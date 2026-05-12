@@ -1,0 +1,29 @@
+{
+  "name": "context",
+  "displayName": "C4A Context",
+  "version": "0.5.29-beta.16",
+  "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query.",
+  "author": {
+    "name": "Context4AI",
+    "email": "support@context4ai.dev"
+  },
+  "homepage": "https://github.com/context4ai/c4a",
+  "repository": "https://github.com/context4ai/c4a",
+  "license": "MIT",
+  "logo": "assets/logo.svg",
+  "keywords": [
+    "context",
+    "knowledge",
+    "citations",
+    "agent-skills"
+  ],
+  "category": "developer-tools",
+  "tags": [
+    "knowledge",
+    "documentation",
+    "agent-skills",
+    "citations"
+  ],
+  "commands": "./commands/",
+  "skills": "./skills/"
+}

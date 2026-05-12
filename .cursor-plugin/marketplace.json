@@ -1,0 +1,17 @@
+{
+  "name": "context",
+  "owner": {
+    "name": "Context4AI",
+    "email": "support@context4ai.dev"
+  },
+  "metadata": {
+    "description": "C4A Context plugin marketplace"
+  },
+  "plugins": [
+    {
+      "name": "context",
+      "source": "./cursor",
+      "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query."
+    }
+  ]
+}

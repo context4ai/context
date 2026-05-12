@@ -1,0 +1,13 @@
+{
+  "name": "context",
+  "owner": {
+    "name": "c4a"
+  },
+  "plugins": [
+    {
+      "name": "context",
+      "source": "./claude",
+      "description": "Context For AI — local knowledge workspace. Capture docs, extract code structure, compile into an interlinked wiki with source-traced facts."
+    }
+  ]
+}

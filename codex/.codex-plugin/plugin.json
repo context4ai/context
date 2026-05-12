@@ -1,0 +1,38 @@
+{
+  "name": "context",
+  "version": "0.5.29-beta.16",
+  "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query.",
+  "author": {
+    "name": "c4a"
+  },
+  "homepage": "https://github.com/context4ai/c4a",
+  "repository": "https://github.com/context4ai/c4a/tree/main/packages/context-cli",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "knowledge-base",
+    "codex-plugin",
+    "agent-skills",
+    "c4a"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "C4A Context",
+    "shortDescription": "Build and query a local, source-linked project knowledge workspace.\nv0.5.29-beta.16",
+    "longDescription": "Keep project knowledge current inside your repo. Capture docs, code structure, notes, and source updates; organize them into readable local knowledge; ask questions with citations; and safely handle refresh, drop, restore, and cleanup without losing traceability.",
+    "developerName": "c4a",
+    "category": "Productivity",
+    "brandColor": "#ef6f2e",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/context4ai/c4a",
+    "defaultPrompt": [
+      "Answer from my local project knowledge with citations.",
+      "Capture new project material and update the knowledge workspace."
+    ]
+  }
+}
