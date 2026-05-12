@@ -27,9 +27,11 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
 3. Reuse existing knowledge before inventing candidates. For named terms or entities, prefer `context mdrive glossary match <name>` and `context mdrive node list --format json` over direct file reads. Treat `match.kind`, `match.matched`, and `match.rank` as stable lookup hints: exact title/slug/alias hits should usually reuse the existing Node instead of creating another one.
 4. Submit generated workflow payloads directly through stdin, preferably as JSON. Use YAML schemas only for reading examples when helpful; generated artifacts should avoid YAML quoting/indentation failure loops. Do not create `/tmp` or workspace scratch files for align payloads. The CLI owns ids, reducer validation, workflow payload storage, and mechanical aggregate. You own semantic discovery, Node type/tag decisions, structure decisions, and user-facing questions.
    - Save coarse-read with `context align --coarse-read - --format json`.
+     The latest `align-coarse-read` payload is only the most recent checkpoint; durable multi-source reading notes are stored under `align-candidate-ledger.source_readings`.
+     Submit coarse-read payloads serially within one workflow; workflow payload writes are not a parallel ingestion API.
    - Submit each candidate batch with `context align --ops - --format json`.
    - After the first batch, pass the current ledger digest as `--ledger-digest <digest>` so stale batches are rejected.
-   - Read the resulting payloads with `context workflow show --payload align-candidate-ledger --view ledger --unwrap --format json` and `context workflow show --payload align-candidate-aggregate --view aggregate --unwrap --format json`.
+   - Read the resulting payloads with `context workflow show --payload align-candidate-ledger --view ledger --unwrap --format json` and `context workflow show --payload align-candidate-aggregate --view aggregate --unwrap --format json`. To revisit one source's coarse-read notes, add `--source <source-id>` to the ledger view; candidates do not carry source ids, so add `--status` or `--candidate-id` only when you also need candidate rows.
 5. If any CLI command returns `agent_hints[]`, follow those hints before retrying. Legacy-protocol hints mean the submitted payload or schema name is retired; switch to the beta.8 schema named in the hint instead of adapting old fields.
 6. Finalize only with `align-structure-decision`:
 
