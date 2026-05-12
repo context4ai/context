@@ -1,7 +1,7 @@
 {
   "name": "context",
   "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query.",
-  "version": "0.5.29-beta.16",
+  "version": "0.5.29-beta.17",
   "author": {
     "name": "c4a"
   },

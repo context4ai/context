@@ -1,10 +1,12 @@
-# Context For AI — Agentic Context System Over Compiled Knowledge
+# Agentic Context System Over Compiled Knowledge
 
 > [中文版本](./README_CN.md)
 
 <p align="center"><img src="./assets/logo.svg" alt="C4A Context" width="180"/></p>
 
 An Agentic knowledge system built for AI Agents. It pre-compiles Feishu docs, local Markdown, code structure, and hand-curated business material into structured, traceable knowledge, so an agent can perform high-precision search over it through a dedicated CLI.
+
+This repository is the **local standalone build of C4A System**. The full C4A System will add online services with stronger multi-user collaboration support — releasing soon.
 
 ## Why C4A Context
 
@@ -34,6 +36,8 @@ C4A Context creates a `.context/` workspace under your project directory (the na
 
 Day to day, work loops through **capture → compile → query & use → governance**; you don't re-run everything from scratch — update incrementally on demand.
 
+<p align="center"><img src="./assets/workflow-en.png" alt="C4A Context workflow example: single-doc vs multi-doc batch" width="1280"/></p>
+
 ## Install
 
 Every Agent needs the `context` CLI first:
@@ -41,7 +45,7 @@ Every Agent needs the `context` CLI first:
 ```bash
 npm i -g @c4a/context-cli
 # or
-bunx @c4a/context-cli
+bun add -g @c4a/context-cli
 ```
 
 Then install the plugin matching the agent you use:
@@ -79,7 +83,13 @@ After completing the **Install** step above, you can hand this document to an AI
 **Core automation prompt** — paste directly to the Agent or automation tool:
 
 ```
-Please initialize a project knowledge base in the current directory (choose Chinese as the language; keep all other parameters as defaults), and run the full knowledge-management flow through the context CLI — including but not limited to: workspace init, multi-source capture, alignment, AI compile, and query validation. For any clarification or decision (source priority, compile-rule tweaks, knowledge-unit classification, etc.), make the call on your own and log every operation, keeping the knowledge base structured and traceable.
+Please initialize a project knowledge base in the current directory (choose Chinese as the language; keep all other parameters as defaults), and run the full knowledge-management flow through the context CLI.
+
+Knowledge sources (restrict to these):
+- Feishu docs: https://[URLS]
+- Local files: /local/path/*.md
+
+Work includes but is not limited to: workspace init, multi-source capture, alignment, AI compile, and query validation. For any clarification or decision (source priority, compile-rule tweaks, knowledge-unit classification, etc.), make the call on your own and log every operation, keeping the knowledge base structured and traceable.
 ```
 
 > Knowledge building is a long iterative process: it involves many detail-level decisions and clarifications. Automation can take over most of the repetitive work, but cannot fully replace human judgment.
@@ -89,8 +99,8 @@ Please initialize a project knowledge base in the current directory (choose Chin
 
 The compiled knowledge base can be packaged for distribution:
 
-- export as a **Skills** package;
-- export as **LLMs.txt**;
+- export as a **Skills** package — `context build --format skills-pack`;
+- export as **LLMs.txt** — `context build --format llms`;
 - [TODO] publish to the **C4A platform** as an MCP service for other AIs to query live;
 - [TODO] publish as a standalone Plugin knowledge package, with retrieval quality on par with the MCP service and CLI.
 
@@ -110,7 +120,7 @@ Measured behavior of Agent + model combinations across instruction following, pa
 
 ## About this repository
 
-The contents of this repository are auto-generated and published by the [c4a project](https://github.com/context4ai/c4a) — do not edit by hand. Issues and PRs should go to the c4a monorepo.
+The contents of this repository are auto-generated and published by the [c4a project](https://github.com/context4ai/c4a) — do not edit by hand.
 
 The c4a project provides end-to-end infrastructure for knowledge processing and hosting, covering the CLI, the knowledge-management Studio, and MCP services; open-source release is planned for late May 2026.
 

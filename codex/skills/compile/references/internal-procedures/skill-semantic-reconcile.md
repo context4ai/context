@@ -31,6 +31,7 @@ CLI-prepared context. Emit decisions only; the CLI performs every write.
 - `merge_update` is legal only when the final Section content is supported by one valid `source_ref`; otherwise use `keep_separate`, `split_then_reanchor`, or `ask_user`.
 - Unresolved conflicts and low-confidence support questions must be `action: ask_user`.
 - `context reconcile review` may return `support_confirmation` for a weakly supported `keep_separate`. Ask the user. If review provides the same `group_key` on several ordinary summary/compression questions, group them into one compact confirmation; do not group missing hard facts, new facts, or different evidence boundaries. If the user confirms, emit the same final write actions with `decided_by: user`; do not apply an `ask_user` decision.
+- Auto mode, long-running authorization, or permission to proceed is not user confirmation. Never use it as a reason to write `decided_by: user`.
 - If review returns `context-only-leakage-high`, stop before apply and follow its `agent_hints[]`: use `rewrite_with_owned_basis` only when owned or shared-primary citation evidence can support the same claim, `skip_for_node` when no citation-eligible basis exists and the claim is not core to that Node, or `pending_ownership_challenge` when a context-only or secondary shared block should be upgraded into owned/shared-primary evidence.
 - The caller applies a ready review by running plain `context reconcile apply` against the current workflow scope. Apply has no input-file path; do not extract `apply_document` with scripts.
 - Stable output: preserve prepared item order, keep decision object fields in the documented order, omit empty optional fields, and do not add current timestamps, random ids, storage paths, or host absolute paths. The fixed protocol and action table come first; only the prepared context should vary between repeated review calls.
@@ -107,7 +108,8 @@ If review returns `example_detail_preservation`, the cited example evidence
 contains a command / config / code fence that was not preserved in
 `proposed.detail`. Prefer regenerating the decision with the relevant fenced
 block in `proposed.detail`; only keep a prose-only example summary after asking
-the user and marking the final decision `decided_by: user`.
+the user and marking the final decision `decided_by: user`. Auto mode or
+permission to continue is not that confirmation.
 
 The support gate exists to prevent orphan claims and false evidence links, not
 to optimize retrieval. Prefer preserving a precise raw-backed claim over
@@ -148,7 +150,7 @@ separately. If confirmed, regenerate the same executable decision with
 `decided_by: user`; if not confirmed, choose stricter evidence or leave an
 `ask_user` item unresolved and stop before apply. User confirmation only
 permits weak support; it does not permit unsupported evidence or missing hard
-facts.
+facts. Auto mode or permission to continue is not user confirmation.
 
 `decided_by` is a top-level decision field, not a `proposed` field:
 
