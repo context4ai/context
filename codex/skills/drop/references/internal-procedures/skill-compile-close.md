@@ -30,9 +30,9 @@ command. It does not hand-edit rendered knowledge.
   - Content / Section issues (`invalid-section-mount`, `body-ad-hoc-heading`, `dangling-source-alias`) → user re-runs `/context:compile` (draft loop fixes its own Section actions; the close stage does not patch)
   - Structural issues (`contains-cycle`, `edge-dangling-node`, `duplicate-slug`, `invalid-node-type`, `domain-same-file-child`) → user runs `/context:align` to revise the plan
   - Source issues (`dropped-source-reference`) → user runs `/context:drop <id>` to complete the drop
-- Exit 0 → summarise node/section totals, verify, `recompiled`, `locator_updates`, `rebuilt`, fingerprint rebuild count, and archive status / archived file count when printed; then stop.
+- Exit 0 → summarise node/section totals, verify, `recompiled`, `locator_updates`, `rebuilt`, fingerprint rebuild count, archive status / archived file count, and any `ready_with_debt` coverage warnings when printed; then stop.
 - Exit 2 → report the full issue list verbatim + point at the right re-entry command above. Do not hand-open the affected rendered article.
-- If exit 2 includes `coverage-high-signal-unresolved`, follow the CLI hint. Read the node-scoped payload with `context workflow show --payload coverage-candidates --scope <node-run-scope> --view coverage`. If all unresolved candidates are intentionally excluded for the same reason, use `context compile --coverage-skip-unresolved --coverage-disposition-node <slug> --payload-digest <digest> --reason "<reason>"`; otherwise inspect `context schema coverage-disposition`. Do not guess workspace-scope payload paths.
+- Coverage warning choice: `ready_with_debt` means close succeeded and unresolved coverage remains visible. You may either continue with the warning recorded, or run an uncovered-only repair/skip round. If all unresolved candidates are intentionally excluded for the same reason, use `context compile --coverage-skip-unresolved --coverage-disposition-node <slug> --payload-digest <digest> --reason "<reason>"`; otherwise inspect `context schema coverage-disposition`.
 - Never re-run `context compile --draft` from close to paper over verify failures. Draft failures belong in the draft loop.
 - Do not use Python, Node.js, shell scripts, `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect `WORKSPACE_DIR`, `.context`, knowledge files, or `/tmp` workflow artifacts.
 - Derivable files self-heal: missing `_index.md` or `changelog.md` is rebuilt inside `compile --close` before the append, locator-only source moves are refreshed, non-canonical but hash-valid `source_ref` locators are canonicalized, and high-signal coverage candidates already backed by active Sections are marked covered. No pre-check needed.
@@ -62,11 +62,10 @@ Close is one in-process command with one exit code:
 | Outcome | Agent action |
 |---|---|
 | Exit 0, 0 issues | Summarise those counts in the user's language: Nodes touched; Sections added / updated / superseded / deprecated / skipped; `recompiled`; `locator_updates`; `rebuilt`; verify green. Stop. |
-| Exit 0, warnings only | Summarise + list warnings verbatim. Point at `/context:status` or `context cache status` when the warning is incremental-cache-related. Stop. |
+| Exit 0, warnings only | Summarise + list warnings verbatim. For coverage warnings, name both choices: continue with `ready_with_debt`, or run an uncovered-only repair/skip round through `context compile --coverage-skip-unresolved` or `context schema coverage-disposition`. Stop. |
 | Exit 2, Section / content issue | Surface the full issue list; point the user at re-running `/context:compile` (the draft loop owns Section writes). Do NOT Edit the affected rendered article. |
 | Exit 2, structural issue (cycle, duplicate slug, `invalid-node-type`, `domain-same-file-child`) | Surface the full issue list; point the user at `/context:align` to revise structure. Do not re-run compile. |
 | Exit 2, `dropped-source-reference` | Surface the source-id; point the user at `/context:drop <id>` to complete the drop cleanup. |
-| Exit 2, `coverage-high-signal-unresolved` | Read the node-scoped coverage payload named in the CLI hint. If all unresolved candidates are intentionally covered by sibling Nodes or should not be written for this Node for the same reason, run `context compile --coverage-skip-unresolved --coverage-disposition-node <slug> --payload-digest <digest> --reason "<reason>"`; otherwise submit targeted dispositions from `context schema coverage-disposition`. |
 
 The close stage never edits rendered knowledge on the agent side. Every verify error routes back to the correct upstream command (compile / align / drop), never sideways into a hand Edit. Use the CLI issue code and hint printed by `context compile --close` for the error→command mapping.
 

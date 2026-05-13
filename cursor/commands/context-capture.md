@@ -1,7 +1,7 @@
 ---
 description: "Capture URLs, local Markdown, source code, stdin path lists, inbox/refresh sources, or conversation notes as Context sources."
 argument-hint: "[url | ./path.md [./more.md...] | --code [path] | --stdin | --inbox | --refresh | note]"
-allowed-tools: Bash(context:*, brew:*, curl:*, sh:*, scoop:*, choco:*, lark-cli:*), WebFetch
+allowed-tools: Bash(context:*, bun:*, brew:*, curl:*, sh:*, scoop:*, choco:*, lark-cli:*), WebFetch
 ---
 
 Capture documents, source code, notes, inbox files, or refreshed sources into the workspace.
@@ -11,6 +11,18 @@ Capture documents, source code, notes, inbox files, or refreshed sources into th
 ## Workflow
 
 Capture is entirely CLI-driven — your role is to route the right `context capture` invocation and relay its output. Never hand-write captured source snapshots: the CLI owns normalisation (NFC, BOM strip, line endings) and the `content_hash` contract, so any manual edit breaks idempotency.
+
+### Code capture dependency preflight
+
+Before any `context capture --code` command, including `--plan`, refresh, or explicit `--module` runs, verify that the TypeScript extraction plugin is installed in the same global package environment as the `context` executable:
+
+```bash
+sh -c 'CTX_BIN="$(command -v context)" && node -e "const { createRequire } = require(\"node:module\"); createRequire(process.argv[1]).resolve(\"@c4a/extract-ts\");" "$CTX_BIN"'
+```
+
+If the check fails, stop the capture task. Tell the user to install the plugin globally with `bun install -g @c4a/extract-ts` (or the exact version from a CLI `agent_hints[].command` if present), then rerun their original `context capture --code ...` command. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
+
+Invocation note: code capture does not run through `npx`. `context capture --code` resolves `@c4a/extract` and `@c4a/extract-ts` from the installed `@c4a/context-cli` package using Node package resolution, prepares `.context/.cache/aspect-runners/<cacheKey>/c4a-extract-code.mjs`, and executes that wrapper directly. The plugin must therefore be available to the same global install that provides `context`.
 
 ### Route by argument
 
@@ -56,6 +68,8 @@ Report the CLI output verbatim. If the CLI reports `N sources changed`, suggest 
 Never suggest `/context-compile` when no align plan exists or when the only active source is `aspect:code` raw snapshot data — compile refuses prose-less work and must not be used to hand-build code knowledge.
 
 ### Missing dependency recovery
+
+If the CLI returns `agent_hints[]` with `code: "capture-code-typescript-plugin-missing"`, stop. Surface the hint to the user and use `agent_hints[0].command` as the install command if the user asks you to install it for them.
 
 If the CLI prints a missing-dependency error like `lark-cli not installed`, walk the user through installation:
 

@@ -4,7 +4,7 @@ description: >
   Internal procedure invoked by `/context-compile`; not a user command. For one Node at a time, reads
   the CLI-provided `NodeContext` (planned metadata, raw snippets, and
   existing Sections if any), classifies every raw fragment into a Section
-  kind via the priority chain, writes content + detail + `source_refs[]`,
+  kind via the priority chain, writes `body` + `source_refs[]`,
   and emits a compile draft JSON document. The CLI
   validates the actions via `context compile --draft <slug> --input - --plan`.
   Activates when `/context-compile` iterates across the confirmed align plan.
@@ -35,17 +35,17 @@ deprecate / skip` actions; emit JSON; the CLI performs every write.
 - Pick `kind` from the form of the cited raw block: code / config / command sample → `example`; verifiable rule with a check method → `spec`; stable invariant, design rule, or core mechanism → `principle`; ≥2 subjects × ≥2 dimensions → `comparison`; explicit risk or caveat → `warning`; Q+A pair → `faq`; real incident with timeline → `incident`; versioned change record → `changelog`. Reach `description` only when none of those forms fit — narrative that defines an entity, explains a mechanism, or summarises a stance. First matching form wins.
 - `kind × node.type` must satisfy the CLI Section mount matrix; mismatches get rejected at write time. When the strongest kind is blocked by mount matrix, fall to the next legal kind whose form actually fits — do not collapse to `description` just because it mounts everywhere, and do not invent thin precision (e.g. one-line `spec`) just to avoid `description` either. See [Description anti-abuse gates](#description-anti-abuse-gates) for the classification checks at the description boundary.
 - Every write action cites raw via `source_refs[]`, choosing values from `raw_snippets[].source_ref`. Use a single-element array for one citation. Treat each source ref as an opaque citation token; never fabricate, parse, dereference, or cite navigation-only blocks as evidence for a content Section.
-- `content` ≤256 chars; long prose goes in `detail`. If a cited raw sentence is already short, single-line, and readable, use it with `content_mode: "extract"` instead of asking AI to summarize it. Do not compress 200 readable characters into a 180-character paraphrase just to make it look rewritten.
-- `detail` is not an evidence echo field. Do not copy raw evidence into `detail`, do not prefix detail with labels such as `原文:`, and do not use detail only to show the raw quote. Raw evidence is traceable through `source_refs[]`.
-- For `example` Sections, if the cited raw snippet contains command / config / code fences, keep `content` as a short summary and preserve the relevant fenced block in `detail`; do not collapse copyable examples into prose-only summaries unless semantic review asks the user and the user accepts that compression.
-- Preserve documentation/reference URL blocks. If a cited raw block is primarily links (官网 / docs / reference / related links), create a small `description` Section such as "相关链接" and put every URL in `detail`; do not drop link-only evidence just because it is not prose.
-- For `add` and `supersede.new`, omit optional fields when empty; do not emit `detail: null`. `detail: null` only has "clear existing detail" meaning on `update`.
+- Use one `body` field for Section prose. It may be long and may contain fenced code. Do not emit internal Section fields or retired extractive-contract fields; the CLI derives its internal short claim/detail split before validation.
+- Set `rewrite: false` only when the raw wording is already clear and should be preserved; omit it for normal concise rewriting.
+- For `example` Sections, if the cited raw snippet contains command / config / code fences, include the short summary and the relevant fenced block together in `body`; do not collapse copyable examples into prose-only summaries unless semantic review asks the user and the user accepts that compression.
+- Preserve documentation/reference URL blocks. If a cited raw block is primarily links (官网 / docs / reference / related links), create a small `description` Section such as "相关链接" and keep every URL in `body`; do not drop link-only evidence just because it is not prose.
+- For `add`, `update`, and `supersede.new`, omit optional fields when empty; never emit `detail: null`.
 - `refers_to_nodes[]` only carries slugs present in the context's glossary, existing Sections, or the current align plan; never invent one.
 - `supersede` is for semantic replacement; `update` is for typo / wording fixes; `deprecate` needs a `reason`; `skip` is the honest default when raw adds nothing.
 - If a note or raw snippet was reviewed and should intentionally not write active knowledge, emit `skip` with `source_refs[]` from that exact snippet. This lets semantic review record `reviewed_no_write`; a bare skip is only for deterministic no-op cases such as unchanged input or navigation-only context.
 - Any Node may legitimately compile to no Sections when the provided snippets contain only navigation (`Parent` / `Children` / `Related` / `Relations`) or placeholder text that explicitly says no detailed content is available. Emit `skip`; do not turn align summaries, parent/child lists, sibling links, or placeholders into `description` Sections. The align graph and Node metadata preserve structure; active Sections need citation-eligible content.
 - FAQ collections attach to the most specific finalized Node (Entity → Action → Domain fallback); never create a standalone FAQ container.
-- Output language: `content`, `detail`, Node-facing summaries, and user-facing draft explanations follow `NodeContext.generation_policy.language` when present; otherwise match the raw material. Preserve product names, code identifiers, CLI flags, slugs, `source_ref` tokens, and exact quoted evidence as printed. Kind / confidence / identifier fields stay English.
+- Output language: draft `body`, Node-facing summaries, and user-facing draft explanations follow `NodeContext.generation_policy.language` when present; otherwise match the raw material. Preserve product names, code identifiers, CLI flags, slugs, `block_id` / `source_ref` tokens, and exact quoted evidence as printed. Kind / confidence / identifier fields stay English.
 - Stable output: keep action order aligned with evidence order, keep object fields in the documented schema order, omit empty optional fields, and do not add current timestamps, random ids, scratch paths, or host paths. Fixed rules and schema come from this skill; only the current NodeContext should vary between repeated Node draft calls.
 
 <reference>
@@ -60,21 +60,21 @@ deprecate / skip` actions; emit JSON; the CLI performs every write.
     "sources": ["..."], "aliases": ["..."], "summary": "...",
     "planned_sections": ["spec", "..."],
     "action_gate": {
-      "actor_blocks": ["b0002"],
+      "actor_blocks": ["2f4b8c1e9a03"],
       "trigger_blocks": [],
-      "goal_blocks": ["b0003"],
-      "step_blocks": ["b0004"],
-      "outcome_blocks": ["b0005"],
-      "repeatability_or_plan_blocks": ["b0006"],
+      "goal_blocks": ["c0d4e5f61728"],
+      "step_blocks": ["8b9a0c1d2e3f"],
+      "outcome_blocks": ["4e2d1c0b9a88"],
+      "repeatability_or_plan_blocks": ["9d1e2f3a4b5c"],
       "inference_sources": {
-        "actor": { "source_type": "explicit-block", "evidence_blocks": ["b0002"], "rationale": "..." },
-        "outcome_or_goal": { "source_type": "explicit-block", "evidence_blocks": ["b0003"], "rationale": "..." },
-        "repeatability_or_plan": { "source_type": "explicit-block", "evidence_blocks": ["b0006"], "rationale": "..." },
+        "actor": { "source_type": "explicit-block", "evidence_blocks": ["2f4b8c1e9a03"], "rationale": "..." },
+        "outcome_or_goal": { "source_type": "explicit-block", "evidence_blocks": ["c0d4e5f61728"], "rationale": "..." },
+        "repeatability_or_plan": { "source_type": "explicit-block", "evidence_blocks": ["9d1e2f3a4b5c"], "rationale": "..." },
         "answerability": { "source_type": "ref-node", "ref_nodes": ["..."], "rationale": "..." }
       }
     },
     "domain_gate": {
-      "scope_blocks": ["b0001"],
+      "scope_blocks": ["7a6f4c9d2e10"],
       "child_refs": ["..."],
       "grouping_reason": "..."
     }
@@ -83,22 +83,22 @@ deprecate / skip` actions; emit JSON; the CLI performs every write.
     "language": "Chinese",
     "source": "workspace.language",
     "applies_to": ["node.title", "node.summary", "section.content", "section.detail", "user_facing_report"],
-    "instruction": "Generate knowledge titles, summaries, Section content/detail, and user-facing reports in Chinese; preserve product names, code identifiers, CLI flags, source_ref tokens, slugs, and quoted evidence exactly when needed."
+    "instruction": "Generate knowledge titles, summaries, Section content/detail, and user-facing reports in Chinese; preserve product names, code identifiers, CLI flags, block_id/source_ref tokens, slugs, and quoted evidence exactly when needed."
   },
   "existing": {               // present if the Node already exists
     "sections": [
       { "id": "section-1", "kind": "description", "content": "...",
         "detail": "...", "status": "active|deprecated",
-        "confidence": "...", "source_ref": "src-1#anchor L10-14@ab12cd34ef56",
+        "confidence": "...", "source_ref": "src-1#anchor L10-14@7a6f4c9d2e10",
         "refers_to_nodes": [...] }
     ]
   },
   // Default NodeContext does not expose raw file paths. Copy raw_snippets[].source_ref
-  // into draft source_refs[]; identify blocks via source_id + block_locator_id (or block_hash).
+  // into draft source_refs[]; copy CLI-provided block_id only for ownership challenges.
   "mentions":      [ { "line": 12, "quote": "...", "source_id": "local:billing", "block_locator_id": "h2-api" } ],
   "raw_snippets":  [ { "line": 10,
                        "line_range": [10, 18],
-                       "source_ref": "src-1#api L10-18@ab12cd34ef56",
+                       "source_ref": "src-1#api L10-18@7a6f4c9d2e10",
                        "quote": "...context block...",
                        "mention_quote": "...",
                        "source_type": "local|feishu|note",
@@ -152,43 +152,31 @@ unless citation-eligible raw snippets state the same claim.
   "target_node": "<matches node.slug>",
   "actions": [
     { "op": "add", "kind": "spec",
-      "content": "...", "detail": "...",
+      "body": "...",
+      "rewrite": false,
       "refers_to_nodes": ["..."],
-      "source_refs": ["src-1#api L10-14@ab12cd34ef56"],
-      "content_mode": "extract",
-      "basis_spans": [
-        { "source_ref": "src-1#api L10-14@ab12cd34ef56" }
-      ]
+      "source_refs": ["src-1#api L10-14@7a6f4c9d2e10"]
     },
     { "op": "update", "target_section_id": "section-3",
-      "content": "...", "detail": null,    // null clears detail
+      "body": "...",
       "refers_to_nodes": null,
-      "source_refs": ["src-1#api L18-21@cd34ef56ab78"],
-      "content_mode": "minimal_paraphrase",
-      "paraphrase_reason": "fragment_fix",
-      "basis_spans": [
-        { "source_ref": "src-1#api L18-21@cd34ef56ab78" }
-      ] },
+      "source_refs": ["src-1#api L18-21@c0d4e5f61728"] },
     { "op": "supersede", "target_section_id": "section-5",
       "reason": "raw published a new retention value",
-      "new": { "kind": "spec", "content": "...", "detail": "...",
+      "new": { "kind": "spec", "body": "...",
                "refers_to_nodes": ["..."],
-               "source_refs": ["src-1#limits L30-34@ef56ab78cd90"],
-               "content_mode": "extract",
-               "basis_spans": [
-                 { "source_ref": "src-1#limits L30-34@ef56ab78cd90" }
-               ] } },
+               "source_refs": ["src-1#limits L30-34@9d1e2f3a4b5c"] } },
     { "op": "deprecate", "target_section_id": "section-2", "reason": "..." },
     { "op": "skip", "reason": "no new evidence in raw snippets" },
     { "op": "skip", "reason": "reviewed; intentionally not written",
-      "source_refs": ["src-1#note L4-8@ab12cd34ef56"] },
+      "source_refs": ["src-1#note L4-8@7a6f4c9d2e10"] },
     { "op": "structure_challenge",
       "challenge_id": "ch_0001",
       "kind": "missing_action_node",
       "node_slug": "<matches node.slug>",
       "action_tag": "rollout-runbook",
       "summary": "The cited evidence is a repeatable procedure.",
-      "source_ref": "src-1#ops L40-55@cd34ef56ab78",
+      "source_ref": "src-1#ops L40-55@c0d4e5f61728",
       "reason": "Align must review structure before compile writes process prose." },
     { "op": "structure_challenge",
       "challenge_id": "ch_0002",
@@ -199,7 +187,7 @@ unless citation-eligible raw snippets state the same claim.
     { "op": "pending_ownership_challenge",
       "challenge_id": "och_0001",
       "node_slug": "<matches node.slug>",
-      "block_id": "b0032",
+      "block_id": "2f4b8c1e9a03",
       "requested_role": "shared",
       "reason": "A visible context_only or secondary shared block contains facts that need citation." }
   ]
@@ -209,17 +197,10 @@ unless citation-eligible raw snippets state the same claim.
 `source_refs[]` values are copied from `raw_snippets[].source_ref`; a single
 citation is still written as a single-element array. Submitting singular
 `source_ref` or quoted-evidence fields is rejected with canonical repair hints.
-Every Section write (`add`, `update` with content/detail/source refs, and
-`supersede.new`) must include `content_mode` plus `basis_spans[]`. Use
-`content_mode: "extract"` when the cited raw sentence already fits the
-single-line content contract and you keep the original sentence order. If you reorder
-sentences, merge sentences with new punctuation, or consolidate bullets, use
-`content_mode: "minimal_paraphrase"` with the matching `paraphrase_reason`. Use `content_mode: "minimal_paraphrase"` only
-when direct extract would be malformed, too broad, duplicated, or needs
-multi-span consolidation; include `paraphrase_reason`.
-Do not mark sentence 1 + sentence 3 from the same evidence block as
-`extract`; non-contiguous copies are `minimal_paraphrase` even when every word
-came from raw evidence.
+Every Section write (`add`, `update` with body/source refs, and
+`supersede.new`) uses `body`. Keep one coherent fact group per action; when
+one Section summarizes contiguous multi-block evidence, list every relevant
+source ref in order under `source_refs[]`.
 `structure_challenge` and `pending_ownership_challenge` do not write Sections;
 the CLI stores them as workflow payloads and close exposes them as debt until
 align resolution handles them. Supported structure challenge kinds include
@@ -357,27 +338,21 @@ For each existing Section:
 
 For each change from Steps 2-3:
 
-1. Split the cited block into `content` and `detail` so the Section is independently addressable in retrieval. `content` (≤256 chars) carries the Section's identity — for `example` / `spec` / `incident` that is the load-bearing identifiers the cited block hinges on (command name, key flags, field names, distinguishing values, mode names, error codes); for `principle` / `description` / `decision` / `comparison` / `warning` / `faq` / `changelog` it is the claim itself in raw's own terms. If the raw sentence already fits this shape, keep it as an extract instead of summarizing it. `detail` carries active knowledge that cannot fit in `content`, especially copyable code/config/URL/table material. Prefer splitting prose into separate supported Sections over storing a raw prose quote in `detail`. Do not put the raw evidence itself into `detail` as a "source copy"; the rendered Section already carries source_ref, and the CLI can resolve the raw evidence from that token.
-2. Keep `content` and `detail` faithful to the cited raw terms: do not introduce acronyms, abbreviations, translations, or aliases that do not appear in the cited raw snippet unless raw itself defines the equivalence or the user confirms it later during semantic review.
-3. If the cited block contains documentation/reference URLs, preserve them in `content` or `detail`. Link-only blocks are still useful knowledge; use `kind: description` with a concise "相关链接" identity when no more specific kind applies.
+1. Write `body` as the Section text the reader should see. It can include long prose, URLs, tables, command/config/code fences, or short raw wording. Keep one coherent, cited fact group per action; the CLI derives the internal `content`/`detail` split.
+2. Keep `body` faithful to the cited raw terms: do not introduce acronyms, abbreviations, translations, or aliases that do not appear in the cited raw snippet unless raw itself defines the equivalence or the user confirms it later during semantic review. Use `rewrite: false` when preserving raw expression is the least surprising representation.
+3. If the cited block contains documentation/reference URLs, preserve them in `body`. Link-only blocks are still useful knowledge; use `kind: description` with a concise "相关链接" identity when no more specific kind applies.
 4. Omit `confidence` for ordinary confirmed claims. Assign `confidence` per the [Confidence rubric](#confidence-rubric) only when the evidence is not confirmed.
 5. Fill `refers_to_nodes[]` per [Glossary and refers_to_nodes](#glossary-and-refers_to_nodes).
 6. Cite evidence with `source_refs[]`, picking values from `raw_snippets[].source_ref`. When one Section summarizes contiguous multi-block evidence, list every relevant source ref in order under `source_refs[]`; the CLI verifies that the refs can collapse to one canonical citation token. If the evidence is non-contiguous or contains separable claims, split the draft into separately cited actions instead of stretching one action across unrelated blocks. For `skip`, include `source_refs[]` only when the skip represents reviewed no-write material; omit evidence for purely deterministic no-ops such as unchanged input. Never submit singular `source_ref` or quoted-evidence fields; the CLI rejects them.
-7. Add the extractive contract to every Section write: `content_mode`,
-   `basis_spans[]`, and `paraphrase_reason` when `content_mode` is
-   `minimal_paraphrase`. Each `basis_spans[]` entry contains only
-   `source_ref`; the CLI resolves cited text and computes the audit basis
-   internally. When one short basis span is already a valid `content`, choose
-   `content_mode: "extract"`.
-8. If evidence implies a missing Action, missing `depends_on`, wrong parent, or
+7. If evidence implies a missing Action, missing `depends_on`, wrong parent, or
    needed ownership upgrade from `context_only`, emit the corresponding
    challenge action instead of forcing the content into a Section.
    `pending_ownership_challenge.requested_role` is `owned` or `shared`.
 
-Rendered knowledge uses the short claim as the visible blockquote and renders
-`detail` as a collapsed Details block under that claim. A reader should be able
-to understand the Section from `content` first; `detail` is supporting active
-knowledge, not a hidden evidence copy.
+Rendered knowledge uses a CLI-derived short claim as the visible blockquote and
+renders longer supporting material from `body` as collapsed Details when needed.
+A reader should be able to understand the Section from the short claim first;
+long supporting material is active knowledge, not a hidden evidence copy.
 
 ### Step 5 — Emit the JSON
 
@@ -388,11 +363,10 @@ Emit one compile draft JSON document for the caller to pass to `context compile 
 - [ ] `target_node` equals `node.slug` — if not, **Step 5**.
 - [ ] Every `add` / `supersede.new` has a legal kind × type combination — if not, **Step 2**.
 - [ ] Every action's `source_refs[]` entries appear in `raw_snippets[].source_ref` for this NodeContext, and no action carries singular `source_ref` or quoted-evidence fields — if not, **Step 4**; pick the right source ref, split non-contiguous claims, or use `skip` only when raw has no write-worthy fact.
-- [ ] Every Section write has `content_mode` and `basis_spans[]`; every
-      `minimal_paraphrase` has `paraphrase_reason` — if not, **Step 4**.
-- [ ] Short, readable, single-line evidence was not rewritten just for style. If it already fits `content`, switch to `content_mode: "extract"` — if not, **Step 4**.
-- [ ] `content` does not add new hard terms, acronyms, abbreviations, translations, URLs, code literals, versions, or aliases absent from the cited raw snippet — if it does, either use the raw wording, move the extra explanation into a user-confirmed decision later, or **Step 4**.
-- [ ] No `add` / `supersede.new` action contains `detail: null` — omit `detail` instead.
+- [ ] Every Section write uses `body` and cites `source_refs[]`; no action uses `content`, `detail`, singular `source_ref`, extractive-contract fields, or quoted-evidence fields — if not, **Step 4**.
+- [ ] Short, readable, single-line evidence was not rewritten just for style. If it is already clear, keep the raw wording in `body` and set `rewrite: false` — if not, **Step 4**.
+- [ ] `body` does not add new hard terms, acronyms, abbreviations, translations, URLs, code literals, versions, or aliases absent from the cited raw snippet — if it does, either use the raw wording, move the extra explanation into a user-confirmed decision later, or **Step 4**.
+- [ ] No action contains `detail` or `content` — use `body` instead.
 - [ ] No `description` action that would fail the anti-abuse gates — if any, **Step 2**.
 - [ ] Every citation-eligible raw URL block is either preserved in a Section or intentionally skipped with evidence and reason; if not, **Step 4**.
 - [ ] Dense raw material was not collapsed into one broad Section. If `raw_snippets[]` spans many locator areas and only one write action exists, return to **Step 2** unless the remaining snippets are duplicates, navigation-only, or already covered by existing Sections.

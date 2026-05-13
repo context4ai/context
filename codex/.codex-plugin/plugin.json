@@ -1,6 +1,6 @@
 {
   "name": "context",
-  "version": "0.5.29-beta.17",
+  "version": "0.5.29-beta.18",
   "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query.",
   "author": {
     "name": "c4a"
@@ -18,7 +18,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "C4A Context",
-    "shortDescription": "Build and query a local, source-linked project knowledge workspace.\nv0.5.29-beta.17",
+    "shortDescription": "Build and query a local, source-linked project knowledge workspace.\nv0.5.29-beta.18",
     "longDescription": "Keep project knowledge current inside your repo. Capture docs, code structure, notes, and source updates; organize them into readable local knowledge; ask questions with citations; and safely handle refresh, drop, restore, and cleanup without losing traceability.",
     "developerName": "c4a",
     "category": "Productivity",

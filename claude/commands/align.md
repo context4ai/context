@@ -11,7 +11,7 @@ Run the beta.8 align workflow. `/context:align` is the user entrypoint; internal
 Keep the prompt shape stable: read fixed schema/protocol first, then existing knowledge lookup, then the current source-specific payload. Do not reorder CLI JSON, add timestamps, or invent scratch paths.
 
 1. Run `context align --scan --format json`. Use the returned workflow payload name, scope id, digest, and `next_command` / `show_command` fields as the continuation handles.
-   - If the align-segments payload includes `generation_policy`, use it as the language contract for generated Node titles, summaries, rationale prose, and planned Section wording. Preserve product names, code identifiers, slugs, flags, and citation tokens exactly when needed.
+   - If the align-segments payload includes `generation_policy`, use it as the language contract for generated Node titles, summaries, rationale prose, and planned Section wording. Preserve product names, code identifiers, slugs, flags, `block_id` handles, and citation tokens exactly when needed.
 2. Read schema and payloads through CLI only:
    - `context schema align-segments`
    - `context schema align-coarse-read`
@@ -28,16 +28,30 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
 4. Submit generated workflow payloads directly through stdin, preferably as JSON. Use YAML schemas only for reading examples when helpful; generated artifacts should avoid YAML quoting/indentation failure loops. Do not create `/tmp` or workspace scratch files for align payloads. The CLI owns ids, reducer validation, workflow payload storage, and mechanical aggregate. You own semantic discovery, Node type/tag decisions, structure decisions, and user-facing questions.
    - Save coarse-read with `context align --coarse-read - --format json`.
      The latest `align-coarse-read` payload is only the most recent checkpoint; durable multi-source reading notes are stored under `align-candidate-ledger.source_readings`.
-     Submit coarse-read payloads serially within one workflow; workflow payload writes are not a parallel ingestion API.
+     For multiple sources, submit one envelope with `coarse_reads[]`; single-source payloads remain valid.
    - Submit each candidate batch with `context align --ops - --format json`.
-   - After the first batch, pass the current ledger digest as `--ledger-digest <digest>` so stale batches are rejected.
+   - `--ledger-digest <digest>` is optional. Usually omit it and let the CLI merge against the current ledger; pass it only when you intentionally want stale-batch rejection for a high-assurance retry.
    - Read the resulting payloads with `context workflow show --payload align-candidate-ledger --view ledger --unwrap --format json` and `context workflow show --payload align-candidate-aggregate --view aggregate --unwrap --format json`. To revisit one source's coarse-read notes, add `--source <source-id>` to the ledger view; candidates do not carry source ids, so add `--status` or `--candidate-id` only when you also need candidate rows.
+   - Review `anomaly_signals[]` as warnings: fix clear mistakes with another ops batch, otherwise continue to finalize and carry the warning rationale in your final decision/report.
 5. If any CLI command returns `agent_hints[]`, follow those hints before retrying. Legacy-protocol hints mean the submitted payload or schema name is retired; switch to the beta.8 schema named in the hint instead of adapting old fields.
 6. Finalize only with `align-structure-decision`:
 
 ```bash
 context align --finalize - --digest <segments-digest>
 ```
+
+If finalize returns an `align-finalize-draft` payload, patch that saved draft with JSON Pointer paths from the returned issues instead of resubmitting the full document:
+
+```json
+{
+  "schema_version": "align.finalize-patch.v1",
+  "operations": [
+    { "op": "replace", "path": "/block_ownership/3/primary_owner", "value": "rspack" }
+  ]
+}
+```
+
+Submit the patch with `context align --finalize-patch - --payload-digest <draft-digest> --format json`.
 
 If `align-segments.incremental.mode` is `incremental`, the finalize step is a delta merge: submit only the Nodes and block ownership supported by the current scanned sources, and reference previous finalized Nodes when they are parents, dependencies, domain children, owners, or visibility targets. Absence of an old Node or edge is not a delete signal. Do not redeclare an old parent/domain just to attach a new child. `sections[].owner` must be a Node declared in the current payload; previous finalized Nodes can be referenced structurally but do not receive new section plans from this incremental payload. Existing or previously removed Node slugs cannot change `node_type`; `context align --scan --full` does not bypass that guard. Use a new slug for a different type, or retire the old slug through `context drop` or explicit structure correction before re-aligning.
 

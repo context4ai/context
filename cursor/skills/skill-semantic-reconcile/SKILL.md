@@ -65,7 +65,7 @@ decisions:
     proposed:
       content: "Runtime isolation uses sandboxing to avoid state pollution."
       confidence: confirmed
-      source_ref: "src-2#runtime L12-14@ab12cd34ef56"
+      source_ref: "src-2#runtime L12-14@7a6f4c9d2e10"
     rationale: "The new evidence clarifies the same claim."
 ```
 
@@ -166,7 +166,7 @@ decisions:
     proposed:
       kind: example
       content: "The host app maps remote modules through the runtime config."
-      source_ref: "src-1#example L32-40@ab12cd34ef56"
+      source_ref: "src-1#example L32-40@7a6f4c9d2e10"
 ```
 
 Final executable decisions must not carry `user_confirmation.required: true`.

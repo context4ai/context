@@ -55,19 +55,19 @@ Not `term`:
 inference_sources:
   actor:
     source_type: explicit-block
-    evidence_blocks: [b0001]
+    evidence_blocks: [7a6f4c9d2e10]
     rationale: "The block names the operator role."
   outcome_or_goal:
     source_type: inferred-from-block
-    evidence_blocks: [b0001]
+    evidence_blocks: [7a6f4c9d2e10]
     rationale: "The block describes recovery as the expected result."
   repeatability_or_plan:
     source_type: heading-and-block
-    evidence_blocks: [b0001]
+    evidence_blocks: [7a6f4c9d2e10]
     rationale: "The runbook heading and ordered list indicate planned reuse."
   answerability:
     source_type: explicit-block
-    evidence_blocks: [b0001]
+    evidence_blocks: [7a6f4c9d2e10]
     rationale: "The steps answer how the operation is performed."
 ```
 
