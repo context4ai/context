@@ -77,7 +77,7 @@ details.
 ```
 context drop --plan <source-id|url> --format json
 context reconcile prepare --mode drop --format json
-context reconcile review --prepare-digest <prepare-digest> --decisions - --view status
+context reconcile review --decisions - --view status
 context drop --apply-plan --reason "<text>" --yes
 ```
 
@@ -134,12 +134,11 @@ context reconcile prepare --mode drop --format json
 ```
 
 Invoke the packaged semantic reconcile procedure with that prepare payload. Use
-stdout `workflow_payload.digest` as `<prepare-digest>`.
 Pass the semantic reconcile decision document directly to review, preferably
 through stdin:
 
 ```
-context reconcile review --prepare-digest <prepare-digest> --decisions - --view status
+context reconcile review --decisions - --view status
 ```
 
 The review command persists the ready immutable review artifact for the current

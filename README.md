@@ -111,12 +111,13 @@ Measured behavior of Agent + model combinations across instruction following, pa
 | Agent | Model | Instruction following | Parameter hallucination | Extraction quality |
 |---|---|---:|---|---:|
 | Claude | Opus 4.6 / 4.7 | 95 | Almost none | 95 |
-| Codex | GPT 5.5 | 95 | Almost none | 91 |
-| Cursor | Opus 4.6 / 4.7 | 92 | Almost none | 86 |
+| Claude | Haiku 4.5 | 92 | Occasional | 91 |
+| Codex | GPT 5.5 | 95 | Almost none | 88 |
+| Cursor | Opus 4.6 / 4.7 | 92 | Almost none | 85 |
 | Claude | DeepSeek V4 | 80 | Frequent | 55 |
 | Claude | DeepSeek V4 Flash | 65 | Frequent | 50 |
 
-**Recommendation**: prefer Claude Opus or GPT for now. DeepSeek V4 still lags in instruction following and extraction quality and needs further CLI optimization; full DeepSeek V4 adaptation is planned for v0.5.40, targeting an overall score above 90.
+**Recommendation**: prefer Opus or Haiku, GPT for now. DeepSeek V4 still lags in instruction following and extraction quality and needs further CLI optimization; full DeepSeek V4 adaptation is planned for v0.5.40, targeting an overall score above 90.
 
 ## About this repository
 

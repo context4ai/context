@@ -1,34 +1,30 @@
 ---
 name: skill-context-query
 description: >
-  Internal procedure invoked by `/context-query`; not a user command. The agent uses
-  `context query` hit/miss/select results first, supplements only with scoped
-  query views when needed, and answers with Node slug, Section id,
-  and compact node/section citations plus explicit gaps for unsupported claims.
+  Internal procedure invoked by `/context-query`; not a user command. 
+  Uses structure-first strategy: explore Node structure via node_search/orientation first,
+  then narrow to specific Nodes, then explore relationships. Semantic queries are secondary
+  and only when structure queries cannot find the target Node. Always cite Node slug and Section id.
   Activates when `/context-query` is invoked or when an agent needs to
   answer a question using local Context workspace knowledge with citations.
 tools:
   - Bash
 ---
 
-# skill-context-query — answer from local knowledge with CLI citations
+# skill-context-query — structure-first knowledge exploration with citations
 
-Answer a user question from the local Context workspace without reading
-workspace files directly. The CLI is the only source of local knowledge.
+Answer user questions by exploring the local Context workspace structure first,
+then retrieving specific content within that structure. The CLI is the only source
+of local knowledge; never read workspace files directly.
 
 ## TL;DR — Non-negotiables
 
-- First evidence-bearing tool call should be the ordinary default query: `context query "$ARGUMENTS"`. One optional `context query --intent orientation` or empty `context query` call may run before it when this conversation has no usable workspace map; orientation is only for choosing a better query/scope and is never evidence for the answer.
-- Do not Read, Glob, Grep, or Write `raw/`, `knowledge/`, `archive/`, `decisions/`, or any workspace file to answer the question.
-- Use only `context query` output as evidence. If the CLI returns `miss` or fails, report that result instead of searching files yourself.
-- Every key conclusion must cite the returned `node` and `section` handles. Default query output intentionally omits source provenance; do not invent or parse source locators.
-- If returned entries do not support a conclusion, mark it as a gap. Do not turn missing local knowledge into a definite answer.
-- If the output asks for a narrower scope or shows multiple candidate slugs, choose one only when the user's wording makes it unambiguous; otherwise ask the user which `slug` to use.
-- If the output reports a broad, blocked, or truncated recall, follow that diagnostic: ask for a narrower Node, term, version, or scope; when entries are returned but truncated, answer from those entries and state the result is not exhaustive.
-- Do not use Python, Node.js, shell scripts, `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect `WORKSPACE_DIR`, `.context`, or `/tmp` workflow artifacts.
-- If the question names a Node title, alias, or slug, state the actual Node slug used in the answer.
-- When the first query is insufficient, supplement only with scoped query views named in the Supplemental context section or anchors from entry `refers_to_nodes`.
-- Output language follows the user's conversation language. CLI flags, output column names, slugs, and Section ids stay as printed.
+- **Structure first**: When problem is vague, don't do semantic search—explore Node structure via `node_search` or `orientation` to let user choose which Node to focus on.
+- **CLI only**: Use only `context query` output as evidence. Never Read/Glob/Grep/Write workspace files.
+- **Route by intent**: Classify problem intent (vague / clear Node / relationship / detail) and choose the right command; see Query Route table below.
+- **Orientation is navigation**: `context query --intent orientation` returns a budgeted `[Slug Map]` plus optional `[Summary]` hints for scope choice only; it is not direct answer evidence.
+- **Cite structure**: Every conclusion cites `[node/slug]` or `[node/section]`. If evidence does not support a claim, mark as gap.
+- **Handle diagnostics**: If CLI returns `select`, `miss`, `broad`, `raw-only`, or `truncated`, follow the hint: show user structure to choose from, ask for narrower scope, or suggest workflow.
 
 <reference>
 
@@ -53,18 +49,66 @@ Supplemental context can come from:
 context query --intent node_search --scope <slug>
 context query --intent impact_analysis --scope <slug>
 context query --intent node_search --refers-to <slug>
+context query --intent description_search --scope <slug> --query "<keywords>"
 ```
+
+## Query Route Decision Table
+
+Choose the `context query` command based on problem intent. **Structure queries take priority.**
+
+| Problem intent | Primary command | When to use |
+|---|---|---|
+| **Vague question, no Node named** User asks "what is X" / "what are the X types" | `context query --intent orientation` or `context query --intent node_search --query "<keyword>"` | User unsure which Node to focus on; show structure first |
+| **Node explicitly named** User mentions a specific service/system | `context query --intent node_search --scope <slug>` | User wants to explore a specific known Node |
+| **Relationship / impact** User asks what depends on X / impact of changing X | `context query --intent impact_analysis --scope <slug>` | User asks about how a Node connects to others |
+| **Detail within known scope** (only after Node chosen) User asks for specific feature/behavior within chosen Node | `context query --intent description_search --scope <slug> --query "<detail>"` | User wants specific detail within an already-chosen Node |
+| **Very specific fact** (fallback, rarely needed) User asks for exact implementation location | `context query "$ARGUMENTS"` | Semantic fallback when structure queries don't suffice |
+| **Archive / reconciliation** User asks "find duplicates" / "check coverage" | `context query --intent recall --profile <reconcile-dedupe\|reconcile-support\|reconcile-refresh> --query "..."` | Only when user explicitly asks for audit/reconciliation |
+
+## Orientation output and budget
+
+`context query --intent orientation` is a navigation surface, not answer evidence.
+
+- JSON output keeps full Node `summary` fields when present.
+- Text output targets about 2000 tokens total. It prints `[Slug Map]` first, then `[Summary]`.
+- `[Slug Map]` uses finalized structure relationships and is for choosing the next `--scope <slug>`. If the workspace is too large, deeper layers are folded first.
+- `[Summary]` is truncated before the map. If output is still over budget, the command prints a continuation note. Drill down with scoped queries; there is no page-token pagination.
+- Use `context query --intent node_search --scope <slug>` for a Node overview, or `context query --intent description_search --scope <slug> --query "<keywords>"` for details inside that Node.
+- Use `context query --intent orientation --tag <tag>` or `context query --intent orientation --domain <slug>` to reduce the map before choosing a scope.
+- When `slug` and `title` are equivalent after normalization (for example `payment-api` and `Payment API`), text output shows only the slug.
+
+## BM25 Search Strategy
+
+When using `description_search`, `recall`, or `node_search --query`, the CLI uses BM25 (keyword-based, not embedding-based) for matching. BM25 requires explicit keyword coverage, so queries must be precise:
+
+- **Mix bilingual keywords**: Include both Chinese and English terms when querying—e.g., `"<chinese-term> <english-equivalent>"`, `"<product-name> <alternate-name>"`
+- **Include synonyms & aliases**: BM25 is keyword-literal, so if your query doesn't match Section content exactly, try related terms
+- **Use specific terminology**: Add version numbers, API names, or domain-specific terms to narrow results
+- **Scope to reduce noise**: Use `--scope <slug>` to focus on a single Node; broad queries may be blocked or produce low-quality matches
+
+Query intents that use BM25:
+- `context query --intent node_search --query "<short-keyword>"` — find candidate Nodes from slug, title, summary, aliases, and tags when direct slug/title/alias matching does not resolve the query
+- `context query --intent description_search --scope <slug> --query "<keywords>"` — find Section details using keyword matching within a known Node
+- `context query --intent recall --profile <profile> --query "<keywords>"` — archive audit and reconciliation queries using keyword matching
+
+Do NOT use BM25 strategy for:
+- `context query --intent node_search --scope <slug>` or `--node <slug>` — uses structure, not keywords
+- `context query --intent orientation` — uses structure, not keywords  
+- `context query --intent impact_analysis` — uses structure, not keywords
 
 ## Answer citation shape
 
-Use compact citations next to each key claim:
+Use compact citations keyed to evidence type:
 
 ```text
-<claim> [node / section]
+Node identity/title:        <claim> [slug]
+Section claim:              <claim> [node/section]
+Relationship/edge:          X → Y [relationship_type]
+Multiple sources:           <claim> [node/section, node/section]
 ```
 
 If multiple Sections support the same claim, cite the strongest one or two.
-Avoid citation-only dumps: summarize what the cited Section supports.
+Summarize what each cited Section supports; do not list citations without explanation.
 
 ## Gap shape
 
@@ -82,103 +126,104 @@ the user's wording indicates newly captured material is not yet knowledge.
 
 <procedures>
 
-## Step 1: Query
+## Step 1: Classify problem intent
 
-If `$ARGUMENTS` is empty or whitespace-only, ask the user for a question first;
-do not run the query.
+Determine what the user is trying to learn. Choose the appropriate command from the Query Route table above.
 
-If the current conversation has no useful workspace map and the user's question
-is broad, ambiguous, or asks what can be queried, run one orientation pass before
-the first evidence query:
+**Classification:**
 
-```bash
-context query --intent orientation
+- **Vague problem** — user unsure which Node to focus on
+  - Indicators: asks "what is X", "what are the X types", "how to understand X", or question without Node anchor
+  - Action: Run `context query --intent orientation` to show available Nodes and structure; then pick a Node or ask for narrower scope
+  - **Note**: `node_search` uses structure not BM25; orientation always works regardless of workspace content
+
+- **Node explicitly named** — user mentions a specific service/system/concept
+  - Indicators: user names a specific Node or system, "tell me about X", "show me X"
+  - Action: Run `context query --intent node_search --scope <slug>` to explore that Node
+
+- **Relationship / impact** — user asks how Nodes relate or what breaks if X changes
+  - Indicators: "what depends on X", "impact of X", "relationship between X and Y"
+  - Action: Run `context query --intent impact_analysis --scope <slug>` to show dependencies/relationships
+
+- **Detail within known scope** — user already chose a Node, now asking for specific detail
+  - Indicators: (comes after Node is selected) user asks "how does X handle [feature]", "what features does X support"
+  - Action: Run `context query --intent description_search --scope <slug> --query "<detail-keywords>"` — use BM25 keywords for precise matching
+
+- **Archive / reconciliation** — user explicitly asks for dedup/audit/coverage
+  - Indicators: "find duplicates", "check source coverage"
+  - Action: Run `context query --intent recall --profile <reconcile-*> --query "..."`
+  - ❌ Never use for ordinary questions
+
+## Step 2: Execute query & interpret response
+
+Run the command from Step 1. Read the CLI output carefully.
+
+**Route based on response:**
+
+- ❌ **Command fails** → Report error and stop
+- ❌ **`miss`** (no knowledge found) → Report no local knowledge and stop
+- ⚠️ **`select`** (multiple candidate Nodes) → Show candidates to user; ask which Node to focus on
+  - Then: loop back to Step 1 with chosen Node scope
+- ⚠️ **`broad` / `blocked` recall** → Ask user for narrower scope (specific Node, term, version)
+  - Then: loop back to Step 1
+- ⚠️ **`raw-only` / `uncompiled`** → Say "raw source found but not yet in compiled knowledge"
+  - Only suggest `/context-align` + `/context-compile` if user wants it compiled
+- ⚠️ **`truncated`** (entries cut off) → Mark answer as "non-exhaustive"
+  - Proceed to Step 3; ask for narrowing only if user needs complete inventory
+- ✓ **Entries returned** → Proceed to Step 3
+
+## Step 3: Compose answer from returned structure
+
+Use only the returned Node/Section structure and content. Do not synthesize beyond what was returned.
+
+**Response structure:**
+
+1. **Start with core answer** — what the structure directly shows
+2. **Cite every claim** — `[node/slug]` for Node identity, `[node/section]` for facts
+3. **Include "Used nodes:" line** — if question named specific Nodes: "Using nodes: `<slug>`, `<slug>`"
+4. **Mark gaps** — if user asked for something not in returned structure: "Gap: no evidence for X"
+5. **Note truncation** — if CLI said `truncated`: "Non-exhaustive result — further narrowing available"
+
+**Example for structure-first query:**
+```
+User asks: "What systems handle X in our architecture?"
+
+Better query (structure-first): 
+  context query --intent orientation  # Shows all available Nodes
+
+Returns several candidate Nodes matching the question.
+
+Response:
+"Systems that handle X:
+- **<Node Title 1>** [<slug-1>] — responsibility and scope
+- **<Node Title 2>** [<slug-2>] — responsibility and scope
+
+To dive deeper into any system, ask me for more details or let me know which Node you want to explore."
 ```
 
-Empty `context query` returns the same orientation map.
+**Why show structure first?** Even when you know keywords, structure queries reveal the full landscape.
+Agents should explore Nodes first, then use description_search for details within a chosen Node.
 
-Orientation returns directly queryable slug/title structure and one query
-template. Use it only to choose a scope or show the user what can be queried.
-Do not answer from orientation output. Do not cite orientation output.
+## Step 4: Explore further (if user requests)
 
-If the user already asked a concrete question but this conversation has no
-workspace map, you may run `context query --intent orientation` (or empty `context query`) and the first
-ordinary `context query "$ARGUMENTS"` concurrently. Use the evidence
-query for the answer; use orientation only for scoped follow-up if the first
-query is insufficient.
+Once Node scope is clear, user may ask for deeper exploration.
 
-Run the ordinary query first:
+**Supplemental query triggers:**
 
-```bash
-context query "$ARGUMENTS"
-```
+- User asks about Node's relationships/dependencies → `context query --intent impact_analysis --scope <slug>`
+- User asks for full Node content after partial answer → `context query --intent node_search --scope <slug>`
+- User asks specific detail within chosen Node → `context query --intent description_search --scope <slug> --query "<keywords>"` 
+  - **Use BM25 strategy**: mix Chinese and English keywords for better matching (e.g., mix synonym or translated forms of the search term)
+- User names another Node in `refers_to_nodes` and asks about its relationship → `context query --intent node_search --refers-to <slug>`
 
-If the user explicitly asks for archive comparison, source cleanup audit, or
-semantic reconciliation candidates, use recall with the matching profile:
+**BM25 tips for supplemental queries:**
+- When searching for a detail, include both native and translated forms of terms
+- If first query is too broad, add more specific keywords or domain terminology instead of generic terms
+- Scope helps narrow BM25 results: `--scope <slug> --query "<specific-term> <synonym>"` is more precise than an unscoped broad query
 
-- duplicate / near duplicate / dedupe → `--profile reconcile-dedupe`
-- support check / source support → `--profile reconcile-support`
-- refresh / stale source comparison → `--profile reconcile-refresh`
-
-```bash
-context query --intent recall --profile reconcile-dedupe --query "$ARGUMENTS"
-```
-
-Do not use recall archive profiles for ordinary questions.
-
-## Step 2: Read and gate
-
-Read the command output before answering.
-
-- If the command fails, report the CLI failure and stop.
-- If the output says `miss` or no local knowledge matched, report no local knowledge hit and stop.
-- If the output shows candidate slugs instead of evidence rows, ask for a specific `slug`, unless the user's wording already identifies one candidate.
-- If the output reports broad or blocked recall, stop and ask for a narrower Node, term, version, or scope before treating missing candidates as evidence of absence.
-- If the output reports truncated recall, answer from the returned evidence when entries exist, mark coverage as non-exhaustive, and ask for narrowing only if the user needs a complete inventory.
-- Keep a working set of returned rows with `node`, `section`, `kind`, `content`, and non-empty `refers_to_nodes`.
-
-## Step 3: Anchor explicit Node mentions
-
-If the user's question contains a likely Node title, alias, slug, code symbol,
-or version:
-
-1. Prefer exact slug, title, or alias matches from the query result.
-2. State the actual Node slug used.
-3. If the candidate set points to multiple plausible slugs, say which slugs were used and keep claims scoped to those slugs.
-
-## Step 4: Supplement only when needed
-
-Use supplemental commands only when the first query has entries but lacks
-enough surrounding structure to answer the question.
-
-Use supplements per the Supplemental context section, only after the first query
-and only for slugs present in returned entries, entry `refers_to_nodes`, or
-the user's explicit question. Use `refers_to_nodes` as extra anchors only when
-they appear in returned Sections. Do not discover extra anchors by reading
-workspace files.
-
-## Step 5: Compose
-
-Answer only from the query and supplemental outputs.
-
-Required response behavior:
-
-1. Start with the direct answer if evidence supports one.
-2. Cite every key conclusion with Node slug and Section id.
-3. Include a short "Used nodes" line when the question was anchored by title, alias, slug, code symbol, or version.
-4. Include "Gap:" lines for requested points that are not supported.
-5. Include a blocked / broad-query note when recall hints require narrowing, or a truncated/non-exhaustive note when returned evidence is only a subset.
-
-## Self-check before final answer
-
-- [ ] First evidence-bearing tool call was ordinary `context query "$ARGUMENTS"` or an explicit reconcile `--intent recall` query. If an orientation command ran first or concurrently, it was only `context query --intent orientation` or empty `context query`, and an evidence-bearing `context query` command ran before answering — if not, go back to **Step 1**.
-- [ ] No direct file Read / Glob / Grep / Write was used against workspace local knowledge — if not, discard that evidence and go back to **Step 1**.
-- [ ] No ad-hoc script or shell file traversal was used against `WORKSPACE_DIR`, `.context`, or `/tmp` workflow artifacts — if not, discard that evidence and go back to **Step 1**.
-- [ ] Direct answer is given when evidence supports one — if not, go back to **Step 5**.
-- [ ] Every key conclusion has `node / section` — if not, go back to **Step 5**.
-- [ ] If the question carried a Node title / alias / slug / code symbol / version, the answer includes a "Used nodes" line — if not, go back to **Step 3** and **Step 5**.
-- [ ] Any unsupported conclusion is marked as a gap — if not, go back to **Step 5**.
-- [ ] Recall diagnostics are handled: broad/blocked asks for narrowing; truncated with entries answers with a non-exhaustive note — if not, go back to **Step 2** and **Step 5**.
-- [ ] Archive entries appear only for explicit reconcile profiles — if not, go back to **Step 1** with the correct profile.
+**Safety:**
+- ❌ Do NOT auto-fetch all `refers_to_nodes`; only query if user asks
+- ❌ Do NOT read workspace files to discover new Nodes
+- ✓ Only supplement with slugs already in returned structure or user's explicit question
 
 </procedures>

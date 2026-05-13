@@ -35,7 +35,7 @@ Before any `context capture --code` command, including `--plan`, refresh, or exp
 sh -c 'CTX_BIN="$(command -v context)" && node -e "const { createRequire } = require(\"node:module\"); createRequire(process.argv[1]).resolve(\"@c4a/extract-ts\");" "$CTX_BIN"'
 ```
 
-If the check fails, stop the capture task. Tell the user to install the plugin globally with `bun install -g @c4a/extract-ts` (or the exact version from a CLI `agent_hints[].command` if present), then rerun their original `context capture --code ...` command. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
+If the check fails, stop the capture task and surface the CLI's `agent_hints[]` install command (the CLI picks `npm install -g` or `bun install -g` based on how `context` itself was installed). Ask the user once whether to run that command on their behalf; global installs touch shared state, so explicit confirmation is required before invoking `Bash`. If approved, run the exact command from `agent_hints[0].command`, then retry the original `context capture --code ...` invocation. If declined, leave the command visible so the user can run it manually. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
 
 Invocation note: code capture does not run through `npx`. `context capture --code` resolves `@c4a/extract` and `@c4a/extract-ts` from the installed `@c4a/context-cli` package using Node package resolution, prepares `.context/.cache/aspect-runners/<cacheKey>/c4a-extract-code.mjs`, and executes that wrapper directly. The plugin must therefore be available to the same global install that provides `context`.
 
@@ -82,9 +82,11 @@ Report the CLI output verbatim. If the CLI reports `N sources changed`, suggest 
 
 Never suggest `/context:compile` when no align plan exists or when the only active source is `aspect:code` raw snapshot data — compile refuses prose-less work and must not be used to hand-build code knowledge.
 
+If capture is rejected with `agent_hints[].code = "workflow-cross-family-rejected"`, do **not** run `context workflow abandon ...` automatically. First run or ask the user to run `context workflow status --format json` and explain that another workflow is active in this workspace. Continue that workflow when it is the intended task; ask the user before abandoning it when the user wants to discard that in-progress work. If the user expected a different repository/workspace, change to the confirmed workspace root before retrying capture.
+
 ### Missing dependency recovery
 
-If the CLI returns `agent_hints[]` with `code: "capture-code-typescript-plugin-missing"`, stop. Surface the hint to the user and use `agent_hints[0].command` as the install command if the user asks you to install it for them.
+If the CLI returns `agent_hints[]` with `code: "capture-code-typescript-plugin-missing"`, stop and surface the hint. Ask the user once for permission to run `agent_hints[0].command` (the CLI has already picked the correct package manager — `npm install -g` or `bun install -g` — based on how `context` itself was installed). If approved, run that exact command via `Bash` and then retry the original capture; if declined, leave the command visible for manual install. Never substitute a different package manager or version.
 
 If the CLI prints a missing-dependency error like `lark-cli not installed`, walk the user through installation:
 

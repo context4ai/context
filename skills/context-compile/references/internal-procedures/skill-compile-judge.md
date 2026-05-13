@@ -101,6 +101,6 @@ candidate list is empty, emit `new` with an empty compared list and
 ### Step 4 — Emit Judge Decisions
 
 Return only the `compile.judge-decisions.v1` document. The caller passes it
-directly to `context reconcile review --prepare-digest <digest> --decisions -`.
+directly to `context reconcile review --decisions -`.
 
 </procedures>
