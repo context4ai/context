@@ -41,24 +41,24 @@ When `existing.sections[]` is non-empty, every `section-N` id you read here is a
 
 ### `update` / `supersede.new` mechanics
 
-- `update` keeps the same `section-N` id; provide a new `body` (and optional new `source_refs[]`) but do not include `kind` unless the kind itself is changing.
-- `supersede.new` is a fresh Section; it needs `kind`, `body`, `source_refs[]`, and may carry `refers_to_nodes[]` and `confidence` per the same rules as `add`.
-- `deprecate` only needs `target_section_id` and `reason`. Do not pass `body` or `source_refs[]`.
+- `update` keeps the same `section-N` id; provide new `content` (optional `summary`, optional new `source_refs[]`) but do not include `kind` unless the kind itself is changing.
+- `supersede.new` is a fresh Section; it needs `kind`, `content`, `source_refs[]`, and may carry `summary`, `refers_to_nodes[]`, and `confidence` per the same rules as `add`.
+- `deprecate` only needs `target_section_id` and `reason`. Do not pass `content` or `source_refs[]`.
 
 ## Output schema (refresh ops)
 
 ```jsonc
-{
-  "actions": [
-    { "op": "update", "target_section_id": "section-3",
-      "body": "...",
-      "refers_to_nodes": null,
-      "source_refs": ["src-1#api L18-21@c0d4e5f61728"] },
-    { "op": "supersede", "target_section_id": "section-5",
-      "reason": "raw published a new retention value",
-      "new": { "kind": "spec", "body": "...",
-               "refers_to_nodes": ["..."],
-               "source_refs": ["src-1#limits L30-34@9d1e2f3a4b5c"] } },
+	{
+	  "actions": [
+	    { "op": "update", "target_section_id": "section-3",
+	      "content": "...",
+	      "refers_to_nodes": null,
+	      "source_refs": ["src-1#api L18-21@c0d4e5f61728"] },
+	    { "op": "supersede", "target_section_id": "section-5",
+	      "reason": "raw published a new retention value",
+	      "new": { "kind": "spec", "content": "...",
+	               "refers_to_nodes": ["..."],
+	               "source_refs": ["src-1#limits L30-34@9d1e2f3a4b5c"] } },
     { "op": "deprecate", "target_section_id": "section-2", "reason": "..." }
   ]
 }

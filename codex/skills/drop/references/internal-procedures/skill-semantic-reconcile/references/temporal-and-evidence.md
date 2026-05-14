@@ -4,8 +4,7 @@ Consult this reference when prepare items carry **any** of:
 
 - `temporal_prior` / `proposed.source_captured_at` / candidate `source_captured_at` / `last_reconciled_at` / `temporal_disposition`
 - `source_support.evidence_block_candidates[]` or `source_support.evidence_block_*` repair hints
-- `proposed.detail` with command / config / code fence content
-- `agent_hints[]` with `code: "example_detail_preservation"`
+- prepared long `proposed.content` / `proposed.summary`, especially with command / config / code fence content
 
 For prepare items that have none of the above, ignore this file.
 
@@ -42,25 +41,26 @@ These are **repair hints**, not automatic broadening permission. Rules:
 
 The support gate exists to prevent orphan claims and false evidence links, not to optimize retrieval. Prefer preserving a precise raw-backed claim over rewriting content into a smoother summary.
 
-## `proposed.detail` preservation
+## Long `proposed.content` / `proposed.summary` preservation
 
-When the prepare item carries `proposed.detail`, treat it as load-bearing:
+When the prepare item carries long `proposed.content` or a `proposed.summary`, treat both as load-bearing:
 
-- `detail` carries long-form prose, examples, and code blocks.
-- Dropping `detail` silently loses knowledge.
-- Preserve it **exactly** on executable write decisions (`merge_update`, `supersede.new`, `keep_separate`, `split_then_reanchor` sub-Sections).
-- The only legitimate way to clear `detail` is an update-style decision that explicitly emits `detail: null` as the chosen outcome.
+- `content` carries the active Section knowledge, including long-form prose, examples, URLs, tables, commands, config, and code blocks.
+- `summary` is the short reader/query aid for long content.
+- Dropping either field silently loses knowledge or query UX.
+- Preserve prepared `content` and `summary` on executable write decisions (`merge_update`, `supersede.new`, `keep_separate`, `split_then_reanchor` sub-Sections) unless the decision intentionally rewrites the user-facing content.
+- The only legitimate way to clear `summary` is an update-style decision that explicitly emits `summary: null` as the chosen outcome.
 
-## `example_detail_preservation` repair
+## Example content preservation repair
 
-If review returns `example_detail_preservation`, the cited example evidence contains a command / config / code fence that did **not** appear in `proposed.detail`. Repair:
+If review reports that a cited example evidence contains a command / config / code fence missing from `proposed.content`, repair:
 
-- **Preferred**: regenerate the decision with the relevant fenced block included in `proposed.detail` (preserve language, fences, and exact code).
+- **Preferred**: regenerate the decision with the relevant fenced block included in `proposed.content` (preserve language, fences, and exact code).
 - **Fallback only after user confirmation**: keep a prose-only example summary, mark the final decision `decided_by: user` per `references/user-confirmation.md`. Auto mode is not user confirmation.
 
 ## How this slots into the main procedure
 
 - **Step 1 — Consume**: scan prepare items for the signal fields above; flag affected items for the relevant repair path.
 - **Step 3 — Decide**: temporal priors inform `rationale` but never the action choice; evidence-block hints may justify broadening the cited range.
-- **Step 4 — Emit**: rerun `context reconcile review` after broadening ranges or restoring `detail`; only then proceed to apply.
-- **Step 5 — Self-verify**: no executable write strips a prepared `detail`; no temporal field leaks into `proposed`; every broadened `source_ref` has been re-reviewed.
+- **Step 4 — Emit**: rerun `context reconcile review` after broadening ranges or restoring missing example content; only then proceed to apply.
+- **Step 5 — Self-verify**: no executable write strips prepared `content` or `summary`; no temporal field leaks into `proposed`; every broadened `source_ref` has been re-reviewed.

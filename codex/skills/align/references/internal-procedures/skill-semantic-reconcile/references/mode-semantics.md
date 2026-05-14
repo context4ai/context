@@ -29,7 +29,7 @@ These appear only in drop prepare items. They handle "a Section that the drop wo
 | Item shape | Decision |
 |---|---|
 | Drop item still **fully** supported by surviving source | `reanchor` + `reanchor` — repoint `proposed.source_ref` at the surviving evidence, keep target unchanged. |
-| Drop item **partly** supported (one fact survives, another does not) | `reanchor` + `split_then_reanchor` — split into `proposed.sections[]`, each with independent `kind` / `content` / `source_ref` / `detail`. |
+| Drop item **partly** supported (one fact survives, another does not) | `reanchor` + `split_then_reanchor` — split into `proposed.sections[]`, each with independent `kind` / `content` / optional `summary` / `source_ref`. |
 | No surviving support | `unsupported` + `remove_unsupported` (physical remove on drop apply). |
 
 `split_then_reanchor` requires each split Section to be independently supported by its own cited evidence. The CLI rejects splits where any sub-Section's `source_ref` does not cover its `content`.

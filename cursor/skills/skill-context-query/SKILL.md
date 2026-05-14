@@ -2,9 +2,9 @@
 name: skill-context-query
 description: >
   Internal procedure invoked by `/context-query`; not a user command. 
-  Uses structure-first strategy: explore Node structure via node_search/orientation first,
-  then narrow to specific Nodes, then explore relationships. Semantic queries are secondary
-  and only when structure queries cannot find the target Node. Always cite Node slug and Section id.
+  Uses structure-first strategy: inspect orientation, resolve unknown Nodes with node_lookup,
+  open known Nodes with node_view, then query Section details with section_search. Always
+  cite Node slug and Section id.
   Activates when `/context-query` is invoked or when an agent needs to
   answer a question using local Context workspace knowledge with citations.
 tools:
@@ -19,7 +19,7 @@ of local knowledge; never read workspace files directly.
 
 ## TL;DR — Non-negotiables
 
-- **Structure first**: When problem is vague, don't do semantic search—explore Node structure via `node_search` or `orientation` to let user choose which Node to focus on.
+- **Structure first**: When problem is vague, don't do semantic search; inspect `orientation`, use `node_lookup` only to find a slug, and use `node_view` to open a known Node.
 - **CLI only**: Use only `context query` output as evidence. Never Read/Glob/Grep/Write workspace files.
 - **Route by intent**: Classify problem intent (vague / clear Node / relationship / detail) and choose the right command; see Query Route table below.
 - **Orientation is navigation**: `context query --intent orientation` returns a budgeted `[Slug Map]` plus optional `[Summary]` hints for scope choice only; it is not direct answer evidence.
@@ -42,14 +42,15 @@ returned row as a small evidence card.
 | `refers_to_nodes` | Optional supplemental anchors when present |
 | `slug` | Candidate handle when the output is asking you to choose a Node |
 | `message` | Miss, broad-query, blocked, or narrowing guidance |
+| `visibility` / `visible:` footer | Completeness signal for `node_view`; when `complete=true` / `visible: complete`, the shown Node Sections are exhaustive and there is no pagination |
 
 Supplemental context can come from:
 
 ```text
-context query --intent node_search --scope <slug>
+context query --intent node_view --scope <slug>
 context query --intent impact_analysis --scope <slug>
-context query --intent node_search --refers-to <slug>
-context query --intent description_search --scope <slug> --query "<keywords>"
+context query --intent node_view --refers-to <slug>
+context query --intent section_search --scope <slug> --query "<keywords>"
 ```
 
 ## Query Route Decision Table
@@ -58,10 +59,10 @@ Choose the `context query` command based on problem intent. **Structure queries 
 
 | Problem intent | Primary command | When to use |
 |---|---|---|
-| **Vague question, no Node named** User asks "what is X" / "what are the X types" | `context query --intent orientation` or `context query --intent node_search --query "<keyword>"` | User unsure which Node to focus on; show structure first |
-| **Node explicitly named** User mentions a specific service/system | `context query --intent node_search --scope <slug>` | User wants to explore a specific known Node |
+| **Vague question, no Node named** User asks "what is X" / "what are the X types" | `context query --intent orientation` or `context query --intent node_lookup --query "<keyword>"` | User unsure which Node to focus on; show structure first |
+| **Node explicitly named** User mentions a specific service/system | `context query --intent node_view --scope <slug>` | User wants to open a specific known Node |
 | **Relationship / impact** User asks what depends on X / impact of changing X | `context query --intent impact_analysis --scope <slug>` | User asks about how a Node connects to others |
-| **Detail within known scope** (only after Node chosen) User asks for specific feature/behavior within chosen Node | `context query --intent description_search --scope <slug> --query "<detail>"` | User wants specific detail within an already-chosen Node |
+| **Detail within known scope** (only after Node chosen) User asks for specific feature/behavior within chosen Node | `context query --intent section_search --scope <slug> --query "<detail>"` | User wants specific detail within an already-chosen Node |
 | **Very specific fact** (fallback, rarely needed) User asks for exact implementation location | `context query "$ARGUMENTS"` | Semantic fallback when structure queries don't suffice |
 | **Archive / reconciliation** User asks "find duplicates" / "check coverage" | `context query --intent recall --profile <reconcile-dedupe\|reconcile-support\|reconcile-refresh> --query "..."` | Only when user explicitly asks for audit/reconciliation |
 
@@ -73,13 +74,13 @@ Choose the `context query` command based on problem intent. **Structure queries 
 - Text output targets about 2000 tokens total. It prints `[Slug Map]` first, then `[Summary]`.
 - `[Slug Map]` uses finalized structure relationships and is for choosing the next `--scope <slug>`. If the workspace is too large, deeper layers are folded first.
 - `[Summary]` is truncated before the map. If output is still over budget, the command prints a continuation note. Drill down with scoped queries; there is no page-token pagination.
-- Use `context query --intent node_search --scope <slug>` for a Node overview, or `context query --intent description_search --scope <slug> --query "<keywords>"` for details inside that Node.
+- Use `context query --intent node_view --scope <slug>` for a Node overview, or `context query --intent section_search --scope <slug> --query "<keywords>"` for details inside that Node.
 - Use `context query --intent orientation --tag <tag>` or `context query --intent orientation --domain <slug>` to reduce the map before choosing a scope.
 - When `slug` and `title` are equivalent after normalization (for example `payment-api` and `Payment API`), text output shows only the slug.
 
 ## BM25 Search Strategy
 
-When using `description_search`, `recall`, or `node_search --query`, the CLI uses BM25 (keyword-based, not embedding-based) for matching. BM25 requires explicit keyword coverage, so queries must be precise:
+When using `section_search`, `recall`, or `node_lookup`, the CLI uses BM25 (keyword-based, not embedding-based) for matching. BM25 requires explicit keyword coverage, so queries must be precise:
 
 - **Mix bilingual keywords**: Include both Chinese and English terms when querying—e.g., `"<chinese-term> <english-equivalent>"`, `"<product-name> <alternate-name>"`
 - **Include synonyms & aliases**: BM25 is keyword-literal, so if your query doesn't match Section content exactly, try related terms
@@ -87,12 +88,12 @@ When using `description_search`, `recall`, or `node_search --query`, the CLI use
 - **Scope to reduce noise**: Use `--scope <slug>` to focus on a single Node; broad queries may be blocked or produce low-quality matches
 
 Query intents that use BM25:
-- `context query --intent node_search --query "<short-keyword>"` — find candidate Nodes from slug, title, summary, aliases, and tags when direct slug/title/alias matching does not resolve the query
-- `context query --intent description_search --scope <slug> --query "<keywords>"` — find Section details using keyword matching within a known Node
+- `context query --intent node_lookup --query "<short-keyword>"` — find candidate Nodes from slug, title, summary, aliases, and tags when direct slug/title/alias matching does not resolve the query
+- `context query --intent section_search --scope <slug> --query "<keywords>"` — find Section details using keyword matching within a known Node
 - `context query --intent recall --profile <profile> --query "<keywords>"` — archive audit and reconciliation queries using keyword matching
 
 Do NOT use BM25 strategy for:
-- `context query --intent node_search --scope <slug>` or `--node <slug>` — uses structure, not keywords
+- `context query --intent node_view --scope <slug>` or `--node <slug>` — uses structure, not keywords
 - `context query --intent orientation` — uses structure, not keywords  
 - `context query --intent impact_analysis` — uses structure, not keywords
 
@@ -135,11 +136,11 @@ Determine what the user is trying to learn. Choose the appropriate command from 
 - **Vague problem** — user unsure which Node to focus on
   - Indicators: asks "what is X", "what are the X types", "how to understand X", or question without Node anchor
   - Action: Run `context query --intent orientation` to show available Nodes and structure; then pick a Node or ask for narrower scope
-  - **Note**: `node_search` uses structure not BM25; orientation always works regardless of workspace content
+  - **Note**: `node_lookup` resolves unknown Node names; `node_view` opens known Node structure; orientation always works regardless of workspace content
 
 - **Node explicitly named** — user mentions a specific service/system/concept
   - Indicators: user names a specific Node or system, "tell me about X", "show me X"
-  - Action: Run `context query --intent node_search --scope <slug>` to explore that Node
+  - Action: Run `context query --intent node_view --scope <slug>` to explore that Node
 
 - **Relationship / impact** — user asks how Nodes relate or what breaks if X changes
   - Indicators: "what depends on X", "impact of X", "relationship between X and Y"
@@ -147,7 +148,7 @@ Determine what the user is trying to learn. Choose the appropriate command from 
 
 - **Detail within known scope** — user already chose a Node, now asking for specific detail
   - Indicators: (comes after Node is selected) user asks "how does X handle [feature]", "what features does X support"
-  - Action: Run `context query --intent description_search --scope <slug> --query "<detail-keywords>"` — use BM25 keywords for precise matching
+  - Action: Run `context query --intent section_search --scope <slug> --query "<detail-keywords>"` — use BM25 keywords for precise matching
 
 - **Archive / reconciliation** — user explicitly asks for dedup/audit/coverage
   - Indicators: "find duplicates", "check source coverage"
@@ -170,6 +171,7 @@ Run the command from Step 1. Read the CLI output carefully.
   - Only suggest `/context-align` + `/context-compile` if user wants it compiled
 - ⚠️ **`truncated`** (entries cut off) → Mark answer as "non-exhaustive"
   - Proceed to Step 3; ask for narrowing only if user needs complete inventory
+- ✓ **`node_view` says `visible: complete` / `visibility.complete=true`** → Do not run `section_search` merely to check completeness; use `section_search` only when you need keyword narrowing or ranking inside the Node
 - ✓ **Entries returned** → Proceed to Step 3
 
 ## Step 3: Compose answer from returned structure
@@ -202,7 +204,7 @@ To dive deeper into any system, ask me for more details or let me know which Nod
 ```
 
 **Why show structure first?** Even when you know keywords, structure queries reveal the full landscape.
-Agents should explore Nodes first, then use description_search for details within a chosen Node.
+Agents should explore Nodes first, then use section_search for details within a chosen Node.
 
 ## Step 4: Explore further (if user requests)
 
@@ -211,10 +213,10 @@ Once Node scope is clear, user may ask for deeper exploration.
 **Supplemental query triggers:**
 
 - User asks about Node's relationships/dependencies → `context query --intent impact_analysis --scope <slug>`
-- User asks for full Node content after partial answer → `context query --intent node_search --scope <slug>`
-- User asks specific detail within chosen Node → `context query --intent description_search --scope <slug> --query "<keywords>"` 
+- User asks for full Node content after partial answer → `context query --intent node_view --scope <slug>`
+- User asks specific detail within chosen Node → `context query --intent section_search --scope <slug> --query "<keywords>"` 
   - **Use BM25 strategy**: mix Chinese and English keywords for better matching (e.g., mix synonym or translated forms of the search term)
-- User names another Node in `refers_to_nodes` and asks about its relationship → `context query --intent node_search --refers-to <slug>`
+- User names another Node in `refers_to_nodes` and asks about its relationship → `context query --intent node_view --refers-to <slug>`
 
 **BM25 tips for supplemental queries:**
 - When searching for a detail, include both native and translated forms of terms

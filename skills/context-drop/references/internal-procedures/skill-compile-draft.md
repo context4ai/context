@@ -4,7 +4,7 @@ description: >
   Packaged skill invoked by `/context:compile`; not a user slash command. For one Node at a time, reads
   the CLI-provided `NodeContext` (planned metadata, raw snippets, and
   existing Sections if any), classifies every raw fragment into a Section
-  kind via the priority chain, writes `body` + `source_refs[]`,
+  kind via the priority chain, writes `content` + optional `summary` + `source_refs[]`,
   and emits a compile draft JSON document. The CLI
   validates the actions via `context compile --draft <slug> --input - --plan`.
   Activates when `/context:compile` iterates across the confirmed align plan.
@@ -26,13 +26,13 @@ Classify raw evidence for one Node into `add` / `skip` (and on refresh: `update`
 - Pick `kind` by the [Section Kind Canon](#section-kind-canon), also exposed as `section_kind_priority` in `context schema compile-draft`. First matching form wins. A `decision` needs at least two surfaced alternatives plus a reason; bare "we use X because Y" is `spec`. Reach `description` only after every more specific kind fails.
 - `kind × node.type` must satisfy the CLI Section mount matrix; mismatches get rejected at write time. When the strongest kind is blocked by mount matrix, fall to the next legal kind whose form actually fits — do not collapse to `description` just because it mounts everywhere, and do not invent thin precision (e.g. one-line `spec`) just to avoid `description` either. See [Description anti-abuse gates](#description-anti-abuse-gates) for the classification checks at the description boundary.
 - Every write action cites raw via `source_refs[]`, choosing values from `raw_snippets[].source_ref`. Use a single-element array for one citation. Treat each source ref as an opaque citation token; never fabricate, parse, dereference, or cite navigation-only blocks as evidence for a content Section.
-- Use one `body` field for Section prose; it may be long and may contain fenced code. The CLI derives the internal short claim/detail split and rejects retired fields (`content`, `detail`, singular `source_ref`, quoted-evidence) with canonical repair hints — read those hints rather than memorising the blacklist. Omit optional fields when empty.
-- Preserve documentation/reference URL blocks. If a citation-eligible raw block is primarily links (官网 / docs / reference / related links), create a small `description` Section such as "相关链接" and keep every URL in `body`; do not drop link-only evidence just because it is not prose. If the URL block is only `context_only`, keep it as background and emit an ownership/structure challenge instead of citing it.
+- Use `content` for the Section text the reader should see. It may be long and may contain URLs, tables, commands, config, or code fences. Add `summary` only when content is long; omit it when content is short. The CLI rejects retired fields (`body`, `detail`, `raw`, singular `source_ref`, quoted-evidence) with canonical repair hints — read those hints rather than memorising the blacklist. Omit optional fields when empty.
+- Preserve documentation/reference URL blocks. If a citation-eligible raw block is primarily links (官网 / docs / reference / related links), create a small `description` Section such as "相关链接" and keep every URL in `content`; do not drop link-only evidence just because it is not prose. If the URL block is only `context_only`, keep it as background and emit an ownership/structure challenge instead of citing it.
 - `refers_to_nodes[]` only carries slugs present in the context's glossary, existing Sections, or the current align plan; never invent one.
 - `skip` is the honest default when raw adds nothing. Bare `skip` (no `source_refs[]`) is only for deterministic no-ops such as unchanged input or pure navigation. When a snippet was reviewed and intentionally not written, emit `skip` with `source_refs[]` from that snippet so semantic review can record `reviewed_no_write`.
 - Any Node may legitimately compile to no Sections when the provided snippets contain only navigation (`Parent` / `Children` / `Related` / `Relations`) or placeholder text that explicitly says no detailed content is available. Emit `skip`; do not turn align summaries, parent/child lists, sibling links, or placeholders into `description` Sections. The align graph and Node metadata preserve structure; active Sections need citation-eligible content.
 - FAQ collections attach to the most specific finalized Node (Entity → Action → Domain fallback); never create a standalone FAQ container.
-- Output language: Node-facing summaries and user-facing draft explanations follow `NodeContext.generation_policy.language` when present; otherwise match the raw material. Draft `body` is source-bound: prefer the cited source language when it differs from the workspace language, and do not translate quoted English facts into Chinese just to satisfy workspace language. Preserve product names, code identifiers, CLI flags, slugs, `block_id` / `source_ref` tokens, and exact quoted evidence as printed. Kind / confidence / identifier fields stay English.
+- Output language: Node-facing summaries and user-facing draft explanations follow `NodeContext.generation_policy.language` when present; otherwise match the raw material. Draft `content` is source-bound: prefer the cited source language when it differs from the workspace language, and do not translate quoted English facts into Chinese just to satisfy workspace language. Preserve product names, code identifiers, CLI flags, slugs, `block_id` / `source_ref` tokens, and exact quoted evidence as printed. Kind / confidence / identifier fields stay English.
 - Stable output: keep action order aligned with evidence order — that ordering is the only stability concern the CLI cannot enforce. The CLI rejects unknown fields (timestamps, random ids, host/scratch paths) and canonicalises stored payloads; fixed rules and schema come from this skill, so only the current NodeContext should vary between repeated Node draft calls.
 
 ## Edge cases — consult references when:
@@ -62,11 +62,11 @@ Boundary recap (rules not captured by the schema enums):
 
 Canonical shape: `context schema compile-draft --format yaml` (or `--format json`). The CLI is the source of truth for fields, enums, and validation — do not memorise the shape from this file.
 
-Main-path ops are **`add`** and **`skip`**. A typical new Section action is `{ op: "add", kind: "<chain-picked>", body: "...", source_refs: ["src-1#... L10-14@..."] }`; never spell that as `add_section` because the `actions[]` array already names the target object. A bare skip is `{ op: "skip", reason: "..." }`; a reviewed-no-write skip carries `source_refs[]` from the cited snippet.
+Main-path ops are **`add`** and **`skip`**. A typical new Section action is `{ op: "add", kind: "<chain-picked>", content: "...", source_refs: ["src-1#... L10-14@..."] }`; never spell that as `add_section` because the `actions[]` array already names the target object. A bare skip is `{ op: "skip", reason: "..." }`; a reviewed-no-write skip carries `source_refs[]` from the cited snippet.
 
 `update` / `supersede` / `deprecate` ops live in [references/refresh-and-update.md](references/refresh-and-update.md). `structure_challenge` / `pending_ownership_challenge` ops live in [references/structural-challenges.md](references/structural-challenges.md). Do not emit them from the main path.
 
-`source_refs[]` values are copied verbatim from `raw_snippets[].source_ref`; a single citation is still a single-element array. When one Section summarises contiguous multi-block evidence, list only the source refs the `body` actually consumes. If the CLI reports `compile-source-refs-auto-narrowed`, it safely reduced an over-wide citation; removed refs are still uncovered, so add separate actions for distinct knowledge or leave them to an evidence-carrying `skip`. Set `rewrite: false` only when the raw wording is already clear and should be preserved. Preserving a cited prose/bullet list as the Section's user-facing content is allowed when that list is the actual knowledge; the anti-pattern is copying raw text into long detail only as traceability or lexical-score padding. For `example` Sections that cite command / config / code fences, include the relevant fenced block alongside the short summary in `body`.
+`source_refs[]` values are copied verbatim from `raw_snippets[].source_ref`; a single citation is still a single-element array. When one Section summarises contiguous multi-block evidence, list only the source refs the `content` actually consumes. If the CLI reports `compile-source-refs-auto-narrowed`, it safely reduced an over-wide citation; removed refs are still uncovered, so add separate actions for distinct knowledge or leave them to an evidence-carrying `skip`. Preserve raw wording in `content` when it is already clear. Preserving a cited prose/bullet list as the Section's user-facing content is allowed when that list is the actual knowledge; the anti-pattern is copying raw text only as traceability or lexical-score padding. For `example` Sections that cite command / config / code fences, include the relevant fenced block in `content`.
 
 ## Section Kind Canon
 
@@ -77,7 +77,7 @@ example -> comparison -> faq -> incident -> changelog ->
 decision -> spec -> warning -> principle -> description
 ```
 
-| kind | Use when | `body` should contain | Positive / negative boundary |
+| kind | Use when | `content` should contain | Positive / negative boundary |
 |---|---|---|---|
 | `example` | fenced code, config, or command sample | what the sample does plus the full snippet when useful | `<AppProvider />` sample or `bun run build`; plain "wrap with AppProvider" is `description` |
 | `comparison` | at least two subjects across at least two dimensions | compared subjects, dimensions, and table/matrix | `X vs Y vs Z` table; "two options have tradeoffs" is `description`; "choose X over Y" is `decision` |
@@ -182,17 +182,19 @@ For dense documents, group nearby snippets by their `block_locator_id` heading p
 
 For each classified snippet:
 
-1. Write `body` as the Section text the reader should see. It can include long prose, URLs, tables, command/config/code fences, or short raw wording. Keep one coherent, cited fact group per action; the CLI derives the internal `content`/`detail` split.
-2. Keep `body` faithful to the cited raw terms: do not introduce acronyms, abbreviations, translations, or aliases that do not appear in the cited raw snippet unless raw itself defines the equivalence or the user confirms it later during semantic review. Use `rewrite: false` when preserving raw expression is the least surprising representation.
-   - `source_support` is a lexical diagnostic, not the final semantic judge. Do not stuff raw text into `body` just to raise matched-term counts.
-   - There is no separate default `evidence-echo` warning. Treat "echo" as an anti-pattern: raw copied into detail merely to show basis/evidence, while `source_ref` already provides traceability.
+1. Write `content` as the Section text the reader should see. It can include long prose, URLs, tables, command/config/code fences, or short raw wording. Keep one coherent, cited fact group per action.
+2. Keep `content` faithful to the cited raw terms: do not introduce acronyms, abbreviations, translations, or aliases that do not appear in the cited raw snippet unless raw itself defines the equivalence or the user confirms it later during semantic review.
+   - Default to raw wording. Only make semantic-preserving edits for formatting, typo fixes, casing, entity/alias consistency, or sentence cleanup. If the raw text is already clear, `content` should equal the raw text.
+   - `source_support` is a lexical diagnostic, not the final semantic judge. Do not stuff raw text into `content` just to raise matched-term counts.
+   - There is no separate default `evidence-echo` warning. Treat "echo" as an anti-pattern: raw copied only to show basis/evidence, while `source_ref` already provides traceability.
    - For `description` / `spec`, a concise summary plus the cited bullet list is acceptable when the bullets are the useful user-facing knowledge. It becomes echo only when the copied text is not meant to be read as active knowledge.
-3. If the cited block contains documentation/reference URLs, preserve them in `body`. Link-only blocks are still useful knowledge; use `kind: description` with a concise "相关链接" identity when no more specific kind applies.
-4. Omit `confidence` for ordinary confirmed claims. Assign `confidence` per the [Confidence rubric](#confidence-rubric) only when the evidence is not confirmed.
-5. Fill `refers_to_nodes[]` per [Glossary and refers_to_nodes](#glossary-and-refers_to_nodes).
-6. Cite evidence with `source_refs[]`, picking values from `raw_snippets[].source_ref`. When one Section summarizes contiguous multi-block evidence, list only the source refs consumed by that Section body; the CLI verifies that the refs can collapse to one canonical citation token and may auto-narrow over-wide citations. If the evidence is non-contiguous or contains separable claims, split the draft into separately cited actions instead of stretching one action across unrelated blocks. For `skip`, include `source_refs[]` only when the skip represents reviewed no-write material; omit evidence for purely deterministic no-ops such as unchanged input. Never submit singular `source_ref` or quoted-evidence fields; the CLI rejects them.
+3. If `content` is longer than 200 characters, add `summary`. Summary is LLM-authored reader/query aid: one plain paragraph, no Markdown, about `content.length / 10`, minimum 10 characters, recommended maximum 120. The CLI warns on missing or odd summaries; it does not auto-generate them.
+4. If the cited block contains documentation/reference URLs, preserve them in `content`. Link-only blocks are still useful knowledge; use `kind: description` with a concise "相关链接" identity when no more specific kind applies.
+5. Omit `confidence` for ordinary confirmed claims. Assign `confidence` per the [Confidence rubric](#confidence-rubric) only when the evidence is not confirmed.
+6. Fill `refers_to_nodes[]` per [Glossary and refers_to_nodes](#glossary-and-refers_to_nodes).
+7. Cite evidence with `source_refs[]`, picking values from `raw_snippets[].source_ref`. When one Section summarizes contiguous multi-block evidence, list only the source refs consumed by that Section content; the CLI verifies that the refs can collapse to one canonical citation token and may auto-narrow over-wide citations. If the evidence is non-contiguous or contains separable claims, split the draft into separately cited actions instead of stretching one action across unrelated blocks. For `skip`, include `source_refs[]` only when the skip represents reviewed no-write material; omit evidence for purely deterministic no-ops such as unchanged input. Never submit singular `source_ref` or quoted-evidence fields; the CLI rejects them.
 
-Rendered knowledge uses a CLI-derived short claim as the visible blockquote and renders longer supporting material from `body` as collapsed Details when needed. A reader should be able to understand the Section from the short claim first; long supporting material is active knowledge, not a hidden evidence copy.
+Rendered knowledge starts with optional `c4a:summary`, then the active `content`. If `content` differs from the cited raw, the CLI may render a debug-only `c4a:raw` block for audit; agents must not emit `raw`.
 
 ### Step 4 — Emit the JSON
 
@@ -200,7 +202,7 @@ Emit one compile draft JSON document for the caller to pass to `context compile 
 
 ### Step 5 — Self-verify
 
-- [ ] Every action's `target_node` equals `node.slug`, with a legal `kind × node.type` combination and `body` + `source_refs[]` only (no singular `source_ref`, no `content` / `detail`, no quoted-evidence or extractive-contract fields, no new terms absent from the cited raw). If not, return to **Step 2** for kind/mount-matrix issues, otherwise **Step 3**.
+- [ ] Every action's `target_node` equals `node.slug`, with a legal `kind × node.type` combination and `content` + optional `summary` + `source_refs[]` only (no singular `source_ref`, no `body` / `detail` / `raw`, no quoted-evidence or extractive-contract fields, no new terms absent from the cited raw). If not, return to **Step 2** for kind/mount-matrix issues, otherwise **Step 3**.
 - [ ] Every `description` action survives the [Description anti-abuse gates](#description-anti-abuse-gates). If not, **Step 2** to split or `skip`.
 - [ ] Coverage matches evidence density: dense raw with one broad action returns to **Step 2** unless remaining snippets are duplicates / navigation / placeholders / already covered. Citation-eligible URL blocks are either preserved or `skip`-with-evidence.
 - [ ] `skip` semantics: bare `skip` only for deterministic no-op (unchanged input or pure navigation); reviewed-no-write `skip` carries `source_refs[]` from the cited snippet. When raw adds nothing, exactly one `op: skip` with a reason — not `actions: []`. If not, **Step 3**.

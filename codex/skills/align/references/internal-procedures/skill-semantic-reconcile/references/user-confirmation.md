@@ -14,6 +14,7 @@ For runs where review emits no questions, ignore this file.
 Only **explicit user reply to a question your agent asked**. The following are **not** confirmation:
 
 - Auto mode being active
+- Delegated mode being active (`--delegated` lets the CLI make scoped low-risk review decisions; it is not user confirmation for a specific question)
 - A blanket "continue" / "yes go ahead" earlier in the session
 - Permission to run shell commands
 - A previous decision applied with `decided_by: user` for a different item
@@ -61,6 +62,7 @@ After user confirmation:
 - `decided_by` is a **top-level** decision field, not a `proposed` sub-field.
 - Final executable decisions must not carry `user_confirmation.required: true`. That flag belongs only on `action: ask_user` items that still need input.
 - User confirmation permits weak support and omit. It does **not** permit unsupported evidence, missing hard facts, or contradictory claims — those still need stricter evidence or stay `ask_user`.
+- `decided_by: delegated_agent` is reserved for CLI-generated decisions inside a delegated compile workflow. Do not emit it from this skill.
 
 ## How this slots into the main procedure
 

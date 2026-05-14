@@ -39,7 +39,7 @@ Invocation note: code capture does not run through `npx`. `context capture --cod
   - Then run `context capture --code` with one repeated `--module <path>` for every selected package. The CLI derives and stores path filtering silently from that selection.
 - User asks to record conversation material, a decision, a revision intent, or a temporary observation → use note capture:
   - Classify once as `revision`, `decision`, or `brainstorm`; temporary observations are `brainstorm`. If unclear, ask one clarification.
-  - For `revision` or `decision`, require an existing target. If missing, run `context query --intent node_search <user words>` and ask the user to confirm a Node or Section before writing.
+  - For `revision` or `decision`, require an existing target. If missing, run `context query --intent node_lookup --query "<user words>"` and ask the user to confirm a Node or Section before writing.
   - Write the body to `context capture --note --intent <intent> --anchor <node-slug>[#<section-id>] --input -` for anchored notes, or omit `--anchor` for brainstorm.
   - For `revision`, organize the stdin Markdown with headings: `旧上下文`, `修改意图`, `新内容`, `验证条件`.
   - For `decision`, organize the stdin Markdown with headings: `议题`, `选项`, `决议`, `理由`.

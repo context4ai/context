@@ -26,6 +26,7 @@ only; the CLI performs every write.
 - Every `merge_update` / `supersede` / `keep_separate` / `split_then_reanchor` write must be supported by **one** valid `proposed.source_ref` covering the final content. Preserve raw evidence's domain terms, numbers, code literals, and named entities; do not introduce acronyms, translations, or aliases the cited evidence does not define. Do not cite a title, `Relations` / `Parent` / `Children` / `Related` navigation line as the sole support for a substantive claim.
 - Unresolved conflicts and low-confidence support → `action: ask_user`. Never expose `src-N`, Section ids, or source refs as the user-facing choice; they belong only in the structured payload.
 - `decided_by: user` only after a specific recent user message answering the specific question for the specific item. Auto mode, blanket "continue," and long-running permissions are **not** user confirmation. Never mark yourself.
+- `decided_by: delegated_agent` is CLI-owned. Do not emit it manually; it appears only when the current compile workflow was created with user-authorized `--delegated`.
 - `omit` is never an automatic decision. If an item looks redundant or low-value, follow the Scope Review pass in [references/scope-review-and-omit.md](references/scope-review-and-omit.md); only a user-confirmed no-write outcome may become `action: omit` with `decided_by: user`.
 - `apply` consumes the ready review artifact for the current workflow scope: run plain `context reconcile apply`. There is no input file; do not extract `apply_document` with scripts.
 - Stable output: preserve prepared item order; the CLI rejects unknown fields (timestamps, random ids, storage paths, host absolute paths) and canonicalises stored payloads. Fixed rules and schema come from this skill; only the prepared context varies between repeated review calls.
@@ -37,7 +38,7 @@ only; the CLI performs every write.
 | `prepare.mode` is `drop` or `refresh` (covers `remove_unsupported` mode semantics, `reanchor`, `split_then_reanchor`) | [references/mode-semantics.md](references/mode-semantics.md) |
 | review returned `support_confirmation`, `omit_confirmation`, `scope_review_required`, or any `ask_user` you need to upgrade to an executable decision | [references/user-confirmation.md](references/user-confirmation.md) |
 | review returned `agent_hints[]` with `code: "context-only-leakage-high"` | [references/leakage-and-ownership.md](references/leakage-and-ownership.md) |
-| items carry `temporal_prior` / `source_captured_at` / `temporal_disposition`, `source_support.evidence_block_*`, `proposed.detail`, or review returned `example_detail_preservation` | [references/temporal-and-evidence.md](references/temporal-and-evidence.md) |
+| items carry `temporal_prior` / `source_captured_at` / `temporal_disposition`, `source_support.evidence_block_*`, or prepared long `proposed.content` / `proposed.summary` | [references/temporal-and-evidence.md](references/temporal-and-evidence.md) |
 | considering `action: omit`, or items look redundant / low-value / scope-wrong | [references/scope-review-and-omit.md](references/scope-review-and-omit.md) |
 
 If none of the above hold, you are on this skill's main path: refresh/drop/non-compile reconcile, or compile scope-review fallback with no special review-time signals. Ordinary compile prepare relation/support judgment remains `skill-compile-judge`.
@@ -82,9 +83,9 @@ Edge-case actions (`reanchor`, `split_then_reanchor`, `remove_unsupported`, `omi
 | action | Required fields | Validation |
 |---|---|---|
 | `duplicate_skip` | `target` | Exact duplicate or already-applied no-op only. |
-| `merge_update` | `target`, `proposed.content`, `proposed.source_ref`, `proposed.detail` when present in prepare | Final content must be supported by cited evidence; `proposed.kind`, when present, must match target kind. |
-| `supersede` | `target`, `proposed.kind`, `proposed.content`, `proposed.source_ref`, `proposed.detail` when present in prepare | New Section claim must be supported by cited evidence. |
-| `keep_separate` | `target`, `proposed.kind`, `proposed.content`, `proposed.source_ref`, `proposed.detail` when present in prepare | New orthogonal claim must be supported by cited evidence. Weak support is allowed only after explicit user confirmation (`decided_by: user`). |
+| `merge_update` | `target`, `proposed.content`, `proposed.source_ref`, `proposed.summary` when present in prepare | Final content must be supported by cited evidence; `proposed.kind`, when present, must match target kind. |
+| `supersede` | `target`, `proposed.kind`, `proposed.content`, `proposed.source_ref`, `proposed.summary` when present in prepare | New Section claim must be supported by cited evidence. |
+| `keep_separate` | `target`, `proposed.kind`, `proposed.content`, `proposed.source_ref`, `proposed.summary` when present in prepare | New orthogonal claim must be supported by cited evidence. Weak support is allowed only after explicit user confirmation (`decided_by: user`). |
 | `ask_user` | `user_confirmation.required: true` | Use when business meaning or support cannot be decided from prepared evidence. |
 
 Source-support gate: if the proposed claim cannot honestly point at one range covering every sentence, split the claim or ask the user instead of forcing it into an incorrect `source_ref`. If a useful reader summary would combine adjacent evidence, first broaden `proposed.source_ref` so the cited range covers every sentence; if that broadening would require unrelated content, split. See [references/temporal-and-evidence.md](references/temporal-and-evidence.md) for evidence-block repair hints.

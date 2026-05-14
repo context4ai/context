@@ -35,7 +35,7 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
    - `context workflow show --payload align-segments --view segment --unwrap --format json`
    - `context workflow show --payload align-segments --view blocks --unwrap --format json` (summary only)
    - `context workflow show --payload align-segments --view windows --unwrap --format json`
-   - Drill into content only with semantic filters such as `--window <window-id>`, `--heading <prefix>`, `--range <start:end>`, or `--token-budget <n>`.
+   - Drill into content only with focused filters such as `--window <window-id|src-N:M>`, `--heading <prefix>`, `--range <start:end>`, or `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`.
    - `--unwrap` only removes the workflow metadata envelope. It does not turn a summary view into detail output.
 3. Reuse existing knowledge before inventing candidates. For named terms or entities, prefer `context mdrive glossary match <name>` and `context mdrive node list --format json` over direct file reads. Treat `match.kind`, `match.matched`, and `match.rank` as stable lookup hints: exact title/slug/alias hits should usually reuse the existing Node instead of creating another one.
    - Apply packaged `references/internal-procedures/skill-align-workflow.md` Node classification gates before candidate ops and again before finalize: Action requires scale plus process evidence; Entity requires a concrete A/B tag or pure `term`; Domain requires child Nodes; fake Entities need at least two suspicious signals before downgrade.
@@ -88,6 +88,8 @@ After a successful finalize, use a targeted ownership patch for small role corre
 Submit it with `context align --ownership-patch - --format json`. Keep `base_digest` in the patch body when you want stale ownership rejection. Use `context schema align-ownership-patch` for the exact shape.
 
 If `align-segments.incremental.mode` is `incremental`, the finalize step is a delta merge: submit only the Nodes and block ownership supported by the current scanned sources, and reference previous finalized Nodes when they are parents, dependencies, domain children, owners, or visibility targets. Absence of an old Node or edge is not a delete signal. Do not redeclare an old parent/domain just to attach a new child. `sections[].owner` must be a Node declared in the current payload; previous finalized Nodes can be referenced structurally but do not receive new section plans from this incremental payload. Existing or previously removed Node slugs cannot change `node_type`; `context align --scan --full` does not bypass that guard. Use a new slug for a different type, or retire the old slug through `context drop` or explicit structure correction before re-aligning.
+
+`nodes[].planned_sections` is the distinct set of Section kinds planned for that Node. List each kind at most once; do not copy `sections[].section_kind` one-for-one when a Node has multiple Sections of the same kind.
 
 For large finalize decisions, use `block_ownership_defaults[]` instead of enumerating every block. Each default names a `source_id` plus the same ownership fields as a block-level entry except `block_id`; the CLI expands it across that source's coverable blocks. Put only exceptions in `block_ownership[]`, which override defaults for their `block_id`. Keep the payload on stdin; do not generate temp JSON files just to list hundreds of ownership rows.
 
