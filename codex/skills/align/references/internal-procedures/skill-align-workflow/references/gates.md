@@ -23,6 +23,23 @@ Good examples:
 | `entity` term | "X identifier", "Y business metric", idempotency |
 | `action` | "user submits X request end-to-end flow", "operator executes Y change flow", "team Z release flow" |
 
+## Title and Source Heading Rules
+
+Classify the Node by the evidence referent, not by the source file title, heading, or local section title. A source title is ordinary evidence just like body prose. It has no automatic right to become `node.title`, `aliases[]`, or `slug`.
+
+After choosing `node_type`, choose the title to fit that type:
+
+| Final type | Title shape |
+|---|---|
+| `entity` concrete | The concrete product, service, library, module, CLI, symbol, application, or system name. |
+| `entity` term | The atomic concept or pattern name, without extra scope/process suffixes. |
+| `domain` | The grouping scope that owns child Nodes. |
+| `action` | The executable process / runbook / flow name that passed the Action Gate. |
+
+Scope/process words in a source title are warning signals when proposed as an Entity title, not hard classification rules. Re-check the type/title when a proposed Entity title contains words such as "方案", "架构", "体系", "演练", "流程", "策略", "能力", "机制", "framework", "architecture", "system", "strategy", "process", or "drill". Keep the wording only when evidence shows it is the formal name of a concrete object or an atomic term.
+
+Relation-only sources should not force title copying. If a relation block has resolvable children and the graph node is useful, prefer an explicit Domain placeholder with `planned_sections: []`. If the source names only an atomic concept such as SSR/CSR, prefer a term Entity title such as "SSR" or "CSR" instead of "SSR 方案" / "CSR 方案".
+
 ## Entity Tag Rules
 
 Use `tags` to state what the Entity is. Legal combinations:

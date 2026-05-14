@@ -1,7 +1,7 @@
 ---
 name: skill-context-query
 description: >
-  Packaged skill invoked by `/context:query`; not a user slash command. 
+  Packaged skill invoked by `/context:query`; not a user slash command.
   Uses structure-first strategy: inspect orientation, resolve unknown Nodes with node_lookup,
   open known Nodes with node_view, then query Section details with section_search. Always
   cite Node slug and Section id.
@@ -94,7 +94,7 @@ Query intents that use BM25:
 
 Do NOT use BM25 strategy for:
 - `context query --intent node_view --scope <slug>` or `--node <slug>` — uses structure, not keywords
-- `context query --intent orientation` — uses structure, not keywords  
+- `context query --intent orientation` — uses structure, not keywords
 - `context query --intent impact_analysis` — uses structure, not keywords
 
 ## Answer citation shape
@@ -190,7 +190,7 @@ Use only the returned Node/Section structure and content. Do not synthesize beyo
 ```
 User asks: "What systems handle X in our architecture?"
 
-Better query (structure-first): 
+Better query (structure-first):
   context query --intent orientation  # Shows all available Nodes
 
 Returns several candidate Nodes matching the question.
@@ -214,7 +214,7 @@ Once Node scope is clear, user may ask for deeper exploration.
 
 - User asks about Node's relationships/dependencies → `context query --intent impact_analysis --scope <slug>`
 - User asks for full Node content after partial answer → `context query --intent node_view --scope <slug>`
-- User asks specific detail within chosen Node → `context query --intent section_search --scope <slug> --query "<keywords>"` 
+- User asks specific detail within chosen Node → `context query --intent section_search --scope <slug> --query "<keywords>"`
   - **Use BM25 strategy**: mix Chinese and English keywords for better matching (e.g., mix synonym or translated forms of the search term)
 - User names another Node in `refers_to_nodes` and asks about its relationship → `context query --intent node_view --refers-to <slug>`
 

@@ -30,7 +30,7 @@ Invocation note: code capture does not run through `npx`. `context capture --cod
 - `$ARGUMENTS` is one or more local `.md` paths → local file batch: `context capture <path...>`.
 - User provides a long newline-separated path list → pass it to `context capture --stdin` with a direct heredoc.
 - `$ARGUMENTS` contains `--inbox` → `context capture --inbox`.
-- `$ARGUMENTS` contains `--refresh` → `context capture --refresh`.
+- `$ARGUMENTS` contains `--refresh` → `context capture --refresh`. This refreshes active Feishu URL sources and local Markdown sources whose stored origin file still exists; code sources use `context capture --code`.
 - User asks for code capture with explicit `--module` flags → run `context capture --code $ARGUMENTS`, preserving code flags such as `--module`, `--version`, `--version-from`, and `--no-runner-cache`.
 - User asks to refresh/re-capture an already configured code source → run `context capture --code` unless the user explicitly wants to change package selection or version flags. The CLI reuses stored `capture_config`, appends a new snapshot only when code/version content changes, and never overwrites prior snapshots.
 - User asks for code capture without explicit `--module` flags → first run `context capture --code $ARGUMENTS --plan --format json`.
