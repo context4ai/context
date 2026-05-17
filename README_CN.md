@@ -108,14 +108,13 @@ bun add -g @c4a/context-cli
 
 | Agent | 模型 | 指令遵循度 | 参数幻觉 | 提取质量 |
 |---|---|---:|---|---:|
+| Codex | GPT 5.5 xh | 95 | 几乎无 | 96 |
 | Claude | Opus 4.6 / 4.7 | 95 | 几乎无 | 95 |
-| Claude | Haiku 4.5 | 92 | 偶尔有 | 91 |
-| Codex | GPT 5.5 | 95 | 几乎无 | 88 |
 | Cursor | Opus 4.6 / 4.7 | 92 | 几乎无 | 85 |
-| Claude | DeepSeek V4 | 80 | 经常 | 55 |
-| Claude | DeepSeek V4 Flash | 65 | 经常 | 50 |
+| Claude | DeepSeek V4 | 70 | 经常 | 55 |
+| Claude | DeepSeek V4 Flash | 55 | 经常 | 45 |
 
-**建议**：目前优先使用 Opus 或 Haiku、GPT；DeepSeek V4 在指令遵循与提取质量上仍有差距，需配合 CLI 进一步优化，预计 v0.5.40 完成 DeepSeek V4 适配并达到 90+ 综合得分。
+**建议**：目前优先使用 GPT 或 Opus；DeepSeek V4 在指令遵循与提取质量上仍有差距，需配合 CLI 进一步优化，预计 v0.5.40 完成 DeepSeek V4 适配并达到 90+ 综合得分。
 
 ## 关于本仓库
 

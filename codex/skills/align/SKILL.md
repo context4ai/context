@@ -21,6 +21,8 @@ Public C4A Context entry for agents that expose skills instead of Claude slash c
 
 Run the beta.8 align workflow. `/context:align` is the user entrypoint; internal stages are workflow payloads, not public slash commands.
 
+If `$ARGUMENTS` contains `--code`, run `context align --code [slug]` and report that dry-run projection plan. This route is CLI-owned, writes no workflow/process files, and is the same deterministic plan implementation used by `context compile --code`.
+
 Keep the prompt shape stable: read fixed schema/protocol first, then existing knowledge lookup, then the current source-specific payload. Do not reorder CLI JSON, add timestamps, or invent scratch paths.
 
 1. Run `context align --scan --format json`. Use the returned workflow payload name, scope id, digest, and `next_command` / `show_command` fields as the continuation handles.
@@ -34,12 +36,13 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
    - `context schema align-candidate-aggregate`
    - `context schema align-structure-decision`
    - `context workflow show --payload align-segments --view segment --unwrap --format json`
-   - `context workflow show --payload align-segments --view blocks --unwrap --format json` (summary only)
+   - `context workflow show --payload align-segments --view source-mapping --unwrap --format json`
+   - `context workflow show --payload align-segments --view blocks --token-budget 2000 --unwrap --format json`
    - `context workflow show --payload align-segments --view windows --unwrap --format json`
-   - Drill into content only with focused filters such as `--window <window-id|src-N:M>`, `--heading <prefix>`, `--range <start:end>`, or `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`.
+   - Drill into content only with semantic filters such as `--source <source-id>`, `--heading <prefix>`, `--window <window-id|src-N:M>`, or a larger `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`. If a budgeted view returns `truncated: true`, follow its `how_to_explore[]` commands before increasing the budget.
    - `--unwrap` only removes the workflow metadata envelope. It does not turn a summary view into detail output.
 3. Reuse existing knowledge before inventing candidates. For named terms or entities, prefer `context mdrive glossary match <name>` and `context mdrive node list --format json` over direct file reads. Treat `match.kind`, `match.matched`, and `match.rank` as stable lookup hints: exact title/slug/alias hits should usually reuse the existing Node instead of creating another one.
-   - Apply packaged `references/internal-procedures/skill-align-workflow.md` Node classification gates before candidate ops and again before finalize: Action requires scale plus process evidence; Entity requires a concrete A/B tag or pure `term`; Domain requires child Nodes; fake Entities need at least two suspicious signals before downgrade. Scope/process words in a source title, such as "方案", "架构", "流程", "策略", or "演练", are review signals for the title/type choice, not proof that the Node is an Entity.
+   - Apply the procedure in `references/internal-procedures/skill-align-workflow.md` for Node classification gates before candidate ops and again before finalize: Action requires scale plus process evidence; Entity requires a concrete A/B tag or pure `term`; Domain requires child Nodes; fake Entities need at least two suspicious signals before downgrade. Scope/process words in a source title, such as "方案", "架构", "流程", "策略", or "演练", are review signals for the title/type choice, not proof that the Node is an Entity.
 4. Submit generated workflow payloads directly through stdin, preferably as JSON. Use YAML schemas only for reading examples when helpful; generated artifacts should avoid YAML quoting/indentation failure loops. Do not create `/tmp` or workspace scratch files for align payloads. The CLI owns ids, reducer validation, workflow payload storage, and mechanical aggregate. You own semantic discovery, Node type/tag decisions, structure decisions, and user-facing questions.
    - Save coarse-read with `context align --coarse-read - --format json`.
      The latest `align-coarse-read` payload is only the most recent checkpoint; durable multi-source reading notes are stored under `align-candidate-ledger.source_readings`.
@@ -55,7 +58,7 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
 context align --finalize -
 ```
 
-If finalize returns an `align-finalize-draft` payload, patch that saved draft with JSON Pointer paths from the returned issues instead of resubmitting the full document:
+If finalize returns an `align-finalize-draft` payload, patch that saved draft with JSON Pointer paths from the returned issues instead of resubmitting the full document. Patch paths are relative to `raw_decision`, so use `/nodes/...`, `/sections/...`, or `/block_ownership/...` rather than `/raw_decision/...`:
 
 ```json
 {
@@ -107,7 +110,7 @@ Do not submit legacy candidate tables, old patch payloads, or full-tree proposal
 - Semantic boundary failures should become downgrade warnings or unresolved items. Do not retry the same semantic judgment in a loop.
 - Hard reference failures must be repaired at the exact op/path with a valid id/ref from the current payload. Use CLI `agent_hints[]` as the repair contract when present.
 - Do not read or modify source snapshots, caches, or rendered workflow artifacts with generic tools. Use `context workflow show`, schema commands, payload name, scope id, digest, and candidate ids as the workflow contract.
-- Do not pipe `context ... --format json` through `jq`, `head`, `tail`, `sed`, `cat`, `2>&1`, Python, Node.js, or shell scripts. Do not read host persisted output files such as Claude `tool-results/**`. Consume complete CLI stdout directly. Use compact views plus `--window` / `--heading` / `--range` / `--token-budget` when the full payload is too large.
+- Do not pipe `context ... --format json` through `jq`, `head`, `tail`, `sed`, `cat`, `2>&1`, Python, Node.js, or shell scripts. Do not read host persisted output files such as Claude `tool-results/**`. Consume complete CLI stdout directly. Use semantic views plus `--source` / `--heading` / `--window` / `--token-budget` and returned `how_to_explore[]` when the payload is too large.
 
 ## Final Report
 

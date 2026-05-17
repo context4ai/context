@@ -27,7 +27,7 @@ only; the CLI performs every write.
 - Unresolved conflicts and low-confidence support → `action: ask_user`. Never expose `src-N`, Section ids, or source refs as the user-facing choice; they belong only in the structured payload.
 - `decided_by: user` only after a specific recent user message answering the specific question for the specific item. Auto mode, blanket "continue," and long-running permissions are **not** user confirmation. Never mark yourself.
 - `decided_by: delegated_agent` is CLI-owned. Do not emit it manually; it appears only when the current compile workflow was created with user-authorized `--delegated`.
-- `omit` is never an automatic decision. If an item looks redundant or low-value, follow the Scope Review pass in [references/scope-review-and-omit.md](references/scope-review-and-omit.md); only a user-confirmed no-write outcome may become `action: omit` with `decided_by: user`.
+- `omit` is never an automatic decision. If an item looks redundant or low-value, follow the Scope Review pass in [skill-semantic-reconcile/references/scope-review-and-omit.md](skill-semantic-reconcile/references/scope-review-and-omit.md); only a user-confirmed no-write outcome may become `action: omit` with `decided_by: user`.
 - `apply` consumes the ready review artifact for the current workflow scope: run plain `context reconcile apply`. There is no input file; do not extract `apply_document` with scripts.
 - Stable output: preserve prepared item order; the CLI rejects unknown fields (timestamps, random ids, storage paths, host absolute paths) and canonicalises stored payloads. Fixed rules and schema come from this skill; only the prepared context varies between repeated review calls.
 
@@ -35,11 +35,11 @@ only; the CLI performs every write.
 
 | Condition | Reference |
 |---|---|
-| `prepare.mode` is `drop` or `refresh` (covers `remove_unsupported` mode semantics, `reanchor`, `split_then_reanchor`) | [references/mode-semantics.md](references/mode-semantics.md) |
-| review returned `support_confirmation`, `omit_confirmation`, `scope_review_required`, or any `ask_user` you need to upgrade to an executable decision | [references/user-confirmation.md](references/user-confirmation.md) |
-| review returned `agent_hints[]` with `code: "context-only-leakage-high"` | [references/leakage-and-ownership.md](references/leakage-and-ownership.md) |
-| items carry `temporal_prior` / `source_captured_at` / `temporal_disposition`, `source_support.evidence_block_*`, or prepared long `proposed.content` / `proposed.summary` | [references/temporal-and-evidence.md](references/temporal-and-evidence.md) |
-| considering `action: omit`, or items look redundant / low-value / scope-wrong | [references/scope-review-and-omit.md](references/scope-review-and-omit.md) |
+| `prepare.mode` is `drop` or `refresh` (covers `remove_unsupported` mode semantics, `reanchor`, `split_then_reanchor`) | [skill-semantic-reconcile/references/mode-semantics.md](skill-semantic-reconcile/references/mode-semantics.md) |
+| review returned `support_confirmation`, `omit_confirmation`, `scope_review_required`, or any `ask_user` you need to upgrade to an executable decision | [skill-semantic-reconcile/references/user-confirmation.md](skill-semantic-reconcile/references/user-confirmation.md) |
+| review returned `agent_hints[]` with `code: "context-only-leakage-high"` | [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md) |
+| items carry `temporal_prior` / `source_captured_at` / `temporal_disposition`, `source_support.evidence_block_*`, or prepared long `proposed.content` / `proposed.summary` | [skill-semantic-reconcile/references/temporal-and-evidence.md](skill-semantic-reconcile/references/temporal-and-evidence.md) |
+| considering `action: omit`, or items look redundant / low-value / scope-wrong | [skill-semantic-reconcile/references/scope-review-and-omit.md](skill-semantic-reconcile/references/scope-review-and-omit.md) |
 
 If none of the above hold, you are on this skill's main path: refresh/drop/non-compile reconcile, or compile scope-review fallback with no special review-time signals. Ordinary compile prepare relation/support judgment remains `skill-compile-judge`.
 
@@ -88,7 +88,7 @@ Edge-case actions (`reanchor`, `split_then_reanchor`, `remove_unsupported`, `omi
 | `keep_separate` | `target`, `proposed.kind`, `proposed.content`, `proposed.source_ref`, `proposed.summary` when present in prepare | New orthogonal claim must be supported by cited evidence. Weak support is allowed only after explicit user confirmation (`decided_by: user`). |
 | `ask_user` | `user_confirmation.required: true` | Use when business meaning or support cannot be decided from prepared evidence. |
 
-Source-support gate: if the proposed claim cannot honestly point at one range covering every sentence, split the claim or ask the user instead of forcing it into an incorrect `source_ref`. If a useful reader summary would combine adjacent evidence, first broaden `proposed.source_ref` so the cited range covers every sentence; if that broadening would require unrelated content, split. See [references/temporal-and-evidence.md](references/temporal-and-evidence.md) for evidence-block repair hints.
+Source-support gate: if the proposed claim cannot honestly point at one range covering every sentence, split the claim or ask the user instead of forcing it into an incorrect `source_ref`. If a useful reader summary would combine adjacent evidence, first broaden `proposed.source_ref` so the cited range covers every sentence; if that broadening would require unrelated content, split. See [skill-semantic-reconcile/references/temporal-and-evidence.md](skill-semantic-reconcile/references/temporal-and-evidence.md) for evidence-block repair hints.
 
 </reference>
 
@@ -113,23 +113,23 @@ Classify each item against the prepared evidence:
 - Additional but separate boundary → `complement` + `keep_separate`.
 - New material replaces old rule → `supersedes` + `supersede`.
 - Direct contradiction → `conflicts` + `ask_user`.
-- Evidence is close but not enough → `ask_user`; for `keep_separate`, review may turn this into `support_confirmation` (see [references/user-confirmation.md](references/user-confirmation.md)).
-- Item appears redundant or not worth writing → run the Scope Review pass in [references/scope-review-and-omit.md](references/scope-review-and-omit.md); never auto-`omit`.
+- Evidence is close but not enough → `ask_user`; for `keep_separate`, review may turn this into `support_confirmation` (see [skill-semantic-reconcile/references/user-confirmation.md](skill-semantic-reconcile/references/user-confirmation.md)).
+- Item appears redundant or not worth writing → run the Scope Review pass in [skill-semantic-reconcile/references/scope-review-and-omit.md](skill-semantic-reconcile/references/scope-review-and-omit.md); never auto-`omit`.
 
-Drop-mode-only branches (`reanchor`, `split_then_reanchor`, `remove_unsupported`) live in [references/mode-semantics.md](references/mode-semantics.md).
+Drop-mode-only branches (`reanchor`, `split_then_reanchor`, `remove_unsupported`) live in [skill-semantic-reconcile/references/mode-semantics.md](skill-semantic-reconcile/references/mode-semantics.md).
 
 ### Step 3 — Emit Decisions
 
 Emit one document with `schema_version: "1.0"` and `decisions[]`. Include only executable final decisions plus unresolved `ask_user` questions. Do not include prose outside the document.
 
-If the latest review rejected the batch with `context-only-leakage-high`, do not convert it into a generic `ask_user`. Follow [references/leakage-and-ownership.md](references/leakage-and-ownership.md): regenerate the affected decision using one of the review hint's explicit repair options and cited item ids, then rerun `context reconcile review`.
+If the latest review rejected the batch with `context-only-leakage-high`, do not convert it into a generic `ask_user`. Follow [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md): regenerate the affected decision using one of the review hint's explicit repair options and cited item ids, then rerun `context reconcile review`.
 
 ### Step 4 — Self-verify
 
 - [ ] Every decision uses canonical `relation` / `action` values per `context schema semantic-decisions`. If not, return to **Step 2**.
 - [ ] Every write action carries the required fields from Action Rules (or, for edge-case actions, the rules in the matching reference). If not, **Step 3**.
 - [ ] `decided_by: user` corresponds to a specific recent user message answering this specific question for this specific item. If not, downgrade to `ask_user`.
-- [ ] No `action: omit` was emitted without `decided_by: user` and a business `rationale`. If any, run Scope Review per [references/scope-review-and-omit.md](references/scope-review-and-omit.md).
+- [ ] No `action: omit` was emitted without `decided_by: user` and a business `rationale`. If any, run Scope Review per [skill-semantic-reconcile/references/scope-review-and-omit.md](skill-semantic-reconcile/references/scope-review-and-omit.md).
 - [ ] If any edge case condition applies (drop/refresh mode, review confirmation request, leakage, temporal/evidence signals, omit), the relevant reference's Self-verify items were also satisfied.
 - [ ] No workspace files were read or written directly; no `--format json` stdout was sliced with shell tools. If violated, restart from **Step 1**.
 

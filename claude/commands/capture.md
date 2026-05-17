@@ -24,7 +24,7 @@ sh -c 'CTX_BIN="$(command -v context)" && node -e "const { createRequire } = req
 
 If the check fails, stop the capture task and surface the CLI's `agent_hints[]` install command (the CLI picks `npm install -g` or `bun install -g` based on how `context` itself was installed). Ask the user once whether to run that command on their behalf; global installs touch shared state, so explicit confirmation is required before invoking `Bash`. If approved, run the exact command from `agent_hints[0].command`, then retry the original `context capture --code ...` invocation. If declined, leave the command visible so the user can run it manually. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
 
-Invocation note: code capture does not run through `npx`. `context capture --code` resolves `@c4a/extract` and `@c4a/extract-ts` from the installed `@c4a/context-cli` package using Node package resolution, prepares `.context/.cache/aspect-runners/<cacheKey>/c4a-extract-code.mjs`, and executes that wrapper directly. The plugin must therefore be available to the same global install that provides `context`.
+Invocation note: code capture does not run through `npx`. `context capture --code` resolves `@c4a/extract` and `@c4a/extract-ts` from the installed `@c4a/context-cli` package using Node package resolution, prepares a user-cache aspect runner wrapper, and executes that wrapper directly. The plugin must therefore be available to the same global install that provides `context`.
 
 ### Route by argument
 
