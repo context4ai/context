@@ -27,6 +27,7 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 - Escape hatch: when an item has no candidates, `relation_verdict: new` with `compared_section_ids: []` and `compared_count: 0` is valid and expected.
 - For `duplicate`, `supersede`, `conflict`, or `merge_into`, set `target_section_id` to the matched candidate Section id.
 - Same `source_ref` can support different Section kinds only when the semantic role differs. Detect and explain same-source-ref multi-kind cases instead of treating them as automatic duplicates.
+- A supported judge verdict may override low lexical `source_support` only when the cited raw evidence covers the hard facts. If `source_support.missing_hard_terms[]` names real missing facts, do not mark support as supported.
 - Weak support is a warning-level verdict, not permission to invent missing facts. Unsupported support should normally pair with `conflict` or a later user question rather than a write decision.
 
 <reference>

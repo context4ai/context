@@ -1,7 +1,7 @@
 {
   "name": "context",
   "displayName": "C4A Context",
-  "version": "0.5.29-beta.29",
+  "version": "0.5.33-alpha.2",
   "description": "Turn project sources into a local, source-linked knowledge workspace your agent can maintain and query.",
   "author": {
     "name": "Context4AI",
