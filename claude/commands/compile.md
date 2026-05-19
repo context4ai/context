@@ -29,6 +29,8 @@ Modes:
 
 Code mode short-circuit: if `$ARGUMENTS` contains `--code`, run `context compile --code [slug]` immediately, relay the CLI output, and stop. Do not run the default compile doctor/draft/reconcile preflight for code projection.
 
+Code-only default routing: if `$ARGUMENTS` is empty, first run `context status --view summary --format json`. When its `next_actions[]` / `next_step.command` contain only `context compile --code ...` actions for active code sources, run `context compile --code` once with no slug so the CLI projects all actionable code sources, then run `context compile --close` only if the compile output says close is needed. If the code projection status asks for `context align --code <slug>` instead, run that dry-run diagnostic and stop with the reported conflict. Do not ask the user whether to run deterministic code projection after they invoked `/context:compile`.
+
 Delegated workflow mode:
 
 - If the user explicitly authorized托管/全自动/delegated mode at the start of this conversation, add `--delegated` to the first compile workflow-creating command, preferably `context compile --scan-changes --delegated --format json`. Do not add it for vague "continue" / "继续" permission.
