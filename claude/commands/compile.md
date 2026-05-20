@@ -1,6 +1,6 @@
 ---
 description: "Compile the confirmed align plan into knowledge articles: draft, semantic reconciliation, apply, then close."
-argument-hint: "[--plan | --code [slug]]"
+argument-hint: "[--plan]"
 allowed-tools: Bash(context:*)
 ---
 
@@ -27,10 +27,6 @@ Modes:
 - **`--plan`** (opt-in when `$ARGUMENTS` contains `--plan`) — per Node, run `context compile --draft <slug> --input - --plan` so the CLI validates stdin draft content without writing active knowledge; surface a user-facing change list (new knowledge, replaced knowledge, unchanged knowledge, and why) while keeping internal Section ids / source refs in details only when needed, then **stop at the end of the per-Node loop — do NOT run close**. The user re-runs `/context:compile` without `--plan` to apply; that run does the real writes + close.
 - **`--code [slug]`** — run the CLI-owned code projection route directly with `context compile --code [slug]`; it does not enter draft/reconcile and uses the same deterministic implementation as `context align --code`.
 
-Code mode short-circuit: if `$ARGUMENTS` contains `--code`, run `context compile --code [slug]` immediately, relay the CLI output, and stop. Do not run the default compile doctor/draft/reconcile preflight for code projection.
-
-Code-only default routing: if `$ARGUMENTS` is empty, first run `context status --view summary --format json`. When its `next_actions[]` / `next_step.command` contain only `context compile --code ...` actions for active code sources, run `context compile --code` once with no slug so the CLI projects all actionable code sources, then run `context compile --close` only if the compile output says close is needed. If the code projection status asks for `context align --code <slug>` instead, run that dry-run diagnostic and stop with the reported conflict. Do not ask the user whether to run deterministic code projection after they invoked `/context:compile`.
-
 Delegated workflow mode:
 
 - If the user explicitly authorized托管/全自动/delegated mode at the start of this conversation, add `--delegated` to the first compile workflow-creating command, preferably `context compile --scan-changes --delegated --format json`. Do not add it for vague "continue" / "继续" permission.
@@ -44,7 +40,7 @@ Stable prompt/output policy: keep fixed protocol, schema, mount matrix, and work
 Preflight:
 
 1. Run `context doctor`; output-align group must be green. If it reports missing aligned knowledge, tell the user to run `/context:align` and stop. Incremental cache group warnings are informational here; only output-align errors block compile.
-2. Run `context mdrive workspace stats --format json`, `context source list --format json`, and `context status --view summary --format json`; record the before counts and `STATUS.semantic.refreshed_source_pending_compile.source_ids[]`. This status means newer raw snapshots exist; it does not mean finalized ownership or `node.sources[]` are already refreshed.
+2. Run `context mdrive workspace stats --format json`, `context source list --format json`, and `context status --format json`; record the before counts and `STATUS.semantic.refreshed_source_pending_compile.source_ids[]`. This status means newer raw snapshots exist; it does not mean finalized ownership or `node.sources[]` are already refreshed.
 3. Run `context compile --scan-changes --format json` and parse the JSON as `COMPILE_WORKSET`. If delegated workflow mode is explicitly authorized, run `context compile --scan-changes --delegated --format json` for this first scan instead. `--scan-changes` is the only workset scan flag; `--plan` is reserved for draft validation.
    - If `context workflow status --format json` has `current: null` but `last_published` is present, continue with `context compile --scan-changes`; the published finalized ownership is still the workspace structure truth. Use `context workflow list --format json` only when you need lineage/history diagnostics.
    - Compile JSON may include `source_finalize`; use it as lineage for the finalized ownership that produced the current Node set and citation ownership.
