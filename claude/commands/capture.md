@@ -14,15 +14,11 @@ length exemption for self-contained slash commands.
 
 Capture is entirely CLI-driven — your role is to route the right `context capture` invocation and relay its output. Never hand-write captured source snapshots: the CLI owns normalisation (NFC, BOM strip, line endings) and the `content_hash` contract, so any manual edit breaks idempotency.
 
-### Code capture dependency preflight
+### Code capture diagnostics
 
-Before any `context capture --code` command, including `--plan`, refresh, or explicit `--module` runs, verify that the TypeScript extraction plugin is installed in the same global package environment as the `context` executable:
+Do not run hand-written dependency preflight commands before `context capture --code`. The CLI owns TypeScript runner/plugin resolution and returns structured `agent_hints[]` when the runner is missing or misconfigured.
 
-```bash
-sh -c 'CTX_BIN="$(command -v context)" && node -e "const { createRequire } = require(\"node:module\"); createRequire(process.argv[1]).resolve(\"@c4a/extract-ts\");" "$CTX_BIN"'
-```
-
-If the check fails, stop the capture task and surface the CLI's `agent_hints[]` install command (the CLI picks `npm install -g` or `bun install -g` based on how `context` itself was installed). Ask the user once whether to run that command on their behalf; global installs touch shared state, so explicit confirmation is required before invoking `Bash`. If approved, run the exact command from `agent_hints[0].command`, then retry the original `context capture --code ...` invocation. If declined, leave the command visible so the user can run it manually. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
+If `context capture --code ...` fails with install or runner hints, surface the CLI's `agent_hints[]` install command exactly as printed. Ask the user once whether to run that command on their behalf; global installs touch shared state, so explicit confirmation is required before invoking `Bash`. If approved, run the exact command from `agent_hints[0].command`, then retry the original `context capture --code ...` invocation. If declined, leave the command visible so the user can run it manually. Do not inline `@c4a/extract-ts`, do not hand-write code snapshots, and do not continue with partial capture.
 
 Invocation note: code capture does not run through `npx`. `context capture --code` resolves `@c4a/extract` and `@c4a/extract-ts` from the installed `@c4a/context-cli` package using Node package resolution, prepares a user-cache aspect runner wrapper, and executes that wrapper directly. The plugin must therefore be available to the same global install that provides `context`.
 
@@ -35,10 +31,12 @@ Invocation note: code capture does not run through `npx`. `context capture --cod
 - `$ARGUMENTS` contains `--refresh` → `context capture --refresh`. This refreshes active Feishu URL sources and local Markdown sources whose stored origin file still exists; code sources use `context capture --code`.
 - User asks for code capture with explicit `--module` flags → run `context capture --code $ARGUMENTS`, preserving code flags such as `--module`, `--version`, `--version-from`, and `--no-runner-cache`.
 - User asks to refresh/re-capture an already configured code source → run `context capture --code` unless the user explicitly wants to change package selection or version flags. The CLI reuses stored `capture_config`, appends a new snapshot only when code/version content changes, and never overwrites prior snapshots.
+- User provides multiple code target paths → run the code-capture flow once per target path. `context capture --code` accepts only one target path per invocation.
 - User asks for code capture without explicit `--module` flags → first run `context capture --code $ARGUMENTS --plan --format json`.
   - Present only candidate package name, module path, and version. Do not show file counts or the derived path filter.
-  - Ask the user which package paths to capture. If the host interaction supports multi-select, allow multi-select; otherwise ask the user to reply with one or more package paths/names.
-  - Then run `context capture --code` with one repeated `--module <path>` for every selected package. The CLI derives and stores path filtering silently from that selection.
+  - If the plan returns exactly one candidate package, run `context capture --code <original-target-if-present> --module <candidate.path> --format json` immediately.
+  - If the plan returns multiple candidate packages, ask the user which package paths to capture. If the host interaction supports multi-select, allow multi-select; otherwise ask the user to reply with one or more package paths/names.
+  - Then run `context capture --code <original-target-if-present>` with one repeated `--module <path>` for every selected package. The CLI derives and stores path filtering silently from that selection.
 - User asks to record conversation material, a decision, a revision intent, or a temporary observation → use note capture:
   - Classify once as `revision`, `decision`, or `brainstorm`; temporary observations are `brainstorm`. If unclear, ask one clarification.
   - For `revision` or `decision`, require an existing target. If missing, run `context query --intent node_lookup --query "<user words>"` and ask the user to confirm a Node or Section before writing.
@@ -65,9 +63,9 @@ Report the CLI output verbatim. If the CLI reports `N sources changed`, suggest 
 - Run `context status --format json` and use its `next_step.command` / `workflow.next_step`.
 - If status says aligned knowledge is missing or alignment is required → suggest `/context:align`.
 - If status says compile work is pending for Markdown / evidence-backed knowledge → suggest `/context:compile`. Mention `/context:align` only if the user wants to revise the structure.
-- If the capture was code-only and status explains that code compile projection is not available yet, do not suggest `/context:compile`; report that the code-aspect source snapshot was captured and active knowledge generation is a later code projection capability.
+- If the capture was code-only and status reports pending code projection, suggest the CLI-owned code route: `/context:compile --code <source-slug>` or `context compile --code <source-slug>`, followed by `context compile --close` when the CLI asks for close.
 
-Never suggest `/context:compile` when no align plan exists or when the only active source is `aspect:code` raw snapshot data — compile refuses prose-less work and must not be used to hand-build code knowledge.
+Never suggest prose compile or hand-built code knowledge for a code-only source. Code snapshots become active knowledge only through `context compile --code`, which materializes package/category/symbol Nodes deterministically.
 
 If capture is rejected with `agent_hints[].code = "workflow-cross-family-rejected"`, do **not** run `context workflow abandon ...` automatically. First run or ask the user to run `context workflow status --format json` and explain that another workflow is active in this workspace. Continue that workflow when it is the intended task; ask the user before abandoning it when the user wants to discard that in-progress work. If the user expected a different repository/workspace, change to the confirmed workspace root before retrying capture.
 
@@ -95,5 +93,5 @@ Your prose to the user follows the user's conversation language. CLI commands, f
 - In `--format json`, code capture runner cache state is authoritative in `result.runner.cacheMode`: `prepared` means a workspace runner was prepared, `cached` means workspace cache hit, and `bypass` means `--no-runner-cache` used a temporary runner directory instead of the workspace runner cache.
 - Aspect snapshots default to `evidence.mode: none`. Prose-like custom aspects must opt in with `evidence: { mode: block }` in `aspects/<name>/aspect.yaml` before they generate evidence manifests. Invalid `evidence.mode` values are reported as `evidence-policy-invalid`; they are not silently treated as `none`.
 - Code aspect snapshots ship with `evidence.mode: none`; symbols/files/edges are indexed inside the code bucket. Do not ask users to inspect or repair a code `.evidence` manifest.
-- Code aspect capture does not currently generate active knowledge Nodes. Do not ask users to run `/context:compile` just because no code Nodes appear; that is the expected boundary.
+- Code aspect capture writes raw code snapshots first. Materialize them with `context compile --code <slug>` (or no slug for all actionable code sources) before prose align needs to attach documentation to code Nodes.
 - On duplicate capture of the same URL: identical `content_hash` → CLI skips with `unchanged`; different hash → CLI appends a new snapshot.

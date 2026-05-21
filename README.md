@@ -67,10 +67,11 @@ From your project directory:
 
 1. **Init** — `/context:init` creates the `.context/` workspace;
 2. **Capture** — `/context:capture <url-or-path>` pulls in Feishu docs, local Markdown, code snapshots, and so on;
-3. **Align** — `/context:align` places raw material onto the Node structure;
-4. **Compile** — `/context:compile` lets the AI turn raw material into structured Sections;
-5. **Query** — `/context:query <question>` answers from local knowledge, citing Node and Section;
-6. **Drop** — `/context:drop <source-id>` reclaims deprecated material and its derived Sections.
+3. **Code projection** — for code snapshots, `/context:compile --code <source-slug>` materializes package/category/symbol Nodes such as `pkg`, `pkg/components`, and `pkg/symbol/button`;
+4. **Align** — `/context:align` places prose material onto the Node structure, including docs or examples that should attach to existing code symbol Nodes;
+5. **Compile** — `/context:compile` lets the AI turn prose material into structured Sections;
+6. **Query** — `/context:query <question>` answers from local knowledge, citing Node and Section; code workspaces can filter mixed evidence with `--evidence code|prose|all`;
+7. **Drop** — `/context:drop <source-id>` reclaims deprecated material and its derived Sections.
 
 Each step writes readable files and a changelog under `.context/`, so you can review or roll back at any time.
 

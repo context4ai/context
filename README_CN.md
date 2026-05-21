@@ -67,10 +67,11 @@ bun add -g @c4a/context-cli
 
 1. **初始化** — `/context:init` 创建 `.context/` 工作目录；
 2. **采集** — `/context:capture <url-or-path>` 拉取飞书文档、本地 Markdown、代码快照等原始资料；
-3. **对齐** — `/context:align` 将原料归位至 Node 结构；
-4. **编译** — `/context:compile` 由 AI 将原料加工为结构化 Section；
-5. **检索** — `/context:query <问题>` 在本地知识中查询答案，返回 Node 与 Section 级引用；
-6. **撤回** — `/context:drop <source-id>` 回收废弃资料及其派生 Section。
+3. **代码投影** — 对代码快照执行 `/context:compile --code <source-slug>`，生成 `pkg`、`pkg/components`、`pkg/symbol/button` 这类 package/category/symbol Node；
+4. **对齐** — `/context:align` 将文档原料归位至 Node 结构，包括挂靠到已有 code symbol Node 的手册、示例和经验；
+5. **编译** — `/context:compile` 由 AI 将文档原料加工为结构化 Section；
+6. **检索** — `/context:query <问题>` 在本地知识中查询答案，返回 Node 与 Section 级引用；代码工作区可用 `--evidence code|prose|all` 区分代码证据和文档证据；
+7. **撤回** — `/context:drop <source-id>` 回收废弃资料及其派生 Section。
 
 每一步都会在 `.context/` 中留下可读文件与 changelog，支持随时回看与回滚。
 

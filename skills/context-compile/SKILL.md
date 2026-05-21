@@ -38,7 +38,7 @@ Modes:
 
 - **Default (no flag)** — draft plan + semantic reconciliation + apply writes + close.
 - **`--plan`** (opt-in when `$ARGUMENTS` contains `--plan`) — per Node, run `context compile --draft <slug> --input - --plan` so the CLI validates stdin draft content without writing active knowledge; surface a user-facing change list (new knowledge, replaced knowledge, unchanged knowledge, and why) while keeping internal Section ids / source refs in details only when needed, then **stop at the end of the per-Node loop — do NOT run close**. The user re-runs `/context:compile` without `--plan` to apply; that run does the real writes + close.
-- **`--code [slug]`** — run the CLI-owned code projection route directly with `context compile --code [slug]`; it does not enter draft/reconcile and uses the same deterministic implementation as `context align --code`.
+- **`--code [slug]`** — run the CLI-owned code projection route directly with `context compile --code [slug]`, report its output, then stop. This route does not enter doctor/draft/reconcile and uses the same deterministic implementation as `context align --code`. It materializes code snapshots into package/category/symbol Nodes; run `context compile --close` afterward only when the CLI asks for close.
 
 Delegated workflow mode:
 
