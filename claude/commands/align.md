@@ -26,7 +26,7 @@ Keep the prompt shape stable: read fixed schema/protocol first, then existing kn
    - `context workflow show --payload align-segments --view source-mapping --unwrap --format json`
    - `context workflow show --payload align-segments --view blocks --token-budget 2000 --unwrap --format json`
    - `context workflow show --payload align-segments --view windows --unwrap --format json`
-   - Drill into content only with semantic filters such as `--source <source-id>`, `--heading <prefix>`, `--window <window-id|src-N:M>`, or a larger `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`. If a budgeted view returns `truncated: true`, follow its `how_to_explore[]` commands before increasing the budget.
+   - Drill into content only with semantic filters such as `--source <source-id>`, `--heading <prefix>`, `--window <window-id|src-N:M[,selector...]>`, or a larger `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`; comma-separated selectors fetch several windows in one call. Use `windows[].recommended_action` to skip low-signal windows, fetch small sources once, or drill only selected large windows. If repeated `how_to_explore[]` commands dominate the output, add `--compact-hints`; rerun without it only when exact commands are needed.
    - `--unwrap` only removes the workflow metadata envelope. It does not turn a summary view into detail output.
 3. Reuse existing knowledge before inventing candidates. For named terms or entities, prefer `context mdrive glossary match <name>` and `context mdrive node list --format json` over direct file reads. Treat `match.kind`, `match.matched`, and `match.rank` as stable lookup hints: exact title/slug/alias hits should usually reuse the existing Node instead of creating another one.
    - Apply packaged `context:skill-align-workflow` Node classification gates before candidate ops and again before finalize: Action requires scale plus process evidence; Entity requires a concrete A/B tag or pure `term`; Domain requires child Nodes; fake Entities need at least two suspicious signals before downgrade. Scope/process words in a source title, such as "方案", "架构", "流程", "策略", or "演练", are review signals for the title/type choice, not proof that the Node is an Entity.
@@ -104,4 +104,13 @@ Do not submit legacy candidate tables, old patch payloads, or full-tree proposal
 
 ## Final Report
 
-Report in the user's language. Include final Node counts by type, unresolved ownership count, workflow payload identifiers, and the next step (`/context:compile` or another `/context:align` pass for unresolved structure).
+Report in the user's conversation language. Translate section headings into the user's language instead of copying the English labels below verbatim. Optimize for human readability: use Node titles instead of slugs in prose, human-readable Node types (`domain` / `entity` / `action`) instead of internal flags, and Section kind names instead of mount-matrix identifiers. Do not surface workflow payload digests, scope ids, block hashes, snapshot digests, or absolute file paths.
+
+Stable structure:
+
+1. Completion headline. Single line with total Node count and the breakdown by Node type (for example "12 Nodes: 2 domain · 8 entity · 2 action"). Capture data from the finalize result's `summary`.
+2. Node structure tree. Render the finalized Node graph as a tree grouped by domain when domains exist (`domain` Node → its `entity` / `action` children; standalone Nodes appear at root). Show the Node title and Node type for each entry, and mark `[new]` / `[modified]` / `[reused]` per Node based on the finalize delta against the previous finalized ownership. Use the same tree for incremental delta finalize; do not omit reused Nodes referenced as parents or dependencies of changed Nodes.
+3. Variance summary. Bullet list of counts: new Nodes, modified Nodes, reused Nodes, removed Nodes (when any), planned Sections (total across `nodes[].planned_sections`), unresolved ownership items, and any structure-decision warnings. Show every counter so the user can verify nothing unexpected fired, including zeros for new/modified/removed.
+4. Next step. Single command suggestion: `/context:compile` when there is compile work to do; another `/context:align` pass only when unresolved structure remains.
+
+Do not include raw `align-segments` digests, scope ids, or workflow payload identifiers in the report. Those belong in earlier troubleshooting output, not in the completion summary.

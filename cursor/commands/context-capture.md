@@ -54,6 +54,19 @@ EOF
 
 Do not pipe the heredoc through another command, and do not discover files with `find` / `ls` when the user already supplied the paths.
 
+### Final Report
+
+Report in the user's conversation language. Translate section headings into the user's language instead of copying the English labels below verbatim. Optimize for human readability: use document titles instead of source ids, package names instead of `aspect:code:*` strings, and human-readable kind labels ("local markdown", "Feishu doc", "code package") instead of internal tokens. Do not surface content hashes, snapshot digests, workflow payload ids, or absolute file paths.
+
+Stable structure:
+
+1. Completion headline. Single line with the action verb plus core counts: how many sources were captured this round, broken down by `new` / `updated` / `unchanged`. Capture data from `context capture ... --format json` `result.summary` (or per-source statuses when no aggregate is returned).
+2. Per-source list grouped by status. Show each captured source under one of three groups (`new` / `updated` / `unchanged`); within each group list the document title (`source.title`), kind label, and a short delta indicator for updated sources (for example added/removed line counts when the CLI returns them; otherwise "content changed"). Cache-hit code packages belong in `unchanged`. Omit groups that are empty.
+3. Pending workflow signals. When `context status --view summary --format json` reports follow-up work tied to this capture (sources pending align, sources pending compile, refreshed sources pending recompile, code sources pending projection), summarize each as a single line naming the work and which sources are affected. Omit the section entirely when there is no pending follow-up.
+4. Next step. Single command suggestion driven by status: `/context-align` when structure work is pending, `/context-compile` when prose compile work is pending, `context compile --code <slug>` (or `/context-compile --code <slug>`) when code projection is pending. If nothing is pending, say so explicitly.
+
+Do not include raw CLI diagnostics, agent_hints content, schema names, or workflow payload identifiers in the report. Those belong in earlier troubleshooting output, not in the completion summary.
+
 ### Output handling
 
 Report the CLI output verbatim. If the CLI reports `N sources changed`, suggest the right next step:
