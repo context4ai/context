@@ -4,7 +4,7 @@ argument-hint: "<free text | url | source-id | question>"
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Inspect `$ARGUMENTS` and delegate to the most appropriate subcommand. Route without running anything of your own first — let the target subcommand drive.
 

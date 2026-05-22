@@ -67,7 +67,7 @@ From your project directory:
 
 1. **Init** — `/context:init` creates the `.context/` workspace;
 2. **Capture** — `/context:capture <url-or-path>` pulls in Feishu docs, local Markdown, code snapshots, and so on;
-3. **Code projection** — for code snapshots, `/context:compile --code <source-slug>` materializes package/category/symbol Nodes such as `pkg`, `pkg/components`, and `pkg/symbol/button`;
+3. **Code projection** — for code snapshots, `/context:compile code <source-slug>` materializes package/category/symbol Nodes such as `pkg`, `pkg/components`, and `pkg/symbol/button`;
 4. **Align** — `/context:align` places prose material onto the Node structure, including docs or examples that should attach to existing code symbol Nodes;
 5. **Compile** — `/context:compile` lets the AI turn prose material into structured Sections;
 6. **Query** — `/context:query <question>` answers from local knowledge, citing Node and Section; code workspaces can filter mixed evidence with `--evidence code|prose|all`;

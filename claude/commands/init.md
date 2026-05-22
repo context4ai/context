@@ -10,7 +10,7 @@ UX before `context init` runs) lives inline here per the slash-command
 length exemption for self-contained slash commands.
 -->
 
-## Your task
+## Your Task
 
 Initialize a context workspace, including layout, default-language, and focus confirmation before creating it.
 

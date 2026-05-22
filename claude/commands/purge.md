@@ -4,7 +4,7 @@ argument-hint: "[--yes]"
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Purge the workspace archive. This is destructive: it deletes all restorable
 source/knowledge artifacts created by `context drop --apply-plan`.

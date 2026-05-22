@@ -4,7 +4,7 @@ argument-hint: "<question>"
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Naming convention:
 

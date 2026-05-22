@@ -127,7 +127,7 @@ the user's wording indicates newly captured material is not yet knowledge.
 
 <procedures>
 
-## Step 1: Classify problem intent
+### Step 1 — Classify Problem Intent
 
 Determine what the user is trying to learn. Choose the appropriate command from the Query Route table above.
 
@@ -155,7 +155,7 @@ Determine what the user is trying to learn. Choose the appropriate command from 
   - Action: Run `context query --intent recall --profile <reconcile-*> --query "..."`
   - ❌ Never use for ordinary questions
 
-## Step 2: Execute query & interpret response
+### Step 2 — Execute Query And Interpret Response
 
 Run the command from Step 1. Read the CLI output carefully.
 
@@ -174,7 +174,7 @@ Run the command from Step 1. Read the CLI output carefully.
 - ✓ **`node_view` says `visible: complete` / `visibility.complete=true`** → Do not run `section_search` merely to check completeness; use `section_search` only when you need keyword narrowing or ranking inside the Node
 - ✓ **Entries returned** → Proceed to Step 3
 
-## Step 3: Compose answer from returned structure
+### Step 3 — Compose Answer From Returned Structure
 
 Use only the returned Node/Section structure and content. Do not synthesize beyond what was returned.
 
@@ -206,7 +206,7 @@ To dive deeper into any system, ask me for more details or let me know which Nod
 **Why show structure first?** Even when you know keywords, structure queries reveal the full landscape.
 Agents should explore Nodes first, then use section_search for details within a chosen Node.
 
-## Step 4: Explore further (if user requests)
+### Step 4 — Explore Further When Requested
 
 Once Node scope is clear, user may ask for deeper exploration.
 

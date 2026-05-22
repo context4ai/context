@@ -4,7 +4,7 @@ argument-hint: "<source-id|url> [--reason <text>] [--yes]"
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Retract a source without losing the audit trail. The CLI owns source resolution, impact planning, semantic decision application, knowledge cleanup, source stamp, changelog append, and verify; the agent presents the impact plan and waits for confirmation.
 

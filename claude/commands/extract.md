@@ -4,7 +4,7 @@ argument-hint: "<path> [--format json|jsonl|pretty]"
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Run `context extract $ARGUMENTS` and stream the CLI's stdout back to the user.
 

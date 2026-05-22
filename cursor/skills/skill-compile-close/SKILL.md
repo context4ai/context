@@ -2,7 +2,7 @@
 name: skill-compile-close
 description: >
   Internal procedure invoked by `/context-compile`; not a user command. Runs after every draft
-  iteration. Triggers `context compile --close`, which in one invocation
+  iteration. Triggers `context compile close`, which in one invocation
   refreshes locator-only evidence, canonicalizes source refs, compacts and verifies the final workspace,
   rebuilds the knowledge index, appends a changelog
   entry, rebuilds section fingerprints + incremental cache, and
@@ -25,18 +25,18 @@ command. It does not hand-edit rendered knowledge.
 
 ## TL;DR — Non-negotiables
 
-- CLI-driven. `context compile --close` performs deterministic close writes first (locator refresh, source_ref canonicalization, compact, index/changelog), verifies the final workspace, then rebuilds section fingerprints + incremental cache and archives compile scratch files. Use the command's stdout + exit code; that's the close's full output.
+- CLI-driven. `context compile close` performs deterministic close writes first (locator refresh, source_ref canonicalization, compact, index/changelog), verifies the final workspace, then rebuilds section fingerprints + incremental cache and archives compile scratch files. Use the command's stdout + exit code; that's the close's full output.
 - **Agent NEVER edits rendered knowledge from the close stage.** The CLI is the sole writer for articles, the index, and the changelog. If verify reports an error here, route it back, not around:
   - Content / Section issues (`invalid-section-mount`, `body-ad-hoc-heading`, `dangling-source-alias`) → user re-runs `/context-compile` (draft loop fixes its own Section actions; the close stage does not patch)
   - Structural issues (`contains-cycle`, `edge-dangling-node`, `duplicate-slug`, `invalid-node-type`, `domain-same-file-child`) → user runs `/context-align` to revise the plan
   - Source issues (`dropped-source-reference`) → user runs `/context-drop <id>` to complete the drop
 - Exit 0 → summarise node/section totals, verify, `recompiled`, `locator_updates`, `rebuilt`, fingerprint rebuild count, archive status / archived file count, and any `ready_with_debt` coverage warnings when printed; then stop.
 - Exit 2 → report the full issue list verbatim + point at the right re-entry command above. Do not hand-open the affected rendered article.
-- Coverage warning choice: `ready_with_debt` means close succeeded and unresolved coverage remains visible. First inspect `context workflow show --payload coverage-candidates --view coverage-summary --token-budget 2000 --unwrap --format json`; use each group's neutral `available_actions[]` and narrow with `--view coverage --type <issue-type>` or `--node <slug>` when needed. You may either continue with the warning recorded, or run an uncovered-only repair/skip round. If all unresolved candidates are intentionally excluded for the same reason, use `context compile --coverage-skip-unresolved --coverage-disposition-node <slug> --reason "<reason>"`; otherwise inspect `context schema coverage-disposition`.
+- Coverage warning choice: `ready_with_debt` means close succeeded and unresolved coverage remains visible. First inspect `context workflow show --payload coverage-candidates --view coverage-summary --token-budget 2000 --unwrap --format json`; use each group's neutral `available_actions[]` and narrow with `--view coverage --type <issue-type>` or `--node <slug>` when needed. You may either continue with the warning recorded, or run an uncovered-only repair/skip round. If all unresolved candidates are intentionally excluded for the same reason, use `context compile coverage <slug> --skip-unresolved --reason "<reason>"`; otherwise inspect `context schema coverage-disposition`.
 - Materialized knowledge means either a CLI-written knowledge article, or an explicit no-write placeholder from align: `planned_sections: []` plus source/context/graph support. A compile skip action records reviewed evidence, but it does not by itself materialize an arbitrary finalized Node.
-- Never re-run `context compile --draft` from close to paper over verify failures. Draft failures belong in the draft loop.
+- Never re-run `context compile draft` from close to paper over verify failures. Draft failures belong in the draft loop.
 - Do not use Python, Node.js, shell scripts, `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect `WORKSPACE_DIR`, `.context`, knowledge files, or `/tmp` workflow artifacts.
-- Derivable files self-heal: missing `_index.md` or `changelog.md` is rebuilt inside `compile --close` before the append, locator-only source moves are refreshed, non-canonical but hash-valid `source_ref` locators are canonicalized, and high-signal coverage candidates already backed by active Sections are marked covered. No pre-check needed.
+- Derivable files self-heal: missing `_index.md` or `changelog.md` is rebuilt inside `context compile close` before the append, locator-only source moves are refreshed, non-canonical but hash-valid `source_ref` locators are canonicalized, and high-signal coverage candidates already backed by active Sections are marked covered. No pre-check needed.
 - LLM-assisted repair (`--fix-with-llm`) is not available in the current release.
 - Output language: summary prose matches the user's language; CLI output, issue codes, file paths stay as printed.
 - Successful close archives CLI scratch artifacts through the output lifecycle and rebuilds the user-level incremental cache. Current align state is internal CLI state, not a file protocol. The CLI owns this lifecycle — the agent must not move, delete, or archive workspace output files by hand.
@@ -44,7 +44,7 @@ command. It does not hand-edit rendered knowledge.
 
 <reference>
 
-## Stages inside `context compile --close`
+## Stages inside `context compile close`
 
 Close is one in-process command with one exit code:
 
@@ -63,17 +63,17 @@ Close is one in-process command with one exit code:
 | Outcome | Agent action |
 |---|---|
 | Exit 0, 0 issues | Summarise those counts in the user's language: Nodes touched; Sections added / updated / superseded / deprecated / skipped; `recompiled`; `locator_updates`; `rebuilt`; verify green. Stop. |
-| Exit 0, warnings only | Summarise + list warnings verbatim. For coverage warnings, name both choices: continue with `ready_with_debt`, or run an uncovered-only repair/skip round through `context compile --coverage-skip-unresolved` or `context schema coverage-disposition`. Stop. |
+| Exit 0, warnings only | Summarise + list warnings verbatim. For coverage warnings, name both choices: continue with `ready_with_debt`, or run an uncovered-only repair/skip round through `context compile coverage <slug> --skip-unresolved --reason "<reason>"` or `context schema coverage-disposition`. Stop. |
 | Exit 2, Section / content issue | Surface the full issue list; point the user at re-running `/context-compile` (the draft loop owns Section writes). Do NOT Edit the affected rendered article. |
 | Exit 2, `compile-close-finalized-node-missing-knowledge` | If the missing Node has real citation evidence, point the user at `/context-compile` for that Node. If it is intentionally navigation-only or placeholder-only, point the user at `/context-align` to make it explicit no-write with `planned_sections: []` and context-only/ignored relation or placeholder blocks. |
 | Exit 2, structural issue (cycle, duplicate slug, `invalid-node-type`, `domain-same-file-child`) | Surface the full issue list; point the user at `/context-align` to revise structure. Do not re-run compile. |
 | Exit 2, `dropped-source-reference` | Surface the source-id; point the user at `/context-drop <id>` to complete the drop cleanup. |
 
-The close stage never edits rendered knowledge on the agent side. Every verify error routes back to the correct upstream command (compile / align / drop), never sideways into a hand Edit. Use the CLI issue code and hint printed by `context compile --close` for the error→command mapping.
+The close stage never edits rendered knowledge on the agent side. Every verify error routes back to the correct upstream command (compile / align / drop), never sideways into a hand Edit. Use the CLI issue code and hint printed by `context compile close` for the error→command mapping.
 
 ## Changelog entry shape
 
-`context compile --close` appends one markdown list item per run to
+`context compile close` appends one markdown list item per run to
 the changelog with aggregate counts — not a multi-line
 block:
 
@@ -90,7 +90,7 @@ item convention (see the drop skill for the exact shape).
 
 ### Step 1 — Invoke close
 
-Run `context compile --close`. The caller (typically `/context-compile`) may have already invoked it; check for existing output before re-running.
+Run `context compile close`. The caller (typically `/context-compile`) may have already invoked it; check for existing output before re-running.
 
 ### Step 2 — Interpret
 
@@ -120,7 +120,7 @@ Stop. Do not auto-invoke follow-on commands.
 
 ### Step 5 — Self-verify
 
-- [ ] `context compile --close` ran exactly once per close call — if not, **Step 1**.
+- [ ] `context compile close` ran exactly once per close call — if not, **Step 1**.
 - [ ] If exit 2, every error is surfaced to the user with a re-entry command (compile / align / drop); no silent ignores — **Step 3**.
 - [ ] No agent-hand edits to rendered knowledge — if any, revert; the close stage is read-only for knowledge content.
 - [ ] No Read / Glob / Grep / Write was used against `WORKSPACE_DIR`; CLI-owned output archival is allowed.

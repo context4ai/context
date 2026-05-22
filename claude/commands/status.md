@@ -4,7 +4,7 @@ argument-hint: ""
 allowed-tools: Bash(context:*)
 ---
 
-## Your task
+## Your Task
 
 Run `context status` from the active workspace root only. `status` is intentionally local-only and does not walk up from child directories. If the CLI reports `workspace-not-found`, relay that error and ask the user to rerun from the workspace root or initialize with `/context:init`; do not probe storage paths to discover a workspace.
 

@@ -16,7 +16,7 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 
 ## TL;DR — Non-negotiables
 
-- Input is the full compile prepare payload. Compact summaries are only a pointer; if needed, load the full payload with the `workflow_payload.show_command` from `context compile --draft ... --prepare`.
+- Input is the full compile prepare payload. Compact summaries are only a pointer; if needed, load the full payload with the `workflow_payload.show_command` from `context compile draft ... --prepare`.
 - Do not inspect workspace storage directly or run ad-hoc scripts to reconstruct candidates. Use only `items[]`, `evidence[]`, `source_support` diagnostics, `candidates[]`, `previous_decisions[]`, and `judge_handoff`.
 - Output exactly one JSON or YAML document with `schema_version: "compile.judge-decisions.v1"` and `decisions[]`.
 - Keep one decision per prepared `item_id`, preserving prepare order.
