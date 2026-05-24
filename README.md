@@ -52,7 +52,7 @@ Then install the plugin matching the agent you use:
 
 | Agent | Install |
 |---|---|
-| Claude Code | `/plugin marketplace add context4ai/context`, then `/plugin install context@context` |
+| Claude Code | `/plugin marketplace add context4ai/context`, then `/plugin install context@c4a` |
 | Cursor | Dashboard → Settings → Plugins → Import → `https://github.com/context4ai/context` |
 | Codex CLI | `codex marketplace add context4ai/context` |
 | Vercel-style skills (Windsurf / OpenCode / Cline / Copilot, etc.) | `npx skills add github:context4ai/context <skill-name>` |

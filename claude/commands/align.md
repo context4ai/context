@@ -6,124 +6,55 @@ allowed-tools: Bash(context:*)
 
 ## Your Task
 
-Run the beta.8 align workflow. `/context:align` is the user entrypoint; internal stages are workflow payloads, not public slash commands.
+Run the CLI-guided align workflow. `/context:align` is the user entrypoint; the CLI owns route, stage, validation, workflow payload storage, and the canonical next write. The agent owns semantic Node/Section grouping and any user-facing questions.
 
-If `$ARGUMENTS` contains `--code`, run `context align --code [slug]` and report that dry-run projection plan. This route is CLI-owned, writes no workflow/process files, and is the same deterministic plan implementation used by `context compile code`.
-
-Keep the prompt shape stable: read fixed schema/protocol first, then existing knowledge lookup, then the current source-specific payload. Do not reorder CLI JSON, add timestamps, or invent scratch paths.
+If `$ARGUMENTS` starts with `code`, run `context align code [slug]`, report the dry-run projection plan, and stop. This route is CLI-owned and does not enter the prose align workflow.
 
 ### Step 1 — Scan
 
-Run `context align --scan --format json`. Use the returned workflow payload name, scope id, digest, and `next_command` / `show_command` fields as the continuation handles.
-   - Read `align_route.next_command` before choosing any write path. Direct routes finalize immediately; batched routes are the only routes that use coarse-read and candidate ops.
-   - If the align-segments payload includes `generation_policy`, use it as the language contract for generated Node titles, Node summaries, rationale prose, and planned Section wording. Source-bound Section wording should stay close to the cited source language when it differs from the workspace language. Section summaries may later follow either the workspace language or the source-bound content language. Preserve product names, code identifiers, slugs, flags, `block_id` handles, and citation tokens exactly when needed.
-   - Source titles and headings are ordinary evidence only. Do not automatically copy them into Node titles or aliases; classify the evidence referent first, then choose a title that fits the final Node type.
-### Step 2 — Read Schemas And Views
+Run `context align scan --format json`.
 
-Read schema and payloads through CLI only:
-   - `context schema align-segments`
-   - `context schema align-structure-decision`
-   - If `align_route.next_command` points to `context align --coarse-read -`, also read `context schema align-coarse-read`, `context schema align-candidate-ops`, `context schema align-candidate-ledger`, and `context schema align-candidate-aggregate`.
-   - `context workflow show --payload align-segments --view segment --unwrap --format json`
-   - `context workflow show --payload align-segments --view source-mapping --unwrap --format json`
-   - `context workflow show --payload align-segments --view blocks --token-budget 8000 --unwrap --format json`
-   - `context workflow show --payload align-segments --view windows --page-size 10 --compact-hints --unwrap --format json`
-   - Default `source-mapping` is a compact per-source index; add `--source <source-id>` only when you need that source's block id map. `blocks` is the text-bearing view: budgeted rows include full block `text` plus `text_preview`, so do not call another full-text path just to read selected align blocks.
-   - Drill into content only with semantic filters such as `--source <source-id>`, `--heading <prefix>`, `--window <window-id|src-N:M[,selector...]>`, or a larger `--token-budget <n>`. `src-N:M` means the M-th window under the `source_alias` shown by `--view windows`; comma-separated selectors fetch several windows in one call. When a paged blocks view returns `page.next_token` or `next_command`, follow `next_command` to continue the same view. Use `window_read_plan`, `windows[].read_strategy`, `windows[].content_size`, `windows[].selector`, and `windows[].batch_selector` to skip low-signal windows, use inline tiny windows, batch neighboring small windows, or drill only selected large windows. The preferred agent reading band is roughly 15K-30K chars / 4K-8K tokens; 50K chars / 12K tokens is an acceptable upper band for a single focused read. Rerun the windows view without `--compact-hints` only when exact per-row commands are needed.
-   - `--unwrap` only removes the workflow metadata envelope. It does not turn a summary view into detail output.
-### Step 3 — Reuse Existing Knowledge
+Use the returned `workflow.next-action-envelope.v2` as the source of truth:
 
-Reuse existing knowledge before inventing candidates. For named terms or entities, prefer `context mdrive glossary match <name>` and `context mdrive node list --format json` over direct file reads. Treat `match.kind`, `match.matched`, and `match.rank` as stable lookup hints: exact title/slug/alias hits should usually reuse the existing Node instead of creating another one.
-   - Apply packaged `context:skill-align-workflow` Node classification gates before finalize; in batched routes, also apply them before candidate ops. Action requires scale plus process evidence; Entity requires a concrete A/B tag or pure `term`; Domain requires child Nodes; fake Entities need at least two suspicious signals before downgrade. Scope/process words in a source title, such as "方案", "架构", "流程", "策略", or "演练", are review signals for the title/type choice, not proof that the Node is an Entity.
-   - Code projection Nodes are reusable knowledge handles. When prose evidence should attach to an existing code symbol Node, reuse the code slug (for example `pkg/symbol/button`) instead of creating a parallel document Node. If that code slug is not already in finalized prose ownership, declare it in the current `nodes[]` with the same node type and compatible tags/title, add the desired `planned_sections`, and point `sections[].owner` plus `block_ownership[].owners` at that slug. Do not cite `aspect:code:*` source refs from prose Sections; prose Sections cite only the current document evidence.
-### Step 4 — Follow The Route
+- Follow top-level `next_action.kind` and `next_action.command` for every write.
+- Use `views[].command` for evidence reads, prioritizing entries with `expected: true`.
+- Treat `allowed_actions[]` as permission for read-only insertions such as `show_view`; do not choose a different write path from it.
+- Treat `agent_hints[]`, when present, as a temporary mirror or diagnostic only. If it conflicts with `next_action`, follow `next_action`.
 
-Submit generated workflow payloads directly through stdin, preferably as JSON. Use YAML schemas only for reading examples when helpful; generated artifacts should avoid YAML quoting/indentation failure loops. Do not create `/tmp` or workspace scratch files for align payloads. The CLI owns ids, reducer validation, workflow payload storage, and mechanical aggregate. You own semantic discovery, Node type/tag decisions, structure decisions, and user-facing questions.
-   - If `align_route.next_command` points to `context align --finalize -`, skip coarse-read, candidate ops, ledger, and aggregate. Build the `align-structure-decision` and submit the returned finalize command.
-   - If `align_route.next_command` points to `context align --coarse-read -`, save coarse-read with `context align --coarse-read - --format json`. The latest `align-coarse-read` payload is only the most recent checkpoint; durable multi-source reading notes are stored under `align-candidate-ledger.source_readings`. Prefer omitting `schema_version` in generated coarse-read JSON; the CLI infers single-source vs batch from shape. For multiple sources, submit one envelope with `coarse_reads[]`; each entry must use the current coarse-read fields (`source_id`, `density_profile`, `reading_anchors`, `section_proposals`), not retired `reading_notes` / `block_readings`.
-   - Only after batched coarse-read is stored, submit each candidate batch with `context align --ops - --format json`. Prefer omitting `schema_version`; the CLI normalizes candidate ops to the current schema. Keep `batch_id`, `ops[]`, and current op field names from `context schema align-candidate-ops`.
-   - `--ledger-digest <digest>` is optional. Usually omit it and let the CLI merge against the current ledger; pass it only when you intentionally want stale-batch rejection for a high-assurance retry.
-   - For batched routes, read the resulting payloads with `context workflow show --payload align-candidate-ledger --view ledger --unwrap --format json` and `context workflow show --payload align-candidate-aggregate --view aggregate --unwrap --format json`. To revisit one source's coarse-read notes, add `--source <source-id>` to the ledger view; candidates do not carry source ids, so add `--status` or `--candidate-id` only when you also need candidate rows.
-   - Review `anomaly_signals[]` as warnings: fix clear mistakes with another ops batch, otherwise continue to finalize and carry the warning rationale in your final decision/report.
-### Step 5 — Follow Hints
+For protocol discovery, prefer narrow commands:
 
-If any CLI command returns `agent_hints[]`, follow those hints before retrying. Legacy-protocol hints mean the submitted payload or schema name is retired; switch to the beta.8 schema named in the hint instead of adapting old fields.
+- `context schema workflow.next-action-envelope.v2 --view minimal --format json`
+- `context protocol show align-compile --format json`
+- `context schema align-structure-decision --view minimal --format json`
 
-### Step 6 — Finalize
+### Step 2 — Read Evidence Through Views
 
-Finalize only with `align-structure-decision`:
+Run the expected view commands from the envelope. For additional reads, use only budget-safe workflow views such as:
 
-```bash
-context align --finalize -
-```
+- `context workflow show --payload align-segments --view blocks --page-size 10 --token-budget 8000 --unwrap --format json`
+- `context workflow show --payload align-segments --view windows --page-size 10 --compact-hints --unwrap --format json`
+- `context workflow show --payload align-segments --view source-mapping --unwrap --format json`
 
-If finalize returns an `align-finalize-draft` payload, patch that saved draft with JSON Pointer paths from the returned issues instead of resubmitting the full document. Patch paths are relative to `raw_decision`, so use `/nodes/...`, `/sections/...`, or `/block_ownership/...` rather than `/raw_decision/...`:
+When a view returns `page.next_command`, follow that command to continue the same semantic view. Use `--source`, `--heading`, `--window`, or `--token-budget` only as view filters; do not inspect workflow files, cache files, host tool-results, or stdout fragments with generic tools.
 
-```json
-{
-  "schema_version": "align.finalize-patch.v1",
-  "operations": [
-    { "op": "replace", "path": "/block_ownership/3/primary_owner", "value": "rspack" }
-  ]
-}
-```
+### Step 3 — Produce The Semantic Payload
 
-Submit the patch with `context align patch draft --input - --format json`. Add `--payload-digest` only when you intentionally want an explicit stale guard.
+Reuse existing knowledge before inventing new Nodes: use `context mdrive glossary match <name>` and `context mdrive node list --format json` for term/entity reuse.
 
-After a successful finalize, use a targeted ownership patch for small role corrections only; do not resubmit the whole structure just to move a few blocks between `context_only`, `ignored`, `owned`, or `shared`:
+Apply packaged `context:skill-align-workflow` Node classification gates and structure-decision procedure. Keep generated payloads on stdin. Do not create scratch files under the workspace or `/tmp`.
 
-```json
-{
-  "schema_version": "align.ownership-patch.v1",
-  "base_digest": "sha256:<finalized-ownership-digest>",
-  "block_ownership": [
-    {
-      "block_id": "<block-id>",
-      "ownership_role": "owned",
-      "owners": ["<node-slug>"],
-      "visible_to": ["<node-slug>"],
-      "reason": "Why this block is citation evidence for the node."
-    }
-  ]
-}
-```
+Use CLI diagnostics instead of static prompt rules:
 
-Submit it with `context align patch ownership --input - --format json`. Keep `base_digest` in the patch body when you want stale ownership rejection. Use `context schema align-ownership-patch` for the exact shape.
+- `diagnostics.automatic_ownership_adjustments[]` explains mechanical external-reference demotions and the explicit ownership override shape.
+- Validation diagnostics identify contiguity, citation eligibility, ownership, and mount-matrix problems.
+- `views[]` and `diagnostics` distinguish citable evidence from supporting context; do not infer citation eligibility from raw ownership prose.
 
-If `align-segments.incremental.mode` is `incremental`, the finalize step is a delta merge: submit only the Nodes and block ownership supported by the current scanned sources, and reference previous finalized Nodes when they are parents, dependencies, domain children, owners, or visibility targets. Absence of an old Node or edge is not a delete signal. Do not redeclare an old parent/domain just to attach a new child. `sections[].owner` must be a Node declared in the current payload; previous finalized Nodes can be referenced structurally but do not receive new section plans from this incremental payload. Existing or previously removed Node slugs cannot change `node_type`; `context align --scan --full` does not bypass that guard. Use a new slug for a different type, or retire the old slug through `context drop` or explicit structure correction before re-aligning.
+### Step 4 — Validate And Submit
 
-For code-projection Nodes, distinguish "reuse the existing knowledge file" from "previous finalized prose ownership". A freshly projected code Node may exist in `knowledge/` but not yet appear in finalized ownership. To attach current prose evidence to it, declare that same slug in the current finalize payload and plan only prose-owned Sections for the current evidence; the compile step will merge the prose source and Sections into the existing code Node while preserving code metadata and code-owned Sections.
+When the envelope asks for `validate_align_decision`, submit the structure-decision payload to `context align validate --input - --format json` or the exact returned command. If validate returns blocking diagnostics, repair the payload and rerun validate. If validate returns a `submit_structure_decision` next_action, execute that command with the validated payload.
 
-`nodes[].planned_sections` is the distinct set of Section kinds used as compile scaffolding for that Node, not a hard completion gate. List each kind at most once; do not copy `sections[].section_kind` one-for-one when a Node has multiple Sections of the same kind.
+For any other write kind, execute the top-level `next_action.command` exactly. If the command rejects the payload, follow the returned `next_action` and `reason_code`; do not infer a route fallback from memory.
 
-Each `sections[].block_ids` entry must be one contiguous run of citation-eligible blocks from one source. If one conceptual Section spans gaps, split it into multiple `sections[]` plans or include the intervening citation-eligible blocks. The CLI rejects non-contiguous plans at finalize so compile does not have to rediscover the split later.
+### Final Report
 
-For large finalize decisions, use `block_ownership_defaults[]` instead of enumerating every block. Each default names a `source_id` plus the same ownership fields as a block-level entry except `block_id`; the CLI expands it across that source's coverable blocks. Put only exceptions in `block_ownership[]`, which override defaults for their `block_id`. Keep the payload on stdin; do not generate temp JSON files just to list hundreds of ownership rows.
-
-If a source is only navigation or placeholder context, keep the Node only when the graph/slug is still useful: set `planned_sections: []`, mark the navigation evidence `context_only` or `ignored` as appropriate, and do not promote relation lines to `owned` just to satisfy citations. Compile close will materialize an empty placeholder Node with no active Sections.
-
-Do not submit legacy candidate tables, old patch payloads, or full-tree proposal files. Do not write `knowledge/`; align finalize writes finalized workflow artifacts and source ownership only.
-
-## Constraints
-
-- Node types are `domain`, `entity`, and `action`.
-- Entity tag `term` is mutually exclusive with concrete A/B tags. If both identities matter, create one concrete Entity and one separate term Entity, then connect them later with Section-local `refers_to_nodes[]`.
-- Document structure uses `nodes[].contains_parent` and `edges[].edge_type = "depends_on"` only.
-- Section-local references stay in `refers_to_nodes[]`; do not project them into Node edges.
-- Semantic boundary failures should become downgrade warnings or unresolved items. Do not retry the same semantic judgment in a loop.
-- Hard reference failures must be repaired at the exact op/path with a valid id/ref from the current payload. Use CLI `agent_hints[]` as the repair contract when present.
-- Do not read or modify source snapshots, caches, or rendered workflow artifacts with generic tools. Use `context workflow show`, schema commands, payload name, scope id, digest, and candidate ids as the workflow contract.
-- Do not pipe `context ... --format json` through `jq`, `head`, `tail`, `sed`, `cat`, `2>&1`, Python, Node.js, or shell scripts. Do not read host persisted output files such as Claude `tool-results/**`. Consume complete CLI stdout directly. Use semantic views plus `--source` / `--heading` / `--window` / `--token-budget`, returned `next_command`, and returned `how_to_explore[]` when the payload is too large.
-
-## Final Report
-
-Report in the user's conversation language. Translate section headings into the user's language instead of copying the English labels below verbatim. Optimize for human readability: use Node titles instead of slugs in prose, human-readable Node types (`domain` / `entity` / `action`) instead of internal flags, and Section kind names instead of mount-matrix identifiers. Do not surface workflow payload digests, scope ids, block hashes, snapshot digests, or absolute file paths.
-
-Stable structure:
-
-1. Completion headline. Single line with total Node count and the breakdown by Node type (for example "12 Nodes: 2 domain · 8 entity · 2 action"). Capture data from the finalize result's `summary`.
-2. Node structure tree. Render the finalized Node graph as a tree grouped by domain when domains exist (`domain` Node → its `entity` / `action` children; standalone Nodes appear at root). Show the Node title and Node type for each entry, and mark `[new]` / `[modified]` / `[reused]` per Node based on the finalize delta against the previous finalized ownership. Use the same tree for incremental delta finalize; do not omit reused Nodes referenced as parents or dependencies of changed Nodes.
-3. Variance summary. Bullet list of counts: new Nodes, modified Nodes, reused Nodes, removed Nodes (when any), planned Sections (total across `nodes[].planned_sections`), unresolved ownership items, and any structure-decision warnings. Show every counter so the user can verify nothing unexpected fired, including zeros for new/modified/removed.
-4. Next step. Single command suggestion: `/context:compile` when there is compile work to do; another `/context:align` pass only when unresolved structure remains.
-
-Do not include raw `align-segments` digests, scope ids, or workflow payload identifiers in the report. Those belong in earlier troubleshooting output, not in the completion summary.
+Report in the user's conversation language. Summarize finalized Node counts and meaningful warnings. Do not surface workflow payload digests, scope ids, block hashes, snapshot digests, or absolute paths.

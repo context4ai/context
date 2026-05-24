@@ -1,6 +1,6 @@
 ---
 description: "Capture URLs, local Markdown, source code, stdin path lists, inbox/refresh sources, or conversation notes as Context sources."
-argument-hint: "[url | ./path.md [./more.md...] | --code [path] | --stdin | --inbox | --refresh | note]"
+argument-hint: "[url | ./path.md [./more.md...] | --code [paths...] | --stdin | --inbox | --refresh | note]"
 allowed-tools: Bash(context:*, bun:*, brew:*, curl:*, sh:*, scoop:*, choco:*, lark-cli:*), WebFetch
 ---
 
@@ -24,18 +24,14 @@ Invocation note: code capture does not run through `npx`. `context capture --cod
 
 ### Route by argument
 
-- `$ARGUMENTS` starts with `http://` / `https://` → `context capture $ARGUMENTS` (feishu URLs need `lark-cli`).
-- `$ARGUMENTS` is one or more local `.md` paths → local file batch: `context capture <path...>`.
-- User provides a long newline-separated path list → pass it to `context capture --stdin` with a direct heredoc.
+- `$ARGUMENTS` is one or more `http://` / `https://` targets and/or local `.md` paths → `context capture $ARGUMENTS` (Feishu docx/wiki URLs need `lark-cli`; URL and mixed batches are supported). Do not write an Agent-side URL loop.
+- User provides a long newline-separated URL list or local `.md` path list → pass it to `context capture --stdin` with a direct heredoc. Mixed URL + local `.md` batches are supported when the user intentionally provides both.
 - `$ARGUMENTS` contains `--inbox` → `context capture --inbox`.
 - `$ARGUMENTS` contains `--refresh` → `context capture --refresh`. This refreshes active Feishu URL sources and local Markdown sources whose stored origin file still exists; code sources use `context capture --code`.
 - User asks for code capture with explicit `--module` flags → run `context capture --code $ARGUMENTS`, preserving code flags such as `--module`, `--version`, `--version-from`, and `--no-runner-cache`.
 - User asks to refresh/re-capture an already configured code source → run `context capture --code` unless the user explicitly wants to change package selection or version flags. The CLI reuses stored `capture_config`, appends a new snapshot only when code/version content changes, and never overwrites prior snapshots.
-- User provides multiple code target paths → run the code-capture flow once per target path. `context capture --code` accepts only one target path per invocation.
-- User asks for code capture without explicit `--module` flags → first run `context capture --code $ARGUMENTS --plan --format json`.
-  - Present only candidate package name, module path, and version. Do not show file counts or the derived path filter.
-  - If the plan returns exactly one candidate package, run `context capture --code <original-target-if-present> --module <candidate.path> --format json` immediately.
-  - If the plan returns multiple candidate packages, ask the user which package paths to capture. If the host interaction supports multi-select, allow multi-select; otherwise ask the user to reply with one or more package paths/names.
+- User provides one or more code target paths, or asks for code capture without explicit `--module` flags → run `context capture --code $ARGUMENTS --format json` directly. The CLI preflights every target first; if any target is ambiguous it returns candidates without writing, otherwise it captures all selected code targets serially.
+  - If the CLI returns candidate packages, ask the user which package paths to capture.
   - Then run `context capture --code <original-target-if-present>` with one repeated `--module <path>` for every selected package. The CLI derives and stores path filtering silently from that selection.
 - User asks to record conversation material, a decision, a revision intent, or a temporary observation → use note capture:
   - Classify once as `revision`, `decision`, or `brainstorm`; temporary observations are `brainstorm`. If unclear, ask one clarification.
@@ -49,6 +45,7 @@ For stdin batches, use this shape:
 
 ```bash
 context capture --stdin <<'EOF'
+https://example.feishu.cn/wiki/abc
 docs/a.md
 docs/b.md
 EOF

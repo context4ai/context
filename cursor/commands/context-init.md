@@ -68,7 +68,10 @@ Q. What will this workspace mainly hold?
 Interpret the answer:
 - Chose A–D → generate a 2–3 line focus description in the user's language. Phrase it as
   "primarily X; supporting materials such as Y may also be filed here" rather than exclusion
-  language — workspaces absorb auxiliary material in practice. Pass it as `--focus "..."`.
+  language — workspaces absorb auxiliary material in practice. Show the exact generated focus
+  text to the user and ask for one confirmation before running `context init`. If the user
+  approves, pass it as `--focus "..."`; if the user edits it, pass the edited text as
+  `--focus "..."`; if the user declines or says to skip, run without `--focus`.
 - Chose E or described freely → pass the user's text verbatim as `--focus "..."`.
 - User says "skip" / "don't care" → run `context init` without `--focus`.
 - `$ARGUMENTS` already contains `--focus "..."` → skip this step entirely.

@@ -19,7 +19,7 @@ only; the CLI performs every write.
 
 ## TL;DR — Non-negotiables
 
-- Input is the full `context reconcile prepare` payload. If the caller handed you a compact prepare summary or `--view issues` payload, load the full payload first with `context workflow show --payload prepare --unwrap --format json` (add `--digest` only as an explicit stale guard). Never `grep` / `sed` / `jq` / `cat` / `head` workflow scratch files or `--format json` stdout to recover prepare fields, and do not Read / Glob / Grep / Write workspace `raw/` / `knowledge/` / `archive/` / `decisions/` — the prepare payload and review output are the only inputs.
+- Input is the budget-safe `context reconcile prepare` summary or issues view. When an item lists candidates, load that item's candidate detail view with `context workflow show --payload prepare --view candidates --item-id <item-id> --unwrap --format json`; request broader detail only when a CLI `next_action` or detail command explicitly asks for it. Never `grep` / `sed` / `jq` / `cat` / `head` workflow scratch files or `--format json` stdout to recover prepare fields, and do not Read / Glob / Grep / Write workspace `raw/` / `knowledge/` / `archive/` / `decisions/` — the prepare payload and review output are the only inputs.
 - Ordinary compile prepare judgment belongs to `skill-compile-judge`. Use this skill for refresh/drop/non-compile reconcile, or when compile review asks for scope/omit/user-confirmation reasoning that is outside the judge handoff.
 - Output: one YAML or JSON document conforming to `context schema semantic-decisions --format yaml`. The schema defines canonical `relation` and `action` enums and the per-action required fields; do not memorise the enum list from this skill.
 - Accept a prepared `default_decision` with the compact form `{ item_id, accept_default: true }` (optionally `decided_by` / `rationale`); the CLI hydrates `target` / `proposed`. Empty `decisions: []` means "no items in prepare," not "accept all defaults." Without `--accept-safe-defaults`, emit one compact accept entry per safe default you intend to accept. With `--accept-safe-defaults`, the CLI auto-accepts mechanically safe no-candidate supported writes and reviewed-no-write skips, so emit only the manual decisions that still need judgment.
@@ -37,7 +37,7 @@ only; the CLI performs every write.
 |---|---|
 | `prepare.mode` is `drop` or `refresh` (covers `remove_unsupported` mode semantics, `reanchor`, `split_then_reanchor`) | [skill-semantic-reconcile/references/mode-semantics.md](skill-semantic-reconcile/references/mode-semantics.md) |
 | review returned `support_confirmation`, `omit_confirmation`, `scope_review_required`, or any `ask_user` you need to upgrade to an executable decision | [skill-semantic-reconcile/references/user-confirmation.md](skill-semantic-reconcile/references/user-confirmation.md) |
-| review returned `agent_hints[]` with `code: "context-only-leakage-high"` | [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md) |
+| review diagnostics or cutover hints returned `code: "context-only-leakage-high"` | [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md) |
 | items carry `temporal_prior` / `source_captured_at` / `temporal_disposition`, `source_support.evidence_block_*`, or prepared long `proposed.content` / `proposed.summary` | [skill-semantic-reconcile/references/temporal-and-evidence.md](skill-semantic-reconcile/references/temporal-and-evidence.md) |
 | considering `action: omit`, or items look redundant / low-value / scope-wrong | [skill-semantic-reconcile/references/scope-review-and-omit.md](skill-semantic-reconcile/references/scope-review-and-omit.md) |
 
@@ -122,7 +122,7 @@ Drop-mode-only branches (`reanchor`, `split_then_reanchor`, `remove_unsupported`
 
 Emit one document with `schema_version: "1.0"` and `decisions[]`. Include only executable final decisions plus unresolved `ask_user` questions. Do not include prose outside the document.
 
-If the latest review rejected the batch with `context-only-leakage-high`, do not convert it into a generic `ask_user`. Follow [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md): regenerate the affected decision using one of the review hint's explicit repair options and cited item ids, then rerun `context reconcile review`.
+If the latest review rejected the batch with `context-only-leakage-high`, do not convert it into a generic `ask_user`. Follow [skill-semantic-reconcile/references/leakage-and-ownership.md](skill-semantic-reconcile/references/leakage-and-ownership.md): regenerate the affected decision using the review diagnostic's explicit repair options and cited item ids, then rerun `context reconcile review`.
 
 ### Step 4 — Self-verify
 

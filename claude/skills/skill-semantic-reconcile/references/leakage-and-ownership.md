@@ -1,6 +1,6 @@
 # Context-only leakage and ownership upgrades
 
-Consult this reference when `context reconcile review` returns `agent_hints[]` with `code: "context-only-leakage-high"`. For runs without that hint, ignore this file.
+Consult this reference when `context reconcile review` returns diagnostics or cutover hints with `code: "context-only-leakage-high"`. For runs without that code, ignore this file.
 
 ## What the hint means
 

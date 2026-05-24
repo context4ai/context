@@ -1,170 +1,89 @@
 ---
-description: "Compile the confirmed align plan into knowledge articles: draft, semantic reconciliation, apply, then close."
+description: "Compile the confirmed align plan into source-linked knowledge through CLI-guided workflow steps."
 argument-hint: "[--plan|code <slug>]"
 allowed-tools: Bash(context:*)
 ---
 
-<!--
-This command is slightly over the 30-line default because it carries
-the default-mode vs `--plan`-mode comparison inline; the mode contrast
-belongs here rather than split across skill references.
-The agent protocol itself still delegates to internal packaged procedures.
--->
-
 ## Your Task
 
-Synthesise the finalized align plan into knowledge through semantic CLI operations. If the user explicitly authorized托管/全自动/delegated mode at the start of this conversation, create the compile workflow with `--delegated`; otherwise stay in manual/default mode. The agent produces compile draft JSON per Node; the CLI owns storage, rendering, verification, and workflow payload persistence. Read workflow payloads with `context workflow show`; write through `context compile`, `context reconcile`, and `context mdrive` operations, never through direct workspace file tools.
+Synthesize finalized align structure into knowledge. The CLI owns workflow routing, validation, reconciliation, apply, close, payload storage, and recovery commands. The agent reads evidence and emits semantic payloads only when `next_action` asks for them.
 
 Naming convention:
 
 - `/context:*` names user slash commands.
 - `context ...` names CLI primitives.
-- Internal packaged procedures invoked by slash workflows are not user slash commands. Do not invent extra slash-command entrypoints for draft or close stages.
+- `context:skill-*` names packaged internal procedures, not user slash commands.
 
 ### Modes
 
-- **Default (no flag)** — draft plan + semantic reconciliation + apply writes + close.
-- **`--plan`** (opt-in when `$ARGUMENTS` contains `--plan`) — per Node, run `context compile draft <slug> --input -` so the CLI validates stdin draft content without writing active knowledge; surface a user-facing change list (new knowledge, replaced knowledge, unchanged knowledge, and why) while keeping internal Section ids / source refs in details only when needed, then **stop at the end of the per-Node loop — do NOT run close**. The user re-runs `/context:compile` without `--plan` to apply; that run does the real writes + close.
-- **`code [slug]`** — run the CLI-owned code projection route directly with `context compile code [slug]`, report its output, then stop. This route does not enter doctor/draft/reconcile and uses the same deterministic implementation as `context align --code`. It materializes code snapshots into package/category/symbol Nodes; run `context compile close` afterward only when the CLI asks for close.
+- **Default** — follow `context compile scan --format json` and the returned `next_action` until compile is closed or no work remains.
+- **`--plan`** — validate per-Node draft changes without closing or writing active knowledge; stop after the planned changes are reported.
+- **`code [selector]`** — run `context compile code [selector]`, report the CLI result, and stop unless the CLI asks for a follow-up close. The selector may be omitted to process all actionable code sources; when present, the CLI resolves source slug, package name, or module path.
+- **Delegated** — add `--delegated` only when the user explicitly authorized delegated/automatic mode at the start of this conversation. Do not infer it from vague "continue" permission.
 
-### Delegated Workflow Mode
+### Core Rules
 
-- If the user explicitly authorized托管/全自动/delegated mode at the start of this conversation, add `--delegated` to the first compile workflow-creating command, preferably `context compile scan --delegated --format json`. Do not add it for vague "continue" / "继续" permission.
-- `--delegated` is a workflow-level authorization, not a per-review override. It only lets the CLI auto-accept low-risk defaults: weak lexical support with empty `source_support.missing_hard_terms`, or supported `keep_separate` decisions whose candidates have no duplicate/conflict/archive/reanchor risk and no pinned target Section. Missing hard facts, type drift, schema errors, ownership/structure challenges, user-confirmation gates, and destructive gates still block.
-- Never hand-author `decided_by: delegated_agent`; the CLI injects it only inside a delegated compile workflow.
+- Follow top-level `next_action.kind` and `next_action.command` for every write.
+- Use `views[].command` for evidence reads, prioritizing `expected: true`.
+- Treat `allowed_actions[]` as permission for read-only insertions; it is not a menu of alternate write paths.
+- Treat `agent_hints[]`, when present, as a temporary mirror or diagnostic. If it conflicts with `next_action`, follow `next_action`.
+- Do not use direct file tools, shell scripts, `jq`, `sed`, `cat`, `head`, `tail`, Python, or Node.js to inspect workspace storage, workflow payload files, or `--format json` stdout.
 
-### Shared Policies
+Protocol discovery:
 
-Language policy: your explanatory prose and final reports follow the user's conversation language. Node titles, Node summaries, and user-facing draft explanations follow `NodeContext.generation_policy.language` when the CLI provides it. Source-bound compile draft `content` should stay close to the cited source language when it differs from the workspace language; do not translate cited English facts into Chinese just to match the workspace. Section `summary` is a compact reader/query aid derived from `content` and may follow either the workspace language or the source-bound `content` language; do not patch it merely to switch languages. source_support hard-term matching checks `content`, not `summary`. For `example` Sections that cite a code/config/command fence, keep `content` centered on the cited fenced block and put framing prose in `summary`; split prose into a separate action only when it cites its own evidence. Preserve product names, code identifiers, CLI flags, slugs, `block_id` / `source_ref` tokens, and exact quoted evidence as printed. CLI stdout/stderr, the canonical `processing <slug>` lines, paths, slugs, block ids, source refs, issue codes, flags, and command names stay as printed.
-
-Stable prompt/output policy: keep fixed protocol, schema, mount matrix, and workspace lookup context before per-Node payloads. For repeated Nodes, use the same command order and consume CLI JSON as-is. Do not add current timestamps, random ids, storage paths, or host absolute paths to draft payloads or reports unless the CLI explicitly returned them as semantic workspace facts.
+- `context schema workflow.next-action-envelope.v2 --view minimal --format json`
+- `context protocol show align-compile --format json`
+- command-specific `context schema <name> --view minimal --format json`
 
 ## Preflight
 
-1. Run `context doctor`; output-align group must be green. If it reports missing aligned knowledge, tell the user to run `/context:align` and stop. Incremental cache group warnings are informational here; only output-align errors block compile.
-2. Run `context mdrive workspace stats --format json`, `context source list --format json`, and `context status --format json`; record the before counts and `STATUS.semantic.refreshed_source_pending_compile.source_ids[]`. This status means newer raw snapshots exist; it does not mean finalized ownership or `node.sources[]` are already refreshed.
-3. Run `context compile scan --format json` and parse the JSON as `COMPILE_WORKSET`. If delegated workflow mode is explicitly authorized, run `context compile scan --delegated --format json` for this first scan instead. `context compile scan` is the only workset scan entrypoint; `/context:compile --plan` controls whether the workflow stops before writing.
-   - If `COMPILE_WORKSET.compile_route` is present, treat it as the current advisory route. It does not replace evidence inspection: for every Node that needs a draft, read that Node's source-refs view before writing content, then use `context compile cycle` as the default write path. Enter manual review only when cycle returns it.
-   - If `context workflow status --format json` has `current: null` but `last_published` is present, continue with `context compile scan`; the published finalized ownership is still the workspace structure truth. Use `context workflow list --format json` only when you need lineage/history diagnostics.
-   - Compile JSON may include `source_finalize`; use it as lineage for the finalized ownership that produced the current Node set and citation ownership.
-   - If `COMPILE_WORKSET.reason` is `no-changed-nodes` and there are no refreshed sources pending compile, report `no changed nodes`; stop before invoking the draft procedure, running any draft command, or running close.
-   - If `COMPILE_WORKSET.status` is `unknown-input`, continue conservatively using the Nodes listed in `COMPILE_WORKSET.nodes`; keep the `unknown_inputs[]` reasons in the final report.
-   - Otherwise process only `COMPILE_WORKSET.nodes`, preserving the CLI order. Per-Node `processing <slug>` echoes must match this order.
+1. Run `context doctor`. If output-align errors block compile, tell the user to run `/context:align` and stop.
+2. Run `context status --format json` and `context mdrive workspace stats --format json` for before/after reporting.
+3. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
+4. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
 
-Review input rule: normal compile flow reads the current prepare payload automatically: pass decisions with `context reconcile review --decisions - --view status`. Add `--prepare-digest` only when you intentionally want an explicit stale guard. Never pass prepare files or hand-edited review output to apply; once review writes a ready artifact for the current workflow scope, plain `context reconcile apply` consumes it.
+## Main Loop
 
-Semantic decision schema discovery: run `context schema semantic-decisions` for JSON, or `context schema semantic-decisions --format yaml` for readable YAML. Do not infer it from memory, and do not hand-edit review output; once `context reconcile review` writes a ready review artifact for the current workflow scope, plain `context reconcile apply` consumes it without re-reading any decisions file.
+Repeat until the CLI returns `stop_noop`, `close_compile` succeeds, or a blocking user question remains.
 
-`source_ref` values are opaque citation tokens. Copy them from CLI payloads into draft/reconcile decisions exactly as printed; do not parse, normalize, or dereference them as file paths.
+### Step 1 — Read Expected Views
 
-Do not use Python, Node.js, shell, or other ad-hoc scripts to preprocess, filter, summarize, or inspect ReconcileContext / review payloads. Do not use `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect workspace storage or temporary workflow artifacts. Consume the structured output from `context reconcile prepare` and `context reconcile review` directly, and pass agent-authored draft/decision payloads through stdin rather than scratch files. Never extract `review.apply_document` manually; the CLI applies the ready review artifact stored under the current workflow scope.
+Run expected view commands from the envelope before writing. For compile evidence, prefer the CLI-returned source-ref/scaffold views. They may expose:
 
-## Refreshed Source Loop
+- `citable_source_refs[]` — the only refs eligible for draft `source_refs`.
+- `supporting_context_refs[]` — background/framing only.
+- `required_preserved_literals[]` — URL, code identifier, `source_ref`, or `block_id` literals that must stay visible in the generated content or repair report.
+- diagnostics such as citation eligibility, source support, coverage, engagement, and advisory foldbacks.
 
-Skip this section unless `STATUS.semantic.refreshed_source_pending_compile.source_ids[]` is non-empty or `context compile scan` returns a refresh-related next action. This is a real recovery path, not the default compile path.
+Follow `page.next_command` for pagination. Use `how_to_explore[]` for narrow reads. Do not expand workflow payloads through host tool-results. Node-cycle receipts are compact by default; `actions_meta[]` exposes current draft action handles for patching without an extra status read.
 
-For each refreshed source id, run `context reconcile prepare --mode refresh --source <source-id> --format json`, pass the payload to packaged `context:skill-semantic-reconcile`, review with `context reconcile review --decisions - --view status`, then apply with plain `context reconcile apply` when ready. If the prepare output says the source is unchanged, report no refresh decisions and continue. After applying refreshed sources in default mode, rerun `context compile scan --format json --ignore-source <source-id>` for each refresh-applied source and use that filtered workset for the per-Node loop.
+### Step 2 — Produce Payloads Only When Requested
 
-## Per-Node Loop
+For `submit_compile_cycle`, load the Node evidence via the returned command/views, invoke packaged `context:skill-compile-draft` for exactly one Node, and pass the emitted JSON on stdin to the returned `next_action.command`.
 
-Process Nodes sequentially. `/context:compile` may cover a multi-Node workset, but each Node must finish its own `context → draft → prepare → review → apply` loop before you apply another Node. Do not run multiple Node draft/reconcile/apply chains in parallel or bury several Node failures inside one shell batch. Capture/align can be broad; compile write decisions must be per-Node and complete.
+For `continue_compile_cycle`, do not invoke the draft skill and do not attach `--input`; execute the returned `next_action.command` exactly. `--continue` resumes a saved draft session. If it returns `status: "noop"`, follow the returned `close_compile` next action.
 
-1. Prepare evidence for every workset Node.
-   - **1a. Get NodeContext.** Run `context compile context <slug> --format json`. If the refreshed-source loop applied any source, append the same `--ignore-source <source-id>` flags used for the filtered workset. The JSON stdout is a compact summary with workflow payload handles; do not extract digests by hand. Only expand the durable NodeContext when you are ready to pass its returned `.value` object to the draft skill.
-   - **1b. Inspect citation refs.** First inspect citation handles with `context compile context <slug> --view source-refs --token-budget 2000 --format json` or `context workflow show --payload node-context --view source-refs --token-budget 2000 --unwrap --format json`; this source-refs view is only a projection of `NodeContext.raw_snippets[]`, not a separate data source. Planned Section rows may include `quote_full_text` for example code fences and long paragraph/table evidence already counted in the view budget; use it directly instead of doing a second full-text request for the same row. If the view returns `page.next_token` or `next_command`, follow `next_command` to continue the same source-refs view. If it returns `truncated: true`, follow `how_to_explore[]` to narrow by `--source` / `--heading` or expand the budget.
-   - **1c. Request full text only when needed.** `context compile context <slug> --request-full-text <block_id> --view text --format json` exposes visible evidence text through the narrow text view; read expanded page text from `items[].text`. Long blocks are returned as line-bounded pages with `items[].next_command`; follow that command to continue reading the same block. `request_full_text.pages[].text` and `raw_snippets[].quote` may appear in full NodeContext outputs as mirrors, but the agent-facing expansion path is `--view text`. Do not use file tools to bypass the page.
-   - **1d. Respect evidence boundaries.** NodeContext is derived only from finalized ownership: `primary_evidence` and citation-eligible `shared_evidence` may be cited; `context_only` and every secondary shared snippet are background only and must not be cited. Full-text inspection does not promote secondary shared evidence into citation eligibility; if the block should support this Node, emit `pending_ownership_challenge` or `structure_challenge` instead of writing a Section. If NodeContext includes `generation_policy`, apply it to generated titles, summaries, and user-facing explanations; for source-bound draft `content`, prefer the cited source language when it differs. Do not default Node titles/summaries to English scaffolding such as "How-To", "Strategy", or "Architecture" when the workspace language is not English.
-   - **1e. Use workflow views instead of files.** When the workset requires full context, the NodeContext payload has `incremental.status: "full-context"` with the `unknown_inputs[]` reasons from the same entrypoint. `incremental.locator_only_changes[]` entries with `agent_action: "none"` are close-time maintenance only; do not draft them. The CLI stores the durable NodeContext and coverage candidates as workflow payloads, not root scratch files. Do not expand the context with direct file tools; the NodeContext payload is the evidence boundary. Prefer citation-eligible refs for citeable evidence and treat `context_only` as background. Do not repeatedly slice saved NodeContext JSON manually; use source-refs, coverage-summary, coverage detail filters, and returned `how_to_explore[]`.
-2. Invoke packaged `context:skill-compile-draft` and follow its procedure to emit draft JSON. Do not reconstruct the draft shape or Section classification rules from memory; the draft skill carries the canonical kind priority, mount matrix, examples, and reflection gates. Section writes use `content` plus optional `summary`; new Sections do not need `section_id`, and the op is exactly `op: "add"` because compile-draft `actions[]` already targets Sections. Do not use align-style op names such as `add_section` or `propose_section`. Cite raw via `source_refs: [...]` chosen from `raw_snippets[].source_ref`; use a single-element array for one citation, and use multiple refs only when the Section content actually consumes all of them. The CLI may report over-wide citation narrowing; `removed_lead_in_source_refs` are framing/navigation refs to keep unless you verify they add no meaning, while `removed_redundant_source_refs` are cleanup candidates. The CLI rejects retired `body` / `detail` / `raw`, singular `source_ref`, and quoted-evidence fields with canonical repair hints. If a note or changed raw snippet should be reviewed but intentionally not written, emit `op: "skip"` with the relevant `source_refs: [...]`; a bare skip is only for deterministic no-op cases. If a NodeContext contains only navigation or placeholder evidence (`Parent` / `Children` / `Related` / `Relations`, "no detailed content", etc.), emit `skip`; do not create a low-value `description` Section from that navigation line just to satisfy the workflow.
-3. Fast path: pass the draft to `context compile cycle <slug> --input - --accept-safe-defaults --format json`. This validates the draft, prepares reconcile, reviews mechanically safe defaults, and applies only when no semantic judgment remains. If stdout returns `status: "applied"`, continue to the next Node. If it returns `status: "partial-applied"` or `status: "review-required"`, use the returned `prepare` / `review` handles and continue with the manual path below for only the remaining questions/issues; do not rerun the earlier context/source-ref reads. When you need to patch a remaining action after prepare, run `context compile draft-status <slug> --format json`; each action backed by the latest prepare payload includes `reconcile_item_id` and `source_support`, so use that claim id instead of guessing. To patch and continue in one call, pass a compile draft-patch payload to the same node-cycle command; use `op: "replace_action"`, `action_id`, and `action`, not align-style `op/path/value`.
-4. Conditional manual path: enter this only when `cycle` returns `partial-applied`, `review-required`, a draft revision hint, or a coverage/source-support issue that cannot be resolved by a compile draft-patch. Use the returned `prepare` / `review` handles and CLI `agent_hints[]`; do not restart the Node from context reads. If semantic judgment is needed, load `context workflow show --payload prepare --unwrap --format json`, feed it to packaged `context:skill-compile-judge`, then pass the judge decisions to `context reconcile review --decisions - --view status`. Apply with plain `context reconcile apply` only when review says `ready_to_apply: true`. If questions are returned, ask the user in business language; never mark `decided_by: user` on your own.
-5. Coverage repair: if compile or close reports uncovered required evidence, first inspect `context workflow show --payload coverage-candidates --view coverage-summary --token-budget 2000 --unwrap --format json`, then narrow with `--view coverage` filters. Use `context compile context <slug> --cover-uncovered-only --format json` for targeted repair drafts. Use coverage skip/disposition only when the candidate is intentionally excluded and the CLI exposes that action.
-6. Persistent failure → stop and surface the full rejection list; never edit rendered files to bypass.
+For `patch_compile_draft`, submit only the patch schema requested by the CLI. Use `actions_meta[].action_id` for `replace_action` / `remove_action`, or `add_action` with `before` / `after`; do not use generic `op/path/value` aliases.
 
-## Close
+For `review_reconcile_decisions`, load the prepare payload through CLI views such as `context workflow show --payload prepare --unwrap --format json`, invoke packaged `context:skill-compile-judge` when semantic judgment is needed, run `context reconcile validate --mode compile --node <slug> --decisions - --format json`, repair any blocking diagnostics, then pass validated decisions to the returned review command.
 
-Default mode only — skip entirely in `--plan` mode.
+Invoke `context:skill-compile-judge` only when the top-level `next_action.kind` is exactly `review_reconcile_decisions`. If `questions` are present but `next_action.kind` is `patch_compile_draft`, patch the draft first; do not infer judge mode from question counts.
 
-1. Invoke packaged `context:skill-compile-close`; it triggers `context compile close`, which refreshes locator-only evidence, canonicalizes source refs, compacts derived knowledge files, verifies the final workspace, rebuilds section fingerprints, and refreshes the incremental cache.
-2. Run `context verify` as a second pass if the skill escalated any issue. Run `context mdrive workspace stats --format json` and `context source list --format json` and diff against the before counts.
-3. Run `context mdrive node list --format json` to collect semantic node handles for the final report. Use `node_class` to keep concrete entities, term definitions, domains, and actions visibly separated. If the user explicitly asks for file links, use an explicit human/report view when available; those links are user inspection aids, not workflow inputs.
+For `apply_reconcile_review`, `close_compile`, `finish_current_node`, `submit_coverage_disposition`, or `abandon_or_rescan`, execute the returned command exactly. If it rejects, follow the new `next_action` and `reason_code`.
 
-`context compile close` may archive explicit debug scratch files through the CLI-owned output lifecycle. Normal compile state lives in workflow-scoped payloads. Current align state is internal CLI state, not a file protocol. Do not move, delete, or archive workspace output files yourself; the CLI owns that lifecycle.
+### Step 3 — Repair From Diagnostics
 
-Close only projects finalized Nodes that materialize as a CLI-written knowledge article or as an explicit no-write placeholder declared by align with `planned_sections: []`. A compile skip action records reviewed no-write evidence, but it does not by itself turn an arbitrary finalized Node into a placeholder.
+Use typed diagnostics as the repair contract:
 
-In plan mode, your final report is the aggregated user-facing change list across all Nodes + "re-run `/context:compile` without `--plan` to apply"; do not run `context compile close` or `context verify` (they only make sense against a real write).
+- `reason_code`, `path`, and `missing[]` identify what to fix.
+- `diagnostics.auto_repaired[]` records mechanical repairs; warning severity must be surfaced in the final report.
+- `diagnostics.warnings[]` with info/advisory severity are not write blockers unless `blocking: true` or the next action says so.
+- stale prepare refresh returns `review_reconcile_decisions` with `reason_code: "prepare_refreshed"`; reread the new prepare result before reviewing.
 
-Never claim success unless `context compile close` exited 0 and `context verify` is green. The only exception is the `no-changed-nodes` gate, where you report that compile stopped before draft and no files were written. Never hand-write rendered knowledge, index, or changelog files — the CLI is the sole writer.
-Never use Read / Glob / Grep / Write against workspace storage; use `context workflow`, `context compile`, `context reconcile`, `context source`, `context query`, and `context mdrive`.
-For large draft payloads, feed stdin directly into the `context compile` command with a heredoc. Do not pipe a heredoc through another command and do not redirect generated content into workspace files. Do not pipe `context ... --format json` through `python3`, `node`, `jq`, `sed`, `cat`, `2>&1`, or shell fallback wrappers. For draft schema discovery, run `context schema compile-draft` for readable YAML or `context schema compile-draft --format json` for machine-readable JSON:
+Do not recover by replaying an old manual path, editing rendered files, or guessing schema aliases.
 
-```bash
-context compile draft billing-api --input - --prepare --format json <<'JSON'
-{
-  "schema_version": "compile.draft.v2",
-  "target_node": "billing-api",
-  "actions": [
-    {
-      "op": "add",
-      "kind": "description",
-      "content": "Billing API exposes invoice lookup and payment capture endpoints.",
-      "source_refs": ["src-1#billing-api L10-18@7a6f4c9d2e10"]
-    }
-  ]
-}
-JSON
-```
+## Close And Report
 
-For reviewed no-write material, keep the evidence in the skip action so semantic review can record it:
+When `next_action.kind` is `close_compile`, execute `context compile close` through packaged `context:skill-compile-close` or the returned command. Never claim success unless close exits 0 and verify is green, except the explicit no-work path.
 
-```bash
-context compile draft billing-api --input - --prepare --format json <<'JSON'
-{
-  "schema_version": "compile.draft.v2",
-  "target_node": "billing-api",
-  "actions": [
-    {
-      "op": "skip",
-      "reason": "reviewed; intentionally not written",
-      "source_refs": ["src-1#reviewed-note L12-14@7a6f4c9d2e10"]
-    }
-  ]
-}
-JSON
-```
-
-For navigation-only or placeholder-only context, no active Section is the correct result:
-
-```bash
-context compile draft billing-api --input - --prepare --format json <<'JSON'
-{
-  "schema_version": "compile.draft.v2",
-  "target_node": "billing-api",
-  "actions": [
-    {
-      "op": "skip",
-      "reason": "navigation-only context; align graph already preserves parent/child/related structure"
-    }
-  ]
-}
-JSON
-```
-
-## Final Report Contract
-
-- Report in the user's conversation language.
-- Keep a stable structure with these semantic sections; translate section headings into the user's conversation language instead of copying these English labels verbatim:
-  1. Completion headline.
-  2. Semantic apply table. Include refreshed-source rows first in source-id order when the refreshed-source loop ran, then one row per Node in align frontmatter order. Columns: target (source id or Node title/slug), type (`refresh` or Node type), and the `context reconcile apply --format json` counts: `applied`, `skipped`, `merged`, `superseded`, `kept_separate`, `omitted`, and `questions_resolved`. Include `reanchored`, `removed_unsupported`, and `split_then_reanchored` only when non-zero.
-  3. Close stage with `context compile close` result, final node/section totals, verify status, changelog stamp, incremental counts (`recompiled`, `locator_updates`, `canonical_source_ref_updates`, `rebuilt`), section fingerprint rebuild count, and archive status / archived file count when reported by CLI. Do not use close output as the semantic apply summary; aggregate the per-Node `context reconcile apply` results from Step 6.
-  4. Before/after status diff table with at least total nodes, node counts by type, total sections, and last compile time.
-  5. Knowledge objects by semantic handle. Include every Node slug and `node_class` returned by `context mdrive node list --format json`; group or label term definitions separately from concrete entities when useful. Include human-readable links only when an explicit human/report view returns them, and state that they are not workflow inputs.
-  6. Optional next step only when there is a concrete useful follow-up (for example recapture stale material or run `/context:align` to revise structure).
-- Do not say the user can inspect files without providing links.
-
-## Plan Mode Final Report Contract
-
-- Use the same stable shape where possible, but make the headline clearly indicate that this was a plan-only run.
-- Replace the close-stage section with a not-written section and tell the user to re-run `/context:compile` without `--plan` to apply.
-- Do not include knowledge file links for files that were not written.
+Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.

@@ -52,7 +52,7 @@ bun add -g @c4a/context-cli
 
 | Agent | 安装方式 |
 |---|---|
-| Claude Code | `/plugin marketplace add context4ai/context`，再执行 `/plugin install context@context` |
+| Claude Code | `/plugin marketplace add context4ai/context`，再执行 `/plugin install context@c4a` |
 | Cursor | Dashboard → Settings → Plugins → Import → `https://github.com/context4ai/context` |
 | Codex CLI | `codex marketplace add context4ai/context` |
 | Vercel-style skills（Windsurf / OpenCode / Cline / Copilot 等） | `npx skills add github:context4ai/context <skill-name>` |

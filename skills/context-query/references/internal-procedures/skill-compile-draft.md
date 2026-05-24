@@ -5,8 +5,8 @@ description: >
   the CLI-provided `NodeContext` (planned metadata, raw snippets, and
   existing Sections if any), classifies every raw fragment into a Section
   kind via the priority chain, writes `content` + optional `summary` + `source_refs[]`,
-  and emits a compile draft JSON document. The CLI
-  validates the actions via `context compile draft <slug> --input -`.
+  and emits a compile draft JSON document for the caller to submit to the current envelope's
+  `next_action.command`.
   Activates when `/context:compile` iterates across the confirmed align plan.
 tools:
   - Bash
@@ -19,16 +19,16 @@ Classify raw evidence for one Node into `add` / `skip` (and on refresh: `update`
 ## TL;DR — Non-negotiables
 
 - One Node per invocation — `target_node` MUST equal `node.slug`; no cross-Node writes. Finish the current Node's draft quality checks before the caller moves to another Node's review/apply loop.
-- Agent emits JSON only; no markdown, no direct workspace file writes. The caller passes the JSON to `context compile draft <slug> --input - --prepare`; the CLI stores workflow payloads. `--save-input` is only for an explicit debug scratch copy.
-- Evidence boundary: treat `raw_snippets[]` as complete. Only `raw_snippet_indexes.citation_eligible` may be cited; `context_only` and secondary-shared snippets are background. `request_full_text` may expose full visible evidence text for inspection, but use the narrow text view (`context compile context <slug> --request-full-text <block_id> --view text --format json`) and read `items[].text`; long blocks are paged, so follow `items[].next_command` when present. `request_full_text.pages[].text` and `raw_snippets[].quote` may mirror the same page text in full NodeContext outputs, and it does not change citation eligibility. If a secondary-shared or `context_only` block holds facts that need citation, emit `pending_ownership_challenge` or `structure_challenge` — see [skill-compile-draft/references/structural-challenges.md](skill-compile-draft/references/structural-challenges.md). Never `grep` / `sed` / `jq` / `cat` / `head` raw `--format json` stdout or workflow scratch files in `/tmp` or `.context/.cache/` to recover a token. Instead: for the digest of any workflow payload use `context workflow show --payload <name> --digest-only --format text` (prints just the digest); for substructure use explicit semantic views such as `context compile context <slug> --view source-refs --token-budget 2000 --format json`, `context workflow show --payload node-context --view source-refs --token-budget 2000 --unwrap --format json`, or `context workflow show --payload prepare --view issues --unwrap --format json`; follow returned `next_command` for paged views and `how_to_explore[]` when the view is truncated. For write commands that take `--payload-digest`, omit the flag entirely and let the CLI auto-resolve the latest payload for the current workflow scope.
+- Agent emits JSON only; no markdown, no direct workspace file writes. The caller submits the JSON to the current envelope's `next_action.command`; the CLI validates and stores workflow payloads.
+- Evidence boundary: treat the CLI-provided NodeContext and evidence views as complete. Cite only refs surfaced in `citable_source_refs[]` or `raw_snippet_indexes.citation_eligible`; treat `supporting_context_refs[]`, `context_only`, and secondary-shared snippets as background. `request_full_text` may expose visible text for inspection through the narrow text view (`context compile context <slug> --request-full-text <block_id> --view text --format json`), and it does not change citation eligibility. If supporting/context-only evidence is needed as a citation, emit `pending_ownership_challenge` or `structure_challenge` — see [skill-compile-draft/references/structural-challenges.md](skill-compile-draft/references/structural-challenges.md). Never `grep` / `sed` / `jq` / `cat` / `head` raw `--format json` stdout or workflow scratch files in `/tmp` or `.context/.cache/`; use semantic views and follow returned `next_command` / `how_to_explore[]`. For write commands that take `--payload-digest`, omit the flag unless the CLI explicitly asks for a stale guard.
 - Actions are candidate write actions, not final semantic decisions; `context reconcile prepare` re-derives near-duplicate / conflict / merge relations from `candidates[]` on its own. Op naming is scoped by schema: compile-draft `actions[]` already targets Sections, so Section lifecycle ops are verb-only (`add`, `update`, `supersede`, `deprecate`, `skip`). Do not use align-style names such as `add_section`, `write_section`, or `propose_section`.
 - Source support passing is not completion. Before emitting, estimate coverage from the provided `raw_snippets[]`: if there are 3+ citation-eligible snippets, a one-action draft is valid only when the later snippets are duplicates, navigation, placeholders, or continuations of the same fact. Small dense docs still need multiple actions when later snippets state distinct capabilities, constraints, examples, risks, FAQ, or usage notes. Large manuals/design docs should compile to several orthogonal actions in the same draft. Do not switch into "speed mode" because the first action validates; coverage is part of the draft task.
-- Pick `kind` by the [Section Kind Canon](#section-kind-canon), also exposed as `section_kind_priority` in `context schema compile-draft`. First matching form wins. A `decision` needs at least two surfaced alternatives plus a reason; bare "we use X because Y" is `spec`. Reach `description` only after every more specific kind fails.
+- Pick `kind` from the CLI's `context schema compile-draft` contract, especially `section_kind_priority` and the mount matrix. First matching form wins. A `decision` needs at least two surfaced alternatives plus a reason; bare "we use X because Y" is `spec`. Reach `description` only after every more specific kind fails.
 - `node.planned_sections[]` is an align-time scaffold hint, not a hard completion gate. Prefer a planned kind when the evidence fits; if a source-backed stronger kind differs, emit it and let the CLI warning guide review.
 - `kind × node.type` must satisfy the CLI Section mount matrix; mismatches get rejected at write time. When the strongest kind is blocked by mount matrix, fall to the next legal kind whose form actually fits — do not collapse to `description` just because it mounts everywhere, and do not invent thin precision (e.g. one-line `spec`) just to avoid `description` either. See [Description anti-abuse gates](#description-anti-abuse-gates) for the classification checks at the description boundary.
 - Every write action cites raw via `source_refs[]`, choosing values from `raw_snippets[].source_ref`. Use a single-element array for one citation. Treat each source ref as an opaque citation token; never fabricate, parse, dereference, or cite navigation-only blocks as evidence for a content Section.
 - Use `content` for the Section text the reader should see. It may be long and may contain URLs, tables, commands, config, or code fences. Add `summary` for long content or when it helps readers/query output; omit it when content is short. Summary quality checks are warning hints only, not schema or evidence failures. The CLI rejects retired fields (`body`, `detail`, `raw`, singular `source_ref`, quoted-evidence) with canonical repair hints — read those hints rather than memorising the blacklist. Omit optional fields when empty.
-- Preserve documentation/reference URL blocks. If a citation-eligible raw block is primarily links (官网 / docs / reference / related links), create a small `description` Section such as "相关链接" and keep every URL in `content`; do not drop link-only evidence just because it is not prose. If the URL block is only `context_only`, keep it as background and emit an ownership/structure challenge instead of citing it.
+- Preserve literals required by the CLI. When source-refs or scaffold output lists `required_preserved_literals[]`, keep those URL, code identifier, `source_ref`, or `block_id` literals visible in the relevant `content`, `summary`, skip reason, or repair challenge. Do not rely on memorized URL rules; let CLI literal fields and citation diagnostics define what must be preserved.
 - `refers_to_nodes[]` only carries slugs present in the context's glossary, existing Sections, or the current align plan; never invent one.
 - `skip` is the honest default when raw adds nothing. Bare `skip` (no `source_refs[]`) is only for deterministic no-ops such as unchanged input or pure navigation. When a snippet was reviewed and intentionally not written, emit `skip` with `source_refs[]` from that snippet so semantic review can record `reviewed_no_write`.
 - Any Node may legitimately compile to no Sections when the provided snippets contain only navigation (`Parent` / `Children` / `Related` / `Relations`) or placeholder text that explicitly says no detailed content is available. Emit `skip`; do not turn align summaries, parent/child lists, sibling links, or placeholders into `description` Sections. The align graph and Node metadata preserve structure; active Sections need citation-eligible content.
@@ -69,57 +69,15 @@ Main-path ops are **`add`** and **`skip`**. A typical new Section action is `{ o
 
 `source_refs[]` values are copied verbatim from `raw_snippets[].source_ref`; a single citation is still a single-element array. When one Section summarises contiguous multi-block evidence, list only the source refs the `content` actually consumes. If the CLI reports `compile-source-refs-auto-narrowed`, it safely reduced an over-wide citation; removed refs are still uncovered, so add separate actions for distinct knowledge or leave them to an evidence-carrying `skip`. Preserve raw wording in `content` when it is already clear. Preserving a cited prose/bullet list as the Section's user-facing content is allowed when that list is the actual knowledge; the anti-pattern is copying raw text only as traceability or lexical-score padding. For `example` Sections that cite command / config / code fences, include the relevant fenced block in `content`.
 
-## Section Kind Canon
+## Section Kind Choice
 
-Walk this priority chain and stop at the first form that fits:
+Use `context schema compile-draft --view minimal --format json` (or yaml) for the current legal kind list, priority order, and mount matrix. This skill adds only semantic guardrails:
 
-```
-example -> comparison -> faq -> incident -> changelog ->
-decision -> spec -> warning -> principle -> description
-```
+- Stop at the first kind whose source-backed form fits.
+- Do not choose `description` to hide lists, rules, tables, samples, risks, choices, or Q+A evidence that has a more precise kind.
+- When the strongest kind is not mountable on this Node type, choose the next legal kind that the evidence truly supports, or `skip` with a structural challenge reason.
 
-| kind | Use when | `content` should contain | Positive / negative boundary |
-|---|---|---|---|
-| `example` | fenced code, config, or command sample | what the sample does plus the full snippet when useful | `<AppProvider />` sample or `bun run build`; plain "wrap with AppProvider" is `description` |
-| `comparison` | at least two subjects across at least two dimensions | compared subjects, dimensions, and table/matrix | `X vs Y vs Z` table; "two options have tradeoffs" is `description`; "choose X over Y" is `decision` |
-| `faq` | one explicit question-answer pair | question plus answer | Q/A block; an "X FAQ collection" is several `faq` Sections on X, not a container Node |
-| `incident` | happened event with time, impact, and root cause / handling | time, severity/impact, root cause, timeline/actions | dated outage postmortem; "risk may happen" is `warning` |
-| `changelog` | version/date plus change description | version, change type, migration notes if present | `v1.2.0 added X`; "X supports Y" without version is `spec` or `description` |
-| `decision` | text surfaces at least two alternatives plus a reason | selected option, alternatives, reason, impact | "choose async rather than sync because..."; bare "use X because..." is `spec` |
-| `spec` | verifiable behavior, threshold, default, limit, or check method | object, condition, value/constraint | retry max 3; vague "consider concurrency" is `principle` or `description` |
-| `warning` | factual risk, caveat, or negative consequence | trigger condition and consequence | "without warmup first 30s timeout"; "don't change config" without consequence is too vague |
-| `principle` | stable design invariant / philosophy with no check method and no choice action | invariant and reason | "single way to write UI"; retry max 3 is `spec`; "choose X over Y" is `decision` |
-| `description` | fallback definition, overview, or plain narrative | definition, purpose, scope, distinction | only after the nine kinds above fail; do not use it to hide lists, rules, tables, samples, risks, or decisions |
-
-Mount matrix:
-
-| kind | domain | entity | action |
-|---|:---:|:---:|:---:|
-| `description` | yes | yes | yes |
-| `spec` | no | yes | yes |
-| `warning` | yes | yes | yes |
-| `principle` | yes | yes | no |
-| `decision` | yes | yes | yes |
-| `incident` | no | yes | yes |
-| `example` | no | yes | no |
-| `changelog` | no | yes | no |
-| `comparison` | no | yes | no |
-| `faq` | yes | yes | yes |
-
-When the strongest kind is not mountable on this Node type, choose the next legal kind that the evidence truly supports, or `skip` with a structural challenge reason. Do not force `description` just because it mounts everywhere.
-
-## Confidence rubric
-
-Four legal values; pick per raw evidence strength.
-
-| `confidence` | When |
-|---|---|
-| `verified` | Raw shows the fact already happened or held — recorded run output, observed metric value, incident timestamp, benchmark result, or explicit "ran X, got Y" log. Executable form alone is not enough; without execution evidence, downgrade to `confirmed`. |
-| `confirmed` | Raw states the fact in normative voice or as a documented spec / config / example, without showing the run that confirmed it. This is the default for code blocks, configuration samples, feature lists, and design rules. |
-| `inferred` | You combined ≥2 raw fragments into a load-bearing conclusion that no single fragment states. |
-| `speculative` | Raw only hints; the Section is a best-effort reading that may not survive review. |
-
-Don't game the rubric. Compile-close flags Nodes dominated by `speculative` Sections, and a Node whose Sections are uniformly `verified` despite raw containing only specs / samples is the symptom of a misread rubric, not strong evidence.
+Confidence is optional. Omit it for ordinary confirmed claims; set it only when the evidence is clearly verified, inferred, or speculative according to the schema enum.
 
 ## Description anti-abuse gates
 
@@ -160,20 +118,14 @@ Check edge case conditions from the routing table at the top of this skill. If a
 
 Estimate coverage from the provided `raw_snippets[]` before writing actions. Treat "the first quote is supported" as only a validation result, not a completion signal.
 
-Coverage self-check:
-
-1. Count citation-eligible, non-navigation snippets and group them by `block_locator_id` heading prefix.
-2. For 3-11 such snippets, read each snippet once. If later snippets are distinct facts, emit separate actions before moving to the next Node. Do not stop after one supported description just because the file is short.
-3. For roughly 12+ citation-eligible snippets or 5+ distinct locator areas, plan multiple Sections in this single draft. Large manuals/design docs usually need several orthogonal actions.
-4. This is not a quota: skip duplicates, navigation-only blocks, placeholders, and unsupported fragments. The goal is coverage of distinct source-backed knowledge, not maximum Section count.
-5. If `context reconcile prepare` returns `compact-source-low-coverage` or `dense-source-low-coverage`, revise the same draft to cover the suggested uncovered evidence candidates before review/apply. Do not treat those warnings as ignorable polish.
+Use the CLI-provided citation-eligible snippets and diagnostics as the coverage contract. Distinct source-backed facts should become distinct actions or evidence-carrying skips; duplicates, navigation-only blocks, placeholders, and unsupported fragments can be skipped. If later CLI diagnostics report low coverage, repair the same draft through the returned `next_action`.
 
 ### Step 2 — Classify each raw snippet
 
 For each `raw_snippets[]` entry:
 
 1. If the snippet only contains navigation or placeholder evidence (`Parent` / `Children` / `Related` / `Relations`, sibling links, "no detailed content", etc.), emit `skip`. Do not create a Section whose content is just "Children: ..." or "Related: ..." and do not summarize facts that are not present in the snippet.
-2. Walk the Section kind priority chain from [Section Kind Canon](#section-kind-canon); stop at the first kind whose trigger fires.
+2. Pick kind using [Section Kind Choice](#section-kind-choice); stop at the first kind whose trigger fires.
 3. Verify the kind against the mount matrix for `node.type`. Mismatch → pick the next legal kind down the chain, or emit `skip` with a reason pointing at a better Node. Never "fall through to description" just to place evidence.
 4. If you land on `description`, walk the [Description anti-abuse gates](#description-anti-abuse-gates). Any gate fires → split or `skip`.
 
@@ -190,9 +142,9 @@ For each classified snippet:
    - There is no separate default `evidence-echo` warning. Treat "echo" as an anti-pattern: raw copied only to show basis/evidence, while `source_ref` already provides traceability.
    - For `description` / `spec`, a concise summary plus the cited bullet list is acceptable when the bullets are the useful user-facing knowledge. It becomes echo only when the copied text is not meant to be read as active knowledge.
    - For `example` Sections that cite a code, config, or command fence, keep `content` centered on the cited fenced block. Put framing prose such as "basic configuration example" in `summary`, or cite a separate prose block in a separate action when that prose is itself source-backed knowledge.
-3. If `content` is longer than 200 characters, add `summary`. Summary is LLM-authored reader/query aid: one plain paragraph, no Markdown, about `content.length / 10`, minimum 10 characters, recommended maximum 120. The CLI reports missing, long, short, or formatted summaries as warning hints only; it does not auto-generate them and does not treat them as evidence failures. `source_support` hard-term matching checks `content` (and legacy `detail` when present), not `summary`; keep summaries faithful to `content`, but do not copy raw-only keywords into `summary` for lexical scoring.
-4. If the cited block contains documentation/reference URLs, preserve them in `content`. Link-only blocks are still useful knowledge; use `kind: description` with a concise "相关链接" identity when no more specific kind applies.
-5. Omit `confidence` for ordinary confirmed claims. Assign `confidence` per the [Confidence rubric](#confidence-rubric) only when the evidence is not confirmed.
+3. For long `content`, add `summary` when it helps readers or query output. Summary is LLM-authored reader/query aid: one plain paragraph, no Markdown, and should stay compact. The CLI only reports advisory hints for missing summaries on long content, Markdown/multi-paragraph formatting, or clearly overlong summaries; it does not enforce a content-length ratio and does not treat summary quality as an evidence failure. `source_support` hard-term matching checks `content` (and legacy `detail` when present), not `summary`; keep summaries faithful to `content`, but do not copy raw-only keywords into `summary` for lexical scoring.
+4. Preserve `required_preserved_literals[]` from the CLI evidence view. For link-heavy citation-eligible evidence, keep the listed URLs in `content` when the action writes knowledge; for supporting-only literals, keep them in the repair/challenge context instead of citing them.
+5. Omit `confidence` for ordinary confirmed claims. Assign it only when the evidence is clearly verified, inferred, or speculative according to the schema enum.
 6. Fill `refers_to_nodes[]` per [Glossary and refers_to_nodes](#glossary-and-refers_to_nodes).
 7. Cite evidence with `source_refs[]`, picking values from `raw_snippets[].source_ref`. When one Section summarizes contiguous multi-block evidence, list only the source refs consumed by that Section content; the CLI verifies that the refs can collapse to one canonical citation token and may auto-narrow over-wide citations. If the evidence is non-contiguous or contains separable claims, split the draft into separately cited actions instead of stretching one action across unrelated blocks. For `skip`, include `source_refs[]` only when the skip represents reviewed no-write material; omit evidence for purely deterministic no-ops such as unchanged input. Never submit singular `source_ref` or quoted-evidence fields; the CLI rejects them.
 
@@ -200,15 +152,8 @@ Rendered knowledge starts with optional `c4a:summary`, then the active `content`
 
 ### Step 4 — Emit the JSON
 
-Emit one compile draft JSON document for the caller to pass to `context compile draft <slug> --input - --prepare`. No markdown wrapper, no leading prose, no trailing commentary.
+Emit one compile draft JSON document for the caller to submit to the current envelope's `next_action.command`. No markdown wrapper, no leading prose, no trailing commentary.
 
-### Step 5 — Self-verify
-
-- [ ] Every action's `target_node` equals `node.slug`, with a legal `kind × node.type` combination and `content` + optional `summary` + `source_refs[]` only (no singular `source_ref`, no `body` / `detail` / `raw`, no quoted-evidence or extractive-contract fields, no new terms absent from the cited raw). If not, return to **Step 2** for kind/mount-matrix issues, otherwise **Step 3**.
-- [ ] Every `description` action survives the [Description anti-abuse gates](#description-anti-abuse-gates). If not, **Step 2** to split or `skip`.
-- [ ] Coverage matches evidence density: dense raw with one broad action returns to **Step 2** unless remaining snippets are duplicates / navigation / placeholders / already covered. Citation-eligible URL blocks are either preserved or `skip`-with-evidence.
-- [ ] `skip` semantics: bare `skip` only for deterministic no-op (unchanged input or pure navigation); reviewed-no-write `skip` carries `source_refs[]` from the cited snippet. When raw adds nothing, exactly one `op: skip` with a reason — not `actions: []`. If not, **Step 3**.
-- [ ] If any edge case condition applies (action/domain Node, note snippets, existing Sections, non-changed-only incremental, or structural defect), the relevant reference's Self-verify items were also satisfied.
-- [ ] NodeContext was the only evidence source — no Read / Glob / Grep / Write / ad-hoc script or shell file traversal against `WORKSPACE_DIR`, `.context`, `/tmp` workflow artifacts, or CLI `--format json` stdout. If any was used, restart from the CLI-provided NodeContext.
+Before returning, ensure `target_node` matches `node.slug`, fields conform to `context schema compile-draft`, `required_preserved_literals[]` are preserved or carried into an evidence-backed skip/repair challenge, and NodeContext was the only evidence source.
 
 </procedures>

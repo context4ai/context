@@ -62,7 +62,7 @@ Supported `structure_challenge.kind` values: `missing_action_node`, `extra_actio
 }
 ```
 
-Different `kind` values demand different sub-fields. The CLI returns `agent_hints[].correct_shape` on shape errors; follow that hint rather than guessing.
+Different `kind` values demand different sub-fields. On shape errors, follow the CLI's top-level diagnostics / `expected_shape` / returned repair `next_action` instead of guessing. `agent_hints[]`, when present, is only a cutover mirror and must not be the source of truth.
 
 ## What these are NOT
 

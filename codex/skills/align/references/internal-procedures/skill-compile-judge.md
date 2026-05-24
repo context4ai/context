@@ -1,9 +1,9 @@
 ---
 name: skill-compile-judge
 description: >
-  Packaged skill invoked by `/context:compile`; not a user slash command. Consumes the full compile prepare payload,
-  judges each draft action's source support and relation to listed candidates,
-  and emits a compile.judge-decisions.v1 document for `context reconcile review`.
+  Packaged skill invoked by `/context:compile`; not a user slash command. Consumes the budget-safe compile prepare summary
+  and candidate detail views, judges each draft action's source support and relation to listed candidates,
+  and emits a compile.judge-decisions.v2 document for `context reconcile review`.
 tools:
   - Bash
 ---
@@ -16,9 +16,10 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 
 ## TL;DR — Non-negotiables
 
-- Input is the full compile prepare payload. Compact summaries are only a pointer; if needed, load the full payload with the `workflow_payload.show_command` from `context compile draft ... --prepare`.
+- Invoke this skill only when the caller's top-level envelope has `next_action.kind: "review_reconcile_decisions"` or the prepare payload contains `judge_handoff`. If the active envelope asks for `patch_compile_draft`, `continue_compile_cycle`, or another action, stop and follow that `next_action.command` instead.
+- Input is the budget-safe compile prepare summary. For items with candidates, load only that item's candidate detail view with `context workflow show --payload prepare --view candidates --item-id <item-id> --unwrap --format json`.
 - Do not inspect workspace storage directly or run ad-hoc scripts to reconstruct candidates. Use only `items[]`, `evidence[]`, `source_support` diagnostics, `candidates[]`, `previous_decisions[]`, and `judge_handoff`.
-- Output exactly one JSON or YAML document with `schema_version: "compile.judge-decisions.v1"` and `decisions[]`.
+- Output exactly one JSON or YAML document with `schema_version: "compile.judge-decisions.v2"` and `decisions[]`.
 - Keep one decision per prepared `item_id`, preserving prepare order.
 - For support, output `support_verdict: supported | weak | unsupported` plus `support_reason`.
 - For relation, output `relation_verdict: new | duplicate | supersede | conflict | merge_into` plus `relation_reason`.
@@ -35,7 +36,7 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 ## Output Shape
 
 ```yaml
-schema_version: "compile.judge-decisions.v1"
+schema_version: "compile.judge-decisions.v2"
 mode: compile
 decisions:
   - item_id: claim-001
@@ -50,7 +51,7 @@ decisions:
 For a relation against an existing candidate:
 
 ```yaml
-schema_version: "compile.judge-decisions.v1"
+schema_version: "compile.judge-decisions.v2"
 mode: compile
 decisions:
   - item_id: claim-002
@@ -80,10 +81,11 @@ decisions:
 
 <procedures>
 
-### Step 1 — Load Full Prepare Payload
+### Step 1 — Load Prepare Summary And Candidate Details
 
-If the caller gave compact prepare output, use its workflow payload command to
-load the full `prepare` payload. Do not infer missing candidates from memory.
+Use the caller-provided compact prepare output. For every item with candidates,
+load its candidate detail view before judging relation. Do not infer missing
+candidates from memory or bypass the candidate detail view.
 
 ### Step 2 — Judge Support
 
@@ -101,7 +103,7 @@ candidate list is empty, emit `new` with an empty compared list and
 
 ### Step 4 — Emit Judge Decisions
 
-Return only the `compile.judge-decisions.v1` document. The caller passes it
+Return only the `compile.judge-decisions.v2` document. The caller passes it
 directly to `context reconcile review --decisions -`.
 
 </procedures>
