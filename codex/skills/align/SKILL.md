@@ -50,6 +50,8 @@ Run the expected view commands from the envelope. For additional reads, use only
 
 When a view returns `page.next_command`, follow that command to continue the same semantic view. Use `--source`, `--heading`, `--window`, or `--token-budget` only as view filters; do not inspect workflow files, cache files, host tool-results, or stdout fragments with generic tools.
 
+If a blocks view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, the response is a partial read. Do not finalize broad ownership or dense planned Sections from source-mapping/headings alone; follow `page.next_command` or the `how_to_explore[]` source full-read / expand-budget command first, then decide whether the remaining evidence needs sections or can stay context-only.
+
 ### Step 3 — Produce The Semantic Payload
 
 Reuse existing knowledge before inventing new Nodes: use `context mdrive glossary match <name>` and `context mdrive node list --format json` for term/entity reuse.
@@ -59,6 +61,7 @@ Apply the procedure in `references/internal-procedures/skill-align-workflow.md` 
 Use CLI diagnostics instead of static prompt rules:
 
 - `diagnostics.automatic_ownership_adjustments[]` explains mechanical external-reference demotions and the explicit ownership override shape.
+- `pending-relation-refs` lists explicit Parent/Children/Related markdown links. Reuse existing target Nodes when present; keep unresolved target slug hints deferred instead of writing dangling `contains_parent`.
 - Validation diagnostics identify contiguity, citation eligibility, ownership, and mount-matrix problems.
 - `views[]` and `diagnostics` distinguish citable evidence from supporting context; do not infer citation eligibility from raw ownership prose.
 

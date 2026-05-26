@@ -20,6 +20,7 @@ Run `context align scan --format json`, read expected evidence views, produce se
 - Existing knowledge is the lookup registry. Use `context mdrive glossary match <name>` and `context mdrive node list --format json`; do not read `knowledge/**` or create a separate registry file.
 - Code projection Nodes are reusable knowledge handles. When document evidence belongs on a code symbol, reuse the code slug instead of creating a parallel document Node.
 - `diagnostics.automatic_ownership_adjustments[]` and validation diagnostics are the mechanical external-reference ownership source of truth. Independent reference definitions, pure URLs, relation kind blocks, and multiline reference-only lists default to context_only; submit an explicit `block_ownership[]` owned/shared entry only when such a reference block is primary citation evidence.
+- When `pending-relation-refs` is present, inspect it before finalizing graph structure. Use existing matches for `contains_parent_ref` or `domain_gate.child_refs`; keep unresolved target slug hints deferred and do not write dangling parent or edge refs.
 - `views[]` and diagnostics distinguish citable evidence from supporting context. Do not promote supporting/context-only material into cited Sections unless a later ownership correction makes it citation-eligible.
 - Keep cache-friendly prompt order: fixed protocol/schema first, existing knowledge lookup second, source evidence views third, current semantic payload last. Preserve CLI JSON order and do not add timestamps, random ids, scratch paths, or host paths to generated payloads.
 - Node type, tag, fake-Entity, `domain`, and `action` gates are in `skill-align-workflow/references/gates.md`.
@@ -44,6 +45,8 @@ Run `views[].command` entries marked `expected: true` before writing. Use additi
 
 Read evidence through semantic CLI views, not shell parsing. Follow `page.next_command` for pagination. Use `--source`, `--heading`, `--window`, and `--token-budget` as view filters only. `--unwrap` removes workflow metadata; it does not expand a compact view into full detail.
 
+If a blocks view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, treat that response as a partial read. Do not finalize source-wide ownership or dense planned Sections from source-mapping/headings alone; follow `page.next_command` or the `how_to_explore[]` source full-read / expand-budget command first, then decide whether to write, split, or leave evidence as context.
+
 ### Step 3 — Reuse Existing Knowledge
 
 Query existing knowledge for reusable names before proposing new term/service/system/action Nodes. Exact title/slug/alias hits should usually become references to the existing Node, not duplicate candidates.
@@ -62,7 +65,7 @@ For large or batched payloads, use `skill-align-workflow/references/density-prof
 
 Use `next_action.input_schema` or the matching `context schema <name> --view minimal --format json` output to shape the payload.
 
-For `submit_structure_decision`, produce one structure-decision document with finalized Nodes, document edges, planned Sections, and ownership. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
+For `submit_structure_decision`, produce one structure-decision document with finalized Nodes, document edges, planned Sections, and ownership. Planned Sections must carry the strongest source-backed `section_kind` that fits the current schema priority chain; do not plan an entire dense source as `description` when the evidence clearly contains examples, comparison tables, Q&A, decisions, specs, warnings, or principles. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
 
 For coarse-read, candidate-op, patch, ownership, or rescan actions, follow the command and schema in the returned `next_action`. Do not carry old candidate-table, decision-patch, or full-tree payload shapes forward.
 

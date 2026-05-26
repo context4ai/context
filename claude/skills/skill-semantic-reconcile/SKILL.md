@@ -5,7 +5,7 @@ description: >
   and compile scope-review fallback; not a user slash command. Ordinary compile
   prepare judgment uses `skill-compile-judge`. This skill consumes only
   `context reconcile prepare` output, judges semantic relation/action for each item,
-  and emits a schema_version 1.0 semantic decision document for `context reconcile review`;
+  and emits a `semantic-decisions.v2` decision document for `context reconcile review`;
   apply consumes the current workflow's ready review artifact.
 tools:
   - Bash
@@ -50,7 +50,7 @@ If none of the above hold, you are on this skill's main path: refresh/drop/non-c
 Accept a prepared `default_decision` with the compact form:
 
 ```yaml
-schema_version: "1.0"
+schema_version: "semantic-decisions.v2"
 decisions:
   - item_id: claim-001
     accept_default: true
@@ -59,7 +59,7 @@ decisions:
 For a changed action or hand-authored decision, emit the full shape with the action's required fields (see Action Rules below):
 
 ```yaml
-schema_version: "1.0"
+schema_version: "semantic-decisions.v2"
 decisions:
   - item_id: claim-001
     relation: near_duplicate
@@ -120,7 +120,7 @@ Drop-mode-only branches (`reanchor`, `split_then_reanchor`, `remove_unsupported`
 
 ### Step 3 — Emit Decisions
 
-Emit one document with `schema_version: "1.0"` and `decisions[]`. Include only executable final decisions plus unresolved `ask_user` questions. Do not include prose outside the document.
+Emit one document with `schema_version: "semantic-decisions.v2"` and `decisions[]`. Include only executable final decisions plus unresolved `ask_user` questions. Do not include prose outside the document.
 
 If the latest review rejected the batch with `context-only-leakage-high`, do not convert it into a generic `ask_user`. Follow [references/leakage-and-ownership.md](references/leakage-and-ownership.md): regenerate the affected decision using the review diagnostic's explicit repair options and cited item ids, then rerun `context reconcile review`.
 

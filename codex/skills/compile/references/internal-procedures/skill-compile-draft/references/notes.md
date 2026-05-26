@@ -22,13 +22,13 @@ When a `raw_snippets[]` entry has `source_type: "note"`:
 
    `revision_kind` (`replace` / `clarify` / ...) refines the choice within `revision`.
 
-3. **No-write reviewed-no-write case.** If the note says "don't modify active knowledge yet" or the correct outcome is no-write after review, emit `skip` with `source_refs[]` containing the note's `raw_snippets[].source_ref`. This lets semantic review record `reviewed_no_write` instead of treating the skip as an unreviewed no-op.
+3. **No-write reviewed-no-write case.** If the note says "don't modify active knowledge yet" or the correct outcome is no-write after review, emit `skip` with `source_block_ids[]` containing the note's citation-eligible block id. This lets semantic review record `reviewed_no_write` instead of treating the skip as an unreviewed no-op.
 
-4. **Bare skip is not allowed for notes.** A bare `skip` (no `source_refs[]`) is only for deterministic no-op cases such as unchanged input or pure navigation. Notes always carry an anchor and an intent; the skip must cite the note's source_ref.
+4. **Bare skip is not allowed for notes.** A bare `skip` (no evidence) is only for deterministic no-op cases such as unchanged input or pure navigation. Notes always carry an anchor and an intent; the skip must cite the note's block id or explicit source_ref.
 
 ## Where this lives in the main procedure
 
 - **Step 2 — Classify**: run the note-first comparison **before** the generic kind priority chain. If the note resolves to `update` / `supersede` / `skip` (reviewed), record the action and move on; do not also process the same note through the generic chain.
-- **Step 5 — Self-verify**: every note snippet was either consumed by an anchored action or carried into a `skip` with `source_refs[]`.
+- **Step 5 — Self-verify**: every note snippet was either consumed by an anchored action or carried into a `skip` with `source_block_ids[]`.
 
 Notes never become structure_challenge or pending_ownership_challenge on their own. If a note describes a structural problem (missing Action, wrong parent, etc.), capture the underlying evidence in raw form and emit the challenge from that — see `references/structural-challenges.md`.

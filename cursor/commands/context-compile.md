@@ -1,6 +1,6 @@
 ---
 description: "Compile the confirmed align plan into source-linked knowledge through CLI-guided workflow steps."
-argument-hint: "[--plan|code <slug>]"
+argument-hint: "[--plan|--aspect code [slug]|--aspect <name>|--all]"
 allowed-tools: Bash(context:*)
 ---
 
@@ -22,7 +22,9 @@ Naming convention:
 
 - **Default** — follow `context compile scan --format json` and the returned `next_action` until compile is closed or no work remains.
 - **`--plan`** — validate per-Node draft changes without closing or writing active knowledge; stop after the planned changes are reported.
-- **`code [selector]`** — run `context compile code [selector]`, report the CLI result, and stop unless the CLI asks for a follow-up close. The selector may be omitted to process all actionable code sources; when present, the CLI resolves source slug, package name, or module path.
+- **`--aspect code [selector]`** — run `context compile --aspect code [selector]`, report the CLI result, and stop unless the CLI asks for a follow-up close. The selector may be omitted to process all actionable code sources; when present, the CLI resolves source slug, package name, or module path.
+- **`--aspect <name>`** — run deterministic custom aspect projection for one configured aspect. Use `context compile --aspect <name> --allow-large-deprecate` only when the CLI rejected a large deprecate and the user confirms the runner output is intentionally empty or reduced.
+- **`--all`** — run `context compile --all` to materialize code projection first and then custom aspect projections in deterministic order.
 - **Delegated** — add `--delegated` only when the user explicitly authorized delegated/automatic mode at the start of this conversation. Do not infer it from vague "continue" permission.
 
 ### Core Rules
@@ -46,15 +48,21 @@ Protocol discovery:
 3. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
 4. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
 
+Run `context compile scan` only for this initial preflight unless the CLI explicitly returns it as the next command after a terminal/no-work state. During an active compile workflow, discover the next node from the current envelope (`next_action`, `views[]`, `workset_progress`) and follow returned commands; do not rerun scan between node cycles to probe for the next node.
+
 ## Main Loop
 
 Repeat until the CLI returns `stop_noop`, `close_compile` succeeds, or a blocking user question remains.
+
+Carry the latest envelope forward between iterations. After a successful node cycle, continue from its returned `next_action.command` / `workset_progress` rather than restarting at `context compile scan`.
 
 ### Step 1 — Read Expected Views
 
 Run expected view commands from the envelope before writing. For compile evidence, prefer the CLI-returned source-ref/scaffold views. They may expose:
 
-- `citable_source_refs[]` — the only refs eligible for draft `source_refs`.
+- `source_refs_index_command` / `source_refs_command` — compact block-id evidence index for drafting; use `items[].block_id` in `source_block_ids[]`.
+- `source_refs_detail_command` — detailed source refs with quote previews; open only when the compact index is not enough.
+- `citable_source_refs[]` — detailed-view refs eligible for draft citations; prefer `block_id` values in `source_block_ids[]`.
 - `supporting_context_refs[]` — background/framing only.
 - `required_preserved_literals[]` — URL, code identifier, `source_ref`, or `block_id` literals that must stay visible in the generated content or repair report.
 - diagnostics such as citation eligibility, source support, coverage, engagement, and advisory foldbacks.
@@ -82,6 +90,8 @@ Use typed diagnostics as the repair contract:
 - `reason_code`, `path`, and `missing[]` identify what to fix.
 - `diagnostics.auto_repaired[]` records mechanical repairs; warning severity must be surfaced in the final report.
 - `diagnostics.warnings[]` with info/advisory severity are not write blockers unless `blocking: true` or the next action says so.
+- `agent_recommended_action` classifies warning handling: `ignore` means continue unless the user asks for cleanup, `respond_optional` means repair only when semantically useful, and `respond_required` means resolve before the returned write action can succeed.
+- `source_support` is advisory lexical diagnostics, not a keyword gate. Do not patch drafts only to satisfy term overlap. Blocking evidence checks should come from invalid source refs, changed evidence boundaries, URL preservation, split-by-evidence candidates, or explicit top-level `next_action`.
 - stale prepare refresh returns `review_reconcile_decisions` with `reason_code: "prepare_refreshed"`; reread the new prepare result before reviewing.
 
 Do not recover by replaying an old manual path, editing rendered files, or guessing schema aliases.
@@ -90,4 +100,4 @@ Do not recover by replaying an old manual path, editing rendered files, or guess
 
 When `next_action.kind` is `close_compile`, execute `context compile close` through packaged `../skills/skill-compile-close/SKILL.md` or the returned command. Never claim success unless close exits 0 and verify is green, except the explicit no-work path.
 
-Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.
+Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, `ready_with_debt` coverage/review-debt summaries when present, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.

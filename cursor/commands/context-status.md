@@ -15,8 +15,10 @@ Run `context status` from the active workspace root only. `status` is intentiona
 Surface the CLI's output verbatim — its trailing suggestions are already actionable. Do not invent additional suggestions; the CLI decides what to recommend based on the workspace state. Typical recommendations you will see:
 
 - Run `/context-align` when there is active raw material but no align plan yet (compile's Stage 1 prerequisite).
+- Run `/context-align` when JSON status reports `incremental.pending_align.status: "pending"` with `count > 0`. This structural signal takes precedence over a previous finalized align workflow's compile hint.
 - Run `/context-compile` when align plan exists and raw is newer than the last compile.
 - Run `/context-capture --code` when the repo is a git checkout but no source-code snapshot has been captured yet.
+- Run `context compile --aspect code` when code projection is pending, or `context compile --aspect <name>` when a custom aspect projection is pending. JSON status includes `aspect_projection` and `code_projection` summaries for these deterministic paths.
 
 Recent CLI output may include `incremental.cache_status`, `incremental.pending_align`, and `incremental.pending_compile`. Surface those fields verbatim. If the user asks what they mean, explain that they show the local incremental cache health and queued align/compile work; cache warnings are informational unless the CLI output includes a blocking error or an explicit next action.
 

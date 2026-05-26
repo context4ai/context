@@ -85,28 +85,27 @@ If the user request names specific aspects, map that directly:
 - "all aspects" / "全部 aspect" → append `--with-all-aspects`
 - "no aspects" / "不安装 aspect" / "minimal" → append `--no-aspects`
 
-Otherwise ask **one** multi-select question. The first option **must** be a `skip` choice so the user can always submit (host multi-choice tools such as Claude Code `AskUserQuestion` refuse to submit when zero boxes are checked). Pre-check `code` as the recommended default.
+Otherwise ask **one** short single-choice question. Keep the option count to three or fewer; host question tools reject longer option lists. Use the host's free-text `Other` escape hatch when the user needs a custom comma-separated aspect list.
 
 ```
-Q. Which aspects should be installed? (multi-select)
-  A. skip — install no aspects now; add later with `context init --with-aspects <name>`
-  B. code — scripted local source-code capture. (Recommended; pre-checked)
-  C. design-system — placeholder aspect template.
-  D. openapi — placeholder aspect template.
-  E. graphql — placeholder aspect template.
+Q. Which aspects should be installed?
+  A. code — scripted local source-code capture. (Recommended)
+  B. all built-in aspects — code, design-system, openapi, graphql.
+  C. skip — install no aspects now; add later with `context init --with-aspects <name>`.
 ```
 
 Hard rules when mapping into the host UI:
 
-- The `skip` option **must** be present as the **first** choice. Do not relabel it `Other`, do not omit it, do not assume the host's auto-injected `Other` covers it. `Other` (if present) is a free-text escape hatch and is unrelated to "skip".
-- Pre-check `code` so the user can submit immediately to get the recommended setup.
-- The user cannot submit zero boxes — they always pick at least `skip` or one aspect. If they pick `skip` together with any aspect, treat `skip` as the winner and ignore the others.
+- Do not present separate options for every built-in aspect; that exceeds host option limits once `skip` is included.
+- Put `code` first and mark it as recommended.
+- Treat the host auto-injected `Other` as a free-text custom list such as `code,openapi`, not as "skip".
 
 Map the answer:
 
+- `code` selected → append `--with-aspects code`.
+- `all built-in aspects` selected → append `--with-all-aspects`.
 - `skip` selected → append `--no-aspects`.
-- One or more aspects selected (without `skip`) → append `--with-aspects <comma-separated names>`, e.g. `--with-aspects code,openapi`.
-- Host auto-injected `Other` selected → ignore it, fall back to the recommended default `--with-aspects code`.
+- Host auto-injected `Other` selected → parse the user's comma-separated aspect names and append `--with-aspects <names>`. If the custom text is empty or invalid, ask once for clarification rather than silently installing all aspects.
 
 Do not silently install all aspects when the user asked for a code-only workspace.
 
