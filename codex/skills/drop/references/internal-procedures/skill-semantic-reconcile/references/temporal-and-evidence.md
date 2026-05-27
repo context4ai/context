@@ -51,12 +51,12 @@ When the prepare item carries long `proposed.content` or a `proposed.summary`, t
 - Preserve prepared `content` and `summary` on executable write decisions (`merge_update`, `supersede.new`, `keep_separate`, `split_then_reanchor` sub-Sections) unless the decision intentionally rewrites the user-facing content.
 - The only legitimate way to clear `summary` is an update-style decision that explicitly emits `summary: null` as the chosen outcome.
 
-## Example content preservation repair
+## Example content preservation advisory
 
-If review reports that a cited example evidence contains a command / config / code fence missing from `proposed.content`, repair:
+If review reports that a cited example evidence contains a command / config / code fence missing from `proposed.content`, first check the CLI issue severity and next action.
 
-- **Preferred**: regenerate the decision with the relevant fenced block included in `proposed.content` (preserve language, fences, and exact code).
-- **Fallback only after user confirmation**: keep a prose-only example summary, mark the final decision `decided_by: user` per `references/user-confirmation.md`. Auto mode is not user confirmation.
+- **When blocking**: regenerate the decision with the relevant fenced block included in `proposed.content` (preserve language, fences, and exact code), then rerun review.
+- **When advisory/debt**: do not patch solely for formatting. Patch only if the missing command/config/code changes the user-facing meaning or the user asks for fidelity cleanup.
 
 ## How this slots into the main procedure
 

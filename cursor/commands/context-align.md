@@ -21,9 +21,10 @@ Run `context align scan --format json`.
 Use the returned `workflow.next-action-envelope.v2` as the source of truth:
 
 - Follow top-level `next_action.kind` and `next_action.command` for every write.
-- Use `views[].command` for evidence reads, prioritizing entries with `expected: true`.
+- Use only the returned `next_action.command` for the next required step. When it points at `read-plan`, run that one command first.
 - Treat `allowed_actions[]` as permission for read-only insertions such as `show_view`; do not choose a different write path from it.
 - Treat `agent_hints[]`, when present, as a temporary mirror or diagnostic only. If it conflicts with `next_action`, follow `next_action`.
+- Read workflow payload views only through returned `context workflow show` commands.
 
 For protocol discovery, prefer narrow commands:
 
@@ -31,17 +32,17 @@ For protocol discovery, prefer narrow commands:
 - `context protocol show align-compile --format json`
 - `context schema align-structure-decision --view minimal --format json`
 
-### Step 2 — Read Evidence Through Views
+### Step 2 — Read Evidence Through The Single Evidence Path
 
-Run the expected view commands from the envelope. For additional reads, use only budget-safe workflow views such as:
+If scan returns a `read-plan` command, run it and then follow the next command returned by that view. The normal path is:
 
-- `context workflow show --payload align-segments --view blocks --page-size 10 --token-budget 8000 --unwrap --format json`
-- `context workflow show --payload align-segments --view windows --page-size 10 --compact-hints --unwrap --format json`
-- `context workflow show --payload align-segments --view source-mapping --unwrap --format json`
+- `read-plan` summarizes source size, active source set, navigation/placeholder sources, and the next evidence command.
+- `source-bundle` returns the selected source text with `@c4a` block annotations. Read it, then write an align structure-decision JSON yourself; do not pipe the bundle text into `context align validate`.
+- `blocks`, `windows`, `block-index`, `source-mapping`, and `pending-relation-refs` are detail views only. Use them when the read-plan/source-bundle next action or `how_to_explore[]` asks for a narrow follow-up.
 
 When a view returns `page.next_command`, follow that command to continue the same semantic view. Use `--source`, `--heading`, `--window`, or `--token-budget` only as view filters; do not inspect workflow files, cache files, host tool-results, or stdout fragments with generic tools.
 
-If a blocks view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, the response is a partial read. Do not finalize broad ownership or dense planned Sections from source-mapping/headings alone; follow `page.next_command` or the `how_to_explore[]` source full-read / expand-budget command first, then decide whether the remaining evidence needs sections or can stay context-only.
+If a detail view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, the response is a partial read. Return to the read-plan/source-bundle continuation instead of treating that partial JSON page as the complete source.
 
 ### Step 3 — Produce The Semantic Payload
 
@@ -58,7 +59,7 @@ Use CLI diagnostics instead of static prompt rules:
 
 ### Step 4 — Validate And Submit
 
-When the envelope asks for `validate_align_decision`, submit the structure-decision payload to `context align validate --input - --format json` or the exact returned command. If validate returns blocking diagnostics, repair the payload and rerun validate. If validate returns a `submit_structure_decision` next_action, execute that command with the validated payload.
+When the envelope asks for `validate_align_decision`, submit the structure-decision payload you authored after reading evidence to `context align validate --input - --format json` or the exact returned command. If validate returns blocking diagnostics, repair the payload and rerun validate. If validate returns a `submit_structure_decision` next_action, execute that command with the validated payload.
 
 For any other write kind, execute the top-level `next_action.command` exactly. If the command rejects the payload, follow the returned `next_action` and `reason_code`; do not infer a route fallback from memory.
 

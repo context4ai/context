@@ -41,12 +41,11 @@ Protocol discovery:
 - `context protocol show align-compile --format json`
 - command-specific `context schema <name> --view minimal --format json`
 
-## Preflight
+## Start
 
-1. Run `context doctor`. If output-align errors block compile, tell the user to run `/context-align` and stop.
-2. Run `context status --format json` and `context mdrive workspace stats --format json` for before/after reporting.
-3. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
-4. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
+1. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
+2. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
+3. Run `context status --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
 
 Run `context compile scan` only for this initial preflight unless the CLI explicitly returns it as the next command after a terminal/no-work state. During an active compile workflow, discover the next node from the current envelope (`next_action`, `views[]`, `workset_progress`) and follow returned commands; do not rerun scan between node cycles to probe for the next node.
 
@@ -62,6 +61,7 @@ Run expected view commands from the envelope before writing. For compile evidenc
 
 - `source_refs_index_command` / `source_refs_command` — compact block-id evidence index for drafting; use `items[].block_id` in `source_block_ids[]`.
 - `source_refs_detail_command` — detailed source refs with quote previews; open only when the compact index is not enough.
+- `request_full_text_command` / `--view text` — narrow text view for one block when quote preview is not enough; this is still Node-scoped, not a workspace evidence bundle.
 - `citable_source_refs[]` — detailed-view refs eligible for draft citations; prefer `block_id` values in `source_block_ids[]`.
 - `supporting_context_refs[]` — background/framing only.
 - `required_preserved_literals[]` — URL, code identifier, `source_ref`, or `block_id` literals that must stay visible in the generated content or repair report.
@@ -91,7 +91,7 @@ Use typed diagnostics as the repair contract:
 - `diagnostics.auto_repaired[]` records mechanical repairs; warning severity must be surfaced in the final report.
 - `diagnostics.warnings[]` with info/advisory severity are not write blockers unless `blocking: true` or the next action says so.
 - `agent_recommended_action` classifies warning handling: `ignore` means continue unless the user asks for cleanup, `respond_optional` means repair only when semantically useful, and `respond_required` means resolve before the returned write action can succeed.
-- `source_support` is advisory lexical diagnostics, not a keyword gate. Do not patch drafts only to satisfy term overlap. Blocking evidence checks should come from invalid source refs, changed evidence boundaries, URL preservation, split-by-evidence candidates, or explicit top-level `next_action`.
+- `source_support` is advisory lexical diagnostics, not a keyword gate. Do not patch drafts only to satisfy term overlap. Blocking evidence checks should come from invalid source refs, changed evidence boundaries, unsupported confirmed hard facts, or explicit top-level `next_action`. URL preservation, section kind precision, example formatting, and summary style are advisory/debt unless the CLI explicitly marks them blocking.
 - stale prepare refresh returns `review_reconcile_decisions` with `reason_code: "prepare_refreshed"`; reread the new prepare result before reviewing.
 
 Do not recover by replaying an old manual path, editing rendered files, or guessing schema aliases.

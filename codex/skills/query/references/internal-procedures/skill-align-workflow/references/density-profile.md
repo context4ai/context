@@ -2,7 +2,7 @@
 
 Use `density_profile` in `align-coarse-read` to describe how much structure the document needs before candidate discovery. This is a reading strategy, not a quality score.
 
-This reference applies only when the current envelope asks for `next_action.kind: "submit_coarse_read"`. A small or moderate direct route should follow `validate_align_decision`; do not emit a `single_pass` coarse-read payload unless the CLI requested coarse-read.
+This reference applies only when the current envelope asks for `next_action.kind: "submit_coarse_read"`. In normal direct routes, read-plan/source-bundle already selected the evidence path; do not emit a `single_pass` coarse-read payload unless the CLI requested coarse-read.
 
 | Profile | Use When | Agent Behavior |
 |---|---|---|

@@ -29,7 +29,7 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 - For `duplicate`, `supersede`, `conflict`, or `merge_into`, set `target_section_id` to the matched candidate Section id.
 - Same `source_ref` can support different Section kinds only when the semantic role differs. Detect and explain same-source-ref multi-kind cases instead of treating them as automatic duplicates.
 - `source_support` is advisory lexical diagnostics, not a keyword gate. A supported judge verdict may override low lexical `source_support` when the cited raw evidence semantically covers the claim.
-- Evidence-boundary errors, missing URLs, and split-by-evidence candidates remain blocking evidence issues. Do not patch drafts merely because `source_support.missing_hard_terms[]` contains a spelling, casing, punctuation, or paraphrase mismatch.
+- Evidence-boundary errors and unsupported confirmed hard facts remain blocking evidence issues. Missing URLs, section kind precision, example formatting, summary style, and lexical hard-term spelling/casing/punctuation/paraphrase mismatches are advisory unless the active CLI `next_action` explicitly blocks on them.
 - Weak support is a warning-level verdict, not permission to invent missing facts. Unsupported support should normally pair with `conflict` or a later user question rather than a write decision.
 
 <reference>

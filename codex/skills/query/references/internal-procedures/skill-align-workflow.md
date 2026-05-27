@@ -7,13 +7,13 @@ description: "Internal procedure for /context:align. Reads CLI-guided align evid
 
 ## TL;DR
 
-Run `context align scan --format json`, read expected evidence views, produce semantic structure payloads, and follow top-level `next_action`. The CLI owns route, validation, repair commands, and stage guards; this skill owns only semantic classification and source-bound structure judgment.
+Run `context align scan --format json`, follow the top-level `next_action.command` to read the CLI-selected evidence path, produce semantic structure payloads, and continue following top-level `next_action`. The CLI owns route, validation, repair commands, and stage guards; this skill owns only semantic classification and source-bound structure judgment.
 
 <reference>
 
 ## Canonical Data
 
-- `workflow.next-action-envelope.v2` is authoritative. Branch on `next_action.kind`, execute `next_action.command` for writes, and use `views[].command` for budget-safe evidence reads.
+- `workflow.next-action-envelope.v2` is authoritative. Branch on `next_action.kind`, execute `next_action.command`, and treat `views[].command` as detail reads rather than a checklist.
 - `allowed_actions[]` may permit extra read-only work before the next write; it is not a menu of alternate write paths.
 - `agent_hints[]`, when still present, is a short-term cutover mirror or diagnostic. Do not prefer it over top-level `next_action`.
 - Schema names and enum values come from `context schema <name>`; use `--view minimal` for protocol discovery before full schema reads.
@@ -39,13 +39,15 @@ Run `context align scan --format json`. Confirm `schema_version: "workflow.next-
 
 If no envelope is present, stop and surface the CLI output; do not reconstruct an align route from old prompt memory.
 
-### Step 2 — Inspect Expected Views
+### Step 2 — Follow The Evidence Read Path
 
-Run `views[].command` entries marked `expected: true` before writing. Use additional `show_view` commands only when listed in `allowed_actions[]` or returned in `how_to_explore[]`.
+Run the returned `next_action.command`. For structural align work this is normally `read-plan`; after that, follow the `read-plan` / `source-bundle` response's `next_action.command`.
+
+`read-plan` is the navigation surface. It chooses whether the next evidence read is a whole-batch `source-bundle`, a scoped source/window bundle, or an existing coarse-read route. `source-bundle` is annotated source text; read it and then author the requested align JSON yourself. Never pipe bundle text into `context align validate`.
 
 Read evidence through semantic CLI views, not shell parsing. Follow `page.next_command` for pagination. Use `--source`, `--heading`, `--window`, and `--token-budget` as view filters only. `--unwrap` removes workflow metadata; it does not expand a compact view into full detail.
 
-If a blocks view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, treat that response as a partial read. Do not finalize source-wide ownership or dense planned Sections from source-mapping/headings alone; follow `page.next_command` or the `how_to_explore[]` source full-read / expand-budget command first, then decide whether to write, split, or leave evidence as context.
+If a blocks view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, treat that response as a partial read. Do not finalize source-wide ownership or dense planned Sections from source-mapping/headings alone; continue the current detail view only when `page.next_command` is explicitly needed, otherwise return to the read-plan/source-bundle continuation.
 
 ### Step 3 — Reuse Existing Knowledge
 
@@ -65,7 +67,7 @@ For large or batched payloads, use `skill-align-workflow/references/density-prof
 
 Use `next_action.input_schema` or the matching `context schema <name> --view minimal --format json` output to shape the payload.
 
-For `submit_structure_decision`, produce one structure-decision document with finalized Nodes, document edges, planned Sections, and ownership. Planned Sections must carry the strongest source-backed `section_kind` that fits the current schema priority chain; do not plan an entire dense source as `description` when the evidence clearly contains examples, comparison tables, Q&A, decisions, specs, warnings, or principles. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
+For `submit_structure_decision`, produce one structure-decision document with finalized Nodes, document edges, planned Sections, and ownership. Prefer the strongest source-backed `section_kind` that fits the current schema priority chain; avoid planning an entire dense source as `description` when the evidence clearly contains examples, comparison tables, Q&A, decisions, specs, warnings, or principles. Treat kind precision as a drafting quality preference, not a reason to block an otherwise source-backed write. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
 
 For coarse-read, candidate-op, patch, ownership, or rescan actions, follow the command and schema in the returned `next_action`. Do not carry old candidate-table, decision-patch, or full-tree payload shapes forward.
 
@@ -78,7 +80,7 @@ If any write is rejected, follow the returned `next_action` and `reason_code`. D
 ### Step 7 — Self-verify
 
 - [ ] All writes followed top-level `next_action.command`. If not, return to **Step 1**.
-- [ ] Evidence was read through `views[].command`, `how_to_explore[]`, or CLI schema/protocol commands only. If not, return to **Step 2**.
+- [ ] Evidence was read through returned `next_action.command`, `how_to_explore[]`, or CLI schema/protocol commands only. If not, return to **Step 2**.
 - [ ] Node classification used the semantic gates in `skill-align-workflow/references/gates.md`. If not, return to **Step 4**.
 - [ ] URL/reference ownership followed CLI diagnostics, not static prompt rules. If not, return to **Step 5**.
 - [ ] Structure decisions passed `context align validate --input - --format json` before finalize. If not, return to **Step 6**.
