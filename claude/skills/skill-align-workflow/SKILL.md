@@ -1,6 +1,6 @@
 ---
 name: skill-align-workflow
-description: "Internal procedure for /context:align. Reads CLI-guided align evidence, applies semantic Node classification gates, and emits align structure-decision payloads for CLI validation/finalize."
+description: "Internal procedure for /context:align. Reads CLI-guided align evidence, applies semantic Node classification gates, and emits align structure-intent payloads for CLI validation/finalize."
 ---
 
 # Align Workflow Procedure
@@ -43,7 +43,9 @@ If no envelope is present, stop and surface the CLI output; do not reconstruct a
 
 Run the returned `next_action.command`. For structural align work this is normally `read-plan`; after that, follow the `read-plan` / `source-bundle` response's `next_action.command`.
 
-`read-plan` is the navigation surface. It chooses whether the next evidence read is a whole-batch `source-bundle`, a scoped source/window bundle, or an existing coarse-read route. `source-bundle` is annotated source text; read it and then author the requested align JSON yourself. Never pipe bundle text into `context align validate`.
+`read-plan` is the navigation surface. It chooses whether the next evidence read is a whole-batch `source-bundle`, a scoped source/window bundle, or an existing coarse-read route. `source-bundle` is annotated source text; read it and then author the requested align JSON yourself, normally `align-structure-intent`. Never pipe bundle text into `context align validate`.
+
+If `source-bundle` omits text for budget, run its `next_action.command`.
 
 Read evidence through semantic CLI views, not shell parsing. Follow `page.next_command` for pagination. Use `--source`, `--heading`, `--window`, and `--token-budget` as view filters only. `--unwrap` removes workflow metadata; it does not expand a compact view into full detail.
 
@@ -67,13 +69,23 @@ For large or batched payloads, use `references/density-profile.md` and `referenc
 
 Use `next_action.input_schema` or the matching `context schema <name> --view minimal --format json` output to shape the payload.
 
-For `submit_structure_decision`, produce one structure-decision document with finalized Nodes, document edges, planned Sections, and ownership. Prefer the strongest source-backed `section_kind` that fits the current schema priority chain; avoid planning an entire dense source as `description` when the evidence clearly contains examples, comparison tables, Q&A, decisions, specs, warnings, or principles. Treat kind precision as a drafting quality preference, not a reason to block an otherwise source-backed write. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
+For the default `align-structure-intent` path, produce one intent document with semantic Nodes, `section_groups[]`, `ownership_groups[]`, optional explicit `block_ownership[]` patches, and edges. Let CLI generate `section_id` values and expand ownership groups into canonical defaults/exceptions.
+
+Use only `block_ids[]` in `section_groups[]`. Do not invent heading/range/window selectors inside the intent. Every block you leave as `owned` or `shared` citation evidence must appear in some section group; otherwise reclassify it as `context_only` or `ignored`. If a no-write/navigation-only/placeholder-only Node has no section group, set `planned_sections: []` explicitly so the CLI knows this was intentional.
+
+Prefer the strongest source-backed `section_kind` that fits the current schema priority chain; avoid planning an entire dense source as `description` when the evidence clearly contains examples, comparison tables, Q&A, decisions, specs, warnings, or principles. Treat kind precision as a drafting quality preference, not a reason to block an otherwise source-backed write. Keep only source-supported semantic decisions in the payload; leave mechanical repair and patch routing to CLI diagnostics.
+
+Canonical `align-structure-decision` is not a parallel authoring path. Use it only when `next_action.input_schema` explicitly asks for it or when auditing/repairing canonical output returned by the CLI.
 
 For coarse-read, candidate-op, patch, ownership, or rescan actions, follow the command and schema in the returned `next_action`. Do not carry old candidate-table, decision-patch, or full-tree payload shapes forward.
 
 ### Step 6 — Validate And Submit
 
-Before finalizing a structure decision, run `context align validate --input - --format json`. If validate returns blocking diagnostics, repair the exact paths it reports and rerun validate. If validate returns a finalize `next_action`, submit the same validated payload to that command.
+Before finalizing, run `context align validate --input - --format json` with the payload matching `next_action.input_schema`. If validate returns blocking diagnostics, repair the exact paths it reports and rerun validate. If validate returns a finalize `next_action`, submit the same validated payload to that command; do not copy compiled canonical JSON from validation output unless the CLI explicitly asks for canonical input.
+
+After finalize succeeds, do not rerun the finalize submit command to confirm success. Use returned `payloads.*.show_command` values, or `context workflow show --payload finalized-ownership --unwrap --format json`, for read-only confirmation; then continue with the returned `next_action.command`, normally `context compile scan --format json`.
+
+If finalize reports node reclassification hints, the submitted Node was changed by a semantic gate. Treat finalized ownership as the source of truth; status counts finalized Nodes, not submitted proposals.
 
 If any write is rejected, follow the returned `next_action` and `reason_code`. Do not retry by guessing direct/batched stages, forcing route bypasses, or editing workflow files.
 
@@ -83,7 +95,7 @@ If any write is rejected, follow the returned `next_action` and `reason_code`. D
 - [ ] Evidence was read through returned `next_action.command`, `how_to_explore[]`, or CLI schema/protocol commands only. If not, return to **Step 2**.
 - [ ] Node classification used the semantic gates in `references/gates.md`. If not, return to **Step 4**.
 - [ ] URL/reference ownership followed CLI diagnostics, not static prompt rules. If not, return to **Step 5**.
-- [ ] Structure decisions passed `context align validate --input - --format json` before finalize. If not, return to **Step 6**.
+- [ ] The requested align payload passed `context align validate --input - --format json` before finalize. If not, return to **Step 6**.
 - [ ] No raw, cache, knowledge, `/tmp`, host tool-results, or workflow scratch files were read or written with generic tools. If violated, restart from **Step 1**.
 
 </procedures>

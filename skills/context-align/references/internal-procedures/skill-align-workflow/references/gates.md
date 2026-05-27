@@ -1,6 +1,6 @@
 # Node Classification Gates
 
-Use these gates before every candidate batch and immediately before `align-structure-decision`.
+Use these gates before every candidate batch and before authoring the align payload requested by `next_action.input_schema`.
 Align owns Node type, tag, graph, planned Section, and ownership classification. It does **not** write Section prose.
 
 ## Node Type Order

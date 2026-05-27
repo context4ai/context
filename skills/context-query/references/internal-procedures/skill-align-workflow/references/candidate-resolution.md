@@ -1,6 +1,6 @@
 # Candidate Resolution Rules
 
-Use these rules after reading candidate ledger and aggregate payloads, before `align-structure-decision`.
+Use these rules after reading candidate ledger and aggregate payloads, before authoring the align payload requested by `next_action.input_schema`.
 
 ## Anomaly Signals
 
@@ -35,7 +35,7 @@ These hints are for audit and Agent DX. Copy them from ledger labels/titles when
 
 ## `llm_slug_hint` And Refs
 
-Use `llm_slug_hint` as the stable reference inside one `align-structure-decision` payload when final slugs may be normalized by the CLI.
+Use `llm_slug_hint` as the stable reference inside one align payload when final slugs may be normalized by the CLI.
 
 Recommended pattern:
 
@@ -57,4 +57,4 @@ block_ownership:
   - owners: [local:data-region]
 ```
 
-Refs may point to `llm_slug_hint` or final `slug`; prefer `*_ref` fields when a schema provides them. If the CLI rejects an unknown ref, use the top-level envelope diagnostics (`issues[].expected_shape.available_node_refs`, `diagnostics.*.available_node_refs`, or the returned repair view) and resubmit the corrected `align-structure-decision` payload. `agent_hints[]`, when present, is only a cutover mirror and must not be the source of truth.
+Refs may point to `llm_slug_hint` or final `slug`; prefer `*_ref` fields when a schema provides them. If the CLI rejects an unknown ref, use the top-level envelope diagnostics (`issues[].expected_shape.available_node_refs`, `diagnostics.*.available_node_refs`, or the returned repair view) and resubmit the corrected payload using the same `next_action.input_schema`. `agent_hints[]`, when present, is only a cutover mirror and must not be the source of truth.

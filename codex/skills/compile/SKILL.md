@@ -76,7 +76,7 @@ Run expected view commands from the envelope before writing. For compile evidenc
 - `required_preserved_literals[]` — URL, code identifier, `source_ref`, or `block_id` literals that must stay visible in the generated content or repair report.
 - diagnostics such as citation eligibility, source support, coverage, engagement, and advisory foldbacks.
 
-Follow `page.next_command` for pagination. Use `how_to_explore[]` for narrow reads. Do not expand workflow payloads through host tool-results. Node-cycle receipts are compact by default; `actions_meta[]` exposes current draft action handles for patching without an extra status read.
+Follow `page.next_command` for pagination. Use `how_to_explore[]` for narrow reads. Do not expand workflow payloads through host tool-results. Node-cycle receipts are compact by default; `actions_meta[]` exposes current draft action handles for patching without an extra status read. When advisory foldbacks say `agent_recommended_action: ignore`, do not inspect each detail row unless the user asks for cleanup or the cited source appears to lose meaning.
 
 ### Step 2 — Produce Payloads Only When Requested
 
