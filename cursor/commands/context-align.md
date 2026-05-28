@@ -31,7 +31,6 @@ For protocol discovery, prefer narrow commands:
 - `context schema workflow.next-action-envelope.v2 --view minimal --format json`
 - `context protocol show align-compile --format json`
 - `context schema align-structure-intent --view minimal --format json`
-- `context schema align-structure-decision --view minimal --format json` only when auditing canonical output or repairing an advanced canonical payload.
 
 ### Step 2 — Read Evidence Through The Single Evidence Path
 
@@ -40,9 +39,10 @@ If scan returns a `read-plan` command, run it and then follow the next command r
 - `read-plan` summarizes source size, active source set, navigation/placeholder sources, and the next evidence command.
 - `source-bundle` returns the selected source text with `@c4a` block annotations. Read it, then write the requested align JSON yourself, normally `align-structure-intent`; do not pipe the bundle text into `context align validate`.
 - If `source-bundle` omits text for budget, run its `next_action.command`.
+- If the next command contains `--read-cursor`, treat it as opaque continuation state. Do not decode it and do not replace it with hand-written `--source` / `--window` / `--range` / `--heading` selectors.
 - `blocks`, `windows`, `block-index`, `source-mapping`, and `pending-relation-refs` are detail views only. Use them when the read-plan/source-bundle next action or `how_to_explore[]` asks for a narrow follow-up.
 
-When a view returns `page.next_command`, follow that command to continue the same semantic view. Use `--source`, `--heading`, `--window`, or `--token-budget` only as view filters; do not inspect workflow files, cache files, host tool-results, or stdout fragments with generic tools.
+When a view returns `page.next_command`, follow that command to continue the same semantic view. Use `--source`, `--heading`, `--window`, `--range`, or `--token-budget` only as view filters; do not inspect workflow files, cache files, host tool-results, or stdout fragments with generic tools.
 
 If a detail view returns `align-blocks-read-incomplete`, `page.has_more`, or `truncated: true`, the response is a partial read. Return to the read-plan/source-bundle continuation instead of treating that partial JSON page as the complete source.
 
@@ -50,12 +50,12 @@ If a detail view returns `align-blocks-read-incomplete`, `page.has_more`, or `tr
 
 Reuse existing knowledge before inventing new Nodes: use `context mdrive glossary match <name>` and `context mdrive node list --format json` for term/entity reuse.
 
-Apply the procedure in `../skills/skill-align-workflow/SKILL.md` for Node classification gates and align intent procedure. Keep generated payloads on stdin. Do not create scratch files under the workspace or `/tmp`.
+Apply the procedure in `../skills/skill-align-workflow/SKILL.md` for Node classification gates and align intent procedure. Keep generated payloads on stdin. Prefer heredocs for small payloads; if payload staging is needed for large or parallel writes, use the workspace AGENTS.md scratch path (`.context/.tmp/agent-payloads/<run-id>/...` in embedded workspaces, `.tmp/agent-payloads/<run-id>/...` in root-layout workspaces) and redirect stdin from it. Never reuse fixed `/tmp/c4a-*` names and never place scratch payloads under output/archive/knowledge/raw truth directories.
 
 Use CLI diagnostics instead of static prompt rules:
 
 - `diagnostics.automatic_ownership_adjustments[]` explains mechanical external-reference demotions and the explicit ownership override shape.
-- `pending-relation-refs` lists explicit Parent/Children/Related markdown links. Reuse existing target Nodes when present; keep unresolved target slug hints deferred instead of writing dangling `contains_parent`.
+- `pending-relation-refs` lists explicit Parent/Children/Related markdown links. Reuse existing target Nodes when present; keep unresolved target slug hints deferred instead of writing dangling `contains_parent` / `domain_gate.child_refs` or empty placeholder Domains.
 - Validation diagnostics identify contiguity, citation eligibility, ownership, and mount-matrix problems.
 - `views[]` and `diagnostics` distinguish citable evidence from supporting context; do not infer citation eligibility from raw ownership prose.
 

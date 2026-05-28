@@ -38,7 +38,7 @@ After choosing `node_type`, choose the title to fit that type:
 
 Scope/process words in a source title are warning signals when proposed as an Entity title, not hard classification rules. Re-check the type/title when a proposed Entity title contains words such as "方案", "架构", "体系", "演练", "流程", "策略", "能力", "机制", "framework", "architecture", "system", "strategy", "process", or "drill". Keep the wording only when evidence shows it is the formal name of a concrete object or an atomic term.
 
-Relation-only sources should not force title copying. If a relation block has resolvable children and the graph node is useful, prefer an explicit Domain placeholder with `planned_sections: []`. If the source names only an atomic concept such as SSR/CSR, prefer a term Entity title such as "SSR" or "CSR" instead of "SSR 方案" / "CSR 方案".
+Relation-only sources should not force title copying or empty graph shells. If a relation block has resolvable current/existing children and the graph node is useful, prefer an explicit Domain placeholder with `planned_sections: []`. If all children are unresolved/deferred relation clues, skip the Node by default and keep the source blocks `context_only` / `ignored`; the pending relation refs are enough until child content appears. Do not express this deferred state as `domain_gate.child_refs: []`. If the source names only an atomic concept such as SSR/CSR and that term is useful on its own, prefer a term Entity title such as "SSR" or "CSR" instead of "SSR 方案" / "CSR 方案".
 
 ## Entity Tag Rules
 
@@ -105,7 +105,7 @@ Use `node_type: domain` only for a scope that groups child Nodes. Fill:
 | `child_refs[]` | Candidate ids, local refs, or final slugs for children in the scope. |
 | `grouping_reason` | Why these children belong together under this domain. |
 
-If a domain has no resolvable child refs, no clear grouping reason, or only one same-file child without a broader scope, emit an Entity instead and choose its Entity tag yourself. The CLI rejects invalid Domain gates; it does not auto-downgrade a Domain or choose fallback tags.
+If a domain has no resolvable child refs, no clear grouping reason, or only one same-file child without a broader scope, do not emit a Domain. For navigation-only / placeholder-only sources with only deferred children, skip the Node. Emit an Entity only when evidence names an atomic term or concrete object and choose its Entity tag yourself. The CLI rejects invalid Domain gates; it does not auto-downgrade a Domain or choose fallback tags.
 
 Scope-name titles such as "X 业务域", "Y 领域", "business domain", or "technical area" are a warning sign when proposed as Entity. Keep them as Entity only when the subject is an atomic term or concrete object; otherwise use Domain with `domain_gate.child_refs`.
 

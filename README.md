@@ -1,12 +1,10 @@
-# Agentic Context System Over Compiled Knowledge
+# Context: Build Agent-Facing Knowledge
 
 > [中文版本](./README_CN.md)
 
 <p align="center"><img src="./assets/logo.svg" alt="C4A Context" width="180"/></p>
 
-An Agentic knowledge system built for AI Agents. It pre-compiles Feishu docs, local Markdown, code structure, and hand-curated business material into structured, traceable knowledge, so an agent can perform high-precision search over it through a dedicated CLI.
-
-This repository is the **local standalone build of C4A System**. The full C4A System will add online services with stronger multi-user collaboration support — releasing soon.
+A knowledge workflow built for small and mid-sized teams working with Agents. It compiles Feishu docs, local Markdown, code, and hand-curated business material into structured, traceable knowledge, then guides the Agent — through optimal reasoning patterns and targeted exploration of that knowledge — to deliver high-quality retrieval. Runs inside any Agent environment that supports Plugins (Skill + Command).
 
 ## Why C4A Context
 
@@ -107,17 +105,19 @@ The compiled knowledge base can be packaged for distribution:
 
 ## Recommended environment
 
-Measured behavior of Agent + model combinations across instruction following, parameter hallucination, and extraction quality (scored 0–100):
+The numbers below come from a parallel benchmark: each model runs the full c4a flow (capture → align → compile) end-to-end over the same 10-document business corpus, with no manual intervention. Quality is scored across 7 dimensions (totaling 100) based on the resulting knowledge base; duration covers the full flow from `context init` to `compile close`.
 
-| Agent | Model | Instruction following | Parameter hallucination | Extraction quality |
-|---|---|---:|---|---:|
-| Codex | GPT 5.5 xh | 95 | Almost none | 96 |
-| Claude | Opus 4.6 / 4.7 | 95 | Almost none | 95 |
-| Cursor | Opus 4.6 / 4.7 | 92 | Almost none | 88 |
-| Claude | DeepSeek V4 | 88 | Almost none | 84 |
-| Claude | DeepSeek V4 Flash | 55 | Frequent | 45 |
-
-**Recommendation**: prefer GPT or Opus for now. DeepSeek V4 still lags in instruction following and extraction quality and needs further CLI optimization; full DeepSeek V4 adaptation is planned for v0.5.40, targeting an overall score above 90.
+| Dimension | GPT 5.5 (Codex) | Opus 4.7 (Claude) | DeepSeek V4 Pro (Claude) |
+|---|---:|---:|---:|
+| Fact coverage (25) | 22 | 22 | 18 |
+| Fact fidelity (25) | 23 | 19 | 18 |
+| Structure (15) | 13 | 8 | 7 |
+| URL (5) | 3 | 2 | 5 |
+| Source ref (10) | 9 | 7 | 6 |
+| Section boundary (10) | 9 | 7 | 5 |
+| Schema (10) | 8 | 9 | 7 |
+| **Total** | **87** | **74** | **66** |
+| Duration | 14m55s | 19m6s | 14m44s |
 
 ## About this repository
 

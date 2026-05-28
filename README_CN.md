@@ -1,12 +1,10 @@
-# Agentic Context System Over Compiled Knowledge
+# Context: Build Agent-Facing Knowledge
 
 > [English](./README.md)
 
 <p align="center"><img src="./assets/logo.svg" alt="C4A Context" width="180"/></p>
 
-专为 AI Agent 打造的 Agentic 知识系统，将飞书文档、本地 Markdown、代码结构、人工整理的业务资料预编译为结构化、可溯源的知识，再让智能体通过专用命令行工具，在这套知识上完成高精度检索。
-
-本仓库是 **C4A System 的本地独立可运行版本**；完整的 C4A System 将支持在线服务、更适合多人协同，即将发布。
+专为 Agent 打造的中小团队知识工作流，将飞书文档、本地 Markdown、代码、人工整理的业务资料编译为结构化、可溯源的知识，再指导 Agent 通过最佳的推理模式和探查知识完成高质量检索。本工具运行在支持 Plugin （Skill + Command） 的 Agent 环境中。
 
 ## 为什么选择 C4A Context
 
@@ -105,17 +103,19 @@ bun add -g @c4a/context-cli
 
 ## 环境推荐
 
-不同 Agent 与模型组合在指令遵循、参数幻觉、提取质量三项上的实测表现（0–100 分）：
+下方数据来自一次并发基准测试：每个模型在同一份 10 篇业务文档语料上端到端跑完 c4a 全流程（capture → align → compile），无人工介入。质量按 7 个维度评分（总分 100）反映产物知识库；耗时覆盖 `context init` 到 `compile close` 的全流程。
 
-| Agent | 模型 | 指令遵循度 | 参数幻觉 | 提取质量 |
-|---|---|---:|---|---:|
-| Codex | GPT 5.5 xh | 95 | 几乎无 | 96 |
-| Claude | Opus 4.6 / 4.7 | 95 | 几乎无 | 95 |
-| Cursor | Opus 4.6 / 4.7 | 92 | 几乎无 | 88 |
-| Claude | DeepSeek V4 | 88 | 几乎无 | 84 |
-| Claude | DeepSeek V4 Flash | 55 | 经常 | 45 |
-
-**建议**：目前优先使用 GPT 或 Opus；DeepSeek V4 在指令遵循与提取质量上仍有差距，需配合 CLI 进一步优化，预计 v0.5.40 完成 DeepSeek V4 适配并达到 90+ 综合得分。
+| 维度 | GPT 5.5（Codex） | Opus 4.7（Claude） | DeepSeek V4 Pro（Claude） |
+|---|---:|---:|---:|
+| 事实覆盖（25） | 22 | 22 | 18 |
+| 事实忠实（25） | 23 | 19 | 18 |
+| 结构语义（15） | 13 | 8 | 7 |
+| URL（5） | 3 | 2 | 5 |
+| Source ref（10） | 9 | 7 | 6 |
+| Section 边界（10） | 9 | 7 | 5 |
+| Schema（10） | 8 | 9 | 7 |
+| **总分** | **87** | **74** | **66** |
+| 总耗时 | 14m55s | 19m6s | 14m44s |
 
 ## 关于本仓库
 

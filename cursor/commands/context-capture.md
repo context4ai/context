@@ -38,7 +38,7 @@ Invocation note: code capture does not run through `npx`. The default code aspec
   - Write the body to `context capture --note --intent <intent> --anchor <node-slug>[#<section-id>] --input -` for anchored notes, or omit `--anchor` for brainstorm.
   - For `revision`, organize the stdin Markdown with headings: `旧上下文`, `修改意图`, `新内容`, `验证条件`.
   - For `decision`, organize the stdin Markdown with headings: `议题`, `选项`, `决议`, `理由`.
-  - After capture, run `context status --format json` and base the user-facing next step on `next_step.command` / `workflow.next_step`.
+  - After capture, run `context status --view summary --format json` and base the user-facing next step on `next_step.command` / `workflow.next_step`.
 
 For stdin batches, use this shape:
 
@@ -56,7 +56,7 @@ Do not pipe the heredoc through another command, and do not discover files with 
 
 Report the CLI output verbatim. If the CLI reports `N sources changed`, suggest the right next step:
 
-- Run `context status --format json` and use its `next_step.command` / `workflow.next_step`.
+- Run `context status --view summary --format json` and use its `next_step.command` / `workflow.next_step`.
 - If JSON status reports `incremental.pending_align.status: "pending"` with `count > 0`, suggest `/context-align` even when a previous finalized align workflow or prose `workflow.next_step` says compile. Newly captured structure work must be routed through align before compile.
 - If status says aligned knowledge is missing or alignment is required → suggest `/context-align`.
 - If status says compile work is pending for Markdown / evidence-backed knowledge → suggest `/context-compile`. Mention `/context-align` only if the user wants to revise the structure.

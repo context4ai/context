@@ -41,7 +41,7 @@ Protocol discovery:
 
 1. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
 2. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
-3. Run `context status --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
+3. Run `context status --view summary --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
 
 Run `context compile scan` only for this initial preflight unless the CLI explicitly returns it as the next command after a terminal/no-work state. During an active compile workflow, discover the next node from the current envelope (`next_action`, `views[]`, `workset_progress`) and follow returned commands; do not rerun scan between node cycles to probe for the next node.
 
@@ -51,11 +51,11 @@ Repeat until the CLI returns `stop_noop`, `close_compile` succeeds, or a blockin
 
 Carry the latest envelope forward between iterations. After a successful node cycle, continue from its returned `next_action.command` / `workset_progress` rather than restarting at `context compile scan`.
 
-### Step 1 — Read Expected Views
+### Step 1 — Read Node Evidence From The Envelope
 
-Run expected view commands from the envelope before writing. For compile evidence, prefer the CLI-returned source-ref/scaffold views. They may expose:
+Run the evidence command returned by the envelope before writing. `views[].expected` identifies the default compact evidence entry, not a separate checklist to exhaust. For compile evidence, prefer the CLI-returned source-ref/scaffold views. They may expose:
 
-- `source_refs_index_command` / `source_refs_command` — compact block-id evidence index for drafting; use `items[].block_id` in `source_block_ids[]`.
+- `source_refs_index_command` / `source_refs_command` — compact Node-scoped citation index for drafting; use `items[].block_id` in `source_block_ids[]` when the row is the evidence you will cite.
 - `source_refs_detail_command` — detailed source refs with quote previews; open only when the compact index is not enough.
 - `request_full_text_command` / `--view text` — narrow text view for one block when quote preview is not enough; this is still Node-scoped, not a workspace evidence bundle.
 - `citable_source_refs[]` — detailed-view refs eligible for draft citations; prefer `block_id` values in `source_block_ids[]`.
@@ -68,6 +68,8 @@ Follow `page.next_command` for pagination. Use `how_to_explore[]` for narrow rea
 ### Step 2 — Produce Payloads Only When Requested
 
 For `submit_compile_cycle`, load the Node evidence via the returned command/views, invoke packaged `context:skill-compile-draft` for exactly one Node, and pass the emitted JSON on stdin to the returned `next_action.command`.
+
+Prefer heredocs for small payloads. If large or parallel draft payloads need staging, use the workspace AGENTS.md scratch path (`.context/.tmp/agent-payloads/<run-id>/...` in embedded workspaces, `.tmp/agent-payloads/<run-id>/...` in root-layout workspaces) and redirect stdin from that file. Never reuse fixed names like `/tmp/c4a-draft-<node>.json`, and never use scratch paths as workflow handoff or CLI-managed storage.
 
 For `continue_compile_cycle`, do not invoke the draft skill and do not attach `--input`; execute the returned `next_action.command` exactly. `--continue` resumes a saved draft session. If it returns `status: "noop"`, follow the returned `close_compile` next action.
 
