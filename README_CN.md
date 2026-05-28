@@ -111,8 +111,8 @@ bun add -g @c4a/context-cli
 |---|---|---:|---|---:|
 | Codex | GPT 5.5 xh | 95 | 几乎无 | 96 |
 | Claude | Opus 4.6 / 4.7 | 95 | 几乎无 | 95 |
-| Cursor | Opus 4.6 / 4.7 | 92 | 几乎无 | 85 |
-| Claude | DeepSeek V4 | 70 | 经常 | 55 |
+| Cursor | Opus 4.6 / 4.7 | 92 | 几乎无 | 88 |
+| Claude | DeepSeek V4 | 88 | 几乎无 | 84 |
 | Claude | DeepSeek V4 Flash | 55 | 经常 | 45 |
 
 **建议**：目前优先使用 GPT 或 Opus；DeepSeek V4 在指令遵循与提取质量上仍有差距，需配合 CLI 进一步优化，预计 v0.5.40 完成 DeepSeek V4 适配并达到 90+ 综合得分。

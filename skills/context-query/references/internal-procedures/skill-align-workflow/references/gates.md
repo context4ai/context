@@ -105,7 +105,7 @@ Use `node_type: domain` only for a scope that groups child Nodes. Fill:
 | `child_refs[]` | Candidate ids, local refs, or final slugs for children in the scope. |
 | `grouping_reason` | Why these children belong together under this domain. |
 
-If a domain has no resolvable child refs, no clear grouping reason, or only one same-file child without a broader scope, emit an Entity instead.
+If a domain has no resolvable child refs, no clear grouping reason, or only one same-file child without a broader scope, emit an Entity instead and choose its Entity tag yourself. The CLI rejects invalid Domain gates; it does not auto-downgrade a Domain or choose fallback tags.
 
 Scope-name titles such as "X 业务域", "Y 领域", "business domain", or "technical area" are a warning sign when proposed as Entity. Keep them as Entity only when the subject is an atomic term or concrete object; otherwise use Domain with `domain_gate.child_refs`.
 
@@ -146,7 +146,7 @@ Each source must include `rationale` when inferred and at least one of `evidence
 
 ## Final Reflection
 
-- Entity cannot pick a legal tag, or depends on its upstream title to make sense -> downgrade to Section or change type.
-- Action only supports one Section -> downgrade to Section. The discriminator is scale, not the presence of "step" words.
+- Entity cannot pick a legal tag, or depends on its upstream title to make sense -> write it as a Section under the upstream Node or change type before submit.
+- Action only supports one Section -> write it as a Section instead of an Action. The discriminator is scale, not the presence of "step" words.
 - Action "steps" are parallel options/configs -> route to Entity `comparison` / `spec` / `description`.
 - Domain has no children -> delete it or merge it into a larger Domain.

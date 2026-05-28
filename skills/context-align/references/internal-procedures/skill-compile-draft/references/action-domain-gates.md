@@ -15,7 +15,7 @@ Treat `node.action_gate` as the compile boundary for procedural claims. An Actio
 
 If `action_gate` is absent on a Node whose `type` is `action`, treat it as a structural defect — emit a `structure_challenge` (see `references/structural-challenges.md`) instead of inventing process semantics.
 
-If the current evidence can only support one thin Section or only a parallel option/config list, do not stretch it into procedure prose. Emit `skip` or `structure_challenge` so align can downgrade it to the owning Entity/Domain Section.
+If the current evidence can only support one thin Section or only a parallel option/config list, do not stretch it into procedure prose. Emit `skip` or `structure_challenge` so align can revise the structure; the CLI does not auto-downgrade an Action or choose replacement Entity tags.
 
 ## Domain Nodes (`node.type === "domain"`)
 

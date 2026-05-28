@@ -113,8 +113,8 @@ Measured behavior of Agent + model combinations across instruction following, pa
 |---|---|---:|---|---:|
 | Codex | GPT 5.5 xh | 95 | Almost none | 96 |
 | Claude | Opus 4.6 / 4.7 | 95 | Almost none | 95 |
-| Cursor | Opus 4.6 / 4.7 | 92 | Almost none | 85 |
-| Claude | DeepSeek V4 | 70 | Frequent | 55 |
+| Cursor | Opus 4.6 / 4.7 | 92 | Almost none | 88 |
+| Claude | DeepSeek V4 | 88 | Almost none | 84 |
 | Claude | DeepSeek V4 Flash | 55 | Frequent | 45 |
 
 **Recommendation**: prefer GPT or Opus for now. DeepSeek V4 still lags in instruction following and extraction quality and needs further CLI optimization; full DeepSeek V4 adaptation is planned for v0.5.40, targeting an overall score above 90.

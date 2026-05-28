@@ -11,6 +11,8 @@ This reference applies only when the current envelope asks for `next_action.kind
 | `micro` | The source is fragmented, note-like, or dense with short independent claims. | Keep section proposals narrow and avoid bundling unrelated blocks into one candidate. |
 | `single_pass` | The source is short enough that one read can safely discover all relevant structure. | Still emit the `align-coarse-read` artifact, but keep anchors minimal and avoid over-segmentation. |
 
+Treat Markdown heading changes as section-planning hints, not hard boundaries. Sibling sub-headings under a shared parent can remain in one `section_groups[]` entry when they form one coherent semantic topic for that parent. Headings with no shared parent should usually split unless you intentionally want one Section to span them. When a dense source has many headings, split by heading first, then merge adjacent or sibling groups only when the merged Section is still one coherent fact group.
+
 ## Content Signals
 
 `content_signals` are neutral shape signals used later by action/domain gates. They must not directly claim `node_type`, tags, or recommendations.

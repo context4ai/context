@@ -77,7 +77,7 @@ For `review_reconcile_decisions`, load the prepare payload through CLI views suc
 
 Invoke `context:skill-compile-judge` only when the top-level `next_action.kind` is exactly `review_reconcile_decisions`. If `questions` are present but `next_action.kind` is `patch_compile_draft`, patch the draft first; do not infer judge mode from question counts.
 
-For `apply_reconcile_review`, `close_compile`, `finish_current_node`, `submit_coverage_disposition`, or `abandon_or_rescan`, execute the returned command exactly. If it rejects, follow the new `next_action` and `reason_code`.
+For `apply_reconcile_review`, execute the returned plain apply command exactly, typically `context reconcile apply --format json`; do not add `--decisions` or stdin. For `close_compile`, `finish_current_node`, `submit_coverage_disposition`, or `abandon_or_rescan`, execute the returned command exactly. If it rejects, follow the new `next_action` and `reason_code`.
 
 ### Step 3 — Repair From Diagnostics
 

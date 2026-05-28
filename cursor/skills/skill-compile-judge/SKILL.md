@@ -17,7 +17,9 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 ## TL;DR — Non-negotiables
 
 - Invoke this skill only when the caller's top-level envelope has `next_action.kind: "review_reconcile_decisions"` or the prepare payload contains `judge_handoff`. If the active envelope asks for `patch_compile_draft`, `continue_compile_cycle`, or another action, stop and follow that `next_action.command` instead.
-- Input is the budget-safe compile prepare summary. For items with candidates, load only that item's candidate detail view with `context workflow show --payload prepare --view candidates --item-id <item-id> --unwrap --format json`.
+- Input is the budget-safe compile prepare summary. If `page.has_more` is true, follow `next_command` until every prepare item is listed.
+- The summary is an index: use `item_detail_command` only when the full proposed content or full source-support repair details are needed.
+- For items with candidates, load only that item's candidate detail view with `context workflow show --payload prepare --view candidates --item-id <item-id> --unwrap --format json`.
 - Do not inspect workspace storage directly or run ad-hoc scripts to reconstruct candidates. Use only `items[]`, `evidence[]`, `source_support` diagnostics, `candidates[]`, `previous_decisions[]`, and `judge_handoff`.
 - Output exactly one JSON or YAML document with `schema_version: "compile.judge-decisions.v2"` and `decisions[]`.
 - Keep one decision per prepared `item_id`, preserving prepare order.
