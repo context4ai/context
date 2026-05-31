@@ -24,6 +24,7 @@ of local knowledge; never read workspace files directly.
 - **Route by intent**: Classify problem intent (vague / clear Node / relationship / detail) and choose the right command; see Query Route table below.
 - **Orientation is navigation**: `context query --intent orientation` returns a budgeted `[Slug Map]` plus optional `[Summary]` hints for scope choice only; it is not direct answer evidence.
 - **Cite structure**: Every conclusion cites `[node/slug]` or `[node/section]`. If evidence does not support a claim, mark as gap.
+- **Expand raw when needed**: Query summaries help recall and scope choice; factual answers should rely on returned Section content or CLI-provided raw/source_ref expansion commands when a hit is marked raw-assisted or raw-expandable.
 - **Handle diagnostics**: If CLI returns `select`, `miss`, `broad`, `raw-only`, or `truncated`, follow the hint: show user structure to choose from, ask for narrower scope, or suggest workflow.
 
 <reference>
@@ -42,6 +43,7 @@ returned row as a small evidence card.
 | `refers_to_nodes` | Optional supplemental anchors when present |
 | `slug` | Candidate handle when the output is asking you to choose a Node |
 | `message` | Miss, broad-query, blocked, or narrowing guidance |
+| `raw_expand_command` / `raw_evidence_preview` | Pointer to expand raw/source_ref evidence when the hit needs factual confirmation |
 | `visibility` / `visible:` footer | Completeness signal for `node_view`; when `complete=true` / `visible: complete`, the shown Node Sections are exhaustive and there is no pagination |
 
 Supplemental context can come from:

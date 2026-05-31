@@ -60,7 +60,7 @@ Q. What default language should agents use for user-facing replies in this works
   C. Other — please describe.
 ```
 
-The option label must be localized, but the stored CLI value should remain stable. Pass the answer as `--language "Chinese"`, `--language "English"`, or the user's custom text.
+The option label must be localized, but the stored CLI value should remain stable. Pass the answer as `--language Chinese`, `--language English`, or quote custom text as `--language '<custom text>'`.
 
 ### Step 3 — Ask about workspace focus (unless user already passed `--focus`)
 
@@ -81,15 +81,16 @@ Q. What will this workspace mainly hold?
 ```
 
 Interpret the answer:
+- When appending generated or user-provided free text to the shell command, quote it with POSIX single quotes. If the text contains a single quote, escape it as `'\''`; do not use double quotes for free-form values.
 - Chose A–D → generate a 2–3 line focus description in the user's language. Phrase it as
   "primarily X; supporting materials such as Y may also be filed here" rather than exclusion
   language — workspaces absorb auxiliary material in practice. Show the exact generated focus
   text to the user and ask for one confirmation before running `context init`. If the user
-  approves, pass it as `--focus "..."`; if the user edits it, pass the edited text as
-  `--focus "..."`; if the user declines or says to skip, run without `--focus`.
-- Chose E or described freely → pass the user's text verbatim as `--focus "..."`.
+  approves, pass it as `--focus '...'`; if the user edits it, pass the edited text as
+  `--focus '...'`; if the user declines or says to skip, run without `--focus`.
+- Chose E or described freely → pass the user's text verbatim as `--focus '...'`.
 - User says "skip" / "don't care" → run `context init` without `--focus`.
-- `$ARGUMENTS` already contains `--focus "..."` → skip this step entirely.
+- `$ARGUMENTS` already contains `--focus <text>` → skip this step entirely.
 
 ### Step 4 — Choose aspects (unless `$ARGUMENTS` already has aspect flags)
 
@@ -140,6 +141,7 @@ Briefly state in the user's conversation language:
 - Default language
 - Installed aspects
 - Whether `AGENTS.md` was created and whether `CLAUDE.md` was linked
+- If the user asks to read the generated workspace instructions, run `context workspace read AGENTS.md --format text`; do not open the data-root file with generic file tools.
 - Whether focus was recorded (show the first line if yes; mention the user can edit `config.yaml` later if not)
 - If the CLI prints a Claude local permission hint, tell the user that `Bash(context:*)` is the recommended scoped allow for heredoc-heavy context workflows. Do not edit `.claude/settings.local.json` unless the user explicitly asks.
 - Suggest `/context:capture` as the natural next step

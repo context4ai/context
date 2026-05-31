@@ -23,7 +23,7 @@ If you cannot point at a specific user message answering the specific question f
 
 ## Weak support handling
 
-A prepare item is "weakly supported" when hard facts match between `proposed` and `evidence`, but lexical overlap is low. `context reconcile review` flags these and may return `support_confirmation`.
+A prepare item is "weakly supported" when cited evidence plausibly covers a compressed or rewritten claim, but review requires human confirmation before applying it. `context reconcile review` flags these and may return `support_confirmation`.
 
 Rules:
 
@@ -40,8 +40,8 @@ When review provides the **same `group_key`** on several questions that are all 
 
 **Do not group**:
 
-- Questions that introduce new facts (the user is making a fact-level call, not a wording call).
-- Questions where one item has missing hard facts that the others have.
+- Questions that introduce new claims (the user is making a fact-level call, not a wording call).
+- Questions where one item lacks evidence that the others have.
 - Questions whose evidence boundaries differ (different sources / different blocks).
 
 When in doubt, ask separately.
@@ -61,7 +61,7 @@ After user confirmation:
 
 - `decided_by` is a **top-level** decision field, not a `proposed` sub-field.
 - Final executable decisions must not carry `user_confirmation.required: true`. That flag belongs only on `action: ask_user` items that still need input.
-- User confirmation permits weak support and omit. It does **not** permit unsupported evidence, missing hard facts, or contradictory claims — those still need stricter evidence or stay `ask_user`.
+- User confirmation permits weak support and omit. It does **not** permit unsupported evidence or contradictory claims — those still need stricter evidence or stay `ask_user`.
 - `decided_by: delegated_agent` is reserved for CLI-generated decisions inside a delegated compile workflow. Do not emit it from this skill.
 
 ## How this slots into the main procedure

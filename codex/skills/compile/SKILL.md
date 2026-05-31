@@ -34,7 +34,7 @@ Naming convention:
 - **`--aspect code [selector]`** — run `context compile --aspect code [selector]`, report the CLI result, and stop unless the CLI asks for a follow-up close. The selector may be omitted to process all actionable code sources; when present, the CLI resolves source slug, package name, or module path.
 - **`--aspect <name>`** — run deterministic custom aspect projection for one configured aspect. Use `context compile --aspect <name> --allow-large-deprecate` only when the CLI rejected a large deprecate and the user confirms the runner output is intentionally empty or reduced.
 - **`--all`** — run `context compile --all` to materialize code projection first and then custom aspect projections in deterministic order.
-- **Delegated** — add `--delegated` only when the user explicitly authorized delegated/automatic mode at the start of this conversation. Do not infer it from vague "continue" permission.
+- **Delegated** — add `--delegated` only when the user explicitly authorized delegated mode at the start of this conversation. Delegated mode records scoped authority for low-risk reconcile/review/apply defaults; it does not auto-draft Node content or replace agent evidence reading. Do not infer it from vague "continue" permission.
 
 ### Core Rules
 
@@ -43,6 +43,7 @@ Naming convention:
 - Treat `allowed_actions[]` as permission for read-only insertions; it is not a menu of alternate write paths.
 - Treat `agent_hints[]`, when present, as a temporary mirror or diagnostic. If it conflicts with `next_action`, follow `next_action`.
 - Do not use direct file tools, shell scripts, `jq`, `sed`, `cat`, `head`, `tail`, Python, or Node.js to inspect workspace storage, workflow payload files, or `--format json` stdout.
+- Workflow write digest flags are stale guards. Omit `--payload-digest` unless the returned command explicitly requires one; when an explicit digest is needed, use `context workflow show --payload <name> --digest-only --format text` instead of parsing JSON stdout.
 
 Protocol discovery:
 
@@ -53,8 +54,9 @@ Protocol discovery:
 ## Start
 
 1. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
-2. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
-3. Run `context status --view summary --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
+2. If the scan returns `close_compile`, run the returned close command even when there are no changed Nodes; finalized no-write/container Nodes may still need close materialization.
+3. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
+4. Run `context status --view summary --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
 
 Run `context compile scan` only for this initial preflight unless the CLI explicitly returns it as the next command after a terminal/no-work state. During an active compile workflow, discover the next node from the current envelope (`next_action`, `views[]`, `workset_progress`) and follow returned commands; do not rerun scan between node cycles to probe for the next node.
 
@@ -73,8 +75,7 @@ Run the evidence command returned by the envelope before writing. `views[].expec
 - `request_full_text_command` / `--view text` — narrow text view for one block when quote preview is not enough; this is still Node-scoped, not a workspace evidence bundle.
 - `citable_source_refs[]` — detailed-view refs eligible for draft citations; prefer `block_id` values in `source_block_ids[]`.
 - `supporting_context_refs[]` — background/framing only.
-- `required_preserved_literals[]` — URL, code identifier, `source_ref`, or `block_id` literals that must stay visible in the generated content or repair report.
-- diagnostics such as citation eligibility, source support, coverage, engagement, and advisory foldbacks.
+- diagnostics such as citation eligibility, coverage, engagement, stale raw/source_ref pointers, and advisory foldbacks.
 
 Follow `page.next_command` for pagination. Use `how_to_explore[]` for narrow reads. Do not expand workflow payloads through host tool-results. Node-cycle receipts are compact by default; `actions_meta[]` exposes current draft action handles for patching without an extra status read. When advisory foldbacks say `agent_recommended_action: ignore`, do not inspect each detail row unless the user asks for cleanup or the cited source appears to lose meaning.
 
@@ -88,9 +89,9 @@ For `continue_compile_cycle`, do not invoke the draft skill and do not attach `-
 
 For `patch_compile_draft`, submit only the patch schema requested by the CLI. Use `actions_meta[].action_id` for `replace_action` / `remove_action`, or `add_action` with `before` / `after`; do not use generic `op/path/value` aliases.
 
-For `review_reconcile_decisions`, load the prepare payload through CLI views such as `context workflow show --payload prepare --unwrap --format json`, Read `references/internal-procedures/skill-compile-judge.md` in full and follow it when semantic judgment is needed, run `context reconcile validate --mode compile --node <slug> --decisions - --format json`, repair any blocking diagnostics, then pass validated decisions to the returned review command.
+For `review_reconcile_decisions`, first inspect the returned command and prepare summary. If the command is `context reconcile review --accept-safe-defaults ...` with no `--decisions -`, run it directly; the CLI is accepting only mechanical defaults. If manual decisions remain, load the prepare payload through CLI views such as `context workflow show --payload prepare --view issues --unwrap --format json`, accept default_decision items with compact `{ item_id, accept_default: true }` when you can verify they are appropriate, and Read `references/internal-procedures/skill-compile-judge.md` in full and follow it only for items that still need support/relation judgment. For hand-authored decision payloads, run `context reconcile validate --mode compile --node <slug> --decisions - --format json`, repair any blocking diagnostics, then pass validated decisions to the returned review command.
 
-Invoke `references/internal-procedures/skill-compile-judge.md` only when the top-level `next_action.kind` is exactly `review_reconcile_decisions`. If `questions` are present but `next_action.kind` is `patch_compile_draft`, patch the draft first; do not infer judge mode from question counts.
+Do not treat every `review_reconcile_decisions` envelope as a judge request. Invoke `references/internal-procedures/skill-compile-judge.md` only when the prepare summary includes `judge_handoff` or the returned diagnostics explicitly ask for support/relation judgment. If `questions` are present but `next_action.kind` is `patch_compile_draft`, patch the draft first; do not infer judge mode from question counts.
 
 For `apply_reconcile_review`, execute the returned plain apply command exactly, typically `context reconcile apply --format json`; do not add `--decisions` or stdin. For `close_compile`, `finish_current_node`, `submit_coverage_disposition`, or `abandon_or_rescan`, execute the returned command exactly. If it rejects, follow the new `next_action` and `reason_code`.
 
@@ -102,8 +103,9 @@ Use typed diagnostics as the repair contract:
 - `diagnostics.auto_repaired[]` records mechanical repairs; warning severity must be surfaced in the final report.
 - `diagnostics.warnings[]` with info/advisory severity are not write blockers unless `blocking: true` or the next action says so.
 - `agent_recommended_action` classifies warning handling: `ignore` means continue unless the user asks for cleanup, `respond_optional` means repair only when semantically useful, and `respond_required` means resolve before the returned write action can succeed.
-- `source_support` is advisory lexical diagnostics, not a keyword gate. Do not patch drafts only to satisfy term overlap. Blocking evidence checks should come from invalid source refs, changed evidence boundaries, unsupported confirmed hard facts, or explicit top-level `next_action`. URL preservation, section kind precision, example formatting, and summary style are advisory/debt unless the CLI explicitly marks them blocking.
+- Raw/source_ref pointer diagnostics are mechanical evidence checks, not content-quality judges. Do not patch drafts only to satisfy URL/style/term-overlap preferences. Blocking evidence checks should come from invalid source refs, stale raw mirrors, changed evidence boundaries, or explicit top-level `next_action`.
 - stale prepare refresh returns `review_reconcile_decisions` with `reason_code: "prepare_refreshed"`; reread the new prepare result before reviewing.
+- If close reports a finalized Node that needs only block ownership/support repair, use `context compile repair ownership --input - --format json` with the `align.ownership-patch.v2` shape. This is the compile-family repair path and preserves completed node-cycle progress. Do not abandon the active compile workflow just to run `context align patch ownership`.
 
 Do not recover by replaying an old manual path, editing rendered files, or guessing schema aliases.
 
@@ -111,4 +113,4 @@ Do not recover by replaying an old manual path, editing rendered files, or guess
 
 When `next_action.kind` is `close_compile`, execute `context compile close` through packaged `references/internal-procedures/skill-compile-close.md` or the returned command. Never claim success unless close exits 0 and verify is green, except the explicit no-work path.
 
-Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, `ready_with_debt` coverage/review-debt summaries when present, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.
+Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, `ready_with_debt` coverage summaries when present, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.

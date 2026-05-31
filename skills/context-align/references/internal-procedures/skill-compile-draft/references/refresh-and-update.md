@@ -41,8 +41,8 @@ When `existing.sections[]` is non-empty, every `section-N` id you read here is a
 
 ### `update` / `supersede.new` mechanics
 
-- `update` keeps the same `section-N` id; provide new `content` (optional `summary`, optional new `source_block_ids[]`) but do not include `kind` unless the kind itself is changing.
-- `supersede.new` is a fresh Section; it needs `kind`, `content`, `source_block_ids[]`, and may carry `summary`, `refers_to_nodes[]`, and `confidence` per the same rules as `add`.
+- `update` keeps the same `section-N` id; provide `source_block_ids[]` / `source_refs[]` for changed evidence and omit `content` when the new cited raw should be mirrored. Include `content` only for an intentional reader-surface rewrite. Do not include `kind` unless the kind itself is changing.
+- `supersede.new` is a fresh Section; it needs `kind` plus citation evidence. Omit `content` when cited raw should be mirrored; include `content` only for an intentional reader-surface rewrite. It may carry `summary`, `refers_to_nodes[]`, and `confidence` per the same rules as `add`.
 - `deprecate` only needs `target_section_id` and `reason`. Do not pass `content`, `source_block_ids[]`, or `source_refs[]`.
 
 ## Output schema (refresh ops)
@@ -51,12 +51,12 @@ When `existing.sections[]` is non-empty, every `section-N` id you read here is a
 	{
 	  "actions": [
 	    { "op": "update", "target_section_id": "section-3",
-	      "content": "...",
+	      "summary": "...",
 	      "refers_to_nodes": null,
 	      "source_block_ids": ["c0d4e5f61728"] },
 	    { "op": "supersede", "target_section_id": "section-5",
 	      "reason": "raw published a new retention value",
-	      "new": { "kind": "spec", "content": "...",
+	      "new": { "kind": "spec", "summary": "...",
 	               "refers_to_nodes": ["..."],
 	               "source_block_ids": ["9d1e2f3a4b5c"] } },
     { "op": "deprecate", "target_section_id": "section-2", "reason": "..." }

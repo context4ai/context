@@ -19,17 +19,19 @@ Naming convention: `/context-*` names user slash commands and `context ...` name
 Routing rules (first match wins):
 
 1. **Empty arguments** → run `/context-status`.
-2. **Starts with `http://` or `https://`, or ends in `.md`** → `/context-capture $ARGUMENTS`.
-3. **Equals `--inbox` or `--refresh`** → `/context-capture $ARGUMENTS`.
-4. **Matches `init`, `initialize`, `new workspace`, or looks like a plain workspace name** → `/context-init $ARGUMENTS`.
-5. **Mentions `code` or source-code capture** → `/context-capture --code $ARGUMENTS`.
-6. **Mentions `aspect` without a concrete supported capture flag** → ask one clarification; code aspect capture is exposed as `/context-capture --code`.
-7. **Matches `align`, `structure`, `plan`, `node tree`** → `/context-align $ARGUMENTS`.
-8. **Matches `compile`, `recompile`, `synthesize`, or `build knowledge`** → `/context-compile $ARGUMENTS`.
-9. **Matches `drop`, `retract`, `delete source`, or passes a known source-id pattern (`feishu:*` / `local:*` / `aspect:*` / `oncall:*` / `meeting:*`)** → `/context-drop $ARGUMENTS`.
-10. **Matches `purge`, `clear archive`, `delete archive`, or `清理归档`** → `/context-purge $ARGUMENTS`.
-11. **Equals `status`, `health`, `overview`, `summary`, or asks for workspace/cache/plugin health** → `/context-status`.
-12. **Anything else** (likely a knowledge question) → `/context-query $ARGUMENTS`.
+2. **Starts with `http://` or `https://`** → `/context-capture $ARGUMENTS`.
+3. **Ends in `.md` and is explicitly presented as source material to ingest/capture** → `/context-capture $ARGUMENTS`.
+   Driver documents such as run instructions, handbooks, READMEs, plans, feedback issues, corpus/index/manifests, and batch lists are not capture targets unless the user explicitly asks to ingest them. Capture only ingest targets that are already explicit in the user request; if they are missing, ask one clarification.
+4. **Equals `--inbox` or `--refresh`** → `/context-capture $ARGUMENTS`.
+5. **Matches `init`, `initialize`, `new workspace`, or looks like a plain workspace name** → `/context-init $ARGUMENTS`.
+6. **Mentions `code` or source-code capture** → `/context-capture --code $ARGUMENTS`.
+7. **Mentions `aspect` without a concrete supported capture flag** → ask one clarification; code aspect capture is exposed as `/context-capture --code`.
+8. **Matches `align`, `structure`, `plan`, `node tree`** → `/context-align $ARGUMENTS`.
+9. **Matches `compile`, `recompile`, `synthesize`, or `build knowledge`** → `/context-compile $ARGUMENTS`.
+10. **Matches `drop`, `retract`, `delete source`, or passes a known source-id pattern (`feishu:*` / `local:*` / `aspect:*` / `oncall:*` / `meeting:*`)** → `/context-drop $ARGUMENTS`.
+11. **Matches `purge`, `clear archive`, `delete archive`, or `清理归档`** → `/context-purge $ARGUMENTS`.
+12. **Equals `status`, `health`, `overview`, `summary`, or asks for workspace/cache/plugin health** → `/context-status`.
+13. **Anything else** (likely a knowledge question) → `/context-query $ARGUMENTS`.
 
 If multiple rules apply, pick the most specific (URL beats word match). When in doubt, ask one clarifying question before dispatching.
 Never use Read / Glob / Grep / Write against `WORKSPACE_DIR`; route to packaged `/context-*` commands and skills instead of opening plugin or workspace files manually.

@@ -34,8 +34,8 @@ command. It does not hand-edit rendered knowledge.
 - Exit 2 → report the full issue list verbatim + point at the right re-entry command above. Do not hand-open the affected rendered article.
 - Coverage warnings are CLI-owned diagnostics. `ready_with_debt` means close succeeded and unresolved coverage remains visible. For severely low coverage, recommend one `--cover-uncovered-only` repair pass unless the user explicitly accepts the debt; otherwise report the warning and follow returned coverage view commands / `available_actions[]` only if the user chooses a repair or skip round.
 - Coverage and engagement denominators count primary citable content evidence. URL/reference-only, marker, frontmatter, embed, navigation, and context-only evidence is excluded or bucketed as non-blocking bookkeeping by the CLI.
-- User-accepted hard-fact risk is carried as `review_debt`; report it from close/status when present, but do not treat review-debt count as a close failure.
 - Materialized knowledge means either a CLI-written knowledge article, or an explicit no-write placeholder from align: `planned_sections: []` plus source/context/graph support. A compile skip action records reviewed evidence, but it does not by itself materialize an arbitrary finalized Node.
+- If close is blocked only because finalized block ownership/support is wrong, use `context compile repair ownership --input - --format json` with `align.ownership-patch.v2`. This keeps the active compile workflow and completed node progress. Do not abandon compile just to run `context align patch ownership`.
 - Never re-run `context compile draft` from close to paper over verify failures. Draft failures belong in the draft loop.
 - Do not use Python, Node.js, shell scripts, `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect `WORKSPACE_DIR`, `.context`, knowledge files, or `/tmp` workflow artifacts.
 - Derivable files self-heal: missing `_index.md` or `changelog.md` is rebuilt inside `context compile close` before the append, locator-only source moves are refreshed, non-canonical but hash-valid `source_ref` locators are canonicalized, and high-signal coverage candidates already backed by active Sections are marked covered. No pre-check needed.
@@ -67,7 +67,7 @@ Close is one in-process command with one exit code:
 | Exit 0, 0 issues | Summarise those counts in the user's language: Nodes touched; Sections added / updated / superseded / deprecated / skipped; `recompiled`; `locator_updates`; `rebuilt`; verify green. Stop. |
 | Exit 0, warnings only | Summarise + list warnings verbatim. For severely low coverage, recommend the CLI-returned `--cover-uncovered-only` repair command before final acceptance; for other coverage warnings, surface returned coverage view commands / `available_actions[]` instead of inventing a local decision matrix. |
 | Exit 2, Section / content issue | Surface the full issue list; point the user at re-running `/context-compile` (the draft loop owns Section writes). Do NOT Edit the affected rendered article. |
-| Exit 2, `compile-close-finalized-node-missing-knowledge` | If the missing Node has real citation evidence, point the user at `/context-compile` for that Node. If it is intentionally navigation-only or placeholder-only, point the user at `/context-align` to make it explicit no-write with `planned_sections: []` and context-only/ignored relation or placeholder blocks. |
+| Exit 2, `compile-close-finalized-node-missing-knowledge` | If the missing Node has real citation evidence, point the user at `/context-compile` for that Node. If it is intentionally navigation-only or placeholder-only and only block ownership/support is wrong, use `context compile repair ownership --input - --format json` to make support explicit with `context_only` + `visible_to` or owned/shared evidence. `ignored` blocks do not support the placeholder by themselves. If the Node itself is structurally wrong, route back to `/context-align` after the active compile workflow is resolved. |
 | Exit 2, structural issue (cycle, duplicate slug, `invalid-node-type`, `domain-same-file-child`) | Surface the full issue list; point the user at `/context-align` to revise structure. Do not re-run compile. |
 | Exit 2, `dropped-source-reference` | Surface the source-id; point the user at `/context-drop <id>` to complete the drop cleanup. |
 
@@ -103,7 +103,7 @@ Use stdout + stderr. The exit code selects the path via [Outcome routing](#outco
 For each error in the CLI's report, classify via [Outcome routing](#outcome-routing) and name the re-entry command in your report. Do NOT hand-edit rendered knowledge — that violates the CLI-sole-writer principle and masks the real upstream fix. Specifically:
 
 - Section / content issue → user re-runs `/context-compile` (draft loop produces new Section actions; the CLI re-writes).
-- `compile-close-finalized-node-missing-knowledge` → content Nodes go back through `/context-compile`; navigation-only or placeholder-only Nodes go back through `/context-align` so they become explicit no-write placeholders.
+- `compile-close-finalized-node-missing-knowledge` → content Nodes go back through `/context-compile`; ownership-only placeholder support fixes use `context compile repair ownership --input - --format json`; structural Node changes still go through `/context-align` after the active compile workflow is resolved.
 - Structural issue → user runs `/context-align` (revise the plan; re-compile afterwards).
 - `dropped-source-reference` → user runs `/context-drop <id>` to finish drop cleanup.
 

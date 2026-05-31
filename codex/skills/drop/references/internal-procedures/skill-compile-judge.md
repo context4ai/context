@@ -2,7 +2,7 @@
 name: skill-compile-judge
 description: >
   Packaged skill invoked by `/context:compile`; not a user slash command. Consumes the budget-safe compile prepare summary
-  and candidate detail views, judges each draft action's source support and relation to listed candidates,
+  and candidate detail views, judges each draft action's raw evidence support and relation to listed candidates,
   and emits a compile.judge-decisions.v2 document for `context reconcile review`.
 tools:
   - Bash
@@ -16,13 +16,13 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 
 ## TL;DR — Non-negotiables
 
-- Invoke this skill only when the caller's top-level envelope has `next_action.kind: "review_reconcile_decisions"` or the prepare payload contains `judge_handoff`. If the active envelope asks for `patch_compile_draft`, `continue_compile_cycle`, or another action, stop and follow that `next_action.command` instead.
+- Invoke this skill only when the active prepare summary contains `judge_handoff` or the returned diagnostics explicitly ask for compile support/relation judgment. A `review_reconcile_decisions` envelope by itself is not enough: if the command is accepting safe defaults or the remaining work is compact `{ item_id, accept_default: true }`, follow that review path instead. If the active envelope asks for `patch_compile_draft`, `continue_compile_cycle`, or another action, stop and follow that `next_action.command` instead.
 - Input is the budget-safe compile prepare summary. If `page.has_more` is true, follow `next_command` until every prepare item is listed.
-- The summary is an index: use `item_detail_command` only when the full proposed content or full source-support repair details are needed.
+- The summary is an index: use `item_detail_command` only when the full proposed content, raw evidence, or source_ref details are needed.
 - For items with candidates, load only that item's candidate detail view with `context workflow show --payload prepare --view candidates --item-id <item-id> --unwrap --format json`.
-- Do not inspect workspace storage directly or run ad-hoc scripts to reconstruct candidates. Use only `items[]`, `evidence[]`, `source_support` diagnostics, `candidates[]`, `previous_decisions[]`, and `judge_handoff`.
+- Do not inspect workspace storage directly or run ad-hoc scripts to reconstruct candidates. Use only `items[]`, `evidence[]`, raw/source_ref diagnostics, `candidates[]`, `previous_decisions[]`, and `judge_handoff`.
 - Output exactly one JSON or YAML document with `schema_version: "compile.judge-decisions.v2"` and `decisions[]`.
-- Keep one decision per prepared `item_id`, preserving prepare order.
+- Keep one decision per `judge_handoff.items[].item_id`, preserving prepare order. Do not emit decisions for mechanical safe-default items that the caller will pass through `--accept-safe-defaults`.
 - For support, output `support_verdict: supported | weak | unsupported` plus `support_reason`.
 - For relation, output `relation_verdict: new | duplicate | supersede | conflict | merge_into` plus `relation_reason`.
 - Compare only the candidates listed on that item. Do not perform workspace-wide BM25, grep, or source-file searches.
@@ -30,8 +30,8 @@ decisions only; the CLI reviews, applies, and writes every workspace change.
 - Escape hatch: when an item has no candidates, `relation_verdict: new` with `compared_section_ids: []` and `compared_count: 0` is valid and expected.
 - For `duplicate`, `supersede`, `conflict`, or `merge_into`, set `target_section_id` to the matched candidate Section id.
 - Same `source_ref` can support different Section kinds only when the semantic role differs. Detect and explain same-source-ref multi-kind cases instead of treating them as automatic duplicates.
-- `source_support` is advisory lexical diagnostics, not a keyword gate. A supported judge verdict may override low lexical `source_support` when the cited raw evidence semantically covers the claim.
-- Evidence-boundary errors and unsupported confirmed hard facts remain blocking evidence issues. Missing URLs, section kind precision, example formatting, summary style, and lexical hard-term spelling/casing/punctuation/paraphrase mismatches are advisory unless the active CLI `next_action` explicitly blocks on them.
+- Raw/source_ref diagnostics are mechanical evidence checks, not a keyword gate. A supported judge verdict comes from the cited raw evidence semantically covering the claim.
+- Evidence-boundary errors remain blocking evidence issues. Section kind precision, example formatting, and summary style are advisory unless the active CLI `next_action` explicitly blocks on them.
 - Weak support is a warning-level verdict, not permission to invent missing facts. Unsupported support should normally pair with `conflict` or a later user question rather than a write decision.
 
 <reference>
@@ -71,7 +71,7 @@ decisions:
 
 | field | value | Meaning |
 |---|---|---|
-| `support_verdict` | `supported` | Cited raw evidence covers the claim's hard facts. |
+| `support_verdict` | `supported` | Cited raw evidence covers the claim. |
 | `support_verdict` | `weak` | The evidence plausibly supports an ordinary summary, but review may ask for confirmation. |
 | `support_verdict` | `unsupported` | The claim adds facts or boundaries not present in cited raw evidence. |
 | `relation_verdict` | `new` | No listed candidate already covers the proposed knowledge. |
@@ -93,8 +93,8 @@ candidates from memory or bypass the candidate detail view.
 ### Step 2 — Judge Support
 
 For each item, read the proposed content and cited evidence. Use
-`source_support` only as a diagnostic hint; final support is your semantic
-verdict from the cited raw evidence.
+Use raw/source_ref diagnostics only as evidence pointers; final support is your
+semantic verdict from the cited raw evidence.
 
 ### Step 3 — Judge Relation
 

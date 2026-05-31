@@ -24,8 +24,10 @@ Invocation note: code capture does not run through `npx`. The default code aspec
 
 ### Route by argument
 
-- `$ARGUMENTS` is one or more `http://` / `https://` targets and/or local `.md` paths → `context capture $ARGUMENTS` (Feishu docx/wiki URLs need `lark-cli`; URL and mixed batches are supported). Do not write an Agent-side URL loop.
-- User provides a long newline-separated URL list or local `.md` path list → pass it to `context capture --stdin` with a direct heredoc. Mixed URL + local `.md` batches are supported when the user intentionally provides both.
+Before choosing a local Markdown capture route, honor the surrounding task context. Driver documents such as run instructions, handbooks, READMEs, plans, feedback issues, corpus/index/manifests, and batch lists are not Context sources unless the user explicitly asks to ingest them. Capture only ingest targets that are already explicit in the user request; if they are missing, ask one clarification instead of capturing the driver document.
+
+- `$ARGUMENTS` is one or more `http://` / `https://` targets and/or local `.md` source documents to ingest → `context capture $ARGUMENTS` (Feishu docx/wiki URLs need `lark-cli`; URL and mixed batches are supported). Do not write an Agent-side URL loop.
+- User provides a long newline-separated URL list or local `.md` source document list to ingest → pass it to `context capture --stdin` with a direct heredoc. Mixed URL + local `.md` batches are supported when the user intentionally provides both.
 - `$ARGUMENTS` contains `--inbox` → `context capture --inbox`.
 - `$ARGUMENTS` contains `--refresh` → `context capture --refresh`. This refreshes active Feishu URL sources and local Markdown sources whose stored origin file still exists; code sources use `context capture --code`.
 - User asks for code capture with explicit `--module` flags → run `context capture --code $ARGUMENTS`, preserving code flags such as `--module`, `--version`, `--version-from`, and `--no-runner-cache`.
