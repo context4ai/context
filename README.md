@@ -107,17 +107,17 @@ The compiled knowledge base can be packaged for distribution:
 
 The numbers below come from a parallel benchmark: each model runs the full c4a flow (capture → align → compile) end-to-end over the same 10-document business corpus, with no manual intervention. Quality is scored across 7 dimensions (totaling 100) based on the resulting knowledge base; duration covers the full flow from `context init` to `compile close`.
 
-| Dimension | Opus 4.8 (Claude) | GPT 5.5 (Codex) | Opus 4.7 (Claude) | DeepSeek V4 Pro (Claude) |
-|---|---:|---:|---:|---:|
-| Fact coverage (25) | 23 | 23 | 22 | 18 |
-| Fact fidelity (25) | 24 | 23 | 19 | 18 |
-| Structure (15) | 14 | 13 | 8 | 7 |
-| URL (5) | 5 | 4 | 2 | 5 |
-| Source ref (10) | 9 | 9 | 7 | 6 |
-| Section boundary (10) | 9 | 10 | 7 | 5 |
-| Schema (10) | 9 | 10 | 9 | 7 |
-| **Total** | **93** | **92** | **74** | **66** |
-| Duration | 30m47s | 10m07s | 19m6s | 14m44s |
+| Dimension | GPT 5.5 xh fast (Codex) | GPT 5.5 m fast (Codex) | Opus 4.8 (Claude) | Sonnet 4.6 (Claude) | DeepSeek V4 Pro (Claude) | DeepSeek V4 Flash (Claude) |
+|---|---:|---:|---:|---:|---:|---:|
+| Fact coverage (25) | 24 | 24 | 24 | 23 | 23 | 23 |
+| Fact fidelity (25) | 25 | 25 | 25 | 25 | 25 | 25 |
+| Structure (15) | 15 | 15 | 15 | 14 | 13 | 14 |
+| URL (5) | 5 | 5 | 5 | 5 | 5 | 5 |
+| Evidence link (10) | 10 | 10 | 10 | 10 | 10 | 8 |
+| Section boundary (10) | 9 | 9 | 8 | 9 | 7 | 5 |
+| Modeling (10) | 9 | 9 | 8 | 8 | 9 | 7 |
+| **Total** | **97** | **97** | **95** | **94** | **92** | **87** |
+| Duration | 5m44s | 4m34s | 20m27s | 20m20s | 11m22s | 2m40s |
 
 ## About this repository
 
