@@ -61,7 +61,7 @@ Carry the latest envelope forward between iterations. After a successful node cy
 
 Run the evidence command returned by the envelope before writing. `views[].expected` identifies the default compact evidence entry, not a separate checklist to exhaust. For compile evidence, prefer the CLI-returned source-ref/scaffold views. They may expose:
 
-- `source_refs_index_command` / `source_refs_command` — compact Node-scoped citation index for drafting; use `items[].block_id` in `source_block_ids[]` when the row is the evidence you will cite.
+- `source_refs_index_command` / `source_refs_command` — compact Node-scoped citation index for drafting; use `items[].block_id` in `source_block_ids[]` when the row is the evidence you will cite. Multiple block ids in one action must be one same-source contiguous citation-eligible run; split around skipped citation-eligible rows or use `--draft-scaffold` when unsure.
 - `source_refs_detail_command` — detailed source refs with quote previews; open only when the compact index is not enough.
 - `request_full_text_command` / `--view text` — narrow text view for one block when quote preview is not enough; this is still Node-scoped, not a workspace evidence bundle.
 - `citable_source_refs[]` — detailed-view refs eligible for draft citations; prefer `block_id` values in `source_block_ids[]`.
