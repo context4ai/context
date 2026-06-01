@@ -31,7 +31,7 @@ For protocol discovery, prefer narrow commands:
 
 - `context schema workflow.next-action-envelope.v2 --view minimal --format json`
 - `context protocol show align-compile --format json`
-- `context schema align-structure-intent --view minimal --format json` — includes required fields, enums, mount matrix, and a minimal authoring example; use full schema only for extended notes.
+- `context schema align-structure-intent --view minimal --format json` — includes required fields, enums, section kind priority/triggers, mount matrix, and a minimal authoring example; use full schema only for extended notes.
 
 ### Step 2 — Read Evidence Through The Single Evidence Path
 

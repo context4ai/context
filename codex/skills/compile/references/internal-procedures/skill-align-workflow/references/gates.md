@@ -48,6 +48,8 @@ Relation-only sources should not force title copying or dangling graph edges. De
 
 Do not put `planned_sections` inside `domain_gate`. A kept placeholder needs support: `context_only` block(s) with `visible_to`, owned/shared evidence, or finalized graph support. `ignored` blocks only dispose unused material and do not support close materialization by themselves. For Domain placeholders, write only resolved current/existing children in `domain_gate.child_refs`; if all children are unresolved/deferred relation clues, use `child_refs: []` and keep those target hints in pending relation refs. If the source names only an atomic concept and that term is useful on its own, prefer a concise term Entity title without scope/process suffixes.
 
+For no-write placeholder summaries, describe only the preserved page identity and unresolved navigation clues. Do not say the Node "provides navigation/links/relations to X" unless those targets are resolved graph children or rendered links; say the source contains deferred navigation clues instead.
+
 ## Entity Tag Rules
 
 Use `tags` to state what the Entity is. Legal combinations:
