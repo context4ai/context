@@ -98,8 +98,9 @@ Work includes but is not limited to: workspace init, multi-source capture, align
 
 The compiled knowledge base can be packaged for distribution:
 
-- export as a **Skills** package — `context build --format skills-pack`;
+- export as a **Skills** package — `context build --format skills`;
 - export as **LLMs.txt** — `context build --format llms`;
+- agent ops build — `/context:ops build` exports Skills by default; use `--format llms` for LLMs.txt;
 - [TODO] publish to the **C4A platform** as an MCP service for other AIs to query live;
 - [TODO] publish as a standalone Plugin knowledge package, with retrieval quality on par with the MCP service and CLI.
 

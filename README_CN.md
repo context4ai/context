@@ -96,8 +96,9 @@ bun add -g @c4a/context-cli
 
 完整知识库支持对外打包发布：
 
-- 导出为 **Skills** 包：`context build --format skills-pack`；
+- 导出为 **Skills** 包：`context build --format skills`；
 - 导出为 **LLMs.txt**：`context build --format llms`；
+- Agent 运维构建：`/context:ops build` 默认导出 Skills，可用 `--format llms` 导出 LLMs.txt；
 - [TODO] 发布至 **C4A 平台**，作为 MCP 服务供其他 AI 实时查询；
 - [TODO] 发布为独立 Plugin 知识包，具备与 MCP 及 CLI 同等精度的检索能力。
 

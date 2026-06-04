@@ -25,7 +25,7 @@ Naming convention:
 - **`--aspect code [selector]`** — run `context compile --aspect code [selector]`, report the CLI result, and stop unless the CLI asks for a follow-up close. The selector may be omitted to process all actionable code sources; when present, the CLI resolves source slug, package name, or module path.
 - **`--aspect <name>`** — run deterministic custom aspect projection for one configured aspect. Use `context compile --aspect <name> --allow-large-deprecate` only when the CLI rejected a large deprecate and the user confirms the runner output is intentionally empty or reduced.
 - **`--all`** — run `context compile --all` to materialize code projection first and then custom aspect projections in deterministic order.
-- **Delegated** — add `--delegated` only when the user explicitly authorized delegated mode at the start of this conversation. Delegated mode records scoped authority for low-risk reconcile/review/apply defaults; it does not auto-draft Node content or replace agent evidence reading. Do not infer it from vague "continue" permission.
+- **Delegated** — add `--delegated` only when the user explicitly authorized delegated mode at the start of this conversation. Treat requests such as "全托管执行", "全自动托管", "fully managed", "delegated execution", or "use delegated mode" as explicit delegated authorization. Delegated mode records scoped authority for low-risk reconcile/review/apply defaults; it does not auto-draft Node content or replace agent evidence reading. Do not infer it from vague "continue", "继续", or "后面不用问我" permission.
 
 ### Core Rules
 
@@ -44,7 +44,7 @@ Protocol discovery:
 
 ## Start
 
-1. Run `context compile scan --format json` (or `context compile scan --delegated --format json` only for explicit delegated mode).
+1. Run `context compile scan --format json` (or `context compile scan --delegated --format json` when the user explicitly authorized delegated mode, including "全托管执行" / "fully managed").
 2. If the scan returns `close_compile`, run the returned close command even when there are no changed Nodes; finalized no-write/container Nodes may still need close materialization.
 3. If the scan returns `stop_noop` or no changed work, report that compile stopped before draft and no files were written.
 4. Run `context status --view summary --format json` or `context mdrive workspace stats --format json` only when needed for the final before/after report or when the CLI asks for diagnostics. Do not run doctor/status/source-list as a required preflight before following a valid compile scan or align-finalize handoff.
@@ -76,6 +76,8 @@ For `submit_compile_cycle`, load the Node evidence via the returned command/view
 
 Prefer heredocs for small payloads. If large or parallel draft payloads need staging, use the workspace AGENTS.md scratch path (`.context/.tmp/agent-payloads/<run-id>/...` in embedded workspaces, `.tmp/agent-payloads/<run-id>/...` in root-layout workspaces) and redirect stdin from that file. Never reuse fixed names like `/tmp/c4a-draft-<node>.json`, and never use scratch paths as workflow handoff or CLI-managed storage.
 
+Use `op: deprecate` only when an existing active Section is no longer supported by its source, is factually wrong, has been superseded, or the user explicitly asked to retire it. Do not deprecate an existing true Section merely because it is low-relevance to the current narrow task; leave it unchanged and use `op: skip` / omit only for the current proposed evidence.
+
 For `continue_compile_cycle`, do not invoke the draft skill and do not attach `--input`; execute the returned `next_action.command` exactly. `--continue` resumes a saved draft session. If it returns `status: "noop"`, follow the returned `close_compile` next action.
 
 For `patch_compile_draft`, submit only the patch schema requested by the CLI. Use `actions_meta[].action_id` for `replace_action` / `remove_action`, or `add_action` with `before` / `after`; do not use generic `op/path/value` aliases.
@@ -103,5 +105,12 @@ Do not recover by replaying an old manual path, editing rendered files, or guess
 ## Close And Report
 
 When `next_action.kind` is `close_compile`, execute `context compile close` through packaged `../skills/skill-compile-close/SKILL.md` or the returned command. Never claim success unless close exits 0 and verify is green, except the explicit no-work path.
+
+Treat close as a terminal gate, not a blind final step:
+
+- If close reports `code_projection_followup` / `compile-close-code-projection-followup`, run the returned `context compile --aspect code ...` command, then run `context compile close` again before reporting final success.
+- If close reports `ready_with_debt`, do not enter export/query/report-as-complete unless the user explicitly accepts the remaining debt. Otherwise repair or skip coverage debt through the returned coverage commands, then run close again.
+- Coverage disposition commands mutate workflow state. Run one `context compile coverage ...` command at a time, or use the returned `--skip-unresolved` bulk command for one Node; never submit multiple coverage disposition writes concurrently.
+- Use `context query --intent recall` only as a smoke-test query. Do not use recall as a deterministic full-workspace export path.
 
 Report in the user's conversation language. Include semantic apply counts, close/verify status, warning-level `auto_repaired[]`, `ready_with_debt` coverage summaries when present, and before/after workspace totals. Do not surface internal workflow payload digests, source-ref hashes, archive paths, or absolute file paths unless a user-facing report view explicitly returns them.

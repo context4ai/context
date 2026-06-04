@@ -24,10 +24,11 @@ Routing rules (first match wins):
 7. **Mentions `aspect` without a concrete supported capture flag** → ask one clarification; code aspect capture is exposed as `/context:capture --code`.
 8. **Matches `align`, `structure`, `plan`, `node tree`** → `/context:align $ARGUMENTS`.
 9. **Matches `compile`, `recompile`, `synthesize`, or `build knowledge`** → `/context:compile $ARGUMENTS`.
-10. **Matches `drop`, `retract`, `delete source`, or passes a known source-id pattern (`feishu:*` / `local:*` / `aspect:*` / `oncall:*` / `meeting:*`)** → `/context:drop $ARGUMENTS`.
-11. **Matches `purge`, `clear archive`, `delete archive`, or `清理归档`** → `/context:purge $ARGUMENTS`.
-12. **Equals `status`, `health`, `overview`, `summary`, or asks for workspace/cache/plugin health** → `/context:status`.
-13. **Anything else** (likely a knowledge question) → `/context:query $ARGUMENTS`.
+10. **Matches `build`, `export`, `package`, `publish`, `deploy`, `release`, `ops`, `operations`, or `运维` as an operational/package task** → `/context:ops $ARGUMENTS`.
+11. **Matches `drop`, `retract`, `delete source`, or passes a known source-id pattern (`feishu:*` / `local:*` / `aspect:*` / `oncall:*` / `meeting:*`)** → `/context:drop $ARGUMENTS`.
+12. **Matches `purge`, `clear archive`, `delete archive`, or `清理归档`** → `/context:purge $ARGUMENTS`.
+13. **Equals `status`, `health`, `overview`, `summary`, or asks for workspace/cache/plugin health** → `/context:status`.
+14. **Anything else** (likely a knowledge question) → `/context:query $ARGUMENTS`.
 
 If multiple rules apply, pick the most specific (URL beats word match). When in doubt, ask one clarifying question before dispatching.
 Never use Read / Glob / Grep / Write against `WORKSPACE_DIR`; route to packaged `/context:*` commands and skills instead of opening plugin or workspace files manually.

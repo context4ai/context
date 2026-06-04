@@ -50,10 +50,13 @@ Supplemental context can come from:
 
 ```text
 context query --intent node_view --scope <slug>
+context query --intent node_view --scope <slug> --view source-refs
 context query --intent impact_analysis --scope <slug>
 context query --intent node_view --refers-to <slug>
 context query --intent section_search --scope <slug> --query "<keywords>"
 ```
+
+Use the `--view source-refs` / `--view source-refs-index` node_view forms when a hit's `raw_expand_command` is needed for factual confirmation. These are query-owned read views; do not substitute `context compile context ...` during answer-only query work.
 
 ## Query Route Decision Table
 
