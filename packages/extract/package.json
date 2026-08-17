@@ -35,6 +35,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "tree-sitter-typescript": "^0.20.5"
+    "tree-sitter-typescript": "^0.23.2"
   }
 }
