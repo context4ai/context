@@ -40,13 +40,14 @@ jobs:
           package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
           test "${GITHUB_REF_NAME}" = "v${package_version}"
 
+      - name: Build workspace
+        run: bun run build
+
       - name: Verify repository
         run: bun run verify:full
 
-      - name: Build publish artifacts
-        run: |
-          bun run build
-          bun run release:prepare
+      - name: Prepare publish artifacts
+        run: bun run release:prepare
 
       - name: Audit npm packages
         run: |
