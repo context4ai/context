@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: build-next
+runner: command
+effect: write
+command: context build --format json

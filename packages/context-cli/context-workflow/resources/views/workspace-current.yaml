@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.workspace-current
+kind: context-view
+mediaType: text/markdown
+description: Current workspace counts, route, diagnostics, and declared lifecycle coverage.
+materializer: actions/materialize-context-view.yaml

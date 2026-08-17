@@ -1,0 +1,12 @@
+schema: agent-graph.test.v1
+name: invalid workspace state is repaired before lifecycle work
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: false }
+expect:
+  statusCode: actionable
+  primaryNode: repair-workspace-state
+  primaryReasonCode: route.workspace.state-invalid
+  handler: context.workspace.inspect-diagnostics

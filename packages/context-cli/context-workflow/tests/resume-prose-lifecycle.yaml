@@ -1,0 +1,19 @@
+schema: agent-graph.test.v1
+name: an active prose round with missing declarations resumes configuration
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    close: { current: true }
+    gates:
+      evidence_maintenance_resolved: true
+    resume:
+      prose_declarations_complete: false
+expect:
+  statusCode: actionable
+  primaryNode: resume-prose-lifecycle
+  primaryReasonCode: route.prose.configuration-required
+  handler: context.project.configure-prose

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.repository-source-recovery.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "repositories"],
+  "properties": {
+    "schema": {
+      "const": "context.repository-source-recovery.v1"
+    },
+    "repositories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "mode", "path"],
+            "properties": {
+              "source": { "type": "string", "minLength": 1 },
+              "mode": { "const": "local" },
+              "path": { "type": "string", "minLength": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "mode"],
+            "properties": {
+              "source": { "type": "string", "minLength": 1 },
+              "mode": { "const": "clone" },
+              "path": { "type": "string", "minLength": 1 }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

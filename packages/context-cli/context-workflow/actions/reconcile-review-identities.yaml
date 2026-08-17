@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: reconcile-review-identities
+runner: host
+effect: write
+handler: context.review.preserve-approved-identities

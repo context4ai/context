@@ -1,0 +1,16 @@
+{
+  "name": "context",
+  "description": "Maintain a project-local knowledge workspace through init and next-step agent guidance.",
+  "version": "__VERSION__",
+  "author": {
+    "name": "c4a"
+  },
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "knowledge-base",
+    "wiki",
+    "claude-plugin",
+    "c4a"
+  ]
+}

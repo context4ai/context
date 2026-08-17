@@ -1,0 +1,23 @@
+schema: agent-graph.test.v1
+name: stale evidence waits for an explicit maintenance decision
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: false }
+    gates: { evidence_maintenance_resolved: false }
+expect:
+  statusCode: waiting-user
+  primaryNode: choose-evidence-maintenance
+  primaryReasonCode: route.evidence.decision-required
+  availability: requires-user
+  gateResolution: user
+  resolutionCommand: context review maintain --input - --format json
+  resolutionInputSchema: schema.maintain-evidence.input
+  requiredResources:
+    - procedure.evidence-maintenance
+    - dialogue.human-gates
+    - dialogue.evidence-maintenance
+    - context.verification-current

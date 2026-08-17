@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: align-next
+runner: host
+effect: write
+handler: context.align.next
+inputSchema: schemas/prose-structure-batch.schema.json

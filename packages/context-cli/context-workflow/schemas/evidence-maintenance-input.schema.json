@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.evidence-maintenance.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "decisions"],
+  "properties": {
+    "schema": {
+      "const": "context.evidence-maintenance.v1"
+    },
+    "decisions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["view_ref", "action"],
+        "properties": {
+          "view_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "enum": ["re-pin", "deprecate", "keep-orphaned"]
+          }
+        }
+      }
+    }
+  }
+}

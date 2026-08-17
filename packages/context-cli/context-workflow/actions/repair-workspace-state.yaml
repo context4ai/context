@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: repair-workspace-state
+runner: host
+effect: read
+handler: context.workspace.inspect-diagnostics

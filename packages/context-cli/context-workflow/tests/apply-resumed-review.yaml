@@ -1,0 +1,24 @@
+schema: agent-graph.test.v1
+name: managed resumed review advances to atomic apply
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    close: { current: true }
+    gates:
+      evidence_maintenance_resolved: true
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: false
+expect:
+  statusCode: actionable
+  primaryNode: apply-resumed-review
+  primaryReasonCode: route.review.apply-managed
+  handler: context.review.approve-current

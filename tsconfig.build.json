@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false
+  },
+  "exclude": [
+    "**/__tests__/**",
+    "**/__e2e__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

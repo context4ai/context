@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.source-boundary
+kind: context-view
+mediaType: text/markdown
+description: Stable registered source identities and boundaries without lifecycle progress.
+materializer: actions/materialize-context-view.yaml

@@ -1,0 +1,31 @@
+{
+  "name": "@c4a/tui",
+  "description": "Shared terminal UI components (Ink + React) for Context development tools",
+  "version": "0.6.2",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/context4ai/context.git",
+    "directory": "packages/tui"
+  },
+  "keywords": [
+    "terminal-ui",
+    "ink",
+    "react",
+    "tui-components"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm --external react-devtools-core && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "ink": "^5.0.0",
+    "react": "^18.3.1"
+  }
+}

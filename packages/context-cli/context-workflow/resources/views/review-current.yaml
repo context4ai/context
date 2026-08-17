@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.review-current
+kind: context-view
+mediaType: text/markdown
+description: Current complete review scope and candidate-set identity.
+materializer: actions/materialize-context-view.yaml

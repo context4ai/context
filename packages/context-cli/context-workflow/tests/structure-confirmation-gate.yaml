@@ -1,0 +1,28 @@
+schema: agent-graph.test.v1
+name: prepared structure requires explicit confirmation
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates:
+      evidence_maintenance_resolved: true
+      structure_confirmation_resolved: false
+    close: { current: true }
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: false
+expect:
+  statusCode: waiting-user
+  primaryNode: confirm-structure
+  primaryReasonCode: route.structure.confirmation-required
+  availability: requires-user
+  gateResolution: user
+  inspectionHandler: context.structure.inspect
+  requiredResources:
+    - procedure.prose-align
+    - dialogue.human-gates
+    - dialogue.structure-confirmation
+    - context.structure-current

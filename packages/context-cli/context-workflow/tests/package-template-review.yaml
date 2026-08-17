@@ -1,0 +1,42 @@
+schema: agent-graph.test.v1
+name: an unchanged generated starter requires explicit review before build
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      extraction_scope_resolved: true
+      document_classification_resolved: true
+      structure_confirmation_resolved: true
+      knowledge_review_resolved: true
+      package_output_resolved: true
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, complete: true }
+    extract: { declarations_complete: true, complete: true }
+    documents: { classified: true }
+    prose: { declarations_complete: true }
+    align: { prepared: true }
+    structure: { confirmed: true }
+    compile: { complete: true }
+    review: { gate_clear: true, batch_resolved: true }
+    close: { current: true }
+    packages: { declared: true, templates_reviewed: false, current: false }
+expect:
+  statusCode: waiting-user
+  primaryNode: review-package-template
+  primaryReasonCode: route.package.template-review-required
+  availability: requires-user
+  gateResolution: user
+  resolutionCommand: context package template accept --all --format json

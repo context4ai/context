@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.structure-current
+kind: context-view
+mediaType: text/markdown
+description: Current multi-document structure slots, declarations, and compile batch.
+materializer: actions/materialize-context-view.yaml

@@ -1,0 +1,7 @@
+{
+  "name": "@fixture/trace-project",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./dist/index.js"
+  }
+}

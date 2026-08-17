@@ -1,0 +1,40 @@
+{
+  "name": "@c4a/extract",
+  "description": "Code extraction engine — Tree-sitter AST parsing and structural analysis",
+  "version": "0.6.2",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/extract"
+  },
+  "keywords": [
+    "code-analysis",
+    "tree-sitter",
+    "ast",
+    "extraction",
+    "symbol-table"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "bin": {
+    "c4a-extract-code": "./dist/bin/c4a-extract-code.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts src/bin/c4a-extract-code.ts --shebang=node --shebang-entry=src/bin/c4a-extract-code.ts && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@c4a/core": "workspace:*",
+    "web-tree-sitter": "^0.20.8",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tree-sitter-typescript": "^0.20.5"
+  }
+}

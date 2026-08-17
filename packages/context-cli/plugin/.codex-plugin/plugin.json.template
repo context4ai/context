@@ -1,0 +1,38 @@
+{
+  "name": "context",
+  "version": "__VERSION__",
+  "description": "Maintain a project-local knowledge workspace through init and next-step agent guidance.",
+  "author": {
+    "name": "c4a"
+  },
+  "homepage": "https://github.com/context4ai/c4a",
+  "repository": "https://github.com/context4ai/c4a/tree/main/packages/context-cli",
+  "license": "MIT",
+  "keywords": [
+    "context",
+    "knowledge-base",
+    "codex-plugin",
+    "agent-skills",
+    "c4a"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "C4A Context",
+    "shortDescription": "Initialize and advance a local, source-linked project knowledge workspace.\nv__VERSION__",
+    "longDescription": "Create a Context workspace and use agent-guided next steps to register sources, run extraction, review candidates, build package outputs, and verify health without silently mutating source repositories.",
+    "developerName": "c4a",
+    "category": "Productivity",
+    "brandColor": "#ef6f2e",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/context4ai/c4a",
+    "defaultPrompt": [
+      "Continue my Context workspace with the next useful step.",
+      "Inspect my Context workspace and proceed safely."
+    ]
+  }
+}

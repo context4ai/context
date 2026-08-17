@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context4ai.dev/schemas/context-source-batch-input.v1.json",
+  "title": "Context source batch input",
+  "description": "One confirmed batch of repository, local document, and Lark document source boundaries.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources"
+      ],
+      "properties": {
+        "sources": {
+          "$ref": "#/$defs/sources"
+        }
+      }
+    },
+    {
+      "$ref": "#/$defs/sources"
+    }
+  ],
+  "$defs": {
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "module"
+      ],
+      "properties": {
+        "type": {
+          "const": "repo"
+        },
+        "module": {
+          "$ref": "#/$defs/module"
+        },
+        "local": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "remote": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "ref": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "local"
+      ],
+      "properties": {
+        "type": {
+          "const": "file"
+        },
+        "module": {
+          "$ref": "#/$defs/module"
+        },
+        "local": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "lark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "lark"
+        },
+        "module": {
+          "$ref": "#/$defs/module"
+        },
+        "url": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "docToken": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "wikiToken": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "url"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "docToken"
+                ]
+              },
+              {
+                "required": [
+                  "wikiToken"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "docToken"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "url"
+                ]
+              },
+              {
+                "required": [
+                  "wikiToken"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "wikiToken"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "url"
+                ]
+              },
+              {
+                "required": [
+                  "docToken"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "source": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/repo"
+        },
+        {
+          "$ref": "#/$defs/file"
+        },
+        {
+          "$ref": "#/$defs/lark"
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  }
+}

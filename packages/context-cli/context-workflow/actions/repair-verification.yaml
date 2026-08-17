@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: repair-verification
+runner: host
+effect: external
+handler: context.verification.repair-next

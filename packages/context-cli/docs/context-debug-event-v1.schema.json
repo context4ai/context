@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context4.ai/schemas/context-debug-event-v1.schema.json",
+  "title": "Context debug event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "trace_id", "sequence", "at", "kind", "data"],
+  "properties": {
+    "schema": { "const": "context.debug.event.v1" },
+    "trace_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "at": { "type": "string", "format": "date-time" },
+    "kind": {
+      "enum": [
+        "debug.enabled",
+        "debug.disabled",
+        "cli.invoked",
+        "cli.completed",
+        "agent-graph.evaluated",
+        "workflow.action-started",
+        "workflow.action-completed",
+        "workflow.stopped"
+      ]
+    },
+    "invocation_id": { "type": "string", "minLength": 1 },
+    "parent_invocation_id": { "type": "string", "minLength": 1 },
+    "data": { "type": "object" }
+  }
+}

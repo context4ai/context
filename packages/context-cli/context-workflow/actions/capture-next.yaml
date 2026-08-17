@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: capture-next
+runner: host
+effect: external
+handler: context.capture.next

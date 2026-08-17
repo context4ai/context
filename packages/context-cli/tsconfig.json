@@ -1,0 +1,41 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist"
+  },
+  "include": [
+    "src/cli.ts",
+    "src/project/**/*.ts",
+    "src/commands/cleanCache.ts",
+    "src/commands/cleanClaudePluginCache.ts",
+    "src/evidence/blockIdentity.ts",
+    "src/incremental/cache.ts",
+    "src/incremental/hash.ts",
+    "src/incremental/rawBlocks.ts",
+    "src/incremental/state.ts",
+    "src/incremental/types.ts",
+    "src/lib/atomicWrite.ts",
+    "src/lib/cliFeedback.ts",
+    "src/lib/errors.ts",
+    "src/lib/feishu.ts",
+    "src/lib/normalize.ts",
+    "src/lib/pathFreeCommandMatrix.ts",
+    "src/lib/pathFreeContractInventory.ts",
+    "src/lib/pathFreeContractTypes.ts",
+    "src/lib/pathFreePathFieldInventory.ts",
+    "src/lib/sectionContentDigest.ts",
+    "src/lib/tokenBudget.ts",
+    "src/lib/userCache.ts",
+    "src/lib/workspaceLayout.ts",
+    "src/types/exitCode.ts",
+    "src/__e2e__/*.e2e.test.ts",
+    "src/__tests__/cli.test.ts",
+    "src/__tests__/document*V062.test.ts",
+    "src/__tests__/okfTypes.test.ts",
+    "src/__tests__/pathFreeContractInventory.test.ts",
+    "src/__tests__/plugin*.test.ts",
+    "src/__tests__/project*.test.ts",
+    "src/__tests__/proseAlignBudget.test.ts",
+    "src/__tests__/sectionContentDigest.test.ts"
+  ]
+}

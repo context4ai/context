@@ -1,0 +1,12 @@
+schema: agent-graph.test.v1
+name: invalid project entry is repaired before workspace routing
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: false, state_valid: false }
+expect:
+  statusCode: actionable
+  primaryNode: repair-project-entry
+  primaryReasonCode: route.workspace.project-entry-invalid
+  handler: context.project.repair-entry

@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: inspect-structure
+runner: host
+effect: read
+handler: context.structure.inspect

@@ -1,0 +1,84 @@
+import { ErrorCode } from "./errorCodes.js";
+
+export type HttpStatusCode =
+  | 200
+  | 400
+  | 401
+  | 403
+  | 422
+  | 504
+  | 502
+  | 404
+  | 409
+  | 429
+  | 500
+  | 503
+  | 501;
+
+const ERROR_CODE_HTTP_STATUS: Record<ErrorCode, HttpStatusCode> = {
+  [ErrorCode.VALIDATION_FAILED]: 400,
+  [ErrorCode.VALIDATION_SCHEMA]: 400,
+  [ErrorCode.PARSE_FAILED]: 400,
+  [ErrorCode.PARSE_YAML]: 400,
+  [ErrorCode.RELATION_INVALID]: 400,
+  [ErrorCode.QUERY_INVALID_PARAMS]: 400,
+  [ErrorCode.INVALID_REGEX]: 400,
+  [ErrorCode.BACKUP_VERSION_INCOMPATIBLE]: 400,
+  [ErrorCode.BACKUP_MANIFEST_INVALID]: 400,
+  [ErrorCode.VECTOR_DIMENSION_MISMATCH]: 400,
+  [ErrorCode.STORAGE_NOT_FOUND]: 404,
+  [ErrorCode.ENTITY_NOT_FOUND]: 404,
+  [ErrorCode.BACKUP_DIR_NOT_FOUND]: 404,
+  [ErrorCode.SOURCE_NOT_FOUND]: 404,
+  [ErrorCode.DIGEST_NOT_FOUND]: 404,
+  [ErrorCode.NOT_INDEXED]: 422,
+  [ErrorCode.STORAGE_CONFLICT]: 409,
+  [ErrorCode.ENTITY_DUPLICATE]: 409,
+  [ErrorCode.INDEX_IN_PROGRESS]: 409,
+  [ErrorCode.SUB_PATH_CONFLICT]: 409,
+  [ErrorCode.API_UNAUTHORIZED]: 401,
+  [ErrorCode.LLM_AUTH_FAILED]: 401,
+  [ErrorCode.AUTH_REQUIRED]: 401,
+  [ErrorCode.AUTH_INVALID_TOKEN]: 401,
+  [ErrorCode.AUTH_INVALID_API_KEY]: 401,
+  [ErrorCode.AUTH_RESERVED_NAME]: 400,
+  [ErrorCode.SOURCE_ACCESS_DENIED]: 403,
+  [ErrorCode.REPO_PATH_NOT_FOUND]: 422,
+  [ErrorCode.COMMIT_NOT_FOUND]: 422,
+  [ErrorCode.COMMIT_NOT_AVAILABLE]: 422,
+  [ErrorCode.GIT_HOST_NOT_CONFIGURED]: 422,
+  [ErrorCode.GIT_API_TREE_TRUNCATED]: 422,
+  [ErrorCode.API_RATE_LIMITED]: 429,
+  [ErrorCode.GIT_API_RATE_LIMITED]: 429,
+  [ErrorCode.API_NOT_IMPLEMENTED]: 501,
+  [ErrorCode.INTENT_NOT_AVAILABLE]: 501,
+  [ErrorCode.BATCH_PARTIAL_FAILURE]: 200,
+  [ErrorCode.VECTOR_REBUILD_PARTIAL]: 200,
+  [ErrorCode.STORAGE_FAILED]: 500,
+  [ErrorCode.EMBEDDING_FAILED]: 500,
+  [ErrorCode.LLM_CALL_FAILED]: 500,
+  [ErrorCode.GIT_API_NETWORK_ERROR]: 502,
+  [ErrorCode.BACKUP_FAILED]: 500,
+  [ErrorCode.RESTORE_FAILED]: 500,
+  [ErrorCode.PURGE_FAILED]: 500,
+  [ErrorCode.GIT_ARCHIVE_FAILED]: 500,
+  [ErrorCode.EMBEDDING_NOT_AVAILABLE]: 503,
+  [ErrorCode.LLM_NOT_AVAILABLE]: 503,
+  [ErrorCode.QUERY_TIMEOUT]: 504,
+  [ErrorCode.DAEMON_OFFLINE]: 503,
+  [ErrorCode.DAEMON_AUTO_START_FAILED]: 503,
+  [ErrorCode.GIT_API_AUTH_FAILED]: 502,
+  [ErrorCode.GIT_API_REPO_NOT_FOUND]: 404,
+  [ErrorCode.AUTH_PROVIDER_ERROR]: 502,
+  [ErrorCode.DOC_INDEX_LLM_UNAVAILABLE]: 503,
+  [ErrorCode.DOC_INDEX_EMBEDDING_UNAVAILABLE]: 503,
+  [ErrorCode.DOC_INDEX_CONTENT_MISSING]: 404,
+  [ErrorCode.DOC_INDEX_PARSE_FAILED]: 422,
+  [ErrorCode.DOC_INDEX_LLM_EXHAUSTED]: 502,
+  [ErrorCode.UNKNOWN]: 500,
+  [ErrorCode.WORKSPACE_ISOLATION]: 400,
+};
+
+export function mapErrorCodeToStatus(code: ErrorCode): HttpStatusCode {
+  return ERROR_CODE_HTTP_STATUS[code] ?? 500;
+}

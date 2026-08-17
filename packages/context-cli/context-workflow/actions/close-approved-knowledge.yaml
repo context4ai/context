@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: close-approved-knowledge
+runner: command
+effect: write
+command: context close --format json

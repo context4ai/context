@@ -1,0 +1,64 @@
+{
+  "name": "@c4a/context-cli",
+  "description": "Local CLI for capturing, compiling, and governing knowledge workspaces",
+  "version": "0.6.2",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/context-cli"
+  },
+  "keywords": [
+    "cli",
+    "knowledge",
+    "context",
+    "claude-code",
+    "claude-plugin"
+  ],
+  "main": "./dist/cli.js",
+  "bin": {
+    "context": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts/postinstall.mjs",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/cli.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && cp ../../LICENSE dist/LICENSE",
+    "build:workflow": "bun run scripts/build-workflow.ts",
+    "build:plugin": "bun run scripts/build-plugin.ts",
+    "postinstall": "node scripts/postinstall.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "C4A_CONTEXT_CACHE_HOME=./.tmp/context-cli-test-cache bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
+    "test:e2e": "C4A_CONTEXT_CACHE_HOME=./.tmp/context-cli-e2e-cache bun test src/__e2e__/*.e2e.test.ts",
+    "lint": "eslint src",
+    "clean-cache": "bun run src/cli.ts clean-cache"
+  },
+  "dependencies": {
+    "@c4a/agent-graph": "0.2.3",
+    "@c4a/context": "workspace:*",
+    "commander": "^11.0.0",
+    "fast-xml-parser": "^5.10.1",
+    "handlebars": "^4.7.8",
+    "ink": "^5.0.0",
+    "jiti": "^2.7.0",
+    "mdast-util-to-string": "^4.0.0",
+    "react": "^18.3.1",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "typescript": "^5.5.4",
+    "unified": "^11.0.5",
+    "web-tree-sitter": "^0.20.8",
+    "yaml": "^2.5.1"
+  },
+  "devDependencies": {
+    "@c4a/core": "workspace:*",
+    "@c4a/extract": "workspace:*",
+    "@c4a/extract-ts": "workspace:*"
+  }
+}

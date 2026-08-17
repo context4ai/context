@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: accept-package-templates
+runner: command
+effect: write
+command: context package template accept --all --format json

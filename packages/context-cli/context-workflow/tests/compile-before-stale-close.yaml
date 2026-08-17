@@ -1,0 +1,29 @@
+schema: agent-graph.test.v1
+name: unfinished prose compile routes before a stale approved projection
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      extraction_scope_resolved: true
+      document_classification_resolved: true
+      structure_confirmation_resolved: true
+      knowledge_review_resolved: true
+      package_output_resolved: true
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: false
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    close: { current: true }
+expect:
+  statusCode: actionable
+  primaryNode: compile-next
+  primaryReasonCode: route.compile.pending-target

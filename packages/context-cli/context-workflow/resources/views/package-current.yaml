@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.package-current
+kind: context-view
+mediaType: text/markdown
+description: Current package declarations, freshness, and output counts.
+materializer: actions/materialize-context-view.yaml

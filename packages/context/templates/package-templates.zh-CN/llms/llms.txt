@@ -1,0 +1,8 @@
+# {{packageName}}
+
+由 Context 生成。
+
+包类型：{{packageKind}}
+已批准知识文件：{{knowledgeCount}}
+
+{{knowledge}}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://context4.ai/schemas/context-debug-replay-v1.schema.json",
+  "title": "Context debug replay v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "events", "transitions"],
+  "properties": {
+    "schema": { "const": "context.debug.replay.v1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "trace_id": { "type": "string" },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "./context-debug-event-v1.schema.json" }
+    },
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "at", "current"],
+        "properties": {
+          "sequence": { "type": "integer", "minimum": 1 },
+          "at": { "type": "string", "format": "date-time" },
+          "invocation_id": { "type": "string" },
+          "previous": { "type": "object" },
+          "current": { "type": "object" },
+          "selected_route": { "type": "object" }
+        }
+      }
+    }
+  }
+}

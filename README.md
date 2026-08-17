@@ -1,131 +1,112 @@
-# Context: Build Agent-Facing Knowledge
+# Context
 
-> [中文版本](./README_CN.md)
+[简体中文](./README.zh-CN.md)
 
-<p align="center"><img src="./assets/logo.svg" alt="C4A Context" width="180"/></p>
+**Context** is a local knowledge assistant for Coding Agents. It helps turn code
+repositories, local documents, and Lark documents into reviewable, traceable,
+maintainable knowledge, then builds that knowledge into reusable packages for
+Agents.
 
-A knowledge workflow built for small and mid-sized teams working with Agents. It compiles Feishu docs, local Markdown, code, and hand-curated business material into structured, traceable knowledge, then guides the Agent — through optimal reasoning patterns and targeted exploration of that knowledge — to deliver high-quality retrieval. Runs inside any Agent environment that supports Plugins (Skill + Command).
+You can start before you know the final taxonomy or package structure. Tell the
+Agent where the source material lives and what you hope to use it for. Context
+guides the conversation through source scope, extraction, classification,
+review, verification, and package output.
 
-## Why C4A Context
+## What Context Does
 
-When an AI agent looks up information in a project, it mostly relies on file search (e.g. `grep`) and full-text reading. As documents and codebases grow, two problems surface:
+- Creates a project-local Context workspace instead of hiding state in a remote
+  job.
+- Captures document evidence and extracts structured information from code.
+- Keeps generated knowledge tied to source evidence for review and later
+  updates.
+- Stops for user decisions at source scope, structure, review, and package
+  output gates.
+- Builds approved knowledge into an Agent knowledge-base package or another
+  declared output.
 
-- **Slow retrieval**: the whole repo has to be scanned to locate the relevant piece;
-- **Context bloat**: large amounts of raw text are pushed into the context window, dragging down downstream reasoning quality.
+Compared with one-shot or remote distillation, Context behaves more like a
+knowledge assistant working beside you. It is useful when you know where the
+knowledge is but still need help deciding how to extract, organize, and publish
+it.
 
-Vanilla RAG handles basic retrieval, but relying on Embedding-based chunk recall has inherent flaws: **vector models lose key information and distort semantics at both the indexing and retrieval stages, which significantly amplifies LLM hallucination**; meanwhile, the downstream LLM is far better at intent recognition than vector similarity, yet the upstream RAG stage already caps recall quality before the LLM gets to see it — overall accuracy is bounded by the upstream pipeline rather than by the model.
+## Quick Start
 
-C4A Context takes a different path: **drop vector embeddings entirely, and let the LLM itself drive structured knowledge management and precise retrieval**. Each piece of raw material is pre-compiled into a typed structured knowledge unit (Section, classified as spec / example / warning / faq, etc.) carrying cross-references and traceable source quotes; the agent then queries that base through dedicated tools and lands on Node / Section-level content directly. Compilation runs through a harness-style loop — the CLI orchestrates small-window iterations of knowledge production, so the agent never has to ingest the whole corpus at once; at query time the CLI hits the Section index directly, with zero LLM calls on the runtime path. Backed by a standardized compile flow and a purpose-built query CLI, the knowledge base reaches a precision close to hand-curated material and **significantly outperforms** both file search and general-purpose RAG — benchmark scores approach 100%.
-
-## Where it fits
-
-**Producer side — long-term project knowledge maintenance**: compile material from different versions and sources into orthogonal structured content (each source non-redundant, with clear boundaries, independently maintainable), so the knowledge base doesn't bloat uncontrollably over time. Particularly suited to long-running large projects, multi-team collaboration, and complex business systems with many documentation sources.
-
-**Consumer side — high-reliability agent workflows**: coding, on-call operations, QA, and similar scenarios with zero tolerance for hallucination and a need for stable, high-quality recall — eliminates fabricated agent output.
-
-## Core capabilities
-
-C4A Context creates a `.context/` workspace under your project directory (the name is configurable) and provides a complete closed loop:
-
-- **Capture** — pull in Feishu docs, local Markdown, code structure, design specs, API specs, and other multi-source business material;
-- **Compile** — let the AI process raw material into structured knowledge under a single protocol — not a summary, but typed Sections (spec / example / warning, etc.) with cross-references and source traceability;
-- **Query & use** — query local structured knowledge directly from Claude / Cursor / Codex etc., landing on Node and Section precisely; or hand the whole knowledge base to another LLM;
-- **Knowledge governance** — drop deprecated material and reclaim its derived knowledge in one go; the knowledge base self-checks integrity and self-heals.
-
-Day to day, work loops through **capture → compile → query & use → governance**; you don't re-run everything from scratch — update incrementally on demand.
-
-<p align="center"><img src="./assets/workflow-en.png" alt="C4A Context workflow example: single-doc vs multi-doc batch" width="1280"/></p>
-
-## Install
-
-Every Agent needs the `context` CLI first:
+Install the CLI and Agent plugin:
 
 ```bash
-npm i -g @c4a/context-cli
-# or
-bun add -g @c4a/context-cli
+npm install -g @c4a/context-cli
+context plugin install
 ```
 
-Then install the plugin matching the agent you use:
+Restart the Agent after installation, then use:
 
-| Agent | Install |
-|---|---|
-| Claude Code | `/plugin marketplace add context4ai/context`, then `/plugin install context@c4a` |
-| Cursor | Dashboard → Settings → Plugins → Import → `https://github.com/context4ai/context` |
-| Codex CLI | `codex marketplace add context4ai/context` |
-| Vercel-style skills (Windsurf / OpenCode / Cline / Copilot, etc.) | `npx skills add github:context4ai/context <skill-name>` |
+- `/context:init` to create a workspace.
+- `/context:continue` to load an existing workspace and continue from its
+  current state.
 
-Once installed, the agent exposes entry points like `/context:*` (Claude) or `/context-*` (Cursor).
+The Agent will explain the next decision instead of asking you to operate the
+low-level CLI directly. For installation details and CLI behavior, read the
+[Context CLI guide](./packages/context-cli/README.md).
 
-> **Tip — updating the Claude Code plugin**: Claude Code caches the installed plugin locally. When upgrading to a new version, uninstall the old plugin first, run `context clean-cache`, then reinstall — this guarantees the new version takes effect immediately.
+## Workspace At A Glance
 
-## Manual workflow
-
-From your project directory:
-
-1. **Init** — `/context:init` creates the `.context/` workspace;
-2. **Capture** — `/context:capture <url-or-path>` pulls in Feishu docs, local Markdown, code snapshots, and so on;
-3. **Code projection** — for code snapshots, `/context:compile --aspect code <source-slug>` materializes package/category/symbol Nodes such as `pkg`, `pkg/components`, and `pkg/symbol/button`;
-4. **Align** — `/context:align` places prose material onto the Node structure, including docs or examples that should attach to existing code symbol Nodes;
-5. **Compile** — `/context:compile` lets the AI turn prose material into structured Sections;
-6. **Query** — `/context:query <question>` answers from local knowledge, citing Node and Section; code workspaces can filter mixed evidence with `--evidence code|prose|all`;
-7. **Drop** — `/context:drop <source-id>` reclaims deprecated material and its derived Sections.
-
-Each step writes readable files and a changelog under `.context/`, so you can review or roll back at any time.
-
-## Automated workflow
-
-After completing the **Install** step above, you can hand this document to an AI Agent (or an automation harness such as OpenClaw), point it at the project workspace and any existing knowledge base, and let it run the entire flow autonomously — cutting most of the manual work.
-
-**Environment**: Claude Opus 4.6+ or Codex 5.5+ is recommended, so the agent can resolve instructions correctly and handle the decision/clarification steps during compile.
-
-**Core automation prompt** — paste directly to the Agent or automation tool:
-
-```
-Please initialize a project knowledge base in the current directory (choose Chinese as the language; keep all other parameters as defaults), and run the full knowledge-management flow through the context CLI.
-
-Knowledge sources (restrict to these):
-- Feishu docs: https://[URLS]
-- Local files: /local/path/*.md
-
-Work includes but is not limited to: workspace init, multi-source capture, alignment, AI compile, and query validation. For any clarification or decision (source priority, compile-rule tweaks, knowledge-unit classification, etc.), make the call on your own and log every operation, keeping the knowledge base structured and traceable.
+```text
+context/
+|-- AGENTS.md
+|-- README.md
+|-- package.json
+|-- src/          # project configuration and package templates
+|-- sources/      # source registries and captured evidence
+|-- knowledge/    # durable knowledge, structure, and rejected fingerprints
+|-- dist/         # generated packages (ignored)
+`-- .tmp/         # disposable lifecycle state (ignored)
 ```
 
-> Knowledge building is a long iterative process: it involves many detail-level decisions and clarifications. Automation can take over most of the repetitive work, but cannot fully replace human judgment.
-> For engineering-critical knowledge (code structure, design specs, API details, etc.), prefer manual curation during the cold-start phase; once the base is stable, hand incremental updates and day-to-day governance to the Agent to avoid drift.
+The workspace is ordinary project state that can be inspected, reviewed, and
+versioned. `src/index.ts` describes the knowledge build, while the other
+directories record evidence and durable knowledge. Active candidates and staged
+structures live only under the ignored `.tmp/context-runtime/lifecycle/`; a
+successful close removes that completed runtime state. The CLI owns state changes;
+the Agent owns explanation, configuration, and semantic judgment; the user owns
+the important decisions.
 
-## Export & publish
+## Packages
 
-The compiled knowledge base can be packaged for distribution:
+- [`packages/context`](./packages/context/README.md) is the declarative SDK used
+  by `src/index.ts`. Its guide covers sources, phases, knowledge collections,
+  package declarations, templates, and custom processing.
+- [`packages/context-cli`](./packages/context-cli/README.md) provides the
+  `context` executable and Agent plugin installer. Its guide covers installation,
+  workspace operations, command groups, and workflow rules.
 
-- export as a **Skills** package — `context build --format skills`;
-- export as **LLMs.txt** — `context build --format llms`;
-- agent ops build — `/context:ops build` exports Skills by default; use `--format llms` for LLMs.txt;
-- [TODO] publish to the **C4A platform** as an MCP service for other AIs to query live;
-- [TODO] publish as a standalone Plugin knowledge package, with retrieval quality on par with the MCP service and CLI.
+The SDK manuals under [`packages/context/docs`](./packages/context/docs/README.md)
+contain the detailed project API and package-template references. The CLI also
+ships a concise [quickstart](./packages/context-cli/docs/quickstart.md).
 
-## Recommended environment
+## Ask The Agent
 
-The numbers below come from a parallel benchmark: each model runs the full c4a flow (capture → align → compile) end-to-end over the same 10-document business corpus, with no manual intervention. Quality is scored across 7 dimensions (totaling 100) based on the resulting knowledge base; duration covers the full flow from `context init` to `compile close`.
+> The Context plugin includes thin Agent entries backed by route-selected
+> workflow resources and manuals. Once Context has loaded the workspace, ask the
+> Agent about anything that is unclear or share any idea you want to explore.
+> The Agent can use the current evidence and project state to turn that
+> conversation into reviewable, usable knowledge.
 
-| Dimension | GPT 5.5 xh fast | GPT 5.5 m fast | Opus 4.8 | Sonnet 4.6 | DeepSeek V4 Pro | V4 Flash |
-|---|---:|---:|---:|---:|---:|---:|
-| Fact coverage | 24 | 24 | 24 | 23 | 24 | 23 |
-| Fact fidelity | 25 | 25 | 25 | 25 | 25 | 25 |
-| Structure | 15 | 15 | 15 | 14 | 15 | 14 |
-| URL | 5 | 5 | 5 | 5 | 5 | 5 |
-| Evidence link | 10 | 10 | 10 | 10 | 10 | 7 |
-| Section boundary | 9 | 9 | 8 | 9 | 9 | 3 |
-| Modeling | 9 | 9 | 8 | 8 | 7 | 6 |
-| **Total** | **97** | **97** | **95** | **94** | **95** | **83** |
-| Duration | 5m44s | 4m34s | 20m27s | 20m20s | ~9m28s | 2m37s |
+## Repository Development
 
-> GPT 5.5 xh fast / GPT 5.5 m fast run on Codex; Opus 4.8 / Sonnet 4.6 / DeepSeek V4 Pro / V4 Flash run on Claude.
+For source, link, Agent plugin, and npm-mode development, see
+[`DEVELOPMENT.md`](./DEVELOPMENT.md).
 
-## About this repository
+```bash
+bun install
+bun run build
+bun run typecheck
+bun run test
+bun run lint
+bun run verify
+```
 
-The contents of this repository are auto-generated and published by the [c4a project](https://github.com/context4ai/c4a) — do not edit by hand.
+Link the local CLI:
 
-The c4a project provides end-to-end infrastructure for knowledge processing and hosting, covering the CLI, the knowledge-management Studio, and MCP services; open-source release is planned for late May 2026.
-
-License: MIT
+```bash
+./start.sh link
+```

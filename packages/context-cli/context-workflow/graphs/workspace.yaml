@@ -1,0 +1,536 @@
+schema: agent-graph.graph.v1
+id: workspace
+description: Fact-grounded lifecycle for a Context knowledge workspace.
+entrypoints:
+  continue: repair-project-entry
+nodes:
+  - id: repair-project-entry
+    kind: action
+    reasonCode: route.workspace.project-entry-invalid
+    action: actions/repair-project-entry.yaml
+    satisfiedBy:
+      - path: workspace.project_entry_valid
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/manuals/reference/project-api.md
+      recommended: [resources/diagnostics/workspace-state.md]
+
+  - id: repair-workspace-state
+    kind: action
+    reasonCode: route.workspace.state-invalid
+    action: actions/repair-workspace-state.yaml
+    satisfiedBy:
+      - path: workspace.state_valid
+        equals: true
+    resources:
+      required:
+        - resources/diagnostics/workspace-state.md
+        - resources/views/workspace-current.yaml
+
+  - id: repair-verification
+    kind: action
+    reasonCode: route.verify.failed
+    action: actions/repair-verification.yaml
+    satisfiedBy:
+      - path: verification.blocking_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/verify-and-repair.md
+        - resources/views/verification-current.yaml
+      recommended: [resources/diagnostics/verification.md]
+
+  - id: choose-evidence-maintenance
+    kind: gate
+    reasonCode: route.evidence.decision-required
+    resolutionAction: actions/maintain-evidence.yaml
+    gate:
+      id: evidence-maintenance
+      prompt: Decide how to handle approved knowledge whose source evidence moved or disappeared.
+      authority: context.evidence-maintenance
+      delegatable: false
+    satisfiedBy:
+      - path: gates.evidence_maintenance_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/evidence-maintenance.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/evidence-maintenance.md
+        - resources/views/verification-current.yaml
+
+  - id: maintain-evidence
+    kind: action
+    reasonCode: route.evidence.maintenance-required
+    action: actions/maintain-evidence.yaml
+    satisfiedBy:
+      - path: evidence.maintenance_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/evidence-maintenance.md
+        - resources/views/verification-current.yaml
+      recommended: [resources/diagnostics/verification.md]
+
+  - id: resume-prose-lifecycle
+    kind: action
+    reasonCode: route.prose.configuration-required
+    action: actions/configure-prose-lifecycle.yaml
+    satisfiedBy:
+      - path: resume.prose_declarations_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/procedures/document-classification.md
+        - resources/views/structure-current.yaml
+        - resources/manuals/reference/project-api.md
+
+  - id: confirm-structure
+    kind: gate
+    reasonCode: route.structure.confirmation-required
+    inspectionAction: actions/inspect-structure.yaml
+    gate:
+      id: structure-confirmation
+      prompt: Confirm the proposed knowledge structure before candidates are compiled.
+      authority: context.structure-confirmation
+      delegatable: true
+    satisfiedBy:
+      - path: resume.structure_confirmation_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/prose-align.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/structure-confirmation.md
+        - resources/views/structure-current.yaml
+
+  - id: resume-align-next
+    kind: action
+    reasonCode: route.structure.pending-target
+    action: actions/align-next.yaml
+    satisfiedBy:
+      - path: resume.structure_refresh_required
+        exists: false
+    resources:
+      required:
+        - resources/procedures/prose-align.md
+        - resources/views/structure-current.yaml
+      recommended:
+        - resources/semantic/align/structure-planning.md
+        - resources/semantic/align/gates.md
+        - resources/semantic/align/density-profile.md
+        - resources/semantic/align/candidate-resolution.md
+
+  - id: apply-structure-confirmation
+    kind: action
+    reasonCode: route.structure.confirm
+    action: actions/apply-structure-confirmation.yaml
+    satisfiedBy:
+      - path: resume.structure_confirmed
+        equals: true
+    resources:
+      required:
+        - resources/procedures/prose-align.md
+        - resources/views/structure-current.yaml
+
+  - id: compile-next
+    kind: action
+    reasonCode: route.compile.pending-target
+    action: actions/compile-next.yaml
+    satisfiedBy:
+      - path: resume.compile_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/prose-compile.md
+      recommended:
+        - resources/views/structure-current.yaml
+        - resources/semantic/compile/index.md
+
+  - id: resolve-review-identities
+    kind: action
+    reasonCode: route.review.identity-conflict
+    action: actions/reconcile-review-identities.yaml
+    satisfiedBy:
+      - path: review.identity_conflicts_present
+        exists: false
+    resources:
+      required:
+        - resources/procedures/knowledge-review.md
+        - resources/views/review-current.yaml
+
+  - id: resume-review-current-batch
+    kind: gate
+    reasonCode: route.review.decision-required
+    inspectionAction: actions/inspect-review.yaml
+    gate:
+      id: knowledge-review
+      prompt: Review the complete current document candidate batch before it enters approved knowledge.
+      authority: context.knowledge-review
+      delegatable: true
+    satisfiedBy:
+      - path: resume.knowledge_review_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/knowledge-review.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/knowledge-review.md
+        - resources/views/review-current.yaml
+
+  - id: apply-resumed-review
+    kind: action
+    reasonCode: route.review.apply-managed
+    action: actions/apply-managed-review.yaml
+    satisfiedBy:
+      - path: resume.review_gate_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/knowledge-review.md
+        - resources/views/review-current.yaml
+
+  - id: choose-source-boundary
+    kind: gate
+    reasonCode: route.source.boundary-required
+    gate:
+      id: source-boundary
+      prompt: Choose the repositories, modules, or documents that may become knowledge sources.
+      authority: context.source-boundary
+      delegatable: false
+    resolutionAction: actions/register-source-batch.yaml
+    satisfiedBy:
+      - path: sources.registered
+        equals: true
+    resources:
+      required:
+        - resources/procedures/source-boundary.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/source-boundary.md
+        - resources/views/source-current.yaml
+      recommended:
+        - resources/procedures/source-capture-detailed.md
+
+  - id: ensure-repository-sources
+    kind: gate
+    reasonCode: route.source.repository-not-ready
+    inspectionAction: actions/inspect-repository-recovery.yaml
+    resolutionAction: actions/restore-repository-sources.yaml
+    gate:
+      id: repository-source-recovery
+      prompt: Choose how to restore each missing registered repository checkout.
+      authority: context.repository-restore
+      delegatable: false
+    satisfiedBy:
+      - path: sources.repositories_ready
+        equals: true
+    resources:
+      required:
+        - resources/procedures/repository-source-recovery.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/repository-source-recovery.md
+        - resources/views/source-current.yaml
+
+  - id: configure-document-capture
+    kind: action
+    reasonCode: route.capture.configuration-required
+    action: actions/configure-document-capture.yaml
+    satisfiedBy:
+      - path: capture.declarations_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/manuals/reference/project-api.md
+      recommended:
+        - resources/procedures/document-capture.md
+        - resources/views/source-current.yaml
+        - resources/manuals/guides/lark-resources.md
+
+  - id: authorize-document-capture
+    kind: gate
+    reasonCode: route.capture.permission-required
+    gate:
+      id: source-read-permission
+      prompt: Allow Context to read the registered external document sources for this capture.
+      authority: context.source-read
+      delegatable: false
+    satisfiedBy:
+      - path: gates.source_read_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/document-capture.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/document-capture.md
+        - resources/views/source-current.yaml
+      recommended:
+        - resources/procedures/source-capture-detailed.md
+        - resources/manuals/guides/lark-resources.md
+
+  - id: capture-next
+    kind: action
+    reasonCode: route.capture.pending-target
+    action: actions/capture-next.yaml
+    satisfiedBy:
+      - path: capture.complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/document-capture.md
+        - resources/views/source-boundary.yaml
+      recommended:
+        - resources/procedures/source-capture-detailed.md
+        - resources/manuals/guides/lark-resources.md
+
+  - id: choose-extraction-scope
+    kind: gate
+    reasonCode: route.extract.scope-required
+    gate:
+      id: extraction-scope
+      prompt: Confirm which registered code modules and symbol boundaries should enter code knowledge.
+      authority: context.extraction-scope
+      delegatable: true
+    satisfiedBy:
+      - path: gates.extraction_scope_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/code-extraction.md
+        - resources/views/source-current.yaml
+      recommended:
+        - resources/procedures/source-capture-detailed.md
+
+  - id: configure-code-extraction
+    kind: action
+    reasonCode: route.extract.configuration-required
+    action: actions/configure-code-extraction.yaml
+    satisfiedBy:
+      - path: extract.declarations_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/procedures/code-extraction.md
+        - resources/views/source-current.yaml
+        - resources/manuals/reference/project-api.md
+
+  - id: extract-next
+    kind: action
+    reasonCode: route.extract.pending-target
+    action: actions/extract-next.yaml
+    satisfiedBy:
+      - path: extract.complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+        - resources/views/source-boundary.yaml
+
+  - id: classify-document
+    kind: gate
+    reasonCode: route.document.classification-required
+    inspectionAction: actions/inspect-document-classification.yaml
+    gate:
+      id: document-classification
+      prompt: Confirm the evidence-backed knowledge collection for the next captured document.
+      authority: context.document-classification
+      delegatable: true
+    satisfiedBy:
+      - path: gates.document_classification_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/document-classification.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/document-classification.md
+        - resources/views/source-current.yaml
+
+  - id: configure-prose-lifecycle
+    kind: action
+    reasonCode: route.prose.configuration-required
+    action: actions/configure-prose-lifecycle.yaml
+    satisfiedBy:
+      - path: prose.declarations_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/procedures/document-classification.md
+        - resources/views/structure-current.yaml
+        - resources/manuals/reference/project-api.md
+
+  - id: align-next
+    kind: action
+    reasonCode: route.structure.pending-target
+    action: actions/align-next.yaml
+    satisfiedBy:
+      - path: align.prepared
+        equals: true
+    resources:
+      required:
+        - resources/procedures/prose-align.md
+        - resources/views/structure-current.yaml
+      recommended:
+        - resources/semantic/align/structure-planning.md
+        - resources/semantic/align/gates.md
+        - resources/semantic/align/density-profile.md
+        - resources/semantic/align/candidate-resolution.md
+
+  - id: review-current-batch
+    kind: gate
+    reasonCode: route.review.decision-required
+    inspectionAction: actions/inspect-review.yaml
+    gate:
+      id: knowledge-review
+      prompt: Review the complete current candidate batch before it enters approved knowledge.
+      authority: context.knowledge-review
+      delegatable: true
+    satisfiedBy:
+      - path: gates.knowledge_review_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/knowledge-review.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/knowledge-review.md
+        - resources/views/review-current.yaml
+
+  - id: apply-managed-review
+    kind: action
+    reasonCode: route.review.apply-managed
+    action: actions/apply-managed-review.yaml
+    satisfiedBy:
+      - path: review.gate_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/knowledge-review.md
+        - resources/views/review-current.yaml
+
+  - id: close-approved-knowledge
+    kind: action
+    reasonCode: route.close.projection-stale
+    action: actions/close-approved-knowledge.yaml
+    satisfiedBy:
+      - path: close.current
+        equals: true
+    resources:
+      required:
+        - resources/procedures/close-and-build.md
+        - resources/views/verification-current.yaml
+      recommended:
+        - resources/diagnostics/projection-stale.md
+
+  - id: choose-package-output
+    kind: gate
+    reasonCode: route.package.output-required
+    gate:
+      id: package-output
+      prompt: Choose how approved knowledge should be packaged for downstream consumers.
+      authority: context.package-output
+      delegatable: true
+    satisfiedBy:
+      - path: gates.package_output_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/package-output.md
+        - resources/dialogue/human-gates.md
+        - resources/dialogue/package-output.md
+        - resources/views/package-current.yaml
+      recommended:
+        - resources/manuals/guides/package-outputs.md
+        - resources/manuals/reference/package-templates.md
+        - resources/manuals/reference/template-variables.md
+
+  - id: configure-package-output
+    kind: action
+    reasonCode: route.package.configuration-required
+    action: actions/configure-package-output.yaml
+    satisfiedBy:
+      - path: packages.declared
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/procedures/package-output.md
+        - resources/views/package-current.yaml
+      recommended:
+        - resources/manuals/guides/package-outputs.md
+        - resources/manuals/reference/project-api.md
+        - resources/manuals/reference/package-templates.md
+        - resources/manuals/reference/template-variables.md
+
+  - id: build-next
+    kind: action
+    reasonCode: route.build.package-stale
+    action: actions/build-next.yaml
+    satisfiedBy:
+      - path: packages.current
+        equals: true
+    resources:
+      required:
+        - resources/procedures/close-and-build.md
+        - resources/views/package-current.yaml
+
+  - id: review-package-template
+    kind: gate
+    reasonCode: route.package.template-review-required
+    resolutionAction: actions/accept-package-templates.yaml
+    gate:
+      id: package-template-review
+      prompt: Replace or edit the declared package templates, or explicitly accept the unchanged generic defaults.
+      authority: context.package-template-review
+      delegatable: true
+    satisfiedBy:
+      - path: packages.templates_reviewed
+        equals: true
+    resources:
+      required:
+        - resources/procedures/package-output.md
+        - resources/dialogue/human-gates.md
+        - resources/views/package-current.yaml
+        - resources/manuals/reference/package-templates.md
+
+  - id: current-scope-complete
+    kind: terminal
+    terminalOutcome: completed
+
+edges:
+  - { from: repair-project-entry, to: repair-workspace-state }
+  - { from: repair-workspace-state, to: repair-verification }
+  - { from: repair-verification, to: choose-evidence-maintenance }
+  - { from: choose-evidence-maintenance, to: maintain-evidence, kind: gatedBy }
+  - { from: maintain-evidence, to: close-approved-knowledge }
+  - { from: close-approved-knowledge, to: resume-prose-lifecycle }
+  - { from: resume-prose-lifecycle, to: resume-align-next }
+  - { from: resume-align-next, to: confirm-structure }
+  - { from: confirm-structure, to: apply-structure-confirmation, kind: gatedBy }
+  - { from: apply-structure-confirmation, to: compile-next }
+  - { from: compile-next, to: resolve-review-identities }
+  - { from: resolve-review-identities, to: resume-review-current-batch }
+  - { from: resume-review-current-batch, to: apply-resumed-review, kind: gatedBy }
+  - { from: apply-resumed-review, to: choose-source-boundary }
+  - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
+  - { from: ensure-repository-sources, to: configure-document-capture }
+  - { from: configure-document-capture, to: authorize-document-capture }
+  - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
+  - { from: capture-next, to: choose-extraction-scope }
+  - { from: choose-extraction-scope, to: configure-code-extraction, kind: gatedBy }
+  - { from: configure-code-extraction, to: extract-next }
+  - { from: extract-next, to: review-current-batch }
+  - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
+  - { from: apply-managed-review, to: classify-document }
+  - { from: classify-document, to: configure-prose-lifecycle, kind: gatedBy }
+  - { from: configure-prose-lifecycle, to: align-next }
+  - { from: align-next, to: choose-package-output }
+  - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
+  - { from: configure-package-output, to: review-package-template }
+  - { from: review-package-template, to: build-next, kind: gatedBy }
+  - { from: build-next, to: current-scope-complete }

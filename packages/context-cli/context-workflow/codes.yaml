@@ -1,0 +1,41 @@
+schema: agent-graph.code-catalog.v1
+codes:
+  - { code: diagnostic.project-entry-invalid, kind: diagnostic, severity: error, summary: The Context project entry cannot be loaded., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.workspace-state-invalid, kind: diagnostic, severity: error, summary: Context cannot establish valid lifecycle facts for the workspace., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.structure-snapshot-invalid, kind: diagnostic, severity: error, summary: An active source-bound structure snapshot is invalid., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.phase-source-unresolved, kind: diagnostic, severity: error, summary: A document lifecycle phase cannot resolve its canonical source., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.structure-route-unresolved, kind: diagnostic, severity: error, summary: A staged structure cannot resolve to one source and collection lifecycle., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.compile-route-ambiguous, kind: diagnostic, severity: error, summary: More than one compile lifecycle owns the same source and collection., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.structure-snapshot-missing, kind: diagnostic, severity: error, summary: A compile batch references a missing confirmed structure snapshot., document: resources/diagnostics/workspace-state.md }
+  - { code: diagnostic.verify-failed, kind: diagnostic, severity: error, summary: Verification found one or more blocking findings., document: resources/diagnostics/verification.md }
+  - { code: diagnostic.projection-stale, kind: diagnostic, severity: info, summary: Approved knowledge changed and deterministic close must refresh its derived projection., document: resources/diagnostics/projection-stale.md }
+  - { code: diagnostic.evidence-degraded, kind: diagnostic, severity: warning, summary: Approved knowledge has evidence that cannot currently be rechecked., document: resources/diagnostics/verification.md }
+  - { code: diagnostic.evidence-stale, kind: diagnostic, severity: warning, summary: Approved knowledge evidence is stale against its registered source., document: resources/diagnostics/verification.md }
+  - { code: diagnostic.evidence-orphaned, kind: diagnostic, severity: warning, summary: Approved knowledge no longer resolves to registered source evidence., document: resources/diagnostics/verification.md }
+  - { code: route.workspace.project-entry-invalid, kind: route-reason, summary: Repair the Context project entry before continuing., document: resources/procedures/project-configuration.md }
+  - { code: route.workspace.state-invalid, kind: route-reason, summary: Inspect and repair the invalid workspace facts., document: resources/diagnostics/workspace-state.md }
+  - { code: route.verify.failed, kind: route-reason, summary: Resolve blocking verification findings before other lifecycle writes., document: resources/procedures/verify-and-repair.md }
+  - { code: route.evidence.decision-required, kind: route-reason, summary: A source-evidence change needs an explicit maintenance decision., document: resources/procedures/evidence-maintenance.md }
+  - { code: route.evidence.maintenance-required, kind: route-reason, summary: Apply the selected evidence-maintenance action., document: resources/procedures/evidence-maintenance.md }
+  - { code: route.source.boundary-required, kind: route-reason, summary: No knowledge source boundary has been registered., document: resources/procedures/source-boundary.md }
+  - { code: route.source.repository-not-ready, kind: route-reason, summary: A registered repository checkout or local source link must be restored., document: resources/procedures/repository-source-recovery.md }
+  - { code: route.capture.configuration-required, kind: route-reason, summary: Registered document sources are missing capture declarations., document: resources/procedures/project-configuration.md }
+  - { code: route.capture.permission-required, kind: route-reason, summary: External document capture requires source-read permission., document: resources/procedures/document-capture.md }
+  - { code: route.capture.pending-target, kind: route-reason, summary: Capture the next declared document target., document: resources/procedures/document-capture.md }
+  - { code: route.extract.scope-required, kind: route-reason, summary: Code extraction scope has not been confirmed., document: resources/procedures/code-extraction.md }
+  - { code: route.extract.configuration-required, kind: route-reason, summary: Registered repository sources are missing extraction declarations., document: resources/procedures/project-configuration.md }
+  - { code: route.extract.pending-target, kind: route-reason, summary: Extract the next pending code target before another workflow family., document: resources/procedures/code-extraction.md }
+  - { code: route.document.classification-required, kind: route-reason, summary: A captured document needs an evidence-backed collection decision., document: resources/procedures/document-classification.md }
+  - { code: route.prose.configuration-required, kind: route-reason, summary: A document target is missing a complete prose lifecycle declaration., document: resources/procedures/project-configuration.md }
+  - { code: route.structure.pending-target, kind: route-reason, summary: Prepare the next document structure slot from source evidence., document: resources/procedures/prose-align.md }
+  - { code: route.structure.confirmation-required, kind: route-reason, summary: A staged structure is waiting for confirmation., document: resources/procedures/prose-align.md }
+  - { code: route.structure.confirm, kind: route-reason, summary: Persist the confirmed structure slot., document: resources/procedures/prose-align.md }
+  - { code: route.compile.pending-target, kind: route-reason, summary: Compile the next planned source-bound knowledge view., document: resources/procedures/prose-compile.md }
+  - { code: route.review.identity-conflict, kind: route-reason, summary: Preserve approved ViewRef and path identity before Review., document: resources/procedures/knowledge-review.md }
+  - { code: route.review.decision-required, kind: route-reason, summary: The complete current candidate batch needs one review decision set., document: resources/procedures/knowledge-review.md }
+  - { code: route.review.apply-managed, kind: route-reason, summary: Apply the current candidate batch under explicit session-managed authority., document: resources/procedures/knowledge-review.md }
+  - { code: route.close.projection-stale, kind: route-reason, summary: Rebuild the deterministic approved structure projection., document: resources/procedures/close-and-build.md }
+  - { code: route.package.output-required, kind: route-reason, summary: Approved knowledge has no confirmed package output., document: resources/procedures/package-output.md }
+  - { code: route.package.configuration-required, kind: route-reason, summary: Declare the confirmed package output in the Context project., document: resources/procedures/package-output.md }
+  - { code: route.package.template-review-required, kind: route-reason, summary: "Replace or edit package templates, or explicitly accept the generic defaults.", document: resources/procedures/package-output.md }
+  - { code: route.build.package-stale, kind: route-reason, summary: Build the declared package outputs from current approved knowledge., document: resources/procedures/close-and-build.md }

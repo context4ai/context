@@ -1,0 +1,28 @@
+{
+  "name": "context",
+  "displayName": "C4A Context",
+  "version": "__VERSION__",
+  "description": "Maintain a project-local knowledge workspace through init and next-step agent guidance.",
+  "author": {
+    "name": "Context4AI",
+    "email": "support@context4ai.dev"
+  },
+  "homepage": "https://github.com/context4ai/c4a",
+  "repository": "https://github.com/context4ai/c4a",
+  "license": "MIT",
+  "logo": "assets/logo.svg",
+  "keywords": [
+    "context",
+    "knowledge",
+    "citations",
+    "agent-skills"
+  ],
+  "category": "developer-tools",
+  "tags": [
+    "knowledge",
+    "documentation",
+    "agent-skills",
+    "citations"
+  ],
+  "commands": "./commands/"
+}

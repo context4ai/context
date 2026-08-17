@@ -1,0 +1,33 @@
+schema: agent-graph.test.v1
+name: managed workflow does not bypass source read permission
+graph: workspace
+entry: continue
+state:
+  authorities:
+    - context.extraction-scope
+    - context.document-classification
+    - context.structure-confirmation
+    - context.knowledge-review
+    - context.package-output
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: false
+    close: { current: true }
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, complete: false }
+expect:
+  statusCode: waiting-user
+  primaryNode: authorize-document-capture
+  primaryReasonCode: route.capture.permission-required
+  availability: requires-user

@@ -1,0 +1,42 @@
+{
+  "name": "@c4a/core",
+  "description": "Shared extraction types, schemas, and utilities for Context",
+  "version": "0.6.2",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "types",
+    "schema",
+    "zod",
+    "utilities",
+    "knowledge-graph"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "*.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts --outdir dist --target node --format esm && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.4",
+    "yaml": "^2.4.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/picomatch": "^4.0.2"
+  }
+}

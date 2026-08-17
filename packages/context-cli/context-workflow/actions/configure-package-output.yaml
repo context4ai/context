@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: configure-package-output
+runner: host
+effect: write
+handler: context.project.configure-package

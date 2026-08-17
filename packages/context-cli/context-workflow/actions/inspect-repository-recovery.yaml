@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: inspect-repository-recovery
+description: Group missing repository modules by physical checkout and show recovery choices.
+runner: command
+effect: read
+command: context source recovery-plan --format json

@@ -1,0 +1,289 @@
+import type { Route } from "@c4a/agent-graph";
+import type {
+  ContextResolvedWorkflowRoute,
+  ContextWorkflowCommand,
+  ContextWorkflowObservation,
+} from "./workflowTypes.js";
+
+export interface ResolvedHostPlan {
+  commands: ContextWorkflowCommand[];
+  configuration?: ContextResolvedWorkflowRoute["configuration"];
+}
+
+type HostPlanResolver = (
+  observation: ContextWorkflowObservation,
+) => ResolvedHostPlan;
+
+function command(
+  value: string,
+  effect: ContextWorkflowCommand["effect"],
+  managedExecution: ContextWorkflowCommand["managed_execution"] =
+    effect === "write" ? "automatic" : "agent-required",
+): ContextWorkflowCommand {
+  return {
+    command: value,
+    effect,
+    availability: "immediate",
+    managed_execution: managedExecution,
+  };
+}
+
+function withJsonFormat(value: string): string {
+  return value.includes(" --format ") ? value : `${value} --format json`;
+}
+
+function reviewOpenCommand(
+  observation: ContextWorkflowObservation,
+): string | undefined {
+  if (
+    observation.draftCandidates <= 0 ||
+    observation.draftCollections.length === 0
+  ) {
+    return undefined;
+  }
+  return observation.draftCollections.length === 1
+    ? `context review html ${observation.draftCollections[0]} --open`
+    : "context review html --all --open";
+}
+
+function reviewApproveCommand(
+  observation: ContextWorkflowObservation,
+): string | undefined {
+  if (
+    observation.draftCandidates <= 0 ||
+    observation.draftCollections.length === 0
+  ) {
+    return undefined;
+  }
+  return observation.draftCollections.length === 1
+    ? `context review approve-all ${observation.draftCollections[0]} --managed --format json`
+    : "context review approve-all --all --managed --format json";
+}
+
+function workspaceRepairPlan(
+  observation: ContextWorkflowObservation,
+): ResolvedHostPlan {
+  if (observation.compilePhaseResolution?.state === "ambiguous") {
+    return {
+      commands: [],
+      configuration: {
+        file: "src/index.ts",
+        action:
+          "Make the compileProse lifecycle owner unique for each source and collection reported by diagnostic.compile-route-ambiguous.",
+      },
+    };
+  }
+  if ((observation.compileBatch?.missingStructureDigests.length ?? 0) > 0) {
+    return {
+      commands: [],
+      configuration: {
+        file: "src/index.ts",
+        action:
+          "Restore the missing confirmed structure snapshot or declare a new align/compile lifecycle for the affected source and collection.",
+      },
+    };
+  }
+  return { commands: [command("context verify --format json --compact", "read")] };
+}
+
+function verificationRepairPlan(
+  observation: ContextWorkflowObservation,
+): ResolvedHostPlan {
+  const recapture = observation.pendingCaptureCommands[0];
+  if (recapture !== undefined) {
+    return {
+      commands: [command(withJsonFormat(recapture), "external", "automatic")],
+    };
+  }
+  if (observation.compileDocumentNext !== undefined) {
+    return {
+      commands: [command(withJsonFormat(observation.compileDocumentNext), "write")],
+    };
+  }
+  return { commands: [command("context verify --format json --compact", "read")] };
+}
+
+const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
+  "context.verification.repair-next": verificationRepairPlan,
+  "context.project.repair-entry": () => ({
+    commands: [],
+    configuration: {
+      file: "src/index.ts",
+      action: "Repair the Context project entry reported by the current diagnostic.",
+    },
+  }),
+  "context.workspace.inspect-diagnostics": workspaceRepairPlan,
+  "context.project.configure-capture": (observation) => ({
+    commands: [],
+    configuration: {
+      file: "src/index.ts",
+      action: `Declare capture phases for ${observation.missingCaptureSources
+        .map((source) => `${source.type}:${source.name}`)
+        .join(", ")}.`,
+    },
+  }),
+  "context.capture.next": (observation) => {
+    const next = observation.pendingCaptureCommands[0];
+    return {
+      commands: next === undefined
+        ? []
+        : [command(withJsonFormat(next), "external", "automatic")],
+    };
+  },
+  "context.project.configure-extraction": () => ({
+    commands: [],
+    configuration: {
+      file: "src/index.ts",
+      action:
+        "Declare extraction for every user-confirmed repository module and scope.",
+    },
+  }),
+  "context.extract.next": (observation) => {
+    const phase = observation.staleSourcePhases[0] ??
+      observation.pendingExtractPhases[0];
+    return {
+      commands: phase === undefined
+        ? []
+        : [command(`context run ${phase} --format json`, "write")],
+    };
+  },
+  "context.document.inspect-classification": (observation) => ({
+    commands: observation.unclassifiedDocumentTargets.map((target) =>
+      command(target.command, "read")
+    ),
+  }),
+  "context.project.configure-prose": (observation) => ({
+    commands: [],
+    configuration: {
+      file: "src/index.ts",
+      action: observation.pendingStructureTargets
+        .flatMap((target) => target.suggestions)
+        .join("; ") ||
+        "Declare align, compile, and review for the confirmed document source and collection.",
+    },
+  }),
+  "context.align.next": (observation) => ({
+    commands: observation.pendingStructureTargets.map((target) =>
+      command(target.command, "read")
+    ),
+  }),
+  "context.structure.inspect": (observation) => ({
+    commands: [
+      observation.alignDocumentStructureSummaryNext,
+      observation.alignDocumentValidateNext,
+    ].flatMap((value) =>
+      value === undefined ? [] : [command(value, "read")]
+    ),
+  }),
+  "context.structure.confirm": (observation) => ({
+    commands: observation.alignDocumentConfirmNext === undefined
+      ? []
+      : [command(observation.alignDocumentConfirmNext, "write")],
+  }),
+  "context.compile.next": (observation) => ({
+    commands: observation.compileDocumentNext === undefined
+      ? []
+      : [command(observation.compileDocumentNext, "write")],
+  }),
+  "context.review.preserve-approved-identities": (observation) => {
+    const source = observation.reviewIdentityConflicts.sourceKeys[0];
+    return {
+      commands: source === undefined
+        ? []
+        : [command(
+            `context review reconcile-identities --source ${source} --strategy preserve-approved --format json`,
+            "write",
+          )],
+    };
+  },
+  "context.review.inspect-current": (observation) => {
+    const next = reviewOpenCommand(observation);
+    return {
+      commands: next === undefined ? [] : [command(next, "read")],
+    };
+  },
+  "context.review.approve-current": (observation) => {
+    const next = reviewApproveCommand(observation);
+    return {
+      commands: next === undefined ? [] : [command(next, "write")],
+    };
+  },
+  "context.project.configure-package": () => ({
+    commands: [],
+    configuration: {
+      file: "src/index.ts",
+      action:
+        "Declare the package output confirmed for the current approved knowledge.",
+      contract: {
+        target: "package-output",
+        choices: [
+          {
+            id: "agent-knowledge-base",
+            factory: "kbPackage",
+            required: ["name", "template"],
+            defaults: {
+              template: "src/package-templates/kb",
+            },
+          },
+          {
+            id: "llm-text",
+            factory: "llmsPackage",
+            required: ["name", "template"],
+            defaults: { template: "src/package-templates/llms" },
+          },
+          {
+            id: "none",
+            factory: null,
+            required: [],
+          },
+        ],
+        reference_resources: [
+          "context.sdk.package-outputs",
+          "context.sdk.project-api",
+        ],
+        after_edit: "context status --format json",
+      },
+    },
+  }),
+};
+
+export function planForHostHandler(
+  handler: string,
+  observation: ContextWorkflowObservation,
+): ResolvedHostPlan {
+  const resolver = HOST_PLAN_RESOLVERS[handler];
+  if (resolver === undefined) {
+    throw new Error(`Unsupported Context workflow host handler: ${handler}`);
+  }
+  return resolver(observation);
+}
+
+export function planForResolvedCommandPlan(
+  commandPlan: Route["commandPlan"],
+  observation: ContextWorkflowObservation,
+): ResolvedHostPlan {
+  const plans = commandPlan.map((item): ResolvedHostPlan => {
+    if (item.handler !== undefined) {
+      return planForHostHandler(item.handler, observation);
+    }
+    return {
+      commands: item.command === undefined
+        ? []
+        : [command(item.command, item.effect)],
+    };
+  });
+  const configurations = plans.flatMap((plan) =>
+    plan.configuration === undefined ? [] : [plan.configuration]
+  );
+  if (configurations.length > 1) {
+    throw new Error(
+      "One Agent Graph Action resolved more than one Context project configuration request.",
+    );
+  }
+  return {
+    commands: plans.flatMap((plan) => plan.commands),
+    ...(configurations[0] === undefined
+      ? {}
+      : { configuration: configurations[0] }),
+  };
+}

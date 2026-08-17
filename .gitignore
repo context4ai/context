@@ -1,4 +1,13 @@
-.DS_Store
 node_modules/
-.idea/
-.vscode/
+dist/
+packages/*/dist/
+.tmp/
+packages/*/.tmp/
+.DS_Store
+coverage/
+.coverage/
+.cache/
+.context/
+output/
+c4a-plugins/
+agent-graph/

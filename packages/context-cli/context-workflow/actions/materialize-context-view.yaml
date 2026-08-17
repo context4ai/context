@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: materialize-context-view
+description: Emit a Context-owned, revision-bound Markdown view supplied by the host adapter.
+runner: script
+effect: read
+entry: scripts/render-context-view.mjs
+runtime: node
+cwd: workspace

@@ -1,0 +1,32 @@
+schema: agent-graph.test.v1
+name: valid empty workspace waits for a source boundary
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates: { evidence_maintenance_resolved: true }
+    close: { current: true }
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: false }
+expect:
+  statusCode: waiting-user
+  primaryNode: choose-source-boundary
+  primaryReasonCode: route.source.boundary-required
+  availability: requires-user
+  requiredResources:
+    - procedure.source-boundary
+    - dialogue.human-gates
+    - dialogue.source-boundary
+    - context.source-current
+  gateResolution: user
+  resolutionCommand: context source add batch --input - --format json
+  resolutionInputSchema: schema.register-source-batch.input

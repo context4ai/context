@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: apply-structure-confirmation
+runner: host
+effect: write
+handler: context.structure.confirm

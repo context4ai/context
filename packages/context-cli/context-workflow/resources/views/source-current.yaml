@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.source-current
+kind: context-view
+mediaType: text/markdown
+description: Current repository and document source readiness and pending capture or extraction targets.
+materializer: actions/materialize-context-view.yaml

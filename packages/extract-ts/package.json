@@ -1,0 +1,26 @@
+{
+  "name": "@c4a/extract-ts",
+  "description": "TypeScript extraction plugin for C4A ExtractionResult v2",
+  "version": "0.6.2",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/extract-ts"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@c4a/extract": "workspace:*",
+    "web-tree-sitter": "^0.20.8"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "context",
+  "version": "0.6.2",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/context4ai/context.git"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@typescript-eslint/eslint-plugin": "^8.12.0",
+    "@typescript-eslint/parser": "^8.12.0",
+    "bun-types": "^1.3.5",
+    "eslint": "^9.8.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "description": "Project-local knowledge package tooling",
+  "private": true,
+  "scripts": {
+    "start": "bun run --cwd packages/dev-cli src/index.tsx",
+    "cli": "bun run --cwd packages/context-cli src/cli.ts",
+    "context": "bun run --cwd packages/context-cli src/cli.ts",
+    "link": "bun run --cwd packages/dev-cli src/index.tsx link",
+    "unlink": "bun run --cwd packages/dev-cli src/index.tsx unlink",
+    "build": "bun run --filter @c4a/core build && bun run --filter @c4a/context build && bun run --filter @c4a/extract build && bun run --filter @c4a/extract-ts build && bun run --filter @c4a/tui build && bun run --filter @c4a/context-cli build",
+    "typecheck": "bun run --filter '*' typecheck",
+    "test": "bun run --filter '*' test",
+    "test:e2e": "bun run --filter @c4a/context-cli test:e2e",
+    "lint": "bun run --filter '*' lint",
+    "verify:fast": "bun run typecheck && bun run lint && bun run test",
+    "verify": "bun run verify:fast",
+    "verify:full": "bun run verify:fast && bun run test:e2e",
+    "typecheck:core": "bun run --filter @c4a/core typecheck",
+    "test:core": "bun run --filter @c4a/core test"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "overrides": {
+    "onnxruntime-common": "1.24.3"
+  }
+}

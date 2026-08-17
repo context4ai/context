@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.verification-current
+kind: context-view
+mediaType: text/markdown
+description: Current verification, evidence, and deterministic close diagnostics.
+materializer: actions/materialize-context-view.yaml

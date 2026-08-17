@@ -1,0 +1,27 @@
+schema: agent-graph.test.v1
+name: authorized declared capture selects the next source
+graph: workspace
+entry: continue
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    close: { current: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, complete: false }
+expect:
+  statusCode: actionable
+  primaryNode: capture-next
+  primaryReasonCode: route.capture.pending-target
+  handler: context.capture.next
