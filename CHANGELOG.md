@@ -10,4 +10,5 @@ All notable changes to Context are documented here.
 - Added reproducible CI for Node.js 20 and 24 with the complete Context end-to-end gate.
 - Added release-driven, OIDC-based npm publishing for the five public Context packages.
 - Added deterministic release preparation and npm package auditing based on the existing dist packaging contract.
+- Removed an unused native Tree-sitter development dependency so clean Linux installs use the shipped WASM runtime on every supported Node.js version.
 - Added community contribution, support, security, issue, pull-request, dependency-update, and release-note configuration.

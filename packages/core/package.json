@@ -4,6 +4,9 @@
   "version": "0.6.3",
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/context4ai/context.git",
