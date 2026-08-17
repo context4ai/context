@@ -78,3 +78,11 @@ bun run verify
 ```bash
 ./start.sh link
 ```
+
+## 社区协作
+
+- [参与贡献](./CONTRIBUTING.md)
+- [获取支持](./SUPPORT.md)
+- [安全策略](./SECURITY.md)
+- [社区行为准则](./CODE_OF_CONDUCT.md)
+- [发布记录](./CHANGELOG.md)

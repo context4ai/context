@@ -1,0 +1,67 @@
+name: Bug report
+description: Report reproducible incorrect behavior in the CLI, SDK, extraction, workflow, or package output.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Remove source content, credentials, private paths, and review payloads before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Context version
+      placeholder: 0.6.3
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the operating system and Node.js and Bun versions.
+      placeholder: macOS 15, Node.js 22.19.0, Bun 1.3.9
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include the command and the smallest sanitized workspace or configuration that reproduces the problem.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Complete output
+      description: Paste the complete error or diagnostic output with private data removed.
+      render: text
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Is this a regression?
+      options:
+        - "Unknown"
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing Issues and Discussions.
+          required: true
+        - label: I removed source content, credentials, review payloads, and private paths.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true

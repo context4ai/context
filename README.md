@@ -110,3 +110,11 @@ Link the local CLI:
 ```bash
 ./start.sh link
 ```
+
+## Community
+
+- [Contributing](./CONTRIBUTING.md)
+- [Support](./SUPPORT.md)
+- [Security policy](./SECURITY.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Release history](./CHANGELOG.md)

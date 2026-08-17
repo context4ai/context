@@ -1,6 +1,6 @@
 {
   "name": "context",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "repository": {
     "type": "git",
     "url": "https://github.com/context4ai/context.git"
@@ -31,6 +31,7 @@
     "verify:fast": "bun run typecheck && bun run lint && bun run test",
     "verify": "bun run verify:fast",
     "verify:full": "bun run verify:fast && bun run test:e2e",
+    "release:prepare": "bun run scripts/prepare-release.ts",
     "typecheck:core": "bun run --filter @c4a/core typecheck",
     "test:core": "bun run --filter @c4a/core test"
   },

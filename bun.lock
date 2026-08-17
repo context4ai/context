@@ -17,7 +17,7 @@
     },
     "packages/context": {
       "name": "@c4a/context",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "dependencies": {
         "yaml": "^2.5.1",
         "zod": "^3.23.8",
@@ -25,12 +25,12 @@
     },
     "packages/context-cli": {
       "name": "@c4a/context-cli",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "bin": {
-        "context": "./dist/cli.js",
+        "context": "dist/cli.js",
       },
       "dependencies": {
-        "@c4a/agent-graph": "0.2.3",
+        "@c4a/agent-graph": "0.2.4",
         "@c4a/context": "workspace:*",
         "commander": "^11.0.0",
         "fast-xml-parser": "^5.10.1",
@@ -56,7 +56,7 @@
     },
     "packages/core": {
       "name": "@c4a/core",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "dependencies": {
         "picomatch": "^4.0.4",
         "yaml": "^2.4.5",
@@ -68,7 +68,7 @@
     },
     "packages/dev-cli": {
       "name": "@c4a/dev-cli",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/tui": "workspace:*",
@@ -79,7 +79,7 @@
     },
     "packages/extract": {
       "name": "@c4a/extract",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "bin": {
         "c4a-extract-code": "./dist/bin/c4a-extract-code.js",
       },
@@ -94,7 +94,7 @@
     },
     "packages/extract-ts": {
       "name": "@c4a/extract-ts",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "dependencies": {
         "@c4a/extract": "workspace:*",
         "web-tree-sitter": "^0.20.8",
@@ -102,7 +102,7 @@
     },
     "packages/tui": {
       "name": "@c4a/tui",
-      "version": "0.6.2",
+      "version": "0.6.3",
       "dependencies": {
         "ink": "^5.0.0",
         "react": "^18.3.1",
@@ -115,7 +115,7 @@
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.1.3", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^4.0.0" } }, "sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw=="],
 
-    "@c4a/agent-graph": ["@c4a/agent-graph@0.2.3", "", { "bin": { "agent-graph": "dist/agent-graph.mjs" } }, "sha512-5QWo2JpM85eAVIiG6I024ZseKx71vZMk0heb5hRN1aNho09Lqem5eCGAOLcBTMaNIZgE5CAImp5LfDljgTziSg=="],
+    "@c4a/agent-graph": ["@c4a/agent-graph@0.2.4", "", { "bin": { "agent-graph": "dist/agent-graph.mjs" } }, "sha512-oYnU378nCmuw0h3iLcJllDqXCh41h+XeKItc38hFxfS3szuogw+pXX7jhDJlRMtUqELZdBLhXkPp/L5a0g7YJg=="],
 
     "@c4a/context": ["@c4a/context@workspace:packages/context"],
 
