@@ -206,12 +206,19 @@ the exact registry artifacts locally with:
 ```bash
 bun run build
 bun run release:prepare
+bun run release:notes
 ```
 
 `release:prepare` reuses the same metadata and runtime-resource rules as the
 interactive developer publisher. It rejects version drift or missing build
-outputs. Audit the prepared directories rather than the source package
-directories:
+outputs.
+
+`release:notes` renders the `Published packages` section from the same package
+manifest. After a successful OIDC publication, the GitHub workflow also
+updates that section on the Release page so its package list cannot silently
+drift from the artifacts it published.
+
+Audit the prepared directories rather than the source package directories:
 
 ```bash
 npm pack packages/core/dist --dry-run

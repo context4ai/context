@@ -6,7 +6,7 @@ on:
       - published
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -51,30 +51,22 @@ jobs:
       - name: Prepare publish artifacts
         run: bun run release:prepare
 
+      - name: Prepare release metadata
+        run: |
+          mkdir -p .tmp
+          bun run scripts/release-metadata.ts --format directories > .tmp/release-package-dirs.txt
+          test -s .tmp/release-package-dirs.txt
+
       - name: Audit npm packages
         run: |
-          for package_dir in \
-            packages/core/dist \
-            packages/context/dist \
-            packages/extract/dist \
-            packages/extract-ts/dist \
-            packages/extract-go/dist \
-            packages/extract-rush/dist \
-            packages/context-cli/dist
+          while IFS= read -r package_dir
           do
             npm pack "${package_dir}" --dry-run --json >/dev/null
-          done
+          done < .tmp/release-package-dirs.txt
 
       - name: Publish packages
         run: |
-          for package_dir in \
-            packages/core/dist \
-            packages/context/dist \
-            packages/extract/dist \
-            packages/extract-ts/dist \
-            packages/extract-go/dist \
-            packages/extract-rush/dist \
-            packages/context-cli/dist
+          while IFS= read -r package_dir
           do
             package_name="$(node --input-type=module -e "import pkg from './${package_dir}/package.json' with { type: 'json' }; process.stdout.write(pkg.name)")"
             package_version="$(node --input-type=module -e "import pkg from './${package_dir}/package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
@@ -83,4 +75,20 @@ jobs:
             else
               npm publish "${package_dir}" --access public --provenance
             fi
-          done
+          done < .tmp/release-package-dirs.txt
+
+      - name: Update release package list
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq .body > .tmp/release-body.md
+          bun run scripts/release-metadata.ts \
+            --format markdown \
+            --body .tmp/release-body.md \
+            > .tmp/release-body-updated.md
+          gh api \
+            --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F body=@.tmp/release-body-updated.md \
+            >/dev/null

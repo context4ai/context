@@ -5,6 +5,9 @@ import { useState } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import { readRootVersion, cmdBumpVersion } from "./bumpVersion.js";
 import { runWithStatus } from "./cliUtils.js";
+import { PUBLISH_PACKAGES, type PackageEntry } from "./releasePackages.js";
+
+export { PUBLISH_PACKAGES } from "./releasePackages.js";
 
 export type PublishContext = {
   projectRoot: string;
@@ -15,8 +18,6 @@ export type PublishContext = {
   waitForInput: (prompt: string, defaultValue?: string) => Promise<string>;
 };
 
-type PackageEntry = { name: string; dir: string };
-
 // Workspace packages whose runtime files must remain independently installed.
 // Most workspace dependencies are bundled into their consumer's JavaScript and
 // can be omitted from published metadata. context-cli is different: it loads
@@ -25,16 +26,6 @@ type PackageEntry = { name: string; dir: string };
 const PUBLISHED_WORKSPACE_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
   "context-cli": new Set(["@c4a/context"]),
 };
-
-export const PUBLISH_PACKAGES: PackageEntry[] = [
-  { name: "@c4a/core", dir: "core" },
-  { name: "@c4a/context", dir: "context" },
-  { name: "@c4a/extract", dir: "extract" },
-  { name: "@c4a/extract-ts", dir: "extract-ts" },
-  { name: "@c4a/extract-go", dir: "extract-go" },
-  { name: "@c4a/extract-rush", dir: "extract-rush" },
-  { name: "@c4a/context-cli", dir: "context-cli" },
-];
 
 export async function cmdPublish(args: string[], ctx: PublishContext): Promise<void> {
   console.log("\n" + "=".repeat(50));

@@ -34,6 +34,7 @@
     "verify:full": "bun run verify:fast && bun run test:e2e && bun run test:dist",
     "test:dist": "node packages/extract-go/scripts/smokeDist.mjs",
     "release:prepare": "bun run scripts/prepare-release.ts",
+    "release:notes": "bun run scripts/release-metadata.ts --format markdown",
     "typecheck:core": "bun run --filter @c4a/core typecheck",
     "test:core": "bun run --filter @c4a/core test"
   },

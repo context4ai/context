@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cmdBumpVersion } from "../commands/bumpVersion.js";
 import { prepareDistPackageJson, PUBLISH_PACKAGES, type PublishContext } from "../commands/publish.js";
+import {
+  releasePackageDirectories,
+  renderPublishedPackages,
+  upsertPublishedPackages,
+} from "../commands/releasePackages.js";
 
 async function mkTmp(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), `c4a-dev-cli-${prefix}-`));
@@ -109,6 +114,27 @@ describe("publish package list", () => {
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-go", dir: "extract-go" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-rush", dir: "extract-rush" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context-cli", dir: "context-cli" });
+  });
+
+  test("renders package directories and release notes from the same manifest", () => {
+    expect(releasePackageDirectories()).toEqual(
+      PUBLISH_PACKAGES.map((pkg) => `packages/${pkg.dir}/dist`),
+    );
+    expect(renderPublishedPackages("1.2.3")).toContain("`@c4a/context-cli@1.2.3`");
+    expect(renderPublishedPackages("1.2.3").match(/^- `/gm)).toHaveLength(
+      PUBLISH_PACKAGES.length,
+    );
+  });
+
+  test("appends or replaces the published package section idempotently", () => {
+    const initial = "## Highlights\n\n- Stable release.\n\n## Verification\n\n- Passed.\n";
+    const appended = upsertPublishedPackages(initial, "1.2.3");
+    const replaced = upsertPublishedPackages(appended, "1.2.4");
+
+    expect(appended).toContain("## Published packages\n\n- `@c4a/core@1.2.3`");
+    expect(replaced).not.toContain("@1.2.3");
+    expect(replaced.match(/^## Published packages$/gm)).toHaveLength(1);
+    expect(replaced).toContain("`@c4a/context-cli@1.2.4`");
   });
 });
 
