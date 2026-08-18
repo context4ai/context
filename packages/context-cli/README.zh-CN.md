@@ -81,7 +81,11 @@ node_modules/@c4a/context/docs/reference/package-templates.md
 `wikis/`、`guides/`、`rules/` 和 `feats/` 作为包内 OKF 根目录，不再在这些目录下重复包名。
 旧工作区即使仍声明 `distribution.knowledgeNamespace` 也可以继续加载，但该兼容字段不再改变
 知识包输出路径。
-选中页面引用的资源会复制到包内 `others/assets/`，相对链接由构建器自动改写。
+新建 KB 时优先选择 Git raw 资源分发：构建器将链接改写到仓库 raw 地址；资源的
+提交和发布由知识包作者负责。非 Git 工作区可以配置另一个资源仓库的显式 Raw
+前缀；没有可用 Git 或显式前缀时，可以选择随包复制到 `others/assets/`，或显式
+不输出资源并保留失效引用。随包模式可以安装 `sharp` 并通过
+`kbPackage().assets.optimize` 仅优化生成文件；Context 本身不依赖图片处理器。
 
 完整配置和模板约定参见 SDK 手册：
 
@@ -104,6 +108,16 @@ node_modules/@c4a/context/docs/reference/package-templates.md
 | 知识包输出 | `context build` |
 
 一次构建只完成当前已经确认的知识状态，并不会冻结工作区。后续还可以继续添加和处理新的来源。
+
+当前对话明确授予全托管权限后，
+`context run --managed --until blocked-or-complete` 会在同一个工作区运行时中连续执行
+确定性动作。每个动作仍绑定到选择它的 Route revision；动作完成后，Context 会重新从磁盘
+加载项目并再次求值工作图。已知的本地动作在同一进程中执行，来源工具和其他外部副作用仍
+隔离在子进程中。
+
+执行作用域只管理输出捕获、定时器、子进程和写锁等短生命周期资源，并按注册顺序的逆序释放。
+知识、快照、审核决定和知识包产物属于持久状态，继续使用原有的 revision 校验、项目写锁、
+原子写入、close 和 verify 契约。执行作用域不会回滚或替代这些契约，工作区文件协议也不改变。
 
 ## 命令分组
 

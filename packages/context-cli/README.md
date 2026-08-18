@@ -112,8 +112,14 @@ KB packages use flat, package-relative OKF roots: `wikis/`, `guides/`,
 `dist/<package-name>/` directory and is not repeated inside those roots. Older
 workspaces that still declare `distribution.knowledgeNamespace` remain
 loadable, but the legacy value no longer changes package paths.
-Resources referenced by selected pages are copied to `others/assets/` inside
-the package, with links rewritten by the builder.
+New KB setup should offer Git raw resource delivery first. Build rewrites links
+to repository raw URLs; committing and publishing the resources remains the
+package author's responsibility. An explicit `urlPrefix` also works when the
+Context workspace itself is outside Git. Without Git or an explicit prefix,
+authors can bundle resources under `others/assets/` or explicitly omit them and
+retain unresolved references.
+Bundled delivery may configure `kbPackage().assets.optimize`; Context itself
+does not depend on an image processor.
 
 See the SDK manuals for the complete configuration and template contract:
 
@@ -140,6 +146,21 @@ implementation detail; Context users and plugins consume only
 
 Building a package completes the currently active approved state; it does not
 freeze the workspace. New sources can be added and processed later.
+
+With explicit current-conversation managed authority,
+`context run --managed --until blocked-or-complete` keeps one workspace-bound
+runtime for consecutive deterministic actions. Each action remains bound to
+the Route revision that selected it; after the action, Context reloads the
+project from disk and evaluates the graph again. Known local actions run in the
+same process, while source tools and other external effects remain isolated in
+child processes.
+
+The runtime scope owns only short-lived resources such as output capture,
+timers, child processes, and write locks, and releases them in reverse order.
+Knowledge, snapshots, decisions, and package output are durable state: they
+retain their existing revision checks, project write lock, atomic write, close,
+and verify contracts. No execution scope rolls back or substitutes those
+contracts, and the workspace file protocol is unchanged.
 
 ## Command Groups
 

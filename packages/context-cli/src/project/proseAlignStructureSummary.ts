@@ -94,10 +94,13 @@ export interface StructureViewSplitRequirement {
   };
   parent_index_view_ref?: string;
   suggested_child_views: Array<{
-    section_id: string;
+    group_id: string;
+    section_ids: string[];
+    section_count: number;
     node_ref: string;
     view_ref: string;
     title: string;
+    source_ref_count: number;
     source_refs: string[];
   }>;
   suggested_child_view_refs: string[];
@@ -232,14 +235,21 @@ export function splitRequirementForView(view: StructureViewPlan): StructureViewS
       contains_edge_drafts: [],
     };
   }
-  const suggestedChildViews = view.sections.map((section) => {
-    const childNodeRef = `${view.node_ref}/${section.id}`;
+  const suggestedGroups = boundedChildViewGroups(view.sections);
+  const groupNumberWidth = Math.max(2, String(suggestedGroups.length).length);
+  const suggestedChildViews = suggestedGroups.map((sections, index) => {
+    const groupId = `part-${String(index + 1).padStart(groupNumberWidth, "0")}`;
+    const childNodeRef = `${view.node_ref}/${groupId}`;
+    const sourceRefs = uniqueRefs(sections.flatMap((section) => section.source_refs));
     return {
-      section_id: section.id,
+      group_id: groupId,
+      section_ids: sections.map((section) => section.id),
+      section_count: sections.length,
       node_ref: childNodeRef,
       view_ref: `${view.collection}:${childNodeRef}`,
-      title: section.summary ?? section.id,
-      source_refs: uniqueRefs(section.source_refs),
+      title: `Part ${index + 1}`,
+      source_ref_count: sourceRefs.length,
+      source_refs: sourceRefs,
     };
   });
   return {
@@ -263,6 +273,45 @@ export function splitRequirementForView(view: StructureViewPlan): StructureViewS
       source_refs: child.source_refs,
     })),
   };
+}
+
+function boundedChildViewGroups(sections: readonly StructureSectionPlan[]): StructureSectionPlan[][] {
+  const sourceRefCount = uniqueRefs(sections.flatMap((section) => section.source_refs)).length;
+  const minimumGroupCount = Math.max(
+    2,
+    Math.ceil(sections.length / LARGE_VIEW_SECTION_THRESHOLD),
+    Math.ceil(sourceRefCount / LARGE_VIEW_SOURCE_REF_THRESHOLD),
+  );
+  const groups: StructureSectionPlan[][] = [];
+  let cursor = 0;
+  while (cursor < sections.length) {
+    const groupsStillRequired = Math.max(1, minimumGroupCount - groups.length);
+    const remainingSections = sections.length - cursor;
+    const targetSectionCount = Math.min(
+      LARGE_VIEW_SECTION_THRESHOLD,
+      Math.ceil(remainingSections / groupsStillRequired),
+    );
+    const group: StructureSectionPlan[] = [];
+    while (cursor < sections.length && group.length < targetSectionCount) {
+      const nextSection = sections[cursor];
+      if (nextSection === undefined) break;
+      const nextSourceRefCount = uniqueRefs([
+        ...group.flatMap((section) => section.source_refs),
+        ...nextSection.source_refs,
+      ]).length;
+      if (group.length > 0 && nextSourceRefCount > LARGE_VIEW_SOURCE_REF_THRESHOLD) break;
+      group.push(nextSection);
+      cursor += 1;
+    }
+    if (group.length === 0) {
+      const nextSection = sections[cursor];
+      if (nextSection === undefined) break;
+      group.push(nextSection);
+      cursor += 1;
+    }
+    groups.push(group);
+  }
+  return groups;
 }
 
 export function largeNarrativeSplitDiagnostics(payload: AlignPayload | undefined): AlignDiagnostic[] {

@@ -62,6 +62,14 @@ The Provider is considered valid only when all of the following are true:
     executes the matching command; direct-resource acknowledgement returns the
     re-evaluated Route in the same response, and unchanged content remains
     current across unrelated workflow revisions.
+14. The managed host runtime may reuse one process only for commands whose
+    exact argument shape is recognized and whose effect is not external.
+    Unknown shapes and external effects execute in a child process. Both paths
+    return the same receipt contract and re-enter graph evaluation afterward.
+15. An execution scope owns runtime resources, never durable workspace state.
+    Output interception, child processes, timers, and write locks are released
+    deterministically; knowledge mutations remain revision-checked,
+    write-locked, and atomically committed by their existing command handlers.
 
 ## Managed host-loop receipts
 

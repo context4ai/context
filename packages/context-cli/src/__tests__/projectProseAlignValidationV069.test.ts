@@ -157,14 +157,14 @@ describe("0.6.9 prose align validation", () => {
     }));
   });
 
-  test("blocks single-section actions until record identity evidence is explicit", () => {
+  test("warns for single-section actions without forcing semantic kind diversity", () => {
     const scenarioDiagnostics: AlignDiagnostic[] = [];
     addStructureQualityDiagnostics(basePayload(), scenarioDiagnostics);
     expect(scenarioDiagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+      severity: "warning",
       code: "node.action_too_thin",
       repair: expect.objectContaining({
-        options: ["move_to_owning_view_section", "add_distinct_section_kind", "add_child_action"],
+        options: ["keep_with_reviewed_rationale", "move_to_owning_view_section", "add_source_backed_section", "add_child_action"],
       }),
     }));
 
@@ -194,12 +194,12 @@ describe("0.6.9 prose align validation", () => {
       }],
     }), runbookDiagnostics);
     expect(runbookDiagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+      severity: "warning",
       code: "node.action_too_thin",
     }));
   });
 
-  test("keeps single-section record action exceptions closed without source evidence", () => {
+  test("keeps single-section record actions visible as quality warnings", () => {
     const userStoryDiagnostics: AlignDiagnostic[] = [];
     addStructureQualityDiagnostics(basePayload({
       nodes: [{
@@ -226,7 +226,7 @@ describe("0.6.9 prose align validation", () => {
       }],
     }), userStoryDiagnostics);
     expect(userStoryDiagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+      severity: "warning",
       code: "node.action_too_thin",
       candidate_id: "action/login-story",
     }));
@@ -257,7 +257,7 @@ describe("0.6.9 prose align validation", () => {
       }],
     }), weakScenarioDiagnostics);
     expect(weakScenarioDiagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+      severity: "warning",
       code: "node.action_too_thin",
       candidate_id: "action/login-scenario",
     }));
@@ -319,6 +319,67 @@ describe("0.6.9 prose align validation", () => {
     expect(diagnostics.map((item) => item.code)).not.toContain("node.domain_without_children");
   });
 
+  test("does not flag a generated action parent index with source-backed child pages as thin", () => {
+    const diagnostics: AlignDiagnostic[] = [];
+    addStructureQualityDiagnostics(basePayload({
+      nodes: [
+        {
+          node_ref: "action/upgrade",
+          title: "Upgrade",
+          node_type: "action",
+          tags: ["howto"],
+        },
+        {
+          node_ref: "entity/runtime",
+          title: "Runtime",
+          node_type: "entity",
+          tags: ["module"],
+        },
+      ],
+      views: [
+        {
+          view_ref: "product:action/upgrade",
+          node_ref: "action/upgrade",
+          collection: "product",
+          title: "Upgrade",
+          node_type: "action",
+          containment: "root",
+          slug: "upgrade",
+          path: "product/upgrade.md",
+          sections: [],
+          generated: "parent_index",
+        },
+        {
+          view_ref: "product:entity/runtime",
+          node_ref: "entity/runtime",
+          collection: "product",
+          title: "Runtime",
+          node_type: "entity",
+          containment: "upgrade",
+          slug: "runtime",
+          path: "product/upgrade/runtime.md",
+          sections: [{
+            id: "requirements",
+            section_ref: "product:entity/runtime#requirements",
+            kind: "spec",
+            source_refs: ["file:docs/upgrade.md#span:runtime L1-3@111111111111"],
+          }],
+        },
+      ],
+      edges: [{
+        type: "contains",
+        from: "product:action/upgrade",
+        to: "product:entity/runtime",
+        source_refs: ["file:docs/upgrade.md#span:runtime L1-3@111111111111"],
+      }],
+    }), diagnostics);
+
+    expect(diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "node.action_too_thin",
+      candidate_id: "action/upgrade",
+    }));
+  });
+
   test("action and domain gates count only the intended child node types", () => {
     const actionToEntityDiagnostics: AlignDiagnostic[] = [];
     addStructureQualityDiagnostics(basePayload({
@@ -378,7 +439,7 @@ describe("0.6.9 prose align validation", () => {
       }],
     }), actionToEntityDiagnostics);
     expect(actionToEntityDiagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+      severity: "warning",
       code: "node.action_too_thin",
     }));
 
@@ -480,7 +541,7 @@ describe("0.6.9 prose align validation", () => {
     }));
   });
 
-  test("action scale requires distinct section kinds", () => {
+  test("accepts multiple source-backed action sections with the same kind", () => {
     const diagnostics: AlignDiagnostic[] = [];
     addStructureQualityDiagnostics(basePayload({
       nodes: [{
@@ -506,8 +567,7 @@ describe("0.6.9 prose align validation", () => {
         })),
       }],
     }), diagnostics);
-    expect(diagnostics).toContainEqual(expect.objectContaining({
-      severity: "error",
+    expect(diagnostics).not.toContainEqual(expect.objectContaining({
       code: "node.action_too_thin",
       candidate_id: "action/two-notes",
     }));

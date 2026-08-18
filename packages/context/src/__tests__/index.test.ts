@@ -416,6 +416,55 @@ describe("@c4a/context SDK bootstrap", () => {
       template: "src/package-templates/kb",
     }).distribution).toBeUndefined();
     expect(kbPackage({
+      name: "optimized-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "bundle", optimize: { processor: "sharp" } },
+    }).assets).toEqual({
+      delivery: "bundle",
+      optimize: { processor: "sharp", mode: "lossless-webp" },
+    });
+    expect(kbPackage({
+      name: "lossy-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "bundle", optimize: { processor: "sharp", mode: "webp", quality: 88, maxDimension: 2400 } },
+    }).assets).toEqual({
+      delivery: "bundle",
+      optimize: { processor: "sharp", mode: "webp", quality: 88, maxDimension: 2400 },
+    });
+    expect(() => kbPackage({
+      name: "invalid-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "bundle", optimize: { processor: "sharp", mode: "webp", quality: 0 } },
+    })).toThrow(/assets\.optimize\.quality/);
+    expect(() => kbPackage({
+      name: "invalid-lossless-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "bundle", optimize: { processor: "sharp", mode: "lossless-webp", quality: 80 } },
+    })).toThrow(/only valid/);
+    expect(() => kbPackage({
+      name: "invalid-assets-size-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "bundle", optimize: { processor: "sharp", maxDimension: 0 } },
+    })).toThrow(/assets\.optimize\.maxDimension/);
+    expect(kbPackage({
+      name: "git-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "git-raw", urlPrefix: "https://example.test/org/repo/raw/{commit}/" },
+    }).assets).toEqual({
+      delivery: "git-raw",
+      urlPrefix: "https://example.test/org/repo/raw/{commit}",
+    });
+    expect(kbPackage({
+      name: "omitted-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "omit" },
+    }).assets).toEqual({ delivery: "omit" });
+    expect(() => kbPackage({
+      name: "invalid-git-assets-kb",
+      template: "src/package-templates/kb",
+      assets: { delivery: "git-raw", urlPrefix: "http://example.test/raw/main" },
+    })).toThrow(/assets\.urlPrefix/);
+    expect(kbPackage({
       name: "namespaced-kb",
       template: "src/package-templates/kb",
       distribution: { knowledgeNamespace: "personal-user.123/reference" },

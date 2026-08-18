@@ -458,7 +458,10 @@ export async function collectProjectStatusSnapshot(
     requestedCollections: [...new Set(alignTargets.map((target) => target.collection))],
     requestedGroups: alignGroups,
   });
-  const approvedPages = await countFiles(join(projectRoot, "knowledge"), (rel) => rel.endsWith(".md"));
+  const approvedPages = await countFiles(
+    join(projectRoot, "knowledge"),
+    (rel) => rel.endsWith(".md") && !rel.startsWith("assets/"),
+  );
   const approvedCollections = (await Promise.all(
     KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
       collection,

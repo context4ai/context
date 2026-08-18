@@ -67,6 +67,21 @@ code extractor. Use `customPhase()` only for orchestration that does not publish
 knowledge candidates; it is not a replacement for source, extraction, Review,
 and package lifecycle rules.
 
+Context CLI intentionally does not bundle every language or repository parser.
+Optional structural libraries can be installed by the knowledge project and
+used inside `extractCustom()`:
+
+| Package | Structural facts |
+|---|---|
+| `@c4a/extract-go` | Go declarations, imports, calls, and common HTTP route registrations |
+| `@c4a/extract-rush` | Rush projects, tags, entry signals, workspace dependencies, and owner boundaries |
+| `@c4a/extract-ts` | TypeScript extraction plus reusable React Router route facts |
+
+These libraries do not create Context phases or candidates by themselves. The
+project maps their deterministic facts to its own candidate identities and
+review summaries; Context continues to own evidence validation, freshness,
+Review, close, and package output.
+
 ## Knowledge Collections
 
 Approved Markdown is organized under `knowledge/<collection>/`:
@@ -125,6 +140,15 @@ it is not repeated inside knowledge paths. Context still accepts
 `distribution.knowledgeNamespace` from older workspaces, but the legacy value
 no longer changes build output and new declarations do not need it. Skill names
 remain author-maintained and independent.
+
+New KB setup should offer `assets: { delivery: "git-raw" }` first. Build
+rewrites resource links to Git raw URLs; committing and publishing the resource
+files remains the package author's responsibility. Non-Git workspaces may use
+an explicit `urlPrefix`; without one they can bundle resources or explicitly
+omit them and retain unresolved references. Bundled delivery may
+install `sharp` in the workspace and configure `assets.optimize`; Context
+itself has no image dependency and never changes source snapshots or approved
+resources.
 
 For advanced routing and retrieval, a template may carry a local script such as
 `query.ts`, with a Skill describing when and how an Agent should call it. The

@@ -289,6 +289,7 @@ nodes:
   - id: choose-extraction-scope
     kind: gate
     reasonCode: route.extract.scope-required
+    inspectionAction: actions/inspect-code-extraction.yaml
     gate:
       id: extraction-scope
       prompt: Confirm which registered code modules and symbol boundaries should enter code knowledge.
@@ -318,7 +319,7 @@ nodes:
         - resources/procedures/project-configuration.md
         - resources/procedures/code-extraction.md
         - resources/views/source-current.yaml
-        - resources/manuals/reference/project-api.md
+        - resources/manuals/reference/code-extractors.md
 
   - id: extract-next
     kind: action

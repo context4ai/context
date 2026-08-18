@@ -52,6 +52,7 @@ context/
 
 - [`packages/context`](./packages/context/README.zh-CN.md) 是 `src/index.ts` 使用的声明式 SDK，主要介绍来源、阶段、知识分类、知识包声明、模板和自定义处理。
 - [`packages/context-cli`](./packages/context-cli/README.zh-CN.md) 提供 `context` 命令和 Agent 插件安装能力，主要介绍安装、工作区操作、命令分组和流程规则。
+- [`packages/extract-ts`](./packages/extract-ts/README.zh-CN.md)、[`packages/extract-go`](./packages/extract-go/README.zh-CN.md) 和 [`packages/extract-rush`](./packages/extract-rush/README.zh-CN.md) 提供可复用的结构事实。只有 TypeScript 接入 CLI 内置生命周期；Go 和 Rush 由项目在 `extractCustom()` 中按需使用。
 
 更完整的 SDK 手册位于 [`packages/context/docs`](./packages/context/docs/README.md)，CLI 还提供一份简明的[快速开始](./packages/context-cli/docs/quickstart.md)。
 

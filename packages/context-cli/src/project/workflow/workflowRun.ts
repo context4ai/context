@@ -63,6 +63,7 @@ export interface WorkflowRunExecutor {
   (input: {
     cwd: string;
     command: string;
+    effect: ContextWorkflowCommand["effect"];
   }): Promise<WorkflowCommandReceipt>;
 }
 
@@ -333,6 +334,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
       receipt = await input.execute({
         cwd: status.projectRoot,
         command: selected.command.command,
+        effect: selected.command.effect,
       });
     } catch (error) {
       steps.push(step);

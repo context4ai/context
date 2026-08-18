@@ -78,6 +78,12 @@ describe("multi-source prose review", () => {
     const root = makeTmp();
     try {
       const projectRoot = await createProject(root);
+      const packagePath = join(projectRoot, "package.json");
+      const projectPackage = JSON.parse(readFileSync(packagePath, "utf8")) as {
+        context: Record<string, unknown>;
+      };
+      projectPackage.context.debug = true;
+      writeFileSync(packagePath, `${JSON.stringify(projectPackage, null, 2)}\n`, "utf8");
       stageStructure(projectRoot, SOURCE_NAMES[0]);
       const firstStructure = YAML.parse(readFileSync(
         join(projectRoot, ".tmp", "context-runtime", "lifecycle", "structure.yaml"),
@@ -144,6 +150,15 @@ describe("multi-source prose review", () => {
       ])) as { draftCandidates: number; compileBatch: { remainingViewRefs: string[] } };
       expect(after.draftCandidates).toBe(2);
       expect(after.compileBatch.remainingViewRefs).toEqual([]);
+      const scopeEvents = readFileSync(
+        join(projectRoot, ".tmp", "context-runtime", "debug", "events.jsonl"),
+        "utf8",
+      ).trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
+        kind: string;
+        data: { executor?: string };
+      }).filter((event) => event.kind === "workflow.scope-opened");
+      expect(scopeEvents.filter((event) => event.data.executor === "in-process")).toHaveLength(2);
+      expect(scopeEvents.some((event) => event.data.executor === "subprocess")).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

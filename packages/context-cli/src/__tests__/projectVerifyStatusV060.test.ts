@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   appendDraftCandidate,
@@ -11,6 +11,23 @@ import {
 } from "./projectBuildVerifyV060Helpers.js";
 
 describe("0.6.0 project verify and status", () => {
+  test("status excludes Markdown source assets from approved page counts", async () => {
+    const fixture = await createApprovedProject();
+    try {
+      const assetDir = join(fixture.project, "knowledge", "assets", "synced-reference");
+      mkdirSync(assetDir, { recursive: true });
+      writeFileSync(join(assetDir, "reference.md"), "# Captured reference\n", "utf8");
+
+      const status = JSON.parse(
+        await runCliInDir(fixture.project, ["status", "--format", "json"]),
+      ) as { counts: { approvedPages: number } };
+
+      expect(status.counts.approvedPages).toBe(1);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   test("verify reports source-ref problems and status tracks package freshness", async () => {
     const fixture = await createApprovedProject();
     try {

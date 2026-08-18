@@ -57,6 +57,18 @@ export default defineProject({
 非 TypeScript 或需要聚合代码事实时使用 `extractCustom()`。`customPhase()`
 只用于不发布知识候选的项目专用编排，不能绕开来源、提取、审核和打包生命周期。
 
+Context CLI 不会把所有语言和仓库解析器都打入自身。知识项目可以按需安装结构
+提取库，并在 `extractCustom()` 中使用：
+
+| 包 | 提供的结构事实 |
+|---|---|
+| `@c4a/extract-go` | Go 声明、导入、调用和常见 HTTP 路由注册 |
+| `@c4a/extract-rush` | Rush 项目、标签、入口信号、工作区依赖和所有者边界 |
+| `@c4a/extract-ts` | TypeScript 提取，以及可复用的 React Router 路由事实 |
+
+这些库本身不会创建 Context 阶段或候选。项目负责把确定性事实映射为自己的候选
+身份和审核摘要；证据校验、新鲜度、审核、close 和打包仍由 Context 管理。
+
 ## 知识分类
 
 审核通过的 Markdown 会存放在 `knowledge/<collection>/`：
@@ -103,6 +115,13 @@ kb/
 只用于确定 `dist/<package-name>/` 边界，不会再次写入知识路径。旧工作区中的
 `distribution.knowledgeNamespace` 仍可被读取，但不再改变构建结果；新声明无需配置它。
 Skill 名称继续由作者独立维护。
+
+新建 KB 时优先选择 `assets: { delivery: "git-raw" }`：构建器把资源链接改写到
+Git raw 地址；资源的提交和发布由知识包作者负责，Context 不做远端探测。
+非 Git 工作区也可以配置显式 `urlPrefix`，引用另一个仓库已经发布的资源；没有
+可用 Git 或显式前缀时，可选择 `delivery: "bundle"` 随包分发，或显式选择
+`delivery: "omit"` 不输出资源并保留失效引用。随包分发还可以在工作区安装 `sharp` 并通过
+`assets.optimize` 仅优化生成的知识包；Context 本身不依赖图片处理库。
 
 如果需要更强的路由和检索能力，模板可以携带 `query.ts` 一类本地脚本，再由 Skill 约定 Agent 何时、如何调用。Skill 也可以把 Agent 路由到 MCP、CLI 或其他工具，组成适合当前知识包的 Agentic Search 流程。
 

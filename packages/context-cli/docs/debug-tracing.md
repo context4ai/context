@@ -55,6 +55,9 @@ The event stream records:
 - Agent Graph evaluation revision, status, selected route, alternatives, and
   whether the observable graph position changed;
 - managed workflow action start and completion with deterministic receipts;
+- execution-scope open and close events, including whether a deterministic
+  action ran in-process or in a child process and whether every short-lived
+  resource was released;
 - the reason and graph position at which a managed loop stopped.
 
 `trace_id` groups the workspace-local debug history, `sequence` defines replay order,
@@ -63,6 +66,11 @@ The event stream records:
 can animate `agent-graph.evaluated` events whose `data.transition.changed` is
 true, then associate intervening command and action events by sequence and
 invocation identity.
+
+Execution-scope events are runtime evidence, not workflow facts. They make
+resource ownership and cleanup observable without changing a Route or adding
+workspace state. Durable knowledge mutations are still audited through the
+normal action receipt, revision, close, and verify results.
 
 ## Inspect and export
 

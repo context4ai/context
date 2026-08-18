@@ -11,6 +11,34 @@ packages.
 
 **Depends on:** `@c4a/extract`, `web-tree-sitter`
 
+## React Router structural facts
+
+Projects that use `extractCustom()` can reuse `extractReactRouterRoutes()` to
+index JSX `<Route>` declarations and route-object arrays. It reports paths,
+components, redirects, conditions, import sources, notes, and source locations
+without classifying product meaning:
+
+```ts
+import { extractReactRouterRoutes } from "@c4a/extract-ts";
+
+const routes = extractReactRouterRoutes(source, "src/router.tsx", {
+  routeIdPrefix: "web",
+  mountPath: "/web",
+});
+```
+
+## TypeScript module export facts
+
+`extractTypeScriptModuleExports()` reads one TypeScript or TSX module and
+returns deterministic named exports, wildcard export targets, and all
+re-export targets. It does not resolve files or infer product meaning:
+
+```ts
+import { extractTypeScriptModuleExports } from "@c4a/extract-ts";
+
+const exports = extractTypeScriptModuleExports(source, "src/index.ts");
+```
+
 ## Current Extraction Coverage
 
 ### Entry Detection

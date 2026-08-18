@@ -172,7 +172,7 @@ describe("0.6.0 repository source behavior", () => {
       ])) as Array<{
         source: { name: string };
         moduleCount: number;
-        modules: Array<{ name: string; path: string; version?: string }>;
+        modules: Array<{ name: string; path: string; manifests: string[]; version?: string }>;
         recommended_sources: Array<{ module: string; local: string; command: string }>;
         agent_hints: string[];
       }>;
@@ -180,8 +180,18 @@ describe("0.6.0 repository source behavior", () => {
       expect(inspect[0]?.source.name).toBe("20260712/product");
       expect(inspect[0]?.moduleCount).toBe(2);
       expect(inspect[0]?.modules).toEqual([
-        expect.objectContaining({ name: "@demo/button", path: "packages/button", version: "1.0.0" }),
-        expect.objectContaining({ name: "@demo/link", path: "packages/link", version: "1.0.0" }),
+        expect.objectContaining({
+          name: "@demo/button",
+          path: "packages/button",
+          manifests: ["package.json"],
+          version: "1.0.0",
+        }),
+        expect.objectContaining({
+          name: "@demo/link",
+          path: "packages/link",
+          manifests: ["package.json"],
+          version: "1.0.0",
+        }),
       ]);
       expect(inspect[0]?.recommended_sources).toContainEqual(expect.objectContaining({
         module: "@demo/button",

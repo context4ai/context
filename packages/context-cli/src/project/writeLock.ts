@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
+import { ExecutionScope } from "./workflow/executionScope.js";
+import { recordWorkflowExecutionScope } from "./debugTrace.js";
 
 const LOCK_ROOT = join(".tmp", "context-runtime", "locks");
 const PROJECT_WRITE_LOCK = "project-write.lock";
@@ -29,10 +31,41 @@ export async function withProjectWriteLock<T>(
     }
     throw error;
   }
-
+  const scope = new ExecutionScope(`project-write:${name}`);
+  scope.defer("project-write-lock", () => rm(lockPath, { recursive: true, force: true }));
+  await recordWorkflowExecutionScope({
+    projectRoot,
+    phase: "opened",
+    data: { executor: "project-write", operation: name },
+  });
+  let result: T | undefined;
+  let actionError: unknown;
   try {
-    return await action();
-  } finally {
-    await rm(lockPath, { recursive: true, force: true });
+    // The scope owns only the lock. Durable mutations inside the action retain
+    // their existing revision checks and atomic commit semantics.
+    result = await action();
+  } catch (error) {
+    actionError = error;
   }
+  const receipt = await scope.close();
+  await recordWorkflowExecutionScope({
+    projectRoot,
+    phase: "closed",
+    data: {
+      executor: "project-write",
+      operation: name,
+      resources: receipt.resources,
+      release_errors: receipt.releaseErrors,
+    },
+  });
+  if (actionError !== undefined) throw actionError;
+  if (receipt.releaseErrors > 0) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "context project write lock could not be released", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      lock: relPath,
+      operation: name,
+      next: "Inspect the workspace runtime lock and retry after it is released.",
+    });
+  }
+  return result as T;
 }

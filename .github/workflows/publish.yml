@@ -56,6 +56,8 @@ jobs:
             packages/context/dist \
             packages/extract/dist \
             packages/extract-ts/dist \
+            packages/extract-go/dist \
+            packages/extract-rush/dist \
             packages/context-cli/dist
           do
             npm pack "${package_dir}" --dry-run --json >/dev/null
@@ -68,6 +70,8 @@ jobs:
             packages/context/dist \
             packages/extract/dist \
             packages/extract-ts/dist \
+            packages/extract-go/dist \
+            packages/extract-rush/dist \
             packages/context-cli/dist
           do
             package_name="$(node --input-type=module -e "import pkg from './${package_dir}/package.json' with { type: 'json' }; process.stdout.write(pkg.name)")"

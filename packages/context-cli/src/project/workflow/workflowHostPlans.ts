@@ -130,6 +130,14 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         : [command(withJsonFormat(next), "external", "automatic")],
     };
   },
+  "context.extract.inspect-capabilities": (observation) => ({
+    commands: observation.repoSources.map((source) =>
+      command(
+        `context source inspect ${JSON.stringify(source.name)} --format json`,
+        "read",
+      )
+    ),
+  }),
   "context.project.configure-extraction": () => ({
     commands: [],
     configuration: {
@@ -237,6 +245,20 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
             required: [],
           },
         ],
+        resource_delivery: {
+          applies_to: "agent-knowledge-base",
+          recommendation: "git-raw with local Git or an explicit raw URL prefix; otherwise bundle",
+          choices: [
+            {
+              id: "git-raw",
+              value: { delivery: "git-raw" },
+              optional: ["remote", "urlPrefix"],
+              requirement: "a Context workspace inside Git, or an explicit urlPrefix",
+            },
+            { id: "bundle", value: { delivery: "bundle" } },
+            { id: "omit", value: { delivery: "omit" } },
+          ],
+        },
         reference_resources: [
           "context.sdk.package-outputs",
           "context.sdk.project-api",

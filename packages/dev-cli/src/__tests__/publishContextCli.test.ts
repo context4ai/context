@@ -43,7 +43,9 @@ async function setupContextCliPkg(root: string): Promise<{ pkgDir: string; distD
         license: "MIT",
         repository: { type: "git", url: "https://example.test/repo.git" },
         keywords: ["context", "knowledge"],
-        bin: { context: "./dist/cli.js" },
+        // Match the real source manifest: release preparation publishes the
+        // contents of dist/ as the package root, so this must become cli.js.
+        bin: { context: "dist/cli.js" },
         dependencies: {
           "@c4a/context": "workspace:*",
           jiti: "^2.7.0",
@@ -104,6 +106,8 @@ describe("publish package list", () => {
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context", dir: "context" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract", dir: "extract" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-ts", dir: "extract-ts" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-go", dir: "extract-go" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-rush", dir: "extract-rush" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context-cli", dir: "context-cli" });
   });
 });

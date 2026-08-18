@@ -35,12 +35,15 @@ import {
   approvedKnowledgeTimestamp,
   packageKnowledgeBundle,
   packageTemplateVars,
+  prepareSelectedPackageKnowledge,
   selectPackageKnowledge,
   writeRenderedPackageTemplate,
   writeSelectedPackageKnowledge,
 } from "./packageBuildContent.js";
 import { validatePackageRenderPlan, validatePackageTemplateContract } from "./packageTemplateGuard.js";
 import { projectPackageKnowledgeAssets } from "./packageAssets.js";
+import { resolvePackageImageProcessor } from "./packageAssetOptimization.js";
+import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
 import {
   assertSafeRenderedPath,
   isSafeRelativePath,
@@ -59,6 +62,27 @@ import {
 export interface ProjectBuildResult {
   projectRoot: string;
   packages: PackageBuildSummary[];
+  agent_hints: PackageBuildAgentHint[];
+}
+
+export interface PackageBuildAgentHint {
+  reason_code: "package.assets.optimization-recommended";
+  package_name: string;
+  candidate_files: number;
+  candidate_bytes: number;
+  threshold_bytes: number;
+  command: "bun add -D sharp";
+  configuration: {
+    file: "src/index.ts";
+    field: "kbPackage.assets";
+    value: {
+      delivery: "bundle";
+      optimize: {
+        processor: "sharp";
+        mode: "lossless-webp";
+      };
+    };
+  };
 }
 
 export interface PackageFreshness {
@@ -67,6 +91,7 @@ export interface PackageFreshness {
   state: "missing" | "ready" | "stale";
   inputFiles: number;
   outputFiles: number;
+  assetDelivery?: PackageAssetDeliverySummary;
 }
 
 interface PackageBuildManifest {
@@ -75,11 +100,21 @@ interface PackageBuildManifest {
   outputFingerprint: string;
   outputFiles: number;
   outputs: PackageOutputFile[];
+  assetDelivery?: PackageAssetDeliverySummary;
 }
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v11-consumer-frontmatter";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v13-explicit-asset-delivery";
+
+function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const candidate = value as Partial<PackageAssetDeliverySummary>;
+  if ((candidate.state !== "bundled" && candidate.state !== "git-raw" && candidate.state !== "omitted") ||
+    typeof candidate.sourceFiles !== "number" || typeof candidate.sourceBytes !== "number" ||
+    typeof candidate.outputFiles !== "number" || typeof candidate.outputBytes !== "number") return undefined;
+  return candidate as PackageAssetDeliverySummary;
+}
 
 function assertPackageOutputDir(pkg: PackageDefinition): void {
   const expected = `dist/${pkg.name}`;
@@ -174,6 +209,7 @@ async function packageInputFingerprint(input: {
       name: input.pkg.name,
       select: input.pkg.select ?? null,
       navigation: input.pkg.kind === "package.kb" ? packageNavigation(input.pkg) : null,
+      assets: input.pkg.kind === "package.kb" ? input.pkg.assets ?? null : null,
       template: input.pkg.template,
       outDir: input.pkg.outDir,
     },
@@ -202,6 +238,7 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
         output_fingerprint?: unknown;
         output_files?: unknown;
         outputs?: unknown;
+        asset_delivery?: unknown;
       };
       if (typeof candidate.builder_protocol === "string" &&
         typeof candidate.fingerprint === "string" &&
@@ -217,12 +254,14 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
             (file.group === undefined || typeof file.group === "string");
         });
         if (outputs.length !== candidate.outputs.length) return null;
+        const assetDelivery = packageAssetDeliverySummary(candidate.asset_delivery);
         return {
           builderProtocol: candidate.builder_protocol,
           fingerprint: candidate.fingerprint,
           outputFingerprint: candidate.output_fingerprint,
           outputFiles: candidate.output_files,
           outputs,
+          ...(assetDelivery === undefined ? {} : { assetDelivery }),
         };
       }
     }
@@ -239,6 +278,7 @@ async function writePackageFingerprint(input: {
   outputFingerprint: string;
   outputFiles: number;
   outputs: readonly PackageOutputFile[];
+  assetDelivery: PackageAssetDeliverySummary;
 }): Promise<void> {
   const filePath = packageFingerprintPath(input.projectRoot, input.pkg);
   await mkdir(dirname(filePath), { recursive: true });
@@ -250,6 +290,7 @@ async function writePackageFingerprint(input: {
     output_fingerprint: input.outputFingerprint,
     output_files: input.outputFiles,
     outputs: input.outputs,
+    asset_delivery: input.assetDelivery,
     built_at: new Date().toISOString(),
   }, null, 2)}\n`, "utf8");
 }
@@ -325,6 +366,9 @@ export async function collectPackageFreshness(
       state: ready ? "ready" : "stale",
       inputFiles: selected.length,
       outputFiles: output.files,
+      ...(builtManifest?.assetDelivery === undefined
+        ? {}
+        : { assetDelivery: builtManifest.assetDelivery }),
     };
   }));
 }
@@ -383,6 +427,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
     }
   }
   const summaries: PackageBuildSummary[] = [];
+  const agentHints: PackageBuildAgentHint[] = [];
   await removeOrphanPackageDirs(projectRoot, packages);
   for (const pkg of packages) {
     assertPackageOutputDir(pkg);
@@ -415,6 +460,16 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       knowledgeStructure: structure.parsed,
     });
     validatePackageRenderPlan({ pkg, files: templateFiles, selected, vars });
+    const assetProcessor = await resolvePackageImageProcessor(
+      projectRoot,
+      pkg.kind === "package.kb" ? pkg.assets : undefined,
+    );
+    const preparedKnowledge = await prepareSelectedPackageKnowledge({
+      projectRoot,
+      pkg,
+      files: selected,
+      ...(assetProcessor === undefined ? {} : { assetProcessor }),
+    });
     await rm(join(projectRoot, pkg.outDir), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     await mkdir(join(projectRoot, pkg.outDir), { recursive: true });
     const rendered = await writeRenderedPackageTemplate({
@@ -427,7 +482,13 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       buildInventory,
       knowledgeStructure: structure.parsed,
     });
-    const writtenKnowledge = await writeSelectedPackageKnowledge({ projectRoot, pkg, files: selected });
+    const writtenKnowledge = await writeSelectedPackageKnowledge({
+      projectRoot,
+      pkg,
+      files: selected,
+      ...(assetProcessor === undefined ? {} : { assetProcessor }),
+      prepared: preparedKnowledge,
+    });
     await writeKnowledgeDirectoryIndexes({
       projectRoot,
       pkg,
@@ -454,6 +515,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       outputFingerprint: output.fingerprint,
       outputFiles: output.files,
       outputs: currentOutput,
+      assetDelivery: writtenKnowledge.assetDelivery,
     });
     summaries.push({
       name: pkg.name,
@@ -464,12 +526,29 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       resources: {
         files: writtenKnowledge.resources,
         bytes: writtenKnowledge.resourceBytes,
+        delivery: writtenKnowledge.assetDelivery,
       },
       state: changedFiles === 0 ? "unchanged" : previousOutput.length === 0 ? "created" : "updated",
       changes,
     });
+    const optimization = writtenKnowledge.assetDelivery.optimization;
+    if (optimization?.state === "recommended") {
+      agentHints.push({
+        reason_code: "package.assets.optimization-recommended",
+        package_name: pkg.name,
+        candidate_files: optimization.candidateFiles,
+        candidate_bytes: optimization.originalBytes,
+        threshold_bytes: optimization.thresholdBytes,
+        command: "bun add -D sharp",
+        configuration: {
+          file: "src/index.ts",
+          field: "kbPackage.assets",
+          value: { delivery: "bundle", optimize: { processor: "sharp", mode: "lossless-webp" } },
+        },
+      });
+    }
   }
-  return { projectRoot, packages: summaries };
+  return { projectRoot, packages: summaries, agent_hints: agentHints };
 }
 
 function formatProjectBuildResult(
@@ -480,6 +559,7 @@ function formatProjectBuildResult(
   if (format === "json") {
     if (verbose) return `${JSON.stringify(result, null, 2)}\n`;
     return `${JSON.stringify({
+      agent_hints: result.agent_hints,
       packages: result.packages.map((pkg) => ({
         name: pkg.name,
         kind: pkg.kind,

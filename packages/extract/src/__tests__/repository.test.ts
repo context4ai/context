@@ -173,8 +173,47 @@ describe("runRepositoryExtraction", () => {
         plugins: [createFixturePlugin([])],
       })).rejects.toMatchObject({
         code: "NO_ENTRY_DETECTED",
-        message: expect.stringMatching(/Configure extractTs entries in the Context project, or use mode: "scan"/u),
+        message: expect.stringMatching(/Configure entries in the Context project, or use scan mode/u),
       });
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("supports a Go module through the language-neutral repository protocol", async () => {
+    const repo = await createTempRepo();
+    try {
+      await writeText(repo, "go.mod", "module example.org/service\n\ngo 1.23\n");
+      await writeText(repo, "cmd/service/main.go", "package main\nfunc main() {}\n");
+      const plugin: ExtractionPlugin = {
+        ...createFixturePlugin([]),
+        id: "fixture-go",
+        languages: ["go"],
+        packageManagers: ["go"],
+        canHandle: (source) => source.manifests.some((manifest) => manifest.type === "go.mod"),
+        async detectEntries(manifest) {
+          expect((manifest.content as { raw?: string }).raw).toContain("module example.org/service");
+          return {
+            package: { name: "example.org/service", kind: PackageKind.Service, language: "go" },
+            entries: [],
+          };
+        },
+      };
+
+      const result = await runRepositoryExtraction({
+        repoPath: repo,
+        pathFilter: {
+          package: { include: ["**/go.mod"] },
+          code: { include: ["**/*.go"], exclude: [] },
+          doc: { include: [], exclude: [] },
+        },
+        entrySelection: { mode: "scan" },
+        plugins: [plugin],
+      });
+
+      expect(result.moduleErrors).toEqual([]);
+      expect(result.results[0]?.sourceInfo.language).toBe("go");
+      expect(result.results[0]?.entryDetection.entries[0]?.path).toBe("cmd/service/main.go");
     } finally {
       await rm(repo, { recursive: true, force: true });
     }

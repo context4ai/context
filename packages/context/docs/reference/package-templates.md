@@ -31,6 +31,10 @@ kbPackage({
     foldDirectoryIndexes: true,
     maxInlineEntries: 50,
   },
+  assets: {
+    delivery: "git-raw",
+    urlPrefix: "https://code.example.com/team/knowledge/raw/{commit}",
+  },
 });
 ```
 
@@ -52,7 +56,55 @@ llmsPackage({
 | `template` | yes | Project-relative template directory or `{ path, vars }`. |
 | `select` | no | Approved knowledge selector. Omit to include all approved knowledge. Supports internal `collections`, OKF `okfRoots`, and `include` / `exclude` path patterns relative to `knowledge/`. |
 | `navigation` | no | KB directory-index policy. Defaults to `{ foldDirectoryIndexes: true, maxInlineEntries: 50 }`. |
+| `assets` | no | Resource delivery: Git raw links, bundled files, or explicit omission. New KB setup should offer Git raw first. Omit for legacy byte-for-byte bundling. |
 | `distribution` | no | Legacy input accepted from older workspaces. It no longer changes package paths and should not be added to new declarations. |
+
+Use Git raw delivery when resources are published from a Git repository.
+Without `urlPrefix`, the Context workspace must be inside Git; GitHub remotes
+are derived automatically and pinned to the current commit. Other hosts and
+workspaces outside Git accept an explicit HTTPS prefix; Context appends the
+project-relative `knowledge/assets/...` path. Context does not check whether
+the resources are committed, pushed, or remotely readable; publishing them is
+the package author's responsibility.
+`{commit}` is replaced when present. A literal branch in the prefix is allowed
+but intentionally follows that mutable branch. The configured raw host must be
+reachable by the eventual package consumers.
+
+```ts
+assets: {
+  delivery: "git-raw",
+  urlPrefix: "https://code.example.com/team/knowledge/raw/{commit}",
+}
+```
+
+When the workspace is not in Git and has no explicit raw prefix, choose bundled
+delivery or explicit omission:
+
+```ts
+assets: { delivery: "bundle" }
+assets: { delivery: "omit" } // keeps unresolved links and reports them
+```
+
+Bundled resources are copied byte-for-byte unless image optimization is
+configured. When optimizable PNG/JPEG resources exceed 20 MiB, build and status
+return `package.assets.optimization-recommended`. To optimize bundled output:
+
+```bash
+bun add -D sharp
+```
+
+```ts
+assets: {
+  delivery: "bundle",
+  optimize: { processor: "sharp", mode: "lossless-webp" },
+}
+```
+
+`optimize.mode: "webp"` additionally accepts `quality` from 1 to 100. Both modes accept
+an optional positive `maxDimension`; images are never enlarged. Context adopts
+a generated image only when it is smaller, uses a digest-derived `.webp` path,
+and rewrites package links. A configured but missing processor blocks before
+the previous `dist/` package is replaced.
 
 `template` is required. Do not call `kbPackage({ name })` or
 `llmsPackage({ name })`.

@@ -260,6 +260,7 @@ describe("plugin prompt and workflow resource contract", () => {
 
   test("route-selected SDK manuals remain complete mirrors of the public docs", async () => {
     const manuals = [
+      ["reference/code-extractors.md", "reference/code-extractors.md"],
       ["reference/project-api.md", "reference/project-api.md"],
       ["guides/package-outputs.md", "guides/package-outputs.md"],
       ["guides/lark-resources.md", "guides/lark-resources.md"],

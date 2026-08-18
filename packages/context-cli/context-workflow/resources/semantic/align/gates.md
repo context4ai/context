@@ -249,7 +249,7 @@ Each source must include `rationale` when inferred and at least one of `source_r
 ## Final Reflection
 
 - Entity cannot pick a legal tag, or depends on its upstream title to make sense -> write it as a Section under the upstream Node or change type before submit.
-- Action only supports one Section -> write it as a Section instead of an Action, or add source-backed structure that reaches at least two distinct Section kinds / one child Action. The CLI does not use source prose keywords to grant an exception.
+- Action only supports one Section -> confirm its standalone retrieval value, write it as a Section under its owner, or add another source-backed Section / child Action. Multiple source-backed Sections may use the same kind; the CLI does not manufacture semantic variety to validate an Action.
 - Action "steps" are parallel options/configs -> route to Entity `comparison` / `spec` / `description`.
 - Domain has no children -> delete it or merge it into a larger Domain.
 
@@ -267,7 +267,7 @@ checks as deterministic diagnostics:
 | `node.thin_concrete_entity` | A concrete Entity has one Section and no child Nodes. | Keep it only when it has stable standalone retrieval value; otherwise merge it into the owning Node. |
 | `node.children_should_be_sections` | One parent contains many same-source, single-section child Entities with no stable shape tag. | Merge those children into parent Sections unless the user confirms each child has standalone lookup value. |
 | `node.term_expanded_beyond_definition` | A `term` Entity has grown past a compact definition or owns children. | Move rules, procedures, designs, and examples to the owning Node; keep the term entry narrow. |
-| `node.action_too_thin` | An Action has fewer than two distinct planned Section kinds and no child Action. | Downgrade it to a Section under the owning Node, add a distinct Section kind, or add a child Action; the CLI does not infer a single-section exception from source text. |
+| `node.action_too_thin` | An Action has one planned Section and no child Action. | Confirm its standalone retrieval value, keep it as a Section under the owning Node, add another source-backed Section, or add a child Action. This warning does not require artificial Section-kind diversity. |
 | `node.domain_without_children` | A Domain has no source-backed `contains` child edge. | Add supported children, keep an explicitly confirmed no-write placeholder, or reclassify the Node. |
 | `tags.child_inherits_system` | A child Entity repeats its parent `system` / `application` scope tag. | Retag by the child’s own shape/scope, or keep the child as a Section if it is only a local aspect. |
 | `edge.confidence_invalid` | An edge declares a confidence value outside the current schema. | Use only `possible` or `hypothesis`, or omit the field for source-certain relations. |

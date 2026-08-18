@@ -20,6 +20,8 @@ type DebugEventKind =
   | "agent-graph.evaluated"
   | "workflow.action-started"
   | "workflow.action-completed"
+  | "workflow.scope-opened"
+  | "workflow.scope-closed"
   | "workflow.stopped";
 
 interface DebugInvocationContext {
@@ -312,6 +314,18 @@ export async function recordWorkflowAction(input: {
     input.projectRoot,
     input.phase === "started" ? "workflow.action-started" : "workflow.action-completed",
     input.step,
+  );
+}
+
+export async function recordWorkflowExecutionScope(input: {
+  projectRoot: string;
+  phase: "opened" | "closed";
+  data: Record<string, unknown>;
+}): Promise<void> {
+  await appendEvent(
+    input.projectRoot,
+    input.phase === "opened" ? "workflow.scope-opened" : "workflow.scope-closed",
+    input.data,
   );
 }
 

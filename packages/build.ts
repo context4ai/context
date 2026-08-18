@@ -77,6 +77,12 @@ const RUNTIME_EXTERNALS = [
   // Inlining the CommonJS package bakes the build machine's node_modules path
   // into generated bundles and makes that fallback unusable after publishing.
   "web-tree-sitter",
+  // Native Tree-sitter grammars must be resolved from their installed
+  // packages. The Go plugin stays a runtime package for the same reason.
+  "tree-sitter",
+  "tree-sitter-go",
+  // TypeScript is a declared runtime dependency of packages that use its AST.
+  "typescript",
 ];
 
 const args = process.argv.slice(2);
@@ -164,15 +170,18 @@ const copyWasmAssets = async () => {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
     peerDependencies?: Record<string, string>;
+    c4aBuild?: { assets?: string[] };
   };
   const dependencies = {
     ...packageJson.dependencies,
     ...packageJson.devDependencies,
     ...packageJson.peerDependencies,
   };
-  // Packages that inline @c4a/extract need its language grammars. The extract
-  // package itself already copied those from its own src/wasm above.
-  const needsExtractWasm = Boolean(dependencies["@c4a/extract"]);
+  // Packages that inline @c4a/extract must declare the grammar assets they
+  // consume. Package dependencies alone are insufficient: extractor plugins
+  // may import only its TypeScript contracts and must not inherit unrelated
+  // language assets. The extract package itself copies src/wasm above.
+  const needsExtractWasm = packageJson.c4aBuild?.assets?.includes("extract-wasm") ?? false;
   if (needsExtractWasm) {
     await copyWasmDir(join(packagesDir, "extract", "src", "wasm"));
   }

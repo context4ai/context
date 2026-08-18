@@ -1,0 +1,36 @@
+{
+  "name": "@c4a/extract-rush",
+  "description": "Rush workspace structural index for Context",
+  "version": "0.6.4",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/extract-rush"
+  },
+  "keywords": [
+    "rush",
+    "rushstack",
+    "monorepo",
+    "workspace",
+    "code-analysis"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts && bun run ../writeLibraryDistPackage.ts . && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "typescript": "^5.5.4",
+    "yaml": "^2.5.1"
+  }
+}

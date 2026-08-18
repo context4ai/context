@@ -72,6 +72,13 @@ node_modules/@c4a/context/docs/reference/project-api.md
 node_modules/@c4a/context/docs/reference/package-templates.md
 ```
 
+When configuring code extraction, use the Route-selected
+`reference/code-extractors.md` manual. Run the Gate's read-only source
+inspection first, use its manifest signals to select a matching extractor, and
+read that package's public README before implementing an `extractCustom()`
+adapter. Do not probe compiled package output or treat TypeScript as the default
+for a non-TypeScript module.
+
 ## Workspace State Rules
 
 - `src/index.ts` declares sources, phases, and packages.

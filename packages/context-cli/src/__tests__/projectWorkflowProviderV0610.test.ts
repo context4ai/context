@@ -323,6 +323,33 @@ describe("Context workflow Provider", () => {
     }
   });
 
+  test("code extraction inspection returns one executable technology probe per repo source", () => {
+    expect(planForHostHandler("context.extract.inspect-capabilities", {
+      ...emptyObservation(),
+      sourceCount: 2,
+      repoSources: [
+        { id: "repo-a", name: "20260818/module-a" },
+        { id: "repo-b", name: "20260818/module-b" },
+      ],
+      readyRepoSources: 2,
+    })).toEqual({
+      commands: [
+        {
+          command: 'context source inspect "20260818/module-a" --format json',
+          effect: "read",
+          availability: "immediate",
+          managed_execution: "agent-required",
+        },
+        {
+          command: 'context source inspect "20260818/module-b" --format json',
+          effect: "read",
+          availability: "immediate",
+          managed_execution: "agent-required",
+        },
+      ],
+    });
+  });
+
   test("package configuration exposes a compact, typed choice contract", async () => {
     const snapshot = await evaluateContextWorkflow({
       observation: {
@@ -359,6 +386,15 @@ describe("Context workflow Provider", () => {
             expect.objectContaining({ id: "llm-text", factory: "llmsPackage" }),
             expect.objectContaining({ id: "none", factory: null }),
           ],
+          resource_delivery: {
+            applies_to: "agent-knowledge-base",
+            recommendation: "git-raw with local Git or an explicit raw URL prefix; otherwise bundle",
+            choices: [
+              expect.objectContaining({ id: "git-raw", optional: ["remote", "urlPrefix"] }),
+              expect.objectContaining({ id: "bundle" }),
+              expect.objectContaining({ id: "omit" }),
+            ],
+          },
           after_edit: "context status --format json",
         },
       },

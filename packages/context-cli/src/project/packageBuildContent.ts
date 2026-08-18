@@ -17,7 +17,19 @@ import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes
 import { packageNavigation } from "./packageNavigation.js";
 import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
 import { projectPackageKnowledgeMarkdown } from "./packageKnowledgeProjection.js";
-import { projectPackageKnowledgeAssets, type PackageAssetFile } from "./packageAssets.js";
+import {
+  projectPackageKnowledgeAssets,
+  type PackageAssetFile,
+  type PackageKnowledgeWithAssets,
+} from "./packageAssets.js";
+import { packageMarkdownTarget } from "./packageAssets.js";
+import type { PackageImageProcessor } from "./packageAssetOptimization.js";
+import {
+  deliverPackageAssetFiles,
+  type PackageAssetDeliveryResult,
+  type PackageAssetDeliverySummary,
+} from "./packageAssetDelivery.js";
+import { replaceMarkdownInlineLinkTargets } from "./markdownLinks.js";
 import {
   assertSafeRenderedPath,
   packageKind,
@@ -199,32 +211,75 @@ export async function writeRenderedPackageTemplate(input: {
   return { files: written, consumesKnowledge };
 }
 
+export interface PreparedPackageKnowledge {
+  projectedPages: PackageKnowledgeWithAssets[];
+  delivered: PackageAssetDeliveryResult;
+}
+
+export async function prepareSelectedPackageKnowledge(input: {
+  projectRoot: string;
+  pkg: PackageDefinition;
+  files: readonly ApprovedKnowledgeFile[];
+  assetProcessor?: PackageImageProcessor;
+}): Promise<PreparedPackageKnowledge> {
+  const assets = new Map<string, PackageAssetFile>();
+  const projectedPages = await Promise.all(input.files.map(async (file) => {
+    const projected = await projectPackageKnowledgeAssets({ ...input, file, content: file.content });
+    for (const asset of projected.assets) assets.set(asset.packageRelPath, asset);
+    return projected;
+  }));
+  const delivered = await deliverPackageAssetFiles({
+    projectRoot: input.projectRoot,
+    assets: [...assets.values()],
+    ...(input.pkg.kind === "package.kb" && input.pkg.assets !== undefined
+      ? { definition: input.pkg.assets }
+      : {}),
+    ...(input.assetProcessor === undefined ? {} : { processor: input.assetProcessor }),
+  });
+  return { projectedPages, delivered };
+}
+
 export async function writeSelectedPackageKnowledge(input: {
   projectRoot: string;
   pkg: PackageDefinition;
   files: readonly ApprovedKnowledgeFile[];
-}): Promise<{ pages: number; resources: number; resourceBytes: number }> {
-  let written = 0;
-  const assets = new Map<string, PackageAssetFile>();
-  for (const file of input.files) {
-    const projected = await projectPackageKnowledgeAssets({ ...input, file, content: file.content });
+  assetProcessor?: PackageImageProcessor;
+  prepared?: PreparedPackageKnowledge;
+}): Promise<{
+  pages: number;
+  resources: number;
+  resourceBytes: number;
+  assetDelivery: PackageAssetDeliverySummary;
+}> {
+  const { projectedPages, delivered } = input.prepared ?? await prepareSelectedPackageKnowledge(input);
+  for (const projected of projectedPages) {
     assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
     const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
+    const rewritten = replaceMarkdownInlineLinkTargets(projected.content, (link) => {
+      for (const [inputPath, outputPath] of delivered.targetByOriginal) {
+        if (link.target === packageMarkdownTarget(projected.pageOutputPath, inputPath)) {
+          return /^https:\/\//u.test(outputPath)
+            ? outputPath
+            : packageMarkdownTarget(projected.pageOutputPath, outputPath);
+        }
+      }
+      return undefined;
+    });
     await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, projectPackageKnowledgeMarkdown(projected.content), "utf8");
-    for (const asset of projected.assets) assets.set(asset.packageRelPath, asset);
-    written++;
+    await writeFile(outputPath, projectPackageKnowledgeMarkdown(rewritten), "utf8");
   }
-  for (const asset of assets.values()) {
+  const deliveredAssets = new Map(delivered.assets.map((asset) => [asset.packageRelPath, asset]));
+  for (const asset of deliveredAssets.values()) {
     assertSafeRenderedPath(asset.packageRelPath, "package resource path");
     const outputPath = join(input.projectRoot, input.pkg.outDir, asset.packageRelPath);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, asset.bytes);
   }
   return {
-    pages: written,
-    resources: assets.size,
-    resourceBytes: [...assets.values()].reduce((sum, asset) => sum + asset.bytes.byteLength, 0),
+    pages: projectedPages.length,
+    resources: deliveredAssets.size,
+    resourceBytes: [...deliveredAssets.values()].reduce((sum, asset) => sum + asset.bytes.byteLength, 0),
+    assetDelivery: delivered.summary,
   };
 }
 

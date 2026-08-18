@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local CLI for capturing, compiling, and governing knowledge workspaces",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -20,6 +20,11 @@
     "claude-plugin"
   ],
   "main": "./dist/cli.js",
+  "c4aBuild": {
+    "assets": [
+      "extract-wasm"
+    ]
+  },
   "bin": {
     "context": "dist/cli.js"
   },
@@ -41,7 +46,7 @@
     "clean-cache": "bun run src/cli.ts clean-cache"
   },
   "dependencies": {
-    "@c4a/agent-graph": "0.2.4",
+    "@c4a/agent-graph": "0.2.5",
     "@c4a/context": "workspace:*",
     "commander": "^11.0.0",
     "fast-xml-parser": "^5.10.1",

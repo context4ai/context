@@ -37,6 +37,8 @@ describe("0.6.0 project init and source ensure", () => {
       expect(agents).toContain("preserve revision/authority flags exactly");
       expect(agents).toContain("`.tmp/agent-payloads/`");
       expect(agents).toContain("Avoid inventing top-level scratch directories such as `inputs/`");
+      expect(agents).toContain("Context completion proves knowledge-workflow state, not Git commit safety");
+      expect(agents).toContain("stage only explicit paths");
       expect(agents).toContain(
         "Fully managed mode applies only when the user explicitly requests it in the current conversation",
       );
@@ -155,6 +157,7 @@ describe("0.6.0 project init and source ensure", () => {
       expect(agents).toContain("## 执行契约");
       expect(agents).toContain("全托管只在用户于当前会话明确提出时生效");
       expect(agents).toContain("`execution.target: agent-host`");
+      expect(agents).toContain("Context 完成只证明知识工作流状态，不证明 Git 提交范围安全");
       expect(readme).toContain("这是一个项目内的 Context 工作区");
       expect(readme).toContain('TMPDIR="$PWD/.tmp/install" bun install');
       expect(readme).toContain("`.tmp/install/`");

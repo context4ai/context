@@ -256,9 +256,14 @@ It splits non-contiguous Section mirrors and can expand a broad cross-heading
 Section into Markdown structural groups within the same View. Apply the
 non-blocking repair hint when the groups should be independently retrievable;
 otherwise keep the Section and explain the grouping in structure review.
-Oversized Views still require the Agent to apply the returned child-View and contains-edge suggestions while
-classifying every child Node from evidence. The repair command does not resolve
-orphan ownership, unsupported evidence, or competing semantic groupings.
+Oversized Views still require the Agent to apply the returned child-View and
+contains-edge suggestions while classifying every child Node from evidence.
+Those suggestions preserve Section order and place adjacent Sections into
+bounded groups; `part-N` names are placeholders, not semantic titles. Rename
+and classify each child from evidence instead of expanding one child View per
+Section or treating the suggested grouping as a content decision. The repair
+command does not resolve orphan ownership, unsupported evidence, or competing
+semantic groupings.
 
 When the cited source sentence itself is uncertain, preserve that uncertainty on
 the edge with `confidence: possible` or `confidence: hypothesis`. This is only

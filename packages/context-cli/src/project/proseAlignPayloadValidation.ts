@@ -26,9 +26,9 @@ interface NodeQualityMetrics {
   childNodeCount: number;
   concreteTags: string[];
   descriptionCount: number;
-  distinctSectionKindCount: number;
   fieldPrefix: string;
   hasContainsParent: boolean;
+  hasGeneratedParentIndex: boolean;
   hasTermTag: boolean;
   sectionCount: number;
   tags: string[];
@@ -40,8 +40,8 @@ interface StructureQualityContext {
   childrenByParent: Map<string, Set<string>>;
   containsParents: Map<string, number>;
   descriptionSectionsByNode: Map<string, number>;
+  generatedParentIndexNodes: Set<string>;
   nodeByRef: Map<string, AlignPayload["nodes"][number]>;
-  sectionKindsByNode: Map<string, Set<string>>;
   sectionsByNode: Map<string, number>;
   sourceDocumentsByNode: Map<string, Set<string>>;
 }
@@ -73,9 +73,9 @@ export function addStructureQualityDiagnostics(payload: AlignPayload, diagnostic
         childNodeCount: context.childNodes.get(node.node_ref) ?? 0,
         concreteTags: (node.tags ?? []).filter((tag) => CONCRETE_ENTITY_TAGS.has(tag)),
         descriptionCount: context.descriptionSectionsByNode.get(node.node_ref) ?? 0,
-        distinctSectionKindCount: context.sectionKindsByNode.get(node.node_ref)?.size ?? 0,
         fieldPrefix: `nodes.${node.node_ref}`,
         hasContainsParent: (context.containsParents.get(node.node_ref) ?? 0) > 0,
+        hasGeneratedParentIndex: context.generatedParentIndexNodes.has(node.node_ref),
         hasTermTag: (node.tags ?? []).includes("term"),
         sectionCount: context.sectionsByNode.get(node.node_ref) ?? 0,
         tags: node.tags ?? [],
@@ -105,8 +105,8 @@ function buildStructureQualityContext(payload: AlignPayload): StructureQualityCo
     childrenByParent: new Map<string, Set<string>>(),
     containsParents: new Map<string, number>(),
     descriptionSectionsByNode: new Map<string, number>(),
+    generatedParentIndexNodes: new Set<string>(),
     nodeByRef: new Map(payload.nodes.map((node) => [node.node_ref, node])),
-    sectionKindsByNode: new Map<string, Set<string>>(),
     sectionsByNode: new Map<string, number>(),
     sourceDocumentsByNode: new Map<string, Set<string>>(),
   };
@@ -122,6 +122,9 @@ function buildStructureQualityContext(payload: AlignPayload): StructureQualityCo
     childNodeByEndpoint.set(view.view_ref, view.node_ref);
     for (const section of view.sections) parentOwnerByEndpoint.set(section.section_ref, view.node_ref);
     addViewMetrics(view, context);
+    if (view.generated === "parent_index") {
+      context.generatedParentIndexNodes.add(view.node_ref);
+    }
   }
   for (const edge of payload.edges) {
     addContainsEdgeMetrics(edge, {
@@ -140,13 +143,10 @@ function addViewMetrics(view: AlignPayload["views"][number], context: StructureQ
     view.node_ref,
     (context.descriptionSectionsByNode.get(view.node_ref) ?? 0) + view.sections.filter((section) => section.kind === "description").length,
   );
-  const kinds = context.sectionKindsByNode.get(view.node_ref) ?? new Set<string>();
   const sourceDocuments = context.sourceDocumentsByNode.get(view.node_ref) ?? new Set<string>();
   for (const section of view.sections) {
-    kinds.add(section.kind);
     for (const sourceRef of section.source_refs) sourceDocuments.add(sourceDocumentKey(sourceRef));
   }
-  context.sectionKindsByNode.set(view.node_ref, kinds);
   context.sourceDocumentsByNode.set(view.node_ref, sourceDocuments);
 }
 
@@ -524,18 +524,23 @@ function addThinActionDiagnostic(
   metrics: NodeQualityMetrics,
   diagnostics: AlignDiagnostic[],
 ): void {
-  if (node.node_type !== "action" || metrics.distinctSectionKindCount >= 2 || metrics.childActionCount !== 0) return;
+  if (
+    node.node_type !== "action" ||
+    metrics.sectionCount >= 2 ||
+    metrics.childActionCount !== 0 ||
+    (metrics.hasGeneratedParentIndex && metrics.childCount > 0)
+  ) return;
   diagnostics.push(diagnostic(
-    "error",
+    "warning",
     "node.action_too_thin",
     "node_quality",
-    "Action node has fewer than two distinct planned section kinds and no child action; the CLI cannot prove a single-section action exception from source text.",
+    "Action node has fewer than two planned sections and no child action; confirm that the action has standalone retrieval value or keep it as a section under its owner.",
     `${metrics.fieldPrefix}.sections`,
     {
       candidate_id: node.node_ref,
       repair: {
-        action: "downgrade_to_section_or_add_source_backed_process_structure",
-        options: ["move_to_owning_view_section", "add_distinct_section_kind", "add_child_action"],
+        action: "confirm_standalone_action_or_add_source_backed_process_structure",
+        options: ["keep_with_reviewed_rationale", "move_to_owning_view_section", "add_source_backed_section", "add_child_action"],
       },
     },
   ));

@@ -31,6 +31,8 @@ export const PUBLISH_PACKAGES: PackageEntry[] = [
   { name: "@c4a/context", dir: "context" },
   { name: "@c4a/extract", dir: "extract" },
   { name: "@c4a/extract-ts", dir: "extract-ts" },
+  { name: "@c4a/extract-go", dir: "extract-go" },
+  { name: "@c4a/extract-rush", dir: "extract-rush" },
   { name: "@c4a/context-cli", dir: "context-cli" },
 ];
 
@@ -243,7 +245,7 @@ export async function prepareDistPackageJson(
   if (srcPkg.bin) {
     for (const [k, v] of Object.entries(srcPkg.bin)) {
       bin[k] = v
-        .replace(/^\.\/(?:dist|src)\//, "")
+        .replace(/^(?:\.\/)?(?:dist|src)\//, "")
         .replace(/^\.\/+/, "")
         .replace(/\.[cm]?tsx?$/, ".js");
     }
@@ -271,7 +273,7 @@ export async function prepareDistPackageJson(
 
   // For library packages, set main entry so consumers and createRequire.resolve
   // use the bundled dist entry explicitly instead of Node's index.js fallback.
-  if (dir === "core" || dir === "context" || dir === "extract" || dir === "extract-ts") {
+  if (dir === "core" || dir === "context" || dir === "extract" || dir === "extract-ts" || dir === "extract-go" || dir === "extract-rush") {
     distPkg.main = "./index.js";
     if (dir === "core" || dir === "context") {
       distPkg.types = "./index.d.ts";

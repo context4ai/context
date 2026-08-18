@@ -25,6 +25,15 @@ package namespace. Ask whether Skills need a short optional prefix, then
 maintain their complete final names in the template. Do not expose downstream
 layout terminology or ask for platform-specific identity fields.
 
+Also ask how referenced resources should be delivered. Offer Git raw links,
+bundled files, or explicit omission. Git raw may derive a commit-pinned GitHub
+URL when the workspace is in Git, or use an author-provided HTTPS `urlPrefix`
+for resources published from another repository. A literal branch in that
+prefix is an explicit project choice, not a Context default. If neither local
+Git nor an explicit prefix is available, offer only bundle or omit.
+State that publishing the referenced resources and making private raw hosts
+reachable are the package author's responsibility; Context does not probe them.
+
 Do not offer a hidden `both` shortcut. If the user wants multiple outputs,
 declare and inspect one first, then obtain confirmation for the next. Mention
 `kbPackage` and `llmsPackage` only after the semantic output choice.

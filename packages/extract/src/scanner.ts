@@ -35,6 +35,7 @@ export type ModuleBoundaryResult = {
   name: string;
   path: string;
   manifest: string;
+  manifests: string[];
   version?: string;
 };
 
@@ -265,18 +266,23 @@ const MANIFEST_FILES = [
   "build.gradle",
 ];
 
-/** Check if a directory contains any recognized manifest file. */
-const findManifestFile = async (dirPath: string): Promise<string | null> => {
+/** List every recognized manifest in deterministic precedence order. */
+const findManifestFiles = async (dirPath: string): Promise<string[]> => {
+  const manifests: string[] = [];
   for (const file of MANIFEST_FILES) {
     try {
       await access(join(dirPath, file));
-      return file;
+      manifests.push(file);
     } catch {
       // continue
     }
   }
-  return null;
+  return manifests;
 };
+
+/** Check if a directory contains any recognized manifest file. */
+const findManifestFile = async (dirPath: string): Promise<string | null> =>
+  (await findManifestFiles(dirPath))[0] ?? null;
 
 /** Read module name from a manifest file. Returns null if not parseable. */
 const readModuleName = async (dirPath: string, manifestFile: string): Promise<string | null> => {
@@ -484,7 +490,8 @@ export const detectModules = async (repoPath: string, ref?: string, pathFilter?:
   // Root module: always include if root has a manifest.
   // In monorepos, root-level files (scripts, docs, configs) that don't belong to
   // any child module are captured here. Child module dirs are excluded by buildModule.
-  const rootManifest = await findManifestFile(repoRoot);
+  const rootManifests = await findManifestFiles(repoRoot);
+  const rootManifest = rootManifests[0] ?? null;
   if (rootManifest) {
     const rootName = await readModuleName(repoRoot, rootManifest) ?? basename(repoRoot);
     modules.push(await buildModule(repoRoot, repoRoot, rootName, subModuleDirSet, ref, pathFilter, gitFiles));
@@ -522,25 +529,29 @@ export const detectModuleBoundaries = async (
   const subModuleDirs = await findSubModuleDirs(repoRoot, undefined, gitFiles, pathFilter);
   const boundaries: ModuleBoundaryResult[] = [];
 
-  const rootManifest = await findManifestFile(repoRoot);
+  const rootManifests = await findManifestFiles(repoRoot);
+  const rootManifest = rootManifests[0] ?? null;
   if (rootManifest) {
     const version = await readModuleVersion(repoRoot, rootManifest);
     boundaries.push({
       name: await readModuleName(repoRoot, rootManifest) ?? basename(repoRoot),
       path: ".",
       manifest: rootManifest,
+      manifests: rootManifests,
       ...(version !== null ? { version } : {}),
     });
   }
 
   for (const subDir of subModuleDirs) {
-    const manifest = await findManifestFile(subDir);
+    const manifests = await findManifestFiles(subDir);
+    const manifest = manifests[0] ?? null;
     if (!manifest) continue;
     const version = await readModuleVersion(subDir, manifest);
     boundaries.push({
       name: await readModuleName(subDir, manifest) ?? basename(subDir),
       path: toPosixPath(relative(repoRoot, subDir)) || ".",
       manifest,
+      manifests,
       ...(version !== null ? { version } : {}),
     });
   }
@@ -567,8 +578,9 @@ export const detectModuleAt = async (
   // Check if this module path is excluded by pathFilter
   if (modulePath !== "." && pathFilter?.code?.exclude?.length) {
     const matcher = createPathMatcher({ include: ["**/*"], exclude: pathFilter.code.exclude });
-    // Test a representative file path inside this module
-    if (!matcher(modulePath + "/index.ts")) return null;
+    // Module eligibility is controlled by exclusions only; language-specific
+    // include patterns are applied when the module's files are scanned.
+    if (!matcher(modulePath + "/.context-module")) return null;
   }
   const manifest = await findManifestFile(moduleDir);
   if (!manifest) return null;

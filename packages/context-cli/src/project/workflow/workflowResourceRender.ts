@@ -249,9 +249,16 @@ Apply only a decision payload whose scope and candidate-set identity match the c
 }
 
 function renderPackages(status: ProjectStatus): string {
-  const packages = status.packages.map((item) =>
-    `${inline(item.name)} — ${inline(item.state)}, kind=${inline(item.kind)}, inputs=${item.inputFiles}, outputs=${item.outputFiles}`
-  );
+  const packages = status.packages.flatMap((item) => {
+    const summary =
+      `${inline(item.name)} — ${inline(item.state)}, kind=${inline(item.kind)}, inputs=${item.inputFiles}, outputs=${item.outputFiles}`;
+    if (item.assetDelivery?.optimization?.state !== "recommended") return [summary];
+    const optimization = item.assetDelivery.optimization;
+    return [
+      summary,
+      `  - optional asset optimization: ${optimization.candidateFiles} PNG/JPEG file(s), ${optimization.originalBytes} byte(s); run ${inline("bun add -D sharp")} and configure ${inline("kbPackage().assets.optimize")} only for bundled delivery`,
+    ];
+  });
   const templates = status.packageTemplateReviews.map((item) =>
     `${inline(item.packageName)} — ${inline(item.state)}, source=${inline(item.templatePath)}`
   );

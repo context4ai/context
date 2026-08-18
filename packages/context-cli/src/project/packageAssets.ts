@@ -46,7 +46,7 @@ function packageAssetPath(projectRoot: string, absolute: string): { knowledgeRel
   };
 }
 
-function packageMarkdownTarget(pageOutputPath: string, assetOutputPath: string): string {
+export function packageMarkdownTarget(pageOutputPath: string, assetOutputPath: string): string {
   const target = posixPath(relative(dirname(pageOutputPath), assetOutputPath));
   return target.startsWith(".") ? target : `./${target}`;
 }

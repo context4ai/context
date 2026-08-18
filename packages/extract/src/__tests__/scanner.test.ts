@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { detectModuleBoundaries, detectModules, scanSourceFiles } from "../scanner.js";
@@ -78,18 +80,38 @@ describe("detectModuleBoundaries", () => {
       name: "@fixture/pkg-a",
       path: "packages/pkg-a",
       manifest: "package.json",
+      manifests: ["package.json"],
       version: "0.0.0",
     });
     expect(boundaries).toContainEqual({
       name: "@fixture/pkg-b",
       path: "packages/pkg-b",
       manifest: "package.json",
+      manifests: ["package.json"],
       version: "0.0.0",
     });
     expect(boundaries.find((boundary) => boundary.path === ".")).toEqual({
       name: "repo-monorepo",
       path: ".",
       manifest: "package.json",
+      manifests: ["package.json"],
     });
+  });
+
+  test("reports every manifest when one module contains multiple technology signals", async () => {
+    const root = await mkdtemp(join(tmpdir(), "c4a-module-tech-"));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({ name: "mixed-module" }));
+      await writeFile(join(root, "go.mod"), "module example.test/mixed\n\ngo 1.23\n");
+
+      expect(await detectModuleBoundaries(root)).toEqual([{
+        name: "mixed-module",
+        path: ".",
+        manifest: "package.json",
+        manifests: ["package.json", "go.mod"],
+      }]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

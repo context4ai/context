@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   createApprovedProject,
@@ -184,6 +184,12 @@ describe("managed workflow run-to-completion", () => {
   test("plans and executes only deterministic routes before re-evaluating", async () => {
     const fixture = await createApprovedProject();
     try {
+      const packagePath = join(fixture.project, "package.json");
+      const packageJson = JSON.parse(readFileSync(packagePath, "utf8")) as {
+        context: { debug?: boolean };
+      };
+      packageJson.context.debug = true;
+      writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
       const unread = JSON.parse(await runCliInDir(fixture.project, [
         "run",
         "--managed",
@@ -272,6 +278,21 @@ describe("managed workflow run-to-completion", () => {
       expect(completed.steps[0]?.receipt.stdout.sha256).toMatch(
         /^[a-f0-9]{64}$/u,
       );
+      const debugEvents = readFileSync(
+        join(fixture.project, ".tmp", "context-runtime", "debug", "events.jsonl"),
+        "utf8",
+      ).trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
+        kind: string;
+        data: Record<string, unknown>;
+      });
+      expect(debugEvents).toContainEqual(expect.objectContaining({
+        kind: "workflow.scope-opened",
+        data: expect.objectContaining({ executor: "in-process" }),
+      }));
+      expect(debugEvents).toContainEqual(expect.objectContaining({
+        kind: "workflow.scope-closed",
+        data: expect.objectContaining({ executor: "in-process", release_errors: 0 }),
+      }));
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }

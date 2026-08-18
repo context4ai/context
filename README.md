@@ -78,6 +78,11 @@ the important decisions.
 - [`packages/context-cli`](./packages/context-cli/README.md) provides the
   `context` executable and Agent plugin installer. Its guide covers installation,
   workspace operations, command groups, and workflow rules.
+- [`packages/extract-ts`](./packages/extract-ts/README.md),
+  [`packages/extract-go`](./packages/extract-go/README.md), and
+  [`packages/extract-rush`](./packages/extract-rush/README.md) provide reusable
+  structural facts. Only TypeScript is wired into the built-in CLI lifecycle;
+  projects opt into Go and Rush from `extractCustom()`.
 
 The SDK manuals under [`packages/context/docs`](./packages/context/docs/README.md)
 contain the detailed project API and package-template references. The CLI also

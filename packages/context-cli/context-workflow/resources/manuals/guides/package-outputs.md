@@ -96,11 +96,25 @@ task workflows. Authors may explicitly accept the generic default when it is
 intentionally sufficient.
 
 When approved pages reference materialized document resources, Context keeps
-their production copies in content-addressed `knowledge/assets/` paths. Build
-copies only the resources selected by package pages to `others/assets/` and
-rewrites relative Markdown links. Source audit XML and capture reports stay in
-the production workspace; they are not distributed as reader assets. See
-[Lark Resource Materialization](./lark-resources.md).
+their production copies in content-addressed `knowledge/assets/` paths. New KB
+setup should offer Git raw delivery first. It rewrites package links to either
+an automatically derived raw prefix or an explicit author-provided prefix.
+Context does not check whether resource files are committed, pushed, or
+remotely readable; that is the package author's responsibility. With no
+explicit prefix, supported remotes use an immutable commit URL. An explicit
+prefix can contain `{commit}` when the Context workspace is in Git, or name a
+mutable branch when that lifecycle is intentional; a literal prefix also works
+when resources are published from a separate repository.
+
+Workspaces without usable Git or an explicit raw prefix can choose bundled
+delivery, which copies only selected resources to `others/assets/`, or explicit
+omission, which does not copy resources and reports that links remain
+unresolved. Bundled output may
+optionally install `sharp` in the workspace and configure
+`assets.optimize`; Context itself has no image dependency. Optimization changes
+only `dist/`, content-addresses smaller WebP output, and leaves `sources/` and
+`knowledge/assets/` unchanged. Source audit XML and capture reports are never
+distributed as reader assets. See [Lark Resource Materialization](./lark-resources.md).
 
 The same inventory exposes `structure.relationship_coverage`. It records
 whether selected codegraph pages have current source-backed AST relationship

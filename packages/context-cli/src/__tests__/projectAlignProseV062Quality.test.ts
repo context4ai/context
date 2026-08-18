@@ -120,7 +120,7 @@ describe("0.6.6 prose align structure gate", () => {
         code: "node.term_expanded_beyond_definition",
       }));
       expect(qualityWarnings.result.diagnostics).toContainEqual(expect.objectContaining({
-        severity: "error",
+        severity: "warning",
         code: "node.action_too_thin",
       }));
       expect(qualityWarnings.result.diagnostics).toContainEqual(expect.objectContaining({
@@ -626,8 +626,9 @@ describe("0.6.6 prose align structure gate", () => {
         "json",
         "--verbose",
       ])) as { result: { valid: boolean; diagnostics: Array<{ code: string; candidate_id?: string }> } };
-      expect(sourceBackedStory.result.valid).toBe(false);
+      expect(sourceBackedStory.result.valid).toBe(true);
       expect(sourceBackedStory.result.diagnostics).toContainEqual(expect.objectContaining({
+        severity: "warning",
         code: "node.action_too_thin",
         candidate_id: "action/login-story",
       }));
@@ -679,8 +680,9 @@ describe("0.6.6 prose align structure gate", () => {
         "json",
         "--verbose",
       ])) as { result: { valid: boolean; diagnostics: Array<{ code: string; candidate_id?: string }> } };
-      expect(historyStory.result.valid).toBe(false);
+      expect(historyStory.result.valid).toBe(true);
       expect(historyStory.result.diagnostics).toContainEqual(expect.objectContaining({
+        severity: "warning",
         code: "node.action_too_thin",
         candidate_id: "action/history-story",
       }));

@@ -19,6 +19,7 @@ general reference; do not preload the whole manual set.
 - [Package Outputs](./guides/package-outputs.md) — how to choose between an agent knowledge-base package, LLM text, or no package output.
 - [Lark Resource Materialization](./guides/lark-resources.md) — how embedded resources move from source evidence to approved knowledge and package assets.
 - [Project API](./reference/project-api.md) — `defineProject`, sources, phases, review, and packages.
+- [Code Extractor Selection](./reference/code-extractors.md) — inspect module technology signals and choose a built-in extractor, reusable structural package, or project adapter.
 - [Package Templates](./reference/package-templates.md) — `kbPackage`, `llmsPackage`, template variables, and examples.
 - [Template Variables](./reference/template-variables.md) — Handlebars variables, loops, comments, and default knowledge inventories.
 

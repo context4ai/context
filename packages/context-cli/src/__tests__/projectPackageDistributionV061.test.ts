@@ -201,8 +201,8 @@ describe("flat knowledge package distribution", () => {
         "sample-kb.json",
       );
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-      expect(manifest.builder_protocol).toBe("v11-consumer-frontmatter");
-      delete manifest.builder_protocol;
+      expect(manifest.builder_protocol).toBe("v13-explicit-asset-delivery");
+      manifest.builder_protocol = "v12-optional-asset-optimization";
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
       expect(await runCliInDir(fixture.project, ["status"]))

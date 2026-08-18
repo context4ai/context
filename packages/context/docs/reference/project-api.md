@@ -739,6 +739,41 @@ Review summary and source-backed evidence). It must not write `knowledge/`,
 Review snapshots directly. Context owns those files and preserves rejected and
 unchanged-approved decisions across reruns.
 
+#### Optional structural extractors
+
+For the manifest-to-capability decision and unsupported-language extension
+boundary, read [Code Extractor Selection](./code-extractors.md) before declaring
+the phase.
+
+`extractCustom()` may consume optional community packages without making them
+Context CLI dependencies:
+
+```ts
+import { indexGoRepository } from "@c4a/extract-go";
+import { extractCustom } from "@c4a/context";
+
+extractCustom({
+  id: "extract:service:codegraph",
+  sources: [service],
+  collection: "codegraph",
+  extract: async ({ projectRoot }) => {
+    const facts = await indexGoRepository(resolveServiceCheckout(projectRoot));
+    return { candidates: buildServiceCandidates(facts) };
+  },
+});
+```
+
+Available structural libraries include:
+
+- `@c4a/extract-go`: Go declarations, imports, calls, and common HTTP routes;
+- `@c4a/extract-rush`: Rush projects, tags, entries, dependencies, and owners;
+- `@c4a/extract-ts`: TypeScript extraction and `extractReactRouterRoutes()`.
+
+The packages return syntax and repository facts only. They do not classify
+product meaning, choose candidate identities, or write lifecycle state. The
+knowledge project owns that mapping. Context CLI does not auto-install these
+packages and does not expose a built-in Go or Rush phase.
+
 ### `reviewValidity`
 
 Declare the review step for a collection:

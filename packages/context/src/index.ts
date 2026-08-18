@@ -139,6 +139,37 @@ export type PackageDistributionDefinition = {
   knowledgeNamespace: string;
 };
 
+export type PackageAssetOptimizationDefinition = {
+  /** Image codec provider resolved from the Context workspace. */
+  processor: "sharp";
+  /** Lossless is the safe default; lossy WebP must be selected explicitly. */
+  mode?: "lossless-webp" | "webp";
+  /** WebP quality for lossy mode. */
+  quality?: number;
+  /** Optional longest-edge limit. Images are never enlarged. */
+  maxDimension?: number;
+};
+
+export type PackageAssetDefinition =
+  | {
+    /** Publish references to immutable Git-hosted resources instead of copying resource bytes. */
+    delivery: "git-raw";
+    /** Git remote used to derive the repository URL. */
+    remote?: string;
+    /** Optional HTTPS raw root. Context appends knowledge/assets/**; {commit} is supported. */
+    urlPrefix?: string;
+  }
+  | {
+    /** Copy resources into the package. */
+    delivery: "bundle";
+    /** Optional image optimization, resolved from the Context workspace. */
+    optimize?: PackageAssetOptimizationDefinition;
+  }
+  | {
+    /** Do not copy resources. Existing relative references remain unresolved. */
+    delivery: "omit";
+  };
+
 export type BasePackageDefinition = {
   name: string;
   reads: readonly PhaseResourceReference[];
@@ -152,6 +183,7 @@ export type KbPackageDefinition = BasePackageDefinition & {
   kind: "package.kb";
   navigation: PackageNavigationDefinition;
   distribution?: PackageDistributionDefinition;
+  assets?: PackageAssetDefinition;
 };
 
 export type LlmsPackageDefinition = BasePackageDefinition & {
@@ -307,6 +339,66 @@ const normalizePackageDistribution = (
   return { knowledgeNamespace };
 };
 
+const normalizePackageAssetOptimization = (
+  assets: PackageAssetOptimizationDefinition,
+): PackageAssetOptimizationDefinition => {
+  if (assets.processor !== "sharp") {
+    throw new TypeError(`Package assets.optimize.processor must be "sharp": ${String(assets.processor)}`);
+  }
+  const mode = assets.mode ?? "lossless-webp";
+  if (mode !== "lossless-webp" && mode !== "webp") {
+    throw new TypeError(`Package assets.optimize.mode must be "lossless-webp" or "webp": ${String(mode)}`);
+  }
+  if (assets.quality !== undefined &&
+    (!Number.isSafeInteger(assets.quality) || assets.quality < 1 || assets.quality > 100)) {
+    throw new TypeError(`Package assets.optimize.quality must be a safe integer from 1 to 100: ${assets.quality}`);
+  }
+  if (mode === "lossless-webp" && assets.quality !== undefined) {
+    throw new TypeError("Package assets.optimize.quality is only valid when assets.optimize.mode is \"webp\".");
+  }
+  if (assets.maxDimension !== undefined &&
+    (!Number.isSafeInteger(assets.maxDimension) || assets.maxDimension < 1)) {
+    throw new TypeError(`Package assets.optimize.maxDimension must be a positive safe integer: ${assets.maxDimension}`);
+  }
+  return {
+    processor: "sharp",
+    mode,
+    ...(assets.quality === undefined ? {} : { quality: assets.quality }),
+    ...(assets.maxDimension === undefined ? {} : { maxDimension: assets.maxDimension }),
+  };
+};
+
+const normalizePackageAssets = (
+  assets: PackageAssetDefinition | undefined,
+): PackageAssetDefinition | undefined => {
+  if (assets === undefined) return undefined;
+  if (assets.delivery === "bundle") {
+    return {
+      delivery: "bundle",
+      ...(assets.optimize === undefined
+        ? {}
+        : { optimize: normalizePackageAssetOptimization(assets.optimize) }),
+    };
+  }
+  if (assets.delivery === "omit") return { delivery: "omit" };
+  if (assets.delivery !== "git-raw") {
+    throw new TypeError(`Package assets.delivery must be "git-raw", "bundle", or "omit": ${String((assets as { delivery?: unknown }).delivery)}`);
+  }
+  const remote = assets.remote?.trim();
+  if (remote !== undefined && !/^[A-Za-z0-9._-]+$/u.test(remote)) {
+    throw new TypeError(`Package assets.remote must be a safe Git remote name: ${assets.remote}`);
+  }
+  const urlPrefix = assets.urlPrefix?.trim().replace(/\/+$/u, "");
+  if (urlPrefix !== undefined && !urlPrefix.startsWith("https://")) {
+    throw new TypeError("Package assets.urlPrefix must be an HTTPS URL; it may contain {commit}.");
+  }
+  return {
+    delivery: "git-raw",
+    ...(remote === undefined ? {} : { remote }),
+    ...(urlPrefix === undefined ? {} : { urlPrefix }),
+  };
+};
+
 const assertSelectOkfRoots = (roots: readonly string[]): void => {
   for (const root of roots) {
     assertOkfRoot(root, "Package select.okfRoots");
@@ -372,14 +464,17 @@ export const kbPackage = (definition: {
   select?: PackageSelectDefinition;
   navigation?: Partial<PackageNavigationDefinition>;
   distribution?: PackageDistributionDefinition;
+  assets?: PackageAssetDefinition;
 }): KbPackageDefinition => {
   const base = createPackageDefinitionBase("kb", definition);
   const distribution = normalizePackageDistribution(definition.distribution);
+  const assets = normalizePackageAssets(definition.assets);
   return {
     kind: "package.kb",
     ...base,
     navigation: normalizePackageNavigation(definition.navigation),
     ...(distribution === undefined ? {} : { distribution }),
+    ...(assets === undefined ? {} : { assets }),
   };
 };
 

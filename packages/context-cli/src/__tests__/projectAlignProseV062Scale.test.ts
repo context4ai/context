@@ -72,10 +72,13 @@ describe("0.6.6 prose align structure scale gate", () => {
                 reason: string;
                 parent_index_view_ref?: string;
                 suggested_child_views: Array<{
-                  section_id: string;
+                  group_id: string;
+                  section_ids: string[];
+                  section_count: number;
                   node_ref: string;
                   view_ref: string;
                   title: string;
+                  source_ref_count: number;
                   source_refs: string[];
                 }>;
                 suggested_child_view_refs: string[];
@@ -114,22 +117,38 @@ describe("0.6.6 prose align structure scale gate", () => {
         reason: "too_many_sections",
         parent_index_view_ref: "architecture:action/large-runbook",
       });
-      expect(large.result.structure_summary.views[0]?.split_requirement.suggested_child_views).toContainEqual(
+      expect(large.result.structure_summary.views[0]?.split_requirement.suggested_child_views).toEqual([
         expect.objectContaining({
-          section_id: "segment-1",
-          node_ref: "action/large-runbook/segment-1",
-          view_ref: "architecture:action/large-runbook/segment-1",
-          title: "Segment 1",
+          group_id: "part-01",
+          section_ids: Array.from({ length: 13 }, (_, index) => `segment-${index + 1}`),
+          section_count: 13,
+          node_ref: "action/large-runbook/part-01",
+          view_ref: "architecture:action/large-runbook/part-01",
+          title: "Part 1",
+          source_ref_count: 1,
           source_refs: expect.arrayContaining([sourceRef]),
         }),
-      );
+        expect.objectContaining({
+          group_id: "part-02",
+          section_ids: Array.from({ length: 12 }, (_, index) => `segment-${index + 14}`),
+          section_count: 12,
+          node_ref: "action/large-runbook/part-02",
+          view_ref: "architecture:action/large-runbook/part-02",
+          title: "Part 2",
+          source_ref_count: 1,
+          source_refs: expect.arrayContaining([sourceRef]),
+        }),
+      ]);
       expect(large.result.structure_summary.views[0]?.split_requirement.suggested_child_view_refs)
-        .toContain("architecture:action/large-runbook/segment-1");
+        .toEqual([
+          "architecture:action/large-runbook/part-01",
+          "architecture:action/large-runbook/part-02",
+        ]);
       expect(large.result.structure_summary.views[0]?.split_requirement.contains_edge_drafts).toContainEqual(
         expect.objectContaining({
           type: "contains",
           from: "architecture:action/large-runbook",
-          to: "architecture:action/large-runbook/segment-1",
+          to: "architecture:action/large-runbook/part-01",
           source_refs: expect.arrayContaining([sourceRef]),
         }),
       );

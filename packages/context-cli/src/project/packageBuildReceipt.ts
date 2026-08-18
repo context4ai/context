@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
+import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { toPosixPath } from "./packageTemplateUtils.js";
 
@@ -31,6 +32,7 @@ export interface PackageBuildSummary {
   resources: {
     files: number;
     bytes: number;
+    delivery: PackageAssetDeliverySummary;
   };
   state: "created" | "updated" | "unchanged";
   changes: PackageBuildChanges;
@@ -164,6 +166,22 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     `  files: ${pkg.files}`,
     `  resources: ${pkg.resources.files} file(s), ${pkg.resources.bytes} byte(s)`,
   ];
+  const optimization = pkg.resources.delivery.optimization;
+  if (optimization?.state === "recommended") {
+    lines.push(
+      `  asset optimization: recommended (${optimization.candidateFiles} image(s), ${optimization.originalBytes} byte(s))`,
+      "  setup: choose bundle delivery, add sharp, and configure kbPackage().assets.optimize in src/index.ts",
+    );
+  } else if (optimization?.state === "applied") {
+    lines.push(
+      `  asset optimization: ${optimization.processor}/${optimization.mode}, saved ${optimization.savedBytes} byte(s)`,
+    );
+  } else if (pkg.resources.delivery.state === "git-raw") {
+    const git = pkg.resources.delivery.git;
+    lines.push(`  asset delivery: Git raw at ${git?.commit ?? git?.urlPrefix ?? "configured URL prefix"}`);
+  } else if (pkg.resources.delivery.state === "omitted") {
+    lines.push(`  asset delivery: omitted; ${pkg.resources.delivery.sourceFiles} reference(s) remain unresolved`);
+  }
   if (pkg.state === "unchanged") return [...lines, "  changes: none"];
   return [
     ...lines,

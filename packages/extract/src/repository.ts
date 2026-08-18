@@ -15,6 +15,7 @@ import { detectModuleAt, detectModules, type ModuleScanResult } from "./scanner.
 import { ExtractionInputError, NO_ENTRY_DETECTED } from "./errors.js";
 
 export const PACKAGE_JSON = "package.json";
+export const GO_MOD = "go.mod";
 
 const toPosixPath = (value: string): string => value.split(path.sep).join("/");
 
@@ -90,7 +91,7 @@ function moduleRelativeEntryPath(modulePath: string, sourcePath: string): string
 
 function entrySubpath(filePath: string, index: number): string {
   if (index === 0) return ".";
-  const withoutExtension = filePath.replace(/\.(?:d\.)?(?:ts|tsx|mts|cts)$/u, "");
+  const withoutExtension = filePath.replace(/\.(?:d\.)?(?:ts|tsx|mts|cts|go)$/u, "");
   return `./${withoutExtension}`;
 }
 
@@ -106,7 +107,7 @@ function selectedEntryFiles(input: {
     if (input.detected.entries.length === 0) {
       throw new ExtractionInputError(
         NO_ENTRY_DETECTED,
-        "No TypeScript entry files were detected from package.json. Configure extractTs entries in the Context project, or use mode: \"scan\"; do not modify the source repository solely for Context.",
+        `No ${input.detected.package.language} entry files were detected from the module manifest. Configure entries in the Context project, or use scan mode; do not modify the source repository solely for Context.`,
         { mode: "auto", module: input.module.path },
       );
     }
@@ -127,11 +128,11 @@ function selectedEntryFiles(input: {
     ? [...includedSourceFiles].sort()
     : [...new Set(selection.entries.map(safeSourceRelativePath))];
   if (sourceEntries.length === 0) {
-    throw new ExtractionInputError(
-      NO_ENTRY_DETECTED,
-      selection.mode === "scan"
-        ? "No TypeScript files match extractTs include for scan mode."
-        : "extractTs entries must contain at least one source-relative file path.",
+      throw new ExtractionInputError(
+        NO_ENTRY_DETECTED,
+        selection.mode === "scan"
+        ? `No ${input.detected.package.language} files match the extraction include for scan mode.`
+        : "Extraction entries must contain at least one source-relative file path.",
       { mode: selection.mode, module: input.module.path },
     );
   }
@@ -208,11 +209,22 @@ export const loadSourceInfo = async (
       content: await fs.readJson<Record<string, unknown>>(PACKAGE_JSON),
     });
   }
+  if (await fs.exists(GO_MOD)) {
+    manifests.push({
+      type: "go.mod",
+      path: GO_MOD,
+      content: { raw: await fs.readFile(GO_MOD) },
+    });
+  }
 
   return {
     path: normalizeRelativePath(modulePath),
     manifests,
-    ...(manifests.some((manifest) => manifest.type === PACKAGE_JSON) ? { language: "typescript" } : {}),
+    ...(manifests.some((manifest) => manifest.type === GO_MOD)
+      ? { language: "go" }
+      : manifests.some((manifest) => manifest.type === PACKAGE_JSON)
+        ? { language: "typescript" }
+        : {}),
   };
 };
 
@@ -298,7 +310,7 @@ const noModuleError = (modulePath: string, repoPath: string): RepositoryExtracti
   module_path: modulePath,
   error:
     `No indexable code module detected at "${modulePath}" under ${repoPath}. ` +
-    "A TypeScript module must have a package.json.",
+    "A supported module must have a recognized manifest such as package.json or go.mod.",
 });
 
 const resolveRequestedModules = async (

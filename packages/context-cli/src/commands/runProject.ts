@@ -15,13 +15,14 @@ import {
 } from "../project/workflow/workflowCommandOptions.js";
 import { bindWorkflowExecutionContext } from "../project/workflow/workflowExecutionContext.js";
 import {
-  executeRevisionBoundContextCommand,
   formatWorkflowRunResult,
   runWorkflowUntilBlockedOrComplete,
 } from "../project/workflow/workflowRun.js";
 import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
 import { ExitCode } from "../types/exitCode.js";
 import { recordWorkflowStop } from "../project/debugTrace.js";
+import { WorkspaceExecutionRuntime } from "../project/workflow/workflowExecutionRuntime.js";
+import { createWorkflowInProcessExecutor } from "../project/workflow/workflowInProcessActions.js";
 
 type ProjectRunInput = Parameters<typeof runProjectPhaseCommand>[0];
 
@@ -263,27 +264,33 @@ async function runManagedUntil(input: {
         input.resourceReceiptsReference,
         found.projectRoot,
       );
-  const result = await runWorkflowUntilBlockedOrComplete({
-    observe: () =>
-      collectProjectStatus(found.projectRoot, {
-        managed: true,
-        authorities: input.authorities,
-        ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
-        ...(input.resourceReceiptsReference === undefined
-          ? {}
-          : { resourceReceiptsReference: input.resourceReceiptsReference }),
-      }),
-    execute: ({ cwd, command }) => executeRevisionBoundContextCommand({
-      cwd,
-      command,
-      cliEntryPath: fileURLToPath(input.cliModuleUrl),
-    }),
-    maxSteps: integerOption(input.options.maxSteps, "--max-steps", {
-      min: 1,
-      max: 100,
-    }),
-    dryRun: input.options.dryRun === true,
+  const runtime = new WorkspaceExecutionRuntime({
+    projectRoot: found.projectRoot,
+    cliEntryPath: fileURLToPath(input.cliModuleUrl),
+    inProcess: createWorkflowInProcessExecutor(),
   });
+  let result;
+  try {
+    result = await runWorkflowUntilBlockedOrComplete({
+      observe: () =>
+        collectProjectStatus(found.projectRoot, {
+          managed: true,
+          authorities: input.authorities,
+          ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
+          ...(input.resourceReceiptsReference === undefined
+            ? {}
+            : { resourceReceiptsReference: input.resourceReceiptsReference }),
+        }),
+      execute: (command) => runtime.execute(command),
+      maxSteps: integerOption(input.options.maxSteps, "--max-steps", {
+        min: 1,
+        max: 100,
+      }),
+      dryRun: input.options.dryRun === true,
+    });
+  } finally {
+    await runtime.close();
+  }
   await recordWorkflowStop(found.projectRoot, {
     state: result.state,
     steps: result.steps.length,
