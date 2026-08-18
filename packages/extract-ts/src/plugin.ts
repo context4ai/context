@@ -6,6 +6,7 @@ export class TypeScriptPlugin implements ExtractionPlugin {
   readonly id = "c4a-extract-ts";
   readonly languages = ["typescript", "tsx"];
   readonly packageManagers = ["npm"];
+  readonly manifestTypes: ManifestInfo["type"][] = ["package.json"];
 
   #lastDetection: EntryDetectionResult | null = null;
 

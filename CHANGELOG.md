@@ -4,6 +4,13 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.5 - 2026-08-18
+
+- Made Git-derived asset URLs part of package freshness so a changed commit or remote cannot leave a previously built package incorrectly ready.
+- Made mixed-manifest repository extraction plugin-owned, allowing TypeScript and Go extractors to receive their declared manifest without a global language guess.
+- Kept project-defined extraction code behind the managed subprocess boundary while retaining in-process execution for built-in deterministic phases.
+- Clarified the Git requirements for commit-templated raw asset URLs in SDK and workflow reference documentation.
+
 ## 0.6.4 - 2026-08-18
 
 - Added optional Go and Rush structural extractors, including a portable WASM Go parser, plus a route-selected technology inspection step that chooses built-in parsers or a project-owned custom adapter from repository facts.

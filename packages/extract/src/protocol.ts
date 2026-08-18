@@ -96,6 +96,7 @@ export interface ExtractionPlugin {
   id: string;
   languages: string[];
   packageManagers: string[];
+  manifestTypes?: ManifestInfo["type"][];
   canHandle(source: SourceInfo): boolean;
   detectEntries(manifest: ManifestInfo, fs: FileSystem): Promise<EntryDetectionResult>;
   extractSymbols(entries: EntryFile[], fs: FileSystem): Promise<ExtractionResult>;

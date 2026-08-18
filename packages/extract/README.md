@@ -25,6 +25,7 @@ interface ExtractionPlugin {
   id: string;
   languages: string[];
   packageManagers: string[];
+  manifestTypes?: ManifestInfo["type"][];
   canHandle(source: SourceInfo): boolean;
   detectEntries(manifest: ManifestInfo, fs: FileSystem): Promise<EntryDetectionResult>;
   extractSymbols(entries: EntryFile[], fs: FileSystem): Promise<ExtractionResult>;
@@ -35,6 +36,9 @@ interface ExtractionPlugin {
 Important constraints:
 
 - Plugins read through `FileSystem`; they should not access `node:fs` directly.
+- `manifestTypes` declares which manifest is passed to `detectEntries()`. It is
+  optional for a single-manifest module and required when a plugin accepts a
+  module containing multiple manifest types.
 - `detectEntries()` must return package identity, package kind, language, optional version, and entry files.
 - `extractSymbols()` must return `ExtractionResult` v2 with stable symbols and relations.
 - `detectEntries()` is called before `extractSymbols()`; plugins may keep per-detection package context between those calls.
@@ -171,6 +175,7 @@ export class PythonPlugin implements ExtractionPlugin {
   readonly id = "c4a-extract-python";
   readonly languages = ["python"];
   readonly packageManagers = ["pip"];
+  readonly manifestTypes: ManifestInfo["type"][] = ["pyproject.toml"];
 
   canHandle(source: SourceInfo): boolean {
     return source.manifests.some((manifest) => manifest.type === "pyproject.toml");

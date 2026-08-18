@@ -185,7 +185,7 @@ export interface ContextWorkflowCommand {
   availability: "immediate" | "after-human-confirmation";
   managed_execution: "automatic" | "agent-required";
   execution?: {
-    target: "agent-host";
+    target: "agent-host" | "subprocess";
   };
 }
 

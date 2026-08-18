@@ -36,6 +36,7 @@ export class GoPlugin implements ExtractionPlugin {
   readonly id = "c4a-extract-go";
   readonly languages = ["go"];
   readonly packageManagers = ["go"];
+  readonly manifestTypes: ManifestInfo["type"][] = ["go.mod"];
   #lastDetection: EntryDetectionResult | null = null;
 
   canHandle(source: SourceInfo): boolean {

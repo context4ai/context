@@ -217,16 +217,23 @@ export const loadSourceInfo = async (
     });
   }
 
+  const detectedLanguages = [
+    ...(manifests.some((manifest) => manifest.type === GO_MOD) ? ["go"] : []),
+    ...(manifests.some((manifest) => manifest.type === PACKAGE_JSON) ? ["typescript"] : []),
+  ];
   return {
     path: normalizeRelativePath(modulePath),
     manifests,
-    ...(manifests.some((manifest) => manifest.type === GO_MOD)
-      ? { language: "go" }
-      : manifests.some((manifest) => manifest.type === PACKAGE_JSON)
-        ? { language: "typescript" }
-        : {}),
+    ...(detectedLanguages.length === 1 ? { language: detectedLanguages[0] } : {}),
   };
 };
+
+function manifestForPlugin(source: SourceInfo, plugin: ExtractionPlugin): ManifestInfo | undefined {
+  if (plugin.manifestTypes !== undefined) {
+    return source.manifests.find((manifest) => plugin.manifestTypes?.includes(manifest.type));
+  }
+  return source.manifests.length === 1 ? source.manifests[0] : undefined;
+}
 
 export const prefixSymbolPaths = (
   symbol: SymbolInfo,
@@ -374,12 +381,14 @@ export const runRepositoryExtraction = async (
       continue;
     }
 
-    const manifest = sourceInfo.manifests.find((candidate) => candidate.type === PACKAGE_JSON) ?? sourceInfo.manifests[0];
+    const manifest = manifestForPlugin(sourceInfo, plugin);
     if (!manifest) {
       moduleErrors.push({
         module_name: module.name,
         module_path: module.path,
-        error: `Module "${module.name}" has no supported manifest for extraction`,
+        error: plugin.manifestTypes === undefined && sourceInfo.manifests.length > 1
+          ? `Extraction plugin "${plugin.id}" must declare manifestTypes for mixed-manifest module "${module.name}"`
+          : `Module "${module.name}" has no manifest supported by extraction plugin "${plugin.id}"`,
       });
       continue;
     }

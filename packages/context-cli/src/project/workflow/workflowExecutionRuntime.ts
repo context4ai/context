@@ -145,13 +145,14 @@ export class WorkspaceExecutionRuntime {
     cwd: string;
     command: string;
     effect: ContextWorkflowCommand["effect"];
+    execution?: ContextWorkflowCommand["execution"];
   }): Promise<WorkflowCommandReceipt> {
     if (this.disposed) throw new Error("workspace execution runtime is closed");
     if (input.cwd !== this.projectRoot) {
       throw new Error(`workspace execution runtime cannot cross roots: ${input.cwd}`);
     }
     const args = parseContextCommand(input.command);
-    if (input.effect !== "external" && this.inProcess.supports({ ...input, args })) {
+    if (input.execution?.target !== "subprocess" && input.effect !== "external" && this.inProcess.supports({ ...input, args })) {
       return this.executeInProcess({ ...input, args });
     }
     return this.executeSubprocess(input);

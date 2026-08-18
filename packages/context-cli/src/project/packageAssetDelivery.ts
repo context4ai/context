@@ -38,6 +38,12 @@ export interface PackageAssetDeliveryResult {
   summary: PackageAssetDeliverySummary;
 }
 
+export interface PackageAssetDeliveryFingerprintInput {
+  state: "git-raw";
+  git?: PackageAssetDeliverySummary["git"];
+  targets: Array<[string, string]>;
+}
+
 async function git(projectRoot: string, args: readonly string[]): Promise<string> {
   try {
     const result = await execFileAsync("git", ["-C", projectRoot, ...args], {
@@ -182,6 +188,24 @@ async function deliverFromGit(input: {
       outputBytes: 0,
       git: { remote, commit, urlPrefix },
     },
+  };
+}
+
+export async function packageAssetDeliveryFingerprintInput(input: {
+  projectRoot: string;
+  assets: readonly PackageAssetFile[];
+  definition?: PackageAssetDefinition;
+}): Promise<PackageAssetDeliveryFingerprintInput | null> {
+  if (input.definition?.delivery !== "git-raw" || input.assets.length === 0) return null;
+  const delivery = await deliverFromGit({
+    projectRoot: input.projectRoot,
+    assets: input.assets,
+    definition: input.definition,
+  });
+  return {
+    state: "git-raw",
+    ...(delivery.summary.git === undefined ? {} : { git: delivery.summary.git }),
+    targets: [...delivery.targetByOriginal.entries()].sort(([left], [right]) => left.localeCompare(right)),
   };
 }
 

@@ -189,12 +189,14 @@ version instead of approximating the package layout.
 
 ## Release Automation
 
-Context publishes five public packages from prepared `dist/` directories:
+Context publishes seven public packages from prepared `dist/` directories:
 
 - `@c4a/core`
 - `@c4a/context`
 - `@c4a/extract`
 - `@c4a/extract-ts`
+- `@c4a/extract-go`
+- `@c4a/extract-rush`
 - `@c4a/context-cli`
 
 The repository version, every workspace package version, and the bundled
@@ -216,12 +218,14 @@ npm pack packages/core/dist --dry-run
 npm pack packages/context/dist --dry-run
 npm pack packages/extract/dist --dry-run
 npm pack packages/extract-ts/dist --dry-run
+npm pack packages/extract-go/dist --dry-run
+npm pack packages/extract-rush/dist --dry-run
 npm pack packages/context-cli/dist --dry-run
 ```
 
 Publishing is driven by a GitHub Release whose tag is exactly `v<version>`.
 The release workflow checks the tag, runs `bun run verify:full`, builds and
-audits all five packages, then publishes them in dependency order with npm
+audits all seven packages, then publishes them in dependency order with npm
 provenance. Each npm package must trust the `context4ai/context` repository and
 the `.github/workflows/publish.yml` workflow through npm Trusted Publishing.
 The workflow is safe to rerun after a partial registry publication: it skips an

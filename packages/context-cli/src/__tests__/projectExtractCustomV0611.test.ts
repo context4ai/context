@@ -89,10 +89,11 @@ describe("custom code extraction lifecycle", () => {
 
       const before = JSON.parse(await runCliInDir(initialized.projectRoot, ["status", "--format", "json"])) as {
         progress: { pendingExtractPhases: number };
-        workflow: { current: { commands: Array<{ command: string }> } };
+        workflow: { current: { commands: Array<{ command: string; execution?: { target: string } }> } };
       };
       expect(before.progress.pendingExtractPhases).toBe(1);
       expect(before.workflow.current.commands[0]?.command).toContain("extract:20260811/service:protocol");
+      expect(before.workflow.current.commands[0]?.execution).toEqual({ target: "subprocess" });
 
       const extracted = JSON.parse(await runCliInDir(initialized.projectRoot, [
         "run", "extract:20260811/service:protocol", "--format", "json",

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
 import type { PackageAssetFile } from "../project/packageAssets.js";
+import { packageAssetDeliveryFingerprintInput } from "../project/packageAssetDelivery.js";
 import { writeSelectedPackageKnowledge } from "../project/packageBuildContent.js";
 import {
   isOptimizablePackageImage,
@@ -287,6 +288,55 @@ describe("optional package asset optimization", () => {
       });
       expect(await readFile(join(projectRoot, "dist", "example-kb", "guides", "example.md"), "utf8"))
         .toContain("https://code.example.test/org/resources/raw/published/knowledge/assets/image/diagram.png");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  test("tracks Git-derived raw URLs in the package input identity", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "context-package-git-identity-"));
+    try {
+      const asset = imageAsset("diagram", 64);
+      execFileSync("git", ["init"], { cwd: projectRoot });
+      execFileSync("git", ["config", "user.email", "context@example.test"], { cwd: projectRoot });
+      execFileSync("git", ["config", "user.name", "Context Test"], { cwd: projectRoot });
+      await writeFile(join(projectRoot, "tracked.txt"), "first\n", "utf8");
+      execFileSync("git", ["add", "tracked.txt"], { cwd: projectRoot });
+      execFileSync("git", ["commit", "-m", "first"], { cwd: projectRoot });
+      execFileSync("git", ["remote", "add", "origin", "git@github.com:example/one.git"], { cwd: projectRoot });
+
+      const first = await packageAssetDeliveryFingerprintInput({
+        projectRoot,
+        assets: [asset],
+        definition: { delivery: "git-raw" },
+      });
+      execFileSync("git", ["commit", "--allow-empty", "-m", "second"], { cwd: projectRoot });
+      const afterCommit = await packageAssetDeliveryFingerprintInput({
+        projectRoot,
+        assets: [asset],
+        definition: { delivery: "git-raw" },
+      });
+      expect(afterCommit).not.toEqual(first);
+
+      execFileSync("git", ["remote", "set-url", "origin", "git@github.com:example/two.git"], { cwd: projectRoot });
+      const afterRemote = await packageAssetDeliveryFingerprintInput({
+        projectRoot,
+        assets: [asset],
+        definition: { delivery: "git-raw" },
+      });
+      expect(afterRemote).not.toEqual(afterCommit);
+
+      const literal = await packageAssetDeliveryFingerprintInput({
+        projectRoot,
+        assets: [asset],
+        definition: { delivery: "git-raw", urlPrefix: "https://cdn.example.test/published" },
+      });
+      execFileSync("git", ["commit", "--allow-empty", "-m", "third"], { cwd: projectRoot });
+      expect(await packageAssetDeliveryFingerprintInput({
+        projectRoot,
+        assets: [asset],
+        definition: { delivery: "git-raw", urlPrefix: "https://cdn.example.test/published" },
+      })).toEqual(literal);
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

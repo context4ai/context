@@ -19,12 +19,14 @@ function command(
   effect: ContextWorkflowCommand["effect"],
   managedExecution: ContextWorkflowCommand["managed_execution"] =
     effect === "write" ? "automatic" : "agent-required",
+  execution?: ContextWorkflowCommand["execution"],
 ): ContextWorkflowCommand {
   return {
     command: value,
     effect,
     availability: "immediate",
     managed_execution: managedExecution,
+    ...(execution === undefined ? {} : { execution }),
   };
 }
 
@@ -149,10 +151,17 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.extract.next": (observation) => {
     const phase = observation.staleSourcePhases[0] ??
       observation.pendingExtractPhases[0];
+    const definition = observation.phases.find((candidate) => candidate.id === phase);
+    const projectCode = definition?.kind === "phase.extract.custom" || definition?.kind === "phase.custom";
     return {
       commands: phase === undefined
         ? []
-        : [command(`context run ${phase} --format json`, "write")],
+        : [command(
+            `context run ${phase} --format json`,
+            "write",
+            "automatic",
+            projectCode ? { target: "subprocess" } : undefined,
+          )],
     };
   },
   "context.document.inspect-classification": (observation) => ({

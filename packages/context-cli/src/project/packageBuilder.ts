@@ -41,9 +41,12 @@ import {
   writeSelectedPackageKnowledge,
 } from "./packageBuildContent.js";
 import { validatePackageRenderPlan, validatePackageTemplateContract } from "./packageTemplateGuard.js";
-import { projectPackageKnowledgeAssets } from "./packageAssets.js";
+import { projectPackageKnowledgeAssets, type PackageAssetFile } from "./packageAssets.js";
 import { resolvePackageImageProcessor } from "./packageAssetOptimization.js";
-import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
+import {
+  packageAssetDeliveryFingerprintInput,
+  type PackageAssetDeliverySummary,
+} from "./packageAssetDelivery.js";
 import {
   assertSafeRenderedPath,
   isSafeRelativePath,
@@ -105,7 +108,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v13-explicit-asset-delivery";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v14-git-asset-identity";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -197,11 +200,20 @@ async function packageInputFingerprint(input: {
     })
   ));
   const assets = new Map<string, string>();
+  const assetFiles = new Map<string, PackageAssetFile>();
   for (const projection of projectedAssets) {
     for (const asset of projection.assets) {
       assets.set(asset.packageRelPath, createHash("sha256").update(asset.bytes).digest("hex"));
+      assetFiles.set(asset.packageRelPath, asset);
     }
   }
+  const assetDelivery = input.pkg.kind === "package.kb"
+    ? await packageAssetDeliveryFingerprintInput({
+        projectRoot: input.projectRoot,
+        assets: [...assetFiles.values()],
+        ...(input.pkg.assets === undefined ? {} : { definition: input.pkg.assets }),
+      })
+    : null;
   return stableHash({
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     package: {
@@ -219,6 +231,7 @@ async function packageInputFingerprint(input: {
       content: file.content,
     })),
     assets: [...assets].sort(([left], [right]) => left.localeCompare(right)),
+    assetDelivery,
     template: input.templateFiles.map((file) => ({
       path: file.relPath,
       content: file.content,

@@ -61,14 +61,18 @@ llmsPackage({
 
 Use Git raw delivery when resources are published from a Git repository.
 Without `urlPrefix`, the Context workspace must be inside Git; GitHub remotes
-are derived automatically and pinned to the current commit. Other hosts and
-workspaces outside Git accept an explicit HTTPS prefix; Context appends the
-project-relative `knowledge/assets/...` path. Context does not check whether
-the resources are committed, pushed, or remotely readable; publishing them is
-the package author's responsibility.
-`{commit}` is replaced when present. A literal branch in the prefix is allowed
-but intentionally follows that mutable branch. The configured raw host must be
-reachable by the eventual package consumers.
+are derived automatically and pinned to the current commit. Other hosts accept
+an explicit HTTPS prefix. `{commit}` is replaced only when the workspace is
+inside Git, because Context must resolve the current commit. A workspace outside
+Git must use a literal, already-published prefix without `{commit}`. Context
+appends the project-relative `knowledge/assets/...` path.
+
+The resolved commit and raw URL participate in package freshness, so changing
+Git HEAD or the selected remote makes an existing package stale. Context does
+not check whether resources are committed, pushed, or remotely readable;
+publishing them is the package author's responsibility. A literal branch in the
+prefix is allowed but intentionally follows that mutable branch. The configured
+raw host must be reachable by the eventual package consumers.
 
 ```ts
 assets: {
@@ -77,8 +81,15 @@ assets: {
 }
 ```
 
-When the workspace is not in Git and has no explicit raw prefix, choose bundled
-delivery or explicit omission:
+Outside Git, use a literal published prefix or choose bundled delivery or
+explicit omission:
+
+```ts
+assets: {
+  delivery: "git-raw",
+  urlPrefix: "https://code.example.com/team/knowledge/raw/published-assets",
+}
+```
 
 ```ts
 assets: { delivery: "bundle" }

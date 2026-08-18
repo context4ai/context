@@ -218,4 +218,84 @@ describe("runRepositoryExtraction", () => {
       await rm(repo, { recursive: true, force: true });
     }
   });
+
+  test("lets the selected plugin choose its manifest in a mixed-language module", async () => {
+    const repo = await createTempRepo();
+    try {
+      await writeText(repo, "package.json", JSON.stringify({ name: "@fixture/mixed" }));
+      await writeText(repo, "go.mod", "module example.org/mixed\n\ngo 1.23\n");
+      await writeText(repo, "src/index.ts", "export const value = 1;\n");
+      await writeText(repo, "main.go", "package main\nfunc main() {}\n");
+
+      let receivedType: string | undefined;
+      const typescriptPlugin: ExtractionPlugin = {
+        ...createFixturePlugin([{ path: "src/index.ts", subpath: ".", type: "library" }]),
+        manifestTypes: ["package.json"],
+        async detectEntries(manifest) {
+          receivedType = manifest.type;
+          return {
+            package: { name: "@fixture/mixed", kind: PackageKind.Lib, language: "typescript" },
+            entries: [{ path: "src/index.ts", subpath: ".", type: "library" }],
+          };
+        },
+      };
+      const result = await runRepositoryExtraction({
+        repoPath: repo,
+        modules: ["."],
+        plugins: [typescriptPlugin],
+      });
+
+      expect(result.moduleErrors).toEqual([]);
+      expect(result.results[0]?.sourceInfo.language).toBeUndefined();
+      expect(receivedType).toBe("package.json");
+
+      const goPlugin: ExtractionPlugin = {
+        ...createFixturePlugin([{ path: "main.go", subpath: ".", type: "service" }]),
+        id: "fixture-go",
+        languages: ["go"],
+        packageManagers: ["go"],
+        manifestTypes: ["go.mod"],
+        canHandle: (source) => source.manifests.some((manifest) => manifest.type === "go.mod"),
+        async detectEntries(manifest) {
+          receivedType = manifest.type;
+          return {
+            package: { name: "example.org/mixed", kind: PackageKind.Service, language: "go" },
+            entries: [{ path: "main.go", subpath: ".", type: "service" }],
+          };
+        },
+      };
+      const goResult = await runRepositoryExtraction({
+        repoPath: repo,
+        modules: ["."],
+        pathFilter: {
+          package: { include: ["package.json", "go.mod"] },
+          code: { include: ["**/*.go"], exclude: [] },
+          doc: { include: [], exclude: [] },
+        },
+        plugins: [goPlugin],
+      });
+      expect(goResult.moduleErrors).toEqual([]);
+      expect(receivedType).toBe("go.mod");
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects an ambiguous legacy plugin instead of silently passing the wrong manifest", async () => {
+    const repo = await createTempRepo();
+    try {
+      await writeText(repo, "package.json", JSON.stringify({ name: "@fixture/mixed" }));
+      await writeText(repo, "go.mod", "module example.org/mixed\n\ngo 1.23\n");
+      await writeText(repo, "src/index.ts", "export const value = 1;\n");
+      const result = await runRepositoryExtraction({
+        repoPath: repo,
+        modules: ["."],
+        plugins: [createFixturePlugin()],
+      });
+      expect(result.results).toEqual([]);
+      expect(result.moduleErrors[0]?.error).toContain("must declare manifestTypes");
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
 });

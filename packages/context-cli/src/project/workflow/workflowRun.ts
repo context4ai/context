@@ -64,6 +64,7 @@ export interface WorkflowRunExecutor {
     cwd: string;
     command: string;
     effect: ContextWorkflowCommand["effect"];
+    execution?: ContextWorkflowCommand["execution"];
   }): Promise<WorkflowCommandReceipt>;
 }
 
@@ -335,6 +336,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         cwd: status.projectRoot,
         command: selected.command.command,
         effect: selected.command.effect,
+        ...(selected.command.execution === undefined ? {} : { execution: selected.command.execution }),
       });
     } catch (error) {
       steps.push(step);

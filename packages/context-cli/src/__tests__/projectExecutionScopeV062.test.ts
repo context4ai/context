@@ -98,6 +98,37 @@ describe("Context workspace execution runtime", () => {
     }
   });
 
+  test("keeps project-defined workflow actions in a child process", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-project-action-runtime-"));
+    const entry = join(root, "project-action.mjs");
+    await writeFile(entry, "process.stdout.write('isolated project action')\n", "utf8");
+    let inProcessCalls = 0;
+    const runtime = new WorkspaceExecutionRuntime({
+      projectRoot: root,
+      cliEntryPath: entry,
+      inProcess: {
+        supports: () => true,
+        execute: async () => {
+          inProcessCalls += 1;
+        },
+      },
+    });
+    try {
+      const receipt = await runtime.execute({
+        cwd: root,
+        command: "context --workflow-revision sha256:test run extract:custom --format json",
+        effect: "write",
+        execution: { target: "subprocess" },
+      });
+      expect(receipt.exitCode).toBe(0);
+      expect(receipt.stdout.bytes).toBe(Buffer.byteLength("isolated project action"));
+      expect(inProcessCalls).toBe(0);
+    } finally {
+      await runtime.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("restores process output and reports failure when an in-process action throws", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-failed-runtime-"));
     const originalWrite = process.stdout.write;
