@@ -5,7 +5,6 @@ export interface ExecutionResourceReceipt {
   state: Exclude<ExecutionResourceState, "active">;
   error?: string;
 }
-
 export interface ExecutionScopeReceipt {
   name: string;
   resources: ExecutionResourceReceipt[];
@@ -94,4 +93,3 @@ export class ExecutionScope {
     };
   }
 }
-
