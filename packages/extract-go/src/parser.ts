@@ -1,5 +1,6 @@
-import Parser, { type SyntaxNode } from "tree-sitter";
-import Go from "tree-sitter-go";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { Language, Parser, type SyntaxNode } from "web-tree-sitter";
 import type {
   GoCall,
   GoFileIndex,
@@ -11,8 +12,16 @@ import type {
   GoSymbolKind,
 } from "./types.js";
 
+const resolveWasmPath = (relativePath: string): string =>
+  fileURLToPath(new URL(relativePath, import.meta.url));
+
+const localRuntimeWasm = resolveWasmPath("./wasm/tree-sitter.wasm");
+await Parser.init(existsSync(localRuntimeWasm)
+  ? { locateFile: (scriptName: string) => resolveWasmPath(`./wasm/${scriptName}`) }
+  : undefined);
 const parser = new Parser();
-parser.setLanguage(Go);
+const goLanguage = await Language.load(resolveWasmPath("./wasm/tree-sitter-go.wasm"));
+parser.setLanguage(goLanguage as unknown as NonNullable<Parser["language"]>);
 
 const HTTP_METHODS = new Set(["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "Any", "Handle", "HandleFunc"]);
 
@@ -140,7 +149,13 @@ function extractSymbols(root: SyntaxNode, filePath: string, packageName: string,
     const kind: GoSymbolKind | undefined = node.type === "const_declaration" ? "const" : node.type === "var_declaration" ? "var" : undefined;
     if (!kind) continue;
     for (const spec of descendants(node, kind === "const" ? "const_spec" : "var_spec")) {
-      for (const nameNode of spec.childrenForFieldName("name")) {
+      const nameNodes: SyntaxNode[] = [];
+      let nameNode = spec.childForFieldName("name");
+      while (nameNode?.type === "identifier") {
+        nameNodes.push(nameNode);
+        nameNode = nameNode.nextNamedSibling;
+      }
+      for (const nameNode of nameNodes) {
         const name = nameNode.text;
         if (exportedOnly && !isExported(name)) continue;
         const doc = documentationFor(node);
@@ -295,13 +310,16 @@ function extractCallsAndRoutes(root: SyntaxNode, filePath: string, imports: read
 function countParseErrors(root: SyntaxNode): number {
   let count = 0;
   walk(root, (node) => {
-    if (node.type === "ERROR" || node.isMissing) count += 1;
+    const missing = (node as unknown as { isMissing: boolean | (() => boolean) }).isMissing;
+    if (node.type === "ERROR" || (typeof missing === "function" ? missing.call(node) : missing)) count += 1;
   });
   return count;
 }
 
 export function indexGoSource(source: string, filePath: string, options: { exportedOnly?: boolean } = {}): GoFileIndex {
-  const root = parser.parse(source).rootNode;
+  const tree = parser.parse(source);
+  if (!tree) throw new Error(`Go parser returned no syntax tree for ${filePath}`);
+  const root = tree.rootNode;
   const packageName = descendants(root, "package_identifier")[0]?.text ?? "unknown";
   const imports = extractImports(root);
   const relations = extractCallsAndRoutes(root, filePath, imports);

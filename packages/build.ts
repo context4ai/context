@@ -195,17 +195,18 @@ const copyWasmAssets = async () => {
   // Copy tree-sitter.wasm (core WASM runtime) from node_modules at build time.
   // This avoids committing binary files to the repo.
   //
-  // Why createRequire from extract's package.json: tree-sitter wasm lives in
-  // extract's node_modules (hoisted or nested). Using extract's package.json
-  // as the require base ensures correct resolution regardless of which package
-  // is being built — the consumer package may not directly depend on
-  // web-tree-sitter.
+  // Resolve from the package that declares web-tree-sitter so its JS runtime
+  // and copied WASM always have the same version. Packages that only inline
+  // @c4a/extract resolve through extract's declaration instead.
   const targetDir = join(process.cwd(), "dist", "wasm");
   await mkdir(targetDir, { recursive: true });
   const treeSitterTarget = join(targetDir, "tree-sitter.wasm");
   if (!existsSync(treeSitterTarget)) {
     const { createRequire } = await import("node:module");
-    const req = createRequire(join(packagesDir, "extract", "package.json"));
+    const dependencyOwner = dependencies["web-tree-sitter"]
+      ? packageJsonPath
+      : join(packagesDir, "extract", "package.json");
+    const req = createRequire(dependencyOwner);
     try {
       const pkgDir = dirname(req.resolve("web-tree-sitter"));
       const src = join(pkgDir, "tree-sitter.wasm");

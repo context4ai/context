@@ -40,7 +40,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # All parser binaries needed by tests are shipped as WASM assets.
+        # Avoid host-specific native rebuilds in the Node compatibility matrix.
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build workspace
         run: bun run build

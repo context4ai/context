@@ -20,6 +20,11 @@
     "extraction"
   ],
   "main": "./dist/index.js",
+  "c4aBuild": {
+    "assets": [
+      "go-wasm"
+    ]
+  },
   "exports": {
     ".": "./dist/index.js"
   },
@@ -30,8 +35,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "tree-sitter": "^0.25.0",
-    "tree-sitter-go": "^0.25.0"
+    "web-tree-sitter": "^0.25.10"
   },
   "devDependencies": {
     "@c4a/core": "workspace:*",

@@ -33,7 +33,9 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # Release artifacts use committed/generated WASM assets and do not
+        # require dependency lifecycle scripts on the runner.
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Verify release version
         run: |
