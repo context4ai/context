@@ -4,6 +4,7 @@ import { dirname, join, relative } from "node:path";
 import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
+import { queueContextRuntimeEvent } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readApprovedStructureEdges, readConfirmedStructureEdgeProjection } from "./approvedStructureEdges.js";
 import { verifyProjectWorkspace } from "./verify.js";
@@ -601,5 +602,16 @@ export async function runProjectCloseCommand(input: {
       "",
     ].join("\n"));
   }
+  queueContextRuntimeEvent({
+    cwd: result.projectRoot,
+    kind: "knowledge.closed",
+    properties: {
+      node_count: result.nodes,
+      view_count: result.views,
+      edge_count: result.edges,
+      verify_warning_count: result.verifyWarnings,
+      relationship_coverage: result.relationshipCoverage.state,
+    },
+  });
   return true;
 }

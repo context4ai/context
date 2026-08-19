@@ -219,6 +219,7 @@ export async function prepareDistPackageJson(
     engines?: Record<string, string>;
     bin?: Record<string, string>;
     dependencies?: Record<string, string>;
+    contextRuntimeEventSink?: unknown;
   };
 
   // Bundled workspace dependencies are omitted from published metadata. Keep
@@ -277,6 +278,9 @@ export async function prepareDistPackageJson(
   if (dir === "context-cli") {
     distPkg.main = "./cli.js";
     distPkg.scripts = { postinstall: "node scripts/postinstall.mjs" };
+    if (srcPkg.contextRuntimeEventSink !== undefined) {
+      distPkg.contextRuntimeEventSink = srcPkg.contextRuntimeEventSink;
+    }
     await rm(resolve(distDir, "plugin"), { recursive: true, force: true });
 
     const templatesSource = resolve(pkgDir, "templates");

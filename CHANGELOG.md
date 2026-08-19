@@ -4,6 +4,11 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.6 - 2026-08-19
+
+- Added an optional, package-configured command sink for successful workspace activation, initialization, knowledge close, and package build runtime events; community packages remain disabled by default.
+- Preserved optional runtime event sink metadata in linked and release-prepared CLI manifests.
+
 ## 0.6.5 - 2026-08-18
 
 - Made Git-derived asset URLs part of package freshness so a changed commit or remote cannot leave a previously built package incorrectly ready.

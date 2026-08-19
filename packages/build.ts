@@ -283,6 +283,7 @@ if (shouldShebang) {
       bin?: Record<string, string>;
       dependencies?: Record<string, string>;
       scripts?: Record<string, string>;
+      contextRuntimeEventSink?: unknown;
     };
     const publishDependencies = srcPkg.dependencies === undefined
       ? undefined
@@ -306,6 +307,7 @@ if (shouldShebang) {
       scripts: srcPkg.scripts?.postinstall === undefined
         ? undefined
         : { postinstall: srcPkg.scripts.postinstall.replace(/^node scripts\//, "node scripts/") },
+      contextRuntimeEventSink: srcPkg.contextRuntimeEventSink,
     };
     await writeFile(join(process.cwd(), "dist", "package.json"), JSON.stringify(distPkg, null, 2) + "\n");
   }

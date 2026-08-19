@@ -222,6 +222,7 @@ describe("prepareDistPackageJson — context-cli publish packaging", () => {
       bin?: Record<string, string>;
       scripts?: { postinstall?: string };
       dependencies?: Record<string, string>;
+      contextRuntimeEventSink?: unknown;
     };
     expect(distPkg.name).toBe("@c4a/context-cli");
     expect(distPkg.version).toBe("1.2.3");
@@ -239,6 +240,26 @@ describe("prepareDistPackageJson — context-cli publish packaging", () => {
     expect(distPkg.dependencies?.jiti).toBe("^2.7.0");
     expect(distPkg.dependencies?.["web-tree-sitter"]).toBe("^0.20.8");
     expect(distPkg.dependencies?.yaml).toBe("^2.5.1");
+    expect(distPkg.contextRuntimeEventSink).toBeUndefined();
+  });
+
+  test("preserves optional runtime event sink metadata in the published CLI manifest", async () => {
+    const root = await mkTmp("runtime-event-sink");
+    const { pkgDir, distDir } = await setupContextCliPkg(root);
+    const packagePath = join(pkgDir, "package.json");
+    const sourcePackage = JSON.parse(await readFile(packagePath, "utf-8"));
+    sourcePackage.contextRuntimeEventSink = {
+      schema: "context.runtime-event-sink.v1",
+      transport: "command",
+      command: "example-sink",
+      args: ["emit"],
+    };
+    await writeFile(packagePath, `${JSON.stringify(sourcePackage, null, 2)}\n`);
+
+    await prepareDistPackageJson(stubCtx(root), pkgDir, distDir, "1.2.3", "context-cli");
+
+    const distPackage = JSON.parse(await readFile(join(distDir, "package.json"), "utf-8"));
+    expect(distPackage.contextRuntimeEventSink).toEqual(sourcePackage.contextRuntimeEventSink);
   });
 
   test("wipes stale files left over in dist/plugin, dist/templates, dist/scripts before copying", async () => {

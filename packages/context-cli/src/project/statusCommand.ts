@@ -95,6 +95,7 @@ export async function runProjectStatusCommand(input: {
   authorities?: readonly ContextWorkflowAuthority[];
   resourceReceipts?: ResourceReadReceiptSet;
   resourceReceiptsReference?: string;
+  onSuccess?: (status: ProjectStatus) => void;
 }): Promise<boolean> {
   assertContextStatusWorkspaceAllowed(input.cwd);
   const found = findContextProjectRoot(input.cwd);
@@ -123,6 +124,7 @@ export async function runProjectStatusCommand(input: {
   } else {
     process.stdout.write(formatProjectStatus(status));
   }
+  input.onSuccess?.(status);
   return true;
 }
 
