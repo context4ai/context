@@ -11,29 +11,9 @@ import { ContextError } from "./lib/errors.js";
 import { ErrorCategory, formatFeedback } from "./lib/cliFeedback.js";
 import { ExitCode } from "./types/exitCode.js";
 import {
-  findContextProjectRoot,
-  formatProjectInitResult,
-  initContextProject,
-  projectLanguage,
-} from "./project/workspace.js";
-import { acceptStarterPackageTemplates } from "./project/packageTemplateReview.js";
-import {
   assertProjectWorkflowRevision,
-  runProjectStatusCommand,
 } from "./project/statusCommand.js";
-import { runProjectBuildCommand } from "./project/packageBuilder.js";
-import { runProjectCloseCommand } from "./project/close.js";
-import { runProjectVerifyCommand } from "./project/verify.js";
 import { registerProjectSourceCommands } from "./project/sourceCommands.js";
-import {
-  formatPluginInstallResult,
-  formatPluginPathResult,
-  formatPluginStatusResult,
-  pluginAgentOption,
-  runPluginInstallCommand,
-  runPluginPathCommand,
-  runPluginStatusCommand,
-} from "./project/pluginInstall.js";
 import {
   runReviewApplyCommand,
   runReviewApproveAllCommand,
@@ -51,8 +31,16 @@ import {
   collectWorkflowAuthorityOption,
   workflowAuthorities,
 } from "./project/workflow/workflowCommandOptions.js";
-import { parseWorkflowResourceReceipts } from "./project/workflow/workflowResourceReceipts.js";
 import { withDebugCliInvocation } from "./project/debugTrace.js";
+import { withContextRuntimeEventDelivery } from "./runtimeEvents.js";
+import {
+  registerProjectCloseAndBuildCommands,
+  registerProjectInitCommand,
+  registerProjectStatusCommand,
+  registerProjectVerifyCommand,
+} from "./registerProjectLifecycleCommands.js";
+import { registerPluginCommands } from "./registerPluginCommands.js";
+import { registerPackageCommands } from "./registerPackageCommands.js";
 
 const TOP_LEVEL_COMMANDS = new Set([
   "init",
@@ -240,169 +228,15 @@ export function createCliProgram(): Command {
   const baseHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => `${headerHelpText()}${baseHelpInformation()}${quickstartHelpText()}`;
 
-  program
-    .command("init [project-dir]")
-    .description("Initialize a project-local context workspace")
-    .option("--name <name>", "display/package name override")
-    .option("--language <language>", "workspace and starter-template language: en | zh-CN")
-    .option("--dev", "initialize with the locally linked @c4a/context SDK")
-    .option("--debug", "enable workspace-local command and Agent Graph tracing")
-    .option("--allow-nonempty", "after explicit confirmation, preserve existing files and initialize inside a non-empty non-Context directory")
-    .action(async (projectDir: string | undefined, options: Record<string, unknown>) => {
-      const result = await initContextProject({
-        cwd: process.cwd(),
-        ...(projectDir !== undefined ? { projectDir } : {}),
-        ...(typeof options.name === "string" ? { name: options.name } : {}),
-        ...(typeof options.language === "string"
-          ? { language: projectLanguage(options.language) }
-          : {}),
-        ...(options.dev === true ? { dev: true } : {}),
-        ...(options.debug === true ? { debug: true } : {}),
-        ...(options.allowNonempty === true ? { allowNonempty: true } : {}),
-      });
-      process.stdout.write(formatProjectInitResult(result));
-    });
-
-  const plugin = program
-    .command("plugin")
-    .description("Install or inspect global Context agent plugins");
+  registerProjectInitCommand(program);
+  registerPluginCommands(program);
 
   registerDebugCommands(program);
 
-  plugin
-    .command("path")
-    .description("Print the bundled plugin marketplace root used by `context plugin install`")
-    .action(async () => {
-      process.stdout.write(formatPluginPathResult(await runPluginPathCommand()));
-    });
-
-  plugin
-    .command("status")
-    .description("Inspect the bundled plugin marketplace root and global agent availability")
-    .option("--agent <agent>", "agent target: claude | codex | all", "all")
-    .action(async (options: Record<string, unknown>) => {
-      const agent = pluginAgentOption(options.agent);
-      process.stdout.write(formatPluginStatusResult(await runPluginStatusCommand({ agent })));
-    });
-
-  plugin
-    .command("install")
-    .description("Install the bundled Context plugin globally for Claude and/or Codex")
-    .option("--agent <agent>", "agent target: claude | codex | all", "all")
-    .option("--dry-run", "Print install commands without mutating global agent config")
-    .action(async (options: Record<string, unknown>) => {
-      const agent = pluginAgentOption(options.agent);
-      const result = await runPluginInstallCommand({
-        agent,
-        dryRun: options.dryRun === true,
-      });
-      process.stdout.write(formatPluginInstallResult(result));
-    });
-
   registerContextWorkflowResourceCommands(program);
+  registerPackageCommands(program);
 
-  const packageCommand = program
-    .command("package")
-    .description("Inspect or resolve package output configuration");
-
-  const packageTemplate = packageCommand
-    .command("template")
-    .description("Manage package template review state");
-
-  packageTemplate
-    .command("accept [package-name]")
-    .description("Explicitly accept an unchanged generated starter template")
-    .option("--all", "accept all unchanged generated starter templates")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (
-      packageName: string | undefined,
-      options: Record<string, unknown>,
-    ) => {
-      if ((packageName === undefined) === (options.all !== true)) {
-        throw new ContextError(
-          ExitCode.UserError,
-          "provide one package name or --all",
-          { category: ErrorCategory.UserInputInvalid },
-        );
-      }
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      const found = findContextProjectRoot(process.cwd());
-      if (!found) {
-        throw new ContextError(
-          ExitCode.WorkspaceStateError,
-          "package template acceptance requires a context project workspace",
-          { category: ErrorCategory.WorkspaceNotFound },
-        );
-      }
-      const result = await acceptStarterPackageTemplates({
-        projectRoot: found.projectRoot,
-        ...(packageName === undefined ? {} : { packageNames: [packageName] }),
-      });
-      if (options.format === "json") {
-        process.stdout.write(`${JSON.stringify({
-          action: "package-template-accepted",
-          ...result,
-          next_action: {
-            kind: "reevaluate-workspace",
-            command: "context status --format json",
-          },
-        }, null, 2)}\n`);
-      } else {
-        process.stdout.write(formatFeedback({
-          symbol: "✓",
-          action: "accepted",
-          subject: result.accepted.join(", ") || "package templates",
-          headline: "starter package template",
-          body: result.alreadyResolved.length === 0
-            ? []
-            : [`already resolved: ${result.alreadyResolved.join(", ")}`],
-        }));
-      }
-    });
-
-  program
-    .command("status")
-    .description("Print workspace overview and suggested next actions")
-    .option("--format <format>", "output format: table | json", "table")
-    .option("--view <view>", "with --format json, output view: summary | full", "summary")
-    .option("--managed", "use explicit current-conversation managed approval for this status loop")
-    .option("--resource-receipts <json-or-@file>", "current-conversation Agent Graph resource read receipts")
-    .addOption(
-      new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
-        .argParser(collectWorkflowAuthorityOption)
-        .default([]),
-    )
-    .action(async (options: Record<string, unknown>) => {
-      const rootOptions = program.opts() as Record<string, unknown>;
-      const resourceReceiptsReference = typeof options.resourceReceipts === "string"
-        ? options.resourceReceipts
-        : typeof rootOptions.workflowResourceReceipts === "string"
-        ? rootOptions.workflowResourceReceipts
-        : undefined;
-      const resourceReceipts = resourceReceiptsReference !== undefined
-        ? await parseWorkflowResourceReceipts(resourceReceiptsReference, process.cwd())
-        : undefined;
-      if (await runProjectStatusCommand({
-        cwd: process.cwd(),
-        format: options.format === "json" ? "json" : "table",
-        view: options.view === "full" ? "full" : "summary",
-        managed: options.managed === true,
-        authorities: workflowAuthorities(options.authority),
-        ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
-        ...(resourceReceiptsReference === undefined
-          ? {}
-          : { resourceReceiptsReference }),
-      })) {
-        return;
-      }
-      throw new ContextError(ExitCode.WorkspaceStateError, "status requires a context project workspace", {
-        category: ErrorCategory.WorkspaceNotFound,
-      });
-    });
+  registerProjectStatusCommand(program);
 
   registerProjectRunCommand(program, import.meta.url);
 
@@ -640,89 +474,10 @@ export function createCliProgram(): Command {
       });
     });
 
-  program
-    .command("close")
-    .description("Close approved project knowledge by deriving structure and running final verification")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (await runProjectCloseCommand({
-        cwd: process.cwd(),
-        format: options.format === "json" ? "json" : "text",
-      })) {
-        return;
-      }
-      throw new ContextError(ExitCode.WorkspaceStateError, "close requires a context project workspace", {
-        category: ErrorCategory.WorkspaceNotFound,
-      });
-    });
-
-  program
-    .command("build")
-    .description("Build declared project packages")
-    .option("--format <format>", "output format: text | json", "text")
-    .option("--verbose", "include per-file build changes in JSON output")
-    .action(async (options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (await runProjectBuildCommand({
-        cwd: process.cwd(),
-        format: options.format === "json" ? "json" : "text",
-        verbose: options.verbose === true,
-      })) {
-        return;
-      }
-      throw new ContextError(ExitCode.WorkspaceStateError, "build requires a context project workspace", {
-        category: ErrorCategory.WorkspaceNotFound,
-      });
-    });
+  registerProjectCloseAndBuildCommands(program);
 
   registerProjectSourceCommands(program);
-  program
-    .command("verify")
-    .description("Validate knowledge workspace")
-    .option("--format <format>", "output format: table | json", "table")
-    .option("--compact", "return grouped diagnostics without the complete issue list")
-    .option("--view <view>", "read a verification view: diagnostics")
-    .option("--page-size <n>", "with --view diagnostics, limit returned issues")
-    .option("--page-token <token>", "with --view diagnostics, continue pagination")
-    .action(async (options: Record<string, unknown>) => {
-      if (options.format !== "table" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be table or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (options.view !== undefined && options.view !== "diagnostics") {
-        throw new ContextError(ExitCode.UserError, "--view must be diagnostics", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (options.view === "diagnostics" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--view diagnostics requires --format json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (await runProjectVerifyCommand({
-        cwd: process.cwd(),
-        format: options.format === "json" ? "json" : "table",
-        ...(options.compact === true ? { compact: true } : {}),
-        ...(options.view === "diagnostics" ? { view: "diagnostics" as const } : {}),
-        ...(typeof options.pageSize === "string" ? { pageSize: options.pageSize } : {}),
-        ...(typeof options.pageToken === "string" ? { pageToken: options.pageToken } : {}),
-      })) {
-        return;
-      }
-      throw new ContextError(ExitCode.WorkspaceStateError, "verify requires a context project workspace", {
-        category: ErrorCategory.WorkspaceNotFound,
-      });
-    });
+  registerProjectVerifyCommand(program);
 
   // Distribution to Cursor / Codex / other agents is delegated to the
   // community standard `npx skills add` (vercel-labs/skills, 45-agent
@@ -766,10 +521,12 @@ export function createCliProgram(): Command {
 }
 
 export async function cli_main(argv: string[] = process.argv): Promise<void> {
-  await withDebugCliInvocation(argv, async () => {
-    assertKnownTopLevelCommand(argv);
-    const program = createCliProgram();
-    await program.parseAsync(argv);
+  await withContextRuntimeEventDelivery(async () => {
+    await withDebugCliInvocation(argv, async () => {
+      assertKnownTopLevelCommand(argv);
+      const program = createCliProgram();
+      await program.parseAsync(argv);
+    });
   });
 }
 

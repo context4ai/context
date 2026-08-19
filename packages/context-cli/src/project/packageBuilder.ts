@@ -6,6 +6,7 @@ import type { PackageDefinition } from "@c4a/context";
 import { parse as parseYaml } from "yaml";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
+import { queueContextRuntimeEvent } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   packageBuildInventory,
@@ -644,5 +645,17 @@ export async function runProjectBuildCommand(input: {
     input.format ?? "text",
     input.verbose === true,
   ));
+  queueContextRuntimeEvent({
+    cwd: result.projectRoot,
+    kind: "package.build.completed",
+    properties: {
+      package_count: result.packages.length,
+      created_count: result.packages.filter((pkg) => pkg.state === "created").length,
+      updated_count: result.packages.filter((pkg) => pkg.state === "updated").length,
+      unchanged_count: result.packages.filter((pkg) => pkg.state === "unchanged").length,
+      output_file_count: result.packages.reduce((total, pkg) => total + pkg.files, 0),
+      resource_file_count: result.packages.reduce((total, pkg) => total + pkg.resources.files, 0),
+    },
+  });
   return true;
 }

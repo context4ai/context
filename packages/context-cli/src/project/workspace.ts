@@ -235,6 +235,10 @@ function normalizeProjectDir(cwd: string, projectDir: string | undefined): strin
   return raw === "." ? resolve(cwd) : resolve(cwd, raw);
 }
 
+export function resolveContextProjectInitTarget(cwd: string, projectDir: string | undefined): string {
+  return normalizeProjectDir(cwd, projectDir);
+}
+
 function slugifyName(value: string): string {
   const slug = value
     .trim()
