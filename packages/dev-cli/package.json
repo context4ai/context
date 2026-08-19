@@ -1,7 +1,7 @@
 {
   "name": "@c4a/dev-cli",
   "description": "Developer CLI — interactive menu for context workspace build, link, test, and publish tasks",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "type": "module",
   "license": "MIT",
   "repository": {

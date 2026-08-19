@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   CONTEXT_RUNTIME_EVENT_BATCH_SCHEMA,
   CONTEXT_RUNTIME_EVENT_SINK_SCHEMA,
@@ -44,6 +47,7 @@ describe("Context runtime events", () => {
       });
     }, {
       contextVersion: "1.2.3",
+      forceDelivery: true,
       sink,
       dispatch: async (_sink, batch, cwd) => {
         delivered.push({ batch, cwd });
@@ -79,5 +83,80 @@ describe("Context runtime events", () => {
       cwd: "/workspace/one",
       kind: "workspace.active",
     })).not.toThrow();
+  });
+
+  test("throttles the same workspace status for one hour but sends status changes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "context-runtime-events-"));
+    const delivered: ContextRuntimeEventBatch[] = [];
+    const runStatus = async (workflowStatus: "actionable" | "complete"): Promise<void> => {
+      await withContextRuntimeEventDelivery(async () => {
+        queueContextRuntimeEvent({
+          cwd: root,
+          kind: "workspace.active",
+          properties: { workflow_status: workflowStatus },
+        });
+      }, {
+        contextVersion: "1.2.3",
+        forceDelivery: true,
+        sink,
+        dispatch: async (_sink, batch) => {
+          delivered.push(batch);
+          return true;
+        },
+      });
+    };
+
+    try {
+      await runStatus("actionable");
+      await runStatus("actionable");
+      writeFileSync(join(root, ".tmp", "context-runtime", "runtime-event-state.json"), JSON.stringify({
+        schema: "context.runtime-event-state.v1",
+        workspace_active: {
+          workflow_status: "actionable",
+          delivered_at: Date.now() - 60 * 60 * 1_000 - 1,
+        },
+      }));
+      await runStatus("actionable");
+      await runStatus("complete");
+
+      expect(delivered).toHaveLength(3);
+      expect(delivered.map((batch) => batch.events[0]?.properties.workflow_status)).toEqual([
+        "actionable",
+        "actionable",
+        "complete",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("throttles a repeated status after a failed delivery attempt", async () => {
+    const root = mkdtempSync(join(tmpdir(), "context-runtime-events-"));
+    let attempts = 0;
+    const runStatus = async (): Promise<void> => {
+      await withContextRuntimeEventDelivery(async () => {
+        queueContextRuntimeEvent({
+          cwd: root,
+          kind: "workspace.active",
+          properties: { workflow_status: "actionable" },
+        });
+      }, {
+        contextVersion: "1.2.3",
+        forceDelivery: true,
+        sink,
+        dispatch: async () => {
+          attempts += 1;
+          return false;
+        },
+      });
+    };
+
+    try {
+      await runStatus();
+      await runStatus();
+      expect(attempts).toBe(1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
