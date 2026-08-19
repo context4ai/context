@@ -17,7 +17,7 @@
     },
     "packages/context": {
       "name": "@c4a/context",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "yaml": "^2.5.1",
         "zod": "^3.23.8",
@@ -25,7 +25,7 @@
     },
     "packages/context-cli": {
       "name": "@c4a/context-cli",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "bin": {
         "context": "dist/cli.js",
       },
@@ -56,7 +56,7 @@
     },
     "packages/core": {
       "name": "@c4a/core",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "picomatch": "^4.0.4",
         "yaml": "^2.4.5",
@@ -68,7 +68,7 @@
     },
     "packages/dev-cli": {
       "name": "@c4a/dev-cli",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/tui": "workspace:*",
@@ -79,7 +79,7 @@
     },
     "packages/extract": {
       "name": "@c4a/extract",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "bin": {
         "c4a-extract-code": "./dist/bin/c4a-extract-code.js",
       },
@@ -91,7 +91,7 @@
     },
     "packages/extract-go": {
       "name": "@c4a/extract-go",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "web-tree-sitter": "^0.25.10",
       },
@@ -102,7 +102,7 @@
     },
     "packages/extract-rush": {
       "name": "@c4a/extract-rush",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "typescript": "^5.5.4",
         "yaml": "^2.5.1",
@@ -110,7 +110,7 @@
     },
     "packages/extract-ts": {
       "name": "@c4a/extract-ts",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "typescript": "^5.5.4",
         "web-tree-sitter": "^0.20.8",
@@ -121,7 +121,7 @@
     },
     "packages/tui": {
       "name": "@c4a/tui",
-      "version": "0.6.5",
+      "version": "0.6.7",
       "dependencies": {
         "ink": "^5.0.0",
         "react": "^18.3.1",
