@@ -196,7 +196,7 @@ type CompactStructureSummary = {
       source_ref_count?: unknown;
       edge_count?: unknown;
       unresolved_count?: unknown;
-      split_required?: unknown;
+      split_recommended?: unknown;
     }>;
   }>;
   unresolved?: Array<{ issue?: unknown; note?: unknown; source_ref_count?: unknown }>;
@@ -225,7 +225,7 @@ function appendCompactViews(body: string[], compact: CompactStructureSummary): v
       const refs = typeof view.source_ref_count === "number" ? view.source_ref_count : "?";
       const edges = typeof view.edge_count === "number" ? view.edge_count : "?";
       const unresolved = typeof view.unresolved_count === "number" ? view.unresolved_count : "?";
-      const split = view.split_required === true ? " split-required" : "";
+      const split = view.split_recommended === true ? " split-recommended" : "";
       body.push(`  - ${title}: ${path} (sections:${sections}, refs:${refs}, edges:${edges}, unresolved:${unresolved}${split})`);
     }
     const omitted = viewCount - Math.min(group.views?.length ?? 0, 20);

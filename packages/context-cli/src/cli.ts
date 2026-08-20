@@ -5,10 +5,10 @@ import { Command, Option } from "commander";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
+import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
-import { cleanAllRetrievalCache, inspectAllRetrievalCache } from "./commands/cleanCache.js";
 import { ContextError } from "./lib/errors.js";
-import { ErrorCategory, formatFeedback } from "./lib/cliFeedback.js";
+import { ErrorCategory } from "./lib/cliFeedback.js";
 import { ExitCode } from "./types/exitCode.js";
 import {
   assertProjectWorkflowRevision,
@@ -56,6 +56,7 @@ const TOP_LEVEL_COMMANDS = new Set([
   "package",
   "clean-cache",
   "debug",
+  "logs",
   "help",
 ]);
 
@@ -475,6 +476,7 @@ export function createCliProgram(): Command {
     });
 
   registerProjectCloseAndBuildCommands(program);
+  registerRuntimeEventLogCommands(program);
 
   registerProjectSourceCommands(program);
   registerProjectVerifyCommand(program);
@@ -483,46 +485,20 @@ export function createCliProgram(): Command {
   // community standard `npx skills add` (vercel-labs/skills, 45-agent
   // support). See README / acceptance-playbook §2b.
 
-  const cleanCacheAction = async (options: Record<string, unknown>) => {
-    const dryRun = options.dryRun === true;
-    await runDoctorCleanClaudePluginCache({ dryRun });
-    if (dryRun) {
-      const inspected = await inspectAllRetrievalCache();
-      process.stdout.write(formatFeedback({
-        symbol: "·",
-        action: "scanned",
-        subject: "context retrieval cache",
-        headline: `dry-run: ${inspected.projects} project(s), ${inspected.files} file(s) would be removed`,
-        body: [
-          "cache scope: all-projects",
-          inspected.projectIds.length > 0 ? `project ids: ${inspected.projectIds.join(", ")}` : "project ids: none",
-          "`context clean-cache` is a cross-workspace maintenance operation that removes all retrieval cache projects",
-        ],
-      }));
-      return;
-    }
-    const result = await cleanAllRetrievalCache();
-    process.stdout.write(formatFeedback({
-      symbol: "✓",
-      action: result.action,
-      subject: "context retrieval cache",
-      headline: `${result.removedProjects} project(s), ${result.removedFiles} file(s) removed`,
-      body: ["cache scope: all-projects"],
-    }));
-  };
-
   program
     .command("clean-cache")
-    .description("Clean orphaned Claude Code plugin caches and all retrieval cache projects")
+    .description("Clean orphaned Claude Code plugin caches")
     .option("--dry-run", "Report what would be deleted without removing anything")
-    .action(cleanCacheAction);
+    .action(async (options: Record<string, unknown>) => {
+      await runDoctorCleanClaudePluginCache({ dryRun: options.dryRun === true });
+    });
 
   return program;
 }
 
 export async function cli_main(argv: string[] = process.argv): Promise<void> {
-  await withContextRuntimeEventDelivery(async () => {
-    await withDebugCliInvocation(argv, async () => {
+  await withDebugCliInvocation(argv, async () => {
+    await withContextRuntimeEventDelivery(async () => {
       assertKnownTopLevelCommand(argv);
       const program = createCliProgram();
       await program.parseAsync(argv);

@@ -267,11 +267,12 @@ describe("0.6.0 project init and source ensure", () => {
       await writeFile(join(project, "src", "helper.ts"), "export const projectName = 'loader-ok';\n");
 
       expect(existsSync(marker)).toBe(false);
+      const runtimeExistedBeforeLoad = existsSync(join(project, ".tmp", "context-runtime"));
       const loaded = await loadContextProjectModule(project);
       expect(loaded.kind).toBe("context.project");
       expect(existsSync(marker)).toBe(true);
       expect(readFileSync(marker, "utf8")).toBe("loader-ok");
-      expect(existsSync(join(project, ".tmp", "context-runtime"))).toBe(false);
+      expect(existsSync(join(project, ".tmp", "context-runtime"))).toBe(runtimeExistedBeforeLoad);
     } finally {
       rmSync(project, { recursive: true, force: true });
     }

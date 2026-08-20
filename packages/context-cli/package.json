@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local CLI for capturing, compiling, and governing knowledge workspaces",
-  "version": "0.6.7",
+  "version": "0.6.8",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -40,8 +40,8 @@
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "C4A_CONTEXT_CACHE_HOME=./.tmp/context-cli-test-cache bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
-    "test:e2e": "C4A_CONTEXT_CACHE_HOME=./.tmp/context-cli-e2e-cache bun test src/__e2e__/*.e2e.test.ts",
+    "test": "bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
+    "test:e2e": "bun test src/__e2e__/*.e2e.test.ts",
     "lint": "eslint src",
     "clean-cache": "bun run src/cli.ts clean-cache"
   },

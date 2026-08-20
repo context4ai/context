@@ -65,6 +65,7 @@ import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
 import { recordAgentGraphEvaluation } from "./debugTrace.js";
+import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 
 export type {
   ActiveStructuresStatus,
@@ -549,6 +550,7 @@ export async function collectProjectStatusSnapshot(
   });
   const compilePhaseResolution = compileRouting.resolution;
   const compileDocumentNext = compileRouting.command;
+  const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
   const observation: ContextWorkflowObservation = {
       projectRoot,
       projectEntryValid: phaseStatus.projectEntryValid,
@@ -576,6 +578,7 @@ export async function collectProjectStatusSnapshot(
       packages,
       packageFreshness,
       packageTemplateReviews,
+      runtimeEvents,
       sourceFreshness: sourceFreshness.state,
       staleSourcePhases: sourceFreshness.stalePhases,
       pendingExtractPhases: sourceFreshness.pendingPhases,

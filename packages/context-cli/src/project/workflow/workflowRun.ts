@@ -191,12 +191,17 @@ export function selectAutomaticWorkflowCommand(
     };
   }
   if (command.managed_execution !== "automatic") {
+    const requiresNetworkAccess = command.execution?.requires_network_access === true;
     return {
       state: "blocked",
       stop: blockedStop(
         status,
         "workflow.until.agent-execution-required",
-        "The current command is not eligible for automatic managed execution.",
+        requiresNetworkAccess
+          ? route.reason_code === "route.logs.delivery-pending"
+            ? "Run context logs plan --format json, quote its fixed outbox, event summary, resolved destination, method, and data policy in the network approval request, then execute only its flush_command through the Agent host."
+            : "Request network access and execute the current command through the Agent host before continuing the managed workflow."
+          : "The current command is not eligible for automatic managed execution.",
         command.command,
       ),
     };

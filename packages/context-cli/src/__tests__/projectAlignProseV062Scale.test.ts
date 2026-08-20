@@ -9,8 +9,8 @@ import {
   writePayload,
 } from "./projectAlignProseV062Helpers.js";
 
-describe("0.6.6 prose align structure scale gate", () => {
-  test("keeps ordinary multi-section pages and splits only structural outliers", async () => {
+describe("0.6.6 prose align structure scale guidance", () => {
+  test("keeps size-based split guidance advisory for draft and confirmed structures", async () => {
     const root = makeTmp();
     try {
       const { projectRoot } = await createCapturedAlignProject(root);
@@ -33,13 +33,13 @@ describe("0.6.6 prose align structure scale gate", () => {
       ])) as {
         result: {
           confirmation_blockers: Array<{ code: string }>;
-          structure_summary: { views: Array<{ split_requirement: { status: string } }> };
+          structure_summary: { views: Array<{ split_recommendation: { status: string } }> };
         };
       };
       expect(normal.result.confirmation_blockers).not.toContainEqual(expect.objectContaining({
-        code: "view.split_required",
+        code: "view.split_recommended",
       }));
-      expect(normal.result.structure_summary.views[0]?.split_requirement.status).toBe("not_required");
+      expect(normal.result.structure_summary.views[0]?.split_recommendation.status).toBe("not_recommended");
 
       const largePayload = writePayload(
         projectRoot,
@@ -66,8 +66,9 @@ describe("0.6.6 prose align structure scale gate", () => {
           diagnostics: Array<{ severity: string; code: string; candidate_id?: string }>;
           structure_digest: string;
           structure_summary: {
+            structure_digest: string;
             views: Array<{
-              split_requirement: {
+              split_recommendation: {
                 status: string;
                 reason: string;
                 parent_index_view_ref?: string;
@@ -94,30 +95,27 @@ describe("0.6.6 prose align structure scale gate", () => {
           };
         };
       };
-      expect(large.result.valid).toBe(false);
+      expect(large.result.valid).toBe(true);
       expect(large.result.error_free).toBe(true);
-      expect(large.result.confirmation_ready).toBe(false);
-      expect(large.result.confirmation_blockers).toContainEqual(expect.objectContaining({
-        code: "view.split_required",
-        candidate_id: "architecture:action/large-runbook",
-      }));
+      expect(large.result.confirmation_ready).toBe(true);
+      expect(large.result.confirmation_blockers).toEqual([]);
       expect(large.result.next_action).toMatchObject({
-        kind: "repair_confirmation_blockers",
+        kind: "stage_structure",
         command: expect.stringContaining(
-          "--validate --input .tmp/agent-payloads/align-file-product-docs-architecture-structure.yaml",
+          "--stage --input .tmp/agent-payloads/align-file-product-docs-architecture-structure.yaml",
         ),
       });
       expect(large.result.diagnostics).toContainEqual(expect.objectContaining({
         severity: "warning",
-        code: "view.split_required",
+        code: "view.split_recommended",
         candidate_id: "architecture:action/large-runbook",
       }));
-      expect(large.result.structure_summary.views[0]?.split_requirement).toMatchObject({
-        status: "split_required",
+      expect(large.result.structure_summary.views[0]?.split_recommendation).toMatchObject({
+        status: "split_recommended",
         reason: "too_many_sections",
         parent_index_view_ref: "architecture:action/large-runbook",
       });
-      expect(large.result.structure_summary.views[0]?.split_requirement.suggested_child_views).toEqual([
+      expect(large.result.structure_summary.views[0]?.split_recommendation.suggested_child_views).toEqual([
         expect.objectContaining({
           group_id: "part-01",
           section_ids: Array.from({ length: 13 }, (_, index) => `segment-${index + 1}`),
@@ -139,12 +137,12 @@ describe("0.6.6 prose align structure scale gate", () => {
           source_refs: expect.arrayContaining([sourceRef]),
         }),
       ]);
-      expect(large.result.structure_summary.views[0]?.split_requirement.suggested_child_view_refs)
+      expect(large.result.structure_summary.views[0]?.split_recommendation.suggested_child_view_refs)
         .toEqual([
           "architecture:action/large-runbook/part-01",
           "architecture:action/large-runbook/part-02",
         ]);
-      expect(large.result.structure_summary.views[0]?.split_requirement.contains_edge_drafts).toContainEqual(
+      expect(large.result.structure_summary.views[0]?.split_recommendation.contains_edge_drafts).toContainEqual(
         expect.objectContaining({
           type: "contains",
           from: "architecture:action/large-runbook",
@@ -152,7 +150,7 @@ describe("0.6.6 prose align structure scale gate", () => {
           source_refs: expect.arrayContaining([sourceRef]),
         }),
       );
-      expect(large.result.structure_summary.views[0]?.split_requirement.contains_edge_drafts[0])
+      expect(large.result.structure_summary.views[0]?.split_recommendation.contains_edge_drafts[0])
         .not.toHaveProperty("generated");
 
       const confirmedPayload = writePayload(projectRoot, "large-narrative-confirmed.yaml", {
@@ -161,7 +159,7 @@ describe("0.6.6 prose align structure scale gate", () => {
           state: "confirmed",
           confirmed_by: "human",
           confirmed_at: "2026-06-24T12:00:00Z",
-          structure_digest: large.result.structure_digest,
+          structure_digest: large.result.structure_summary.structure_digest,
         },
       });
       const confirmed = JSON.parse(await runCliInDir(projectRoot, [
@@ -179,10 +177,10 @@ describe("0.6.6 prose align structure scale gate", () => {
           diagnostics: Array<{ severity: string; code: string; candidate_id?: string }>;
         };
       };
-      expect(confirmed.result.valid).toBe(false);
+      expect(confirmed.result.valid).toBe(true);
       expect(confirmed.result.diagnostics).toContainEqual(expect.objectContaining({
-        severity: "error",
-        code: "view.split_required",
+        severity: "warning",
+        code: "view.split_recommended",
         candidate_id: "architecture:action/large-runbook",
       }));
     } finally {

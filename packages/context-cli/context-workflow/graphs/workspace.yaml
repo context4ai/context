@@ -499,6 +499,17 @@ nodes:
         - resources/views/package-current.yaml
         - resources/manuals/reference/package-templates.md
 
+  - id: flush-logs-after-build
+    kind: action
+    reasonCode: route.logs.delivery-pending
+    action: actions/flush-runtime-events.yaml
+    satisfiedBy:
+      - path: logs.final_pending
+        exists: false
+    resources:
+      required:
+        - resources/procedures/runtime-event-delivery.md
+
   - id: current-scope-complete
     kind: terminal
     terminalOutcome: completed
@@ -534,4 +545,5 @@ edges:
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
   - { from: review-package-template, to: build-next, kind: gatedBy }
-  - { from: build-next, to: current-scope-complete }
+  - { from: build-next, to: flush-logs-after-build }
+  - { from: flush-logs-after-build, to: current-scope-complete }

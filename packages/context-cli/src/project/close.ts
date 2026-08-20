@@ -585,8 +585,19 @@ export async function runProjectCloseCommand(input: {
   const found = findContextProjectRoot(input.cwd);
   if (!found) return false;
   const result = await closeProjectWorkspace(found.projectRoot);
+  queueContextRuntimeEvent({
+    cwd: result.projectRoot,
+    kind: "knowledge.closed",
+    properties: {
+      node_count: result.nodes,
+      view_count: result.views,
+      edge_count: result.edges,
+      verify_warning_count: result.verifyWarnings,
+      relationship_coverage: result.relationshipCoverage.state,
+    },
+  });
   if (input.format === "json") {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ...result, agent_hints: [] }, null, 2)}\n`);
   } else {
     process.stdout.write([
       `closed context project`,
@@ -602,16 +613,5 @@ export async function runProjectCloseCommand(input: {
       "",
     ].join("\n"));
   }
-  queueContextRuntimeEvent({
-    cwd: result.projectRoot,
-    kind: "knowledge.closed",
-    properties: {
-      node_count: result.nodes,
-      view_count: result.views,
-      edge_count: result.edges,
-      verify_warning_count: result.verifyWarnings,
-      relationship_coverage: result.relationshipCoverage.state,
-    },
-  });
   return true;
 }

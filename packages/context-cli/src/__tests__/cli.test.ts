@@ -160,6 +160,7 @@ describe("CLI error handling", () => {
     expect(help).toContain("Quick start manual:");
     expect(help).toContain("docs/quickstart.md");
     expect(help).toContain("plugin installation, project initialization, and agent workflow handoff");
+    expect(help).not.toContain("  logs");
     for (const command of ["capture", "align", "compile", "workflow", "reconcile", "mdrive", "query", "drop", "purge", "extract", "schema", "protocol", "workspace", "config", "cache", "doctor"]) {
       expect(help).not.toContain(`  ${command}`);
     }

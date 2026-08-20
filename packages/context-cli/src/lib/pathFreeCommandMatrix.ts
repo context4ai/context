@@ -11,6 +11,9 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "debug disable", view: "production-semantic", handles: ["trace_id", "debug_status"], notes: "Stops new event recording without deleting prior trace data." },
   { command: "debug status", view: "production-semantic", handles: ["trace_id", "debug_status", "event_count"], notes: "Reports debug configuration, event counts, and local trace locations." },
   { command: "debug export", view: "production-semantic", handles: ["trace_id", "event_count", "transition_count"], notes: "Deterministically projects append-only events into replay-ready JSON below the workspace runtime directory." },
+  { command: "logs", view: "production-semantic", handles: ["delivery_status"], notes: "Hidden namespace for a configured package-owned runtime event sink." },
+  { command: "logs plan", view: "production-semantic", handles: ["outbox", "event_summary", "sink_destination", "next_command"], notes: "Describes the fixed runtime-event payload source and package-owned sink without delivering data." },
+  { command: "logs flush", view: "production-semantic", handles: ["delivery_status", "event_count", "next_command"], notes: "Flushes pending generic runtime events through the configured package-owned sink." },
 
   { command: "status", view: "production-semantic", handles: ["project_status", "source_name", "phase_id", "next_command"], notes: "Reports project lifecycle state and status-driven next actions." },
   { command: "resource", view: "production-semantic", handles: ["project_status"], notes: "Context workflow resource namespace." },
@@ -49,5 +52,5 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "source inspect", view: "production-semantic", handles: ["source_name", "module_name", "knowledge_path"], notes: "Inspects registered repo source boundaries and projected knowledge path examples." },
   { command: "source remove", view: "production-semantic", handles: ["source_name", "source_type", "source_status", "plan_digest"], notes: "Previews exact manifest-owned cleanup, then applies the digest-bound plan without deleting shared batch directories." },
   { command: "verify", view: "production-semantic", handles: ["issue_code", "node_ref", "view_ref", "section_id", "source_ref"], notes: "Validates the current project workspace." },
-  { command: "clean-cache", view: "production-semantic", handles: ["removed_count", "cache_status"], notes: "Top-level local maintenance command for plugin and retrieval cache cleanup." },
+  { command: "clean-cache", view: "production-semantic", handles: ["removed_count", "cache_status"], notes: "Top-level local maintenance command for orphaned Claude plugin cache cleanup." },
 ] as const;

@@ -299,7 +299,7 @@ if (shouldShebang) {
         ? Object.fromEntries(
             Object.entries(srcPkg.bin).map(([k, v]) => [
               k,
-              v.replace(/^\.\/dist\//, "./").replace(/\.ts$/, ".js"),
+              v.replace(/^(?:\.\/)?dist\//, "./").replace(/\.ts$/, ".js"),
             ]),
           )
         : undefined,

@@ -421,7 +421,7 @@ export function largeNarrativePayload(
       node_ref: "action/large-runbook",
       title: "Large Runbook",
       node_type: "action",
-      summary: "Large narrative that must be split before confirmation.",
+      summary: "Large narrative that may benefit from smaller navigation units.",
       tags: ["runbook"],
     }],
     views: [{
@@ -433,7 +433,7 @@ export function largeNarrativePayload(
       title: "Large Runbook",
       node_type: "action",
       path: "architecture/runbooks/large-runbook.md",
-      summary: "Large narrative that must be split before confirmation.",
+      summary: "Large narrative that may benefit from smaller navigation units.",
       sections,
     }],
     edges: [],

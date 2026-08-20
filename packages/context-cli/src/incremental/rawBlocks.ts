@@ -5,7 +5,23 @@ import remarkParse from "remark-parse";
 import { normalizedEvidenceBodyHash } from "../evidence/blockIdentity.js";
 import { normalizeMarkdown } from "../lib/normalize.js";
 import { toHashId } from "./hash.js";
-import type { RawBlock } from "./types.js";
+
+export interface RawBlock {
+  block_id?: string;
+  block_locator_id: string;
+  kind: "root" | "paragraph" | "list_item" | "relation" | "code" | "table" | "quote";
+  heading_path: string[];
+  line_start: number;
+  line_end: number;
+  line_range: string;
+  block_hash: string;
+  block_body_hash: string;
+  text_preview: string;
+  list_path?: string[];
+  list_ordinal?: number;
+  structural_parent_id?: string;
+  is_oversized?: boolean;
+}
 
 const RELATION_HEADINGS = new Set([
   "parent",

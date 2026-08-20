@@ -16,7 +16,6 @@ function structure(nodeType: "entity" | "action" | "domain" = "entity"): {
     node_type: "entity",
     path: "architecture/example.md",
     sections: [{ id: "overview", kind: "description", source_refs: ["file:docs/guide.md#span:intro L1-2@123456789abc"] }],
-    split_requirement: { status: "not_required", reason: "" },
   } as unknown as StructureViewPlan;
   return {
     view,

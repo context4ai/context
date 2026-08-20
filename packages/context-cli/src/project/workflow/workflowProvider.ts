@@ -259,7 +259,7 @@ function projectCommandExecution(
   item: ContextWorkflowCommand,
 ): ContextWorkflowCommand {
   return item.effect === "external"
-    ? { ...item, execution: { target: "agent-host" } }
+    ? { ...item, execution: { ...item.execution, target: "agent-host" } }
     : item;
 }
 

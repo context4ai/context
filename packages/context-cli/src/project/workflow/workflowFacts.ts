@@ -405,6 +405,13 @@ export function createContextWorkflowFacts(
       observation.packageFreshness.every((item) => item.state === "ready")
     );
   const templatesReviewed = packageTemplatesReviewed(observation);
+  const runtimeEvents = observation.runtimeEvents ?? {
+    configured: false,
+    pending_count: 0,
+    pending_kinds: [],
+  };
+  const buildLogPending = runtimeEvents.configured &&
+    runtimeEvents.pending_kinds.includes("package.build.completed");
 
   return {
     workspace: {
@@ -422,10 +429,8 @@ export function createContextWorkflowFacts(
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance),
       source_read_resolved: captureComplete ||
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.sourceRead),
-      extraction_scope_resolved: extractDeclarationsComplete ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.extractionScope),
-      document_classification_resolved: documentsClassified ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.documentClassification),
+      extraction_scope_resolved: extractDeclarationsComplete,
+      document_classification_resolved: documentsClassified,
       structure_confirmation_resolved: structureConfirmed ||
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.structureConfirmation),
       knowledge_review_resolved: reviewGateIsClear ||
@@ -492,6 +497,12 @@ export function createContextWorkflowFacts(
       declared: packagesDeclared,
       templates_reviewed: templatesReviewed,
       current: packagesCurrent,
+    },
+    logs: {
+      configured: runtimeEvents.configured,
+      ...(buildLogPending && hasApprovedKnowledge && packagesCurrent
+        ? { final_pending: true as const }
+        : {}),
     },
   };
 }
