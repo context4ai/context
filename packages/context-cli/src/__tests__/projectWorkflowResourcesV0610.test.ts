@@ -6,6 +6,8 @@ import {
   materializeResource,
   type ResourceReadReceiptSet,
 } from "@c4a/agent-graph";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ContextError } from "../lib/errors.js";
 import { collectProjectStatus } from "../project/status.js";
 import {
   evaluateContextWorkflow,
@@ -17,13 +19,44 @@ import {
   projectWorkflowResourceAcknowledgeSummary,
   renderContextWorkflowResource,
 } from "../project/workflow/workflowResource.js";
+import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
 import { initContextProject } from "../project/workspace.js";
+import { ExitCode } from "../types/exitCode.js";
 import {
   emptyObservation,
   receiptPathFromCommand,
 } from "./projectWorkflowProviderV0610.fixtures.js";
 
 describe("Context workflow resources", () => {
+  test("returns a structured recovery action when a receipt file is missing", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-workflow-missing-receipt-"));
+    const reference = "@.tmp/context-runtime/workflow/read-receipts/missing.json";
+    try {
+      await parseWorkflowResourceReceipts(reference, root);
+      throw new Error("expected missing receipt file to be rejected");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ContextError);
+      const contextError = error as ContextError;
+      expect(contextError.code).toBe(ExitCode.UserError);
+      expect(contextError.message).toBe("resource read receipt file is unavailable");
+      expect(contextError.message).not.toContain(root);
+      expect(contextError.detail).toEqual({
+        category: ErrorCategory.UserInputInvalid,
+        reason_code: "resource-receipt-not-found",
+        receipt_reference: reference,
+        io_code: "ENOENT",
+        next_action: {
+          kind: "refresh_workflow_route",
+          command: "context status --format json",
+          message:
+            "Refresh the current route and use only the receipt reference returned by Context.",
+        },
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("source boundary receipts survive capture progress but not boundary changes", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-workflow-source-boundary-"));
     try {

@@ -32,6 +32,138 @@ describe("Context workflow Provider", () => {
     })));
   });
 
+  test("keeps pre-build runtime event failures silent", async () => {
+    const ordinary = await evaluateContextWorkflow({
+      observation: {
+        ...emptyObservation(),
+        approvedPages: 1,
+        close: { state: "ready", diagnostics: [] },
+      },
+      authorities: [],
+    });
+    expect(ordinary.route?.node).not.toContain("logs");
+
+    const preClosePending = await evaluateContextWorkflow({
+      observation: {
+        ...emptyObservation(),
+        approvedPages: 1,
+        close: { state: "ready", diagnostics: [] },
+        runtimeEvents: {
+          configured: true,
+          pending_count: 1,
+          pending_kinds: ["workspace.active"],
+        },
+      },
+      authorities: [],
+    });
+    expect(preClosePending.route?.node).not.toContain("logs");
+
+    const closePending = await evaluateContextWorkflow({
+      observation: {
+        ...emptyObservation(),
+        approvedPages: 1,
+        close: { state: "ready", diagnostics: [] },
+        runtimeEvents: {
+          configured: true,
+          pending_count: 2,
+          pending_kinds: ["workspace.active", "knowledge.closed"],
+        },
+      },
+      authorities: [],
+    });
+    expect(closePending.route?.node).not.toContain("logs");
+  });
+
+  test("does not let ordinary runtime log backlog invalidate the workspace revision", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      runtimeEvents: {
+        configured: true,
+        pending_count: 0,
+        pending_kinds: [] as string[],
+      },
+    };
+    const before = await evaluateContextWorkflow({
+      observation,
+      authorities: [],
+    });
+    const afterActiveDeliveryFailure = await evaluateContextWorkflow({
+      observation: {
+        ...observation,
+        runtimeEvents: {
+          configured: true,
+          pending_count: 3,
+          pending_kinds: ["workspace.initialized", "workspace.active", "knowledge.closed"],
+        },
+      },
+      authorities: [],
+    });
+
+    expect(afterActiveDeliveryFailure.evaluation.revision).toBe(
+      before.evaluation.revision,
+    );
+    expect(afterActiveDeliveryFailure.route?.id).toBe(before.route?.id);
+  });
+
+  test("routes only a failed build boundary to the final log flush", async () => {
+    const packageReady = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      approvedPages: 1,
+      close: { state: "ready" as const, diagnostics: [] },
+      packages: [{
+        kind: "package.kb" as const,
+        name: "knowledge",
+        reads: [],
+        writes: [],
+        template: { path: "src/package-templates/kb" },
+        outDir: "dist/knowledge",
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
+      }],
+      packageFreshness: [{
+        name: "knowledge",
+        kind: "kb" as const,
+        state: "ready" as const,
+        inputFiles: 1,
+        outputFiles: 1,
+      }],
+      packageTemplateReviews: [{
+        packageName: "knowledge",
+        templatePath: "src/package-templates/kb",
+        state: "starter-accepted" as const,
+      }],
+    };
+    const activeOnly = await evaluateContextWorkflow({
+      observation: {
+        ...packageReady,
+        runtimeEvents: {
+          configured: true,
+          pending_count: 1,
+          pending_kinds: ["workspace.active"],
+        },
+      },
+      authorities: [],
+    });
+    expect(activeOnly.route).toBeUndefined();
+
+    const buildPending = await evaluateContextWorkflow({
+      observation: {
+        ...packageReady,
+        runtimeEvents: {
+          configured: true,
+          pending_count: 3,
+          pending_kinds: ["workspace.active", "knowledge.closed", "package.build.completed"],
+        },
+      },
+      authorities: [],
+    });
+    expect(buildPending.route).toMatchObject({
+      node: "flush-logs-after-build",
+      reason_code: "route.logs.delivery-pending",
+    });
+  });
+
   test("defers stale close maintenance while draft candidates await Review", () => {
     const facts = createContextWorkflowFacts({
       ...emptyObservation(),
@@ -99,6 +231,48 @@ describe("Context workflow Provider", () => {
       availability: "after-human-confirmation",
       managed_execution: "agent-required",
     }]);
+  });
+
+  test("managed extraction authority keeps the evidence inspection Gate observable", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      repoSources: [{ id: "module-a", name: "module-a" }],
+      readyRepoSources: 1,
+    };
+    const authorities = contextWorkflowAuthorities({ managed: true });
+    const facts = createContextWorkflowFacts(observation, authorities);
+
+    expect(authorities).toContain(
+      CONTEXT_WORKFLOW_AUTHORITIES.extractionScope,
+    );
+    expect(facts.gates.extraction_scope_resolved).toBe(false);
+
+    const snapshot = await evaluateContextWorkflow({
+      observation,
+      authorities,
+    });
+    expect(snapshot.evaluation.statusCode).toBe("actionable");
+    expect(snapshot.route).toMatchObject({
+      node: "choose-extraction-scope",
+      availability: "immediate",
+      gate: {
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.extractionScope,
+        resolution: "session-authority",
+        inspection_action: {
+          id: "inspect-code-extraction",
+          effect: "read",
+        },
+      },
+      commands: [{
+        command: expect.stringContaining(
+          '--workflow-managed source inspect "module-a" --format json',
+        ),
+        effect: "read",
+        availability: "immediate",
+        managed_execution: "agent-required",
+      }],
+    });
   });
 
   test("a build receipt cannot hide an unclassified captured document", () => {
@@ -388,7 +562,8 @@ describe("Context workflow Provider", () => {
           ],
           resource_delivery: {
             applies_to: "agent-knowledge-base",
-            recommendation: "git-raw with local Git or an explicit raw URL prefix; otherwise bundle",
+            recommendation:
+              "prefer git-raw; derive an explicit same-host /raw/{commit} prefix for confirmed GitHub-compatible services before falling back to bundle",
             choices: [
               expect.objectContaining({ id: "git-raw", optional: ["remote", "urlPrefix"] }),
               expect.objectContaining({ id: "bundle" }),

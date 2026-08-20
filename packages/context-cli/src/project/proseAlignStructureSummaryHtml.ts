@@ -1,7 +1,7 @@
 import type { AlignDiagnostic } from "./proseAlignTypes.js";
 import type { StructureSummary } from "./proseAlignStructureSummary.js";
 import { machineAppendix } from "./proseAlignStructureSummaryAppendix.js";
-import { attentionSection, splitRequiredViews } from "./proseAlignStructureSummaryAttention.js";
+import { attentionSection } from "./proseAlignStructureSummaryAttention.js";
 import { escapeHtml, label } from "./proseAlignStructureSummaryMarkup.js";
 import { structureSummaryStyles } from "./proseAlignStructureSummaryStyles.js";
 
@@ -136,17 +136,17 @@ function nonContainmentEdges<T extends { type: string }>(edges: readonly T[]): T
   return edges.filter((edge) => edge.type !== "contains");
 }
 
-function hasBlockers(summary: StructureSummary, diagnostics: readonly AlignDiagnostic[]): boolean {
-  return diagnostics.some((diagnostic) => diagnostic.severity === "error") || splitRequiredViews(summary).length > 0;
+function hasBlockers(diagnostics: readonly AlignDiagnostic[]): boolean {
+  return diagnostics.some((diagnostic) => diagnostic.severity === "error");
 }
 
 function softAttention(summary: StructureSummary, diagnostics: readonly AlignDiagnostic[]): boolean {
-  if (hasBlockers(summary, diagnostics)) return false;
+  if (hasBlockers(diagnostics)) return false;
   return summary.counts.diagnostics.warnings > 0 || summary.counts.unresolved > 0;
 }
 
 function judgementLine(summary: StructureSummary, diagnostics: readonly AlignDiagnostic[]): string {
-  const blocked = hasBlockers(summary, diagnostics);
+  const blocked = hasBlockers(diagnostics);
   return blocked
     ? label("Not ready to confirm — resolve the blocking issues above first.", "暂不能确认：上面有阻塞问题，需先处理。")
     : softAttention(summary, diagnostics)
@@ -321,7 +321,7 @@ function pagePlanSection(summary: StructureSummary, diagnostics: readonly AlignD
           const distinctiveSources = sourceDocs.filter((doc) => (doc.split("/").pop() ?? doc) !== pathFile);
           const relationCount = nonContainmentEdges(view.connected_edges).length;
           const flags = [
-            view.split_requirement.status === "split_required" ? label("split required", "需要拆分") : undefined,
+            view.split_recommendation.status === "split_recommended" ? label("split recommended", "建议拆分") : undefined,
             view.unresolved.length > 0 ? label(`${view.unresolved.length} deferred`, `${view.unresolved.length} 个保留项`) : undefined,
             ...(diagnosticCodes.get(view.view_ref) ?? []).map(flagLabel),
           ].filter((item): item is string => item !== undefined);
@@ -378,7 +378,7 @@ export function renderStructureSummaryHtml(input: {
   const title = `Structure Summary - ${summary.source.type}:${summary.source.name}`;
   const language = preferredLanguage();
   const lookup = buildEndpointLookup(summary);
-  const blocked = hasBlockers(summary, input.diagnostics);
+  const blocked = hasBlockers(input.diagnostics);
   const attention = softAttention(summary, input.diagnostics);
   const judgementBorder = blocked ? "rgba(220,38,38,.32)" : attention ? "rgba(217,119,6,.32)" : "rgba(5,150,105,.32)";
   const judgementBg = blocked ? "var(--danger-bg)" : attention ? "var(--warn-bg)" : "var(--ok-bg)";

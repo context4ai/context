@@ -9,9 +9,35 @@ import { ContextError } from "../../lib/errors.js";
 import { ExitCode } from "../../types/exitCode.js";
 
 async function receiptDocument(value: string, cwd: string): Promise<unknown> {
-  const source = value.startsWith("@")
-    ? await readFile(resolve(cwd, value.slice(1)), "utf8")
-    : value;
+  let source = value;
+  if (value.startsWith("@")) {
+    try {
+      source = await readFile(resolve(cwd, value.slice(1)), "utf8");
+    } catch (error) {
+      const ioCode = error !== null && typeof error === "object" &&
+          "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined;
+      throw new ContextError(
+        ExitCode.UserError,
+        "resource read receipt file is unavailable",
+        {
+          category: ErrorCategory.UserInputInvalid,
+          reason_code: ioCode === "ENOENT"
+            ? "resource-receipt-not-found"
+            : "resource-receipt-unreadable",
+          receipt_reference: value,
+          ...(ioCode === undefined ? {} : { io_code: ioCode }),
+          next_action: {
+            kind: "refresh_workflow_route",
+            command: "context status --format json",
+            message:
+              "Refresh the current route and use only the receipt reference returned by Context.",
+          },
+        },
+      );
+    }
+  }
   try {
     return JSON.parse(source) as unknown;
   } catch (error) {

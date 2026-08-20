@@ -23,10 +23,9 @@ import {
 import { renderStructureSummaryHtml } from "./proseAlignStructureSummaryHtml.js";
 import { htmlReportReference, type LocalHtmlReportReference } from "./localHtmlReport.js";
 
-// A View is allowed to carry a normal document's worth of independently
-// citable Sections. This is a structural safety ceiling, not a semantic page
-// splitter: common multi-section documents must not be expanded into one View
-// per Section merely because their evidence is well segmented.
+// These thresholds only identify Views that may benefit from semantic
+// restructuring. They are not correctness ceilings: only an Agent or user can
+// decide whether the evidence belongs on one page or several pages.
 const LARGE_VIEW_SECTION_THRESHOLD = 24;
 const LARGE_VIEW_SOURCE_REF_THRESHOLD = 32;
 
@@ -67,7 +66,7 @@ export interface StructureSummaryView {
   connected_edges: StructureSummaryEdge[];
   shared_source_refs: StructureSummarySharedSourceRef[];
   unresolved: StructureSummaryUnresolvedIssue[];
-  split_requirement: StructureViewSplitRequirement;
+  split_recommendation: StructureViewSplitRecommendation;
 }
 
 export interface StructureSummaryViewGroup {
@@ -85,8 +84,8 @@ export interface StructureSummarySharedSourceRef {
 
 export type StructureSummaryUnresolvedIssue = StructureUnresolvedIssue & { source_ref_count: number };
 
-export interface StructureViewSplitRequirement {
-  status: "not_required" | "split_required";
+export interface StructureViewSplitRecommendation {
+  status: "not_recommended" | "split_recommended";
   reason: string;
   thresholds: {
     max_sections: number;
@@ -170,7 +169,7 @@ export interface StructureSummaryCompact {
       source_ref_count: number;
       edge_count: number;
       unresolved_count: number;
-      split_required: boolean;
+      split_recommended: boolean;
     }>;
   }>;
   unresolved: Array<Pick<StructureSummaryUnresolvedIssue, "issue" | "note" | "source_ref_count">>;
@@ -218,13 +217,13 @@ function sectionSummary(section: StructureSectionPlan): StructureSummarySection 
   };
 }
 
-export function splitRequirementForView(view: StructureViewPlan): StructureViewSplitRequirement {
+export function splitRecommendationForView(view: StructureViewPlan): StructureViewSplitRecommendation {
   const sourceRefCount = uniqueRefs(view.sections.flatMap((section) => section.source_refs)).length;
   const overSectionThreshold = view.sections.length > LARGE_VIEW_SECTION_THRESHOLD;
   const overSourceRefThreshold = sourceRefCount > LARGE_VIEW_SOURCE_REF_THRESHOLD;
   if (!overSectionThreshold && !overSourceRefThreshold) {
     return {
-      status: "not_required",
+      status: "not_recommended",
       reason: "within_threshold",
       thresholds: {
         max_sections: LARGE_VIEW_SECTION_THRESHOLD,
@@ -253,7 +252,7 @@ export function splitRequirementForView(view: StructureViewPlan): StructureViewS
     };
   });
   return {
-    status: "split_required",
+    status: "split_recommended",
     reason: overSectionThreshold && overSourceRefThreshold
       ? "too_many_sections_and_source_refs"
       : overSectionThreshold
@@ -316,25 +315,22 @@ function boundedChildViewGroups(sections: readonly StructureSectionPlan[]): Stru
 
 export function largeNarrativeSplitDiagnostics(payload: AlignPayload | undefined): AlignDiagnostic[] {
   if (payload === undefined) return [];
-  const blocking = payload.lifecycle.state === "confirmed" || payload.lifecycle.state === "frozen";
   return payload.views.flatMap((view, index): AlignDiagnostic[] => {
-    const requirement = splitRequirementForView(view);
-    if (requirement.status !== "split_required") return [];
+    const recommendation = splitRecommendationForView(view);
+    if (recommendation.status !== "split_recommended") return [];
     return [{
-      severity: blocking ? "error" : "warning",
-      code: "view.split_required",
+      severity: "warning",
+      code: "view.split_recommended",
       family: "node_quality",
-      message: blocking
-        ? "Large narrative view must be split into a parent index view and child views before confirmation."
-        : "Large narrative view should be split into a parent index view and child views before confirmation.",
+      message: "This View is large enough that splitting it may improve navigation; keep it intact when the evidence belongs on one page.",
       candidate_id: view.view_ref,
       field: `views[${index}]`,
       repair: {
-        action: "split_large_view_before_confirmation",
-        parent_index_view_ref: requirement.parent_index_view_ref,
-        suggested_child_view_refs: requirement.suggested_child_view_refs,
-        contains_edge_drafts: requirement.contains_edge_drafts,
-        reason: requirement.reason,
+        action: "consider_splitting_large_view",
+        parent_index_view_ref: recommendation.parent_index_view_ref,
+        suggested_child_view_refs: recommendation.suggested_child_view_refs,
+        contains_edge_drafts: recommendation.contains_edge_drafts,
+        reason: recommendation.reason,
       },
     }];
   });
@@ -412,7 +408,7 @@ function viewSummary(input: {
     connected_edges: input.edges.filter((edge) => edgeTouchesView(edge, endpointAliases)),
     shared_source_refs: input.sharedSourceRefs.filter((sharedRef) => sharedRefTouchesView(sharedRef, endpointAliases)),
     unresolved: input.unresolved.filter((issue) => unresolvedTouchesView(issue, endpointAliases, sourceRefSet)),
-    split_requirement: splitRequirementForView(view),
+    split_recommendation: splitRecommendationForView(view),
   };
 }
 
@@ -599,7 +595,7 @@ export function compactStructureSummary(input: {
         source_ref_count: view.source_ref_count,
         edge_count: view.connected_edges.length,
         unresolved_count: view.unresolved.length,
-        split_required: view.split_requirement.status === "split_required",
+        split_recommended: view.split_recommendation.status === "split_recommended",
       })),
     })),
     unresolved: input.summary.unresolved.slice(0, unresolvedLimit).map((item) => ({

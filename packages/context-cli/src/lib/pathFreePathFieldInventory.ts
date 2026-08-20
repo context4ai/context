@@ -113,7 +113,7 @@ function semanticReplacementFor(field: string): string {
     return "Use source_name, snapshot_hash, manifest status counts, and issue_code instead of manifest paths.";
   }
   if (field.toLowerCase().includes("cache")) {
-    return "Use clean-cache status, removed_count, and issue_code instead of cache paths.";
+    return "Use clean-cache status, removed_count, and issue_code instead of plugin cache paths.";
   }
   if (field.toLowerCase().includes("package") || field.startsWith("output") || field === "out_dir") {
     return "Use package_name, build_inventory, and build status instead of generated output paths.";

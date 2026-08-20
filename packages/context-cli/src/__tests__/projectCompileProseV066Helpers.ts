@@ -51,12 +51,10 @@ export async function invokeCliInDir(dir: string, args: string[]): Promise<{
     const originalCwd = process.cwd();
     const originalStdout = process.stdout.write;
     const originalStderr = process.stderr.write;
-    const originalCacheHome = process.env.C4A_CONTEXT_CACHE_HOME;
     const stdout: string[] = [];
     const stderr: string[] = [];
     let status = 0;
     process.chdir(dir);
-    process.env.C4A_CONTEXT_CACHE_HOME = join(dir, ".tmp", "context-cli-test-cache");
     process.stdout.write = ((chunk: string | Uint8Array) => {
       stdout.push(String(chunk));
       return true;
@@ -82,11 +80,6 @@ export async function invokeCliInDir(dir: string, args: string[]): Promise<{
     } finally {
       process.stdout.write = originalStdout;
       process.stderr.write = originalStderr;
-      if (originalCacheHome === undefined) {
-        delete process.env.C4A_CONTEXT_CACHE_HOME;
-      } else {
-        process.env.C4A_CONTEXT_CACHE_HOME = originalCacheHome;
-      }
       process.chdir(originalCwd);
     }
     return { status, stdout: stdout.join(""), stderr: stderr.join("") };

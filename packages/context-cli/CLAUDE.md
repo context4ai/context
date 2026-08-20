@@ -279,15 +279,9 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 - `source_ref` / raw block / internal align binding 的 `mentions[].line` 都用去掉 capture frontmatter 和自动分隔空行后的正文行号。
 - 读 internal align binding 不能只按 `mentions[].line` 索引 raw，必须用 `quote` 校验或 fallback;行号口径不一致时以 quote 校验为准。
 
-### Incremental Cache
+### Cache Maintenance
 
-`src/incremental/` 只产可重建的派生索引，不是真相源。
-
-- user-level retrieval cache 默认在 `~/.c4a/context-cli/retrieval/<project-id>/`，测试用 `C4A_CONTEXT_CACHE_HOME` 注入。
-- 不把 `manifest.json` / `raw-blocks.json` / `section-fingerprints.json` 写进 workspace data root。
-- cache 缺失或 stale 时返回 `unknown-input` 或提示 rebuild，不伪造 baseline 跳过 align/compile。
-- `context cache clean --project` 只清当前 workspace；`clean --all` 清所有 retrieval cache。
-- `context clean-cache` 是开发/验收入口：清 Claude plugin orphan cache，非 dry-run 时等价 `context cache clean --all`。
+`context clean-cache` 仅清理带 `.orphaned_at` 标记的 Claude plugin 版本缓存；`--dry-run` 只报告，不删除。Context 工作区状态与知识生命周期不依赖该缓存。
 
 ## 模块职责
 

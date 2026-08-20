@@ -43,8 +43,22 @@ commit-pinned URL or that explicit prefix. Context does not check whether those
 files are committed, pushed, or remotely readable; that remains the package
 author's responsibility. If neither Git nor an explicit prefix is available,
 offer bundled resources or explicit omission; omission keeps unresolved links
-and must be described as such. Do not infer repository identity or invent a raw
-host URL.
+and must be described as such.
+
+Before falling back to bundled delivery for a non-GitHub remote, inspect the
+confirmed repository web URL or a known raw-file URL. When the Git service uses
+the GitHub-compatible same-host shape
+`https://<host>/<namespace>/<repository>/raw/<ref>/<path>`, prefer an explicit
+`urlPrefix` such as
+`https://git.example.com/team/knowledge/raw/{commit}`. Include the
+repository-relative workspace directory in that prefix when the Context
+workspace is nested below the repository root; Context appends the
+project-relative `knowledge/assets/...` path. Lack of built-in automatic
+derivation alone is not a reason to bundle. Prefer `{commit}` for immutable
+links; use a literal published ref only when the author intentionally wants it.
+If the service's raw convention or repository identity cannot be established,
+do not guess or probe an invented endpoint: ask the author for `urlPrefix`, or
+offer bundled delivery.
 
 Large image optimization applies only to bundled delivery. Without an `assets`
 declaration, existing workspaces continue to copy selected resources

@@ -29,7 +29,9 @@ interface ProseStructureBatchValidation {
   views: number;
   sections: number;
   diagnostics: number;
+  diagnostic_codes: string[];
   confirmation_blockers: number;
+  confirmation_blocker_codes: string[];
   self_healed?: ValidateResult["self_healed"];
   diagnostics_command: string;
 }
@@ -38,7 +40,7 @@ export interface ProseStructureBatchResult {
   kind: "prose.structure-batch.result";
   schema: typeof PROSE_STRUCTURE_BATCH_SCHEMA;
   operation: "validated" | "staged";
-  state: "ready" | "invalid" | "staged" | "confirmed";
+  state: "ready" | "repair-required" | "invalid" | "staged" | "confirmed";
   targets: number;
   ready: number;
   written: number;
@@ -54,6 +56,11 @@ export interface ProseStructureBatchResult {
   next_action: {
     kind: "stage_structure_batch" | "repair_structure_batch" | "reevaluate_workspace";
     command: string;
+    reason_code:
+      | "prose-structure-batch-ready"
+      | "prose-structure-batch-invalid"
+      | "prose-structure-batch-repair-required"
+      | "prose-structure-batch-staged";
   };
 }
 
@@ -138,7 +145,9 @@ function validationSummary(
       ? counts.sections
       : 0,
     diagnostics: result.diagnostics.length,
+    diagnostic_codes: [...new Set(result.diagnostics.map((item) => item.code))].sort(),
     confirmation_blockers: result.confirmation_blockers.length,
+    confirmation_blocker_codes: [...new Set(result.confirmation_blockers.map((item) => item.code))].sort(),
     ...(result.self_healed === undefined ? {} : { self_healed: result.self_healed }),
     diagnostics_command: `context run ${shellQuote(phaseId)} --validate --input ${shellQuote(input)} --format json --verbose`,
   };
@@ -199,11 +208,14 @@ export async function runProseStructureBatch(input: {
   const ready = validations.filter((item) => item.state === "ready").length;
   const statusCommand = "context status --format json";
   if (ready !== items.length) {
+    const batchState = validations.some((item) => item.state === "invalid")
+      ? "invalid"
+      : "repair-required";
     const result: ProseStructureBatchResult = {
       kind: "prose.structure-batch.result",
       schema: PROSE_STRUCTURE_BATCH_SCHEMA,
       operation: "validated",
-      state: "invalid",
+      state: batchState,
       targets: items.length,
       ready,
       written: 0,
@@ -212,6 +224,9 @@ export async function runProseStructureBatch(input: {
       next_action: {
         kind: "repair_structure_batch",
         command: validations.find((item) => !item.valid)?.diagnostics_command ?? statusCommand,
+        reason_code: batchState === "invalid"
+          ? "prose-structure-batch-invalid"
+          : "prose-structure-batch-repair-required",
       },
     };
     if (input.operation === "stage") {
@@ -236,6 +251,7 @@ export async function runProseStructureBatch(input: {
       next_action: {
         kind: "stage_structure_batch",
         command: `context run --batch-input ${shellQuote(input.batchInput)} --stage${input.managed ? " --managed" : ""} --format json`,
+        reason_code: "prose-structure-batch-ready",
       },
     };
   }
@@ -283,6 +299,7 @@ export async function runProseStructureBatch(input: {
     next_action: {
       kind: "reevaluate_workspace",
       command: statusCommand,
+      reason_code: "prose-structure-batch-staged",
     },
   };
 }
@@ -293,12 +310,12 @@ export function formatProseStructureBatchResult(
 ): string {
   if (format === "json") return `${JSON.stringify(result, null, 2)}\n`;
   return formatFeedback({
-    symbol: result.state === "invalid" ? "⚠" : "✓",
+    symbol: result.state === "invalid" || result.state === "repair-required" ? "⚠" : "✓",
     action: result.operation,
     subject: "prose structure batch",
     headline: `${result.ready}/${result.targets} ready, ${result.written} written`,
     body: result.validations.map((item) =>
-      `${item.phase_id}: ${item.state} (${item.nodes} nodes, ${item.views} views, ${item.diagnostics} diagnostics)`
+      `${item.phase_id}: ${item.state} (${item.nodes} nodes, ${item.views} views, ${item.diagnostics} diagnostics${item.diagnostic_codes.length > 0 ? `: ${item.diagnostic_codes.join(", ")}` : ""})`
     ),
     next: result.next_action.command,
   });

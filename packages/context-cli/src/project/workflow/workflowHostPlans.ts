@@ -256,7 +256,8 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         ],
         resource_delivery: {
           applies_to: "agent-knowledge-base",
-          recommendation: "git-raw with local Git or an explicit raw URL prefix; otherwise bundle",
+          recommendation:
+            "prefer git-raw; derive an explicit same-host /raw/{commit} prefix for confirmed GitHub-compatible services before falling back to bundle",
           choices: [
             {
               id: "git-raw",
@@ -275,6 +276,14 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         after_edit: "context status --format json",
       },
     },
+  }),
+  "context.logs.flush": () => ({
+    commands: [command(
+      "context logs flush --format json",
+      "external",
+      "agent-required",
+      { target: "agent-host", requires_network_access: true },
+    )],
   }),
 };
 

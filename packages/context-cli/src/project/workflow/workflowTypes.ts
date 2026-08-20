@@ -116,6 +116,10 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
     templates_reviewed: boolean;
     current: boolean;
   };
+  logs: {
+    configured: boolean;
+    final_pending?: true;
+  };
 }
 
 export interface ContextWorkflowObservation {
@@ -131,6 +135,11 @@ export interface ContextWorkflowObservation {
   packages: readonly PackageDefinition[];
   packageFreshness: readonly PackageFreshness[];
   packageTemplateReviews: readonly PackageTemplateReviewStatus[];
+  runtimeEvents?: {
+    configured: boolean;
+    pending_count: number;
+    pending_kinds: string[];
+  };
   sourceFreshness: SourceFreshnessState;
   staleSourcePhases: readonly string[];
   pendingExtractPhases: readonly string[];
@@ -186,6 +195,7 @@ export interface ContextWorkflowCommand {
   managed_execution: "automatic" | "agent-required";
   execution?: {
     target: "agent-host" | "subprocess";
+    requires_network_access?: true;
   };
 }
 

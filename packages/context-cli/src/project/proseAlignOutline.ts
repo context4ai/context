@@ -3,7 +3,7 @@ import {
   updateMarkdownFenceState,
   type FenceState,
 } from "../incremental/rawBlocks.js";
-import type { RawBlock } from "../incremental/types.js";
+import type { RawBlock } from "../incremental/rawBlocks.js";
 
 function stableRawLineQuote(line: string): string {
   return line.trim().replace(/\s+/g, " ").slice(0, 180);

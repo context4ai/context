@@ -227,8 +227,8 @@ function groupUnresolved(items: readonly StructureSummary["unresolved"][number][
   return [...groups.values()];
 }
 
-export function splitRequiredViews(summary: StructureSummary): SummaryView[] {
-  return summary.views.filter((view) => view.split_requirement.status === "split_required");
+export function splitRecommendedViews(summary: StructureSummary): SummaryView[] {
+  return summary.views.filter((view) => view.split_recommendation.status === "split_recommended");
 }
 
 function explainBody(exp: Explanation): string {
@@ -247,13 +247,13 @@ export function attentionSection(
   lookup: EndpointLookup,
 ): string {
   const visibleDiagnostics = diagnostics.filter((diagnostic) => diagnostic.severity === "error" || diagnostic.severity === "warning");
-  const splits = splitRequiredViews(summary);
+  const splits = splitRecommendedViews(summary);
   const hasAttention = visibleDiagnostics.length > 0 || summary.unresolved.length > 0 || splits.length > 0;
   if (!hasAttention) {
     return `
       <section class="panel attention ok">
         <h2>${label("Attention", "需要关注")}</h2>
-        <p>${label("✓ No errors, warnings, deferred items, or split blockers.", "✓ 没有错误、警告、保留项或拆分阻塞。")}</p>
+        <p>${label("✓ No errors, warnings, deferred items, or split recommendations.", "✓ 没有错误、警告、保留项或拆分建议。")}</p>
       </section>
     `;
   }
@@ -307,17 +307,17 @@ export function attentionSection(
   `;
   const splitHtml = splits.length === 0 ? "" : `
     <div class="attention-group">
-      <h3>${label("Split Required", "需要拆分")}</h3>
+      <h3>${label("Split Recommended", "建议拆分")}</h3>
       <div class="attention-group-body">
         ${splits.map((view) => {
           const exp: Explanation = {
             title: escapeHtml(view.title),
-            problem: escapeHtml(view.split_requirement.reason),
-            impact: label("This page is too large or mixed to compile as a single page.", "这个页面太大或太杂，没法作为一个页面编译。"),
-            action: label("Split it into smaller pages before confirming.", "确认前先把它拆成更小的页面。"),
+            problem: escapeHtml(view.split_recommendation.reason),
+            impact: label("A smaller page set may be easier to navigate, but the current View remains valid.", "拆成更小的页面可能更易导航，但当前 View 仍然有效。"),
+            action: label("Split only when the evidence supports separate pages.", "仅在证据适合独立成页时拆分。"),
           };
           return `
-            <article class="attention-item danger">
+            <article class="attention-item warn">
               <strong>${exp.title}</strong>
               ${explainBody(exp)}
             </article>

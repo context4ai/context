@@ -67,6 +67,18 @@ inside Git, because Context must resolve the current commit. A workspace outside
 Git must use a literal, already-published prefix without `{commit}`. Context
 appends the project-relative `knowledge/assets/...` path.
 
+For a non-GitHub service that exposes raw files through the GitHub-compatible
+same-host layout
+`https://<host>/<namespace>/<repository>/raw/<ref>/<path>`, derive and configure
+the explicit prefix before choosing bundled delivery. For example, use
+`https://git.example.com/team/knowledge/raw/{commit}` for a workspace at the
+repository root. If the workspace is nested, append its repository-relative
+directory to the prefix because Context appends only the project-relative
+`knowledge/assets/...` path. This derivation is appropriate only when the
+service's raw convention and repository identity are confirmed; otherwise ask
+for the prefix or use bundled delivery. The fact that Context does not
+automatically recognize a host is not, by itself, a reason to bundle.
+
 The resolved commit and raw URL participate in package freshness, so changing
 Git HEAD or the selected remote makes an existing package stale. Context does
 not check whether resources are committed, pushed, or remotely readable;

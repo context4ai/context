@@ -6,7 +6,12 @@ import type { PackageDefinition } from "@c4a/context";
 import { parse as parseYaml } from "yaml";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
-import { queueContextRuntimeEvent } from "../runtimeEvents.js";
+import {
+  flushQueuedContextRuntimeEvents,
+  queueContextRuntimeEvent,
+  runtimeEventPendingAgentHint,
+  type RuntimeEventPendingAgentHint,
+} from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   packageBuildInventory,
@@ -69,7 +74,9 @@ export interface ProjectBuildResult {
   agent_hints: PackageBuildAgentHint[];
 }
 
-export interface PackageBuildAgentHint {
+export type PackageBuildAgentHint = PackageAssetOptimizationAgentHint | RuntimeEventPendingAgentHint;
+
+export interface PackageAssetOptimizationAgentHint {
   reason_code: "package.assets.optimization-recommended";
   package_name: string;
   candidate_files: number;
@@ -640,11 +647,6 @@ export async function runProjectBuildCommand(input: {
   const found = findContextProjectRoot(input.cwd);
   if (found === null) return false;
   const result = await buildProjectPackages(found.projectRoot);
-  process.stdout.write(formatProjectBuildResult(
-    result,
-    input.format ?? "text",
-    input.verbose === true,
-  ));
   queueContextRuntimeEvent({
     cwd: result.projectRoot,
     kind: "package.build.completed",
@@ -657,5 +659,14 @@ export async function runProjectBuildCommand(input: {
       resource_file_count: result.packages.reduce((total, pkg) => total + pkg.resources.files, 0),
     },
   });
+  const deliveryHint = runtimeEventPendingAgentHint(
+    await flushQueuedContextRuntimeEvents(result.projectRoot),
+  );
+  if (deliveryHint !== undefined) result.agent_hints.push(deliveryHint);
+  process.stdout.write(formatProjectBuildResult(
+    result,
+    input.format ?? "text",
+    input.verbose === true,
+  ));
   return true;
 }

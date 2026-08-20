@@ -16,7 +16,6 @@ function confirmationBlockerDiagnostics(diagnostics: readonly AlignDiagnostic[])
   return diagnostics.filter((item) =>
     item.severity === "warning" &&
     (
-      item.code === "view.split_required" ||
       item.code === "view.orphan_risk" ||
       item.code === "existing_approved.path_identity_conflict" ||
       item.code === "existing_approved.view_path_conflict" ||

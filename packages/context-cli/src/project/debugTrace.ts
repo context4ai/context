@@ -22,7 +22,8 @@ type DebugEventKind =
   | "workflow.action-completed"
   | "workflow.scope-opened"
   | "workflow.scope-closed"
-  | "workflow.stopped";
+  | "workflow.stopped"
+  | "runtime.telemetry";
 
 interface DebugInvocationContext {
   invocationId: string;
@@ -327,6 +328,13 @@ export async function recordWorkflowExecutionScope(input: {
     input.phase === "opened" ? "workflow.scope-opened" : "workflow.scope-closed",
     input.data,
   );
+}
+
+export async function recordRuntimeTelemetryDelivery(input: {
+  projectRoot: string;
+  data: Record<string, unknown>;
+}): Promise<void> {
+  await appendEvent(input.projectRoot, "runtime.telemetry", input.data);
 }
 
 export async function recordWorkflowStop(projectRoot: string, data: Record<string, unknown>): Promise<void> {

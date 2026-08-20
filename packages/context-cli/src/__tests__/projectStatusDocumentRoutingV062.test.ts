@@ -279,6 +279,37 @@ describe("0.6.2 document workflow status routing", () => {
         }),
       ]));
 
+      const managedStatus = await collectProjectStatus(projectRoot, {
+        managed: true,
+      });
+      expect(managedStatus.state).toBe(
+        "route.document.classification-required",
+      );
+      expect(managedStatus.workflow.current).toMatchObject({
+        node: "classify-document",
+        availability: "immediate",
+        gate: {
+          authority: "context.document-classification",
+          resolution: "session-authority",
+          inspection_action: {
+            id: "inspect-document-classification",
+            effect: "read",
+          },
+        },
+      });
+      expect(managedStatus.workflow.current?.resources.required.filter(
+        (resource) => resource.id.startsWith("context.source-body/"),
+      )).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: join(projectRoot, "sources", "file", "docs-a", "a.md"),
+          read_state: "read-required",
+        }),
+        expect.objectContaining({
+          path: join(projectRoot, "sources", "file", "docs-c", "c.md"),
+          read_state: "read-required",
+        }),
+      ]));
+
       const firstBody = sourceBodies[0]!;
       const withReceipt = await collectProjectStatus(projectRoot, {
         resourceReceipts: {

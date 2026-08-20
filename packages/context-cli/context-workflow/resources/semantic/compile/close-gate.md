@@ -42,9 +42,8 @@ command. It does not hand-edit rendered knowledge.
   - Source/evidence issues → recapture the affected source, then rerun align or
     compile as status instructs.
 - Exit 0 → summarise approved node count, approved edge count, structural edge
-  contract status, and verify status. References, changelog, package index,
-  section fingerprints, and full incremental cache rebuilds are not current
-  close output.
+  contract status, and verify status. References, changelog, and package index
+  are not current close output.
 - Exit 2 → report the full issue list verbatim + point at the right re-entry command above. Do not hand-open the affected rendered article.
 - Materialized knowledge means approved Markdown plus its approved
   `knowledge/structure.yaml` projection. A compile skip action records reviewed
