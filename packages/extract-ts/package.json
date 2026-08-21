@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "typescript": "^5.5.4",
-    "web-tree-sitter": "^0.20.8"
+    "web-tree-sitter": "^0.26.12"
   },
   "devDependencies": {
     "@c4a/extract": "workspace:*"
