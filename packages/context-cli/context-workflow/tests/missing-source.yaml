@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: valid empty workspace waits for a source boundary
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }
@@ -26,6 +26,7 @@ expect:
     - procedure.source-boundary
     - dialogue.human-gates
     - dialogue.source-boundary
+    - dialogue.workflow-mode-after-creation
     - context.source-current
   gateResolution: user
   resolutionCommand: context source add batch --input - --format json

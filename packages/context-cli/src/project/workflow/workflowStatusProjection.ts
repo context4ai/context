@@ -20,10 +20,12 @@ function pendingReview(
   observation: ContextWorkflowObservation,
   route: ContextResolvedWorkflowRoute | undefined,
 ): NonNullable<ProjectStatus["pendingReview"]> | undefined {
-  const decisionSource = route?.reason_code === "route.review.apply-managed"
-    ? "managed-session" as const
-    : route?.gate?.id === "knowledge-review"
-      ? "user-review" as const
+  const decisionSource = route?.gate?.id === "knowledge-review"
+    ? route.gate.resolution === "session-authority"
+      ? "managed-session" as const
+      : "user-review" as const
+    : route?.reason_code === "route.review.apply-managed"
+      ? "managed-session" as const
       : undefined;
   if (
     decisionSource === undefined ||
@@ -34,6 +36,11 @@ function pendingReview(
   }
   const collections = [...observation.draftCollections] as
     KnowledgeCollection[];
+  const managedCommand = decisionSource === "managed-session"
+    ? route?.commands.find((item) =>
+        item.availability === "immediate" && item.effect === "write"
+      )?.command
+    : undefined;
   if (collections.length === 1) {
     const collection = collections[0]!;
     return {
@@ -41,7 +48,7 @@ function pendingReview(
       collections,
       collection,
       count: observation.draftCandidates,
-      command: `context review html ${collection} --open`,
+      command: managedCommand ?? `context review html ${collection} --open`,
       decisionSource,
       ...(observation.candidateSetDigest === undefined
         ? {}
@@ -52,7 +59,7 @@ function pendingReview(
     scope: "all",
     collections,
     count: observation.draftCandidates,
-    command: "context review html --all --open",
+    command: managedCommand ?? "context review html --all --open",
     decisionSource,
     ...(observation.candidateSetDigest === undefined
       ? {}

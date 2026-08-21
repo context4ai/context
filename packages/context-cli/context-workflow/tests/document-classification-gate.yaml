@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: captured document classification exposes a read-only inspection action
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }
@@ -33,3 +33,9 @@ expect:
   availability: requires-user
   gateResolution: user
   inspectionHandler: context.document.inspect-classification
+  requiredResources:
+    - procedure.document-classification
+    - dialogue.human-gates
+    - dialogue.document-classification
+    - dialogue.workflow-mode-after-capture
+    - context.source-current

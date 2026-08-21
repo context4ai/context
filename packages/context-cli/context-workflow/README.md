@@ -1,7 +1,21 @@
 # Context Workflow Provider
 
+[简体中文](./README.zh-CN.md)
+
 This directory is the source form of the workflow contract embedded in
 `@c4a/context-cli`.
+
+The Provider turns a long knowledge production lifecycle into fact-selected,
+testable Routes. It does not contain knowledge content and does not perform
+semantic judgment. Instead, it decides which task category is legal now, which
+resources the Agent must read, which Gate is unresolved, which exact host
+action may execute, and what workspace facts should be observed afterward.
+
+```text
+workspace facts → Agent Graph Route → resources / Gate / Action
+       ↑                                      ↓
+       └──────── observe after execution ─────┘
+```
 
 It is intentionally internal to Context:
 
@@ -19,6 +33,21 @@ It is intentionally internal to Context:
 
 The public lifecycle remains a Context product contract. The generic graph
 protocol and its commands are not a user-facing dependency.
+
+## Source layout
+
+| Path | Responsibility |
+|---|---|
+| `provider.yaml` | Provider identity, graph catalog, and exported resources |
+| `graphs/workspace.yaml` | Stable knowledge-work task categories and legal transitions |
+| `actions/` | Action contracts resolved by the Context host adapter |
+| `resources/` | Procedures, dialogue, diagnostics, manuals, schemas, and dynamic-view definitions |
+| `schemas/` | Structured Agent payload contracts |
+| `tests/` | Fact-to-Route scenarios that run without a model |
+| `scripts/build-workflow.ts` | Validation and immutable bundle generation |
+
+Current source names, dates, modules, collections, and phase ids are runtime
+facts. They must not become graph nodes or hard-coded prompt state.
 
 ## Runtime invariants
 

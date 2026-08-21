@@ -1,8 +1,8 @@
 {
-  "name": "context",
+  "name": "c4a",
   "displayName": "C4A Context",
   "version": "__VERSION__",
-  "description": "Maintain a project-local knowledge workspace through init and next-step agent guidance.",
+  "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
   "author": {
     "name": "Context4AI",
     "email": "support@context4ai.dev"

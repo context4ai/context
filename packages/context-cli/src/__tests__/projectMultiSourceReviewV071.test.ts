@@ -134,7 +134,7 @@ describe("multi-source prose review", () => {
         steps: Array<{ receipt?: { exitCode: number } }>;
         stop: { reasonCode: string };
       };
-      expect(result.steps).toHaveLength(2);
+      expect(result.steps).toHaveLength(3);
       expect(result.steps.every((step) => step.receipt?.exitCode === 0)).toBe(true);
       expect(result).toMatchObject({
         state: "blocked",
@@ -148,7 +148,7 @@ describe("multi-source prose review", () => {
         "--view",
         "full",
       ])) as { draftCandidates: number; compileBatch: { remainingViewRefs: string[] } };
-      expect(after.draftCandidates).toBe(2);
+      expect(after.draftCandidates).toBe(0);
       expect(after.compileBatch.remainingViewRefs).toEqual([]);
       const scopeEvents = readFileSync(
         join(projectRoot, ".tmp", "context-runtime", "debug", "events.jsonl"),
@@ -157,7 +157,7 @@ describe("multi-source prose review", () => {
         kind: string;
         data: { executor?: string };
       }).filter((event) => event.kind === "workflow.scope-opened");
-      expect(scopeEvents.filter((event) => event.data.executor === "in-process")).toHaveLength(2);
+      expect(scopeEvents.filter((event) => event.data.executor === "in-process")).toHaveLength(3);
       expect(scopeEvents.some((event) => event.data.executor === "subprocess")).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });

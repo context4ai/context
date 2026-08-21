@@ -11,9 +11,9 @@ import { ExitCode } from "../types/exitCode.js";
 
 const execFileAsync = promisify(execFile);
 const MARKETPLACE_NAME = "c4a";
-const PLUGIN_ID = "context@c4a";
-const PLUGIN_NAME = "context";
-const LEGACY_PLUGIN_NAMES: readonly string[] = [];
+const PLUGIN_ID = "c4a@c4a";
+const PLUGIN_NAME = "c4a";
+const LEGACY_PLUGIN_NAMES: readonly string[] = ["context"];
 const ORPHAN_MARKER = ".orphaned_at";
 const CLAUDE_PLUGIN_CACHE_ROOT_ENV = "C4A_CLAUDE_PLUGIN_CACHE_ROOT";
 const CLAUDE_PLUGIN_CACHE_HOME_ENV = "C4A_CLAUDE_PLUGIN_CACHE_HOME";
@@ -160,14 +160,14 @@ async function commandAvailable(command: string): Promise<boolean> {
   return runExternalOptional("sh", ["-lc", `command -v ${command} >/dev/null 2>&1`]);
 }
 
-async function claudePluginInstalled(): Promise<boolean> {
+async function claudePluginInstalled(pluginId: string): Promise<boolean> {
   try {
     const { stdout } = await execFileAsync("claude", ["plugin", "list", "--json"], {
       maxBuffer: 1024 * 1024,
     });
     const parsed = JSON.parse(stdout) as unknown;
     return Array.isArray(parsed) && parsed.some((item) => (
-      item !== null && typeof item === "object" && "id" in item && item.id === PLUGIN_ID
+      item !== null && typeof item === "object" && "id" in item && item.id === pluginId
     ));
   } catch {
     return false;
@@ -218,7 +218,9 @@ function isStaleMarketplaceBlock(header: string, block: readonly string[]): bool
 }
 
 function isStalePluginBlock(header: string): boolean {
-  return header === `plugins."context@context"` || header === "plugins.context";
+  return header === `plugins."context@context"` ||
+    header === `plugins."context@c4a"` ||
+    header === "plugins.context";
 }
 
 export function pruneLegacyCodexConfigContent(content: string): { content: string; removed: string[] } {
@@ -527,6 +529,13 @@ async function installClaude(root: string, dryRun: boolean, steps: InstallStep[]
   const installArgs = ["plugin", "install", PLUGIN_ID, "--scope", "user"];
   steps.push({ agent: "claude", command: commandLine("claude", addArgs), status: dryRun ? "planned" : "ran" });
   if (dryRun) {
+    for (const pluginName of LEGACY_PLUGIN_NAMES) {
+      steps.push({
+        agent: "claude",
+        command: commandLine("claude", ["plugin", "uninstall", `${pluginName}@${MARKETPLACE_NAME}`, "--scope", "user"]),
+        status: "planned",
+      });
+    }
     steps.push({ agent: "claude", command: commandLine("claude", installArgs), status: "planned" });
     return;
   }
@@ -535,7 +544,14 @@ async function installClaude(root: string, dryRun: boolean, steps: InstallStep[]
   if (!added) {
     await runExternal("claude", ["plugin", "marketplace", "update", MARKETPLACE_NAME]);
   }
-  if (await claudePluginInstalled()) {
+  for (const pluginName of LEGACY_PLUGIN_NAMES) {
+    const legacyPluginId = `${pluginName}@${MARKETPLACE_NAME}`;
+    if (!await claudePluginInstalled(legacyPluginId)) continue;
+    const uninstallArgs = ["plugin", "uninstall", legacyPluginId, "--scope", "user"];
+    steps.push({ agent: "claude", command: commandLine("claude", uninstallArgs), status: "ran" });
+    await runExternal("claude", uninstallArgs);
+  }
+  if (await claudePluginInstalled(PLUGIN_ID)) {
     const uninstallArgs = ["plugin", "uninstall", PLUGIN_ID, "--scope", "user"];
     steps.push({ agent: "claude", command: commandLine("claude", uninstallArgs), status: "ran" });
     await runExternal("claude", uninstallArgs);

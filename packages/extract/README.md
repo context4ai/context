@@ -1,6 +1,16 @@
 # @c4a/extract
 
-Code extraction framework for Context. It owns the language-plugin protocol, repository runner, raw code snapshot contract, digest generation, and shared Tree-sitter parsing utilities.
+[简体中文](./README.zh-CN.md)
+
+`@c4a/extract` turns repository structure into deterministic evidence that a
+Context knowledge workflow can review and explain. It owns the language-plugin
+protocol, repository runner, raw code snapshot contract, digest generation, and
+shared Tree-sitter parsing utilities.
+
+It does not decide what code means to a product or audience and does not write
+approved knowledge. Language plugins emit structural facts; the Context runtime
+binds them to source identity, stages review candidates, and applies approved
+knowledge through the normal lifecycle.
 
 ## Package Role
 
@@ -13,6 +23,20 @@ project extraction phases such as `extractTs({ source, collection: "codegraph" }
 - The project flow stages review candidates under `.tmp/context-runtime/lifecycle/candidates.jsonl` and keeps runtime candidate artifacts under `.tmp/context-runtime/extract/`; approved Markdown is written only by review/apply.
 
 **Depends on:** `@c4a/core`, `web-tree-sitter`, `zod`
+
+```text
+confirmed repository boundary
+          ↓
+language plugins + repository runner
+          ↓
+versioned raw code snapshot
+          ↓
+Context candidates → review → approved knowledge
+```
+
+Knowledge-workspace users normally reach this package through the installed
+Agent entry and a declared extraction phase. The runner protocol below is for
+extractor authors, Context maintainers, and project-owned adapters.
 
 ## Protocol Layers
 

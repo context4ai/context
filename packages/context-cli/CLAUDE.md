@@ -59,8 +59,7 @@
 
 | Slash command | Skill 链 | CLI 辅助 | 写入边界 |
 |---|---|---|---|
-| `/context:init` | thin Context shell | `context init [project-dir] [--name <name>] [--language en\|zh-CN]` | 只创建项目骨架;不加载 `src/index.ts`,不写项目内 `.claude/` / `.codex/` adapter。 |
-| `/context:continue` | thin Context shell | 运行 `context status --format json`,消费 `workflow.current` | 对话式推进当前工作区;底层 Graph 选择路线，CLI 做机械写入，Agent 读取当前资源、征询用户和编辑声明。 |
+| `/c4a:context` | thin Context shell | 运行 `context entry --format json`，按返回动作初始化、进入工作区或消费 `workflow.current` | 单一对话入口；入口解析器只处理 workspace bootstrap，底层 Graph 选择生命周期路线。 |
 
 改 project workflow 协议时，同步更新 `context-workflow/` Provider、CLI
 adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run build`
@@ -68,13 +67,14 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 ### V1 Agent 入口与写入契约
 
-- 公开 Agent 入口只保留 `/context:init` 和 `/context:continue`。不要为 `source` / `run` / `review` / `build` / `verify` / `status` 增加公开 slash command 或 public skill。
-- `/context:continue` 是对话式推进入口,不是 CLI primitive。**不要新增或调用 `context continue`**;它必须运行 `context status --format json`,把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。
+- 公开 Agent 入口只保留 `/c4a:context`。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
+- `/c4a:context` 是对话式入口，不是同名 CLI primitive。它先运行只读 `context entry --format json`，只执行返回的 `next_action.command`；工作区就绪后把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。**不要新增或调用 `context continue`**。
 - 用户在当前会话明确授权全托管后，默认先调用 `context run --managed --until blocked-or-complete --format json`，不要由 Agent 手工重复 status/action。它不是第二个路由入口：只能执行唯一、immediate、非 read 命令，每步后必须重新求值；遇到语义读取、配置、诊断、权限缺口或多命令时立即返回当前 `workflow.current`。
+- 普通模式与全托管模式复用同一 Gate，并完整保留普通模式的 Inspection 与 Resolution 能力。只在 Graph Gate 的 `delegated` 策略中声明全托管可跳过的冗余 inspection、可替换的对话 Resource，以及需要时由 authority 选择的专用 Resolution Action；不要在 Facts、TypeScript 或入口提示词中把 Authority 伪装成已完成业务事实。普通模式在工作区创建后和来源采集完成后通过 Route-selected dialogue 说明模式差异。
 - Agent 不得只复述 Route 的机械命令。`availability=immediate` 时读取 required 资源后执行；`gate` 未解析时先执行 read 命令并向用户解释决定；`configuration` 存在时只修改指定项目文件。动作后重新 status，phase-local `next_action` 不得替代 workspace Route。
 - `missing-source` 不是自动探索信号。不要根据 cwd、父目录、monorepo 结构、package 名、`git remote` 自行决定 source;用户明确给出 source 名称/路径/ref 后,才运行 `context source add repo ...`。
 - `needs-extract-phase` 表示 extract phase 尚未声明。不要扫描源仓库来替用户选 include/exclude;先问用户要摄取哪个已登记 source、哪些目录/包/符号范围,再按 `workflow.current.configuration` 编辑 `src/index.ts`。
-- 底层 CLI 命令可以保留,但只作为 `/context:continue` 驱动的机械动作。默认用户不需要知道命令清单。
+- 底层 CLI 命令可以保留，但只作为 `/c4a:context` 驱动的机械动作。默认用户不需要知道命令清单。
 - `context init` 生成的 workspace `AGENTS.md` 只放项目边界、SDK 手册位置、CLI-only workspace 规则,不承载长流程 prompt。
 
 ### Knowledge / OKF Profile
@@ -135,14 +135,14 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 
 ### 命名边界（必须遵守）
 
-- **Slash command**：只发布 `/context:init` 和 `/context:continue`。源 `plugin/commands/*.md`，产物 `dist/plugins/claude/commands/*.md`。
+- **Slash command**：只发布 `/c4a:context`。源 `plugin/commands/context.md`，产物 `dist/plugins/claude/commands/context.md`。
 - **CLI primitive**：`context <subcommand> ...`（如 `context status`,
   `context run ...`, `context close`）。Slash command / skill 内部调用。
-- **Cursor command entry**：带前缀的 command 名称（`context-init` / `context-continue`），由 `build:plugin` 从 `plugin/commands/*.md` 生成到 `dist/plugins/cursor/commands/`。属于全局 slash command 空间，不要生成裸 `init.md` / `continue.md`。
-- **Public skill — Codex**（plugin namespace via `.codex-plugin/plugin.json`）：裸 slug（`init` / `continue`），完整调用 `context.<skill>`。源 `dist/plugins/codex/skills/<slug>/`，frontmatter `name: <slug>`。
-- **Public skill — Vercel-style**（无 plugin manifest，全局空间）：带 `context-<slug>` 前缀（`context-init` / `context-continue`），完整调用 `context-continue`。源 `dist/plugins/skills/context-<slug>/`，frontmatter `name: context-<slug>`。
+- **Cursor command entry**：全局命令名 `c4a-context`，由 `build:plugin` 从 `plugin/commands/context.md` 生成到 `dist/plugins/cursor/commands/`。
+- **Public skill — Codex**（plugin namespace via `.codex-plugin/plugin.json`）：裸 slug `context`，由 plugin namespace 暴露为 `c4a:context`。源 `dist/plugins/codex/skills/context/`，frontmatter `name: context`。
+- **Public skill — Vercel-style**（无 plugin manifest，全局空间）：名称 `c4a-context`。源 `dist/plugins/skills/c4a-context/`，frontmatter `name: c4a-context`。
 - 命名差异源于 namespace 机制差异（Codex 有 plugin namespace，Vercel 无），`scripts/build-plugin.ts` 的 `codexSkillNameForCommand` / `skillNameForCommand` 各自实现这两套约定，不要对齐成同一种命名。
-- 不发布阶段型 Skill。来源、采集、对齐、编译、审核和构建能力由 `workflow.current.resources` 动态选择；宿主入口始终由 `plugin/commands/{init,continue}.md` 生成。
+- 不发布阶段型 Skill。来源、采集、对齐、编译、审核和构建能力由 `workflow.current.resources` 动态选择；宿主入口始终由 `plugin/commands/context.md` 生成。
 - 禁止把底层 CLI primitive 写成公开 Agent 命令,例如 `/context:source`、`/context:run`、`/context:review`、`/context:build`、`/context:verify`、`/context:status`。描述时写“continue will run `context status` and may call `context run ...`”。
 - **Workflow resource** 是当前 Route 选择的文件或 Context View，不是 Skill 之间的静态引用。Agent 只消费 `workflow.current.resources.required/recommended` 返回的 `path` 或 `command`，不拼接插件安装路径。
 
@@ -307,14 +307,14 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 | `context-workflow/` | `dist/providers/context/` | 唯一 Graph、Procedure、Diagnostic、语义规则和动态 View 定义 |
 | `plugin/assets/` | `dist/plugins/codex/assets/`，`dist/plugins/cursor/assets/` | plugin 品牌资产 |
 | `plugin/.{claude,codex,cursor}-plugin/plugin.json.template` | `dist/plugins/{claude,codex,cursor}/.{...}-plugin/plugin.json` | manifest，构建时替换 `__VERSION__` |
-| —（由 commands 派生） | `dist/plugins/codex/skills/<slug>/`，`dist/plugins/skills/context-<slug>/` | Codex / Vercel-style public skill |
+| —（由 command 派生） | `dist/plugins/codex/skills/context/`，`dist/plugins/skills/c4a-context/` | Codex / Vercel-style public skill |
 
 构建不变量：
 
-- `dist/plugins/claude/` 只通过 `commands/` 发布 init / continue。
-- `dist/plugins/cursor/` 只通过 `commands/context*.md`（如 `/context-continue`）发布用户入口。
-- `dist/plugins/codex/skills/<slug>/`（裸 slug）和 `dist/plugins/skills/context-<slug>/`（自带 `context-` 前缀）只放 public entries，不出现 `skill-*` 顶层目录。两边命名差异源自 namespace 机制差异，不是 build 不一致。
-- Codex/Vercel public entries 直接由 `plugin/commands/{init,continue}.md`
+- `dist/plugins/claude/` 只通过 `commands/context.md` 发布单一入口。
+- `dist/plugins/cursor/` 只通过 `commands/c4a-context.md` 发布用户入口。
+- `dist/plugins/codex/skills/context/` 和 `dist/plugins/skills/c4a-context/` 只放单一 public entry，不出现 `skill-*` 顶层目录。两边命名差异源自 namespace 机制差异，不是 build 不一致。
+- Codex/Vercel public entries 直接由 `plugin/commands/context.md`
   生成，不复制 Provider 的长篇 Procedure 或语义规则。
 - `dist/plugins/{claude,codex,cursor}/` 各带 generated guard（`CLAUDE.md` 或 `AGENTS.md` + `.generated`）；看到 guard 不要编辑 build 产物。`dist/plugins/skills/` 顶层 README 统一说明。
 - 生命周期规则、长诊断、Schema 发现说明和语义规则统一住在
@@ -374,7 +374,7 @@ Use the packaged Context shell and follow `workflow.current`.
 
 - frontmatter 三字段齐全（`description` / `argument-hint` / `allowed-tools`）；缺字段时 runtime 可能静默丢命令。
 - `allowed-tools` 按最小权限列；纯 CLI 代理命令通常只需 `Bash(context:*)`。
-- `init` / `continue` 这类 agent-driven command 只说明如何取得并消费 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 align / compile / drop / query 等公开 slash command。
+- 单一 `context` agent-driven command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
 - command md 不写 `${CLAUDE_PLUGIN_ROOT}/skills/...`，只指向打包后的 Context shell。
 - command md 只负责流程入口；schema、mount matrix、source_ref 规则通过当前 Graph resource 或 CLI View 发现。
 

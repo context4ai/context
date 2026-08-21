@@ -1,0 +1,121 @@
+---
+description: "Build or continue structured, traceable Agent knowledge from documents and code."
+argument-hint: "[project-dir or user intent]"
+allowed-tools: Bash(context:*), Bash(bun:*), Bash(cd *)
+---
+
+## Your Task
+
+Context is a knowledge management tool built for Agent knowledge workflows. It
+compiles Feishu/Lark documents, local Markdown, repository code, and manually
+curated business material into structured, traceable knowledge, then produces
+knowledge packages, LLM-ready documents, or Agent Skills. The CLI packages all
+workflow guidance, knowledge-building procedures, and code-indexing capabilities
+needed to produce that knowledge; follow its returned commands and resources
+for the next action.
+
+Use this as the single conversational entry for Context. Let the CLI locate an
+existing workspace, relocate into it, initialize a requested workspace, or
+evaluate its current workflow. Do not infer the workspace state yourself.
+
+### Enter the workspace
+
+Run:
+
+```bash
+context entry [project-dir] --language <language> --format json
+```
+
+Use the user's explicit language choice when present; otherwise pass `zh-CN`
+for a Chinese conversation and `en` for an English conversation. Pass
+`project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
+requested that initialization choice. Pass `--managed` only after the user
+explicitly authorizes fully managed operation in this conversation.
+
+If the `context` process itself cannot start because the command is missing
+(`ENOENT`, or shell exit 127 explicitly identifying `context` as the missing
+command, such as `command not found: context` or `context: command not found`),
+explain that the global CLI is not installed and ask the user to install or
+authorize installation with:
+
+```bash
+npm install -g @c4a/context-cli@latest
+context plugin install
+```
+
+Stop after giving that recovery. Do not run an installation preflight, install
+automatically, or mistake a normal Context `not found` diagnostic for a missing
+executable.
+
+Execute only `next_action.command` returned by `context entry`:
+
+- `initialize-workspace` writes a new workspace. Execute it immediately only
+  when the user explicitly requested initialization through this entry;
+  otherwise explain the target root and ask for confirmation. Preserve the
+  `init-target-nonempty` confirmation.
+- `enter-workspace` and `evaluate-workflow` are read-only and need no additional
+  confirmation.
+- After initialization, execute the exact setup command returned by `context
+  init`, enter the project root, read the generated `AGENTS.md`, and run this
+  entry again.
+
+### Conversation modes
+
+Enable debugging only when the user explicitly requests it. Run `context debug
+enable` first; debugging records traces below `.tmp/context-runtime/debug/` but
+does not grant workflow authority or provide source evidence.
+
+For explicitly authorized fully managed operation, use:
+
+```bash
+context run --managed --until blocked-or-complete --format json
+```
+
+Use `--managed` for every resumed workflow evaluation in the same active
+request. Never persist or reuse that authority in another conversation, and
+stop using it when the conversation ends or the user revokes it. Pass any
+additional `--authority` only when the user explicitly grants that authority in
+this conversation.
+
+The managed loop executes only Route-selected work and returns the current
+`workflow.current` whenever Agent reading, project configuration, a human Gate,
+host execution, diagnostics, or a non-unique plan needs attention. Resume from
+that returned Route; never reconstruct a command from an earlier step.
+
+### Follow the current Route
+
+Treat `workflow.current` as the current-step authority:
+
+1. Read every `resources.required` item whose `read_state` is `read-required`.
+   Read a returned `path` completely, or execute a returned resource `command`
+   and read its complete output file. Materializing a resource is not reading
+   it. Keep the merged receipts only in this conversation and submit them with
+   the exact returned `context status --resource-receipts @<file>` command. Use
+   `after_read_receipts` only after the full resource has been read. The exact
+   `resources.after_read.command` already returns the re-evaluated
+   `workflow.current`; continue from it without an additional status call.
+2. At a Gate, keep inspection and resolution phase-local. Read an
+   `inspection_action` resource only while inspecting the decision, and read a
+   `resolution_action` resource only after the user confirms the Gate. Neither
+   replaces ordinary required resources.
+3. Execute only `commands` returned by the Route, preserving revision and
+   authority flags exactly. A command marked `after-human-confirmation` waits
+   for the current Gate decision. Run a command whose `execution.target` is `agent-host`
+   as an exact top-level host action with the required host access,
+   not inside a restricted child sandbox. Follow the Route-selected procedure
+   for its audit and approval contract; never invent a payload, destination, or
+   substitute command.
+4. If `configuration` is present, edit only the named project file and use the
+   selected resources as its contract.
+5. After every action or configuration change, run status again. The managed
+   loop performs this re-evaluation internally. A phase-local `next_action` can
+   continue that operation but never replaces the workspace Route.
+
+Explain, ask, confirm, and summarize in the user's current conversation
+language. Keep commands, flags, paths, ids, status values, JSONL keys,
+`source_ref` values, and copied CLI tokens unchanged.
+
+Do not infer repo sources, extraction scope, review decisions, or package output
+choices from surrounding files. Do not call source-repo operations such as
+clone, checkout, reset, fetch, install, build, or test without explicit user
+approval.

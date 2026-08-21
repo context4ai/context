@@ -1,6 +1,7 @@
 import type { CommandMatrixEntry } from "./pathFreeContractTypes.js";
 
 export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
+  { command: "entry", view: "production-semantic", handles: ["project_status", "workspace_root", "next_command"], notes: "Resolves the single agent entry into initialization, workspace relocation, or current Agent Graph workflow evaluation." },
   { command: "init", view: "production-semantic", handles: ["project_dir", "project_name"], notes: "Creates a project-local Context workspace." },
   { command: "plugin", view: "production-semantic", handles: ["plugin_status", "agent_adapter"], notes: "Global Context agent plugin namespace." },
   { command: "plugin install", view: "production-semantic", handles: ["plugin_status", "agent_adapter", "marketplace_root"], notes: "Installs or refreshes bundled global agent plugins." },

@@ -55,12 +55,12 @@ function writeInstallablePluginRoot(root: string, version = "1.2.3-test"): void 
   mkdirSync(join(root, ".agents", "plugins"), { recursive: true });
   mkdirSync(join(root, "claude", ".claude-plugin"), { recursive: true });
   mkdirSync(join(root, "codex", ".codex-plugin"), { recursive: true });
-  mkdirSync(join(root, "codex", "skills", "continue"), { recursive: true });
+  mkdirSync(join(root, "codex", "skills", "context"), { recursive: true });
   writeFileSync(join(root, ".claude-plugin", "marketplace.json"), "{}\n", "utf8");
   writeFileSync(join(root, ".agents", "plugins", "marketplace.json"), "{}\n", "utf8");
   writeFileSync(join(root, "claude", ".claude-plugin", "plugin.json"), `${JSON.stringify({ version })}\n`, "utf8");
   writeFileSync(join(root, "codex", ".codex-plugin", "plugin.json"), `${JSON.stringify({ version })}\n`, "utf8");
-  writeFileSync(join(root, "codex", "skills", "continue", "SKILL.md"), "---\nname: continue\ndescription: test\n---\n", "utf8");
+  writeFileSync(join(root, "codex", "skills", "context", "SKILL.md"), "---\nname: context\ndescription: test\n---\n", "utf8");
 }
 
 describe("CLI error handling", () => {
@@ -162,7 +162,7 @@ describe("CLI error handling", () => {
     expect(help).toContain("plugin installation, project initialization, and agent workflow handoff");
     expect(help).not.toContain("  logs");
     for (const command of ["capture", "align", "compile", "workflow", "reconcile", "mdrive", "query", "drop", "purge", "extract", "schema", "protocol", "workspace", "config", "cache", "doctor"]) {
-      expect(help).not.toContain(`  ${command}`);
+      expect(help).not.toMatch(new RegExp(`^  ${command}(?:\\s|$)`, "mu"));
     }
   });
 
@@ -389,7 +389,7 @@ describe("CLI error handling", () => {
       expect(stdout).toContain("codex 'plugin' 'marketplace' 'add'");
       expect(stdout).toContain("config.toml");
       expect(stdout).toContain("materialize Codex plugin cache");
-      expect(stdout).toContain(join("plugins", "cache", "c4a", "context", "1.2.3-test"));
+      expect(stdout).toContain(join("plugins", "cache", "c4a", "c4a", "1.2.3-test"));
     } finally {
       if (previous === undefined) delete process.env.C4A_CONTEXT_PLUGIN_ROOT;
       else process.env.C4A_CONTEXT_PLUGIN_ROOT = previous;
@@ -424,7 +424,7 @@ describe("CLI error handling", () => {
         "",
       ].join("\n"), "utf8");
       mkdirSync(join(codexHome, "plugins", "cache", "c4a", "context", "0.5.42-alpha.1"), { recursive: true });
-      const orphanClaudeCache = join(claudeHome, ".claude", "plugins", "cache", "c4a", "context", "0.5.42-alpha.1");
+      const orphanClaudeCache = join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.5.42-alpha.1");
       mkdirSync(orphanClaudeCache, { recursive: true });
       writeFileSync(join(orphanClaudeCache, ".orphaned_at"), "test\n", "utf8");
 
@@ -435,7 +435,7 @@ describe("CLI error handling", () => {
 
       expect(stdout).toContain("prune stale Codex config blocks: marketplaces.context, marketplaces.c4a, plugins.\"context@context\"");
       expect(stdout).toContain("prune cached Codex c4a/context version(s): 0.5.42-alpha.1");
-      expect(stdout).toContain("prune orphaned Claude context cache version(s): c4a/context/0.5.42-alpha.1");
+      expect(stdout).toContain("prune orphaned Claude context cache version(s): c4a/c4a/0.5.42-alpha.1");
       expect(readFileSync(join(codexHome, "config.toml"), "utf8")).toContain("[marketplaces.context]");
       expect(existsSync(join(codexHome, "plugins", "cache", "c4a", "context", "0.5.42-alpha.1"))).toBe(true);
       expect(existsSync(orphanClaudeCache)).toBe(true);
@@ -458,11 +458,11 @@ describe("CLI error handling", () => {
     const version = "0.6.0-dev.4";
     try {
       writeInstallablePluginRoot(pluginRoot, version);
-      const cacheRoot = join(codexHome, "plugins", "cache", "c4a", "context");
+      const cacheRoot = join(codexHome, "plugins", "cache", "c4a", "c4a");
       const currentCache = join(cacheRoot, version);
-      mkdirSync(join(currentCache, "skills", "continue"), { recursive: true });
+      mkdirSync(join(currentCache, "skills", "context"), { recursive: true });
       writeFileSync(join(currentCache, "stale.txt"), "remove me\n", "utf8");
-      writeFileSync(join(currentCache, "skills", "continue", "SKILL.md"), "old dev content\n", "utf8");
+      writeFileSync(join(currentCache, "skills", "context", "SKILL.md"), "old dev content\n", "utf8");
       mkdirSync(join(cacheRoot, "0.5.9"), { recursive: true });
       mkdirSync(join(cacheRoot, "local"), { recursive: true });
       mkdirSync(binDir, { recursive: true });
@@ -479,8 +479,8 @@ describe("CLI error handling", () => {
       expect(result.code).toBe(0);
       expect(result.stdout).toContain(`materialize Codex plugin cache:`);
       expect(result.stdout).toContain(currentCache);
-      expect(result.stdout).toContain("prune cached Codex c4a/context version(s): 0.5.9, local");
-      expect(readFileSync(join(currentCache, "skills", "continue", "SKILL.md"), "utf8")).toContain("name: continue");
+      expect(result.stdout).toContain("prune cached Codex c4a/c4a version(s): 0.5.9, local");
+      expect(readFileSync(join(currentCache, "skills", "context", "SKILL.md"), "utf8")).toContain("name: context");
       expect(existsSync(join(currentCache, "stale.txt"))).toBe(false);
       expect(existsSync(join(cacheRoot, "0.5.9"))).toBe(false);
       expect(existsSync(join(cacheRoot, "local"))).toBe(false);
@@ -527,14 +527,14 @@ describe("CLI error handling", () => {
     try {
       writeInstallablePluginRoot(pluginRoot);
       writeFileSync(join(pluginRoot, "claude", ".claude-plugin", "plugin.json"), JSON.stringify({
-        name: "context",
+        name: "c4a",
         version: "0.6.0-beta.2",
       }), "utf8");
       const claudeHome = join(cwd, "claude-home");
-      mkdirSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "context", "0.6.0-alpha.6"), {
+      mkdirSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-alpha.6"), {
         recursive: true,
       });
-      mkdirSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "context", "0.6.0-beta.2"), {
+      mkdirSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-beta.2"), {
         recursive: true,
       });
       mkdirSync(binDir, { recursive: true });
@@ -559,14 +559,14 @@ describe("CLI error handling", () => {
 
       expect(result.code).toBe(0);
       expect(result.stdout).toContain("claude 'plugin' 'uninstall' 'context@c4a' '--scope' 'user'");
-      expect(result.stdout).toContain("claude 'plugin' 'install' 'context@c4a' '--scope' 'user'");
-      expect(result.stdout).toContain("prune superseded Claude c4a/context version(s): 0.6.0-alpha.6");
+      expect(result.stdout).toContain("claude 'plugin' 'install' 'c4a@c4a' '--scope' 'user'");
+      expect(result.stdout).toContain("prune superseded Claude c4a/c4a version(s): 0.6.0-alpha.6");
       const commands = readFileSync(commandLog, "utf8");
       expect(commands).toContain("plugin list --json");
       expect(commands).toContain("plugin uninstall context@c4a --scope user");
-      expect(commands).toContain("plugin install context@c4a --scope user");
-      expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "context", "0.6.0-alpha.6"))).toBe(false);
-      expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "context", "0.6.0-beta.2"))).toBe(true);
+      expect(commands).toContain("plugin install c4a@c4a --scope user");
+      expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-alpha.6"))).toBe(false);
+      expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-beta.2"))).toBe(true);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

@@ -327,7 +327,7 @@ Approved Markdown under `knowledge/` is the production source of truth:
 - Context production metadata such as `sources`, `node_type`, `visibility`,
   `code_symbols`, relationship records, and `candidate_fingerprint` also lives
   at the top level;
-- do not nest C4A extension metadata under `context`; fields such as
+- do not nest Context production metadata under `context`; fields such as
   `context.sources` and `context.code_symbols` are not part of the 0.6 profile;
 - section provenance lives in `<!-- context:section ... source_ref="..." -->`
   comments;

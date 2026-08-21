@@ -58,12 +58,13 @@ describe("plugin and workflow workspace guard", () => {
     }
   });
 
-  test("continuation is route-led instead of a duplicated state table", async () => {
+  test("the single public entry is route-led instead of a duplicated state table", async () => {
     const workflow = await readFile(
-      join(PLUGIN_ROOT, "commands", "continue.md"),
+      join(PLUGIN_ROOT, "commands", "context.md"),
       "utf8",
     );
-    expect(workflow).toContain("context status --format json");
+    expect(workflow).toContain("context entry");
+    expect(workflow).toContain("context status --resource-receipts");
     expect(workflow).toContain("workflow.current");
     expect(workflow).toContain("resources.required");
     expect(workflow).toContain("Execute only `commands` returned by the Route");
@@ -74,7 +75,7 @@ describe("plugin and workflow workspace guard", () => {
 
   test("managed mode is explicit, current-conversation-only, and bounded", async () => {
     const boundedEntryFiles = [
-      join(PLUGIN_ROOT, "commands", "continue.md"),
+      join(PLUGIN_ROOT, "commands", "context.md"),
       join(PACKAGE_ROOT, "src", "project", "workspace.ts"),
     ];
     for (const file of boundedEntryFiles) {
@@ -106,7 +107,7 @@ describe("plugin and workflow workspace guard", () => {
     expect(source).toContain("stop using it when the conversation ends or the user revokes it");
     expect(source).toContain("`execution.target: agent-host`");
     expect(source).not.toContain("Execute safe mechanical `next:` steps");
-    const continuation = await readFile(join(PLUGIN_ROOT, "commands", "continue.md"), "utf8");
+    const continuation = await readFile(join(PLUGIN_ROOT, "commands", "context.md"), "utf8");
     expect(continuation).toContain("`execution.target` is `agent-host`");
     expect(continuation).toMatch(/not inside a restricted child\s+sandbox/u);
   });
@@ -186,14 +187,14 @@ describe("plugin and workflow workspace guard", () => {
         expect(text, file).not.toContain("references/internal-procedures");
         expect(text, file).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
       }
-      for (const entry of ["init", "continue"]) {
+      for (const entry of ["context"]) {
         const name = root.endsWith("skills")
           && root.includes(`${join("dist", "plugins", "skills")}`)
-          ? `context-${entry}`
+          ? `c4a-${entry}`
           : entry;
         const body = await readFile(join(root, name, "SKILL.md"), "utf8");
         expect(body, `${root}/${name}`).toContain(
-          "context status --format json",
+          "context entry",
         );
         expect(body, `${root}/${name}`).toContain("workflow.current");
       }

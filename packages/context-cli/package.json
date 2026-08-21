@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
-  "description": "Local CLI for capturing, compiling, and governing knowledge workspaces",
-  "version": "0.6.8",
+  "description": "Local runtime and Agent integration for traceable knowledge production",
+  "version": "0.6.9",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -40,13 +40,13 @@
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
-    "test:e2e": "bun test src/__e2e__/*.e2e.test.ts",
+    "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
+    "test:e2e": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__e2e__/*.e2e.test.ts",
     "lint": "eslint src",
     "clean-cache": "bun run src/cli.ts clean-cache"
   },
   "dependencies": {
-    "@c4a/agent-graph": "0.2.5",
+    "@c4a/agent-graph": "0.2.6",
     "@c4a/context": "workspace:*",
     "commander": "^11.0.0",
     "fast-xml-parser": "^5.10.1",

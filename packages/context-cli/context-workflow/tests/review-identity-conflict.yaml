@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: path identity conflict is coordinated before review
 graph: workspace
-entry: continue
+entry: context
 state:
   authorities: [context.knowledge-review]
   facts:

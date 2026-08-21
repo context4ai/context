@@ -1,10 +1,27 @@
-# Getting Started
+# Knowledge Project Walkthrough
 
 This guide shows the common Context workspace shape. The same workspace can
 ingest source documents, code repositories, or both. Start with the user's
 source boundary, then declare the matching phases in `src/index.ts`.
 
-## 1. Initialize
+For normal use, start from the installed Context Agent entry and describe the
+knowledge goal. The entry resolves whether it should initialize a workspace,
+enter an existing workspace, or continue the current production round:
+
+```text
+/c4a:context Build a traceable knowledge package from this repository and the
+documents I provide. Explain each source and structure decision before asking
+for confirmation.
+```
+
+The remainder of this guide explains the project model behind that
+conversation. Command examples are maintainer orientation; an Agent should
+prefer the exact command and resources returned by `workflow.current`.
+
+## 1. Establish the workspace
+
+When initialization is required, the Agent runs the exact action returned by
+`context entry`. A manual equivalent for automation or source development is:
 
 ```bash
 context init context
@@ -28,11 +45,10 @@ inside a non-empty directory that is not already a Context workspace is blocked
 before any files are written; use the returned `--allow-nonempty` command only
 after confirming that the existing files should share the workspace root.
 
-When operating through an Agent plugin, use the installed Context continuation
-entry from the project root after initialization. It consumes
-`workflow.current`, loads only the selected resources, and calls lower-level
-CLI primitives as needed. The exact slash command or skill name is
-host-specific.
+After initialization, return to the single installed Context Agent entry from
+the project root. It consumes `workflow.current`, loads only the selected
+resources, and calls lower-level CLI primitives as needed. Do not introduce a
+separate continuation entry.
 
 ## 2. Choose And Register A Source Boundary
 
@@ -233,9 +249,9 @@ export default defineProject({
 });
 ```
 
-Then start from `context status` or the installed host-specific Context
-continuation entry. The
-normal sequence is:
+Then return to the installed Context Agent entry. For maintainer inspection,
+`context status --format json` exposes the same current Route. The normal
+sequence is:
 
 1. capture the source into committed snapshots;
 2. investigate evidence and confirm the CLI-managed lifecycle structure;

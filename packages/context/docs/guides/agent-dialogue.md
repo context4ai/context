@@ -21,6 +21,13 @@ not duplicated in this SDK manual.
 This keeps a new Agent from loading every possible conversation script before
 it knows which decision is current.
 
+The ordinary path also selects short mode guidance after workspace creation
+and source capture. Explain that ordinary review is the default, provides HTML
+reports at review decisions, and is currently estimated to take about 40%
+longer overall depending on scope and response time. Offer fully managed mode
+for the current conversation while explaining that it gives the user fewer
+opportunities to adjust intermediate content.
+
 ## Stable Principles
 
 - Use the user's conversation language for explanations and questions.
@@ -47,7 +54,10 @@ context status --managed --format json
 ```
 
 The returned route decides which delegatable gates may proceed without another
-question. This authority is not project configuration and must not be persisted
-or reused in another conversation. It cannot choose source boundaries,
+question. A Gate may keep its ordinary inspection Action and dialogue resources
+while replacing them with a direct revision-bound resolution path only for a
+session-authority Route. Necessary evidence inspection remains selected for
+semantic scope or classification work. This authority is not project
+configuration and must not be persisted or reused in another conversation. It cannot choose source boundaries,
 authorize unread external sources or external operations, or bypass validation
 and verification.

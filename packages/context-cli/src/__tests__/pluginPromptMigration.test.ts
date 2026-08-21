@@ -30,8 +30,7 @@ describe("plugin prompt and workflow resource contract", () => {
     ];
     for (const readme of readmes) {
       for (const snippet of [
-        "init",
-        "continue",
+        "context",
         "workflow",
       ]) {
         expect(readme, snippet).toContain(snippet);
@@ -54,19 +53,29 @@ describe("plugin prompt and workflow resource contract", () => {
     const pluginEntries = await readdir(PLUGIN_ROOT, { withFileTypes: true });
     expect(pluginEntries.some((entry) => entry.isDirectory() && entry.name === "skills")).toBe(false);
 
-    for (const command of ["init.md", "continue.md"]) {
+    for (const command of ["context.md"]) {
       const body = await read(PLUGIN_ROOT, "commands", command);
       expect(body, command).toContain("context status");
       expect(body, command).toContain("workflow.current");
       expect(body, command).not.toContain("references/internal-procedures");
       expect(body, command).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
     }
-    const continuation = await read(PLUGIN_ROOT, "commands", "continue.md");
+    const continuation = await read(PLUGIN_ROOT, "commands", "context.md");
+    expect(continuation).toContain("context entry");
+    expect(continuation).toContain("knowledge management tool built for Agent knowledge workflows");
+    expect(continuation).toContain("Feishu/Lark documents");
+    expect(continuation).toContain("structured, traceable knowledge");
+    expect(continuation).toContain("knowledge packages, LLM-ready documents, or Agent Skills");
+    expect(continuation).toContain("code-indexing capabilities");
     expect(continuation).toContain("workflow.current");
     expect(continuation).toContain("resources.required");
     expect(continuation).toContain("without an additional status call");
     expect(continuation).toContain("revision and");
     expect(continuation).toMatch(/never replaces\s+the workspace\s+Route/u);
+    expect(continuation).toContain("npm install -g @c4a/context-cli@latest");
+    expect(continuation).toContain("context plugin install");
+    expect(continuation).toContain("shell exit 127");
+    expect(continuation).toContain("Do not run an installation preflight");
   });
 
   test("source and gate discipline lives in selected workflow procedures", async () => {
@@ -113,6 +122,8 @@ describe("plugin prompt and workflow resource contract", () => {
       ["knowledge-review.md", ["exact Payload", "fully managed operation"]],
       ["package-output.md", ["output", "package"]],
       ["evidence-maintenance.md", ["source evidence", "content refresh"]],
+      ["workflow-mode-after-creation.md", ["Ordinary review mode", "about 40% slower"]],
+      ["workflow-mode-after-capture.md", ["fully managed operation", "about 40% slower"]],
     ] as const;
 
     for (const [file, snippets] of dialogue) {

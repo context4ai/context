@@ -64,7 +64,7 @@ async function setupContextCliPkg(root: string): Promise<{ pkgDir: string; distD
   );
   // Realistic source layout: plugin/, templates/, scripts/ under pkgDir.
   await mkdir(join(pkgDir, "plugin", "commands"), { recursive: true });
-  await writeFile(join(pkgDir, "plugin", "commands", "init.md"), "---\ndescription: 'init'\nallowed-tools: Bash\n---\n");
+  await writeFile(join(pkgDir, "plugin", "commands", "context.md"), "---\ndescription: 'context'\nallowed-tools: Bash\n---\n");
   await mkdir(join(pkgDir, "templates", "aspects", "code"), { recursive: true });
   await writeFile(join(pkgDir, "templates", "aspects", "code", "prompt.md"), "# code aspect\n");
   await mkdir(join(pkgDir, "scripts"), { recursive: true });

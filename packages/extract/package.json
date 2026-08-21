@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract",
-  "description": "Code extraction engine — Tree-sitter AST parsing and structural analysis",
-  "version": "0.6.8",
+  "description": "Language-plugin framework and repository runner for Context code evidence",
+  "version": "0.6.9",
   "type": "module",
   "license": "MIT",
   "engines": {

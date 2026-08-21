@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: managed workflow does not bypass source read permission
 graph: workspace
-entry: continue
+entry: context
 state:
   authorities:
     - context.extraction-scope

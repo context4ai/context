@@ -35,6 +35,7 @@ import { withDebugCliInvocation } from "./project/debugTrace.js";
 import { withContextRuntimeEventDelivery } from "./runtimeEvents.js";
 import {
   registerProjectCloseAndBuildCommands,
+  registerProjectEntryCommand,
   registerProjectInitCommand,
   registerProjectStatusCommand,
   registerProjectVerifyCommand,
@@ -43,6 +44,7 @@ import { registerPluginCommands } from "./registerPluginCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
 
 const TOP_LEVEL_COMMANDS = new Set([
+  "entry",
   "init",
   "plugin",
   "status",
@@ -229,6 +231,7 @@ export function createCliProgram(): Command {
   const baseHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => `${headerHelpText()}${baseHelpInformation()}${quickstartHelpText()}`;
 
+  registerProjectEntryCommand(program);
   registerProjectInitCommand(program);
   registerPluginCommands(program);
 

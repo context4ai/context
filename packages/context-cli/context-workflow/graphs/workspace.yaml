@@ -2,7 +2,7 @@ schema: agent-graph.graph.v1
 id: workspace
 description: Fact-grounded lifecycle for a Context knowledge workspace.
 entrypoints:
-  continue: repair-project-entry
+  context: repair-project-entry
 nodes:
   - id: repair-project-entry
     kind: action
@@ -92,6 +92,12 @@ nodes:
     kind: gate
     reasonCode: route.structure.confirmation-required
     inspectionAction: actions/inspect-structure.yaml
+    resolutionAction: actions/apply-structure-confirmation.yaml
+    delegated:
+      inspection: skip
+      resources:
+        required: []
+        recommended: []
     gate:
       id: structure-confirmation
       prompt: Confirm the proposed knowledge structure before candidates are compiled.
@@ -166,6 +172,12 @@ nodes:
     kind: gate
     reasonCode: route.review.decision-required
     inspectionAction: actions/inspect-review.yaml
+    delegated:
+      inspection: skip
+      resolutionAction: actions/apply-managed-review.yaml
+      resources:
+        required: []
+        recommended: []
     gate:
       id: knowledge-review
       prompt: Review the complete current document candidate batch before it enters approved knowledge.
@@ -210,6 +222,7 @@ nodes:
         - resources/procedures/source-boundary.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/source-boundary.md
+        - resources/dialogue/workflow-mode-after-creation.md
         - resources/views/source-current.yaml
       recommended:
         - resources/procedures/source-capture-detailed.md
@@ -290,6 +303,14 @@ nodes:
     kind: gate
     reasonCode: route.extract.scope-required
     inspectionAction: actions/inspect-code-extraction.yaml
+    delegated:
+      resources:
+        required:
+          - resources/procedures/code-extraction.md
+          - resources/dialogue/code-extraction.md
+          - resources/views/source-current.yaml
+        recommended:
+          - resources/procedures/source-capture-detailed.md
     gate:
       id: extraction-scope
       prompt: Confirm which registered code modules and symbol boundaries should enter code knowledge.
@@ -303,6 +324,7 @@ nodes:
         - resources/procedures/code-extraction.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/code-extraction.md
+        - resources/dialogue/workflow-mode-after-capture.md
         - resources/views/source-current.yaml
       recommended:
         - resources/procedures/source-capture-detailed.md
@@ -337,6 +359,12 @@ nodes:
     kind: gate
     reasonCode: route.document.classification-required
     inspectionAction: actions/inspect-document-classification.yaml
+    delegated:
+      resources:
+        required:
+          - resources/procedures/document-classification.md
+          - resources/dialogue/document-classification.md
+          - resources/views/source-current.yaml
     gate:
       id: document-classification
       prompt: Confirm the evidence-backed knowledge collection for the next captured document.
@@ -350,6 +378,7 @@ nodes:
         - resources/procedures/document-classification.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/document-classification.md
+        - resources/dialogue/workflow-mode-after-capture.md
         - resources/views/source-current.yaml
 
   - id: configure-prose-lifecycle
@@ -387,6 +416,12 @@ nodes:
     kind: gate
     reasonCode: route.review.decision-required
     inspectionAction: actions/inspect-review.yaml
+    delegated:
+      inspection: skip
+      resolutionAction: actions/apply-managed-review.yaml
+      resources:
+        required: []
+        recommended: []
     gate:
       id: knowledge-review
       prompt: Review the complete current candidate batch before it enters approved knowledge.
@@ -484,6 +519,10 @@ nodes:
     kind: gate
     reasonCode: route.package.template-review-required
     resolutionAction: actions/accept-package-templates.yaml
+    delegated:
+      resources:
+        required: []
+        recommended: []
     gate:
       id: package-template-review
       prompt: Replace or edit the declared package templates, or explicitly accept the unchanged generic defaults.

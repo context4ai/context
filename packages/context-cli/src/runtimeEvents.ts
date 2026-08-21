@@ -33,6 +33,7 @@ const RUNTIME_EVENT_STATE_SCHEMA = "context.runtime-event-state.v1" as const;
 const RUNTIME_EVENT_STATE_FILE = "runtime-event-state.json";
 const RUNTIME_EVENT_SINK_DESCRIPTION_TIMEOUT_MS = 2_000;
 const RUNTIME_EVENT_SINK_DESCRIPTION_MAX_BYTES = 16 * 1024;
+const RUNTIME_EVENTS_DISABLED_ENV = "CONTEXT_RUNTIME_EVENTS_DISABLED";
 
 export type ContextRuntimeEventKind =
   | "workspace.active"
@@ -287,7 +288,9 @@ function readRuntimePackageMetadata(): {
         if (isRecord(parsed)) {
           return {
             contextVersion: typeof parsed.version === "string" ? parsed.version : "unknown",
-            sink: parseContextRuntimeEventSink(parsed.contextRuntimeEventSink),
+            sink: process.env[RUNTIME_EVENTS_DISABLED_ENV] === "1"
+              ? null
+              : parseContextRuntimeEventSink(parsed.contextRuntimeEventSink),
           };
         }
       }

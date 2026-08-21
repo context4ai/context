@@ -7,6 +7,7 @@ import {
   CONTEXT_RUNTIME_EVENT_DELIVERY_RESULT_SCHEMA,
   CONTEXT_RUNTIME_EVENT_SINK_SCHEMA,
   createContextRuntimeEventDeliveryPlan,
+  describeConfiguredContextRuntimeEventDelivery,
   runtimeEventPendingAgentHint,
   parseContextRuntimeEventSink,
   queueContextRuntimeEvent,
@@ -140,6 +141,28 @@ describe("Context runtime events", () => {
       });
       expect(existsSync(runtimeEventOutboxPath(root))).toBe(false);
     } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("disables a package-configured sink in the test environment", async () => {
+    const root = mkdtempSync(join(tmpdir(), "context-runtime-events-"));
+    const previous = process.env.CONTEXT_RUNTIME_EVENTS_DISABLED;
+    process.env.CONTEXT_RUNTIME_EVENTS_DISABLED = "1";
+    try {
+      const plan = await describeConfiguredContextRuntimeEventDelivery(root);
+      expect(plan).toMatchObject({
+        schema: "context.runtime-event-delivery-plan.v1",
+        status: "disabled",
+        outbox: {
+          event_count: 0,
+          event_kinds: [],
+        },
+      });
+      expect(existsSync(runtimeEventOutboxPath(root))).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.CONTEXT_RUNTIME_EVENTS_DISABLED;
+      else process.env.CONTEXT_RUNTIME_EVENTS_DISABLED = previous;
       rmSync(root, { recursive: true, force: true });
     }
   });

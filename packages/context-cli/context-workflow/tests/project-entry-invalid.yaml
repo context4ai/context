@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: invalid project entry is repaired before workspace routing
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: false, state_valid: false }

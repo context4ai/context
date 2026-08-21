@@ -29,7 +29,7 @@ import type { ReviewPathIdentityConflictStatus } from "../reviewIdentityConflict
 
 export const CONTEXT_WORKFLOW_PROVIDER_ID = "c4a/context";
 export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
-export const CONTEXT_WORKFLOW_ENTRY = "continue";
+export const CONTEXT_WORKFLOW_ENTRY = "context";
 
 export const CONTEXT_WORKFLOW_AUTHORITIES = {
   evidenceMaintenance: "context.evidence-maintenance",
