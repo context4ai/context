@@ -67,6 +67,38 @@ async function fixture(): Promise<{
 }
 
 describe("repository source recovery", () => {
+  test("groups transport aliases by repository path and pinned commit", async () => {
+    const input = await fixture();
+    await writeRepoRegistry(input.project, {
+      repos: [
+        {
+          name: "20260813/alpha",
+          namespace: "20260813",
+          module: "alpha",
+          subpath: "packages/alpha",
+          git: {
+            remote: "git@source.example.com:example/product-monorepo.git",
+            ref: input.commit,
+          },
+        },
+        {
+          name: "20260813/beta",
+          namespace: "20260813",
+          module: "beta",
+          subpath: "packages/beta",
+          git: {
+            remote: "https://mirror.example.net/example/product-monorepo/",
+            ref: input.commit,
+          },
+        },
+      ],
+    });
+
+    const plan = await repositoryRecoveryPlan({ projectRoot: input.project });
+    expect(plan.groups).toHaveLength(1);
+    expect(plan.groups[0]?.sources).toEqual(["20260813/alpha", "20260813/beta"]);
+  });
+
   test("groups logical modules and restores them from one explicit local checkout", async () => {
     const input = await fixture();
     const plan = await repositoryRecoveryPlan({ projectRoot: input.project });
@@ -98,6 +130,39 @@ describe("repository source recovery", () => {
     const readyPlan = await repositoryRecoveryPlan({ projectRoot: input.project });
     expect(readyPlan.pending_groups).toBe(0);
     expect(readyPlan.next_action).toBeNull();
+  });
+
+  test("accepts a local checkout whose origin uses another transport host", async () => {
+    const input = await fixture();
+    git(input.checkout, [
+      "remote",
+      "set-url",
+      "origin",
+      "ssh://mirror-user@mirror.example.net:29418/example/product-monorepo.git",
+    ]);
+
+    const result = await restoreRepositorySources({
+      projectRoot: input.project,
+      payload: {
+        schema: "context.repository-source-recovery.v1",
+        repositories: [{ source: "20260813/alpha", mode: "local", path: input.checkout }],
+      },
+    });
+
+    expect(result.restored[0]).toEqual(expect.objectContaining({ mode: "local", ready: true }));
+  });
+
+  test("rejects a local checkout with a different repository path", async () => {
+    const input = await fixture();
+    git(input.checkout, ["remote", "set-url", "origin", "git@mirror.example.net:other/product-monorepo.git"]);
+
+    await expect(restoreRepositorySources({
+      projectRoot: input.project,
+      payload: {
+        schema: "context.repository-source-recovery.v1",
+        repositories: [{ source: "20260813/alpha", mode: "local", path: input.checkout }],
+      },
+    })).rejects.toThrow("local repository origin does not match the registered source");
   });
 
   test("clones the pinned commit into the disposable repository cache", async () => {

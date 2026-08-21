@@ -88,16 +88,26 @@ export function parseRepositoryRecoveryPayload(value: unknown): RepositoryRecove
   return { schema: RECOVERY_SCHEMA, repositories };
 }
 
-function canonicalRemote(value: string): string {
+function trimRepositorySuffix(value: string): string {
+  return value.trim().replace(/^\/+|\/+$/gu, "").replace(/\.git$/iu, "");
+}
+
+function repositoryPathIdentity(value: string): string {
   const trimmed = value.trim().replace(/\/+$/u, "").replace(/\.git$/iu, "");
-  const scp = /^(?:[^@]+@)?([^:]+):(.+)$/u.exec(trimmed);
-  if (scp !== null) return `${scp[1]?.toLowerCase()}/${scp[2]}`;
-  try {
-    const url = new URL(trimmed);
-    return `${url.hostname.toLowerCase()}${url.pathname}`.replace(/\/+$/u, "").replace(/\.git$/iu, "");
-  } catch {
-    return trimmed;
+  const windowsPath = /^[a-z]:[\\/]/iu.test(trimmed);
+  const urlSyntax = /^[a-z][a-z0-9+.-]*:\/\//iu.test(trimmed);
+  if (!windowsPath && urlSyntax) {
+    try {
+      const url = new URL(trimmed);
+      if (url.hostname.length > 0) return trimRepositorySuffix(url.pathname);
+      return url.pathname.replace(/\/+$/u, "").replace(/\.git$/iu, "");
+    } catch {
+      return trimmed;
+    }
   }
+  const scp = windowsPath ? null : /^(?:[^@/:]+@)?[^/:]+:(.+)$/u.exec(trimmed);
+  if (scp?.[1] !== undefined) return trimRepositorySuffix(scp[1]);
+  return trimmed;
 }
 
 function repositorySlug(remote: string): string {
@@ -111,7 +121,7 @@ function groupId(source: Pick<RepoSourceRecord, "git">): string {
 }
 
 function groupKey(source: Pick<RepoSourceRecord, "git">): string {
-  return `${canonicalRemote(source.git.remote)}\u0000${source.git.ref.toLowerCase()}`;
+  return `${repositoryPathIdentity(source.git.remote)}\u0000${source.git.ref.toLowerCase()}`;
 }
 
 function suggestedCloneTarget(source: Pick<RepoSourceRecord, "git">): string {
@@ -217,10 +227,14 @@ async function verifyCheckout(input: {
   subpaths: readonly string[];
 }): Promise<void> {
   const actualRemote = await git(input.checkout, ["remote", "get-url", "origin"]);
-  if (canonicalRemote(actualRemote) !== canonicalRemote(input.remote)) {
+  const expectedRepository = repositoryPathIdentity(input.remote);
+  const actualRepository = repositoryPathIdentity(actualRemote);
+  if (actualRepository !== expectedRepository) {
     throw userInputError("local repository origin does not match the registered source", {
       expected_remote: input.remote,
       actual_remote: actualRemote,
+      expected_repository: expectedRepository,
+      actual_repository: actualRepository,
       checkout: input.checkout,
     });
   }
