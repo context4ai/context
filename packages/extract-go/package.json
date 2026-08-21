@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-go",
   "description": "Go extraction plugin and structural index for Context",
-  "version": "0.6.10",
+  "version": "0.6.11",
   "type": "module",
   "license": "MIT",
   "engines": {

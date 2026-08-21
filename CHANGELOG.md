@@ -4,6 +4,10 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.11 - 2026-08-21
+
+- Deferred code `source_ref` reverse lookup until every declared extraction phase is indexed, so a cold runtime continues the remaining phases instead of reporting provisional stale evidence.
+
 ## 0.6.10 - 2026-08-21
 
 - Made repository recovery identity transport-independent by matching the full namespace/repository path while preserving pinned-commit and subpath validation.

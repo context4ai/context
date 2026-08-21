@@ -266,10 +266,15 @@ export async function readSourceStatus(projectRoot: string): Promise<{
   };
 }
 
-export async function readVerifyStatus(projectRoot: string): Promise<{ issues: ProjectVerifyIssue[]; diagnostics: string[] }> {
+export async function readVerifyStatus(
+  projectRoot: string,
+  expectedExtractPhaseIds?: readonly string[],
+): Promise<{ issues: ProjectVerifyIssue[]; diagnostics: string[] }> {
   try {
     return {
-      issues: (await verifyProjectWorkspace(projectRoot)).issues,
+      issues: (await verifyProjectWorkspace(projectRoot, {
+        ...(expectedExtractPhaseIds === undefined ? {} : { expectedExtractPhaseIds }),
+      })).issues,
       diagnostics: [],
     };
   } catch (error) {
