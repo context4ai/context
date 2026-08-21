@@ -31,6 +31,6 @@
   },
   "dependencies": {
     "typescript": "^5.5.4",
-    "yaml": "^2.5.1"
+    "yaml": "^2.9.0"
   }
 }
