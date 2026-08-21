@@ -4,6 +4,9 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.10 - 2026-08-21
+
+- Made repository recovery identity transport-independent by matching the full namespace/repository path while preserving pinned-commit and subpath validation.
 - Added Gate-owned managed fast paths that preserve ordinary inspection and resolution capabilities while skipping redundant HTML review surfaces and dialogue resources under current-conversation authority.
 - Added ordinary-mode guidance after workspace creation and source capture that explains the review/fully-managed trade-off before later approval rounds.
 
