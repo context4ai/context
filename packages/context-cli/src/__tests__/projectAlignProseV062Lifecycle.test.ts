@@ -150,9 +150,11 @@ describe("0.6.6 prose align structure gate", () => {
         item.command.includes("--view structure-summary --input .tmp/context-runtime/lifecycle/structure.yaml") &&
         item.availability === "immediate"
       )).toBe(true);
-      expect(confirmationStatus.workflow.current.commands.some((item) =>
+      expect(confirmationStatus.workflow.current.commands.find((item) =>
         item.command.includes(" --confirm ")
-      )).toBe(false);
+      )).toMatchObject({
+        availability: "after-human-confirmation",
+      });
       expect(confirmationStatus.workflow.current.resources.required).toContainEqual(
         expect.objectContaining({ id: "dialogue.structure-confirmation" }),
       );
@@ -168,11 +170,23 @@ describe("0.6.6 prose align structure gate", () => {
         workflow: {
           current: {
             node: string;
+            gate: {
+              resolution: string;
+              inspection_action?: unknown;
+              resolution_action?: { id: string };
+            };
             commands: Array<{ command: string; availability: string }>;
+            resources: { required: Array<{ id: string }> };
           };
         };
       };
-      expect(authorizedStatus.workflow.current.node).toBe("apply-structure-confirmation");
+      expect(authorizedStatus.workflow.current.node).toBe("confirm-structure");
+      expect(authorizedStatus.workflow.current.gate).toMatchObject({
+        resolution: "session-authority",
+        resolution_action: { id: "apply-structure-confirmation" },
+      });
+      expect(authorizedStatus.workflow.current.gate.inspection_action).toBeUndefined();
+      expect(authorizedStatus.workflow.current.resources.required).toEqual([]);
       expect(authorizedStatus.workflow.current.commands.find((item) =>
         item.command.includes(" --confirm ")
       )).toMatchObject({

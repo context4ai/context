@@ -1,0 +1,34 @@
+schema: agent-graph.test.v1
+name: managed extraction scope keeps evidence inspection but omits ordinary mode dialogue
+graph: workspace
+entry: context
+state:
+  authorities: [context.extraction-scope]
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    close: { current: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      extraction_scope_resolved: false
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, complete: true }
+expect:
+  statusCode: actionable
+  primaryNode: choose-extraction-scope
+  primaryReasonCode: route.extract.scope-required
+  gateResolution: session-authority
+  inspectionHandler: context.extract.inspect-capabilities
+  requiredResources:
+    - procedure.code-extraction
+    - dialogue.code-extraction
+    - context.source-current

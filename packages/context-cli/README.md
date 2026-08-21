@@ -1,268 +1,204 @@
-# Context CLI
+# Context Agent Runtime
 
 [简体中文](./README.zh-CN.md)
 
-`@c4a/context-cli` provides the **Context CLI** and the global Agent plugin
-installer. The CLI manages project-local workspace state; the Agent plugin
-explains that state, asks for user decisions, and edits project configuration.
+`@c4a/context-cli` ships the local runtime and Agent integration for the
+Context knowledge production workflow. Despite the package name, its primary
+user experience is not a terminal command catalog: users invoke one Agent
+entry, describe the knowledge they want, and follow the decisions explained in
+conversation.
 
-The CLI is Node/Bun compatible and does not call an LLM. Mechanical work belongs
-to the CLI, semantic judgment belongs to the Agent, and important decisions
-belong to the user.
+The runtime performs deterministic work—workspace observation, source capture,
+code indexing, evidence validation, candidate staging, review application,
+verification, and package builds. The Agent performs semantic work, while the
+user owns permissions and important content decisions. The runtime never calls
+an LLM itself.
 
-Markdown parsing is structural only: source headings remain inside citeable
-evidence spans, while their meaning, grouping, and knowledge type are never
-inferred by the CLI.
-
-## Install
+## Install the Agent integration
 
 ```bash
-npm install -g @c4a/context-cli
+npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-Global package installation also attempts a best-effort plugin refresh. Run
-`context plugin install` again after installing or upgrading Claude or Codex,
-then restart the Agent.
+Restart or refresh the Agent host after installation. The bundled installer
+projects the same source entry into supported Claude, Codex, Cursor, and
+Skill-compatible layouts.
 
-The public Agent entries are:
-
-- `/context:init` creates a project-local Context workspace.
-- `/context:continue` reads the current workspace state and continues from the
-  next action.
-
-`/context:continue` is Agent guidance, not a CLI subcommand. There is no
-`context continue` command.
-
-For the shortest installed-package walkthrough, read
-[CLI Quickstart](./docs/quickstart.md).
-
-Workspace tracing is off by default. Use `context init context --debug` or
-`context debug enable` only when command and Agent Graph route observability is
-needed; logs stay under ignored `.tmp/context-runtime/debug/`. See
-[Workspace debug tracing](./docs/debug-tracing.md).
-
-## CLI And Agent Responsibilities
-
-| Responsibility | Owner |
-|---|---|
-| Source registries, capture, extraction, review application, verify, and build | CLI |
-| Explaining choices, editing `src/index.ts`, proposing structure, and generating candidates from evidence | Agent |
-| Source permission, classification, review decisions, and package-output choice | User |
-
-The Agent treats `context status --format json` `workflow.current` as the
-current-step authority rather than guessing the next command. The default JSON
-view is compact: it contains the route, required resource locations, progress,
-counts, and aggregated diagnostics. Use `--view full` only for debugging. Long
-procedures and semantic rules remain complete Markdown resources selected by
-the route; progressive loading does not shorten or discard them.
-
-## Create Or Continue A Workspace
-
-```bash
-# Create a standalone workspace.
-context init context
-# Use --language zh-CN when generated workspace and starter templates should be Chinese.
-cd context
-bun install
-
-# Ask the Agent to continue from the current state.
-/context:continue
-```
-
-The generated `AGENTS.md` is the Agent's project-local operating guide. After
-dependency installation, SDK manuals are available at:
+The public community entry is `/c4a:context`. It creates a requested workspace,
+locates an existing workspace, or resumes the current workflow. Users should
+start with intent, not internal commands:
 
 ```text
-node_modules/@c4a/context/docs/README.md
-node_modules/@c4a/context/docs/guides/agent-guide.md
-node_modules/@c4a/context/docs/reference/project-api.md
-node_modules/@c4a/context/docs/reference/package-templates.md
+/c4a:context Turn these product documents and this repository into a reviewed
+Agent knowledge package. Keep every code claim traceable.
 ```
 
-The workspace state is split across:
+If the Agent entry is present but the `context` executable is missing, the
+entry reports the exact installation recovery and stops. It does not run an
+installation preflight on every request and does not confuse a normal workflow
+`not found` diagnostic with a missing executable.
 
-- `src/` for project declarations and package templates.
-- `sources/` for source registries and captured evidence.
-- `.tmp/context-runtime/lifecycle/` for ignored, CLI-managed draft candidates and
-  confirmed structure snapshots during an open lifecycle round.
-- `knowledge/` for approved Markdown, the closed `structure.yaml` projection,
-  and the minimal `decisions.json` rejected-candidate fingerprint map when one
-  exists. Resources referenced by approved pages live in content-addressed
-  `knowledge/assets/` paths.
-- `dist/` for generated package output.
-- `.tmp/context-runtime/` for other ignored logs, previews, reports, locks, and caches.
+## How one Agent entry drives the workflow
 
-The lifecycle and review runtime state is not user-editable and is removed by a
-successful `context close`. `knowledge/structure.yaml` is the durable approved
-structure projection. Its minimal `source_inputs` entries record only the
-source, collection, and source snapshot consumed by a closed prose target, so a
-clean workspace can distinguish completed and changed inputs after transient
-snapshots are removed. `knowledge/decisions.json` only preserves rejected
-candidate IDs and their fingerprints so unchanged candidates are not offered again.
+```text
+User knowledge goal
+        ↓
+single Agent entry
+        ↓
+context entry ── observes workspace location and state
+        ↓
+workflow.current ── current Route, resources, Gate, exact commands
+        ↓
+Agent reads / decides / executes one selected action
+        ↓
+workspace facts change ── evaluate again
+```
 
-Do not repair lifecycle state by manually deleting or rewriting these
-directories. Use the command or next action returned by the CLI.
+`context entry --format json` is the read-only bootstrap resolver. It can
+return an initialization action, a workspace relocation action, or the current
+workflow evaluation. There is no `context continue` primitive and no separate
+public entry for source, review, build, or status.
 
-## Package Output
+Once a workspace is ready, `workflow.current` is the current-step authority:
 
-`context build` writes each declared package under `dist/<package-name>/`.
-KB packages use flat, package-relative OKF roots: `wikis/`, `guides/`,
-`rules/`, and `feats/`. The package name already identifies the surrounding
-`dist/<package-name>/` directory and is not repeated inside those roots. Older
-workspaces that still declare `distribution.knowledgeNamespace` remain
-loadable, but the legacy value no longer changes package paths.
-New KB setup should offer Git raw resource delivery first. Build rewrites links
-to repository raw URLs; committing and publishing the resources remains the
-package author's responsibility. An explicit `urlPrefix` also works when the
-Context workspace itself is outside Git. Without Git or an explicit prefix,
-authors can bundle resources under `others/assets/` or explicitly omit them and
-retain unresolved references.
-Bundled delivery may configure `kbPackage().assets.optimize`; Context itself
-does not depend on an image processor.
+- required resources marked `read-required` are read completely before acting;
+- only Route-returned commands are executed, with their revision and authority
+  arguments preserved;
+- human Gates explain the decision and its impact before collecting a choice;
+- project configuration changes are limited to the file named by the Route;
+- every action is followed by a fresh observation, so stale commands cannot
+  advance a changed workspace.
 
-See the SDK manuals for the complete configuration and template contract:
+Long procedures, schemas, diagnostics, and source views remain addressable
+files in the bundled workflow. The Agent loads only what the current Route
+selects instead of carrying the entire lifecycle in its prompt.
 
-- [Package outputs](../context/docs/guides/package-outputs.md)
-- [Package templates](../context/docs/reference/package-templates.md)
+## The knowledge production lifecycle
 
-## Status-Driven Workflow
+| Phase | What the user experiences | What the runtime protects |
+|---|---|---|
+| Goal and sources | Confirm what knowledge is needed and which materials are in scope | Source identity, permission boundary, pinned repository or document inputs |
+| Capture and extraction | The Agent reads documents or inspects a confirmed code boundary | Complete bodies, resources, symbols, relations, fingerprints, and freshness |
+| Structure and compile | Review the proposed knowledge organization and content | Source-bound Nodes and Sections, coverage, continuity, and stable identities |
+| Review and close | Approve, reject, or adjust the candidate set | Atomic review application, durable decisions, and closed structure projection |
+| Verify and build | Choose an output and receive a reusable package | Validation, package templates, asset policy, and build inventory |
 
-The project workflow is declared in `src/index.ts` and routed by the bundled
-Context workflow graph behind `context status`. This graph is an internal CLI
-implementation detail; Context users and plugins consume only
-`workflow.current`, Context commands, and the selected resources:
+Building completes the currently approved state; it does not freeze the
+workspace. New or changed sources can open another production round later.
 
-| Stage | CLI surface |
-|---|---|
-| Source setup | `context source add repo/file/lark`, `context source add batch`, and `context source ensure` |
-| Document capture | Declared capture phases through `context run <phase-id>` |
-| Code extraction | Declared `extractTs` phases through `context run <phase-id>` |
-| Prose structure | `context run align:<type>:<source>:<collection> ...` evidence and validation views |
-| Prose compile | `context run compile:<type>:<source>:<collection> ...` evidence and validation views |
-| Review | `context review html`, scoped decisions, and `context review apply` |
-| Close and quality | `context close` and `context verify` |
-| Package output | `context build` |
+## Ordinary and fully managed conversations
 
-Building a package completes the currently active approved state; it does not
-freeze the workspace. New sources can be added and processed later.
+Ordinary mode is the default. It preserves explicit source, scope, structure,
+review, and package decisions and can provide HTML inspection reports at
+content-review Gates.
 
-With explicit current-conversation managed authority,
-`context run --managed --until blocked-or-complete` keeps one workspace-bound
-runtime for consecutive deterministic actions. Each action remains bound to
-the Route revision that selected it; after the action, Context reloads the
-project from disk and evaluates the graph again. Known local actions run in the
-same process, while source tools and other external effects remain isolated in
-child processes.
-
-The runtime scope owns only short-lived resources such as output capture,
-timers, child processes, and write locks, and releases them in reverse order.
-Knowledge, snapshots, decisions, and package output are durable state: they
-retain their existing revision checks, project write lock, atomic write, close,
-and verify contracts. No execution scope rolls back or substitutes those
-contracts, and the workspace file protocol is unchanged.
-
-## Command Groups
+When the user explicitly authorizes fully managed operation for the current
+conversation, the Agent uses:
 
 ```bash
-# Plugin installation and diagnostics
-context plugin install
-context plugin status
-
-# Workspace creation and state
-context init [project-dir]
-context status
 context run --managed --until blocked-or-complete --format json
-
-# Route-selected resources
-context resource materialize --help
-context resource acknowledge-current --help
-
-# Sources
-context source add repo [YYYYMMDD] --module <module> --local <repo-or-subdir>
-context source add file [YYYYMMDD] --module <module> --local <file-or-folder>
-context source add lark [YYYYMMDD] --module <module> --url <lark-url>
-context source add batch [YYYYMMDD] --input <yaml-or-json>
-context source remove <source-id> --format json          # preview
-context source remove <source-id> --yes --plan-digest <preview-digest> --format json
-context source ensure [source]
-context source inspect [source]
-
-# Declared phases and review
-context run --list
-context run <phase-id> --dry-run
-context run <phase-id>
-context review html [collection] --open
-context review apply <payload-file>
-
-# Package template decisions
-context package template accept --help
-
-# Final quality and output
-context close
-context verify
-context build
-
-# Optional workspace tracing
-context debug enable
-context debug status
-context debug export
-
-# Development/cache maintenance
-context clean-cache --dry-run
 ```
 
-Run `context <command> --help` for current flags. Commands that require a
-workspace search upward for a `package.json` with `context.project=true` and a
-configured `context.entry`. Revision-bound resource and package commands should
-normally be copied from `workflow.current`; the examples above show their
-discovery surface rather than a replacement for the current route.
+This collapses consecutive deterministic actions and delegated Gates, then
+stops when Agent reading, project configuration, additional permission,
+diagnostic repair, or a non-unique plan needs attention. It reuses the same
+workflow Graph and does not remove ordinary-mode review capability. The
+authority is conversation-scoped; it does not persist and cannot authorize new
+source boundaries, unread external content, repository operations, failed
+validation, or failed verification.
 
-## Human Gates And Evidence
+## Workspace state
 
-- The CLI never silently clones, checks out, resets, fetches, installs, builds,
-  or runs scripts in a source repository.
-- Source registration and source-body reading are separate permissions.
-- Extraction scope and document classification are confirmed before candidate
-  writes.
-- In ordinary mode, Review decisions come from the user and the Agent must not
-  invent payloads. Explicit current-conversation fully managed mode uses only
-  the atomic approval command returned by `workflow.current`.
-- Package output is chosen after approved knowledge exists; package templates
-  are project configuration, not a second factual source.
+```text
+context/
+├── src/                         # declarative project and package templates
+├── sources/                     # source registry and captured evidence
+├── knowledge/                   # approved Markdown and durable decisions
+├── dist/                        # built packages
+└── .tmp/context-runtime/
+    ├── lifecycle/               # open-round candidates and structure
+    ├── debug/                   # optional traces
+    └── logs/                    # optional runtime-event outbox
+```
 
-CLI-returned source names, phase IDs, candidate IDs, diagnostics, and
-`source_ref` values are workflow tokens. A `source_ref` is an opaque evidence
-citation: copy it exactly and do not parse it as a filesystem path.
+These directories have different durability contracts. `sources/` and
+`knowledge/` are project state; `dist/` is reproducible output; lifecycle and
+debug directories are ignored runtime state. A successful close removes the
+completed lifecycle staging area. Do not repair a workflow by manually editing
+or deleting CLI-owned state—use the recovery action returned by the current
+Route.
 
-## Further Reading
+## Evidence and safety boundaries
 
-- [CLI Quickstart](./docs/quickstart.md)
+- Source registration does not grant permission to read source bodies.
+- The runtime does not silently clone, checkout, reset, fetch, install, build,
+  test, or run scripts in a source repository.
+- Markdown parsing preserves structural evidence but does not infer product
+  meaning or choose a knowledge collection.
+- Code extraction emits structural facts; the Agent and user decide their
+  knowledge meaning and scope.
+- `source_ref` values are opaque, verified evidence identities. Copy them
+  exactly rather than treating them as filesystem paths.
+- Review decisions become approved Markdown only through atomic review apply;
+  Agents do not hand-write lifecycle output.
+- Package templates shape distribution but never replace approved knowledge as
+  the source of truth.
+
+## Package output
+
+Declared packages are built under `dist/<package-name>/`. Agent knowledge
+packages may contain `wikis/`, `guides/`, `rules/`, `feats/`, Skills, indexes,
+and package-specific retrieval helpers. LLM packages consolidate selected
+knowledge into a text artifact.
+
+Each build inventory maps the distributed paths back to approved workspace
+knowledge. Asset delivery can use repository raw URLs, an explicit URL prefix,
+or bundled assets; the project chooses the policy before build.
+
+See [Package Outputs](../context/docs/guides/package-outputs.md) and
+[Package Templates](../context/docs/reference/package-templates.md).
+
+## Diagnostics and direct CLI use
+
+Normal users should follow the Agent entry. Direct commands remain available
+for maintainers, automation, and diagnostics:
+
+- `context status --format json` inspects the current Route;
+- `context <command> --help` is the authority for current flags;
+- `context plugin status` checks installed Agent projections;
+- `context debug enable` records optional traces below
+  `.tmp/context-runtime/debug/`;
+- `context clean-cache --dry-run` previews cleanup of Context-owned stale
+  plugin caches.
+
+Revision-bound commands should be copied from `workflow.current`; examples in
+documentation are orientation, not a substitute for the current Route. See the
+[installed quickstart](./docs/quickstart.md) and
+[debug tracing guide](./docs/debug-tracing.md).
+
+## Documentation and development
+
+- [Plugin contract](./plugin/README.md)
+- [Workflow Provider internals](./context-workflow/README.md)
 - [SDK documentation index](../context/docs/README.md)
-- [Getting Started](../context/docs/getting-started.md)
+- [Knowledge-project walkthrough](../context/docs/getting-started.md)
 - [Agent Guide](../context/docs/guides/agent-guide.md)
-- [Agent Dialogue](../context/docs/guides/agent-dialogue.md)
-- [Lark Resource Materialization](../context/docs/guides/lark-resources.md)
 - [Project API](../context/docs/reference/project-api.md)
-- [Package Templates](../context/docs/reference/package-templates.md)
 
-## Development
-
-For the complete source, link, plugin, and npm-mode workflow, see
+For source, link, packaged-install, and release workflows, see
 [`DEVELOPMENT.md`](../../DEVELOPMENT.md) and this package's
 [`DEVELOPMENT.md`](./DEVELOPMENT.md).
 
 ```bash
-./start.sh link
 bun run --filter @c4a/context-cli build
 bun run --filter @c4a/context-cli typecheck
 bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
 ```
 
-Build writes the installable Claude, Codex, Cursor, and skill-only trees to
-`dist/plugins`. `context plugin install` installs from that package-bundled
-output. Do not edit generated plugin trees directly.
+Build generates the installable host projections under `dist/plugins`; edit
+only `plugin/` and the bundled workflow source, never generated output.
 
 ## License
 

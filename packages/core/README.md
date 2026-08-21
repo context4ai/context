@@ -1,23 +1,38 @@
-# @c4a/core
+# Context Core Contracts
 
-`@c4a/core` is the shared foundation package for Context. It provides reusable types, schemas, error definitions, and utility helpers used across multiple packages.
+[简体中文](./README.zh-CN.md)
 
-## Installation
+`@c4a/core` is the shared contract package used by Context's project SDK,
+extraction framework, and local workflow runtime. It keeps identities, schemas,
+errors, and reference helpers consistent across package boundaries.
 
-```bash
-bun add @c4a/core
-# or
-npm install @c4a/core
+This package is infrastructure for Context maintainers and extension authors.
+Knowledge-workspace users normally work through the Context Agent entry and do
+not install it directly.
+
+## Place in the knowledge workflow
+
+```text
+project SDK ─┐
+extractors ──┼─→ shared types / schemas / errors / references
+runtime ─────┘
 ```
 
-## What It Includes
+Core contracts prevent the same source, entity, relation, or diagnostic from
+acquiring different shapes as it moves from capture to extraction, review,
+verification, and package build.
 
-- **Domain types**: common TypeScript types for entities, relations, contents, and sources
-- **Schema definitions**: Zod-based input/output validation models
-- **Error system**: unified error codes and `C4AError`
-- **Ref utilities**: helpers for parsing and building `ref:*` pointers
-- **Shared constants and helpers**: reusable utilities for Context extraction
-  and CLI packages
+## What it provides
+
+- domain types for entities, relations, content, sources, and extraction data;
+- Zod schemas for validating shared inputs and outputs;
+- stable error codes and the exported `C4AError` API;
+- helpers for parsing and constructing `ref:*` pointers;
+- constants and utilities shared by extraction and workflow packages.
+
+The `C4AError` symbol and `@c4a/core` package name are published API
+identifiers. They are not a separate user-facing product model and should not
+be copied into generated knowledge content.
 
 ## Example
 
@@ -30,12 +45,28 @@ if (!parsed) {
 }
 ```
 
-## Common Use Cases
+## Use this package when
 
-- Reuse a single contract across a monorepo to avoid type drift
-- Validate external inputs with consistent schemas and error handling
-- Parse and build cross-resource reference pointers
+- adding a shared protocol consumed by more than one Context package;
+- validating external or serialized data at a package boundary;
+- working with cross-resource identities and references;
+- implementing an extractor that must return Context-compatible structures.
+
+Do not place workflow routing, source-specific business meaning, Agent prompts,
+or filesystem lifecycle behavior here. Those belong to the workflow Provider,
+project SDK, extraction plugins, or runtime respectively.
+
+## Development
+
+```bash
+bun run --filter @c4a/core build
+bun run --filter @c4a/core typecheck
+bun run --filter @c4a/core test
+bun run --filter @c4a/core lint
+```
+
+Runtime code remains Node.js compatible.
 
 ## License
 
-MIT
+MIT.

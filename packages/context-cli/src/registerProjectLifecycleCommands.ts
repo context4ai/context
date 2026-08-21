@@ -19,6 +19,41 @@ import {
 import { parseWorkflowResourceReceipts } from "./project/workflow/workflowResourceReceipts.js";
 import { queueContextRuntimeEvent } from "./runtimeEvents.js";
 import { ExitCode } from "./types/exitCode.js";
+import { formatContextEntry, resolveContextEntry } from "./project/entryCommand.js";
+
+export function registerProjectEntryCommand(program: Command): void {
+  program
+    .command("entry [project-dir]")
+    .description("Resolve the single Context agent entry for initialization or workflow evaluation")
+    .option("--name <name>", "display/package name override when initialization is required")
+    .option("--language <language>", "workspace and starter-template language: en | zh-CN", "en")
+    .option("--dev", "plan initialization with the locally linked @c4a/context SDK")
+    .option("--debug", "plan initialization with workspace-local tracing enabled")
+    .option("--managed", "use explicit current-conversation managed approval for workflow evaluation")
+    .addOption(
+      new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
+        .argParser(collectWorkflowAuthorityOption)
+        .default([]),
+    )
+    .option("--format <format>", "output format: json", "json")
+    .action((projectDir: string | undefined, options: Record<string, unknown>) => {
+      if (options.format !== "json") {
+        throw new ContextError(ExitCode.UserError, "--format must be json", {
+          category: ErrorCategory.UserInputInvalid,
+        });
+      }
+      process.stdout.write(formatContextEntry(resolveContextEntry({
+        cwd: process.cwd(),
+        ...(projectDir === undefined ? {} : { projectDir }),
+        ...(typeof options.name === "string" ? { name: options.name } : {}),
+        language: projectLanguage(options.language),
+        ...(options.dev === true ? { dev: true } : {}),
+        ...(options.debug === true ? { debug: true } : {}),
+        ...(options.managed === true ? { managed: true } : {}),
+        authorities: workflowAuthorities(options.authority),
+      })));
+    });
+}
 
 export function registerProjectInitCommand(program: Command): void {
   program

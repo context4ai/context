@@ -2,11 +2,43 @@
 
 [简体中文](./README.zh-CN.md)
 
-`@c4a/context` is the declarative SDK for a Context workspace. It provides the
-typed API used by `src/index.ts` to describe sources, processing phases, review
-gates, and package outputs. It does not perform filesystem writes or run the
-workflow; those operations belong to the
-[Context CLI](../context-cli/README.md).
+`@c4a/context` is the declarative model behind a Context knowledge workspace.
+It lets the workspace describe which sources contribute knowledge, how evidence
+is processed, where human review applies, and which reusable outputs should be
+built.
+
+Most users do not install or operate this SDK directly. They start through the
+Context Agent entry, describe a knowledge goal, and let the selected workflow
+Route guide the Agent when `src/index.ts` needs configuration. This README is
+for knowledge-project authors, Agent maintainers, and developers who need to
+understand that project declaration.
+
+The SDK is intentionally declarative. It does not read sources, write workspace
+state, execute an Agent, or build packages by itself. Those operations belong
+to the [Context workflow runtime](../context-cli/README.md).
+
+## Place in the knowledge workflow
+
+```text
+User intent + source boundaries
+              ↓
+       src/index.ts declaration   ← this package
+              ↓
+  Context Route + Agent judgment
+              ↓
+ approved knowledge → package output
+```
+
+The declaration answers four stable questions:
+
+- Which registered source boundaries may contribute evidence?
+- Which capture, extraction, alignment, compilation, and review phases exist?
+- Which approved collections belong in each output?
+- Which templates and asset-delivery policies shape the built package?
+
+It does not encode current progress. Workspace facts and the bundled workflow
+Provider select the next Route at runtime, so `src/index.ts` remains a project
+contract rather than a second state machine.
 
 ## Project Model
 
@@ -42,11 +74,11 @@ export default defineProject({
 });
 ```
 
-`src/index.ts` is similar to a Webpack configuration for knowledge. It defines
-what enters the project, which transformations and gates run, and what is built
-at the end. The installed Agent plugin provides thin entries; the current
-workflow route selects the procedures and manuals needed to maintain this
-configuration from a user's requirements.
+`src/index.ts` is similar to a build configuration for knowledge. It defines
+what enters the project, which transformations and gates are available, and
+what can be built at the end. The installed Agent entry stays thin; the current
+workflow Route selects the exact procedures, schemas, and manuals needed to
+maintain this declaration from the user's requirements.
 
 ## Public Surface
 
@@ -181,3 +213,7 @@ state. The CLI owns that runtime state and removes it after a successful close.
 - [Lark Resource Materialization](./docs/guides/lark-resources.md)
 - [Package Templates](./docs/reference/package-templates.md)
 - [Template Variables](./docs/reference/template-variables.md)
+
+The [documentation index](./docs/README.md) explains which references should be
+read for each workflow decision. Agents should prefer Route-selected resources
+over preloading every manual.

@@ -1,17 +1,36 @@
 # Context SDK Docs
 
+[简体中文](./README.zh-CN.md)
+
 These docs ship inside the installed SDK package at:
 
 ```text
 node_modules/@c4a/context/docs/
 ```
 
-For lifecycle work, Agents should first consume the resources selected by
-`context status --format json` `workflow.current`. Read these SDK manuals when
-the selected route requires project configuration, package templates, or
-general reference; do not preload the whole manual set.
+These manuals explain how a knowledge project declares sources, processing,
+review, and package output. They are references inside the larger Agent-driven
+workflow, not a second set of lifecycle instructions.
 
-## Read First
+For active knowledge production, start through the installed Context Agent
+entry. Agents should first consume the resources selected by
+`workflow.current`, then read an SDK manual only when that Route requires
+project configuration, package-template work, or a stable API reference. Do not
+preload the whole manual set.
+
+## Find the right document
+
+| Current need | Read |
+|---|---|
+| Understand the whole knowledge-project shape | [Getting Started](./getting-started.md) |
+| Know what the Agent may decide or change | [Agent Guide](./guides/agent-guide.md) and [Agent Dialogue](./guides/agent-dialogue.md) |
+| Configure sources, phases, review, or packages | [Project API](./reference/project-api.md) |
+| Choose a code extraction path | [Code Extractor Selection](./reference/code-extractors.md) |
+| Choose an Agent package or LLM document | [Package Outputs](./guides/package-outputs.md) |
+| Customize package files and indexes | [Package Templates](./reference/package-templates.md) and [Template Variables](./reference/template-variables.md) |
+| Preserve Lark images and embedded resources | [Lark Resource Materialization](./guides/lark-resources.md) |
+
+## Complete reference
 
 - [Getting Started](./getting-started.md) — end-to-end component-library flow.
 - [Agent Guide](./guides/agent-guide.md) — what an agent should do, and what it should not inspect manually.

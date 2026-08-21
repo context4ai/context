@@ -478,7 +478,11 @@ describe("0.6.2 document workflow status routing", () => {
       expect(commands).toContainEqual(expect.stringContaining(
         "run align:file:docs-b:architecture --validate --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
       ));
-      expect(commands.some((item) => item.includes(" --confirm "))).toBe(false);
+      expect(status.routing.command_plan.find((item) =>
+        item.command.includes(" --confirm ")
+      )).toMatchObject({
+        availability: "after-human-confirmation",
+      });
       expect(status.routing.human_gate).toMatchObject({
         required: true,
         kind: "structure-confirmation",
@@ -486,6 +490,13 @@ describe("0.6.2 document workflow status routing", () => {
       const confirmed = await collectProjectStatus(projectRoot, {
         authorities: ["context.structure-confirmation"],
       });
+      expect(confirmed.workflow.current?.node).toBe("confirm-structure");
+      expect(confirmed.workflow.current?.gate).toMatchObject({
+        resolution: "session-authority",
+        resolution_action: { id: "apply-structure-confirmation" },
+      });
+      expect(confirmed.workflow.current?.gate?.inspection_action).toBeUndefined();
+      expect(confirmed.workflow.current?.resources.required).toEqual([]);
       expect(confirmed.routing.command_plan).toHaveLength(1);
       expect(confirmed.routing.command_plan[0]?.command).toContain("--workflow-revision");
       expect(confirmed.routing.command_plan[0]?.command).toContain(

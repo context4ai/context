@@ -1,15 +1,31 @@
 # @c4a/extract-ts
 
-TypeScript/TSX extraction plugin for Context. It implements the
+[简体中文](./README.zh-CN.md)
+
+`@c4a/extract-ts` turns TypeScript and TSX structure into deterministic code
+evidence for Context knowledge production. It implements the
 `ExtractionPlugin` protocol from `@c4a/extract` and is the default plugin used
 by the SDK `extractTs({ source, collection: "codegraph" })` phase for npm-style
 packages.
+
+It extracts code facts; it does not decide product meaning, write approved
+Markdown, or choose the user's source boundary. Knowledge-workspace users reach
+it through the Context Agent entry and a confirmed extraction phase. The direct
+APIs below are for reusable structural analysis and project-owned adapters.
 
 ## Package Role
 
 `@c4a/extract-ts` handles TypeScript package entry detection and AST extraction. It does not write `.context` files directly; `@c4a/extract` runs the plugin and `@c4a/context-cli` persists the resulting raw code snapshot.
 
 **Depends on:** `@c4a/extract`, `web-tree-sitter`
+
+```text
+confirmed TypeScript boundary
+          ↓
+entry detection + export tracing + AST facts
+          ↓
+raw code snapshot → review candidates → approved knowledge
+```
 
 ## React Router structural facts
 

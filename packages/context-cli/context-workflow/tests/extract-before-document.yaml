@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: pending code extraction precedes document classification
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }

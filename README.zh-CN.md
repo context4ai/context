@@ -1,89 +1,154 @@
 # Context
 
-[English](./README.md)
+[![CI](https://github.com/context4ai/context/actions/workflows/ci.yml/badge.svg)](https://github.com/context4ai/context/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@c4a/context-cli.svg)](https://www.npmjs.com/package/@c4a/context-cli)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-339933?logo=node.js&logoColor=white)](./package.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-**Context** 是一位运行在 Coding Agent 中的本地知识助理。它可以把代码仓库、本地文档和飞书文档逐步整理成可审查、可追溯、能够持续更新的知识，再构建成可供 Agent 使用的知识包。
+Context 是一套专为 Agent 打造的知识生产工作流。它将飞书文档、本地
+Markdown、代码仓库和人工整理的业务资料转化为结构化、可溯源的知识，再构建为
+Agent 知识包、LLM 文档或 Skills。
 
-你不需要一开始就想清楚最终的分类和知识包结构。只要先告诉 Agent 知识在哪里、希望解决什么问题，Context 就会通过对话陪你完成来源确认、内容提取、知识分类、人工审核、质量验证和打包。
+用户说明要生产什么知识、资料在哪里；Agent 阅读证据、设计结构并解释关键决策；
+Context 负责让整个过程合法且可重复：登记来源边界、检查证据覆盖、暂存可审查
+候选、保留来源关系、验证正式知识，并构建用户选择的产物。
 
-## Context 能做什么
+> 从知识目标开始，而不是从命令清单开始。
 
-- 创建一个本地 Context workspace，知识生产过程不会藏在远程任务里。
-- 读取文档证据，并从代码中提取结构化信息。
-- 让生成的知识保留来源依据，方便审核和后续更新。
-- 在来源范围、知识结构、候选审核和打包方式等关键环节等待用户确认。
-- 把审核通过的知识构建成 Agent 知识库或其他声明好的产物。
+[English](./README.md) · [SDK 指南](./packages/context/README.zh-CN.md) · [Agent 接入](./packages/context-cli/README.zh-CN.md) · [开发指南](./DEVELOPMENT.md)
 
-和一次性或远程蒸馏相比，Context 更像是一位在本地和你一起工作的知识助理。它适合这样的阶段：你已经知道知识在哪里，但还不确定应该怎么提取、分类、组织和发布。
+## 可以生产什么
 
-## 快速开始
+当知识已经存在，但还不能直接被 Agent 稳定消费时，Context 可以帮助完成：
 
-安装 CLI 和 Agent 插件：
+- 把产品、架构、运营、SOP 或 FAQ 文档整理为可导航的知识库；
+- 将代码结构与说明文档关联起来，同时保留精确的来源证据；
+- 把多个仓库和多组文档汇总为一份经过审核的知识包；
+- 产出 `wikis/`、`guides/`、`rules/`、`feats/`、聚合后的 LLM 文本或项目专属
+  Skills；
+- 来源发生变化后更新已有知识工作区，而不是依赖对话记忆从头重做。
+
+Context 不是一次性摘要工具。来源快照、审核状态、正式知识和构建清单都保存在
+本地工作区中，因此结果可以查看、纳入版本管理并在以后持续更新。
+
+## 从 Agent 开始使用
+
+只需安装一次 Context Agent 接入：
 
 ```bash
-npm install -g @c4a/context-cli
+npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-安装完成后请重启 Agent，然后使用：
+重启或刷新 Agent 宿主，然后调用 `/c4a:context`。这是创建新工作区和继续已有
+工作区的唯一公开入口。无需先学习生命周期命令，直接用自然语言说明知识目标即可，
+例如：
 
-- `/context:init`：创建新的知识工作区。
-- `/context:continue`：载入已有工作区，并从当前状态继续。
+```text
+/c4a:context 请把当前仓库和架构文档整理成 Agent 知识包，代码引用必须可追溯，
+最终结构在批准前先让我确认。
+```
 
-Agent 会解释下一步需要做什么，不需要用户直接操作底层 CLI。安装细节和 CLI 行为参见 [Context CLI 指南](./packages/context-cli/README.zh-CN.md)。
+安装的入口只保留启动契约；Context 运行时会提供完整的工作流说明、Schema、代码
+索引能力和当前下一步动作。如果本机缺少 `context` 运行时，入口会给出安装恢复
+方法，不会猜测状态或只初始化一半工作区。
 
-## 工作区概览
+## 一套工作流，多种知识
+
+![Context 知识生产工作流](./assets/context-workflow.zh-CN.svg)
+
+你可以[观看真实运行的脱敏交互式回放](https://context4ai.github.io/agent-graph/case-studies/context/?lang=zh)，更直观地了解整个知识构建过程及其[实现原理](https://github.com/context4ai/agent-graph/blob/main/docs/zh-CN/case-studies/context.md)。
+
+具体路径会随来源和产物变化，但长期稳定的工作流是：
+
+1. **确认目标和来源边界。** 决定哪些仓库、文档或人工资料属于本次范围。
+2. **采集证据。** 保存文档正文、内嵌资源、代码符号、关系和来源指纹。
+3. **设计知识结构。** Agent 阅读当前选中的证据，提出语义分类、Node 和 Section，
+   由用户确认。
+4. **编译可审查知识。** 草稿始终绑定来源证据，并接受覆盖度、连续性、身份和
+   过期输入检查。
+5. **审核并关闭本轮。** 已批准决定写成持久 Markdown 和关闭后的结构投影；被
+   拒绝候选只保留最小指纹，避免未变化内容反复出现。
+6. **验证并构建。** Context 验证正式工作区，再生成声明好的知识包或文档产物。
+
+这不是一条固定脚本。当前工作区事实会选择下一条合法 Route，Agent 只加载这条
+Route 需要的操作说明和资源。再次进入同一工作区时，流程从真实状态继续，而不是
+重放历史对话。
+
+## 职责边界
+
+| 参与方 | 负责内容 |
+|---|---|
+| **用户** | 知识目标、来源权限、范围、结构选择、审核决定和产物意图 |
+| **Agent** | 阅读证据、语义判断、提出结构和内容、解释决策，以及按当前路线编辑项目声明 |
+| **Context** | 工作区事实、来源采集、代码索引、证据契约、候选身份、审核应用、质量验证和确定性构建 |
+
+Context 不调用 LLM，也不会静默克隆仓库、读取未授权外部来源，或推断用户已经做出
+决定。在全托管对话中，Agent 可以依据工作流的 delegated policy 跳过重复审核
+界面，但证据、权限、校验和验证不会被删除。
+
+## 本地知识工作区
 
 ```text
 context/
-|-- AGENTS.md
-|-- README.md
-|-- package.json
-|-- src/          # 项目配置和知识包模板
-|-- sources/      # 来源登记和已读取的证据
-|-- knowledge/    # 持久知识、结构投影和拒绝指纹
-|-- dist/         # 构建生成的知识包（忽略）
-`-- .tmp/         # 可删除的生命周期状态（忽略）
+├── AGENTS.md       # 面向 Agent 的项目内说明
+├── src/            # 来源、阶段和知识包声明
+├── sources/        # 已登记来源和采集证据
+├── knowledge/      # 审核通过的知识和持久决定
+├── dist/           # 构建生成的知识包（忽略）
+└── .tmp/           # 可丢弃运行状态和报告（忽略）
 ```
 
-知识工作区由普通项目文件组成，可以查看、审核和纳入版本管理。`src/index.ts` 描述知识如何生产，`sources/` 与 `knowledge/` 保存来源证据和持久结果；活动候选与暂存结构只存在于被忽略的 `.tmp/context-runtime/lifecycle/`，成功关闭后由 CLI 清理。CLI 负责可靠地修改状态，Agent 负责解释、配置和语义判断，用户负责关键决策。
+`sources/`、`knowledge/`、`dist/` 和 `.tmp/context-runtime/` 的生命周期写入由
+CLI 负责，它们不是可以随意修改的临时目录。只有当前工作流 Route 要求时，Agent
+才编辑项目配置，并使用 Route 返回的命令推进状态。
 
-## 包与文档
+## 产物形态
 
-- [`packages/context`](./packages/context/README.zh-CN.md) 是 `src/index.ts` 使用的声明式 SDK，主要介绍来源、阶段、知识分类、知识包声明、模板和自定义处理。
-- [`packages/context-cli`](./packages/context-cli/README.zh-CN.md) 提供 `context` 命令和 Agent 插件安装能力，主要介绍安装、工作区操作、命令分组和流程规则。
-- [`packages/extract-ts`](./packages/extract-ts/README.zh-CN.md)、[`packages/extract-go`](./packages/extract-go/README.zh-CN.md) 和 [`packages/extract-rush`](./packages/extract-rush/README.zh-CN.md) 提供可复用的结构事实。只有 TypeScript 接入 CLI 内置生命周期；Go 和 Rush 由项目在 `extractCustom()` 中按需使用。
+- **Agent 知识包**：审核通过的知识位于 `wikis/`、`guides/`、`rules/` 和
+  `feats/`，并可包含 Skills、索引和包专属查询工具。
+- **LLM 文档**：用于模型上下文、离线评测或下游导入的聚合文本。
+- **项目自定义包**：模板可以增加 Agent 说明、静态文件或检索工具，同时仍以正式
+  知识作为事实来源。
 
-更完整的 SDK 手册位于 [`packages/context/docs`](./packages/context/docs/README.md)，CLI 还提供一份简明的[快速开始](./packages/context-cli/docs/quickstart.md)。
+每次构建都会输出一份清单，将分发文件映射回工作区内的正式知识。发布页只保留
+面向读者的元数据；完整来源和审核证据继续留在生产工作区。
 
-## 有想法，直接告诉 Agent
+## 仓库模块
 
-> Context 插件提供薄入口，并由当前路由按需选择工作流资源和说明文档。载入 Context 工作区后，无论哪里不明白，或者只是有一个不太成形的想法，都可以直接和 Agent 聊。Agent 会结合当前证据和项目状态，把讨论逐步变成可以审核和使用的知识。
+| 模块 | 在知识生产链中的职责 | 文档 |
+|---|---|---|
+| `@c4a/context` | 声明来源、阶段、审核门禁和产物的项目 SDK | [English](./packages/context/README.md) · [中文](./packages/context/README.zh-CN.md) |
+| `@c4a/context-cli` | 本地工作流运行时和 Agent 接入 | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
+| `@c4a/core` | 共享 Schema、身份、错误和提取契约 | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
+| `@c4a/extract` | 语言插件协议和仓库提取 Runner | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
+| `@c4a/extract-ts` | TypeScript/TSX 结构提取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
+| `@c4a/extract-go` | 可选 Go 结构提取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
+| `@c4a/extract-rush` | 可选 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
+| `@c4a/dev-cli` | 仓库开发和发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
+| `@c4a/tui` | 开发工具共用的终端组件 | [English](./packages/tui/README.md) · [中文](./packages/tui/README.zh-CN.md) |
 
-## 仓库开发
+包名只是技术分发标识。面向用户的知识工作流、知识包模板和生成内容统一使用
+Context 产品语义，下游分发无需继承另一套品牌模型。
 
-源码、链接、Agent 插件和 npm 产物的开发方式参见
-[`DEVELOPMENT.md`](./DEVELOPMENT.md)。
+## 文档与开发
 
-```bash
-bun install
-bun run build
-bun run typecheck
-bun run test
-bun run lint
-bun run verify
-```
-
-把本地 CLI 链接到全局：
-
-```bash
-./start.sh link
-```
-
-## 社区协作
-
+- [SDK 文档索引](./packages/context/docs/README.zh-CN.md)
+- [知识项目完整示例](./packages/context/docs/getting-started.md)
+- [Agent 接入指南](./packages/context-cli/README.zh-CN.md)
+- [插件契约](./packages/context-cli/plugin/README_CN.md)
+- [Workflow Provider 内部说明](./packages/context-cli/context-workflow/README.zh-CN.md)
 - [参与贡献](./CONTRIBUTING.md)
 - [获取支持](./SUPPORT.md)
 - [安全策略](./SECURITY.md)
-- [社区行为准则](./CODE_OF_CONDUCT.md)
 - [发布记录](./CHANGELOG.md)
+
+仓库开发使用 Bun，运行时包保持兼容 Node.js 20 及以上版本：
+
+```bash
+bun install
+bun run verify
+```
+
+源码、link、打包安装和发布流程参见 [DEVELOPMENT.md](./DEVELOPMENT.md)。这些是
+维护者命令，不是普通用户的知识生产入口；用户通过已安装的 Agent 入口工作。

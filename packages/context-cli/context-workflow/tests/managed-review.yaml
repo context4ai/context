@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: explicit managed authority advances review to atomic apply
 graph: workspace
-entry: continue
+entry: context
 state:
   authorities: [context.knowledge-review]
   facts:
@@ -15,13 +15,13 @@ state:
       extraction_scope_resolved: true
       document_classification_resolved: true
       structure_confirmation_resolved: true
-      knowledge_review_resolved: true
+      knowledge_review_resolved: false
     resume:
       prose_declarations_complete: true
       structure_confirmation_resolved: true
       structure_confirmed: true
       compile_complete: true
-      knowledge_review_resolved: true
+      knowledge_review_resolved: false
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
     capture: { declarations_complete: true, complete: true }
@@ -34,6 +34,8 @@ state:
     review: { gate_clear: false, batch_resolved: false }
 expect:
   statusCode: actionable
-  primaryNode: apply-managed-review
-  primaryReasonCode: route.review.apply-managed
-  handler: context.review.approve-current
+  primaryNode: resume-review-current-batch
+  primaryReasonCode: route.review.decision-required
+  gateResolution: session-authority
+  resolutionHandler: context.review.approve-current
+  requiredResources: []

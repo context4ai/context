@@ -1,215 +1,175 @@
-# Context CLI
+# Context Agent 运行时
 
 [English](./README.md)
 
-`@c4a/context-cli` 提供 **Context CLI** 和全局 Agent 插件安装能力。CLI 负责管理本地知识工作区的状态，Agent 插件负责解释状态、询问用户决策并修改项目配置。
+`@c4a/context-cli` 提供 Context 知识生产工作流的本地运行时和 Agent 接入。虽然
+包名中包含 CLI，但它面向用户的主要体验不是终端命令清单：用户调用一个 Agent
+入口，用自然语言说明要生产的知识，再在对话中完成必要决策。
 
-CLI 同时兼容 Node 和 Bun，本身不会调用 LLM。机械操作交给 CLI，语义判断交给 Agent，重要决策交给用户。
+运行时执行确定性工作，包括观察工作区、采集来源、索引代码、校验证据、暂存候选、
+应用审核决定、验证质量和构建知识包；Agent 负责语义工作，用户负责权限和重要内容
+决定。运行时本身不会调用 LLM。
 
-CLI 对 Markdown 只做结构解析：源标题会保留在可引用的证据区间中，但标题的含义、分组方式和知识类型均不会由 CLI 推断。
-
-## 安装
+## 安装 Agent 接入
 
 ```bash
-npm install -g @c4a/context-cli
+npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-全局安装 npm 包时也会尝试刷新插件，但不会因为插件安装失败而阻塞 CLI 安装。安装或升级 Claude、Codex 后，可以再次执行 `context plugin install`，然后重启 Agent。
+安装后重启或刷新 Agent 宿主。同一份入口源会被安装器投影到支持的 Claude、Codex、
+Cursor 和 Skill-compatible 目录。
 
-面向用户的 Agent 入口是：
-
-- `/context:init`：创建一个本地 Context workspace。
-- `/context:continue`：读取已有工作区的状态，并从下一步继续。
-
-`/context:continue` 是 Agent 工作指引，不是 CLI 子命令；不存在 `context continue` 命令。
-
-最简安装后流程参见 [CLI 快速开始](./docs/quickstart.md)。
-
-工作区调试追踪默认关闭。仅在需要观察命令调用与 Agent Graph 路由时，使用
-`context init context --debug` 或 `context debug enable` 开启；日志只写入已忽略的
-`.tmp/context-runtime/debug/`。协议与回放说明见
-[工作区调试追踪](./docs/debug-tracing.md)。
-
-## CLI、Agent 和用户的分工
-
-| 职责 | 负责方 |
-|---|---|
-| 来源登记、内容读取、代码提取、应用审核、验证和构建 | CLI |
-| 解释选择、修改 `src/index.ts`、提出知识结构、基于证据生成候选 | Agent |
-| 来源授权、知识分类、审核决定和打包方式 | 用户 |
-
-Agent 把 `context status --format json` 返回的 `workflow.current` 作为当前步骤的权威协议，不会凭记忆猜下一条命令。默认 JSON 是紧凑视图，只包含当前路由、所需资源位置、进度、计数和聚合诊断；调试时才使用 `--view full`。长篇流程和语义规则仍以完整 Markdown 资源随包发布，由当前路由按需选择，渐进加载不会删减内容。
-
-## 创建或继续工作区
-
-```bash
-# 创建独立工作区
-context init context --language zh-CN
-cd context
-bun install
-
-# 让 Agent 从当前状态继续
-/context:continue
-```
-
-初始化生成的 `AGENTS.md` 是 Agent 在当前项目中的操作指南。安装依赖后，SDK 手册位于：
+社区版公开入口是 `/c4a:context`。它可以创建用户请求的工作区、定位已有工作区，
+或从当前状态继续流程。用户应该从知识意图开始，而不是内部命令：
 
 ```text
-node_modules/@c4a/context/docs/README.md
-node_modules/@c4a/context/docs/guides/agent-guide.md
-node_modules/@c4a/context/docs/reference/project-api.md
-node_modules/@c4a/context/docs/reference/package-templates.md
+/c4a:context 请把这些产品文档和当前仓库整理成经过审核的 Agent 知识包，所有代码
+结论都要保留可追溯引用。
 ```
 
-工作区状态分布在：
+如果 Agent 入口已经存在但缺少 `context` 可执行文件，入口会给出准确的安装恢复
+方法并停止。它不会为每次调用增加安装预检，也不会把普通工作流中的 `not found`
+诊断误判成可执行文件缺失。
 
-- `src/`：项目声明和知识包模板。
-- `sources/`：来源登记和已经读取的证据。
-- `.tmp/context-runtime/lifecycle/`：一个开放生命周期轮次中的、被忽略且仅由 CLI 管理的草稿候选和已确认结构快照。
-- `knowledge/`：已批准的 Markdown、close 后的 `structure.yaml` 结构投影，以及存在时用于记录被拒候选 fingerprint 的精简 `decisions.json`。已批准页面引用的资源位于内容寻址的 `knowledge/assets/`。
-- `dist/`：构建生成的知识包。
-- `.tmp/context-runtime/`：其他被忽略的日志、预览、报告、锁和缓存。
+## 一个 Agent 入口如何驱动整套工作流
 
-生命周期和审核运行态不可由用户编辑，成功执行 `context close` 后会被自动清理。`knowledge/structure.yaml` 是持久的已批准结构投影，其中精简的 `source_inputs` 只记录已关闭 prose 目标消费的 source、collection 和来源快照，以便临时结构清理后仍能区分已完成输入与变化输入；`knowledge/decisions.json` 仅保留被拒候选的 ID 与 fingerprint，避免未变化的候选再次出现。
+```text
+用户知识目标
+     ↓
+单一 Agent 入口
+     ↓
+context entry ── 观察工作区位置和状态
+     ↓
+workflow.current ── 当前 Route、资源、Gate 和精确命令
+     ↓
+Agent 阅读 / 判断 / 执行一个选中动作
+     ↓
+工作区事实变化 ── 再次求值
+```
 
-不要通过手动删除或改写这些目录来修复流程状态，应使用 CLI 返回的命令或下一步操作。
+`context entry --format json` 是只读的启动解析器，可以返回初始化动作、进入已有
+工作区的动作，或当前工作流求值。不存在 `context continue` primitive，也不会为
+source、review、build 或 status 提供第二个公开入口。
 
-## 知识包输出
+工作区就绪后，`workflow.current` 是当前步骤的权威协议：
 
-`context build` 会把声明好的知识包写入 `dist/<package-name>/`。KB 包直接使用
-`wikis/`、`guides/`、`rules/` 和 `feats/` 作为包内 OKF 根目录，不再在这些目录下重复包名。
-旧工作区即使仍声明 `distribution.knowledgeNamespace` 也可以继续加载，但该兼容字段不再改变
-知识包输出路径。
-新建 KB 时优先选择 Git raw 资源分发：构建器将链接改写到仓库 raw 地址；资源的
-提交和发布由知识包作者负责。非 Git 工作区可以配置另一个资源仓库的显式 Raw
-前缀；没有可用 Git 或显式前缀时，可以选择随包复制到 `others/assets/`，或显式
-不输出资源并保留失效引用。随包模式可以安装 `sharp` 并通过
-`kbPackage().assets.optimize` 仅优化生成文件；Context 本身不依赖图片处理器。
+- 执行动作前完整读取所有标记为 `read-required` 的必需资源；
+- 只执行 Route 返回的命令，并保留 revision 和 authority 参数；
+- 人工 Gate 先解释用户在决定什么以及影响范围，再收集选择；
+- 项目配置修改只发生在 Route 指定的文件中；
+- 每个动作后重新观察事实，过期命令不能推进已经变化的工作区。
 
-完整配置和模板约定参见 SDK 手册：
+长篇操作说明、Schema、诊断和来源视图继续作为 Workflow Provider 中可寻址的文件。
+Agent 只加载当前 Route 选择的内容，不把完整生命周期长期塞在 Prompt 中。
 
-- [知识包输出](../context/docs/guides/package-outputs.md)
-- [知识包模板](../context/docs/reference/package-templates.md)
+## 知识生产生命周期
 
-## 状态驱动流程
+| 阶段 | 用户体验 | 运行时保护内容 |
+|---|---|---|
+| 目标和来源 | 确认要生产什么知识、哪些资料属于范围 | 来源身份、权限边界、固定的仓库或文档输入 |
+| 采集和提取 | Agent 阅读文档或检查已确认的代码边界 | 完整正文、资源、符号、关系、指纹和新鲜度 |
+| 结构和编译 | 审阅知识组织方式和候选正文 | 绑定来源的 Node/Section、覆盖度、连续性和稳定身份 |
+| 审核和关闭 | 批准、拒绝或调整候选 | 原子化审核应用、持久决定和关闭后的结构投影 |
+| 验证和构建 | 选择产物并得到可复用知识包 | 质量校验、知识包模板、资源策略和构建清单 |
 
-项目流程声明在 `src/index.ts` 中，由 `context status` 背后的 Context 工作图负责路由。这张图是 CLI 内部实现；用户和插件只消费 `workflow.current`、Context 命令以及当前路由选中的资源：
+构建完成的是当前正式状态，不会冻结工作区。以后新增或变化的来源可以开启下一轮
+知识生产。
 
-| 阶段 | CLI 入口 |
-|---|---|
-| 来源设置 | `context source add repo/file/lark`、`context source add batch`、`context source ensure` |
-| 文档读取 | 通过 `context run <phase-id>` 执行声明好的 capture 阶段 |
-| 代码提取 | 通过 `context run <phase-id>` 执行声明好的 `extractTs` 阶段 |
-| 文档结构 | `context run align:<type>:<source>:<collection> ...` 的证据和校验视图 |
-| 文档编译 | `context run compile:<type>:<source>:<collection> ...` 的证据和校验视图 |
-| 人工审核 | `context review html`、范围化决定和 `context review apply` |
-| 收口与质量 | `context close`、`context verify` |
-| 知识包输出 | `context build` |
+## 普通对话与全托管对话
 
-一次构建只完成当前已经确认的知识状态，并不会冻结工作区。后续还可以继续添加和处理新的来源。
+普通模式是默认模式，保留显式的来源、范围、结构、审核和知识包决定，并可在内容
+审核 Gate 提供 HTML 检查报告。
 
-当前对话明确授予全托管权限后，
-`context run --managed --until blocked-or-complete` 会在同一个工作区运行时中连续执行
-确定性动作。每个动作仍绑定到选择它的 Route revision；动作完成后，Context 会重新从磁盘
-加载项目并再次求值工作图。已知的本地动作在同一进程中执行，来源工具和其他外部副作用仍
-隔离在子进程中。
-
-执行作用域只管理输出捕获、定时器、子进程和写锁等短生命周期资源，并按注册顺序的逆序释放。
-知识、快照、审核决定和知识包产物属于持久状态，继续使用原有的 revision 校验、项目写锁、
-原子写入、close 和 verify 契约。执行作用域不会回滚或替代这些契约，工作区文件协议也不改变。
-
-## 命令分组
+只有用户在当前对话明确授权全托管时，Agent 才使用：
 
 ```bash
-# 插件安装与诊断
-context plugin install
-context plugin status
-
-# 工作区创建与状态
-context init [project-dir]
-context status
 context run --managed --until blocked-or-complete --format json
-
-# 当前路由选择的资源
-context resource materialize --help
-context resource acknowledge-current --help
-
-# 知识来源
-context source add repo [YYYYMMDD] --module <module> --local <repo-or-subdir>
-context source add file [YYYYMMDD] --module <module> --local <file-or-folder>
-context source add lark [YYYYMMDD] --module <module> --url <lark-url>
-context source add batch [YYYYMMDD] --input <yaml-or-json>
-context source remove <source-id> --format json          # 预览
-context source remove <source-id> --yes --plan-digest <预览摘要> --format json
-context source ensure [source]
-context source inspect [source]
-
-# 声明阶段与审核
-context run --list
-context run <phase-id> --dry-run
-context run <phase-id>
-context review html [collection] --open
-context review apply <payload-file>
-
-# 知识包模板决策
-context package template accept --help
-
-# 最终质量与输出
-context close
-context verify
-context build
-
-# 可选的工作区调试追踪
-context debug enable
-context debug status
-context debug export
-
-# 开发与缓存维护
-context clean-cache --dry-run
 ```
 
-当前参数以 `context <command> --help` 为准。需要工作区的命令会向上查找带有
-`context.project=true` 和 `context.entry` 配置的 `package.json`。带 revision
-约束的资源和知识包命令通常应直接复制 `workflow.current` 返回的命令；上面的例子只用于
-发现命令入口，不能替代当前路由。
+它会合并连续的确定性动作和可 delegated 的 Gate；遇到 Agent 阅读、项目配置、
+额外权限、诊断修复或非唯一计划时立即停止。它复用同一张 Workflow Graph，不会
+删除普通模式的审核能力。授权只对当前对话生效，不会持久化，也不能授权新的来源
+边界、未读取外部内容、仓库操作、失败的校验或失败的验证。
 
-## 人工门禁与证据
+## 工作区状态
 
-- CLI 不会悄悄在来源仓库中执行 clone、checkout、reset、fetch、install、build 或脚本。
-- 登记来源和读取来源正文是两次独立授权。
-- 写入知识候选前，需要确认代码提取范围和文档分类。
-- 普通模式下，审核决定来自用户，Agent 不能自行编造批准或拒绝结果；只有当前对话明确启用全托管时，才可执行 `workflow.current` 返回的原子批准命令。
-- 正式知识准备好后再选择打包方式；知识包模板是项目配置，不是第二份事实来源。
+```text
+context/
+├── src/                         # 声明式项目配置和知识包模板
+├── sources/                     # 来源登记和采集证据
+├── knowledge/                   # 正式 Markdown 和持久决定
+├── dist/                        # 构建产物
+└── .tmp/context-runtime/
+    ├── lifecycle/               # 当前轮候选和结构
+    ├── debug/                   # 可选调试轨迹
+    └── logs/                    # 可选运行事件 outbox
+```
 
-CLI 返回的来源名称、阶段 ID、候选 ID、诊断和 `source_ref` 都是流程标识。`source_ref` 是不可拆解的证据引用，应原样复制，不能把它当作文件路径解析。
+这些目录具有不同的持久性契约。`sources/` 和 `knowledge/` 是项目状态，`dist/` 是
+可重复构建产物，lifecycle 和 debug 目录是被忽略的运行状态。成功 close 会清理
+已经完成的 lifecycle 暂存区。不要通过手工编辑或删除 CLI-owned 状态修复流程，
+应执行当前 Route 返回的恢复动作。
 
-## 继续阅读
+## 证据和安全边界
 
-- [CLI 快速开始](./docs/quickstart.md)
-- [SDK 文档索引](../context/docs/README.md)
-- [快速开始](../context/docs/getting-started.md)
-- [Agent 指南](../context/docs/guides/agent-guide.md)
-- [Agent 对话指南](../context/docs/guides/agent-dialogue.md)
-- [飞书资源物化](../context/docs/guides/lark-resources.md)
-- [项目 API](../context/docs/reference/project-api.md)
-- [知识包模板](../context/docs/reference/package-templates.md)
+- 登记来源不等于授权读取来源正文。
+- 运行时不会静默在来源仓库中 clone、checkout、reset、fetch、install、build、
+  test 或运行脚本。
+- Markdown 解析只保留结构证据，不推断产品含义，也不选择知识分类。
+- 代码提取只生成结构事实；知识含义和范围由 Agent 与用户决定。
+- `source_ref` 是不透明、可验证的证据身份，应完整复制，不能当作文件路径解析。
+- 审核决定只能通过原子化 review apply 变成正式 Markdown；Agent 不手写生命周期
+  产物。
+- 知识包模板只决定分发形态，不会替代正式知识成为事实来源。
 
-## 开发
+## 知识包产物
 
-完整的源码、链接、插件和 npm 产物流程参见
-[`DEVELOPMENT.md`](../../DEVELOPMENT.md) 和当前包的
-[`DEVELOPMENT.md`](./DEVELOPMENT.md)。
+声明好的知识包构建到 `dist/<package-name>/`。Agent 知识包可以包含 `wikis/`、
+`guides/`、`rules/`、`feats/`、Skills、索引和包专属检索工具；LLM 包则把所选
+知识聚合为一个文本产物。
+
+每份构建清单都会将分发路径映射回工作区正式知识。资源可以使用仓库 raw URL、
+显式 URL 前缀或随包分发；项目在构建前选择策略。
+
+详见 [Package Outputs](../context/docs/guides/package-outputs.md) 和
+[Package Templates](../context/docs/reference/package-templates.md)。
+
+## 诊断和直接使用 CLI
+
+普通用户应跟随 Agent 入口。直接命令继续供维护、自动化和诊断使用：
+
+- `context status --format json` 检查当前 Route；
+- `context <command> --help` 是当前参数的权威来源；
+- `context plugin status` 检查已安装的 Agent 投影；
+- `context debug enable` 在 `.tmp/context-runtime/debug/` 记录可选轨迹；
+- `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
+
+绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，
+不能替代当前 Route。参见[安装后快速说明](./docs/quickstart.zh-CN.md)和
+[debug tracing](./docs/debug-tracing.md)。
+
+## 文档与开发
+
+- [插件契约](./plugin/README_CN.md)
+- [Workflow Provider 内部说明](./context-workflow/README.zh-CN.md)
+- [SDK 文档索引](../context/docs/README.zh-CN.md)
+- [知识项目完整示例](../context/docs/getting-started.md)
+- [Agent Guide](../context/docs/guides/agent-guide.md)
+- [Project API](../context/docs/reference/project-api.md)
+
+源码、link、打包安装和发布流程参见 [`DEVELOPMENT.md`](../../DEVELOPMENT.md)
+以及本包的 [`DEVELOPMENT.md`](./DEVELOPMENT.md)。
 
 ```bash
-./start.sh link
 bun run --filter @c4a/context-cli build
 bun run --filter @c4a/context-cli typecheck
 bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
 ```
 
-构建会把 Claude、Codex、Cursor 和纯 Skill 形态的插件写入 `dist/plugins`。`context plugin install` 从包内构建产物安装插件，不要直接修改生成目录。
+构建会在 `dist/plugins` 生成可安装的宿主投影；只修改 `plugin/` 和 Workflow
+Provider 源码，不要直接编辑生成产物。
 
 ## License
 

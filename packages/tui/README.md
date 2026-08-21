@@ -1,24 +1,34 @@
-# @c4a/tui
+# Context Terminal Components
 
-Shared terminal UI components built on Ink and React for CLI applications.
+[简体中文](./README.zh-CN.md)
 
-## Role in the monorepo
+`@c4a/tui` contains shared Ink and React components used by Context repository
+development tools. Its current consumer is `@c4a/dev-cli`.
 
-Provides reusable TUI components used by `dev-cli` for interactive terminal
-menus and prompts.
+This is a maintainer-facing UI library, not the Context knowledge workflow and
+not the user-facing Agent integration. Keeping it separate lets development
+menus share layout, prompts, and CJK-aware text behavior without adding terminal
+UI dependencies to the runtime or SDK.
 
-**Depends on:** (no internal packages)
-**Depended on by:** `dev-cli`
+## Package relationship
+
+```text
+@c4a/tui → @c4a/dev-cli → repository maintenance
+```
+
+It has no internal package dependencies and is not required by knowledge
+workspaces.
 
 ## Key exports
 
-- `CascadeMenu` — multi-level interactive terminal menu
-- `Header` — styled header component
-- `HelpPanel` — help text display
-- `confirm()` — confirmation dialog
-- `pickDirectory()` — interactive directory picker
-- `displayWidth()` / `padToWidth()` / `truncateToWidth()` — CJK-aware string width utilities
-- `MenuItem` type — menu item definition
+- `CascadeMenu` — multi-level interactive terminal menu;
+- `Header` — shared menu header;
+- `HelpPanel` — contextual help display;
+- `confirm()` — confirmation dialogue;
+- `pickDirectory()` — interactive directory picker;
+- `displayWidth()`, `padToWidth()`, and `truncateToWidth()` — CJK-aware width
+  utilities;
+- `MenuItem` — menu item type.
 
 ## Development
 
@@ -27,3 +37,6 @@ bun run --filter @c4a/tui build
 bun run --filter @c4a/tui typecheck
 bun run --filter @c4a/tui lint
 ```
+
+Runtime components remain compatible with Node.js; Bun-specific APIs belong
+only in build or test tooling.

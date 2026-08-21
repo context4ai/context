@@ -431,10 +431,8 @@ export function createContextWorkflowFacts(
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.sourceRead),
       extraction_scope_resolved: extractDeclarationsComplete,
       document_classification_resolved: documentsClassified,
-      structure_confirmation_resolved: structureConfirmed ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.structureConfirmation),
-      knowledge_review_resolved: reviewGateIsClear ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview),
+      structure_confirmation_resolved: structureConfirmed,
+      knowledge_review_resolved: reviewGateIsClear,
       package_output_resolved: packagesDeclared ||
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.packageOutput),
     },
@@ -443,13 +441,11 @@ export function createContextWorkflowFacts(
         activeRoundProseComplete,
       ...(structureRefreshRequired ? { structure_refresh_required: true } : {}),
       structure_confirmation_resolved: !captureComplete || !documentRoundStarted ||
-        structureConfirmed ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.structureConfirmation),
+        structureConfirmed,
       structure_confirmed: !captureComplete || !documentRoundStarted || structureConfirmed,
       compile_complete: !captureComplete || !documentRoundStarted || compiled,
       knowledge_review_resolved: !captureComplete || !documentRoundStarted ||
-        reviewGateIsClear ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview),
+        reviewGateIsClear,
       review_gate_clear: !captureComplete || !documentRoundStarted || reviewGateIsClear,
     },
     sources: {

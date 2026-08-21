@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: captured sources wait for explicit extraction scope
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }
@@ -25,3 +25,9 @@ expect:
   statusCode: waiting-user
   primaryNode: choose-extraction-scope
   primaryReasonCode: route.extract.scope-required
+  requiredResources:
+    - procedure.code-extraction
+    - dialogue.human-gates
+    - dialogue.code-extraction
+    - dialogue.workflow-mode-after-capture
+    - context.source-current

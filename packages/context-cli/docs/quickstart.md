@@ -1,103 +1,90 @@
-# CLI Quickstart
+# Start Context through an Agent
 
-This file is shipped with the installed CLI at `dist/docs/quickstart.md`.
-It is for users who have installed the `context` executable and need the next
-step before an agent plugin or project workspace is ready.
+[简体中文](./quickstart.zh-CN.md)
 
-## 1. Install Agent Plugin Entry Points
+This file ships with the installed runtime. Context is designed to be used from
+its Agent entry: the user states a knowledge goal, and the Agent follows the
+current workflow Route. The low-level CLI exists to execute that workflow; it
+is not the first interface users need to learn.
 
-Install the bundled agent plugin first:
+## 1. Install the Agent integration
 
 ```bash
+npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-The plugin adds the user-facing agent entries for workspace initialization and
-continuation. Exact command names depend on the host agent, but the intended
-flow is:
+Restart or refresh the Agent host so it discovers the installed entry.
 
-- initialize a Context workspace through the plugin entry when available;
-- continue work through the plugin entry after a workspace exists;
-- let the agent follow `context status`, CLI diagnostics, and human gates.
+## 2. Invoke the single entry
 
-If the host agent has not loaded the plugin yet, restart or refresh that agent
-after installation.
-
-## 2. Create a Project Workspace
-
-Create a standalone workspace:
-
-```bash
-context init context
-```
-
-Choose the generated workspace and starter-template language explicitly when
-needed; the CLI does not infer it from terminal locale or conversation text:
-
-```bash
-context init context --language zh-CN
-```
-
-Then enter it and install dependencies:
-
-```bash
-cd context
-bun install
-```
-
-After initialization, read the workspace guidance:
+Use `/c4a:context` for both new and existing workspaces. Describe the source
+material, intended audience, and desired output in normal language:
 
 ```text
-AGENTS.md
+/c4a:context Build a traceable Agent knowledge package from the Markdown in
+docs/ and the exported APIs in packages/example. Ask me before approving the
+knowledge structure.
 ```
 
-`AGENTS.md` explains the current project, SDK references, installed Agent
-entry, and safe workflow contract. It is the project-local starting point after
-`context init`.
+The entry first runs the read-only `context entry --format json` resolver. It
+will either:
 
-## 3. Work Through an Agent
+- propose initialization at a concrete project path;
+- relocate into an existing Context workspace; or
+- return the current `workflow.current` Route.
 
-Inside the workspace, ask the installed agent plugin to continue the workflow.
-The agent should:
+Initialization writes a new workspace and therefore remains explicit. Entering
+or evaluating an existing workspace is read-only and does not need a second
+confirmation.
 
-1. read `AGENTS.md`;
-2. run `context status --format json`;
-3. treat `workflow.current` as the current-step authority, read each
-   `resources.required` item, and execute only the returned command or
-   configuration action;
-4. at a Gate, load an `inspection_action` Skill or Schema only for
-   pre-decision inspection and a `resolution_action` Skill or Schema only
-   after confirmation;
-5. stop at human gates such as source scope, structure confirmation, review,
-   and package decisions.
+## 3. Follow the conversation
 
-The CLI performs mechanical work such as source registration, capture,
-validation, review application, verify, close, and build. The agent performs
-semantic judgment only when the workflow asks for it.
+The Agent will guide the knowledge production round through source permission,
+capture or code extraction, structure design, candidate compilation, review,
+close, verification, and package output. At each step it should explain:
 
-When the user explicitly requests fully managed operation, the Agent starts with
-`context run --managed --until blocked-or-complete --format json` to collapse
-consecutive deterministic routes. The CLI re-evaluates every revision and
-stops before semantic reads, configuration, missing authority, diagnostics, or
-multiple commands.
+- what has already been established from workspace facts;
+- what decision is needed now and what that decision changes;
+- which evidence or report supports the decision;
+- what will happen after confirmation.
 
-## 4. Manual Orientation
+The Agent reads Route-selected resources and executes exact Route-selected
+commands. Users should not need to translate placeholders such as `<phase-id>`
+or `<collection>` into internal CLI arguments.
 
-When operating without an agent plugin, start with:
+## 4. Choose a conversation mode
 
-```bash
-context status
-```
+Ordinary mode is the default. It exposes review decisions and HTML inspection
+reports so the user can adjust intermediate content.
 
-If the command reports that no workspace exists, run `context init` first. If a
-workspace exists, prefer the next action reported by `context status` instead of
-guessing lower-level phase commands.
+Fully managed mode must be explicitly authorized in the current conversation.
+It lets the Agent collapse deterministic work and delegated review surfaces,
+while preserving permissions, evidence checks, validation, and verification.
+The Agent still stops whenever it needs semantic reading, project
+configuration, external authority, or diagnostic repair.
 
-Project-local SDK documentation is installed under:
+## 5. Understand the workspace
+
+After initialization, the project-local `AGENTS.md` is the entry contract for
+the Agent. `src/index.ts` declares the project; `sources/` keeps captured
+evidence; `knowledge/` keeps approved knowledge; `dist/` contains reproducible
+outputs; `.tmp/context-runtime/` contains disposable runtime state.
+
+Do not edit CLI-owned lifecycle files to force progress. If work is blocked,
+the current Route or diagnostic provides the canonical recovery action.
+
+## Maintainer orientation
+
+If an Agent integration is unavailable, `context status --format json` exposes
+the same current Route for manual inspection. Use `context <command> --help`
+for exact flags, and prefer commands returned by `workflow.current` over
+examples copied from documentation.
+
+The SDK reference installed in a workspace starts at:
 
 ```text
 node_modules/@c4a/context/docs/README.md
 ```
 
-Use those SDK docs when editing `src/index.ts` or package templates. For normal
-workflow operation, prefer the agent plugin and the workspace `AGENTS.md`.
+Use it when a Route asks for project configuration or package-template work.

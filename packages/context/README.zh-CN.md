@@ -2,7 +2,39 @@
 
 [English](./README.md)
 
-`@c4a/context` 是 Context workspace 使用的声明式 SDK。它为 `src/index.ts` 提供类型化 API，用来描述知识来源、处理阶段、审核门禁和知识包输出。SDK 本身不写入工作区，也不执行流程；这些操作由 [Context CLI](../context-cli/README.zh-CN.md) 负责。
+`@c4a/context` 是 Context 知识工作区背后的声明模型。它让工作区说明哪些来源会
+贡献知识、证据经过哪些处理、哪些地方需要人工审核，以及最终应该构建哪些可复用
+产物。
+
+多数用户不需要单独安装或直接操作这个 SDK。他们从 Context Agent 入口开始，说明
+知识目标；当 `src/index.ts` 需要配置时，当前工作流 Route 会引导 Agent 完成修改。
+这份 README 面向知识项目作者、Agent 维护者和需要理解项目声明的开发者。
+
+SDK 有意保持声明式：它本身不读取来源、不写入工作区状态、不运行 Agent，也不
+构建知识包。这些操作由 [Context 工作流运行时](../context-cli/README.zh-CN.md)
+负责。
+
+## 在知识生产工作流中的位置
+
+```text
+用户意图 + 来源边界
+         ↓
+  src/index.ts 项目声明   ← 本包
+         ↓
+Context Route + Agent 判断
+         ↓
+正式知识 → 知识包产物
+```
+
+项目声明回答四个长期稳定的问题：
+
+- 哪些已经登记的来源边界可以贡献证据？
+- 存在哪些采集、提取、对齐、编译和审核阶段？
+- 每种产物应该选择哪些正式知识分类？
+- 哪些模板和资源分发策略决定最终包的结构？
+
+它不记录当前进度。工作区事实和随包发布的 Workflow Provider 会在运行时选择下一
+条 Route，因此 `src/index.ts` 是项目契约，不是第二套状态机。
 
 ## 项目模型
 
@@ -38,7 +70,9 @@ export default defineProject({
 });
 ```
 
-`src/index.ts` 有点像知识项目的 Webpack 配置：它定义哪些内容进入项目、经过哪些转换和门禁，以及最终构建什么产物。安装好的 Agent 插件只提供薄入口，当前工作流路由会按需选择维护这份配置所需的流程资源和 SDK 文档。
+`src/index.ts` 类似知识项目的构建配置：它定义哪些内容进入项目、可以经过哪些转换
+和门禁，以及最终能够构建什么产物。安装好的 Agent 入口保持精简，当前工作流
+Route 会按需选择维护这份声明所需的操作说明、Schema 和手册。
 
 ## 主要 API
 
@@ -145,3 +179,6 @@ SDK 只负责声明。它可以描述读取、写入、阶段、审核和知识�
 - [飞书资源物化](./docs/guides/lark-resources.md)
 - [知识包模板](./docs/reference/package-templates.md)
 - [模板变量](./docs/reference/template-variables.md)
+
+[文档索引](./docs/README.zh-CN.md)说明每类工作流决策应该查看哪些参考资料。Agent
+应优先读取 Route 选择的资源，不要预加载整套手册。

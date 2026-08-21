@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-ts",
-  "description": "TypeScript extraction plugin for C4A ExtractionResult v2",
-  "version": "0.6.8",
+  "description": "TypeScript extraction plugin for the Context ExtractionResult v2 contract",
+  "version": "0.6.9",
   "type": "module",
   "license": "MIT",
   "engines": {

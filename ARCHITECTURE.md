@@ -364,8 +364,9 @@ knowledge pages through the same candidate workflow as prose.
 ## Agent Entries And Workflow Provider
 
 The CLI ships an agent plugin marketplace under `packages/context-cli/plugin`.
-The source contains only public `init` and `continue` entry commands plus
-manifests/assets. Build derives host-specific entries under
+The source contains one public `context` entry command plus manifests/assets.
+It delegates workspace bootstrap to `context entry` and lifecycle routing to
+Agent Graph. Build derives host-specific entries under
 `packages/context-cli/dist/plugins`.
 
 The lifecycle contract lives under `packages/context-cli/context-workflow`: a
@@ -378,7 +379,7 @@ Important areas:
 
 | Path | Role |
 |---|---|
-| `plugin/commands` | Thin public init/continue entries |
+| `plugin/commands` | Single thin public Context entry |
 | `plugin/assets` | Plugin brand assets |
 | `context-workflow/graphs` | Stable task and gate graph |
 | `context-workflow/actions` | Host-resolved action contracts |
@@ -389,7 +390,8 @@ Important areas:
 | `scripts/build-workflow.ts` | Provider validation and immutable bundle build |
 | `project/pluginInstall.ts` | Global plugin installation and status |
 
-Entry prompts describe only how to obtain and consume `workflow.current`.
+The entry prompt describes only how to consume `context entry` and
+`workflow.current`.
 Long procedures and dialogue live in route-selected resources, while CLI code
 retains mechanical validation, dynamic facts, reason codes, and commands.
 

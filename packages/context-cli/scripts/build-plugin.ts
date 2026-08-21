@@ -30,7 +30,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(__dirname, "..");
 const PLUGINS_ROOT = resolve(pkgRoot, "dist", "plugins");
 const MARKETPLACE_NAME = "c4a";
-const PLUGIN_NAME = "context";
+const PLUGIN_NAME = "c4a";
 
 interface CommandSource {
   slug: string;
@@ -40,14 +40,14 @@ interface CommandSource {
 }
 
 function cursorCommandFileName(slug: string): string {
-  return `context-${slug}.md`;
+  return `c4a-${slug}.md`;
 }
 
 function rewriteClaudeSlashCommandsForCursor(body: string): string {
   return body
-    .replace(/\/context:\*/g, "/context-*")
-    .replace(/\/context:([a-z-]+)/g, (_match, slug: string) =>
-      slug === "context" ? "/context" : `/context-${slug}`
+    .replace(/\/c4a:\*/g, "/c4a-*")
+    .replace(/\/c4a:([a-z-]+)/g, (_match, slug: string) =>
+      `/c4a-${slug}`
     )
     .replace(/^## Your [Tt]ask$/gm, "## Workflow")
     .replace(/\bnot a user slash command\b/g, "not a user command");
@@ -177,7 +177,7 @@ function titleFromSlug(slug: string): string {
 }
 
 function skillNameForCommand(slug: string): string {
-  return `context-${slug}`;
+  return `c4a-${slug}`;
 }
 
 function codexSkillNameForCommand(slug: string): string {
@@ -185,8 +185,7 @@ function codexSkillNameForCommand(slug: string): string {
 }
 
 const CURSOR_COMMAND_SUMMARIES: Record<string, string> = {
-  init: "Initialize a Context knowledge workspace.",
-  continue: "Continue the Context workflow from the current workspace state.",
+  context: "Start or continue a C4A Context knowledge workspace.",
 };
 
 function cursorCommandSummary(command: CommandSource): string {
@@ -377,8 +376,8 @@ async function buildCursor(version: string, commands: readonly CommandSource[]):
       "Install shape:",
       "",
       "- Marketplace/GitHub plugin shape: this directory is a plugin root with `.cursor-plugin/plugin.json` and `commands/`.",
-      "- User entries are under `commands/`; Cursor command files are prefixed as `context-*` to avoid global slash-command collisions.",
-      "- Local plugin fallback: symlink or copy this directory to `~/.cursor/plugins/local/context/` only when Marketplace import is unavailable.",
+      "- User entries are under `commands/`; Cursor command files are prefixed as `c4a-*` to avoid global slash-command collisions.",
+      "- Local plugin fallback: symlink or copy this directory to `~/.cursor/plugins/local/c4a/` only when Marketplace import is unavailable.",
       "",
       "Cursor Marketplace installs this plugin root directly.",
       "",
@@ -397,7 +396,7 @@ async function writeMarketplaceManifests(version: string): Promise<void> {
     plugins: [{
       name: PLUGIN_NAME,
       source: "./claude",
-      description: "Local knowledge workspace. Initialize a project and use next-step guidance to maintain it.",
+      description: "Start or continue a local knowledge workspace through one graph-routed entry.",
     }],
   };
   const cursorMarketplace = {
@@ -407,7 +406,7 @@ async function writeMarketplaceManifests(version: string): Promise<void> {
     plugins: [{
       name: PLUGIN_NAME,
       source: "./cursor",
-      description: "Maintain a project-local knowledge workspace through init and continue-step guidance.",
+      description: "Start or continue a project-local knowledge workspace through one graph-routed entry.",
     }],
   };
   const codexMarketplace = {

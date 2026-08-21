@@ -299,7 +299,7 @@ export async function recordAgentGraphEvaluation(input: {
       : { routeId: input.route.id, node: input.route.node, reasonCode: input.route.reasonCode }),
   };
   await appendEvent(input.projectRoot, "agent-graph.evaluated", {
-    graph: { provider: "c4a/context", graph: "workspace", entry: "continue" },
+    graph: { provider: "c4a/context", graph: "workspace", entry: "context" },
     current,
     ...(input.route === undefined ? {} : { selected_route: input.route }),
     alternatives: input.alternatives,

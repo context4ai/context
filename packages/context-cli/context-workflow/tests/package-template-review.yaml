@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: an unchanged generated starter requires explicit review before build
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }

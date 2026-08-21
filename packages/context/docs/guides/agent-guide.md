@@ -30,6 +30,13 @@ without another question. Review uses the CLI's atomic `context review
 approve-all ... --managed` route; valid structure staging records
 `confirmed_by: managed-session`.
 
+The Provider may omit an ordinary Gate's HTML inspection Action and
+user-dialogue resources only on its session-authority Route, then expose the
+authority-selected revision-bound resolution Action directly. The ordinary
+inspection and resolution capabilities remain available in ordinary mode.
+Evidence reads needed to choose an extraction scope or classify a captured
+document are not removed.
+
 After the first managed status evaluation, use
 `context run --managed --until blocked-or-complete --format json` when the
 current work can advance through consecutive mechanical routes. The CLI

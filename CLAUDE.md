@@ -53,7 +53,7 @@ bun run --filter @c4a/dev-cli start
 
 ## Notes
 
-- This repository is developed and released independently from the broader C4A
-  workspace.
+- This repository is developed and released independently from any parent
+  monorepo or downstream distribution.
 - Keep generated files out of source control: `dist/`, `node_modules/`, `.tmp/`,
   coverage, and local caches.

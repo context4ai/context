@@ -1,7 +1,7 @@
 schema: agent-graph.test.v1
 name: configured prose advances to the next unprepared structure target
 graph: workspace
-entry: continue
+entry: context
 state:
   facts:
     workspace: { project_entry_valid: true, state_valid: true }

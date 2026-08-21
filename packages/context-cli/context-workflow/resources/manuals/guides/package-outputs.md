@@ -122,7 +122,7 @@ metadata, how many codegraph views were selected, and how many package-visible
 edges were emitted. An empty edge list is therefore explicit evidence of a
 coverage state, not permission to invent a dependency.
 
-The generated `wikis/` directory is the default OKF root and follows the C4A OKF
+The generated `wikis/` directory is the default OKF root and follows the Context OKF
 Profile. Internal production collections are mapped into package OKF roots such
 as `wikis/`, `guides/`, `rules/`, or `feats/`; when selected, `context build`
 copies them into the package and generates root-aware directory indexes for them

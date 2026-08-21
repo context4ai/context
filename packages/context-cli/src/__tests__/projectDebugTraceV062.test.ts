@@ -68,7 +68,7 @@ describe("Context observational debug trace", () => {
       expect(recorded.every((event, index) => event.sequence === index + 1)).toBe(true);
       const graphEvent = recorded.find((event) => event.kind === "agent-graph.evaluated");
       expect(graphEvent?.data).toMatchObject({
-        graph: { provider: "c4a/context", graph: "workspace", entry: "continue" },
+        graph: { provider: "c4a/context", graph: "workspace", entry: "context" },
         current: { revision: expect.stringContaining("sha256:") },
         transition: { changed: true },
       });

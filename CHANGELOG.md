@@ -4,6 +4,15 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+- Added Gate-owned managed fast paths that preserve ordinary inspection and resolution capabilities while skipping redundant HTML review surfaces and dialogue resources under current-conversation authority.
+- Added ordinary-mode guidance after workspace creation and source capture that explains the review/fully-managed trade-off before later approval rounds.
+
+## 0.6.9 - 2026-08-21
+
+- Consolidated initialization, workspace relocation, and ongoing workflow handling behind one `/c4a:context` agent entry backed by the read-only `context entry` resolver.
+- Renamed the Agent Graph workflow entry from `continue` to `context` while keeping the Provider route as the sole lifecycle authority.
+- Renamed the community plugin identity from `context@c4a` to `c4a@c4a` and removed the retired public init and continue command surfaces.
+
 ## 0.6.6 - 2026-08-19
 
 - Added an optional, package-configured command sink for successful workspace activation, initialization, knowledge close, and package build runtime events; community packages remain disabled by default.
