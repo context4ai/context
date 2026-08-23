@@ -15,6 +15,7 @@ import {
 import { enableContextDebug } from "./debugTrace.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
+const PROJECT_SCRATCH_DIRS = [join(".tmp", "agent-payloads")] as const;
 const DEFAULT_PROJECT_DIR = "context";
 const DEFAULT_PROJECT_ENTRY = "src/index.ts";
 export const PROJECT_LANGUAGES = ["en", "zh-CN"] as const;
@@ -485,7 +486,7 @@ function renderReadme(projectName: string, language: ProjectLanguage): string {
       "- `sources/`：来源注册信息和采集快照。",
       "- `knowledge/`：持久知识及其结构投影。",
       "- `dist/`：生成的知识包。",
-      "- `.tmp/agent-payloads/`：Agent 可选的临时命令输入，成功 stage/apply 后可以删除。",
+      "- `.tmp/agent-payloads/`：Agent 可选的临时命令输入；初始化时会创建，被清理后可在写入前重新创建。",
       "- `.tmp/install/`：依赖安装使用的工作区本地临时目录。",
       "- `.tmp/context-runtime/`：可删除的 Context 运行时状态。",
       "",
@@ -523,7 +524,7 @@ function renderReadme(projectName: string, language: ProjectLanguage): string {
     "- `sources/`: registered sources and captured snapshots.",
     "- `knowledge/`: durable knowledge, its structural projection with minimal closed source inputs, and compact rejected-candidate fingerprints.",
     "- `dist/`: generated packages.",
-    "- `.tmp/agent-payloads/`: optional Agent-owned command inputs. These files are transient and can be removed after the corresponding stage or apply succeeds.",
+    "- `.tmp/agent-payloads/`: optional Agent-owned command inputs. Initialization creates it; recreate it before writing if scratch cleanup removed it.",
     "- `.tmp/install/`: workspace-local temporary files used during dependency installation.",
     "- `.tmp/context-runtime/`: disposable runtime files, including lifecycle candidates and staged structures. Successful close removes completed lifecycle and Review state.",
     "",
@@ -564,7 +565,7 @@ function renderAgents(projectName: string, language: ProjectLanguage): string {
       "- 不得根据目录、文件名、URL、示例或旧会话推断用户决定；没有明确授权时不得扫描或对来源仓库执行 clone、fetch、checkout、install、build、test 或脚本。已登记仓库 checkout 缺失时，使用 Route 返回的恢复计划和恢复动作，不手工创建来源软链。",
       "- 生命周期写入必须使用 Context CLI，不得用临时脚本修改 `sources/`、`knowledge/`、`dist/` 或 `.tmp/context-runtime/`。",
       "- 飞书采集只在 `evidence_status: error` 时停止；`projection_status: generic|warning` 表示原始 XML 已保留且可继续。不得在用户工作区修补 CLI 或手改快照来增加 renderer。",
-      "- Agent 编写的临时输入优先放在 `.tmp/agent-payloads/`；这是推荐而非强制。不要自行创建 `inputs/` 等顶层临时目录。",
+      "- Agent 编写的临时输入优先放在 `.tmp/agent-payloads/`；这是推荐而非强制。目录在初始化时创建，如果临时目录已清理则在写入前重新创建。不要自行创建 `inputs/` 等顶层临时目录。",
       "- Context 完成只证明知识工作流状态，不证明 Git 提交范围安全。保留任务开始前已有的工作树变更，只按明确路径暂存；不要用 `git add -A` 把无关修改、删除或未跟踪目录带入提交。",
       "- 调试追踪默认关闭；仅在用户明确要求时使用 `context debug enable`。追踪只写入 `.tmp/context-runtime/debug/`，属于观测数据，不能作为生命周期事实或授权依据。",
       "- 普通 Review 使用用户原样提供的 Payload；托管批准只能使用托管 status 返回的 revision-bound 原子命令。",
@@ -603,7 +604,7 @@ function renderAgents(projectName: string, language: ProjectLanguage): string {
     "- Never infer source or review decisions from repository layout, filenames, URLs, examples, or prior conversations. Never scan for, clone, fetch, checkout, install, build, test, or run source-repository scripts without explicit authority. When registered repository checkouts are missing, use the Route-selected recovery plan and resolution action instead of creating source links by hand.",
     "- Use Context CLI for lifecycle writes. Do not inspect or repair `sources/`, `knowledge/`, `dist/`, or `.tmp/context-runtime/` with ad hoc scripts.",
     "- Stop Lark capture only for `evidence_status: error`. A `projection_status` of `generic` or `warning` means the original XML is preserved and the route may continue. Never patch the CLI or edit snapshots in a user workspace to add a renderer.",
-    "- Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs. This is a recommendation, not a CLI requirement; explicit custom paths remain valid. Avoid inventing top-level scratch directories such as `inputs/`.",
+    "- Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs. This is a recommendation, not a CLI requirement; explicit custom paths remain valid. Initialization creates the directory; recreate it before writing if scratch cleanup removed it. Avoid inventing top-level scratch directories such as `inputs/`.",
     "- Context completion proves knowledge-workflow state, not Git commit safety. Preserve worktree changes that existed before the task, stage only explicit paths, and never use `git add -A` to mix unrelated modifications, deletions, or untracked directories into the deliverable.",
     "- Debug tracing is off by default; use `context debug enable` only when the user explicitly requests it. Trace files stay in `.tmp/context-runtime/debug/` and are observational data, never lifecycle facts or authority.",
     "- Review uses the user's exact Payload in ordinary mode. Managed approval uses only the revision-bound atomic command returned by managed status.",
@@ -682,6 +683,9 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
   };
 
   for (const dir of PROJECT_DIRS) {
+    await mkdir(join(projectRoot, dir), { recursive: true });
+  }
+  for (const dir of PROJECT_SCRATCH_DIRS) {
     await mkdir(join(projectRoot, dir), { recursive: true });
   }
   await mkdir(join(projectRoot, "sources", "repo"), { recursive: true });

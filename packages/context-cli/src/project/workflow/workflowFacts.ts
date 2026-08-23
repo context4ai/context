@@ -158,6 +158,17 @@ function evidenceMaintenanceClear(
   if (observation.capturedDocumentSources < observation.documentSources.length) return true;
   if (activeProseRefreshRepairsVerification(observation)) return true;
   if (verifyErrorsAreCloseRepairable(observation.verifyIssues)) return true;
+  const staleEvidenceIssues = observation.verifyIssues.filter((issue) =>
+    issue.severity === "error" && issue.code === "approved-source-ref-stale"
+  );
+  const pendingExtractionRepairsCodeEvidence = observation.pendingExtractPhases.length > 0 &&
+    staleEvidenceIssues.length > 0 &&
+    staleEvidenceIssues.every((issue) =>
+      issue.source_keys !== undefined &&
+      issue.source_keys.length > 0 &&
+      issue.source_keys.every((sourceKey) => sourceKey.startsWith("repo:"))
+    );
+  if (pendingExtractionRepairsCodeEvidence) return true;
   return observation.evidenceWarnings !== "orphaned" &&
     observation.evidenceWarnings !== "stale";
 }

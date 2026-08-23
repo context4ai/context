@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { extractTs, source } from "@c4a/context";
 import { LARK_DOCUMENT_NORMALIZER_VERSION } from "../project/documentCaptureContract.js";
 import {
   pendingDocumentCaptureCommands,
@@ -26,6 +27,48 @@ function declaredProseRow(sourceKey: string, collection = "sop") {
 }
 
 describe("Context workflow resource repair", () => {
+  test("finishes pending code extraction before asking for evidence maintenance", async () => {
+    const sampleA = source("20260821", "sample-a");
+    const sampleB = source("20260821", "sample-b");
+    const phaseA = extractTs({ source: sampleA, collection: "codegraph" });
+    const phaseB = extractTs({ source: sampleB, collection: "codegraph" });
+    const observation: ContextWorkflowObservation = {
+      ...emptyObservation(),
+      sourceCount: 2,
+      repoSources: [
+        { id: sampleA.name, name: sampleA.name },
+        { id: sampleB.name, name: sampleB.name },
+      ],
+      readyRepoSources: 2,
+      phases: [phaseA, phaseB],
+      sourceFreshness: "unknown",
+      pendingExtractPhases: [phaseB.id],
+      draftCandidates: 1,
+      draftCollections: ["codegraph"],
+      approvedPages: 1,
+      evidenceWarnings: "stale",
+      verifyErrors: 1,
+      verifyIssues: [{
+        severity: "error",
+        code: "approved-source-ref-stale",
+        source_keys: [`repo:${sampleB.name}`],
+        message: "approved source_ref is not present in the partial symbol index",
+      }],
+    };
+
+    const facts = createContextWorkflowFacts(observation, []);
+    expect(facts.verification.blocking_clear).toBe(true);
+    expect(facts.evidence.maintenance_clear).toBe(true);
+    expect(facts.extract.complete).toBe(false);
+
+    const snapshot = await evaluateContextWorkflow({ observation, authorities: [] });
+    expect(snapshot.route).toMatchObject({
+      node: "extract-next",
+      reason_code: "route.extract.pending-target",
+    });
+    expect(snapshot.route?.commands[0]?.command).toContain(`run ${phaseB.id} --format json`);
+  });
+
   test("unprojected source asset paths route to deterministic close repair", async () => {
     const observation: ContextWorkflowObservation = {
       ...emptyObservation(),

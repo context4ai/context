@@ -16,7 +16,7 @@ import {
   type EvidenceIndexCache,
 } from "./verifySourceRefs.js";
 import type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
-import { findContextProjectRoot } from "./workspace.js";
+import { findContextProjectRoot, loadContextProjectModule } from "./workspace.js";
 import { readRejectedDecisions, REVIEW_DECISIONS_FILE } from "./reviewDecisions.js";
 import { knowledgeAssetReferences, unprojectedSourceAssetLinks } from "./knowledgeAssets.js";
 import { parseDocumentSourceLocator } from "@c4a/extract";
@@ -108,10 +108,29 @@ async function readCandidateDecisionState(input: {
 
 export async function verifyProjectWorkspace(
   projectRoot: string,
-  options: { approvedStructureOverride?: Record<string, unknown> } = {},
+  options: {
+    approvedStructureOverride?: Record<string, unknown>;
+    expectedExtractPhaseIds?: readonly string[];
+  } = {},
 ): Promise<ProjectVerifyResult> {
   const issues: ProjectVerifyIssue[] = [];
-  const symbolIndex = await loadVerifiedSymbolIndex(projectRoot);
+  let expectedExtractPhaseIds = options.expectedExtractPhaseIds;
+  if (expectedExtractPhaseIds === undefined) {
+    try {
+      const loaded = await loadContextProjectModule(projectRoot);
+      expectedExtractPhaseIds = loaded.project.phases
+        .filter((phase) =>
+          phase.kind === "phase.extract.ts" || phase.kind === "phase.extract.custom"
+        )
+        .map((phase) => phase.id);
+    } catch {
+      // Project-entry diagnostics are owned by status. Verification can still
+      // validate durable files without inferring extraction coverage.
+    }
+  }
+  const symbolIndex = await loadVerifiedSymbolIndex(projectRoot, {
+    ...(expectedExtractPhaseIds === undefined ? {} : { expectedPhaseIds: expectedExtractPhaseIds }),
+  });
   const sourceRegistry = await loadSourceRegistryLookup(projectRoot, issues);
   const evidenceIndexCache: EvidenceIndexCache = {
     entries: new Map(),

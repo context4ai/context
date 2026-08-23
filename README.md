@@ -139,6 +139,11 @@ Every build emits an inventory that maps distributed files back to approved
 workspace knowledge. Published pages keep reader-facing metadata; detailed
 source and review evidence remains in the production workspace.
 
+Context stops after producing a complete local build output. Publishing that
+output to a hosted knowledge service or package registry belongs to an
+explicitly installed downstream distribution tool; use its complete-output
+upload path when available instead of reconstructing a remote installation.
+
 ## Repository map
 
 | Module | Role in the workflow | Documentation |

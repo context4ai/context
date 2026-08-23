@@ -314,6 +314,7 @@ describe("CLI error handling", () => {
       expect(existsSync(join(cwd, "parser-kb", ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);
       expect(existsSync(join(cwd, "parser-kb", "knowledge"))).toBe(true);
       expect(existsSync(join(cwd, "parser-kb", "dist"))).toBe(true);
+      expect(existsSync(join(cwd, "parser-kb", ".tmp", "agent-payloads"))).toBe(true);
       expect(existsSync(join(cwd, "parser-kb", "README.md"))).toBe(true);
       expect(existsSync(join(cwd, "parser-kb", "AGENTS.md"))).toBe(true);
       expect(existsSync(join(cwd, "parser-kb", ".claude"))).toBe(false);
@@ -329,6 +330,7 @@ describe("CLI error handling", () => {
       expect(readme).toContain('TMPDIR="$PWD/.tmp/install" bun install');
       expect(readme).toContain("`.tmp/install/`: workspace-local temporary files");
       expect(readme).toContain("`.tmp/agent-payloads/`: optional Agent-owned command inputs");
+      expect(readme).toContain("Initialization creates it");
       expect(readme).toContain("`.tmp/context-runtime/`: disposable runtime files");
       expect(agents).toContain("Treat `workflow.current` as the current-step authority");
       expect(agents).toContain("Read every `resources.required` item");
@@ -340,6 +342,7 @@ describe("CLI error handling", () => {
       expect(agents).toContain("never store or reuse that authority");
       expect(agents).toContain("Managed approval uses only the revision-bound atomic command");
       expect(agents).toContain("Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs");
+      expect(agents).toContain("Initialization creates the directory");
       expect(agents).toContain("not a CLI requirement");
       expect(readme).not.toContain("bun run context -- status");
       expect(agents).toContain("context status");

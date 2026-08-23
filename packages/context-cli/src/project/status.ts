@@ -483,7 +483,14 @@ export async function collectProjectStatusSnapshot(
       })
     : { state: "ready" as const, stalePhases: [], pendingPhases: [], diagnostics: [], errorDiagnostics: [] };
   const verifyStatus = draftStatus.diagnostics.length === 0
-    ? await readVerifyStatus(projectRoot)
+    ? await readVerifyStatus(
+        projectRoot,
+        phases
+          .filter((phase) =>
+            phase.kind === "phase.extract.ts" || phase.kind === "phase.extract.custom"
+          )
+          .map((phase) => phase.id),
+      )
     : { issues: [], diagnostics: [] };
   const resourceRepair = resourcePlaceholderRepairTargets(verifyStatus.issues);
   const pendingCapture = pendingDocumentCaptureCommands({

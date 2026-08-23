@@ -4,6 +4,24 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.13 - 2026-08-23
+
+- Clarified debug startup so a new workspace receives `--debug` through
+  `context entry`/`context init`, while existing workspaces continue to use
+  `context debug enable`.
+- Created the recommended `.tmp/agent-payloads/` scratch directory during
+  initialization and documented how to recreate it after scratch cleanup.
+
+## 0.6.12 - 2026-08-22
+
+- Added Agent guidance for publishing a completed Context build directly from
+  its output directory, while preserving human review by default and using
+  automatic merge only when the user explicitly requests direct publication.
+
+## 0.6.11 - 2026-08-21
+
+- Deferred code `source_ref` reverse lookup until every declared extraction phase is indexed, so a cold runtime continues the remaining phases instead of reporting provisional stale evidence.
+
 ## 0.6.10 - 2026-08-21
 
 - Made repository recovery identity transport-independent by matching the full namespace/repository path while preserving pinned-commit and subpath validation.
