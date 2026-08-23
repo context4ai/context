@@ -38,7 +38,10 @@ const execFileAsync = promisify(execFile);
 
 export interface SymbolIndexLookup {
   bySource: ReadonlyMap<string, readonly ExtractSourceSymbolIndexEntry[]> | null;
-  unavailableCode?: "extract-symbol-index-missing" | "extract-symbol-index-untrusted";
+  unavailableCode?:
+    | "extract-symbol-index-missing"
+    | "extract-symbol-index-untrusted"
+    | "extract-symbol-index-incomplete";
   unavailableMessage?: string;
 }
 
@@ -278,7 +281,10 @@ export function proseStaleMessage(sourceRef: string, status: ResolvedProseSource
   return `document source span changed for ${sourceRef}; create a replacement candidate unless the approved body still matches a moved source span`;
 }
 
-export async function loadVerifiedSymbolIndex(projectRoot: string): Promise<SymbolIndexLookup> {
+export async function loadVerifiedSymbolIndex(
+  projectRoot: string,
+  options: { expectedPhaseIds?: readonly string[] } = {},
+): Promise<SymbolIndexLookup> {
   const symbolIndex = await readExtractSourceSymbolIndex(projectRoot);
   if (symbolIndex === null) {
     return {
@@ -304,6 +310,17 @@ export async function loadVerifiedSymbolIndex(projectRoot: string): Promise<Symb
       bySource: null,
       unavailableCode: "extract-symbol-index-untrusted",
       unavailableMessage: `extract symbol index does not match source fingerprint cache for phase ${stalePhase[0]}; source_ref reverse lookup was skipped`,
+    };
+  }
+  const expectedPhaseIds = [...new Set(options.expectedPhaseIds ?? [])].sort();
+  const missingPhaseIds = expectedPhaseIds.filter((phaseId) =>
+    symbolIndex.phaseFingerprints[phaseId] === undefined
+  );
+  if (missingPhaseIds.length > 0) {
+    return {
+      bySource: null,
+      unavailableCode: "extract-symbol-index-incomplete",
+      unavailableMessage: `extract symbol index covers ${expectedPhaseIds.length - missingPhaseIds.length}/${expectedPhaseIds.length} declared extraction phases; source_ref reverse lookup was deferred until extraction completes`,
     };
   }
   const symbolIndexBySource = new Map<string, ExtractSourceSymbolIndexEntry[]>();

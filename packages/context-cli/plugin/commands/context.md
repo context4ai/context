@@ -61,9 +61,13 @@ Execute only `next_action.command` returned by `context entry`:
 
 ### Conversation modes
 
-Enable debugging only when the user explicitly requests it. Run `context debug
-enable` first; debugging records traces below `.tmp/context-runtime/debug/` but
-does not grant workflow authority or provide source evidence.
+Enable debugging only when the user explicitly requests it. If initialization
+is required, pass `--debug` to `context entry` and execute its returned
+`context init ... --debug` command; do not run a workspace-only debug command
+before initialization. For an existing workspace, run `context debug enable`
+before workflow evaluation. Debugging records traces below
+`.tmp/context-runtime/debug/` but does not grant workflow authority or provide
+source evidence.
 
 For explicitly authorized fully managed operation, use:
 
@@ -114,6 +118,12 @@ Treat `workflow.current` as the current-step authority:
 Explain, ask, confirm, and summarize in the user's current conversation
 language. Keep commands, flags, paths, ids, status values, JSONL keys,
 `source_ref` values, and copied CLI tokens unchanged.
+
+When the user explicitly asks to publish a completed build, treat publication
+as a downstream distribution step outside the Context Route. Use only an
+explicitly installed distribution tool and its documented complete-output
+upload command. If no such tool is available, stop after the local build and
+explain that Context itself does not publish to a hosted service.
 
 Do not infer repo sources, extraction scope, review decisions, or package output
 choices from surrounding files. Do not call source-repo operations such as

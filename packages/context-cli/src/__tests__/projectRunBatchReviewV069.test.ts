@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCliProgram, handleCliFailure } from "../cli.js";
+import { writeApproved } from "./projectVerifyV062Helpers.js";
 
 function makeTmp(): string {
   return mkdtempSync(join(tmpdir(), "ctx-project-batch-review-v069-"));
@@ -100,7 +101,95 @@ function writeMultiSourceProjectEntry(project: string): void {
   ].join("\n"), "utf8");
 }
 
+function writeRepoOnlyProjectEntry(project: string): void {
+  writeFileSync(join(project, "src", "index.ts"), [
+    'import { defineProject, extractTs, source } from "@c4a/context";',
+    "",
+    'const sampleA = source("20260712", "sample-a");',
+    'const sampleB = source("20260712", "sample-b");',
+    "",
+    "export default defineProject({",
+    "  sources: [sampleA, sampleB],",
+    "  phases: [",
+    '    extractTs({ source: sampleA, collection: "codegraph" }),',
+    '    extractTs({ source: sampleB, collection: "codegraph" }),',
+    "  ],",
+    "  packages: [],",
+    "});",
+    "",
+  ].join("\n"), "utf8");
+}
+
 describe("0.6.9 codegraph batched human review", () => {
+  test("a cold runtime continues all extraction phases before validating existing code evidence", async () => {
+    const root = makeTmp();
+    const repoA = join(root, "repo-a");
+    const repoB = join(root, "repo-b");
+    const project = join(root, "kb");
+    try {
+      await mkdir(repoA, { recursive: true });
+      await mkdir(repoB, { recursive: true });
+      const headA = initTsRepo(repoA, "sample-a");
+      const headB = initTsRepo(repoB, "sample-b");
+      await runCliInDir(root, ["init", "kb"]);
+      for (const source of [
+        { module: "sample-a", local: "../repo-a", remote: "https://git.example.com/repo-a.git", ref: headA },
+        { module: "sample-b", local: "../repo-b", remote: "https://git.example.com/repo-b.git", ref: headB },
+      ]) {
+        await runCliInDir(project, [
+          "source", "add", "repo", "20260712",
+          "--module", source.module,
+          "--local", source.local,
+          "--remote", source.remote,
+          "--ref", source.ref,
+        ]);
+      }
+      writeRepoOnlyProjectEntry(project);
+      expect(existsSync(join(project, ".tmp", "context-runtime", "extract", "source-symbols.json"))).toBe(false);
+
+      await runCliInDir(project, [
+        "run", "extract:20260712/sample-a:codegraph", "--format", "json",
+      ]);
+      await writeApproved({
+        projectRoot: project,
+        collection: "codegraph",
+        sources: ["repo:20260712/sample-b"],
+        sourceRef: "src-1#symbol:src/Button.ts:Button:function@abc123abc123",
+        body: "Existing sample B knowledge.",
+        extraFrontmatter: {
+          visibility: "exported",
+          code_symbols: ["20260712/sample-b|Button|function"],
+          candidate_fingerprint: "sha256:approved-sample-b",
+        },
+      });
+
+      const status = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
+        state: string;
+        verifyErrors: number;
+        pendingExtractPhases: string[];
+        routing: { command_plan: Array<{ command: string }> };
+      };
+      expect(status.state).toBe("route.extract.pending-target");
+      expect(status.verifyErrors).toBe(0);
+      expect(status.pendingExtractPhases).toEqual(["extract:20260712/sample-b:codegraph"]);
+      expect(status.routing.command_plan[0]?.command).toContain(
+        "run extract:20260712/sample-b:codegraph --format json",
+      );
+
+      const verify = JSON.parse(await runCliInDir(project, ["verify", "--format", "json"])) as {
+        ok: boolean;
+        evidence_status: string;
+        issues: Array<{ code: string }>;
+      };
+      expect(verify.ok).toBe(true);
+      expect(verify.evidence_status).toBe("pass-with-unverifiable-evidence");
+      expect(verify.issues.map((issue) => issue.code)).toContain("extract-symbol-index-incomplete");
+      expect(verify.issues.map((issue) => issue.code)).not.toContain("approved-source-ref-stale");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("multiple confirmed repo modules finish extraction before one codegraph Review", async () => {
     const root = makeTmp();
     const repoA = join(root, "repo-a");

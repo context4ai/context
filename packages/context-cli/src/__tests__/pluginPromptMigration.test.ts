@@ -76,6 +76,11 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(continuation).toContain("context plugin install");
     expect(continuation).toContain("shell exit 127");
     expect(continuation).toContain("Do not run an installation preflight");
+    expect(continuation).toContain("context init ... --debug");
+    expect(continuation).toContain("do not run a workspace-only debug command");
+    expect(continuation).toContain("For an existing workspace, run `context debug enable`");
+    expect(continuation).toContain("downstream distribution step outside the Context Route");
+    expect(continuation).toContain("Context itself does not publish to a hosted service");
   });
 
   test("source and gate discipline lives in selected workflow procedures", async () => {
