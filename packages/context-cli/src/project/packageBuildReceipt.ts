@@ -167,14 +167,9 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     `  resources: ${pkg.resources.files} file(s), ${pkg.resources.bytes} byte(s)`,
   ];
   const optimization = pkg.resources.delivery.optimization;
-  if (optimization?.state === "recommended") {
+  if (optimization?.state === "applied") {
     lines.push(
-      `  asset optimization: recommended (${optimization.candidateFiles} image(s), ${optimization.originalBytes} byte(s))`,
-      "  setup: choose bundle delivery, add sharp, and configure kbPackage().assets.optimize in src/index.ts",
-    );
-  } else if (optimization?.state === "applied") {
-    lines.push(
-      `  asset optimization: ${optimization.processor}/${optimization.mode}, saved ${optimization.savedBytes} byte(s)`,
+      `  asset optimization: ${optimization.processor}/${optimization.mode}, saved ${optimization.savedBytes} byte(s), largest ${optimization.largestOutputBytes}/${optimization.maxImageBytes} byte(s), total ${optimization.outputBytes}/${optimization.maxTotalImageBytes} byte(s)`,
     );
   } else if (pkg.resources.delivery.state === "git-raw") {
     const git = pkg.resources.delivery.git;

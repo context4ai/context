@@ -133,12 +133,9 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
     };
   },
   "context.extract.inspect-capabilities": (observation) => ({
-    commands: observation.repoSources.map((source) =>
-      command(
-        `context source inspect ${JSON.stringify(source.name)} --format json`,
-        "read",
-      )
-    ),
+    commands: observation.repoSources.length === 0
+      ? []
+      : [command("context source inspect --repo-only --format json", "read")],
   }),
   "context.project.configure-extraction": () => ({
     commands: [],
@@ -148,6 +145,20 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         "Declare extraction for every user-confirmed repository module and scope.",
     },
   }),
+  "context.extract.preview-batch": (observation) => {
+    const phases = [...new Set([
+      ...observation.staleSourcePhases,
+      ...observation.pendingExtractPhases,
+    ])];
+    return {
+      commands: [command(
+        `context run --preview-extraction-batch${phases.map((phase) => ` --preview-phase ${JSON.stringify(phase)}`).join("")} --format json`,
+        "write",
+        "automatic",
+        { target: "subprocess" },
+      )],
+    };
+  },
   "context.extract.next": (observation) => {
     const phase = observation.staleSourcePhases[0] ??
       observation.pendingExtractPhases[0];
@@ -257,15 +268,15 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         resource_delivery: {
           applies_to: "agent-knowledge-base",
           recommendation:
-            "prefer git-raw; derive an explicit same-host /raw/{commit} prefix for confirmed GitHub-compatible services before falling back to bundle",
+            "bundle referenced resources by default; Context keeps each image at or below 1 MiB and all bundled images within 40 MiB, compressing package output when needed; use git-raw only when the author explicitly configures it",
           choices: [
+            { id: "bundle", value: { delivery: "bundle" }, default: true },
             {
               id: "git-raw",
               value: { delivery: "git-raw" },
               optional: ["remote", "urlPrefix"],
               requirement: "a Context workspace inside Git, or an explicit urlPrefix",
             },
-            { id: "bundle", value: { delivery: "bundle" } },
             { id: "omit", value: { delivery: "omit" } },
           ],
         },

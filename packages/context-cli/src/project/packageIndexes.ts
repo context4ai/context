@@ -386,6 +386,10 @@ export function knowledgeInventory(
   const currentDirectory = navigationPlan.find((directory) => directory.relPath === templateRelPath);
   const navigationLines: string[] = [];
   if (currentDirectory !== undefined) {
+    const childTitles = navigationChildTitles(
+      currentDirectory.pathWithinOkfRoot,
+      currentDirectory.childDirectoryPaths,
+    );
     for (const childPath of currentDirectory.childDirectoryPaths) {
       const child = navigationPlan.find((directory) =>
         directory.okfRoot === currentDirectory.okfRoot &&
@@ -393,7 +397,7 @@ export function knowledgeInventory(
       );
       if (child === undefined) continue;
       navigationLines.push(
-        `- [${titleFromSegment(childPath.split("/").at(-1) ?? childPath)}](${relativeMarkdownHref(templateRelPath, child.relPath)}) - ${child.items.length} item(s)`,
+        `- [${childTitles.get(childPath) ?? titleFromSegment(childPath.split("/").at(-1) ?? childPath)}](${relativeMarkdownHref(templateRelPath, child.relPath)}) - ${child.items.length} item(s)`,
       );
     }
     for (const group of currentDirectory.pageGroups) {
@@ -420,6 +424,32 @@ export function knowledgeInventory(
   return { items, groups, treeNodes, treeMarkdown, itemsMarkdown, groupsMarkdown };
 }
 
+function navigationChildTitles(parentPath: string, childPaths: readonly string[]): Map<string, string> {
+  const parentSegments = parentPath.split("/").filter(Boolean);
+  const relativePaths = childPaths.map((path) => ({
+    path,
+    segments: path.split("/").filter(Boolean).slice(parentSegments.length),
+  }));
+  if (relativePaths.length > 1) {
+    while (
+      relativePaths.every((entry) => entry.segments.length > 1) &&
+      relativePaths.every((entry) => entry.segments[0] === relativePaths[0]?.segments[0])
+    ) {
+      for (const entry of relativePaths) entry.segments.shift();
+    }
+    while (
+      relativePaths.every((entry) => entry.segments.length > 1) &&
+      relativePaths.every((entry) => entry.segments.at(-1) === relativePaths[0]?.segments.at(-1))
+    ) {
+      for (const entry of relativePaths) entry.segments.pop();
+    }
+  }
+  return new Map(relativePaths.map(({ path, segments }) => [
+    path,
+    segments.map(titleFromSegment).join(" / ") || titleFromSegment(path.split("/").at(-1) ?? path),
+  ]));
+}
+
 function collectKnowledgeDirectoryIndexes(
   pkg: PackageDefinition,
   files: readonly ApprovedKnowledgeFile[],
@@ -433,6 +463,7 @@ function collectKnowledgeDirectoryIndexes(
   const plan = planKnowledgeDirectoryIndexes(inventory.items, packageNavigation(pkg));
   return plan.map((directory) => {
     const dirSegments = directory.pathWithinOkfRoot.split("/").filter(Boolean);
+    const childTitles = navigationChildTitles(directory.pathWithinOkfRoot, directory.childDirectoryPaths);
     return {
       okfRoot: directory.okfRoot,
       okfRootPath: directory.okfRootPath,
@@ -449,7 +480,7 @@ function collectKnowledgeDirectoryIndexes(
         const childRelPath = child?.relPath ?? `${directory.okfRootPath}/${childPath}/index.md`;
         return {
           name: childPath.split("/").at(-1) ?? childPath,
-          title: titleFromSegment(childPath.split("/").at(-1) ?? childPath),
+          title: childTitles.get(childPath) ?? titleFromSegment(childPath.split("/").at(-1) ?? childPath),
           relPath: childRelPath,
           href: relativeMarkdownHref(directory.relPath, childRelPath),
           count: child?.items.length ?? 0,

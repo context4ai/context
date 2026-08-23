@@ -283,6 +283,7 @@ export function makeCandidates(input: {
         collection: input.phase.collection,
         status: "draft",
         candidate_type: "code-symbol",
+        relationship_mode: "source-backed-ast",
         change: "add",
         kind: symbol.kind,
         visibility: symbol.visibility,

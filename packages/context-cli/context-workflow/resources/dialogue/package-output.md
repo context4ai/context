@@ -25,14 +25,11 @@ package namespace. Ask whether Skills need a short optional prefix, then
 maintain their complete final names in the template. Do not expose downstream
 layout terminology or ask for platform-specific identity fields.
 
-Also ask how referenced resources should be delivered. Offer Git raw links,
-bundled files, or explicit omission. Git raw may derive a commit-pinned GitHub
-URL when the workspace is in Git, or use an author-provided HTTPS `urlPrefix`
-for resources published from another repository. A literal branch in that
-prefix is an explicit project choice, not a Context default. If neither local
-Git nor an explicit prefix is available, offer only bundle or omit.
-State that publishing the referenced resources and making private raw hosts
-reachable are the package author's responsibility; Context does not probe them.
+Referenced resources are bundled by default. Explain the 1 MiB per-image and
+40 MiB total-image package limits only when relevant. Offer Git raw links or
+explicit omission only when the author asks for another delivery policy. Git
+raw uses an immutable derived URL or an author-provided HTTPS `urlPrefix`;
+publishing and access remain the author's responsibility.
 
 Do not offer a hidden `both` shortcut. If the user wants multiple outputs,
 declare and inspect one first, then obtain confirmation for the next. Mention

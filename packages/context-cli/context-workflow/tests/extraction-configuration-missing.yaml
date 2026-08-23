@@ -23,8 +23,8 @@ state:
       knowledge_review_resolved: true
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
-    capture: { declarations_complete: true, complete: true }
-    extract: { declarations_complete: false, complete: false }
+    capture: { declarations_complete: true, batch_digest: null, complete: true }
+    extract: { declarations_complete: false, plans_complete: true, capability_clear: true, preview_current: false, ownership_clear: true, scale_clear: true, batch_digest: null, complete: false }
 expect:
   statusCode: actionable
   primaryNode: configure-code-extraction

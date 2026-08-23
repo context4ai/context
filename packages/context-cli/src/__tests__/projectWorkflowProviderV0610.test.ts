@@ -266,13 +266,24 @@ describe("Context workflow Provider", () => {
       },
       commands: [{
         command: expect.stringContaining(
-          '--workflow-managed source inspect "module-a" --format json',
+          "--workflow-managed source inspect --repo-only --format json",
         ),
         effect: "read",
         availability: "immediate",
         managed_execution: "agent-required",
       }],
     });
+    expect(snapshot.route?.resources.required.map((resource) => resource.id)).toContain(
+      "semantic.code-index.classification",
+    );
+    expect(snapshot.route?.resources.recommended.map((resource) => resource.id)).not.toEqual(
+      expect.arrayContaining([
+        "semantic.code-index.template.web-application",
+        "semantic.code-index.template.api-service",
+        "semantic.code-index.template.sdk-library",
+        "semantic.code-index.template.protocol-boundary",
+      ]),
+    );
   });
 
   test("a build receipt cannot hide an unclassified captured document", () => {
@@ -497,7 +508,7 @@ describe("Context workflow Provider", () => {
     }
   });
 
-  test("code extraction inspection returns one executable technology probe per repo source", () => {
+  test("code extraction inspection returns one batch technology probe for all repo sources", () => {
     expect(planForHostHandler("context.extract.inspect-capabilities", {
       ...emptyObservation(),
       sourceCount: 2,
@@ -509,13 +520,7 @@ describe("Context workflow Provider", () => {
     })).toEqual({
       commands: [
         {
-          command: 'context source inspect "20260818/module-a" --format json',
-          effect: "read",
-          availability: "immediate",
-          managed_execution: "agent-required",
-        },
-        {
-          command: 'context source inspect "20260818/module-b" --format json',
+          command: "context source inspect --repo-only --format json",
           effect: "read",
           availability: "immediate",
           managed_execution: "agent-required",
@@ -563,10 +568,10 @@ describe("Context workflow Provider", () => {
           resource_delivery: {
             applies_to: "agent-knowledge-base",
             recommendation:
-              "prefer git-raw; derive an explicit same-host /raw/{commit} prefix for confirmed GitHub-compatible services before falling back to bundle",
+              "bundle referenced resources by default; Context keeps each image at or below 1 MiB and all bundled images within 40 MiB, compressing package output when needed; use git-raw only when the author explicitly configures it",
             choices: [
+              expect.objectContaining({ id: "bundle", default: true }),
               expect.objectContaining({ id: "git-raw", optional: ["remote", "urlPrefix"] }),
-              expect.objectContaining({ id: "bundle" }),
               expect.objectContaining({ id: "omit" }),
             ],
           },

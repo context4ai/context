@@ -606,7 +606,64 @@ Options:
 | `mode` | `"exports"` (default) traces public exports from automatic or configured entries; `"scan"` uses every file matched by `include` as an entry root |
 | `entries` | Optional source-relative entry files for `"exports"` mode. They override `package.json` entry detection and live only in the Context project configuration |
 | `exportedOnly` | Defaults to `true` in `"exports"` mode and `false` in `"scan"` mode |
+| `indexUnits` | Stable module/index plans used for ownership, capability and per-unit scale checks. A single-source exports-only package gets a compatible public-contract default; scan, collection and custom extraction require an explicit plan before formal writes |
 | `transform` | Optional markdown transform function or functions |
+
+An explicit index unit records production intent rather than parser settings:
+
+```ts
+extractTs({
+  source: componentLib,
+  collection: "codegraph",
+  indexUnits: [{
+    id: "component-public-api",
+    inputSources: ["20260712/component-lib"],
+    outputOwner: "component-lib",
+    moduleType: "sdk-library",
+    moduleTypes: ["sdk-library"],
+    facets: ["public-api", "plugin-extension"],
+    moduleTypeEvidence: ["package.json exports and src/index.ts public entry"],
+    outputProfile: "public-api-reference",
+    responsibility: "Document stable exported component contracts.",
+    entries: ["src/index.ts"],
+    pageKinds: ["module-map", "public-contract"],
+    protocols: [],
+    dependencies: [],
+    exclusions: ["src/internal/**", "src/generated/**"],
+    lifecycle: "authoritative",
+    sourceOfTruth: "src/index.ts",
+    capability: "complete",
+  }],
+});
+```
+
+`inputSources` names registered evidence sources; `outputOwner` is the one
+stable page owner used for accounting and navigation. `capability` is
+`"complete"`, `"project-adapter"`, or `"material-required"`. The last value
+stops the Route until the plan is narrowed or reliable source material is
+provided.
+
+`moduleType` is the primary compact classification. `moduleTypes` may add other
+applicable archetypes for a hybrid module, while `facets` records composable
+behaviors such as routing, protocol consumption, events, persistence, plugins,
+release, or cross-module chains. `moduleTypeEvidence` records the inspected
+paths that support the classification. Classify first, then read the matching
+Route-provided code-index templates, and only then finish the extraction plan.
+`lifecycle` is `"authoritative"`, `"generated"`, `"mirrored"`, `"legacy"`,
+or `"vendored"`; derived sources normally use `"provenance-only"` rather
+than duplicating reader-facing pages. These are generic project facts, not
+framework names inferred by the CLI.
+
+`moduleType`, `moduleTypes`, `facets`, `outputProfile`, `lifecycle`, and
+`capability` are runtime-validated closed values. Supported output profiles are
+`module-map`, `application-map`, `protocol-index`, `service-boundary`,
+`runtime-map`, `public-api-reference`, `command-map`, `adapter-contract`,
+`module-registry`, `cross-module-flow`, and `provenance-only`.
+
+`extractTs()` projects one candidate page per selected symbol, and each source
+can belong to only one of its index units. Use `extractCustom()` for aggregated
+maps, registries, protocol indexes, cross-module flows, or multiple candidate
+owners over one source; custom candidates declare their owning `module`.
 
 `source` is the only package/module boundary. `include` narrows files inside
 that source; it does not select a second module. Standard packages can omit
@@ -625,7 +682,9 @@ extractTs({
 
 When the intended knowledge scope is every declaration in the selected files
 rather than a public export graph, use `mode: "scan"`. Scan mode does not accept
-`entries`; `include` supplies its file roots.
+`entries`; `include` supplies its file roots. Because scan mode can expand
+internal declarations into a symbol catalog, it requires an explicit
+`indexUnits` plan before formal extraction.
 
 Entry failures use the stable machine code `NO_ENTRY_DETECTED`. This includes
 `entries: []`, exports mode with no detected/configured entry, and scan mode
@@ -656,6 +715,21 @@ resolved `entryFiles`, exported/internal symbol counts, and a structural
 does not infer which symbols are meaningful to a particular product or
 audience. Modules with skipped files include the deterministic traversal
 reason, such as files not reachable from exports-mode entries.
+
+Before formal extraction, the workflow runs one batch preview for all pending
+phases. Each `indexUnits[]` result reports projected Markdown pages, output
+profile/owner, content-byte estimates, and risks. Per unit, 0–100 pages is
+normal, 101–300 is a warning that may continue, and more than 300 is blocked.
+The limit is non-delegatable, including in managed mode. A passing preview is
+cached by digest under `.tmp/context-runtime/extract/previews/` and reused by
+formal extraction when the source scope, phase declaration, project `src/`,
+dependency lock, and preview protocol still match. A missing cache is
+recoverable by rerunning the preview. The report includes cache hits,
+extractor invocation count, current and projected page counts, changes,
+exported/internal distribution, top directories, and advisory large-page
+risks; only the 300-page per-unit limit is a hard scale gate.
+A batch-total page advisory and quality risks such as a thin custom aggregate
+remain report signals and do not create another Gate.
 
 Phase id shape:
 
@@ -700,19 +774,53 @@ extractCustom({
   id: "extract:service:protocol",
   sources: [service],
   collection: "codegraph",
-  extract: async ({ projectRoot }) => ({
+  indexUnits: [{
+    id: "service-protocol",
+    inputSources: ["20260811/service"],
+    outputOwner: "service",
+    moduleType: "api-service",
+    moduleTypes: ["api-service", "adapter"],
+    facets: ["protocol-provider", "protocol-consumer", "cross-module-chain"],
+    moduleTypeEvidence: ["src/protocol.ts registration and src/handler.ts dispatch"],
+    outputProfile: "protocol-index",
+    responsibility: "Document the stable service protocol boundary.",
+    entries: ["src/protocol.ts"],
+    pageKinds: ["protocol-index"],
+    protocols: ["declared service protocol"],
+    dependencies: [],
+    exclusions: ["generated/**"],
+    lifecycle: "authoritative",
+    capability: "project-adapter",
+  }],
+  extract: async ({ sources }) => {
+    const serviceRoot = sources.find((item) => item.name === "20260811/service")?.absolutePath;
+    if (serviceRoot === undefined) throw new Error("service source is not materialized");
+    const protocolEvidence = inspectProtocol(serviceRoot);
+    return {
     candidates: [{
       nodeRef: "service/protocol",
       kind: "protocol",
       visibility: "exported",
       module: "service",
-      markdown: renderProtocol(projectRoot),
-      evidence: [{
-        source: "20260811/service",
-        file: "src/protocol.ts",
-        symbol: "protocol",
-        kind: "variable",
-        digest: "0123456789ab",
+      evidence: [protocolEvidence],
+      sections: [{
+        id: "contract",
+        kind: "contract",
+        title: "Provided contract",
+        markdown: renderContract(serviceRoot),
+        evidence: [protocolEvidence],
+      }, {
+        id: "operations",
+        kind: "operation",
+        title: "Operations",
+        markdown: renderOperations(serviceRoot),
+        evidence: inspectOperations(serviceRoot),
+      }, {
+        id: "handoff",
+        kind: "handoff",
+        title: "Implementation handoff",
+        markdown: renderHandoff(serviceRoot),
+        evidence: inspectHandoff(serviceRoot),
       }],
       review: {
         title: "Service protocol",
@@ -721,17 +829,49 @@ extractCustom({
         reason: "Review the project-owned extraction.",
       },
     }],
-  }),
+  }},
 });
 ```
 
-`sources` is the complete registered repo scope for the phase. Every candidate
-and edge carries structured `evidence`; the CLI validates that evidence against
+`sources` is the complete CLI-resolved repo scope for the phase. Resolve files
+from `sources[].absolutePath`; do not embed a local or remote Agent checkout
+path. Every candidate section and edge carries structured `evidence`; the CLI validates that evidence against
 the declared sources, creates canonical `source_ref` values, writes the symbol
 index, candidate ledger and Review snapshots atomically, and records a phase
-fingerprint. `context status` therefore treats this phase exactly like another
+fingerprint. Evidence-scoped section `kind` values satisfy the selected output
+profile's semantic coverage contract. A cross-module flow also requires at
+least one source-backed structured edge. `context status` therefore treats this phase exactly like another
 pending code extraction target, and Review can verify snapshot freshness
 without a placeholder `extractTs` phase.
+
+`indexUnits` is also the batch scale and ownership contract. Candidate
+`module` must match one declared unit id or output owner. Older callbacks that
+omit `indexUnits` remain compatible: Context groups candidates by `module` and
+marks the plan as inferred. Once explicit units exist, an unmatched or
+multiply-owned candidate blocks formal extraction instead of being guessed.
+An inferred plan can be previewed for migration diagnostics, but formal writes
+require the project to declare stable units and owners.
+
+For a large adapter, `candidates` may be an `AsyncIterable` instead of an
+array. Context consumes it incrementally and stops retaining full candidates
+for an index unit after the 301st item proves that the unit is blocked. Array
+callbacks remain supported and are reported as `legacy-preview`.
+
+An optional generic `inspect` adapter can return source-backed module, entry,
+protocol, dependency, lifecycle, and source-of-truth findings before candidate
+collection. It may also return capability gaps tied to declared index-unit ids;
+those gaps enter the one non-delegatable capability Gate. Internal framework
+meaning stays in the project adapter and its referenced material.
+
+The CLI also runs a lightweight structural probe before every custom preview.
+It recognizes TypeScript symbols, React Router routes, Go symbols, Rush
+workspace structure, and source-owned protocol schemas from generic manifests
+and paths. The preview exposes all detected probes in
+`inspection.structuralProbes` and records `structuralCoverage` on each index
+unit. Candidate evidence must cover every probe applicable to the selected
+output profile. Coverage is based on source-backed evidence paths, not Markdown
+page count, so one aggregate page can pass while an entry-only static module
+card cannot.
 
 The extractor returns knowledge semantics (`nodeRef`, rendered Markdown,
 Review summary and source-backed evidence). It must not write `knowledge/`,
@@ -772,7 +912,9 @@ Available structural libraries include:
 The packages return syntax and repository facts only. They do not classify
 product meaning, choose candidate identities, or write lifecycle state. The
 knowledge project owns that mapping. Context CLI does not auto-install these
-packages and does not expose a built-in Go or Rush phase.
+packages and does not expose a built-in Go or Rush phase. Detection does not
+execute or replace an optional parser; it makes the matching parser contract
+and its evidence coverage auditable before candidate writes.
 
 ### `reviewValidity`
 

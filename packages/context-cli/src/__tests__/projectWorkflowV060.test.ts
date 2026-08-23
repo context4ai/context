@@ -130,15 +130,14 @@ function initFixtureRepo(path: string): string {
 
 function writeProjectEntry(project: string): void {
   writeFileSync(join(project, "src", "index.ts"), [
-    'import { allSources, defineProject, extractTs, llmsPackage, reviewValidity, kbPackage } from "@c4a/context";',
+    'import { defineProject, extractTs, llmsPackage, reviewValidity, kbPackage, source } from "@c4a/context";',
     "",
-    'const repoSources = allSources("repo");',
-    "const repoSourceCollection = repoSources[0];",
+    'const sampleLib = source("20260712", "sample-lib");',
     "",
     "export default defineProject({",
-    "  sources: repoSources,",
+    "  sources: [sampleLib],",
     "  phases: [",
-    '    extractTs({ source: repoSourceCollection, collection: "codegraph" }),',
+    '    extractTs({ source: sampleLib, collection: "codegraph" }),',
     '    reviewValidity({ collection: "codegraph" }),',
     "  ],",
     "  packages: [",
@@ -271,15 +270,19 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(lstatSync(join(project, "sources", "repo", "20260712", "sample-lib")).isSymbolicLink()).toBe(true);
 
       const readyStatus = await runCliInDir(project, ["status"]);
-      expect(readyStatus).toContain("state: route.extract.pending-target");
+      expect(readyStatus).toContain("state: route.extract.preview-required");
       expect(readyStatus).toContain("source 20260712/sample-lib: ready");
 
-      const dryRun = await runCliInDir(project, ["run", "extract:repo:codegraph", "--dry-run"]);
-      expect(dryRun).toContain("reads: source:repo:*");
+      await runCliInDir(project, ["run", "--preview-extraction-batch", "--format", "json"]);
+      const previewedStatus = await runCliInDir(project, ["status"]);
+      expect(previewedStatus).toContain("state: route.extract.pending-target");
+
+      const dryRun = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph", "--dry-run"]);
+      expect(dryRun).toContain("reads: source:repo:20260712/sample-lib");
       expect(dryRun).toContain("writes: lifecycle:candidates:codegraph:draft");
       expect(existsSync(join(project, ".tmp", "context-runtime", "runs"))).toBe(false);
 
-      const extract = await runCliInDir(project, ["run", "extract:repo:codegraph"]);
+      const extract = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
       expect(extract).toContain("drafts: +");
       const rows = readRows(project);
       const button = rows.find((row) => row.review.title === "Button");
@@ -473,10 +476,10 @@ describe("0.6.0 current workflow acceptance", () => {
         nextHead,
       ]);
       const sourceStale = await runCliInDir(project, ["status"]);
-      expect(sourceStale).toContain("state: route.extract.pending-target");
+      expect(sourceStale).toContain("state: route.extract.preview-required");
       expect(sourceStale).toContain("source freshness: stale");
       expect(sourceStale).toContain("--workflow-revision");
-      expect(sourceStale).toContain("run extract:repo:codegraph --format json");
+      expect(sourceStale).toContain("run --preview-extraction-batch");
       expect(readRows(project)).toEqual([]);
       expect(JSON.parse(readFileSync(join(project, "knowledge", "decisions.json"), "utf8"))).toEqual({
         [secret!.id]: secret!.fingerprint,
@@ -509,7 +512,7 @@ describe("0.6.0 current workflow acceptance", () => {
         "--ref",
         head,
       ]);
-      await runCliInDir(project, ["run", "extract:repo:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
 
       const rows = readRows(project);
       const button = rows.find((row) => row.review.title === "Button");

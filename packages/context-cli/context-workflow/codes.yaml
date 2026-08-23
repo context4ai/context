@@ -24,6 +24,10 @@ codes:
   - { code: route.capture.pending-target, kind: route-reason, summary: Capture the next declared document target., document: resources/procedures/document-capture.md }
   - { code: route.extract.scope-required, kind: route-reason, summary: Code extraction scope has not been confirmed., document: resources/procedures/code-extraction.md }
   - { code: route.extract.configuration-required, kind: route-reason, summary: Registered repository sources are missing extraction declarations., document: resources/procedures/project-configuration.md }
+  - { code: route.extract.capability-required, kind: route-reason, summary: One or more code index units require missing material or a narrower plan., document: resources/procedures/code-extraction.md }
+  - { code: route.extract.preview-required, kind: route-reason, summary: Preview all pending code index units before candidate writes., document: resources/procedures/code-extraction.md }
+  - { code: route.extract.ownership-required, kind: route-reason, summary: Revise the index plan so every projected page has one output owner., document: resources/procedures/code-extraction.md }
+  - { code: route.extract.scale-limit-exceeded, kind: route-reason, summary: At least one index unit exceeds the supported page limit., document: resources/procedures/code-extraction.md }
   - { code: route.extract.pending-target, kind: route-reason, summary: Extract the next pending code target before another workflow family., document: resources/procedures/code-extraction.md }
   - { code: route.document.classification-required, kind: route-reason, summary: A captured document needs an evidence-backed collection decision., document: resources/procedures/document-classification.md }
   - { code: route.prose.configuration-required, kind: route-reason, summary: A document target is missing a complete prose lifecycle declaration., document: resources/procedures/project-configuration.md }

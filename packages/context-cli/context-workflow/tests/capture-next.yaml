@@ -19,7 +19,7 @@ state:
       knowledge_review_resolved: true
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
-    capture: { declarations_complete: true, complete: false }
+    capture: { declarations_complete: true, batch_digest: null, complete: false }
 expect:
   statusCode: actionable
   primaryNode: capture-next

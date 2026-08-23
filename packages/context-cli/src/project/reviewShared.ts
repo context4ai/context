@@ -17,7 +17,7 @@ import { ExitCode } from "../types/exitCode.js";
 import { buildCommittedEvidenceIndex } from "./documentEvidenceIndex.js";
 import { assertSafeEntityId } from "./entityId.js";
 import { extractPhaseSourceFingerprint } from "./extractCandidateArtifacts.js";
-import { selectRepoSourcesForExtraction } from "./extractCandidates.js";
+import { selectRepoSourcesForExtraction } from "./extractSourceSelection.js";
 import { proseCandidateMarkdown } from "./proseCandidateMarkdown.js";
 import type { ProseCandidateSection, CandidateRecord } from "./candidateLedger.js";
 import { loadContextProjectModule } from "./workspace.js";

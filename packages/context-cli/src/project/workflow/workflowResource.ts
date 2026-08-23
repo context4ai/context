@@ -189,6 +189,8 @@ export async function materializeContextWorkflowResource(input: {
   assertObservedProjectWorkflowRevision({
     status: snapshot.status,
     expectedRevision: input.revision,
+    managed: input.managed === true,
+    authorities,
   });
   const status = snapshot.status;
   const resourceId = workflowResourceId(input.resourceId);
@@ -317,6 +319,8 @@ export async function acknowledgeCurrentWorkflowResources(input: {
   assertObservedProjectWorkflowRevision({
     status: snapshot.status,
     expectedRevision: input.revision,
+    managed: input.managed === true,
+    authorities,
   });
   const status = snapshot.status;
   const directResources = (status.workflow.current?.resources.required ?? [])

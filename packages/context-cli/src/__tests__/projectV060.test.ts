@@ -431,9 +431,9 @@ describe("0.6.0 project init and source ensure", () => {
       expect(lstatSync(link).isSymbolicLink()).toBe(true);
 
       const status = await runCliInDir(project, ["status"]);
-      expect(status).toContain("state: route.extract.pending-target");
+      expect(status).toContain("state: route.extract.preview-required");
       expect(status).toContain("--workflow-revision");
-      expect(status).toContain("run extract:20260712/sample-lib:codegraph --format json");
+      expect(status).toContain("run --preview-extraction-batch");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

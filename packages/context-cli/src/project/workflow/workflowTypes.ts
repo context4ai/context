@@ -26,6 +26,7 @@ import type {
 import type { StructureDraftStatus } from "../statusReaders.js";
 import type { ProjectVerifyIssue } from "../verify.js";
 import type { ReviewPathIdentityConflictStatus } from "../reviewIdentityConflicts.js";
+import type { ExtractionPreviewState } from "../extractionPreviewCache.js";
 
 export const CONTEXT_WORKFLOW_PROVIDER_ID = "c4a/context";
 export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
@@ -85,6 +86,12 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   };
   extract: {
     declarations_complete: boolean;
+    plans_complete: boolean;
+    capability_clear: boolean;
+    preview_current: boolean;
+    ownership_clear: boolean;
+    scale_clear: boolean;
+    batch_digest: string | null;
     complete: boolean;
   };
   documents: {
@@ -143,6 +150,7 @@ export interface ContextWorkflowObservation {
   sourceFreshness: SourceFreshnessState;
   staleSourcePhases: readonly string[];
   pendingExtractPhases: readonly string[];
+  extractionPreview?: ExtractionPreviewState;
   pendingCaptureCommands: readonly string[];
   missingCaptureSources: readonly DocumentSourceStatus[];
   evidenceWarnings: EvidenceWarningState;

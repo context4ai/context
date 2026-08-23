@@ -13,6 +13,7 @@ export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 export type CandidateStatus = "draft" | "rejected";
 export type CandidateType = "code-symbol" | "prose-align";
 export type CandidateChange = "add" | "update" | "remove";
+export type CodeRelationshipMode = "source-backed-ast" | "source-backed-explicit";
 
 export interface ProseCandidateSource {
   type: "file" | "lark";
@@ -85,6 +86,7 @@ export interface CandidateRecord {
   body?: string;
   sections?: ProseCandidateSection[];
   code_edges?: CodeCandidateEdge[];
+  relationship_mode?: CodeRelationshipMode;
   fingerprint: string;
   review: CandidateReviewSummary;
   updated: string;
@@ -193,6 +195,20 @@ function candidateChangeField(record: Record<string, unknown>, line: number): Ca
     throw schemaError(line, "field change must be one of add, update, remove");
   }
   return record.change as CandidateChange;
+}
+
+function relationshipModeField(
+  record: Record<string, unknown>,
+  line: number,
+): CodeRelationshipMode | undefined {
+  if (record.relationship_mode === undefined) return undefined;
+  if (
+    record.relationship_mode !== "source-backed-ast" &&
+    record.relationship_mode !== "source-backed-explicit"
+  ) {
+    throw schemaError(line, "field relationship_mode must be source-backed-ast or source-backed-explicit");
+  }
+  return record.relationship_mode;
 }
 
 function optionalStringField(record: Record<string, unknown>, field: string, line: number): string | undefined {
@@ -371,6 +387,7 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
   const structureDigest = optionalStringField(value, "structure_digest", line);
   const sections = sectionsField(value, line);
   const codeEdges = codeEdgesField(value, line);
+  const relationshipMode = relationshipModeField(value, line);
   const sharedSourceRefs = optionalStringArrayField(value, "shared_source_refs", line);
   const nodeTags = value.node_tags === undefined
     ? undefined
@@ -380,6 +397,9 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
   if (targetPath !== undefined) throw schemaError(line, "field target_path is not supported; use path");
   if (value.replaces !== undefined) throw schemaError(line, "field replaces is not supported");
   validateCodeEdgesCandidate({ candidateType, codeEdges, nodeRef, line });
+  if (relationshipMode !== undefined && candidateType !== "code-symbol") {
+    throw schemaError(line, "field relationship_mode is supported only for code-symbol candidates");
+  }
   return {
     candidate_id: candidateId,
     node_ref: nodeRef,
@@ -402,6 +422,7 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
     ...(body !== undefined ? { body } : {}),
     ...(sections !== undefined ? { sections } : {}),
     ...(codeEdges !== undefined ? { code_edges: codeEdges } : {}),
+    ...(relationshipMode !== undefined ? { relationship_mode: relationshipMode } : {}),
     fingerprint: stringField(value, "fingerprint", line),
     review: reviewField(value, line),
     updated: stringField(value, "updated", line),

@@ -66,6 +66,7 @@ import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
 import { recordAgentGraphEvaluation } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
+import { readExtractionPreviewState } from "./extractionPreviewCache.js";
 
 export type {
   ActiveStructuresStatus,
@@ -481,7 +482,15 @@ export async function collectProjectStatusSnapshot(
         sources,
         sourceStatuses,
       })
-    : { state: "ready" as const, stalePhases: [], pendingPhases: [], diagnostics: [], errorDiagnostics: [] };
+    : { state: "ready" as const, stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
+  const extractionPreview = await readExtractionPreviewState({
+    projectRoot,
+    pendingPhaseIds: [...new Set([
+      ...sourceFreshness.stalePhases,
+      ...sourceFreshness.pendingPhases,
+    ])],
+    phases,
+  });
   const verifyStatus = draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(
         projectRoot,
@@ -589,6 +598,7 @@ export async function collectProjectStatusSnapshot(
       sourceFreshness: sourceFreshness.state,
       staleSourcePhases: sourceFreshness.stalePhases,
       pendingExtractPhases: sourceFreshness.pendingPhases,
+      extractionPreview,
       pendingCaptureCommands: pendingCapture.commands,
       missingCaptureSources: pendingCapture.missingSources,
       evidenceWarnings,
@@ -666,6 +676,7 @@ export async function collectProjectStatusSnapshot(
     sourceFreshness: sourceFreshness.state,
     staleSourcePhases: sourceFreshness.stalePhases,
     pendingExtractPhases: sourceFreshness.pendingPhases,
+    extractionPreview,
     pendingCapturePhases: pendingCapture.phaseIds,
     evidenceStatus,
     evidenceWarnings,

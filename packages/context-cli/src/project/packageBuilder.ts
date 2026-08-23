@@ -74,27 +74,7 @@ export interface ProjectBuildResult {
   agent_hints: PackageBuildAgentHint[];
 }
 
-export type PackageBuildAgentHint = PackageAssetOptimizationAgentHint | RuntimeEventPendingAgentHint;
-
-export interface PackageAssetOptimizationAgentHint {
-  reason_code: "package.assets.optimization-recommended";
-  package_name: string;
-  candidate_files: number;
-  candidate_bytes: number;
-  threshold_bytes: number;
-  command: "bun add -D sharp";
-  configuration: {
-    file: "src/index.ts";
-    field: "kbPackage.assets";
-    value: {
-      delivery: "bundle";
-      optimize: {
-        processor: "sharp";
-        mode: "lossless-webp";
-      };
-    };
-  };
-}
+export type PackageBuildAgentHint = RuntimeEventPendingAgentHint;
 
 export interface PackageFreshness {
   name: string;
@@ -116,7 +96,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v14-git-asset-identity";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v15-navigation-entry-folding";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -552,22 +532,6 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       state: changedFiles === 0 ? "unchanged" : previousOutput.length === 0 ? "created" : "updated",
       changes,
     });
-    const optimization = writtenKnowledge.assetDelivery.optimization;
-    if (optimization?.state === "recommended") {
-      agentHints.push({
-        reason_code: "package.assets.optimization-recommended",
-        package_name: pkg.name,
-        candidate_files: optimization.candidateFiles,
-        candidate_bytes: optimization.originalBytes,
-        threshold_bytes: optimization.thresholdBytes,
-        command: "bun add -D sharp",
-        configuration: {
-          file: "src/index.ts",
-          field: "kbPackage.assets",
-          value: { delivery: "bundle", optimize: { processor: "sharp", mode: "lossless-webp" } },
-        },
-      });
-    }
   }
   return { projectRoot, packages: summaries, agent_hints: agentHints };
 }

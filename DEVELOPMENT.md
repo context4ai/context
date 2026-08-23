@@ -231,11 +231,13 @@ npm pack packages/context-cli/dist --dry-run
 ```
 
 Publishing is driven by a GitHub Release whose tag is exactly `v<version>`.
-The release workflow checks the tag, runs `bun run verify:full`, builds and
-audits all seven packages, then publishes them in dependency order with npm
-provenance. Each npm package must trust the `context4ai/context` repository and
-the `.github/workflows/publish.yml` workflow through npm Trusted Publishing.
-The workflow is safe to rerun after a partial registry publication: it skips an
+Use that exact tag as the Release title; do not prefix the title with the
+product name. The release workflow checks the tag, normalizes the title to the
+tag, runs `bun run verify:full`, builds and audits all seven packages, then
+publishes them in dependency order with npm provenance. Each npm package must
+trust the `context4ai/context` repository and the
+`.github/workflows/publish.yml` workflow through npm Trusted Publishing. The
+workflow is safe to rerun after a partial registry publication: it skips an
 exact package version that already exists and continues with the remaining
 packages.
 

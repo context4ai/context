@@ -9,6 +9,7 @@ import {
   assertContextStatusWorkspaceAllowed,
   findContextProjectRoot,
 } from "./workspace.js";
+import { workflowStatusCommand } from "./workflow/workflowExecutionContext.js";
 import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
 
 function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
@@ -131,6 +132,7 @@ export async function runProjectStatusCommand(input: {
 export async function assertProjectWorkflowRevision(input: {
   cwd: string;
   expectedRevision: string;
+  managed: boolean;
   authorities?: readonly ContextWorkflowAuthority[];
 }): Promise<void> {
   assertProjectWorkflowRevisionValue(input.expectedRevision);
@@ -143,6 +145,7 @@ export async function assertProjectWorkflowRevision(input: {
     );
   }
   const status = await collectProjectStatus(found.projectRoot, {
+    managed: input.managed,
     ...(input.authorities === undefined
       ? {}
       : { authorities: input.authorities }),
@@ -150,24 +153,37 @@ export async function assertProjectWorkflowRevision(input: {
   assertObservedProjectWorkflowRevision({
     status,
     expectedRevision: input.expectedRevision,
+    managed: input.managed,
+    authorities: input.authorities ?? [],
   });
 }
 
 export function assertObservedProjectWorkflowRevision(input: {
   status: ProjectStatus;
   expectedRevision: string;
+  managed: boolean;
+  authorities: readonly ContextWorkflowAuthority[];
 }): void {
   assertProjectWorkflowRevisionValue(input.expectedRevision);
   if (input.status.workflow.revision === input.expectedRevision) return;
+  const recoveryCommand = workflowStatusCommand({
+    managed: input.managed,
+    authorities: input.authorities,
+  });
   throw new ContextError(
     ExitCode.WorkspaceStateError,
-    "The Context workspace changed after this command was selected. Re-run `context status --format json` and use the new route.",
+    `The Context workspace changed after this command was selected. Re-run \`${recoveryCommand}\` and use the new route.`,
     {
       category: ErrorCategory.WorkflowRevisionStale,
       expected_revision: input.expectedRevision,
       current_revision: input.status.workflow.revision,
       current_state: input.status.workflow.current?.reason_code ??
         input.status.workflow.status,
+      next_action: {
+        kind: "refresh_workflow_route",
+        command: recoveryCommand,
+        message: "Refresh the current route in the same execution mode and use only the newly returned command.",
+      },
     },
   );
 }

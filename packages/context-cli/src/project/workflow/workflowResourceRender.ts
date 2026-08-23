@@ -5,6 +5,7 @@ export const CONTEXT_WORKFLOW_RESOURCE_IDS = [
   "context.verification-current",
   "context.source-boundary",
   "context.source-current",
+  "context.extraction-preview",
   "context.structure-current",
   "context.review-current",
   "context.package-current",
@@ -172,6 +173,47 @@ ${bullets(documents)}
 `;
 }
 
+function renderExtractionPreview(status: ProjectStatus): string {
+  const preview = status.extractionPreview.report;
+  if (preview === undefined) {
+    return `# Current code extraction preview\n\nNo current preview is available. Run the Route-selected batch preview command.\n`;
+  }
+  const units = preview.phases.flatMap((phase) => phase.indexUnits.map((unit) =>
+    `${inline(unit.id)} — owner=${inline(unit.outputOwner)}, types=${unit.moduleTypes.map(inline).join("+")}, facets=${unit.facets.length === 0 ? "none" : unit.facets.map(inline).join("+")}, profile=${inline(unit.outputProfile)}, plan=${inline(unit.plan)}, pages=${unit.currentPageCount}→${unit.projectedPageCount}, changes=+${unit.changes.added}/~${unit.changes.updated}/-${unit.changes.removed}/=${unit.changes.unchanged}${unit.changes.exact ? "" : " (estimated)"}, scale=${inline(unit.scale)}, semantic-coverage=${unit.semanticCoverage === undefined ? "n/a" : `${unit.semanticCoverage.covered.length}/${unit.semanticCoverage.required.length}${unit.semanticCoverage.uncovered.length === 0 ? "" : ` missing:${unit.semanticCoverage.uncovered.map(inline).join("+")}`}`}, exported/internal=${unit.visibility.exported}/${unit.visibility.internal}, bytes=${unit.contentBytes.total}, max-page-bytes=${unit.contentBytes.max}, top-directories=${unit.topDirectories.map((item) => `${inline(item.path)}:${item.count}`).join(", ") || "none"}, risks=${unit.risks.length === 0 ? "none" : unit.risks.map(inline).join(", ")}`
+  ));
+  const capabilityGaps = preview.phases.flatMap((phase) =>
+    "inspection" in phase
+      ? phase.inspection.capabilityGaps.map((gap) =>
+          `${inline(gap.indexUnitId)} — ${gap.reason}${gap.requestedMaterial === undefined ? "" : `; requested=${inline(gap.requestedMaterial)}`}`
+        )
+      : []
+  );
+  return `# Current code extraction preview
+
+## Batch
+
+- Digest: ${inline(preview.digest)}
+- Index units: ${preview.totals.indexUnits}
+- Projected pages: ${preview.totals.projectedPages}
+- Projected content bytes: ${preview.totals.contentBytes}
+- Warning units: ${preview.totals.warnings}
+- Blocked units: ${preview.totals.blocked}
+- Capability clear: ${inline(preview.capabilityClear)}
+- Ownership clear: ${inline(preview.ownershipClear)}
+- Scale clear: ${inline(preview.scaleClear)}
+- Batch advisories: ${inline(preview.advisories.length === 0 ? "none" : preview.advisories.join(", "))}
+- Reusable phase caches: ${preview.cache.reusablePhases}/${preview.totals.phases}
+
+## Index units
+
+${bullets(units)}
+
+## Capability gaps
+
+${bullets(capabilityGaps)}
+`;
+}
+
 function renderStructure(status: ProjectStatus): string {
   const activeSlots = status.activeStructures.slots.map((slot) =>
     `${inline(slot.sourceKey)} / ${inline(slot.collection)} — ${inline("active")}, digest=${inline(slot.structureDigest)}`
@@ -249,16 +291,9 @@ Apply only a decision payload whose scope and candidate-set identity match the c
 }
 
 function renderPackages(status: ProjectStatus): string {
-  const packages = status.packages.flatMap((item) => {
-    const summary =
-      `${inline(item.name)} — ${inline(item.state)}, kind=${inline(item.kind)}, inputs=${item.inputFiles}, outputs=${item.outputFiles}`;
-    if (item.assetDelivery?.optimization?.state !== "recommended") return [summary];
-    const optimization = item.assetDelivery.optimization;
-    return [
-      summary,
-      `  - optional asset optimization: ${optimization.candidateFiles} PNG/JPEG file(s), ${optimization.originalBytes} byte(s); run ${inline("bun add -D sharp")} and configure ${inline("kbPackage().assets.optimize")} only for bundled delivery`,
-    ];
-  });
+  const packages = status.packages.map((item) =>
+    `${inline(item.name)} — ${inline(item.state)}, kind=${inline(item.kind)}, inputs=${item.inputFiles}, outputs=${item.outputFiles}`
+  );
   const templates = status.packageTemplateReviews.map((item) =>
     `${inline(item.packageName)} — ${inline(item.state)}, source=${inline(item.templatePath)}`
   );
@@ -290,6 +325,7 @@ export function renderContextWorkflowResource(
     case "context.verification-current": return renderVerification(status);
     case "context.source-boundary": return renderSourceBoundary(status);
     case "context.source-current": return renderSources(status);
+    case "context.extraction-preview": return renderExtractionPreview(status);
     case "context.structure-current": return renderStructure(status);
     case "context.review-current": return renderReview(status);
     case "context.package-current": return renderPackages(status);

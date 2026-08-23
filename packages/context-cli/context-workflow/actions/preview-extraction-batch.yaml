@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: preview-extraction-batch
+runner: host
+effect: write
+handler: context.extract.preview-batch

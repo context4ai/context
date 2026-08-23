@@ -21,7 +21,7 @@ state:
       knowledge_review_resolved: true
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
-    capture: { declarations_complete: true, complete: true }
+    capture: { declarations_complete: true, batch_digest: null, complete: true }
 expect:
   statusCode: actionable
   primaryNode: choose-extraction-scope
@@ -31,4 +31,5 @@ expect:
   requiredResources:
     - procedure.code-extraction
     - dialogue.code-extraction
+    - semantic.code-index.classification
     - context.source-current

@@ -225,6 +225,7 @@ export function createCliProgram(): Command {
     await assertProjectWorkflowRevision({
       cwd: process.cwd(),
       expectedRevision: options.workflowRevision,
+      managed: options.workflowManaged === true,
       authorities,
     });
   });

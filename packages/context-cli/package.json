@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.6.13",
+  "version": "0.6.15",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -59,6 +59,7 @@
     "remark-mdx": "^3.1.1",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.5.4",
     "unified": "^11.0.5",
     "web-tree-sitter": "^0.20.8",

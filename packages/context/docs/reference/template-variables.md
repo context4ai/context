@@ -231,9 +231,10 @@ The default KB template uses the variables above to generate a starter index:
 - links to generated directory indexes when a directory exceeds the configured
   inline-entry threshold.
 
-`context build` always provides selected OKF root indexes. By default, a
-non-root directory gets its own index only when it contains more than 50
-descendant knowledge pages. Configure this with
+`context build` always provides selected OKF root indexes. By default,
+directory indexes are planned bottom-up, and a non-root directory gets its own
+index only when it would expose more than 50 page or retained child-index
+entries to its parent. Configure this with
 `kbPackage({ navigation: { foldDirectoryIndexes, maxInlineEntries } })`.
 
 The output is only a starter. Edit the files under

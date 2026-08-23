@@ -209,6 +209,10 @@ function projectPhaseRunInput(input: {
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
+    ...(input.options.previewExtractionBatch === true ? { previewExtractionBatch: true } : {}),
+    ...(Array.isArray(input.options.previewPhase)
+      ? { previewPhaseIds: input.options.previewPhase.filter((value): value is string => typeof value === "string") }
+      : {}),
     ...(input.options.autoPromote === true ? { autoPromote: true } : {}),
     ...(input.managed ? { managed: true } : {}),
     ...(input.workflowRevision === undefined
@@ -316,6 +320,13 @@ export function registerProjectRunCommand(
     .description("Inspect or run a declared project phase")
     .option("--list", "list declared phases")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
+    .addOption(new Option("--preview-extraction-batch").hideHelp())
+    .addOption(
+      new Option("--preview-phase <phase-id>")
+        .hideHelp()
+        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
+        .default([]),
+    )
     .option("--auto-promote", "with a codegraph extract phase, apply deterministic deltas, refresh close, and verify without review")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
@@ -360,6 +371,11 @@ export function registerProjectRunCommand(
         rootOptions.workflowAuthority,
         options.authority,
       );
+      if (options.previewExtractionBatch === true && phaseId !== undefined) {
+        throw new ContextError(ExitCode.UserError, "--preview-extraction-batch cannot be combined with a phase id", {
+          category: ErrorCategory.UserInputInvalid,
+        });
+      }
       if (typeof options.batchInput === "string") {
         const operation = assertBatchOptions(phaseId, options);
         const result = await runProseStructureBatch({

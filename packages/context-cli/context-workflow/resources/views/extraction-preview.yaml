@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.extraction-preview
+kind: context-view
+mediaType: text/markdown
+description: Current batch code-extraction scale, output profile, ownership, structural probe coverage, and capability report.
+materializer: actions/materialize-context-view.yaml

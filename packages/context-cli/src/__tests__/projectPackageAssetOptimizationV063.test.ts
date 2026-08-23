@@ -36,32 +36,65 @@ function imageAsset(name: string, size: number): PackageAssetFile {
   };
 }
 
-describe("optional package asset optimization", () => {
-  test("recommends a workspace processor only after eligible bytes exceed the threshold", async () => {
+describe("package asset image budgets", () => {
+  test("compresses only when the default single-image budget is exceeded", async () => {
     const asset = imageAsset("example", 24);
     expect(isOptimizablePackageImage(asset)).toBe(true);
-    const recommended = await optimizePackageAssetFiles({
+    const optimized = await optimizePackageAssetFiles({
       projectRoot: "/workspace",
       assets: [asset],
-      thresholdBytes: 20,
+      maxImageBytes: 20,
+      maxTotalImageBytes: 100,
+      processor: { optimize: async () => webpBytes(12) },
     });
-    expect(recommended.summary).toEqual({
-      state: "recommended",
+    expect(optimized.summary).toEqual({
+      state: "applied",
       candidateFiles: 1,
       originalBytes: 24,
-      outputBytes: 24,
-      savedBytes: 0,
-      thresholdBytes: 20,
-      reasonCode: "package.assets.optimization-recommended",
+      outputBytes: 12,
+      savedBytes: 12,
+      maxImageBytes: 20,
+      maxTotalImageBytes: 100,
+      largestOutputBytes: 12,
+      processor: "sharp",
+      mode: "webp",
     });
-    expect(recommended.assets[0]?.packageRelPath).toBe(asset.packageRelPath);
+    expect(optimized.assets[0]?.packageRelPath).toEndWith(".webp");
 
     const below = await optimizePackageAssetFiles({
       projectRoot: "/workspace",
       assets: [asset],
-      thresholdBytes: 24,
+      maxImageBytes: 24,
+      maxTotalImageBytes: 100,
     });
     expect(below.summary.state).toBe("not-needed");
+  });
+
+  test("compresses multiple images to the total budget and blocks impossible output", async () => {
+    const images = [imageAsset("one", 30), imageAsset("two", 30)];
+    const result = await optimizePackageAssetFiles({
+      projectRoot: "/workspace",
+      assets: images,
+      maxImageBytes: 100,
+      maxTotalImageBytes: 40,
+      processor: { optimize: async () => webpBytes(15) },
+    });
+    expect(result.summary).toMatchObject({
+      state: "applied",
+      outputBytes: 30,
+      maxTotalImageBytes: 40,
+      largestOutputBytes: 15,
+    });
+
+    await expect(optimizePackageAssetFiles({
+      projectRoot: "/workspace",
+      assets: images,
+      maxImageBytes: 100,
+      maxTotalImageBytes: 40,
+      processor: { optimize: async (bytes) => webpBytes(bytes.byteLength) },
+    })).rejects.toMatchObject({
+      detail: { reason_code: "package.assets.image-budget-exceeded" },
+    });
   });
 
   test("uses a configured processor, content-addresses smaller output, and keeps other files", async () => {
@@ -164,19 +197,14 @@ describe("optional package asset optimization", () => {
     }
   });
 
-  test("reports the exact workspace setup when a configured processor is absent", async () => {
+  test("resolves the CLI-owned processor without a workspace dependency", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "context-package-processor-"));
     try {
       await writeFile(join(projectRoot, "package.json"), "{}\n", "utf8");
-      await expect(resolvePackageImageProcessor(projectRoot, {
+      expect(await resolvePackageImageProcessor(projectRoot, {
         delivery: "bundle",
         optimize: { processor: "sharp", mode: "lossless-webp" },
-      })).rejects.toMatchObject({
-        detail: {
-          reason_code: "package.assets.optimizer-missing",
-          next: "Run bun add -D sharp in the Context workspace, then rerun context build.",
-        },
-      });
+      })).toBeDefined();
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

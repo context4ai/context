@@ -28,12 +28,9 @@ export function formatProjectStatus(status: ProjectStatus): string {
   );
   const packageLines = status.packages.length === 0
     ? ["packages: none"]
-    : status.packages.flatMap((pkg) => [
-      `package ${pkg.name}: ${pkg.state} (kind=${pkg.kind}, inputs=${pkg.inputFiles}, outputs=${pkg.outputFiles})`,
-      ...(pkg.assetDelivery?.optimization?.state === "recommended"
-        ? [`agent hint ${pkg.name}: package.assets.optimization-recommended; run bun add -D sharp and configure kbPackage.assets in src/index.ts`]
-        : []),
-    ]);
+    : status.packages.map((pkg) =>
+      `package ${pkg.name}: ${pkg.state} (kind=${pkg.kind}, inputs=${pkg.inputFiles}, outputs=${pkg.outputFiles})`
+    );
   return formatFeedback({
     symbol: status.verifyErrors > 0 || status.diagnostics.length > 0 ? "⚠" : "✓",
     action: "inspected",

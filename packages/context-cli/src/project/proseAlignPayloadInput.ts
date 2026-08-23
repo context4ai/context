@@ -32,7 +32,7 @@ export async function readAlignInputPayload(path: string | undefined): Promise<u
     const message = error instanceof Error ? error.message : String(error);
     throw alignPayloadUserError(`structure payload is invalid YAML/JSON: ${message}`, {
       path,
-      next: "Fix payload syntax, then rerun --stage; use --validate only when a diagnostics-only pass is useful.",
+      next: "Fix payload syntax. Quote YAML strings that begin with reserved indicators such as @, or provide JSON. Then rerun --stage; use --validate only when a diagnostics-only pass is useful.",
     });
   }
 }

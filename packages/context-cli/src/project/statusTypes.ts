@@ -13,6 +13,7 @@ import type { StructureDraftStatus } from "./statusReaders.js";
 import type { StructureBatchStatus } from "./statusStructureBatch.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
 import type { ReviewPathIdentityConflictStatus } from "./reviewIdentityConflicts.js";
+import type { ExtractionPreviewState } from "./extractionPreviewCache.js";
 
 export type SourceFreshnessState = "ready" | "stale" | "unknown";
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
@@ -159,6 +160,7 @@ export interface ProjectStatus {
   sourceFreshness: SourceFreshnessState;
   staleSourcePhases: string[];
   pendingExtractPhases: string[];
+  extractionPreview: ExtractionPreviewState;
   pendingCapturePhases: string[];
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;

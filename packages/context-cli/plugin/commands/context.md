@@ -109,6 +109,10 @@ Treat `workflow.current` as the current-step authority:
    not inside a restricted child sandbox. Follow the Route-selected procedure
    for its audit and approval contract; never invent a payload, destination, or
    substitute command.
+   Treat a code-extraction batch preview as one Route action. Read its complete
+   index-unit report and keep same-kind capability or scale decisions in the
+   single returned Gate; do not ask about modules one by one. A non-delegatable
+   extraction Gate must stop even in fully managed mode.
 4. If `configuration` is present, edit only the named project file and use the
    selected resources as its contract.
 5. After every action or configuration change, run status again. The managed

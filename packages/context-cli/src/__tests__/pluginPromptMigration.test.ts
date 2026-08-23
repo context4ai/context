@@ -231,6 +231,62 @@ describe("plugin prompt and workflow resource contract", () => {
     ).toBeGreaterThan(13_000);
   });
 
+  test("code-index archetype templates remain usable without prior project context", async () => {
+    const classification = await read(
+      WORKFLOW_ROOT,
+      "resources",
+      "semantic",
+      "code-index",
+      "classification.md",
+    );
+    for (const required of [
+      "Use one batch evidence pass",
+      "Record classification before reading templates",
+      "Read matching templates",
+      "Match the plan to the extractor",
+      "Produce one deduplicated plan",
+      "Capability gaps and preview",
+      "up to 100 pages",
+      "101–300 pages",
+      "more than 300 pages",
+    ]) {
+      expect(classification, required).toContain(required);
+    }
+
+    const templates = new Map<string, readonly string[]>([
+      ["web-application.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["api-service.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["domain-service.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["background-runtime.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["sdk-library.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["cli-tool.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["adapter.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["monorepo-container.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["derived-source.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
+      ["contract-source.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprint", "Granularity and stop conditions"]],
+      ["protocol-boundary.md", ["Evidence pass", "Questions the knowledge must answer", "Canonical operation record", "Generated and authoritative contracts", "Granularity and relationships"]],
+      ["event-flow.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
+      ["persistence-boundary.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
+      ["plugin-extension.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
+      ["cross-module-chain.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Extractor and ownership rule", "Granularity and stop conditions"]],
+    ]);
+
+    for (const [file, requiredSections] of templates) {
+      const body = await read(
+        WORKFLOW_ROOT,
+        "resources",
+        "semantic",
+        "code-index",
+        "templates",
+        file,
+      );
+      expect(body, `${file}:chapter blueprint`).toContain("```markdown");
+      for (const section of requiredSections) {
+        expect(body, `${file}:${section}`).toContain(section);
+      }
+    }
+  });
+
   test("workflow graph exposes the complete semantic inventory as progressive context", async () => {
     const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
     const compileIndex = await read(

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { loadSourcesRegistry } from "@c4a/context";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -500,14 +500,17 @@ the CLI derives a lowercase path-safe module and rejects duplicate batch identit
 
   source.command("inspect [name]")
     .description("Inspect repo source module boundaries without extraction")
+    .addOption(new Option("--repo-only").hideHelp())
     .option("--format <format>", "output format: json | yaml | table", "table")
     .action(async (name: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
       const projectRoot = requireProjectRoot(process.cwd(), "source inspect");
-      const documentMatches = await documentSourcesForName({
-        projectRoot,
-        ...(name !== undefined ? { name } : {}),
-      });
+      const documentMatches = options.repoOnly === true
+        ? []
+        : await documentSourcesForName({
+            projectRoot,
+            ...(name !== undefined ? { name } : {}),
+          });
       const repoMatches = name === undefined || (await listRepoSources(projectRoot)).some((repo) =>
         repo.name === name || repo.id === name || repo.namespace === name
       );
