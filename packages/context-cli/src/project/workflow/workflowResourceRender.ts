@@ -9,6 +9,7 @@ export const CONTEXT_WORKFLOW_RESOURCE_IDS = [
   "context.structure-current",
   "context.review-current",
   "context.package-current",
+  "context.document-optimization-current",
 ] as const;
 
 export type ContextWorkflowResourceId =
@@ -316,6 +317,27 @@ ${bullets(templates)}
 `;
 }
 
+function renderDocumentOptimization(status: ProjectStatus): string {
+  const current = status.documentOptimization;
+  return `# Current document optimization overlays
+
+- Enabled: ${inline(current.enabled)}
+- Policy: ${inline(current.policy)}
+- Current: ${inline(current.current)}
+- Eligible views: ${current.eligible_views}
+- Eligible fragments: ${current.eligible_fragments}
+- Optimized fragments: ${current.optimized_fragments}
+- Kept fragments: ${current.kept_fragments}
+- Manual overrides: ${current.override_fragments}
+- Pending fragments: ${current.pending_fragments}
+- Conflicts: ${current.conflict_fragments}
+
+Generated decisions do not modify approved knowledge. Manual overrides are
+applied only while their recorded input, context, and policy digests remain
+current.
+`;
+}
+
 export function renderContextWorkflowResource(
   id: ContextWorkflowResourceId,
   status: ProjectStatus,
@@ -329,6 +351,7 @@ export function renderContextWorkflowResource(
     case "context.structure-current": return renderStructure(status);
     case "context.review-current": return renderReview(status);
     case "context.package-current": return renderPackages(status);
+    case "context.document-optimization-current": return renderDocumentOptimization(status);
   }
 }
 

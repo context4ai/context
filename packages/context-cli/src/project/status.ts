@@ -44,6 +44,11 @@ import type {
   UnclassifiedDocumentTarget,
 } from "./statusTypes.js";
 import {
+  collectDocumentOptimizationStatus,
+  disabledDocumentOptimizationStatus,
+} from "./documentOptimization.js";
+import { listApprovedKnowledge } from "./packageBuilder.js";
+import {
   evaluateContextWorkflow,
   projectContextWorkflowStatus,
 } from "./workflow/workflowProvider.js";
@@ -473,6 +478,12 @@ export async function collectProjectStatusSnapshot(
       ),
     })),
   )).filter((item) => item.count > 0).map((item) => item.collection);
+  const documentOptimization = phaseStatus.projectEntryValid
+    ? await collectDocumentOptimizationStatus({
+        projectRoot,
+        files: await listApprovedKnowledge(projectRoot),
+      })
+    : disabledDocumentOptimizationStatus(projectRoot);
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const sourceFreshness = phaseStatus.projectEntryValid
@@ -594,6 +605,7 @@ export async function collectProjectStatusSnapshot(
       packages,
       packageFreshness,
       packageTemplateReviews,
+      documentOptimization,
       runtimeEvents,
       sourceFreshness: sourceFreshness.state,
       staleSourcePhases: sourceFreshness.stalePhases,
@@ -673,6 +685,7 @@ export async function collectProjectStatusSnapshot(
     phases: phases.map((phase) => phase.id),
     packages: packageFreshness,
     packageTemplateReviews,
+    documentOptimization,
     sourceFreshness: sourceFreshness.state,
     staleSourcePhases: sourceFreshness.stalePhases,
     pendingExtractPhases: sourceFreshness.pendingPhases,

@@ -6,6 +6,7 @@ import type {
   StructureCompileResolution,
 } from "./declarationGraph.js";
 import type { PackageFreshness } from "./packageBuilder.js";
+import type { DocumentOptimizationStatus } from "./documentOptimization.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
 import type { ProseCompileBatchProgress } from "./proseCompileBatch.js";
 import type { RepoSourceStatus } from "./repoSources.js";
@@ -156,6 +157,7 @@ export interface ProjectStatus {
   documentSources: DocumentSourceStatus[];
   phases: string[];
   packages: PackageFreshness[];
+  documentOptimization: DocumentOptimizationStatus;
   packageTemplateReviews: PackageTemplateReviewStatus[];
   sourceFreshness: SourceFreshnessState;
   staleSourcePhases: string[];

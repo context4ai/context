@@ -288,6 +288,11 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
       },
     },
   }),
+  "context.document-optimization.next": (observation) => ({
+    commands: observation.documentOptimization?.enabled === true && !observation.documentOptimization.current
+      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
+      : [],
+  }),
   "context.logs.flush": () => ({
     commands: [command(
       "context logs flush --format json",

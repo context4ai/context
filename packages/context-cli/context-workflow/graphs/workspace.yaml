@@ -623,6 +623,18 @@ nodes:
         - resources/views/package-current.yaml
         - resources/manuals/reference/package-templates.md
 
+  - id: optimize-documents
+    kind: action
+    reasonCode: route.document-optimization.pending
+    action: actions/optimize-documents.yaml
+    satisfiedBy:
+      - path: document_optimization.current
+        equals: true
+    resources:
+      required:
+        - resources/procedures/document-optimization.md
+        - resources/views/document-optimization-current.yaml
+
   - id: flush-logs-after-build
     kind: action
     reasonCode: route.logs.delivery-pending
@@ -672,6 +684,7 @@ edges:
   - { from: align-next, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: build-next, kind: gatedBy }
+  - { from: review-package-template, to: optimize-documents, kind: gatedBy }
+  - { from: optimize-documents, to: build-next }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }

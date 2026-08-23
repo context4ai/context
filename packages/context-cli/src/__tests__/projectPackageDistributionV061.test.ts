@@ -201,7 +201,7 @@ describe("flat knowledge package distribution", () => {
         "sample-kb.json",
       );
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-      expect(manifest.builder_protocol).toBe("v15-navigation-entry-folding");
+      expect(manifest.builder_protocol).toBe("v16-document-optimization-overlays");
       manifest.builder_protocol = "v14-git-asset-identity";
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 

@@ -72,6 +72,12 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
       },
       pendingCapturePhases: status.pendingCapturePhases.length,
       pendingExtractPhases: status.pendingExtractPhases.length,
+      documentOptimization: {
+        enabled: status.documentOptimization.enabled,
+        current: status.documentOptimization.current,
+        pendingFragments: status.documentOptimization.pending_fragments,
+        conflicts: status.documentOptimization.conflict_fragments,
+      },
       configurationGaps: status.configurationGaps,
     },
     counts: {

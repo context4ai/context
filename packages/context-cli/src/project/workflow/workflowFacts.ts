@@ -464,6 +464,12 @@ export function createContextWorkflowFacts(
   };
   const buildLogPending = runtimeEvents.configured &&
     runtimeEvents.pending_kinds.includes("package.build.completed");
+  const documentOptimization = observation.documentOptimization ?? {
+    enabled: false,
+    current: true,
+    pending_fragments: 0,
+    conflict_fragments: 0,
+  };
 
   return {
     workspace: {
@@ -554,6 +560,12 @@ export function createContextWorkflowFacts(
       declared: packagesDeclared,
       templates_reviewed: templatesReviewed,
       current: packagesCurrent,
+    },
+    document_optimization: {
+      enabled: documentOptimization.enabled,
+      current: documentOptimization.current,
+      pending_count: documentOptimization.pending_fragments,
+      conflict_count: documentOptimization.conflict_fragments,
     },
     logs: {
       configured: runtimeEvents.configured,

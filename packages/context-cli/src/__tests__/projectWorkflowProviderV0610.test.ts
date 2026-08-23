@@ -164,6 +164,59 @@ describe("Context workflow Provider", () => {
     });
   });
 
+  test("routes enabled document optimization before build in ordinary and managed sessions", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      approvedPages: 1,
+      close: { state: "ready" as const, diagnostics: [] },
+      packages: [{
+        kind: "package.kb" as const,
+        name: "knowledge",
+        reads: [],
+        writes: [],
+        template: { path: "src/package-templates/kb" },
+        outDir: "dist/knowledge",
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
+      }],
+      packageFreshness: [{
+        name: "knowledge",
+        kind: "kb" as const,
+        state: "stale" as const,
+        inputFiles: 1,
+        outputFiles: 1,
+      }],
+      packageTemplateReviews: [{
+        packageName: "knowledge",
+        templatePath: "src/package-templates/kb",
+        state: "starter-accepted" as const,
+      }],
+      documentOptimization: {
+        schema: "context.document-optimization-status.v1" as const,
+        enabled: true,
+        policy: "context.document-optimization.v1",
+        overlay_root: "/workspace/overlays/document-optimization",
+        eligible_views: 1,
+        eligible_fragments: 2,
+        optimized_fragments: 0,
+        kept_fragments: 0,
+        override_fragments: 0,
+        pending_fragments: 2,
+        conflict_fragments: 0,
+        current: false,
+        pending_fragment_ids: ["opt-a", "opt-b"],
+        conflict_fragment_ids: [],
+      },
+    };
+    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
+      const snapshot = await evaluateContextWorkflow({ observation, authorities });
+      expect(snapshot.route?.node).toBe("optimize-documents");
+      expect(snapshot.route?.reason_code).toBe("route.document-optimization.pending");
+      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs plan --format json");
+      expect(snapshot.route?.action?.input_schema?.id).toBe("schema.optimize-documents.input");
+    }
+  });
+
   test("defers stale close maintenance while draft candidates await Review", () => {
     const facts = createContextWorkflowFacts({
       ...emptyObservation(),

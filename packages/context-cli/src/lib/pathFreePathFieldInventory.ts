@@ -49,6 +49,8 @@ const DEFAULT_INTERNAL_FIELDS = [
   "report_path",
   "absolute_path",
   "route_metadata_path",
+  "overlay_root",
+  "recovery_path",
   "prompt_path",
   "packageDir",
   "package_dir",

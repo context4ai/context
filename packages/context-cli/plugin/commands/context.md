@@ -28,8 +28,11 @@ context entry [project-dir] --language <language> --format json
 
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
-`project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
-requested that initialization choice. Pass `--managed` only after the user
+`project-dir`, `--name`, `--dev`, `--debug`, or `--optimize-docs` only when the
+user explicitly requested that initialization choice. Treat requests to enable
+document compilation optimization, document formatting optimization, or
+equivalent conservative build-time cleanup as `--optimize-docs`. Pass
+`--managed` only after the user
 explicitly authorizes fully managed operation in this conversation.
 
 If the `context` process itself cannot start because the command is missing
@@ -68,6 +71,14 @@ before initialization. For an existing workspace, run `context debug enable`
 before workflow evaluation. Debugging records traces below
 `.tmp/context-runtime/debug/` but does not grant workflow authority or provide
 source evidence.
+
+Enable document optimization only when the user explicitly requests it. If
+initialization is required, pass `--optimize-docs` through `context entry`; for
+an existing workspace, run `context optimize-docs enable` before workflow
+evaluation. The feature keeps approved `knowledge/` source-faithful and stores
+incremental presentation decisions below `overlays/document-optimization/`.
+Follow the resulting Route instead of editing approved knowledge or package
+output by hand.
 
 For explicitly authorized fully managed operation, use:
 
