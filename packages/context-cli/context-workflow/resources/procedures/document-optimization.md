@@ -23,9 +23,16 @@ returned by the plan. Context rejects stale, incomplete, duplicate, or
 semantically broad decisions. Unchanged fragments reuse their previous
 decision; changed fragments alone return to this phase.
 
-Generated decisions live below `overlays/document-optimization/generated/`.
-Tracked manual adjustments live below `overlays/document-optimization/overrides/`
-and take precedence while their input and context digests remain current. Use
-`context optimize-docs override <fragment-id>` to create a valid override
-skeleton, then edit only the body between its markers. A source change makes a
-stale override a blocking conflict instead of silently applying it.
+Only pages with reader-visible changes are stored. Each page uses the same
+relative path and Markdown evidence protocol as its approved source, for
+example `knowledge/guides/setup.md` becomes `overlays/guides/setup.md`.
+Fragment-level `keep` decisions and incremental state are compact runtime cache
+below `.tmp/context-runtime/document-optimization/`; never edit that cache.
+
+Use `context optimize-docs override <fragment-id>` to create or locate the
+corresponding page overlay, then edit only reader-visible prose inside the
+existing `context:section` boundaries. Run `context optimize-docs validate`
+after editing. It rejects lifecycle metadata changes, stale page baselines,
+unsafe token changes, broad rewrites, and invalid Markdown structure. A source
+change makes the page overlay a blocking conflict instead of silently applying
+it. Do not create fragment JSON files or another overlay namespace.

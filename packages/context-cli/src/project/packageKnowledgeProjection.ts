@@ -19,6 +19,7 @@ const PACKAGE_OMITTED_FIELDS = [
   "candidate_fingerprint",
   "resource",
   "sources",
+  "context_overlay",
 ] as const;
 const PACKAGE_INVENTORY_FIELDS = [
   "node_type",

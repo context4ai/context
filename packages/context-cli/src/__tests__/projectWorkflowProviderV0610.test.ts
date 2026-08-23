@@ -194,8 +194,9 @@ describe("Context workflow Provider", () => {
       documentOptimization: {
         schema: "context.document-optimization-status.v1" as const,
         enabled: true,
-        policy: "context.document-optimization.v1",
-        overlay_root: "/workspace/overlays/document-optimization",
+        policy: "context.document-optimization.v2",
+        overlay_root: "/workspace/overlays",
+        overlay_pages: 0,
         eligible_views: 1,
         eligible_fragments: 2,
         optimized_fragments: 0,

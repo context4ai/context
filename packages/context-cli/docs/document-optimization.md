@@ -17,18 +17,22 @@ context status --format json
 ```
 
 When enabled, the workflow plans only new or changed fragments. The Agent may
-keep a fragment unchanged or apply a conservative replacement. Decisions are
-stored under `overlays/document-optimization/generated/`; package build reads
-the resulting projection, while approved knowledge stays source-faithful.
+keep a fragment unchanged or apply a conservative replacement. Only changed
+pages are stored, using the same relative Markdown path under `overlays/` as
+their approved source under `knowledge/`. Compact fragment decisions stay in
+`.tmp/context-runtime/document-optimization/` as rebuildable runtime cache.
 
-To maintain an intentional presentation adjustment, create a tracked override:
+To maintain an intentional presentation adjustment, create or locate its page
+overlay:
 
 ```bash
 context optimize-docs override <fragment-id>
 ```
 
-Edit only the body between the generated markers. If upstream content or local
-context changes, the override becomes a conflict and must be reviewed again.
+Edit reader-visible prose without changing frontmatter provenance or
+`context:section` boundaries, then run `context optimize-docs validate`. If
+upstream content changes, the page overlay becomes a conflict and must be
+reviewed again.
 
 Disable and restore baseline output with:
 
@@ -36,5 +40,6 @@ Disable and restore baseline output with:
 context optimize-docs disable
 ```
 
-The active overlay directory is moved to Context runtime recovery storage and
-the next build uses approved knowledge directly.
+Document optimization pages are moved to Context runtime recovery storage and
+the next build uses approved knowledge directly. Unrelated future overlay
+types are left untouched.

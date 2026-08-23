@@ -76,7 +76,8 @@ Enable document optimization only when the user explicitly requests it. If
 initialization is required, pass `--optimize-docs` through `context entry`; for
 an existing workspace, run `context optimize-docs enable` before workflow
 evaluation. The feature keeps approved `knowledge/` source-faithful and stores
-incremental presentation decisions below `overlays/document-optimization/`.
+incremental presentation pages below `overlays/` using the same relative paths
+as `knowledge/`.
 Follow the resulting Route instead of editing approved knowledge or package
 output by hand.
 

@@ -75,6 +75,7 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
       documentOptimization: {
         enabled: status.documentOptimization.enabled,
         current: status.documentOptimization.current,
+        overlayPages: status.documentOptimization.overlay_pages,
         pendingFragments: status.documentOptimization.pending_fragments,
         conflicts: status.documentOptimization.conflict_fragments,
       },

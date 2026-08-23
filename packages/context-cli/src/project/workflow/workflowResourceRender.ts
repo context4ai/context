@@ -326,15 +326,16 @@ function renderDocumentOptimization(status: ProjectStatus): string {
 - Current: ${inline(current.current)}
 - Eligible views: ${current.eligible_views}
 - Eligible fragments: ${current.eligible_fragments}
+- Page overlays: ${current.overlay_pages}
 - Optimized fragments: ${current.optimized_fragments}
 - Kept fragments: ${current.kept_fragments}
 - Manual overrides: ${current.override_fragments}
 - Pending fragments: ${current.pending_fragments}
 - Conflicts: ${current.conflict_fragments}
 
-Generated decisions do not modify approved knowledge. Manual overrides are
-applied only while their recorded input, context, and policy digests remain
-current.
+Page overlays do not modify approved knowledge. They mirror the approved path
+under \`overlays/\`; manual edits are applied only while their recorded source
+baseline and policy remain current.
 `;
 }
 

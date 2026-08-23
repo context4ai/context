@@ -158,7 +158,7 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
       "- Agent 编写的临时输入优先放在 `.tmp/agent-payloads/`；这是推荐而非强制。目录在初始化时创建，如果临时目录已清理则在写入前重新创建。不要自行创建 `inputs/` 等顶层临时目录。",
       "- Context 完成只证明知识工作流状态，不证明 Git 提交范围安全。保留任务开始前已有的工作树变更，只按明确路径暂存；不要用 `git add -A` 把无关修改、删除或未跟踪目录带入提交。",
       "- 调试追踪默认关闭；仅在用户明确要求时使用 `context debug enable`。追踪只写入 `.tmp/context-runtime/debug/`，属于观测数据，不能作为生命周期事实或授权依据。",
-      "- 文档编译优化只在 `package.json.context.documentOptimization=true` 时可达。按照 Route 处理 `overlays/document-optimization/`；不得用它改写事实，人工调整只能编辑 `context optimize-docs override` 生成标记之间的正文。",
+      "- 文档编译优化只在 `package.json.context.documentOptimization=true` 时可达。按照 Route 处理与 `knowledge/` 同相对路径的 `overlays/**/*.md` 页级副本；不得用它改写事实，人工调整先由 `context optimize-docs override` 创建对应页面，再执行校验。",
       "- 普通 Review 使用用户原样提供的 Payload；托管批准只能使用托管 status 返回的 revision-bound 原子命令。",
       "- Route 允许时，只读证据可以并行；注册、stage、confirm、Review apply、close 和 build 必须串行。",
       "- build 成功只代表当前已声明范围完成；新增或尚未处理的来源会重新打开更早的 Route。",
@@ -198,7 +198,7 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
     "- Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs. This is a recommendation, not a CLI requirement; explicit custom paths remain valid. Initialization creates the directory; recreate it before writing if scratch cleanup removed it. Avoid inventing top-level scratch directories such as `inputs/`.",
     "- Context completion proves knowledge-workflow state, not Git commit safety. Preserve worktree changes that existed before the task, stage only explicit paths, and never use `git add -A` to mix unrelated modifications, deletions, or untracked directories into the deliverable.",
     "- Debug tracing is off by default; use `context debug enable` only when the user explicitly requests it. Trace files stay in `.tmp/context-runtime/debug/` and are observational data, never lifecycle facts or authority.",
-    "- Document optimization is reachable only when `package.json.context.documentOptimization=true`. Follow the Route for `overlays/document-optimization/`; never use it to change facts, and edit only the marked body created by `context optimize-docs override` for a manual adjustment.",
+    "- Document optimization is reachable only when `package.json.context.documentOptimization=true`. Follow the Route for page overlays under `overlays/**/*.md` using the same relative paths as `knowledge/`; never use them to change facts, and create a manual page through `context optimize-docs override` before editing and validation.",
     "- Review uses the user's exact Payload in ordinary mode. Managed approval uses only the revision-bound atomic command returned by managed status.",
     "- Evidence reads may be parallel when the route says so; registry, stage, confirm, Review apply, close, and build mutations are serial.",
     "- A successful build covers the currently declared scope only. New or unprocessed sources can reopen earlier routes.",
@@ -214,5 +214,4 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
     "",
   ].join("\n");
 }
-
 

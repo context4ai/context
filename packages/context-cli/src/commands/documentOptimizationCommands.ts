@@ -8,6 +8,7 @@ import {
   collectDocumentOptimizationStatus,
   createDocumentOptimizationOverride,
   createDocumentOptimizationPlan,
+  reconcileDocumentOptimizationOverlays,
 } from "../project/documentOptimization.js";
 import {
   disableDocumentOptimization,
@@ -107,19 +108,19 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("validate")
-    .description("Validate current generated decisions and manual overrides")
+    .description("Validate page overlays and reconcile safe manual edits")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
-      const status = await collectDocumentOptimizationStatus({
+      const status = await reconcileDocumentOptimizationOverlays({
         projectRoot,
         files: await listApprovedKnowledge(projectRoot),
       });
       if (status.conflict_fragments > 0) {
-        throw new ContextError(ExitCode.WorkspaceStateError, "document optimization contains stale or invalid manual overrides", {
+        throw new ContextError(ExitCode.WorkspaceStateError, "document optimization contains stale or invalid page overlays", {
           category: ErrorCategory.WorkspaceStateInvalid,
           conflicts: status.conflict_fragment_ids,
-          next: "Recreate or remove the listed overrides, then rerun context optimize-docs validate.",
+          next: "Regenerate or review the listed page overlays, then rerun context optimize-docs validate.",
         });
       }
       writeResult({
@@ -165,7 +166,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("override <fragment-id>")
-    .description("Create a tracked manual override for one current fragment")
+    .description("Open a page-level overlay for a tracked manual fragment adjustment")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (fragmentId: string, options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
