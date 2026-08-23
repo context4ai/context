@@ -64,23 +64,18 @@ not match the inspected source.
 
 ## Read The Contract Before Extending
 
-Before editing `src/index.ts`, read the relevant installed public manual or
-package README. Do not infer APIs from bundled JavaScript.
+Before editing `src/index.ts`, read the Route-selected Context lifecycle and
+extractor resources completely. They are the installed contract for
+Context-owned phases such as `extractTs()`; do not require a separate
+workspace copy of an implementation package and do not infer APIs from bundled
+JavaScript.
 
-- Context lifecycle and `extractCustom()`:
-  `node_modules/@c4a/context/docs/reference/project-api.md`
-- Generic plugin protocol:
-  `node_modules/@c4a/extract/README.md`
-- TypeScript:
-  `node_modules/@c4a/extract-ts/README.md`
-- Go:
-  `node_modules/@c4a/extract-go/README.md`
-- Rush:
-  `node_modules/@c4a/extract-rush/README.md`
-
-If an optional package is not installed, use this capability matrix to decide
-whether it is relevant, add only that dependency, and then read its shipped
-README before implementing the callback.
+Only a capability imported directly by a project-owned `extractCustom()`
+adapter requires its package README. Use this matrix to decide whether that
+optional capability is relevant, add only that dependency, then read the
+README from the resolved installed package before implementing the callback.
+Never assume that a transitive or dev-only package is present at a hard-coded
+`node_modules` path.
 
 A project-owned adapter may use an existing parser, compiler API, or command
 whose output is deterministic. It must return source-backed candidates through
