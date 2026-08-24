@@ -5,6 +5,7 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCliProgram, handleCliFailure } from "../cli.js";
+import { acceptCurrentCodeIndexAudit } from "./projectBuildVerifyV060Helpers.js";
 import { writeApproved } from "./projectVerifyV062Helpers.js";
 
 function makeTmp(): string {
@@ -267,6 +268,20 @@ describe("0.6.9 codegraph batched human review", () => {
       );
 
       await runCliInDir(project, ["run", "extract:20260712/sample-b:codegraph", "--format", "json"]);
+      const auditStatus = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
+        state: string;
+        codeIndexAudit: { current: boolean; resolved: boolean; report: { units: Array<{ id: string }> } };
+      };
+      expect(auditStatus.state).toBe("route.extract.audit-required");
+      expect(auditStatus.codeIndexAudit.current).toBe(false);
+      expect(auditStatus.codeIndexAudit.resolved).toBe(false);
+      expect(auditStatus.codeIndexAudit.report.units.map((unit) => unit.id)).toEqual(
+        expect.arrayContaining(["sample-a", "sample-b"]),
+      );
+      await acceptCurrentCodeIndexAudit(
+        project,
+        "Both fixture modules were reviewed together and intentionally expose one symbol page each.",
+      );
       const reviewStatus = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
         state: string;
         draftCandidates: number;
@@ -292,10 +307,16 @@ describe("0.6.9 codegraph batched human review", () => {
       expect(reviewStatus.pendingExtractPhases).toEqual([]);
       expect(reviewStatus.routing).toMatchObject({
         human_gate: { required: true, kind: "knowledge-review" },
-        command_plan: [{
-          command: expect.stringContaining("review html codegraph --open"),
-          availability: "immediate",
-        }],
+        command_plan: [
+          {
+            command: expect.stringContaining("review html codegraph --open"),
+            availability: "immediate",
+          },
+          {
+            command: expect.stringContaining("review approve-all codegraph --force --format json"),
+            availability: "after-human-confirmation",
+          },
+        ],
       });
 
       const review = JSON.parse(await runCliInDir(project, [

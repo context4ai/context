@@ -185,6 +185,7 @@ describe("CLI error handling", () => {
 
     expect(status).toContain("--managed");
     expect(approveAll).toContain("--managed");
+    expect(approveAll).toContain("--force");
     expect(approveAll).toContain("--all");
     expect(approveAll).toContain("current-conversation");
   });
@@ -340,7 +341,8 @@ describe("CLI error handling", () => {
       );
       expect(agents).toContain("use `context status --managed --format json` for every status evaluation");
       expect(agents).toContain("never store or reuse that authority");
-      expect(agents).toContain("Managed approval uses only the revision-bound atomic command");
+      expect(agents).toContain("Managed approval still uses only the atomic command returned by managed status");
+      expect(agents).toContain("exact phrase `强制批准`");
       expect(agents).toContain("Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs");
       expect(agents).toContain("Initialization creates the directory");
       expect(agents).toContain("not a CLI requirement");

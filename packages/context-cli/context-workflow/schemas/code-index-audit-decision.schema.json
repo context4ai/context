@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.code-index-audit-decision.v1",
+  "title": "Context code-index Agent audit decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "report_digest",
+    "decision",
+    "summary",
+    "reviewed_units",
+    "scope_assessment",
+    "signal_assessments"
+  ],
+  "properties": {
+    "schema": { "const": "context.code-index-audit-decision.v1" },
+    "report_digest": { "type": "string", "minLength": 1 },
+    "decision": {
+      "type": "string",
+      "enum": ["accept", "revise", "request-input"]
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "reviewed_units": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "scope_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matches_requested_scope", "omissions", "summary"],
+      "properties": {
+        "matches_requested_scope": { "type": "boolean" },
+        "omissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "signal_assessments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signal_id", "disposition", "reason"],
+        "properties": {
+          "signal_id": { "type": "string", "minLength": 1 },
+          "disposition": {
+            "type": "string",
+            "enum": ["fix", "acceptable", "not-applicable"]
+          },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "revision_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "actions"],
+      "properties": {
+        "units": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "requested_material": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision": { "const": "revise" } } },
+      "then": { "required": ["revision_plan"] }
+    },
+    {
+      "if": { "properties": { "decision": { "const": "request-input" } } },
+      "then": { "required": ["requested_material"] }
+    }
+  ]
+}

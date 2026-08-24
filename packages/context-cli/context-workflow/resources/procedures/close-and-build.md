@@ -26,3 +26,11 @@ package inventory. Revision sidecars are never emitted as separate knowledge.
 Run only the current route command, then evaluate again. A successful build
 means the currently declared scope is current; newly captured or newly declared
 targets can reopen earlier graph nodes.
+# Code-index audit record
+
+When a package selects approved `codegraph` pages, build requires the current
+batch-level Agent audit to be accepted. The complete report remains in the
+Context workspace at `knowledge/code-index-audit.json` and is not copied into
+`dist/` or uploaded with the package. `context-build-inventory.json` stores only
+the report digest, decision, and compact package summary needed to identify the
+audited build.

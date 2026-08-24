@@ -310,6 +310,12 @@ export function packageBuildInventory(input: {
   structure: KnowledgeStructureInfo;
   verifyEvidenceStatus: ProjectVerifyResult["evidenceStatus"] | null;
   documentOptimization?: DocumentOptimizationStatus;
+  codeIndexAudit?: {
+    reportDigest: string;
+    decision: string;
+    codePages: number;
+    signals: number;
+  };
 }): Record<string, unknown> {
   const inventory = knowledgeInventory(
     input.selected,
@@ -456,6 +462,16 @@ export function packageBuildInventory(input: {
             eligible_fragments: input.documentOptimization.eligible_fragments,
             revised_fragments: input.documentOptimization.revised_fragments,
             kept_fragments: input.documentOptimization.kept_fragments,
+          },
+        }),
+    ...(input.codeIndexAudit === undefined
+      ? {}
+      : {
+          code_index_audit: {
+            report_digest: input.codeIndexAudit.reportDigest,
+            decision: input.codeIndexAudit.decision,
+            code_pages: input.codeIndexAudit.codePages,
+            signals: input.codeIndexAudit.signals,
           },
         }),
     structure: {

@@ -215,7 +215,8 @@ describe("0.6.6 compileProse review/apply validation", () => {
       ]);
       expect(locked.status).not.toBe(0);
       expect(locked.stderr).toContain("context project write lock is already held");
-      expect(locked.stderr).toContain("Wait for the running context command to finish");
+      expect(locked.stderr).toContain('"reason_code": "project-write-in-progress"');
+      expect(locked.stderr).toContain('"kind": "inspect-project-write-lock"');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -6,6 +6,7 @@ import { registerContextWorkflowResourceCommands } from "./commands/resourceComm
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentOptimizationCommands } from "./commands/documentOptimizationCommands.js";
+import { registerCodeIndexAuditReviewCommand } from "./commands/codeIndexAuditCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
 import { ContextError } from "./lib/errors.js";
@@ -253,6 +254,8 @@ export function createCliProgram(): Command {
     .command("review")
     .description("Review draft project candidates and apply approval decisions");
 
+  registerCodeIndexAuditReviewCommand(review);
+
   review
     .command("html [collection]")
     .description("Render a self-contained local review HTML page")
@@ -334,9 +337,10 @@ export function createCliProgram(): Command {
 
   review
     .command("approve-all [collection]")
-    .description("Approve the complete current review scope under explicit managed-session authority")
+    .description("Approve the complete current review scope under explicit managed or user force authority")
     .option("--all", "approve all current draft candidates across internal collections")
     .option("--managed", "assert explicit current-conversation managed approval")
+    .option("--force", "assert the user's explicit current-conversation force approval")
     .option("--verbose", "include candidate ids and materialized page paths in JSON output")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (collection: string | undefined, options: Record<string, unknown>) => {
@@ -350,6 +354,7 @@ export function createCliProgram(): Command {
         ...(collection !== undefined ? { collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         managed: options.managed === true,
+        force: options.force === true,
         verbose: options.verbose === true,
         format: options.format === "json" ? "json" : "text",
       });

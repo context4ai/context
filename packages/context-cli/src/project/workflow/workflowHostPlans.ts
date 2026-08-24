@@ -62,6 +62,20 @@ function reviewApproveCommand(
     : "context review approve-all --all --managed --format json";
 }
 
+function reviewForceApproveCommand(
+  observation: ContextWorkflowObservation,
+): string | undefined {
+  if (
+    observation.draftCandidates <= 0 ||
+    observation.draftCollections.length === 0
+  ) {
+    return undefined;
+  }
+  return observation.draftCollections.length === 1
+    ? `context review approve-all ${observation.draftCollections[0]} --force --format json`
+    : "context review approve-all --all --force --format json";
+}
+
 function workspaceRepairPlan(
   observation: ContextWorkflowObservation,
 ): ResolvedHostPlan {
@@ -175,6 +189,33 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
           )],
     };
   },
+  "context.code-index-audit.submit": () => ({
+    commands: [command(
+      "context review code-index --input .tmp/agent-payloads/code-index-audit-decision.json --format json",
+      "write",
+      "agent-required",
+    )],
+  }),
+  "context.project.revise-code-index": (observation) => {
+    const decision = observation.codeIndexAudit?.decision;
+    const units = decision?.revision_plan?.units ?? [];
+    const actions = decision?.revision_plan?.actions ?? [];
+    return {
+      commands: [],
+      configuration: {
+        file: "src/index.ts",
+        action: [
+          units.length === 0
+            ? "Revise the code-index units identified by the current Agent audit."
+            : `Revise code-index units ${units.join(", ")}.`,
+          actions.length === 0
+            ? "Improve aggregation, explanatory sections, evidence scope, source coverage, or structured handoffs as reported."
+            : `Apply this accepted revision plan: ${actions.join("; ")}.`,
+          "Then run context status --format json; the Route will preview, extract, and audit the new revision before review.",
+        ].join(" "),
+      },
+    };
+  },
   "context.document.inspect-classification": (observation) => ({
     commands: observation.unclassifiedDocumentTargets.map((target) =>
       command(target.command, "read")
@@ -232,6 +273,12 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   },
   "context.review.approve-current": (observation) => {
     const next = reviewApproveCommand(observation);
+    return {
+      commands: next === undefined ? [] : [command(next, "write")],
+    };
+  },
+  "context.review.force-approve-current": (observation) => {
+    const next = reviewForceApproveCommand(observation);
     return {
       commands: next === undefined ? [] : [command(next, "write")],
     };

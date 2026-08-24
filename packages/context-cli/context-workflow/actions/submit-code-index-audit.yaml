@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: submit-code-index-audit
+runner: host
+effect: write
+handler: context.code-index-audit.submit
+inputSchema: schemas/code-index-audit-decision.schema.json

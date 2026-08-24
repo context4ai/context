@@ -73,6 +73,7 @@ import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
 import { recordAgentGraphEvaluation } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 import { readExtractionPreviewState } from "./extractionPreviewCache.js";
+import { collectCodeIndexAuditStatus } from "./codeIndexAudit.js";
 
 export type {
   ActiveStructuresStatus,
@@ -503,6 +504,16 @@ export async function collectProjectStatusSnapshot(
     ])],
     phases,
   });
+  const codeIndexAudit = phaseStatus.projectEntryValid && draftStatus.diagnostics.length === 0
+    ? await collectCodeIndexAuditStatus(projectRoot)
+    : {
+        applicable: false,
+        current: true,
+        resolved: true,
+        revision_required: false,
+        input_required: false,
+        history: [],
+      };
   const verifyStatus = draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(
         projectRoot,
@@ -612,6 +623,7 @@ export async function collectProjectStatusSnapshot(
       staleSourcePhases: sourceFreshness.stalePhases,
       pendingExtractPhases: sourceFreshness.pendingPhases,
       extractionPreview,
+      codeIndexAudit,
       pendingCaptureCommands: pendingCapture.commands,
       missingCaptureSources: pendingCapture.missingSources,
       evidenceWarnings,
@@ -691,6 +703,7 @@ export async function collectProjectStatusSnapshot(
     staleSourcePhases: sourceFreshness.stalePhases,
     pendingExtractPhases: sourceFreshness.pendingPhases,
     extractionPreview,
+    codeIndexAudit,
     pendingCapturePhases: pendingCapture.phaseIds,
     evidenceStatus,
     evidenceWarnings,

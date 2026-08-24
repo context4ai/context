@@ -4,6 +4,19 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.18 - 2026-08-24
+
+- Added a mandatory Agent semantic audit for completed code-index extraction,
+  including thin-content, evidence-scope, source-coverage, section-depth, and
+  relationship signals with managed revision loops.
+- Added an ordinary Review escape path: after a report-access failure, the
+  user's exact current-conversation phrase `强制批准` can authorize one
+  revision-bound, whole-scope approval without a copied decision Payload.
+- Kept the full code-index audit report in the workspace while excluding it
+  from knowledge-package output and upload.
+- Made concurrent Context writers wait for the active owner and reuse its
+  completion result instead of causing avoidable lock-retry loops.
+
 ## 0.6.17 - 2026-08-24
 
 - Enabled conservative document optimization by default for newly initialized

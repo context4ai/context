@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: revise-code-index-audit
+runner: host
+effect: write
+handler: context.project.revise-code-index

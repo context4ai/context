@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import { createCliProgram, handleCliFailure } from "../cli.js";
+import { acceptCurrentCodeIndexAudit } from "./projectBuildVerifyV060Helpers.js";
 
 let cliInvocationQueue: Promise<void> = Promise.resolve();
 
@@ -298,6 +299,14 @@ describe("0.6.0 current workflow acceptance", () => {
         expect(row).not.toHaveProperty("signature");
         expect(row).not.toHaveProperty("props");
       }
+
+      const needsAudit = await runCliInDir(project, ["status"]);
+      expect(needsAudit).toContain("state: route.extract.audit-required");
+      expect(needsAudit).toContain("review code-index");
+      await acceptCurrentCodeIndexAudit(
+        project,
+        "The fixture candidates intentionally cover both exported symbols for review workflow testing.",
+      );
 
       const needsReview = await runCliInDir(project, ["status"]);
       expect(needsReview).toContain("state: route.review.decision-required");

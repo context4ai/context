@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: apply-forced-review
+runner: host
+effect: write
+handler: context.review.force-approve-current

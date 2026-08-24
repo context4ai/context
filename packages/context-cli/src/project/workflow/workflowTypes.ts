@@ -28,6 +28,7 @@ import type { ProjectVerifyIssue } from "../verify.js";
 import type { ReviewPathIdentityConflictStatus } from "../reviewIdentityConflicts.js";
 import type { ExtractionPreviewState } from "../extractionPreviewCache.js";
 import type { DocumentOptimizationStatus } from "../documentOptimization.js";
+import type { CodeIndexAuditStatus } from "../codeIndexAudit.js";
 
 export const CONTEXT_WORKFLOW_PROVIDER_ID = "c4a/context";
 export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
@@ -94,6 +95,10 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
     scale_clear: boolean;
     batch_digest: string | null;
     complete: boolean;
+    audit_applicable: boolean;
+    audit_resolved: boolean;
+    audit_revision_required: boolean;
+    audit_input_required: boolean;
   };
   documents: {
     classified: boolean;
@@ -160,6 +165,7 @@ export interface ContextWorkflowObservation {
   staleSourcePhases: readonly string[];
   pendingExtractPhases: readonly string[];
   extractionPreview?: ExtractionPreviewState;
+  codeIndexAudit?: CodeIndexAuditStatus;
   pendingCaptureCommands: readonly string[];
   missingCaptureSources: readonly DocumentSourceStatus[];
   evidenceWarnings: EvidenceWarningState;

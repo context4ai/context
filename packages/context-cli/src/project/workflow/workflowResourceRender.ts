@@ -6,6 +6,7 @@ export const CONTEXT_WORKFLOW_RESOURCE_IDS = [
   "context.source-boundary",
   "context.source-current",
   "context.extraction-preview",
+  "context.code-index-audit",
   "context.structure-current",
   "context.review-current",
   "context.package-current",
@@ -215,6 +216,66 @@ ${bullets(capabilityGaps)}
 `;
 }
 
+function renderCodeIndexAudit(status: ProjectStatus): string {
+  const audit = status.codeIndexAudit;
+  const report = audit.report;
+  if (report === undefined) {
+    return "# Current code-index audit\n\nNo code-index audit scope is available.\n";
+  }
+  const units = report.units.map((unit) =>
+    `${inline(unit.id)} — profile=${inline(unit.output_profile)}, types=${unit.module_types.map(inline).join("+") || "unknown"}, pages=${unit.page_count}, effective-chars=${unit.effective_chars}, evidence=${unit.evidence_count}, sections=${unit.section_count}, relations=${unit.relation_count}, uncovered-sources=${unit.uncovered_sources.map(inline).join(", ") || "none"}, signals=${unit.signal_count} (${unit.elevated_signal_count} elevated)`
+  );
+  const signals = report.signals.map((signal) =>
+    `${inline(signal.severity)} ${inline(signal.id)} — ${signal.message}` +
+    (signal.view_ref === undefined ? "" : `; page=${inline(signal.view_ref)}`)
+  );
+  const samples = report.page_samples.map((page) =>
+    `${inline(page.view_ref)} — chars=${page.effective_chars}, evidence=${page.evidence_count}, section-scoped=${page.section_scoped_evidence_count}, sections=${page.section_count}, relations=${page.relation_count}`
+  );
+  return `# Current code-index audit
+
+This is a required Agent semantic review, not a numeric rejection. Inspect the
+reported pages and their evidence, compare all registered sources with the
+user-confirmed scope in the current conversation, then submit one explicit
+decision: \`accept\`, \`revise\`, or \`request-input\`.
+
+## Batch
+
+- Report digest: ${inline(report.digest)}
+- Scope digest: ${inline(report.scope_digest)}
+- Source: ${inline(report.source)}
+- Units: ${report.summary.units}
+- Pages: ${report.summary.pages}
+- Effective prose characters: ${report.summary.effective_chars}
+- Evidence items: ${report.summary.evidence}
+- Sections: ${report.summary.sections}
+- Relations: ${report.summary.relations}
+- Signals: ${report.summary.signals} (${report.summary.elevated_signals} elevated)
+- Current decision: ${audit.decision === undefined ? "none" : inline(audit.decision.decision)}
+
+## Index units
+
+${bullets(units)}
+
+## Signals
+
+${bullets(signals)}
+
+## Evidence-heavy page samples
+
+${bullets(samples)}
+
+## Decision rule
+
+- In fully managed work, fix every signal that represents a real scope,
+  structure, evidence, or content-depth problem and repeat extraction until it
+  converges. Do not accept a real problem merely to continue.
+- A false positive may be accepted only with a concrete assessment tied to the
+  inspected page and intended output profile.
+- Submit the decision using the current Route input schema and report digest.
+`;
+}
+
 function renderStructure(status: ProjectStatus): string {
   const activeSlots = status.activeStructures.slots.map((slot) =>
     `${inline(slot.sourceKey)} / ${inline(slot.collection)} — ${inline("active")}, digest=${inline(slot.structureDigest)}`
@@ -287,7 +348,7 @@ function renderReview(status: ProjectStatus): string {
 
 ## Rule
 
-Apply only a decision payload whose scope and candidate-set identity match the current review. A managed session may approve the complete current scope atomically; ordinary review still uses the user's exact payload.
+Apply only a decision payload whose scope and candidate-set identity match the current review. A managed session may approve the complete current scope atomically. Ordinary review uses the user's exact payload unless the user cannot access the report and explicitly invokes the Route-documented force-approval phrase in the current conversation.
 `;
 }
 
@@ -352,6 +413,7 @@ export function renderContextWorkflowResource(
     case "context.source-boundary": return renderSourceBoundary(status);
     case "context.source-current": return renderSources(status);
     case "context.extraction-preview": return renderExtractionPreview(status);
+    case "context.code-index-audit": return renderCodeIndexAudit(status);
     case "context.structure-current": return renderStructure(status);
     case "context.review-current": return renderReview(status);
     case "context.package-current": return renderPackages(status);

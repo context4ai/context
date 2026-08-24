@@ -5,6 +5,10 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCliProgram, handleCliFailure } from "../cli.js";
+import {
+  applyCodeIndexAuditDecision,
+  buildCodeIndexAuditReport,
+} from "../project/codeIndexAudit.js";
 
 export async function invokeCliInDir(
   dir: string,
@@ -102,6 +106,36 @@ export function writePackageTemplates(project: string): void {
   ].join("\n"), "utf8");
 }
 
+export async function acceptCurrentCodeIndexAudit(
+  project: string,
+  summary = "The fixture's code index matches its intentionally narrow test scope.",
+): Promise<void> {
+  const audit = await buildCodeIndexAuditReport(project);
+  if (audit === undefined) throw new Error("expected code-index audit report");
+  await applyCodeIndexAuditDecision({
+    projectRoot: project,
+    payload: {
+      schema: "context.code-index-audit-decision.v1",
+      report_digest: audit.digest,
+      decision: "accept",
+      summary,
+      reviewed_units: audit.units.map((unit) => unit.id),
+      scope_assessment: {
+        matches_requested_scope: true,
+        omissions: [],
+        summary: "The fixture sources and selected exports are represented.",
+      },
+      signal_assessments: audit.signals
+        .filter((signal) => signal.severity === "elevated")
+        .map((signal) => ({
+          signal_id: signal.id,
+          disposition: "not-applicable",
+          reason: "This fixture deliberately verifies granular exported symbols rather than an aggregate production module map.",
+        })),
+    },
+  });
+}
+
 export async function createApprovedProject(options: {
   approvedMarkdownSuffix?: string;
   beforeClose?: (project: string) => void | Promise<void>;
@@ -145,6 +179,10 @@ export async function createApprovedProject(options: {
     writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
   }
   await runCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+  await acceptCurrentCodeIndexAudit(
+    project,
+    "The fixture's single exported symbol page matches its intentionally narrow scope.",
+  );
   await options.beforeClose?.(project);
   await runCliInDir(project, ["close", "--format", "json"]);
   return {

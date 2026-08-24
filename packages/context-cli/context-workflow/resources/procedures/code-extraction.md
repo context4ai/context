@@ -144,3 +144,17 @@ extractor, keep the lifecycle in `extractCustom()` and implement only the
 missing project adapter. If reliable syntax facts cannot be produced, stop at
 configuration and report the generic capability gap rather than emitting an
 empty or guessed graph.
+# Agent audit after extraction
+
+After every complete code-extraction batch, the Route produces one batch-level
+code-index audit. Mechanical signals cover content depth, evidence scope,
+declared-source coverage, and structured handoffs. They are review evidence,
+not an automatic numeric rejection: the Agent must inspect the affected pages
+and submit one `accept`, `revise`, or `request-input` decision for all index
+units together.
+
+Do not split this into one confirmation per module. In fully managed operation,
+real issues select `revise` and the Route returns through project configuration,
+batch Preview, extraction, and a new audit until the index is acceptable. A
+false positive may be accepted only with a concrete inspected reason. Ask the
+user only when reliable correction needs unavailable material or access.
