@@ -99,6 +99,12 @@ The Provider is considered valid only when all of the following are true:
     Output interception, child processes, timers, and write locks are released
     deterministically; knowledge mutations remain revision-checked,
     write-locked, and atomically committed by their existing command handlers.
+16. Every complete code-index batch receives one Agent semantic audit before
+    knowledge Review. CLI signals remain advisory evidence, but the Agent must
+    choose accept, revise, or request-input. Fully managed work revises real
+    issues and repeats Preview/extraction/audit until accepted. The complete
+    report stays in the workspace; package inventory carries only a compact
+    audit summary and no report file is published.
 
 ## Managed host-loop receipts
 

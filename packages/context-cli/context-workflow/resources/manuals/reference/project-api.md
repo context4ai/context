@@ -951,10 +951,17 @@ review html --all --open --format json`, confirm the returned `opened` field,
 and wait for the user-copied payload. They should not run the phase as an
 automatic approval step or synthesize a payload themselves.
 
-The only batch-wide exception is explicit current-conversation fully managed
-authority. In that mode, follow the `context status --managed` route to
+One batch-wide path is explicit current-conversation fully managed authority.
+In that mode, follow the `context status --managed` route to
 `context review approve-all ... --managed`; the CLI validates the exact current
 scope before applying one default-approved decision.
+
+Ordinary mode has a separate user-confirmed escape path for environments where
+the Review report cannot be opened. Do not advertise it in the initial Review
+prompt. After the user reports that limitation, the exact conversation phrase
+`强制批准` authorizes only the current Route's revision-bound
+`context review approve-all ... --force` command. Other generic approval or
+continue wording does not invoke it.
 
 The gate is batch-scoped: prose waits for every planned View across all active
 structure slots and every declared `pendingStructureTargets` item in the round;

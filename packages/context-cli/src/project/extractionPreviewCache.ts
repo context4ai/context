@@ -284,6 +284,15 @@ export async function readReusableExtractionPreparation(input: {
   return (await readCurrentPhaseCache(input))?.prepared;
 }
 
+export async function readLatestExtractionBatchPreview(
+  projectRoot: string,
+): Promise<ExtractionBatchPreview | undefined> {
+  const cached = await parseJson<ExtractionBatchCacheFile>(
+    join(projectRoot, EXTRACTION_BATCH_PREVIEW_FILE),
+  );
+  return cached?.version === 2 ? cached.preview : undefined;
+}
+
 export async function readExtractionPreviewState(input: {
   projectRoot: string;
   pendingPhaseIds: readonly string[];

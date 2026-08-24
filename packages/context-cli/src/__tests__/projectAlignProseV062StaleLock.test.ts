@@ -70,7 +70,8 @@ describe("0.6.6 prose align structure gate", () => {
 
       expect(staged.status).not.toBe(0);
       expect(staged.stderr).toContain("context project write lock is already held");
-      expect(staged.stderr).toContain("Wait for the running context command to finish");
+      expect(staged.stderr).toContain('"reason_code": "project-write-in-progress"');
+      expect(staged.stderr).toContain('"kind": "inspect-project-write-lock"');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -26,6 +26,12 @@ Without explicit session-managed authority:
 - let the user approve or reject candidates;
 - apply the exact returned decision payload.
 
+The ordinary Route also carries a revision-bound force-approval resolution
+Action as an escape path. Do not advertise it when first presenting Review.
+Use it only after the user cannot use the report and explicitly replies with
+the exact phrase `强制批准` in the current conversation. It approves the complete
+current scope atomically; no candidate-specific decisions are inferred.
+
 With explicit session-managed authority, Context may approve the complete
 current batch atomically. The authority exists only in the current
 conversation. It does not bypass source permission, validation, close, or

@@ -1,0 +1,6 @@
+schema: agent-graph.resource.v1
+id: context.code-index-audit
+kind: context-view
+mediaType: text/markdown
+description: Current code-index content-depth, evidence-scope, relationship, source-coverage signals, and prior Agent decisions.
+materializer: actions/materialize-context-view.yaml

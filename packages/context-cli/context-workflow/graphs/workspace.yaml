@@ -172,6 +172,7 @@ nodes:
     kind: gate
     reasonCode: route.review.decision-required
     inspectionAction: actions/inspect-review.yaml
+    resolutionAction: actions/apply-forced-review.yaml
     delegated:
       inspection: skip
       resolutionAction: actions/apply-managed-review.yaml
@@ -440,6 +441,51 @@ nodes:
         - resources/procedures/code-extraction.md
         - resources/views/source-boundary.yaml
 
+  - id: resolve-code-index-audit-input
+    kind: gate
+    reasonCode: route.extract.audit-input-required
+    resolutionAction: actions/submit-code-index-audit.yaml
+    gate:
+      id: code-index-audit-input
+      prompt: Provide the specific missing source or protocol material required to complete the code-index audit.
+      delegatable: false
+    satisfiedBy:
+      - path: extract.audit_input_required
+        equals: false
+    resources:
+      required:
+        - resources/procedures/code-index-audit.md
+        - resources/dialogue/human-gates.md
+        - resources/views/code-index-audit.yaml
+
+  - id: revise-code-index-audit
+    kind: action
+    reasonCode: route.extract.audit-revision-required
+    action: actions/revise-code-index-audit.yaml
+    satisfiedBy:
+      - path: extract.audit_revision_required
+        equals: false
+    resources:
+      required:
+        - resources/procedures/code-index-audit.md
+        - resources/semantic/code-index/classification.md
+        - resources/views/code-index-audit.yaml
+      recommended:
+        - resources/manuals/reference/code-extractors.md
+
+  - id: audit-code-index
+    kind: action
+    reasonCode: route.extract.audit-required
+    action: actions/submit-code-index-audit.yaml
+    satisfiedBy:
+      - path: extract.audit_resolved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-index-audit.md
+        - resources/semantic/code-index/classification.md
+        - resources/views/code-index-audit.yaml
+
   - id: classify-document
     kind: gate
     reasonCode: route.document.classification-required
@@ -501,6 +547,7 @@ nodes:
     kind: gate
     reasonCode: route.review.decision-required
     inspectionAction: actions/inspect-review.yaml
+    resolutionAction: actions/apply-forced-review.yaml
     delegated:
       inspection: skip
       resolutionAction: actions/apply-managed-review.yaml
@@ -689,7 +736,10 @@ edges:
   - { from: preview-extraction-batch, to: repair-extraction-ownership }
   - { from: repair-extraction-ownership, to: revise-extraction-scale }
   - { from: revise-extraction-scale, to: extract-next }
-  - { from: extract-next, to: review-current-batch }
+  - { from: extract-next, to: resolve-code-index-audit-input }
+  - { from: resolve-code-index-audit-input, to: revise-code-index-audit, kind: gatedBy }
+  - { from: revise-code-index-audit, to: audit-code-index }
+  - { from: audit-code-index, to: review-current-batch }
   - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
   - { from: apply-managed-review, to: classify-document }
   - { from: classify-document, to: configure-prose-lifecycle, kind: gatedBy }

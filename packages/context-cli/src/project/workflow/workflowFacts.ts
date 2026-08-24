@@ -402,6 +402,14 @@ export function createContextWorkflowFacts(
       observation.pendingExtractPhases.length === 0 &&
       observation.staleSourcePhases.length === 0
     );
+  const codeIndexAudit = observation.codeIndexAudit ?? {
+    applicable: false,
+    current: true,
+    resolved: true,
+    revision_required: false,
+    input_required: false,
+    history: [],
+  };
   const documentsClassified =
     observation.unclassifiedDocumentTargets.length === 0;
   const documentRoundStarted =
@@ -530,6 +538,10 @@ export function createContextWorkflowFacts(
       scale_clear: extractionPreview.current ? extractionPreview.scaleClear : true,
       batch_digest: extractionPreview.digest ?? null,
       complete: extractComplete,
+      audit_applicable: codeIndexAudit.applicable,
+      audit_resolved: !extractComplete || codeIndexAudit.resolved,
+      audit_revision_required: extractComplete && codeIndexAudit.revision_required,
+      audit_input_required: extractComplete && codeIndexAudit.input_required,
     },
     documents: {
       classified: documentsClassified,

@@ -33,6 +33,9 @@ state:
       scale_clear: true
       batch_digest: null
       complete: true
+      audit_input_required: false
+      audit_revision_required: false
+      audit_resolved: true
     documents: { classified: true }
     prose: { declarations_complete: true }
     align: { prepared: true }

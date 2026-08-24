@@ -450,16 +450,27 @@ export async function runReviewApproveAllCommand(input: {
   collection?: string;
   all?: boolean;
   managed?: boolean;
+  force?: boolean;
   verbose?: boolean;
   format?: ReviewFormat;
 }): Promise<void> {
-  if (input.managed !== true) {
-    throw new ContextError(ExitCode.UserError, "review approve-all requires explicit --managed current-conversation authority", {
+  if (input.managed === true && input.force === true) {
+    throw new ContextError(ExitCode.UserError, "review approve-all accepts either --managed or --force, not both", {
       category: ErrorCategory.UserInputInvalid,
-      code: "managed-session-authority-required",
+      code: "review-approval-authority-conflict",
       next: "context status --format json",
     });
   }
+  if (input.managed !== true && input.force !== true) {
+    throw new ContextError(ExitCode.UserError, "review approve-all requires explicit --managed authority or --force user confirmation", {
+      category: ErrorCategory.UserInputInvalid,
+      code: "review-approval-authority-required",
+      next: "context status --format json",
+    });
+  }
+  const decisionSource = input.managed === true
+    ? "managed-session"
+    : "explicit-user-force-approval";
   const projectRoot = projectRootFromCwd(input.cwd);
   const scoped = await reviewCommandScope({
     projectRoot,
@@ -480,7 +491,9 @@ export async function runReviewApproveAllCommand(input: {
     payload: {
       decisions: [],
       default: "approved",
-      note: "managed-session auto approval",
+      note: input.managed === true
+        ? "managed-session auto approval"
+        : "explicit user force approval",
       ...(scoped.collection !== undefined ? { collection: scoped.collection } : {}),
       scope: scoped.scope,
     },
@@ -489,7 +502,7 @@ export async function runReviewApproveAllCommand(input: {
     const { visible_candidate_ids: visibleCandidateIds, ...compactScope } = scoped.scope;
     process.stdout.write(`${JSON.stringify({
       kind: "review.approve-all.result",
-      decision_source: "managed-session",
+      decision_source: decisionSource,
       scope: compactScope,
       applied: result.applied,
       approved: result.approved,
@@ -515,10 +528,10 @@ export async function runReviewApproveAllCommand(input: {
   process.stdout.write(formatFeedback({
     symbol: "✓",
     action: "approved",
-    subject: "managed review batch",
+    subject: input.managed === true ? "managed review batch" : "force-approved review batch",
     headline: `${result.approved} candidate(s) approved`,
     body: [
-      "decision source: managed-session",
+      `decision source: ${decisionSource}`,
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,

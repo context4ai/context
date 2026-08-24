@@ -177,7 +177,7 @@ describe("0.6.9 review quick decision scope gate", () => {
         "review", "approve-all", "architecture", "--format", "json",
       ]);
       expect(denied.status).not.toBe(0);
-      expect(denied.stderr).toContain("requires explicit --managed");
+      expect(denied.stderr).toContain("requires explicit --managed authority or --force user confirmation");
 
       const approved = await invokeCliInDir(projectRoot, [
         "review", "approve-all", "architecture", "--managed", "--format", "json",
@@ -198,6 +198,57 @@ describe("0.6.9 review quick decision scope gate", () => {
       });
       expect(JSON.stringify(approvedResult)).not.toContain("architecture/entity/install");
       expect(JSON.stringify(approvedResult)).not.toContain("overview.md");
+      expect(existsSync(join(projectRoot, "knowledge", "architecture", "install", "overview.md"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("explicit force approval atomically approves the current ordinary review scope", async () => {
+    const root = makeTmp();
+    const projectRoot = await createCapturedCompileProject(root);
+    try {
+      await stageInstallDraft(projectRoot);
+
+      const status = JSON.parse(await runCliInDir(projectRoot, [
+        "status", "--format", "json", "--view", "full",
+      ])) as {
+        workflow: {
+          current: {
+            gate: { resolution_action?: { id: string } };
+          };
+        };
+        routing: {
+          command_plan: Array<{ command: string; availability: string }>;
+        };
+      };
+      expect(status.workflow.current.gate.resolution_action).toMatchObject({
+        id: "apply-forced-review",
+      });
+      expect(status.routing.command_plan).toContainEqual({
+        command: expect.stringContaining(
+          "review approve-all architecture --force --format json",
+        ),
+        availability: "after-human-confirmation",
+      });
+
+      const conflict = await invokeCliInDir(projectRoot, [
+        "review", "approve-all", "architecture", "--managed", "--force", "--format", "json",
+      ]);
+      expect(conflict.status).not.toBe(0);
+      expect(conflict.stderr).toContain("either --managed or --force, not both");
+
+      const approved = await invokeCliInDir(projectRoot, [
+        "review", "approve-all", "architecture", "--force", "--format", "json",
+      ]);
+      expect(approved.status).toBe(0);
+      expect(JSON.parse(approved.stdout)).toMatchObject({
+        kind: "review.approve-all.result",
+        decision_source: "explicit-user-force-approval",
+        applied: 1,
+        approved: 1,
+        rejected: 0,
+      });
       expect(existsSync(join(projectRoot, "knowledge", "architecture", "install", "overview.md"))).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });

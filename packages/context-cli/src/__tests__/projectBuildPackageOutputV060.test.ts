@@ -129,6 +129,7 @@ describe("0.6.0 project package output", () => {
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codegraph", "sample-a", "index.md"))).toBe(false);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codegraph", "sample-a", "symbol", "index.md"))).toBe(false);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "meta", "sample-kb.txt"))).toBe(true);
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "context-code-index-audit.json"))).toBe(false);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", `${fixture.approvedId}.md`))).toBe(true);
       const approvedPage = readFileSync(join(fixture.project, "knowledge", `${fixture.approvedId}.md`), "utf8");
       const distributedPage = readFileSync(join(fixture.project, "dist", "sample-kb", "wikis", `${fixture.approvedId}.md`), "utf8");
@@ -183,6 +184,12 @@ describe("0.6.0 project package output", () => {
             source_ref_validation: { status: string; evidence_status?: string };
           };
         };
+        code_index_audit: {
+          report_digest: string;
+          decision: string;
+          code_pages: number;
+          signals: number;
+        };
       };
       expect(kbInventory.schema_version).toBe("context.package-build-inventory.v1");
       expect(kbInventory.approved_knowledge.count).toBe(1);
@@ -228,6 +235,11 @@ describe("0.6.0 project package output", () => {
       });
       expect(kbInventory.structure.edge_contract.allowed_types).toContain("depends_on");
       expect(kbInventory.structure.edge_contract.allowed_confidence).toEqual(["possible", "hypothesis"]);
+      expect(kbInventory.code_index_audit).toMatchObject({
+        decision: "accept",
+        code_pages: 1,
+      });
+      expect(kbInventory.code_index_audit.report_digest).toMatch(/^sha256:/u);
 
       const llms = readFileSync(join(fixture.project, "dist", "sample-llms", "llms.txt"), "utf8");
       expect(llms).toContain("# sample-llms");

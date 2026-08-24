@@ -22,7 +22,7 @@ state:
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
     capture: { declarations_complete: true, batch_digest: null, complete: true }
-    extract: { declarations_complete: true, plans_complete: true, capability_clear: true, preview_current: true, ownership_clear: true, scale_clear: true, batch_digest: null, complete: false }
+    extract: { declarations_complete: true, plans_complete: true, capability_clear: true, preview_current: true, ownership_clear: true, scale_clear: true, batch_digest: null, complete: false, audit_input_required: false, audit_revision_required: false, audit_resolved: true }
     review: { gate_clear: true, batch_resolved: true }
 expect:
   statusCode: actionable

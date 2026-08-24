@@ -15,6 +15,7 @@ import type { StructureBatchStatus } from "./statusStructureBatch.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
 import type { ReviewPathIdentityConflictStatus } from "./reviewIdentityConflicts.js";
 import type { ExtractionPreviewState } from "./extractionPreviewCache.js";
+import type { CodeIndexAuditStatus } from "./codeIndexAudit.js";
 
 export type SourceFreshnessState = "ready" | "stale" | "unknown";
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
@@ -163,6 +164,7 @@ export interface ProjectStatus {
   staleSourcePhases: string[];
   pendingExtractPhases: string[];
   extractionPreview: ExtractionPreviewState;
+  codeIndexAudit: CodeIndexAuditStatus;
   pendingCapturePhases: string[];
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;

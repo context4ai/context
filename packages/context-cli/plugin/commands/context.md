@@ -139,6 +139,11 @@ Treat `workflow.current` as the current-step authority:
    `inspection_action` resource only while inspecting the decision, and read a
    `resolution_action` resource only after the user confirms the Gate. Neither
    replaces ordinary required resources.
+   For ordinary Knowledge Review, follow the Route-selected dialogue: do not
+   advertise force approval in the initial prompt. If the user cannot access
+   the report, only their exact current-conversation reply `强制批准` authorizes
+   the returned force-approval resolution command; generic approval wording
+   does not.
 3. Execute only `commands` returned by the Route, preserving revision and
    authority flags exactly. A command marked `after-human-confirmation` waits
    for the current Gate decision. Run a command whose `execution.target` is `agent-host`
@@ -146,6 +151,9 @@ Treat `workflow.current` as the current-step authority:
    not inside a restricted child sandbox. Follow the Route-selected procedure
    for its audit and approval contract; never invent a payload, destination, or
    substitute command.
+   A Context command is complete only after its process returns an exit code and
+   receipt. If the host reports that it is still running, keep polling that same
+   invocation; never start a second Context write command in parallel.
    Treat a code-extraction batch preview as one Route action. Read its complete
    index-unit report and keep same-kind capability or scale decisions in the
    single returned Gate; do not ask about modules one by one. A non-delegatable

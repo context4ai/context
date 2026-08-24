@@ -637,7 +637,8 @@ describe("0.6.0 project phase runtime edge cases", () => {
       const result = await runCliProcess(project, ["run", "extract:20260712/sample-a:codegraph"]);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("context project write lock is already held");
-      expect(result.stderr).toContain("Wait for the running context command to finish");
+      expect(result.stderr).toContain('"reason_code": "project-write-in-progress"');
+      expect(result.stderr).toContain('"kind": "inspect-project-write-lock"');
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
