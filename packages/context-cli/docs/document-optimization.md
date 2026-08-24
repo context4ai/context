@@ -1,19 +1,21 @@
 # Document revisions
 
-Document optimization is an optional build phase for source-backed prose. It
-repairs presentation-level Markdown without changing the approved knowledge
-page.
+New workspaces enable conservative document optimization by default. It is a
+build phase for source-backed prose that repairs presentation-level Markdown,
+links, and obvious local errors without changing the approved knowledge page or
+broadly rewriting its meaning.
 
-Enable it during initialization:
+To opt out during initialization:
 
 ```bash
-context init context --optimize-docs
+context init context --no-optimize-docs
 ```
 
-Or enable it in an existing workspace:
+Existing workspaces retain their current setting. Change it explicitly with:
 
 ```bash
 context optimize-docs enable
+context optimize-docs disable
 context status --format json
 ```
 
@@ -52,11 +54,5 @@ broad document optimization was disabled, this entry activates only the target
 page and keeps every other eligible page out of the pending batch. If upstream
 content changes, the revision becomes a conflict and must be reviewed again.
 
-Disable and restore baseline output with:
-
-```bash
-context optimize-docs disable
-```
-
-Revision pages move to Context runtime recovery storage, and the next build
-uses approved knowledge directly.
+Disabling moves active revision pages to Context runtime recovery storage. The
+next build uses approved knowledge directly.

@@ -23,6 +23,57 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 describe("plugin prompt and workflow resource contract", () => {
+  test("document revision stays one sibling-page contract across CLI, Route, and Agent guidance", async () => {
+    const [
+      command,
+      graph,
+      action,
+      procedure,
+      registration,
+      classification,
+      storage,
+      optimization,
+      hostPlans,
+    ] = await Promise.all([
+      read(PLUGIN_ROOT, "commands", "context.md"),
+      read(WORKFLOW_ROOT, "graphs", "workspace.yaml"),
+      read(WORKFLOW_ROOT, "actions", "revise-document.yaml"),
+      read(WORKFLOW_ROOT, "resources", "procedures", "document-revision.md"),
+      read(PACKAGE_ROOT, "src", "commands", "documentOptimizationCommands.ts"),
+      read(PACKAGE_ROOT, "src", "project", "knowledgeFileClassification.ts"),
+      read(PACKAGE_ROOT, "src", "project", "documentOptimizationStorage.ts"),
+      read(PACKAGE_ROOT, "src", "project", "documentOptimization.ts"),
+      read(PACKAGE_ROOT, "src", "project", "workflow", "workflowHostPlans.ts"),
+    ]);
+
+    expect(command).toContain('context revise "<the user\'s page title, approved path, ViewRef, or wording>"');
+    expect(command).toContain("knowledge/**/*__revision.md");
+    expect(command).toContain("route.document-revision.requested");
+    expect(graph).toContain("id: revise-document");
+    expect(graph).toContain("reasonCode: route.document-revision.requested");
+    expect(action).toContain("handler: context.document-revision.next");
+    expect(hostPlans).toContain('command("context optimize-docs revise-current --format json"');
+    expect(procedure).toContain("sibling `__revision.md` page");
+    expect(registration).toContain('program.command("revise <target>")');
+    expect(classification).toContain('DOCUMENT_REVISION_SUFFIX = "__revision.md"');
+    expect(storage).toContain('join(projectRoot, "knowledge", documentRevisionPathForApprovedPath(approvedPath))');
+
+    for (const source of [
+      command,
+      graph,
+      action,
+      procedure,
+      registration,
+      classification,
+      storage,
+      optimization,
+      hostPlans,
+    ]) {
+      expect(source).not.toContain("overlays/");
+      expect(source).not.toContain("migrateLegacyDocumentOptimization");
+    }
+  });
+
   test("plugin README exposes only current public entrypoints", async () => {
     const readmes = [
       await read(PLUGIN_ROOT, "README.md"),

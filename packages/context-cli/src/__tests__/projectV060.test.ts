@@ -102,14 +102,24 @@ describe("0.6.0 project init and source ensure", () => {
       expect(existsSync(join(project, "sources", "repo", "index.yaml"))).toBe(true);
       expect(existsSync(join(project, ".context"))).toBe(false);
       const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
-        context?: { project?: boolean; entry?: string; language?: string };
+        context?: {
+          project?: boolean;
+          entry?: string;
+          language?: string;
+          documentOptimization?: boolean;
+        };
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
       };
       const cliPkg = JSON.parse(await readFile(join(import.meta.dir, "..", "..", "package.json"), "utf8")) as {
         version: string;
       };
-      expect(pkg.context).toEqual({ project: true, entry: "src/index.ts", language: "en" });
+      expect(pkg.context).toEqual({
+        project: true,
+        entry: "src/index.ts",
+        language: "en",
+        documentOptimization: true,
+      });
       expect(pkg.dependencies?.["@c4a/context"]).toBe(cliPkg.version);
       expect(pkg.devDependencies?.typescript).toBe("latest");
       expect(pkg.devDependencies?.["@c4a/context-cli"]).toBeUndefined();
@@ -188,6 +198,47 @@ describe("0.6.0 project init and source ensure", () => {
       expect(pkg.name).toBe("sample-kb");
       expect(pkg.dependencies["@c4a/context"]).toBeTruthy();
       expect(pkg.devDependencies["@c4a/context-cli"]).toBeUndefined();
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  test("context init can explicitly disable document optimization", async () => {
+    const project = makeTmp();
+    try {
+      await runCliInDir(project, [
+        "init",
+        ".",
+        "--name",
+        "sample-kb",
+        "--no-optimize-docs",
+      ]);
+
+      const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
+        context: { documentOptimization?: boolean };
+      };
+      expect(pkg.context.documentOptimization).toBeUndefined();
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  test("context init preserves an existing workspace preference when no flag is passed", async () => {
+    const project = makeTmp();
+    try {
+      await runCliInDir(project, [
+        "init",
+        ".",
+        "--name",
+        "sample-kb",
+        "--no-optimize-docs",
+      ]);
+      await runCliInDir(project, ["init", "."]);
+
+      const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
+        context: { documentOptimization?: boolean };
+      };
+      expect(pkg.context.documentOptimization).toBeUndefined();
     } finally {
       rmSync(project, { recursive: true, force: true });
     }

@@ -1,18 +1,19 @@
 # 文档修订页
 
-文档编译优化是面向来源可追溯正文的可选构建阶段。它只修复 Markdown
-排版和明显的局部问题，不修改正式知识页。
+新工作区默认开启保守的文档编译优化。它是面向来源可追溯正文的构建阶段，只修复
+Markdown 排版、链接和明显的局部错误，不修改正式知识页，也不大段改写原意。
 
-初始化时开启：
+初始化时如需关闭：
 
 ```bash
-context init context --optimize-docs
+context init context --no-optimize-docs
 ```
 
-已有工作区可以运行：
+已有工作区保持当前设置，可显式调整：
 
 ```bash
 context optimize-docs enable
+context optimize-docs disable
 context status --format json
 ```
 
@@ -42,13 +43,8 @@ CLI 只在目标唯一时创建或复用该页修订，并由 Agent Graph 返回
 否则询问用户。Agent 只编辑面向读者的正文，不修改来源信息和
 `context:section` 边界，随后运行 `context optimize-docs validate`。校验成功后，
 请求自动结束；若产物因此过期，下一条 Route 会直接提示重新构建。即使工作区
-此前没有开启整库文档编译优化，这个入口也只激活目标页面，不会让其他页面进入
+此前关闭了整库文档编译优化，这个入口也只激活目标页面，不会让其他页面进入
 待优化队列。上游内容变化后，旧修订页会成为冲突，不会被静默应用。
 
-关闭并恢复基础构建结果：
-
-```bash
-context optimize-docs disable
-```
-
-修订页会被移动到 Context 的运行时恢复目录，下一次构建直接使用正式知识。
+关闭后，修订页会被移动到 Context 的运行时恢复目录，下一次构建直接使用正式
+知识。

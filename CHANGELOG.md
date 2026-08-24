@@ -4,6 +4,13 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.17 - 2026-08-24
+
+- Enabled conservative document optimization by default for newly initialized
+  workspaces while preserving the current setting of existing workspaces.
+- Added `--no-optimize-docs` to the single Agent entry and direct initializer,
+  and documented how users can enable or disable revisions later.
+
 ## 0.6.16 - 2026-08-24
 
 - Added optional source-faithful document optimization that stores only changed

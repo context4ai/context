@@ -169,7 +169,8 @@ for maintainers, automation, and diagnostics:
 - `context plugin status` checks installed Agent projections;
 - `context debug enable` records optional traces below
   `.tmp/context-runtime/debug/`;
-- `context optimize-docs enable` enables incremental document revisions
+- new workspaces enable conservative document revisions by default;
+  `context optimize-docs enable|disable` changes that workspace preference
   without modifying approved `knowledge/`;
 - `context revise "<title or approved path>"` starts one conversational
   correction and routes its validation before the next package build;
