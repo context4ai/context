@@ -76,7 +76,7 @@ describe("plugin and workflow workspace guard", () => {
   test("managed mode is explicit, current-conversation-only, and bounded", async () => {
     const boundedEntryFiles = [
       join(PLUGIN_ROOT, "commands", "context.md"),
-      join(PACKAGE_ROOT, "src", "project", "workspace.ts"),
+      join(PACKAGE_ROOT, "src", "project", "workspaceGuidanceTemplates.ts"),
     ];
     for (const file of boundedEntryFiles) {
       const text = await readFile(file, "utf8");
@@ -97,7 +97,10 @@ describe("plugin and workflow workspace guard", () => {
   });
 
   test("generated workspace guidance stays concise and graph-led", async () => {
-    const source = await readFile(join(PACKAGE_ROOT, "src", "project", "workspace.ts"), "utf8");
+    const source = await readFile(
+      join(PACKAGE_ROOT, "src", "project", "workspaceGuidanceTemplates.ts"),
+      "utf8",
+    );
     expect(source).toContain("Treat `workflow.current` as the current-step authority");
     expect(source).toContain("Read every `resources.required` item");
     expect(source).toContain("do not run another status command");

@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: optimize-documents
+runner: host
+effect: write
+handler: context.document-optimization.next
+inputSchema: schemas/document-optimization-decisions.schema.json

@@ -33,9 +33,19 @@ import {
 import {
   previewExtractTsPhase,
   runExtractTsPhase,
-  type ExtractTsPhasePreview,
 } from "./extractCandidates.js";
-import { runExtractCustomPhase } from "./customExtractCandidates.js";
+import {
+  previewExtractCustomPhase,
+  runExtractCustomPhase,
+} from "./customExtractCandidates.js";
+import {
+  previewExtractionBatch,
+  readReusableExtractionPreparation,
+} from "./extractionPreviewCache.js";
+import type {
+  ExtractionBatchPreview,
+  ExtractionPhasePreview,
+} from "./extractCandidateTypes.js";
 import { ensureRepoSources } from "./repoSources.js";
 import { writeReviewHtml } from "./reviewHtml.js";
 import { errorView, resultSummary, writeRunSuccess, type ProjectRunFormat } from "./runOutput.js";
@@ -70,7 +80,7 @@ export interface ProjectPhaseResourcePlan {
   packageKind?: string;
 }
 
-type PhaseRunPreview = ExtractTsPhasePreview | DocumentPhasePreview;
+type PhaseRunPreview = ExtractionPhasePreview | DocumentPhasePreview;
 
 function resourceLabel(resource: PhaseResourceReference): string {
   switch (resource.kind) {
@@ -250,6 +260,15 @@ function previewBody(preview: PhaseRunPreview): string[] {
     return lines;
   }
 
+  if (preview.phaseKind === "phase.extract.custom") {
+    return [
+      `preview: ${preview.totals.sources} source(s), ${preview.totals.candidates} candidate(s), ${preview.totals.evidence} evidence reference(s), ${preview.totals.relations} relation(s)`,
+      ...preview.indexUnits.map((unit) =>
+        `index unit ${unit.id}: ${unit.projectedPageCount} page(s), scale ${unit.scale}, profile ${unit.outputProfile}, owner ${unit.outputOwner}`
+      ),
+    ];
+  }
+
   const lines: string[] = [
     `include: ${preview.include.length > 0 ? preview.include.join(", ") : "none"}`,
     `entry mode: ${preview.mode}`,
@@ -291,6 +310,25 @@ function previewBody(preview: PhaseRunPreview): string[] {
     lines.push(`hint ${hint.code}: ${hint.message}${hint.command ? `; ${hint.command}` : ""}`);
   }
   return lines;
+}
+
+function writeExtractionBatchPreview(
+  preview: ExtractionBatchPreview,
+  format: ProjectRunFormat,
+): void {
+  if (format === "json") {
+    process.stdout.write(`${JSON.stringify(preview, null, 2)}\n`);
+    return;
+  }
+  process.stdout.write(formatFeedback({
+    symbol: preview.scaleClear && preview.capabilityClear && preview.ownershipClear ? "✓" : "⚠",
+    action: "previewed",
+    subject: "code extraction batch",
+    headline: `${preview.totals.indexUnits} index unit(s), ${preview.totals.projectedPages} projected page(s)`,
+    body: preview.phases.flatMap((phase) => phase.indexUnits.map((unit) =>
+      `${unit.id}: ${unit.projectedPageCount} page(s), ${unit.scale}, ${unit.outputProfile}`
+    )),
+  }));
 }
 
 function writeRunPlan(
@@ -364,6 +402,8 @@ export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
   list?: boolean;
+  previewExtractionBatch?: boolean;
+  previewPhaseIds?: readonly string[];
   dryRun?: boolean;
   autoPromote?: boolean;
   managed?: boolean;
@@ -384,6 +424,15 @@ export async function runProjectPhaseCommand(input: {
 
   const loaded = await loadContextProjectModule(found.projectRoot);
   const format = input.format ?? "text";
+  if (input.previewExtractionBatch === true) {
+    const preview = await previewExtractionBatch({
+      projectRoot: found.projectRoot,
+      phases: loaded.project.phases,
+      ...(input.previewPhaseIds === undefined ? {} : { phaseIds: input.previewPhaseIds }),
+    });
+    writeExtractionBatchPreview(preview, format);
+    return;
+  }
   if (input.list === true || input.phaseId === undefined) {
     const phaseEntries = await normalizeRunPhasesForList({
       projectRoot: found.projectRoot,
@@ -451,6 +500,20 @@ export async function runProjectPhaseCommand(input: {
           };
         }
       }
+    } else if (phase.kind === "phase.extract.custom") {
+      try {
+        preview = await previewExtractCustomPhase({
+          projectRoot: found.projectRoot,
+          phase,
+          runId: `preview_${Date.now()}`,
+        });
+      } catch (error) {
+        if (error instanceof ContextError) {
+          previewError = { message: error.message, detail: error.detail };
+        } else {
+          previewError = { message: errorView(error).message };
+        }
+      }
     } else if (isDocumentPhase(phase)) {
       try {
         preview = await previewDocumentPhase({
@@ -478,17 +541,27 @@ export async function runProjectPhaseCommand(input: {
   try {
     let result: unknown;
     if (phase.kind === "phase.extract.ts") {
+      const cached = await readReusableExtractionPreparation({
+        projectRoot: found.projectRoot,
+        phase,
+      });
       result = await runExtractTsPhase({
         projectRoot: found.projectRoot,
         phase,
         runId,
+        ...(cached?.kind === "context.extract-ts-prepared.v1" ? { prepared: cached } : {}),
         ...(input.autoPromote === true ? { autoPromote: true } : {}),
       });
     } else if (phase.kind === "phase.extract.custom") {
+      const cached = await readReusableExtractionPreparation({
+        projectRoot: found.projectRoot,
+        phase,
+      });
       result = await runExtractCustomPhase({
         projectRoot: found.projectRoot,
         phase,
         runId,
+        ...(cached?.kind === "context.extract-custom-prepared.v1" ? { prepared: cached } : {}),
       });
     } else if (phase.kind === "phase.custom") {
       result = await phase.run(customPhaseContext({

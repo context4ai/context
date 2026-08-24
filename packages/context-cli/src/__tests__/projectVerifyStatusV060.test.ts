@@ -47,11 +47,11 @@ describe("0.6.0 project verify and status", () => {
 
       rmSync(join(fixture.project, ".tmp", "context-runtime", "extract", "source-fingerprints.json"), { force: true });
       const unknownBaselineStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(unknownBaselineStatus).toContain("state: route.extract.pending-target");
+      expect(unknownBaselineStatus).toContain("state: route.extract.preview-required");
       expect(unknownBaselineStatus).toContain("source freshness: unknown");
       expect(unknownBaselineStatus).toContain("evidence status: pass-with-unverifiable-evidence");
       expect(unknownBaselineStatus).toContain("evidence warning: degraded");
-      expect(unknownBaselineStatus).toContain("run extract:20260712/sample-a:codegraph --format json");
+      expect(unknownBaselineStatus).toContain("run --preview-extraction-batch");
 
       await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codegraph"]);
       await runCliInDir(fixture.project, ["build"]);
@@ -86,10 +86,10 @@ describe("0.6.0 project verify and status", () => {
         nextHead,
       ]);
       const sourceStaleStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(sourceStaleStatus).toContain("state: route.extract.pending-target");
+      expect(sourceStaleStatus).toContain("state: route.extract.preview-required");
       expect(sourceStaleStatus).toContain("source freshness: stale");
       expect(sourceStaleStatus).toContain("--workflow-revision");
-      expect(sourceStaleStatus).toContain("run extract:20260712/sample-a:codegraph --format json");
+      expect(sourceStaleStatus).toContain("run --preview-extraction-batch");
       expect(sourceStaleStatus).not.toContain("state: route.review.decision-required");
 
       await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codegraph"]);

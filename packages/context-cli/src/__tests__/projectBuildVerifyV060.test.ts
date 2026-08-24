@@ -176,26 +176,36 @@ describe("0.6.0 project build, verify, and status", () => {
     }
   });
 
-  test("build creates child indexes when a directory exceeds the configured threshold", async () => {
+  test("build keeps large leaf indexes while folding thin ancestor indexes", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/first.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/second.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/first.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/second.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/third.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/first.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/second.md");
+      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/third.md");
       configureKbNavigation(fixture.project, {
         foldDirectoryIndexes: true,
-        maxInlineEntries: 1,
+        maxInlineEntries: 2,
       });
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
 
       await runCliInDir(fixture.project, ["build"]);
 
       const guidesIndex = readFileSync(join(fixture.project, "dist", "sample-kb", "guides", "index.md"), "utf8");
-      const sopIndex = readFileSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "index.md"), "utf8");
-      const domainIndex = readFileSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "domain", "index.md"), "utf8");
-      expect(guidesIndex).toContain("[Sop](./sop/index.md) - 2 item(s)");
-      expect(sopIndex).toContain("[Domain](./domain/index.md) - 2 item(s)");
-      expect(domainIndex).toContain("[Getting Started Guide](./first.md) - Guide");
-      expect(domainIndex).toContain("[Getting Started Guide](./second.md) - Guide");
+      const firstDomainIndex = readFileSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "domain", "a", "index.md"), "utf8");
+      const secondDomainIndex = readFileSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "domain", "b", "index.md"), "utf8");
+      expect(guidesIndex).toContain("[A](./sop/domain/a/index.md) - 3 item(s)");
+      expect(guidesIndex).toContain("[B](./sop/domain/b/index.md) - 3 item(s)");
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "index.md"))).toBe(false);
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "guides", "sop", "domain", "index.md"))).toBe(false);
+      expect(firstDomainIndex).toContain("[Getting Started Guide](./first.md) - Guide");
+      expect(firstDomainIndex).toContain("[Getting Started Guide](./second.md) - Guide");
+      expect(firstDomainIndex).toContain("[Getting Started Guide](./third.md) - Guide");
+      expect(secondDomainIndex).toContain("[Getting Started Guide](./first.md) - Guide");
+      expect(secondDomainIndex).toContain("[Getting Started Guide](./second.md) - Guide");
+      expect(secondDomainIndex).toContain("[Getting Started Guide](./third.md) - Guide");
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }

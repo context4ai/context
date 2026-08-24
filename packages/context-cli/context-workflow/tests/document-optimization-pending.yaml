@@ -1,0 +1,49 @@
+schema: agent-graph.test.v1
+name: enabled document optimization resolves before package build
+graph: workspace
+entry: context
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      extraction_scope_resolved: true
+      document_classification_resolved: true
+      structure_confirmation_resolved: true
+      knowledge_review_resolved: true
+      package_output_resolved: true
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, complete: true }
+    extract:
+      declarations_complete: true
+      plans_complete: true
+      capability_clear: true
+      preview_current: true
+      ownership_clear: true
+      scale_clear: true
+      batch_digest: null
+      complete: true
+    documents: { classified: true }
+    prose: { declarations_complete: true }
+    align: { prepared: true }
+    structure: { confirmed: true }
+    compile: { complete: true }
+    review: { gate_clear: true, batch_resolved: true, candidate_set_digest: null }
+    close: { current: true }
+    packages: { declared: true, templates_reviewed: true, current: false }
+    document_optimization: { enabled: true, current: false, pending_count: 2, conflict_count: 0 }
+    logs: { configured: false }
+expect:
+  statusCode: actionable
+  primaryNode: optimize-documents
+  primaryReasonCode: route.document-optimization.pending

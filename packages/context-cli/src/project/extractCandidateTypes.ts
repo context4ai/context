@@ -1,4 +1,13 @@
-import type { KnowledgeCollection } from "@c4a/context";
+import type {
+  CodeIndexCapability,
+  CodeIndexCapabilityGap,
+  CodeIndexCoverageKind,
+  CodeIndexInspectionFinding,
+  CodeIndexModuleFacet,
+  CodeIndexModuleType,
+  CodeIndexOutputProfile,
+  KnowledgeCollection,
+} from "@c4a/context";
 import type { SymbolInfo } from "@c4a/extract";
 import type { RepoSourceRecord, RepoSourceStatus } from "./repoSources.js";
 import type { CandidateRecord } from "./candidateLedger.js";
@@ -15,7 +24,7 @@ export interface ExtractAgentHint {
 }
 
 export interface ExtractRelationshipCoverage {
-  mode: "source-backed-ast";
+  mode: "source-backed-ast" | "source-backed-explicit";
   detected: number;
   emitted: number;
   omitted: {
@@ -73,12 +82,15 @@ export interface ExtractTsRunResult {
 }
 
 export interface ExtractTsPhasePreview {
+  kind: "context.extraction-phase-preview.v1";
+  phaseKind: "phase.extract.ts";
   phaseId: string;
   collection: KnowledgeCollection;
   include: string[];
   mode: "exports" | "scan";
   entries?: string[];
   exportedOnly: boolean;
+  indexUnits: ExtractionIndexUnitPreview[];
   knowledgeTree: string[];
   knowledgePathExamples: Array<{
     id: string;
@@ -130,6 +142,151 @@ export interface ExtractTsPhasePreview {
   agent_hints: ExtractAgentHint[];
 }
 
+export interface ExtractCustomPhasePreview {
+  kind: "context.extraction-phase-preview.v1";
+  phaseKind: "phase.extract.custom";
+  phaseId: string;
+  collection: KnowledgeCollection;
+  indexUnits: ExtractionIndexUnitPreview[];
+  sources: Array<{
+    name: string;
+    ref: string;
+    head?: string;
+    scopeHash: string;
+    materializedAt: string;
+  }>;
+  inspection: {
+    findings: CodeIndexInspectionFinding[];
+    capabilityGaps: CodeIndexCapabilityGap[];
+    structuralProbes: ExtractionStructuralProbe[];
+  };
+  totals: {
+    sources: number;
+    candidates: number;
+    evidence: number;
+    relations: number;
+    contentBytes: number;
+  };
+  agent_hints: ExtractAgentHint[];
+}
+
+export type ExtractionPhasePreview = ExtractTsPhasePreview | ExtractCustomPhasePreview;
+
+export type ExtractionScaleLevel = "normal" | "warning" | "blocked";
+
+export type ExtractionStructuralCapability =
+  | "typescript-symbols"
+  | "react-router-routes"
+  | "go-symbols"
+  | "rush-workspace"
+  | "protocol-schema";
+
+export type ExtractionStructuralProbeKind =
+  | "entry"
+  | "implementation"
+  | "route"
+  | "workspace"
+  | "protocol";
+
+export interface ExtractionStructuralProbe {
+  id: string;
+  source: string;
+  capability: ExtractionStructuralCapability;
+  kind: ExtractionStructuralProbeKind;
+  paths: string[];
+  profiles: CodeIndexOutputProfile[];
+  summary: string;
+}
+
+export interface ExtractionStructuralCoverage {
+  required: number;
+  covered: number;
+  uncovered: Array<{
+    id: string;
+    capability: ExtractionStructuralCapability;
+    kind: ExtractionStructuralProbeKind;
+    source: string;
+    expectedPaths: string[];
+  }>;
+}
+
+export interface ExtractionSemanticCoverage {
+  required: CodeIndexCoverageKind[];
+  covered: CodeIndexCoverageKind[];
+  uncovered: CodeIndexCoverageKind[];
+}
+
+export interface ExtractionIndexUnitPreview {
+  id: string;
+  inputSources: string[];
+  outputOwner: string;
+  moduleType: CodeIndexModuleType;
+  moduleTypes: CodeIndexModuleType[];
+  facets: CodeIndexModuleFacet[];
+  moduleTypeEvidence: string[];
+  outputProfile: CodeIndexOutputProfile;
+  capability: CodeIndexCapability;
+  plan: "declared" | "inferred";
+  responsibility: string;
+  entries: string[];
+  protocols: string[];
+  exclusions: string[];
+  lifecycle: "authoritative" | "generated" | "mirrored" | "legacy" | "vendored";
+  sourceOfTruth?: string;
+  currentPageCount: number;
+  projectedPageCount: number;
+  candidateEstimate: number;
+  changes: {
+    added: number;
+    updated: number;
+    removed: number;
+    unchanged: number;
+    exact: boolean;
+  };
+  scale: ExtractionScaleLevel;
+  visibility: {
+    exported: number;
+    internal: number;
+  };
+  candidateKinds: Record<string, number>;
+  topDirectories: Array<{ path: string; count: number }>;
+  contentBytes: {
+    total: number;
+    max: number;
+    sampled: boolean;
+    topPages: Array<{ path: string; bytes: number }>;
+  };
+  structuralCoverage?: ExtractionStructuralCoverage;
+  semanticCoverage?: ExtractionSemanticCoverage;
+  risks: string[];
+}
+
+export interface ExtractionBatchPreview {
+  schema: "context.extraction-batch-preview.v1";
+  digest: string;
+  createdAt: string;
+  phases: ExtractionPhasePreview[];
+  totals: {
+    phases: number;
+    indexUnits: number;
+    projectedPages: number;
+    contentBytes: number;
+    warnings: number;
+    blocked: number;
+  };
+  advisories: string[];
+  capabilityClear: boolean;
+  ownershipClear: boolean;
+  scaleClear: boolean;
+  cache: {
+    root: ".tmp/context-runtime/extract/previews";
+    reusablePhases: number;
+    hits: number;
+    extractorInvocations: number;
+    previewDurationMs: number;
+  };
+}
+
 export interface SourceSelection {
   record: RepoSourceRecord;
   status: RepoSourceStatus;
@@ -140,6 +297,22 @@ export interface SourceSymbolSnapshot {
   source: RepoSourceRecord;
   symbol: SymbolInfo;
   markdown: string;
+}
+
+export interface ExtractTsPreparedRun {
+  kind: "context.extract-ts-prepared.v1";
+  phaseId: string;
+  fingerprint: ExtractPhaseSourceFingerprintRecord;
+  sources: SourceSelection[];
+  candidates: CandidateDraft[];
+  snapshots: SourceSymbolSnapshot[];
+  symbolIndex: ExtractSourceSymbolIndexEntry[];
+  modules: number;
+  extractedSymbols: number;
+  relationships: ExtractRelationshipCoverage;
+  moduleErrors: Array<{ source: string; module_path: string; error: string }>;
+  agent_hints: ExtractAgentHint[];
+  preview: ExtractTsPhasePreview;
 }
 
 export interface ExtractPhaseSourceFingerprintRecord {

@@ -164,6 +164,112 @@ describe("Context workflow Provider", () => {
     });
   });
 
+  test("routes enabled document optimization before build in ordinary and managed sessions", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      approvedPages: 1,
+      close: { state: "ready" as const, diagnostics: [] },
+      packages: [{
+        kind: "package.kb" as const,
+        name: "knowledge",
+        reads: [],
+        writes: [],
+        template: { path: "src/package-templates/kb" },
+        outDir: "dist/knowledge",
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
+      }],
+      packageFreshness: [{
+        name: "knowledge",
+        kind: "kb" as const,
+        state: "stale" as const,
+        inputFiles: 1,
+        outputFiles: 1,
+      }],
+      packageTemplateReviews: [{
+        packageName: "knowledge",
+        templatePath: "src/package-templates/kb",
+        state: "starter-accepted" as const,
+      }],
+      documentOptimization: {
+        schema: "context.document-optimization-status.v2" as const,
+        enabled: true,
+        policy: "context.document-optimization.v2",
+        revision_pages: 0,
+        eligible_views: 1,
+        eligible_fragments: 2,
+        revised_fragments: 0,
+        kept_fragments: 0,
+        pending_fragments: 2,
+        conflict_fragments: 0,
+        revision_requested: false,
+        current: false,
+        pending_fragment_ids: ["opt-a", "opt-b"],
+        conflict_fragment_ids: [],
+      },
+    };
+    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
+      const snapshot = await evaluateContextWorkflow({ observation, authorities });
+      expect(snapshot.route?.node).toBe("optimize-documents");
+      expect(snapshot.route?.reason_code).toBe("route.document-optimization.pending");
+      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs plan --format json");
+      expect(snapshot.route?.action?.input_schema?.id).toBe("schema.optimize-documents.input");
+    }
+  });
+
+  test("routes a conversational document correction before optimization and build", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      approvedPages: 1,
+      close: { state: "ready" as const, diagnostics: [] },
+      packages: [{
+        kind: "package.kb" as const,
+        name: "knowledge",
+        reads: [],
+        writes: [],
+        template: { path: "src/package-templates/kb" },
+        outDir: "dist/knowledge",
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
+      }],
+      packageFreshness: [{
+        name: "knowledge",
+        kind: "kb" as const,
+        state: "stale" as const,
+        inputFiles: 1,
+        outputFiles: 1,
+      }],
+      packageTemplateReviews: [{
+        packageName: "knowledge",
+        templatePath: "src/package-templates/kb",
+        state: "starter-accepted" as const,
+      }],
+      documentOptimization: {
+        schema: "context.document-optimization-status.v2" as const,
+        enabled: true,
+        policy: "context.document-optimization.v2",
+        revision_pages: 0,
+        eligible_views: 1,
+        eligible_fragments: 1,
+        revised_fragments: 0,
+        kept_fragments: 1,
+        pending_fragments: 0,
+        conflict_fragments: 0,
+        revision_requested: true,
+        requested_approved_path: "faq/example.md",
+        current: true,
+        pending_fragment_ids: [],
+        conflict_fragment_ids: [],
+      },
+    };
+    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
+      const snapshot = await evaluateContextWorkflow({ observation, authorities });
+      expect(snapshot.route?.node).toBe("revise-document");
+      expect(snapshot.route?.reason_code).toBe("route.document-revision.requested");
+      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs revise-current --format json");
+    }
+  });
+
   test("defers stale close maintenance while draft candidates await Review", () => {
     const facts = createContextWorkflowFacts({
       ...emptyObservation(),
@@ -266,13 +372,24 @@ describe("Context workflow Provider", () => {
       },
       commands: [{
         command: expect.stringContaining(
-          '--workflow-managed source inspect "module-a" --format json',
+          "--workflow-managed source inspect --repo-only --format json",
         ),
         effect: "read",
         availability: "immediate",
         managed_execution: "agent-required",
       }],
     });
+    expect(snapshot.route?.resources.required.map((resource) => resource.id)).toContain(
+      "semantic.code-index.classification",
+    );
+    expect(snapshot.route?.resources.recommended.map((resource) => resource.id)).not.toEqual(
+      expect.arrayContaining([
+        "semantic.code-index.template.web-application",
+        "semantic.code-index.template.api-service",
+        "semantic.code-index.template.sdk-library",
+        "semantic.code-index.template.protocol-boundary",
+      ]),
+    );
   });
 
   test("a build receipt cannot hide an unclassified captured document", () => {
@@ -497,7 +614,7 @@ describe("Context workflow Provider", () => {
     }
   });
 
-  test("code extraction inspection returns one executable technology probe per repo source", () => {
+  test("code extraction inspection returns one batch technology probe for all repo sources", () => {
     expect(planForHostHandler("context.extract.inspect-capabilities", {
       ...emptyObservation(),
       sourceCount: 2,
@@ -509,13 +626,7 @@ describe("Context workflow Provider", () => {
     })).toEqual({
       commands: [
         {
-          command: 'context source inspect "20260818/module-a" --format json',
-          effect: "read",
-          availability: "immediate",
-          managed_execution: "agent-required",
-        },
-        {
-          command: 'context source inspect "20260818/module-b" --format json',
+          command: "context source inspect --repo-only --format json",
           effect: "read",
           availability: "immediate",
           managed_execution: "agent-required",
@@ -563,10 +674,10 @@ describe("Context workflow Provider", () => {
           resource_delivery: {
             applies_to: "agent-knowledge-base",
             recommendation:
-              "prefer git-raw; derive an explicit same-host /raw/{commit} prefix for confirmed GitHub-compatible services before falling back to bundle",
+              "bundle referenced resources by default; Context keeps each image at or below 1 MiB and all bundled images within 40 MiB, compressing package output when needed; use git-raw only when the author explicitly configures it",
             choices: [
+              expect.objectContaining({ id: "bundle", default: true }),
               expect.objectContaining({ id: "git-raw", optional: ["remote", "urlPrefix"] }),
-              expect.objectContaining({ id: "bundle" }),
               expect.objectContaining({ id: "omit" }),
             ],
           },

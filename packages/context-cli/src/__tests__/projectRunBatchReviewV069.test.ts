@@ -163,6 +163,12 @@ describe("0.6.9 codegraph batched human review", () => {
         },
       });
 
+      await runCliInDir(project, [
+        "run", "--preview-extraction-batch",
+        "--preview-phase", "extract:20260712/sample-b:codegraph",
+        "--format", "json",
+      ]);
+
       const status = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
         state: string;
         verifyErrors: number;
@@ -231,6 +237,12 @@ describe("0.6.9 codegraph batched human review", () => {
         kind: "continue-codegraph-batch",
         command: "context status --format json",
       });
+
+      await runCliInDir(project, [
+        "run", "--preview-extraction-batch",
+        "--preview-phase", "extract:20260712/sample-b:codegraph",
+        "--format", "json",
+      ]);
 
       const batchStatus = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
         state: string;

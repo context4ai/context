@@ -91,10 +91,11 @@ function normalizeApprovedEdges(input: {
         from_known: input.approvedEndpointRefs.has(from),
         to_known: input.approvedEndpointRefs.has(to),
       };
-      const sourceBackedAst = rawEdge.relationship_mode === "source-backed-ast";
+      const sourceBackedCode = rawEdge.relationship_mode === "source-backed-ast" ||
+        rawEdge.relationship_mode === "source-backed-explicit";
       if (
         input.tolerateMissingEndpoints === true ||
-        (input.tolerateMissingSourceBackedAstEndpoints === true && sourceBackedAst)
+        (input.tolerateMissingSourceBackedAstEndpoints === true && sourceBackedCode)
       ) {
         input.onMissingEndpoint?.(`Dropped structure edge ${index} from ${input.path} because an endpoint is not approved: ${from} -> ${to}`);
         continue;

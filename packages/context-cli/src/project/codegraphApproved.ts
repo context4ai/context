@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { candidateIdFromViewRef } from "./candidateIdentity.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
-import { walkMarkdown } from "./verifyProjectFiles.js";
+import { walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { parseLocalCodeSymbolSourceRef } from "./codeSymbolSourceRef.js";
 
 export interface ApprovedCodegraphPage {
@@ -108,7 +108,7 @@ export async function readApprovedCodegraphPages(input: {
 }): Promise<ApprovedCodegraphPage[]> {
   const root = join(input.projectRoot, "knowledge", "codegraph");
   const pages: ApprovedCodegraphPage[] = [];
-  for (const file of await walkMarkdown(root)) {
+  for (const file of await walkApprovedMarkdown(root)) {
     const content = await readFile(file.absPath, "utf8");
     const frontmatter = parseFrontmatterLoose(content);
     const identity = approvedPageIdentity(frontmatter, input.sourceNames);

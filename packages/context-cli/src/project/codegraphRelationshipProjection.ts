@@ -40,7 +40,7 @@ export function codegraphEdgesFromFrontmatter(
       !Array.isArray(sourceRefs) ||
       sourceRefs.length === 0 ||
       sourceRefs.some((ref) => typeof ref !== "string" || !ref.startsWith("repo:")) ||
-      relationshipMode !== "source-backed-ast" ||
+      (relationshipMode !== "source-backed-ast" && relationshipMode !== "source-backed-explicit") ||
       typeof relationType !== "string" ||
       relationType.trim().length === 0
     ) {
@@ -64,8 +64,9 @@ export function codegraphEdgesFromFrontmatter(
   });
 }
 
-function sourceBackedAst(edge: Record<string, unknown>): boolean {
-  return edge.relationship_mode === "source-backed-ast";
+function sourceBackedCode(edge: Record<string, unknown>): boolean {
+  return edge.relationship_mode === "source-backed-ast" ||
+    edge.relationship_mode === "source-backed-explicit";
 }
 
 export function currentCodegraphEdges(input: {
@@ -85,7 +86,7 @@ export function currentCodegraphEdges(input: {
     }
     return valid;
   });
-  return [...input.baseEdges.filter((edge) => !sourceBackedAst(edge)), ...current];
+  return [...input.baseEdges.filter((edge) => !sourceBackedCode(edge)), ...current];
 }
 
 export interface CodegraphRelationshipCoverage {
@@ -106,7 +107,7 @@ export function codegraphRelationshipCoverage(input: {
   const endpointRefs = new Set(codegraphViews.flatMap((view) => [view.node_ref, view.view_ref])
     .filter((value): value is string => typeof value === "string"));
   const codegraphEdges = input.edges.filter((edge) =>
-    sourceBackedAst(edge) &&
+    sourceBackedCode(edge) &&
     typeof edge.from === "string" &&
     typeof edge.to === "string" &&
     endpointRefs.has(edge.from) &&
@@ -117,7 +118,7 @@ export function codegraphRelationshipCoverage(input: {
       ? "not-applicable"
       : codegraphEdges.length > 0
         ? "available"
-        : declaredModes.includes("source-backed-ast")
+        : declaredModes.includes("source-backed-ast") || declaredModes.includes("source-backed-explicit")
           ? "no-approved-source-backed-edges"
           : "unknown",
     modes: declaredModes,

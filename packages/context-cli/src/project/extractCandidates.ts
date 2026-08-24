@@ -1,15 +1,10 @@
 import { resolve } from "node:path";
 import { DEFAULT_PATH_FILTER, Visibility, type PathFilterConfig } from "@c4a/core";
-import type {
-  ExtractCustomPhaseDefinition,
-  ExtractTsPhaseDefinition,
-  RepoProjectSourceDefinition,
-} from "@c4a/context";
+import type { ExtractTsPhaseDefinition } from "@c4a/context";
 import {
-  detectModuleBoundaries,
   runRepositoryExtraction,
-  type ModuleBoundaryResult,
   type RepositoryEntrySelection,
+  type RepositoryExtractionResult,
 } from "@c4a/extract";
 import { TypeScriptPlugin } from "@c4a/extract-ts";
 import {
@@ -43,6 +38,7 @@ import type {
   CandidateDraft,
   ExtractAgentHint,
   ExtractTsPhasePreview,
+  ExtractTsPreparedRun,
   ExtractTsRunResult,
   SourceSelection,
   SourceSymbolSnapshot,
@@ -54,14 +50,22 @@ import type {
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import {
-  diagnoseRepoSource,
-  ensureRepoSource,
-  listRepoSources,
-} from "./repoSources.js";
 import { readCandidateRecords, CANDIDATE_LEDGER_FILE, writeCandidateRecords } from "./candidateLedger.js";
 import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import {
+  declaredIndexUnitPreview,
+  EXTRACTION_BLOCK_PAGE_COUNT,
+  finalizeIndexUnit,
+  incrementPreviewDirectory,
+  inferredIndexUnit,
+  recordPreviewPage,
+} from "./extractTsPreview.js";
+import {
+  assertReadyExtractionSources,
+  assertSingleModuleSourceBoundaries,
+  selectRepoSources,
+} from "./extractSourceSelection.js";
 
 export {
   extractPhaseSourceFingerprint,
@@ -107,147 +111,17 @@ function moduleErrorHint(input: {
   };
 }
 
-async function selectRepoSourcesForDefinition(input: {
-  projectRoot: string;
-  source: RepoProjectSourceDefinition;
-  materialize: boolean;
-}): Promise<SourceSelection[]> {
-  if (input.source.kind === "source.repo") {
-    const status = input.materialize
-      ? await ensureRepoSource({ projectRoot: input.projectRoot, source: input.source })
-      : await diagnoseRepoSource({ projectRoot: input.projectRoot, source: input.source });
-    return [{ record: input.source, status }];
-  }
-
-  const records = await listRepoSources(input.projectRoot);
-  const selected = input.source.kind === "source.collection"
-    ? records
-    : (() => {
-        const requestedSource = input.source;
-        return records.filter((source) => source.name === requestedSource.name || source.id === requestedSource.name);
-      })();
-
-  if (input.source.kind === "source.collection" && selected.length === 0) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "no repo sources are registered for extraction", {
-      category: ErrorCategory.SourceNotFound,
-      sourceType: input.source.type,
-      code: "repo-source-registration-required",
-      next: "context status --format json",
-    });
-  }
-
-  if (input.source.kind === "source.ref" && selected.length === 0) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `repo source is not registered: ${input.source.name}`, {
-      category: ErrorCategory.SourceNotFound,
-      sourceId: input.source.name,
-    });
-  }
-
-  return Promise.all(selected.map(async (record) => ({
-    record,
-    status: input.materialize
-      ? await ensureRepoSource({ projectRoot: input.projectRoot, source: record })
-      : await diagnoseRepoSource({ projectRoot: input.projectRoot, source: record }),
-  })));
-}
-
-export async function selectRepoSourcesForExtraction(input: {
-  projectRoot: string;
-  phase: ExtractTsPhaseDefinition | ExtractCustomPhaseDefinition;
-  materialize: boolean;
-}): Promise<SourceSelection[]> {
-  const definitions = input.phase.kind === "phase.extract.ts"
-    ? [input.phase.source]
-    : input.phase.sources;
-  const selected = (await Promise.all(definitions.map((source) => selectRepoSourcesForDefinition({
-    projectRoot: input.projectRoot,
-    source,
-    materialize: input.materialize,
-  })))).flat();
-  return [...new Map(selected.map((source) => [source.record.name, source])).values()]
-    .sort((left, right) => left.record.name.localeCompare(right.record.name));
-}
-
-export async function selectRepoSources(input: {
+export async function prepareExtractTsPhase(input: {
   projectRoot: string;
   phase: ExtractTsPhaseDefinition;
-  materialize: boolean;
-}): Promise<SourceSelection[]> {
-  return selectRepoSourcesForExtraction(input);
-}
-
-function assertReadySources(sources: readonly SourceSelection[]): void {
-  const notReady = sources.filter((source) => !source.status.ready);
-  if (notReady.length > 0) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "repo source is not ready for extraction", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      sources: notReady.map((source) => ({
-        name: source.record.name,
-        diagnostics: source.status.diagnostics,
-        agent_hints: source.status.agent_hints,
-      })),
-    });
-  }
-}
-
-async function inspectSourceModules(input: {
-  projectRoot: string;
-  source: SourceSelection;
-}): Promise<{
-  source: SourceSelection;
-  modules: ModuleBoundaryResult[];
-}> {
-  const repoPath = resolve(input.projectRoot, input.source.status.materializedAt);
-  return {
-    source: input.source,
-    modules: await detectModuleBoundaries(
-      repoPath,
-      input.source.status.head ?? input.source.status.ref,
-      DEFAULT_PATH_FILTER,
-    ),
-  };
-}
-
-async function assertSingleModuleSourceBoundaries(input: {
-  projectRoot: string;
-  sources: readonly SourceSelection[];
-}): Promise<void> {
-  const inspections = await Promise.all(input.sources.map((source) => inspectSourceModules({
-    projectRoot: input.projectRoot,
-    source,
-  })));
-  const ambiguous = inspections.filter((inspection) => inspection.modules.length > 1);
-  if (ambiguous.length === 0) return;
-
-  throw new ContextError(
-    ExitCode.UserError,
-    "repo source contains multiple code modules; register the intended package or subdirectory as its own source before extraction",
-    {
-      category: ErrorCategory.UserInputInvalid,
-      code: "extract-source-scope-ambiguous",
-      sources: ambiguous.map((inspection) => ({
-        name: inspection.source.record.name,
-        materializedAt: inspection.source.status.materializedAt,
-        modules: inspection.modules.map((module) => ({
-          name: module.name,
-          path: module.path,
-        })),
-      })),
-      next: "context status --format json",
-    },
-  );
-}
-
-export async function previewExtractTsPhase(input: {
-  projectRoot: string;
-  phase: ExtractTsPhaseDefinition;
-}): Promise<ExtractTsPhasePreview> {
+  materialize?: boolean;
+}): Promise<ExtractTsPreparedRun> {
   const selectedSources = await selectRepoSources({
     projectRoot: input.projectRoot,
     phase: input.phase,
-    materialize: false,
+    materialize: input.materialize === true,
   });
-  assertReadySources(selectedSources);
+  assertReadyExtractionSources(selectedSources);
   await assertSingleModuleSourceBoundaries({
     projectRoot: input.projectRoot,
     sources: selectedSources,
@@ -256,6 +130,25 @@ export async function previewExtractTsPhase(input: {
   const sources: ExtractTsPhasePreview["sources"] = [];
   const agentHints: ExtractAgentHint[] = [];
   const knowledgePathExamples: ExtractTsPhasePreview["knowledgePathExamples"] = [];
+  const allCandidates: CandidateDraft[] = [];
+  const snapshots: SourceSymbolSnapshot[] = [];
+  const sourceSymbolIndex: ExtractSourceSymbolIndexEntry[] = [];
+  const moduleErrorsForRun: ExtractTsRunResult["moduleErrors"] = [];
+  const relationships: ExtractTsRunResult["relationships"] = {
+    mode: "source-backed-ast",
+    detected: 0,
+    emitted: 0,
+    omitted: { external: 0, endpointNotSelected: 0, ambiguousEndpoint: 0 },
+  };
+  const phaseIndexUnits = input.phase.indexUnits ?? [];
+  const indexUnitById = new Map(phaseIndexUnits.map((unit) => [
+    unit.id,
+    declaredIndexUnitPreview(unit, input.phase.indexPlan ?? "inferred"),
+  ]));
+  const extractedSources: Array<{
+    source: SourceSelection;
+    extraction: RepositoryExtractionResult;
+  }> = [];
   let totalModules = 0;
   let totalFiles = 0;
   let totalAnalyzedFiles = 0;
@@ -274,22 +167,7 @@ export async function previewExtractTsPhase(input: {
       entrySelection: phaseEntrySelection(input.phase),
       plugins: [new TypeScriptPlugin()],
     });
-    const { candidates } = makeCandidates({
-      phase: input.phase,
-      extraction,
-      source: source.record,
-    });
-    for (const candidate of candidates.slice(0, Math.max(0, 8 - knowledgePathExamples.length))) {
-      knowledgePathExamples.push({
-        id: candidate.candidate_id,
-        title: candidate.review.title,
-        kind: candidate.kind,
-        source: source.record.name,
-        module: candidate.module,
-        path: knowledgePath(input.phase.collection, candidate),
-        source_ref: candidate.source_refs[0] ?? "",
-      });
-    }
+    extractedSources.push({ source, extraction });
     const modules = extraction.results.map((result) => {
       const version = manifestVersion(result.sourceInfo.manifests);
       const selectedSymbols = result.extraction.symbols.filter((symbol) =>
@@ -303,6 +181,60 @@ export async function previewExtractTsPhase(input: {
         (symbol) => symbol.visibility === Visibility.Exported,
       ).length;
       const candidateEstimate = selectedSymbols.length;
+      const matchingUnits = phaseIndexUnits.filter((unit) =>
+        unit.inputSources.includes(source.record.name)
+      );
+      const unit = matchingUnits[0] === undefined
+        ? (() => {
+            const inferred = indexUnitById.get(source.record.name) ?? inferredIndexUnit({
+              phase: input.phase,
+              sourceName: source.record.name,
+            });
+            indexUnitById.set(inferred.id, inferred);
+            return inferred;
+          })()
+        : indexUnitById.get(matchingUnits[0].id)!;
+      if (matchingUnits.length > 1 && !unit.risks.includes("ownership-ambiguous")) {
+        unit.risks.push("ownership-ambiguous");
+      }
+      unit.projectedPageCount += candidateEstimate;
+      unit.visibility.exported += selectedSymbols.filter(
+        (symbol) => symbol.visibility === Visibility.Exported,
+      ).length;
+      unit.visibility.internal += selectedSymbols.filter(
+        (symbol) => symbol.visibility !== Visibility.Exported,
+      ).length;
+      for (const [kind, count] of Object.entries(candidateKinds)) {
+        unit.candidateKinds[kind] = (unit.candidateKinds[kind] ?? 0) + count;
+      }
+      if (input.phase.mode === "scan" && !unit.risks.includes("full-scan")) unit.risks.push("full-scan");
+      if (!input.phase.exportedOnly && !unit.risks.includes("internal-symbols")) unit.risks.push("internal-symbols");
+      const sampledSymbols = selectedSymbols.slice(0, EXTRACTION_BLOCK_PAGE_COUNT + 1);
+      let sampledBytes = 0;
+      for (const symbol of sampledSymbols) {
+        const markdown = applyMarkdownTransforms(renderSymbolMarkdown(symbol), input.phase);
+        const bytes = Buffer.byteLength(markdown, "utf8");
+        sampledBytes += bytes;
+        unit.contentBytes.max = Math.max(unit.contentBytes.max, bytes);
+        recordPreviewPage(unit, symbol.file, bytes);
+        incrementPreviewDirectory(unit, symbol.file);
+        if (
+          /(?:^|\/)(?:generated|gen|dist|vendor|vendored)(?:\/|$)|\.generated\./iu.test(symbol.file) &&
+          !unit.risks.includes("generated-source-risk")
+        ) unit.risks.push("generated-source-risk");
+        if ((symbol.initializer?.length ?? 0) > 256 && !unit.risks.includes("implementation-body-risk")) {
+          unit.risks.push("implementation-body-risk");
+        }
+      }
+      for (const symbol of selectedSymbols.slice(sampledSymbols.length)) incrementPreviewDirectory(unit, symbol.file);
+      if (sampledSymbols.length < selectedSymbols.length) {
+        unit.contentBytes.sampled = true;
+        unit.contentBytes.total += Math.round(
+          (sampledBytes / Math.max(1, sampledSymbols.length)) * selectedSymbols.length,
+        );
+      } else {
+        unit.contentBytes.total += sampledBytes;
+      }
       totalModules += 1;
       totalFiles += result.module.fileCount;
       totalAnalyzedFiles += result.extraction.stats.files;
@@ -339,6 +271,11 @@ export async function previewExtractTsPhase(input: {
         error: error.error,
       });
       agentHints.push(hint);
+      moduleErrorsForRun.push({
+        source: source.record.name,
+        module_path: error.module_path,
+        error: error.error,
+      });
       return {
         module_path: error.module_path,
         error: error.error,
@@ -356,13 +293,109 @@ export async function previewExtractTsPhase(input: {
     });
   }
 
-  return {
+  const indexUnits = [...indexUnitById.values()].map(finalizeIndexUnit)
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const previewBlocked = indexUnits.some((unit) =>
+    unit.plan === "inferred" ||
+    unit.scale === "blocked" ||
+    unit.capability === "material-required" ||
+    unit.risks.includes("ownership-ambiguous")
+  );
+  if (!previewBlocked) {
+    for (const { source, extraction } of extractedSources) {
+      const sourceBuild = makeCandidates({
+        phase: input.phase,
+        extraction,
+        source: source.record,
+      });
+      allCandidates.push(...sourceBuild.candidates);
+      relationships.detected += sourceBuild.relationships.detected;
+      relationships.emitted += sourceBuild.relationships.emitted;
+      relationships.omitted.external += sourceBuild.relationships.omitted.external;
+      relationships.omitted.endpointNotSelected += sourceBuild.relationships.omitted.endpointNotSelected;
+      relationships.omitted.ambiguousEndpoint += sourceBuild.relationships.omitted.ambiguousEndpoint;
+      for (const candidate of sourceBuild.candidates.slice(0, Math.max(0, 8 - knowledgePathExamples.length))) {
+        knowledgePathExamples.push({
+          id: candidate.candidate_id,
+          title: candidate.review.title,
+          kind: candidate.kind,
+          source: source.record.name,
+          module: candidate.module,
+          path: knowledgePath(input.phase.collection, candidate),
+          source_ref: candidate.source_refs[0] ?? "",
+        });
+      }
+      const candidateBySourceRef = new Map(sourceBuild.candidates.map((candidate) => [
+        candidate.source_refs[0],
+        candidate,
+      ]));
+      for (const result of extraction.results) {
+        for (const symbol of result.extraction.symbols) {
+          const candidate = candidateBySourceRef.get(canonicalSourceRef(source.record.name, symbol));
+          if (!candidate) continue;
+          sourceSymbolIndex.push({
+            source: source.record.name,
+            file: symbol.file,
+            name: symbol.name,
+            kind: symbol.kind,
+            digest: symbolShapeDigest(symbol),
+          });
+          snapshots.push({
+            candidate,
+            source: source.record,
+            symbol,
+            markdown: applyMarkdownTransforms(renderSymbolMarkdown(symbol), input.phase),
+          });
+        }
+      }
+    }
+  }
+
+  const approvedPages = await readApprovedCodegraphPages({
+    projectRoot: input.projectRoot,
+    sourceNames: new Set(selectedSources.map((source) => source.record.name)),
+  });
+  for (const unit of indexUnits) {
+    const current = approvedPages.filter((page) => unit.inputSources.includes(page.sourceName));
+    const candidates = allCandidates.filter((candidate) => candidate.source_refs.some((ref) =>
+      unit.inputSources.some((source) => ref.startsWith(`repo:${source}#`))
+    ));
+    unit.currentPageCount = current.length;
+    if (previewBlocked) {
+      unit.changes = {
+        added: Math.max(0, unit.projectedPageCount - current.length),
+        updated: 0,
+        removed: Math.max(0, current.length - unit.projectedPageCount),
+        unchanged: Math.min(current.length, unit.projectedPageCount),
+        exact: false,
+      };
+      continue;
+    }
+    const currentById = new Map(current.map((page) => [page.candidateId, page]));
+    const candidateIds = new Set(candidates.map((candidate) => candidate.candidate_id));
+    unit.changes = {
+      added: candidates.filter((candidate) => !currentById.has(candidate.candidate_id)).length,
+      updated: candidates.filter((candidate) => {
+        const page = currentById.get(candidate.candidate_id);
+        return page !== undefined && page.candidateFingerprint !== candidate.fingerprint;
+      }).length,
+      removed: current.filter((page) => !candidateIds.has(page.candidateId)).length,
+      unchanged: candidates.filter((candidate) =>
+        currentById.get(candidate.candidate_id)?.candidateFingerprint === candidate.fingerprint
+      ).length,
+      exact: true,
+    };
+  }
+  const preview: ExtractTsPhasePreview = {
+    kind: "context.extraction-phase-preview.v1",
+    phaseKind: "phase.extract.ts",
     phaseId: input.phase.id,
     collection: input.phase.collection,
     include: [...input.phase.include],
     mode: input.phase.mode,
     ...(input.phase.entries !== undefined ? { entries: [...input.phase.entries] } : {}),
     exportedOnly: input.phase.exportedOnly,
+    indexUnits,
     knowledgeTree: knowledgeTreeFromExamples(input.phase.collection, knowledgePathExamples),
     knowledgePathExamples,
     sources,
@@ -380,6 +413,28 @@ export async function previewExtractTsPhase(input: {
     },
     agent_hints: agentHints,
   };
+  return {
+    kind: "context.extract-ts-prepared.v1",
+    phaseId: input.phase.id,
+    fingerprint: extractPhaseSourceFingerprint({ phase: input.phase, sources: selectedSources }),
+    sources: selectedSources,
+    candidates: allCandidates,
+    snapshots,
+    symbolIndex: sourceSymbolIndex,
+    modules: totalModules,
+    extractedSymbols: totalSymbols,
+    relationships,
+    moduleErrors: moduleErrorsForRun,
+    agent_hints: agentHints,
+    preview,
+  };
+}
+
+export async function previewExtractTsPhase(input: {
+  projectRoot: string;
+  phase: ExtractTsPhaseDefinition;
+}): Promise<ExtractTsPhasePreview> {
+  return (await prepareExtractTsPhase(input)).preview;
 }
 
 export async function runExtractTsPhase(input: {
@@ -387,21 +442,50 @@ export async function runExtractTsPhase(input: {
   phase: ExtractTsPhaseDefinition;
   runId: string;
   autoPromote?: boolean;
+  prepared?: ExtractTsPreparedRun;
 }): Promise<ExtractTsRunResult> {
-  const selectedSources = await selectRepoSources({
+  const prepared = input.prepared ?? await prepareExtractTsPhase({
     projectRoot: input.projectRoot,
     phase: input.phase,
     materialize: true,
   });
-  assertReadySources(selectedSources);
-  await assertSingleModuleSourceBoundaries({
-    projectRoot: input.projectRoot,
-    sources: selectedSources,
-  });
-  const sourceFingerprint = extractPhaseSourceFingerprint({
-    phase: input.phase,
-    sources: selectedSources,
-  });
+  if (prepared.phaseId !== input.phase.id) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "extraction preview does not match the requested phase", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      code: "extract-preview-phase-mismatch",
+      expected: input.phase.id,
+      actual: prepared.phaseId,
+    });
+  }
+  const planUnits = prepared.preview.indexUnits.filter((unit) => unit.plan === "inferred");
+  const classificationUnits = prepared.preview.indexUnits.filter((unit) =>
+    unit.risks.includes("module-classification-required")
+  );
+  const blockedUnits = prepared.preview.indexUnits.filter((unit) => unit.scale === "blocked");
+  const capabilityUnits = prepared.preview.indexUnits.filter((unit) => unit.capability === "material-required");
+  const ownershipUnits = prepared.preview.indexUnits.filter((unit) => unit.risks.includes("ownership-ambiguous"));
+  const blockedBy = planUnits.length > 0
+    ? { code: "extract-plan-required", units: planUnits }
+    : classificationUnits.length > 0
+      ? { code: "extract-plan-required", units: classificationUnits }
+    : blockedUnits.length > 0
+      ? { code: "extract-scale-limit-exceeded", units: blockedUnits }
+      : capabilityUnits.length > 0
+      ? { code: "extract-capability-required", units: capabilityUnits }
+      : ownershipUnits.length > 0
+        ? { code: "extract-ownership-required", units: ownershipUnits }
+        : undefined;
+  if (blockedBy !== undefined) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "code extraction preview requires an index plan revision before candidates can be written", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      code: blockedBy.code,
+      limit: EXTRACTION_BLOCK_PAGE_COUNT,
+      units: blockedBy.units,
+      next: "Revise the extraction index plan in src/index.ts, then run context status --format json.",
+    });
+  }
+  const selectedSources = prepared.sources;
+  const sourceFingerprint = prepared.fingerprint;
   const previousFingerprint = (await readExtractSourceFingerprints(input.projectRoot)).phases[input.phase.id];
   const sourceState = previousFingerprint === undefined
     ? "first-run" as const
@@ -410,85 +494,14 @@ export async function runExtractTsPhase(input: {
       : "changed" as const;
 
   const now = new Date().toISOString();
-  const allCandidates: CandidateDraft[] = [];
-  const snapshots: SourceSymbolSnapshot[] = [];
-  const sourceSymbolIndex: ExtractSourceSymbolIndexEntry[] = [];
-  const moduleErrors: ExtractTsRunResult["moduleErrors"] = [];
-  const agentHints: ExtractAgentHint[] = [];
-  let modules = 0;
-  let extractedSymbols = 0;
-  const relationships: ExtractTsRunResult["relationships"] = {
-    mode: "source-backed-ast",
-    detected: 0,
-    emitted: 0,
-    omitted: {
-      external: 0,
-      endpointNotSelected: 0,
-      ambiguousEndpoint: 0,
-    },
-  };
-
-  for (const source of selectedSources) {
-    const repoPath = resolve(input.projectRoot, source.status.materializedAt);
-    const extraction = await runRepositoryExtraction({
-      repoPath,
-      commitHash: source.status.head ?? source.status.ref,
-      pathFilter: phasePathFilter(input.phase),
-      entrySelection: phaseEntrySelection(input.phase),
-      plugins: [new TypeScriptPlugin()],
-    });
-    modules += extraction.results.length;
-    for (const error of extraction.moduleErrors) {
-      moduleErrors.push({
-        source: source.record.name,
-        module_path: error.module_path,
-        error: error.error,
-      });
-      agentHints.push(moduleErrorHint({
-        sourceName: source.record.name,
-        modulePath: error.module_path,
-        error: error.error,
-      }));
-    }
-    for (const result of extraction.results) {
-      extractedSymbols += result.extraction.symbols.length;
-    }
-    const sourceBuild = makeCandidates({
-      phase: input.phase,
-      extraction,
-      source: source.record,
-    });
-    const sourceCandidates = sourceBuild.candidates;
-    relationships.detected += sourceBuild.relationships.detected;
-    relationships.emitted += sourceBuild.relationships.emitted;
-    relationships.omitted.external += sourceBuild.relationships.omitted.external;
-    relationships.omitted.endpointNotSelected +=
-      sourceBuild.relationships.omitted.endpointNotSelected;
-    relationships.omitted.ambiguousEndpoint +=
-      sourceBuild.relationships.omitted.ambiguousEndpoint;
-    allCandidates.push(...sourceCandidates);
-
-    const candidateBySourceRef = new Map(sourceCandidates.map((candidate) => [candidate.source_refs[0], candidate]));
-    for (const result of extraction.results) {
-      for (const symbol of result.extraction.symbols) {
-        const candidate = candidateBySourceRef.get(canonicalSourceRef(source.record.name, symbol));
-        if (!candidate) continue;
-        sourceSymbolIndex.push({
-          source: source.record.name,
-          file: symbol.file,
-          name: symbol.name,
-          kind: symbol.kind,
-          digest: symbolShapeDigest(symbol),
-        });
-        snapshots.push({
-          candidate,
-          source: source.record,
-          symbol,
-          markdown: applyMarkdownTransforms(renderSymbolMarkdown(symbol), input.phase),
-        });
-      }
-    }
-  }
+  const allCandidates = [...prepared.candidates];
+  const snapshots = prepared.snapshots;
+  const sourceSymbolIndex = prepared.symbolIndex;
+  const moduleErrors = prepared.moduleErrors;
+  const agentHints = prepared.agent_hints;
+  const modules = prepared.modules;
+  const extractedSymbols = prepared.extractedSymbols;
+  const relationships = prepared.relationships;
 
   const sourceNames = new Set(selectedSources.map((source) => source.record.name));
   const approvedPages = await readApprovedCodegraphPages({ projectRoot: input.projectRoot, sourceNames });

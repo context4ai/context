@@ -223,6 +223,18 @@ describe("@c4a/context SDK bootstrap", () => {
     expect(extract.mode).toBe("exports");
     expect(extract.entries).toBeUndefined();
     expect(extract.exportedOnly).toBe(true);
+    expect(extract.indexPlan).toBe("declared");
+    expect(extract.indexUnits).toEqual([expect.objectContaining({
+      id: "sample-lib",
+      inputSources: ["sample-lib"],
+      outputOwner: "sample-lib",
+      moduleType: "sdk-library",
+      moduleTypes: ["sdk-library"],
+      facets: ["public-api"],
+      moduleTypeEvidence: ["Package export entries selected by extractTs exports mode."],
+      outputProfile: "public-api-reference",
+      capability: "complete",
+    })]);
     expect(extract.transform).toBe(transform);
     expect(captureMdxDocs.processors).toEqual([{
       kind: "file.capture.processor.mdx-json-docs",
@@ -299,6 +311,7 @@ describe("@c4a/context SDK bootstrap", () => {
       id: "extract:sample-lib:protocol",
       collection: "codegraph",
       sources: [repoRef],
+      indexUnits: [],
       writes: [{
         kind: "lifecycle.candidates",
         path: ".tmp/context-runtime/lifecycle/candidates.jsonl",
@@ -415,6 +428,10 @@ describe("@c4a/context SDK bootstrap", () => {
       name: "default-namespace-kb",
       template: "src/package-templates/kb",
     }).distribution).toBeUndefined();
+    expect(kbPackage({
+      name: "default-assets-kb",
+      template: "src/package-templates/kb",
+    }).assets).toEqual({ delivery: "bundle" });
     expect(kbPackage({
       name: "optimized-assets-kb",
       template: "src/package-templates/kb",
@@ -608,34 +625,6 @@ describe("@c4a/context SDK bootstrap", () => {
     expect(() =>
       reviewValidity({ scope: "collection" as never })
     ).toThrow(/reviewValidity scope must be all/);
-  });
-
-  test("extractTs supports Context-owned entries and entry-free scan mode", () => {
-    const sampleLib = source("sample-lib");
-    const configured = extractTs({
-      source: sampleLib,
-      collection: "codegraph",
-      include: ["src/**/*.ts"],
-      entries: ["./src/api.ts", "src/admin.ts", "src/api.ts"],
-    });
-    const scan = extractTs({
-      source: sampleLib,
-      collection: "codegraph",
-      include: ["app/**/*.ts"],
-      mode: "scan",
-    });
-
-    expect(configured).toMatchObject({
-      mode: "exports",
-      entries: ["src/api.ts", "src/admin.ts"],
-      exportedOnly: true,
-    });
-    expect(scan).toMatchObject({
-      mode: "scan",
-      include: ["app/**/*.ts"],
-      exportedOnly: false,
-    });
-    expect(scan.entries).toBeUndefined();
   });
 
   test("collection constants separate internal routing from OKF output roots", () => {

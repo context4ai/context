@@ -9,7 +9,7 @@ import { CANDIDATE_LEDGER_FILE, readCandidateRecords, type CandidateRecord } fro
 import { validateApprovedStructureEdges } from "./verifyApprovedStructure.js";
 import { validateCanonicalSourceRef } from "./verifyCanonicalSourceRefs.js";
 import { parseFrontmatterLoose, validateApprovedMarkdown } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkMarkdown } from "./verifyProjectFiles.js";
+import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import {
   loadSourceRegistryLookup,
   loadVerifiedSymbolIndex,
@@ -144,7 +144,7 @@ export async function verifyProjectWorkspace(
   });
 
   const seenViewRefs = new Set<string>();
-  for (const file of await walkMarkdown(join(projectRoot, "knowledge"))) {
+  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
     const content = await readFile(file.absPath, "utf8");
     const frontmatter = parseFrontmatterLoose(content);

@@ -53,11 +53,18 @@ export {
   captureFile,
   captureLark,
   compileProse,
+  CODE_INDEX_CAPABILITIES,
+  CODE_INDEX_COVERAGE_KINDS,
+  CODE_INDEX_LIFECYCLES,
+  CODE_INDEX_MODULE_FACETS,
+  CODE_INDEX_MODULE_TYPES,
+  CODE_INDEX_OUTPUT_PROFILES,
   customPhase,
   extractCustom,
   extractTs,
   ExtractTsConfigurationError,
   NO_ENTRY_DETECTED,
+  requiredCodeIndexCoverage,
   mdxJsonDocs,
   reviewValidity,
 } from "./phases.js";
@@ -71,11 +78,25 @@ export type {
   CustomPhaseDefinition,
   CustomCodeCandidateDraft,
   CustomCodeCandidateEdge,
+  CustomCodeCandidateSection,
   CustomCodeCandidateReview,
   CustomCodeEvidence,
   CustomCodeExtractionContext,
   CustomCodeExtractionResult,
   CustomCodeExtractor,
+  CodeIndexCapability,
+  CodeIndexCapabilityGap,
+  CodeIndexCoverageKind,
+  CodeIndexInspectionAdapter,
+  CodeIndexInspectionContext,
+  CodeIndexInspectionFinding,
+  CodeIndexInspectionFindingKind,
+  CodeIndexInspectionResult,
+  CodeIndexLifecycle,
+  CodeIndexModuleFacet,
+  CodeIndexModuleType,
+  CodeIndexOutputProfile,
+  CodeIndexUnitPlan,
   ExtractCustomPhaseDefinition,
   ExtractTsPhaseDefinition,
   PhaseDefinition,
@@ -140,9 +161,9 @@ export type PackageDistributionDefinition = {
 };
 
 export type PackageAssetOptimizationDefinition = {
-  /** Image codec provider resolved from the Context workspace. */
+  /** Image codec provider supplied by Context CLI. */
   processor: "sharp";
-  /** Lossless is the safe default; lossy WebP must be selected explicitly. */
+  /** Explicit output policy. Omit optimize to use Context's adaptive package budget. */
   mode?: "lossless-webp" | "webp";
   /** WebP quality for lossy mode. */
   quality?: number;
@@ -160,7 +181,7 @@ export type PackageAssetDefinition =
     urlPrefix?: string;
   }
   | {
-    /** Copy resources into the package. */
+    /** Copy resources into the package. This is the default delivery. */
     delivery: "bundle";
     /** Optional image optimization, resolved from the Context workspace. */
     optimize?: PackageAssetOptimizationDefinition;
@@ -370,8 +391,8 @@ const normalizePackageAssetOptimization = (
 
 const normalizePackageAssets = (
   assets: PackageAssetDefinition | undefined,
-): PackageAssetDefinition | undefined => {
-  if (assets === undefined) return undefined;
+): PackageAssetDefinition => {
+  if (assets === undefined) return { delivery: "bundle" };
   if (assets.delivery === "bundle") {
     return {
       delivery: "bundle",
@@ -474,7 +495,7 @@ export const kbPackage = (definition: {
     ...base,
     navigation: normalizePackageNavigation(definition.navigation),
     ...(distribution === undefined ? {} : { distribution }),
-    ...(assets === undefined ? {} : { assets }),
+    assets,
   };
 };
 

@@ -43,6 +43,12 @@ describe("Context workflow resource repair", () => {
       phases: [phaseA, phaseB],
       sourceFreshness: "unknown",
       pendingExtractPhases: [phaseB.id],
+      extractionPreview: {
+        current: true,
+        capabilityClear: true,
+        ownershipClear: true,
+        scaleClear: true,
+      },
       draftCandidates: 1,
       draftCollections: ["codegraph"],
       approvedPages: 1,

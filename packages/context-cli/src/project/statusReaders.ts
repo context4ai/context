@@ -583,15 +583,16 @@ export async function collectSourceFreshness(input: {
   state: SourceFreshnessState;
   stalePhases: string[];
   pendingPhases: string[];
+  phaseFingerprints: Record<string, string>;
   diagnostics: string[];
   errorDiagnostics: string[];
 }> {
   const extractPhases = input.phases.filter(isCodeExtractionPhase);
   if (extractPhases.length === 0) {
-    return { state: "ready", stalePhases: [], pendingPhases: [], diagnostics: [], errorDiagnostics: [] };
+    return { state: "ready", stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
   }
   if (input.sources.length === 0) {
-    return { state: "ready", stalePhases: [], pendingPhases: [], diagnostics: [], errorDiagnostics: [] };
+    return { state: "ready", stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
   }
 
   const cached = await readExtractSourceFingerprints(input.projectRoot);
@@ -599,6 +600,7 @@ export async function collectSourceFreshness(input: {
   const diagnostics: string[] = [];
   const errorDiagnostics: string[] = [];
   const unknownPhases: string[] = [];
+  const phaseFingerprints: Record<string, string> = {};
   for (const phase of extractPhases) {
     const selectedSources = selectedSourcesForExtractPhase({
       phase,
@@ -613,6 +615,7 @@ export async function collectSourceFreshness(input: {
       phase,
       sources: selectedSources,
     });
+    phaseFingerprints[phase.id] = current.fingerprint;
     const previous = cached.phases[phase.id];
     if (previous === undefined) {
       unknownPhases.push(phase.id);
@@ -629,6 +632,7 @@ export async function collectSourceFreshness(input: {
     pendingPhases: extractPhases
       .map((phase) => phase.id)
       .filter((phaseId) => stalePhases.includes(phaseId) || unknownPhases.includes(phaseId)),
+    phaseFingerprints,
     diagnostics: [
       ...diagnostics,
       ...unknownPhases.map((phaseId) =>

@@ -108,6 +108,41 @@ function extractionDeclarationsComplete(
   );
 }
 
+function extractionCapabilityClear(
+  observation: ContextWorkflowObservation,
+): boolean {
+  const pending = new Set([
+    ...observation.pendingExtractPhases,
+    ...observation.staleSourcePhases,
+  ]);
+  return observation.phases.every((phase) =>
+    !pending.has(phase.id) ||
+    (phase.kind !== "phase.extract.ts" && phase.kind !== "phase.extract.custom") ||
+    (phase.indexUnits ?? []).every((unit) => unit.capability !== "material-required")
+  );
+}
+
+function extractionPlansComplete(
+  observation: ContextWorkflowObservation,
+): boolean {
+  const pending = new Set([
+    ...observation.pendingExtractPhases,
+    ...observation.staleSourcePhases,
+  ]);
+  if (pending.size === 0) return true;
+  return observation.phases.every((phase) => {
+    if (!pending.has(phase.id)) return true;
+    if (phase.kind !== "phase.extract.ts" && phase.kind !== "phase.extract.custom") return true;
+    return (phase.indexPlan ?? "inferred") === "declared" &&
+      (phase.indexUnits ?? []).length > 0 &&
+      (phase.indexUnits ?? []).every((unit) =>
+        unit.moduleType !== "unknown" &&
+        !(unit.moduleTypes ?? [unit.moduleType]).includes("unknown") &&
+        (unit.moduleTypeEvidence?.length ?? 0) > 0
+      );
+  });
+}
+
 function workspaceStateValid(observation: ContextWorkflowObservation): boolean {
   if (observation.stateDiagnostics.length > 0) return false;
   if (observation.activeStructures.state === "invalid") return false;
@@ -354,6 +389,12 @@ export function createContextWorkflowFacts(
     observation.pendingCaptureCommands.length === 0;
   const extractDeclarationsComplete =
     extractionDeclarationsComplete(observation);
+  const extractionPreview = observation.extractionPreview ?? {
+    current: observation.pendingExtractPhases.length === 0,
+    capabilityClear: true,
+    ownershipClear: true,
+    scaleClear: true,
+  };
   const extractComplete = observation.repoSources.length === 0 ||
     (
       extractDeclarationsComplete &&
@@ -423,6 +464,13 @@ export function createContextWorkflowFacts(
   };
   const buildLogPending = runtimeEvents.configured &&
     runtimeEvents.pending_kinds.includes("package.build.completed");
+  const documentOptimization = observation.documentOptimization ?? {
+    enabled: false,
+    current: true,
+    pending_fragments: 0,
+    conflict_fragments: 0,
+    revision_requested: false,
+  };
 
   return {
     workspace: {
@@ -472,6 +520,15 @@ export function createContextWorkflowFacts(
     },
     extract: {
       declarations_complete: extractDeclarationsComplete,
+      plans_complete: extractionPlansComplete(observation),
+      capability_clear: extractionCapabilityClear(observation) &&
+        (!extractionPreview.current || extractionPreview.capabilityClear),
+      preview_current: extractionPreview.current,
+      ownership_clear: extractionPreview.current
+        ? extractionPreview.ownershipClear
+        : true,
+      scale_clear: extractionPreview.current ? extractionPreview.scaleClear : true,
+      batch_digest: extractionPreview.digest ?? null,
       complete: extractComplete,
     },
     documents: {
@@ -504,6 +561,15 @@ export function createContextWorkflowFacts(
       declared: packagesDeclared,
       templates_reviewed: templatesReviewed,
       current: packagesCurrent,
+    },
+    document_optimization: {
+      enabled: documentOptimization.enabled,
+      current: documentOptimization.current,
+      pending_count: documentOptimization.pending_fragments,
+      conflict_count: documentOptimization.conflict_fragments,
+      ...(documentOptimization.revision_requested
+        ? { revision_requested: true as const }
+        : {}),
     },
     logs: {
       configured: runtimeEvents.configured,

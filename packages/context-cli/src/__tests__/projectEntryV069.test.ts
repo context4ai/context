@@ -87,10 +87,11 @@ describe("single Context agent entry", () => {
         language: "zh-CN",
         dev: true,
         debug: true,
+        optimizeDocs: true,
       });
       expect(entry.state).toBe("workspace-initialization-required");
       expect(entry.next_action.command).toBe(
-        "context init custom --language zh-CN --name 'Docs KB' --dev --debug",
+        "context init custom --language zh-CN --name 'Docs KB' --dev --debug --optimize-docs",
       );
     } finally {
       await rm(root, { recursive: true, force: true });

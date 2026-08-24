@@ -27,6 +27,7 @@ import {
   readProseCompileBatchProgress,
   type ProseCompileBatchProgress,
 } from "./proseCompileBatch.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { structureBatchStatus } from "./statusStructureBatch.js";
 import {
   activeStructureGroups,
@@ -43,6 +44,11 @@ import type {
   ProjectStatus,
   UnclassifiedDocumentTarget,
 } from "./statusTypes.js";
+import {
+  collectDocumentOptimizationStatus,
+  disabledDocumentOptimizationStatus,
+} from "./documentOptimization.js";
+import { listApprovedKnowledge } from "./packageBuilder.js";
 import {
   evaluateContextWorkflow,
   projectContextWorkflowStatus,
@@ -66,6 +72,7 @@ import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
 import { recordAgentGraphEvaluation } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
+import { readExtractionPreviewState } from "./extractionPreviewCache.js";
 
 export type {
   ActiveStructuresStatus,
@@ -461,17 +468,23 @@ export async function collectProjectStatusSnapshot(
   });
   const approvedPages = await countFiles(
     join(projectRoot, "knowledge"),
-    (rel) => rel.endsWith(".md") && !rel.startsWith("assets/"),
+    (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
   );
   const approvedCollections = (await Promise.all(
     KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
       collection,
       count: await countFiles(
         join(projectRoot, "knowledge", collection),
-        (rel) => rel.endsWith(".md"),
+        (rel) => isApprovedKnowledgeMarkdownPath(rel),
       ),
     })),
   )).filter((item) => item.count > 0).map((item) => item.collection);
+  const documentOptimization = phaseStatus.projectEntryValid
+    ? await collectDocumentOptimizationStatus({
+        projectRoot,
+        files: await listApprovedKnowledge(projectRoot),
+      })
+    : disabledDocumentOptimizationStatus();
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const sourceFreshness = phaseStatus.projectEntryValid
@@ -481,7 +494,15 @@ export async function collectProjectStatusSnapshot(
         sources,
         sourceStatuses,
       })
-    : { state: "ready" as const, stalePhases: [], pendingPhases: [], diagnostics: [], errorDiagnostics: [] };
+    : { state: "ready" as const, stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
+  const extractionPreview = await readExtractionPreviewState({
+    projectRoot,
+    pendingPhaseIds: [...new Set([
+      ...sourceFreshness.stalePhases,
+      ...sourceFreshness.pendingPhases,
+    ])],
+    phases,
+  });
   const verifyStatus = draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(
         projectRoot,
@@ -585,10 +606,12 @@ export async function collectProjectStatusSnapshot(
       packages,
       packageFreshness,
       packageTemplateReviews,
+      documentOptimization,
       runtimeEvents,
       sourceFreshness: sourceFreshness.state,
       staleSourcePhases: sourceFreshness.stalePhases,
       pendingExtractPhases: sourceFreshness.pendingPhases,
+      extractionPreview,
       pendingCaptureCommands: pendingCapture.commands,
       missingCaptureSources: pendingCapture.missingSources,
       evidenceWarnings,
@@ -663,9 +686,11 @@ export async function collectProjectStatusSnapshot(
     phases: phases.map((phase) => phase.id),
     packages: packageFreshness,
     packageTemplateReviews,
+    documentOptimization,
     sourceFreshness: sourceFreshness.state,
     staleSourcePhases: sourceFreshness.stalePhases,
     pendingExtractPhases: sourceFreshness.pendingPhases,
+    extractionPreview,
     pendingCapturePhases: pendingCapture.phaseIds,
     evidenceStatus,
     evidenceWarnings,

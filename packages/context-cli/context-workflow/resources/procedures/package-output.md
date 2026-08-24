@@ -36,37 +36,13 @@ maintain the complete final Skill directory name in the template, such as
 Package output is incremental: a built package is current only for the approved
 knowledge and template digests recorded by its receipt.
 
-When declaring a new KB package, make resource delivery an explicit author
-choice. Offer Git raw when the workspace is in Git or the author supplies a
-raw `urlPrefix`; it keeps package payloads small and uses either the derived
-commit-pinned URL or that explicit prefix. Context does not check whether those
-files are committed, pushed, or remotely readable; that remains the package
-author's responsibility. If neither Git nor an explicit prefix is available,
-offer bundled resources or explicit omission; omission keeps unresolved links
-and must be described as such.
+KB packages bundle referenced resources by default. Images are copied to
+`others/assets/`; when necessary, Context compresses supported images so each
+output image is at most 1 MiB and their combined package size is at most 40
+MiB. This changes only `dist/`, never captured or approved source resources.
 
-Before falling back to bundled delivery for a non-GitHub remote, inspect the
-confirmed repository web URL or a known raw-file URL. When the Git service uses
-the GitHub-compatible same-host shape
-`https://<host>/<namespace>/<repository>/raw/<ref>/<path>`, prefer an explicit
-`urlPrefix` such as
-`https://git.example.com/team/knowledge/raw/{commit}`. Include the
-repository-relative workspace directory in that prefix when the Context
-workspace is nested below the repository root; Context appends the
-project-relative `knowledge/assets/...` path. Lack of built-in automatic
-derivation alone is not a reason to bundle. Prefer `{commit}` for immutable
-links; use a literal published ref only when the author intentionally wants it.
-If the service's raw convention or repository identity cannot be established,
-do not guess or probe an invented endpoint: ask the author for `urlPrefix`, or
-offer bundled delivery.
-
-Large image optimization applies only to bundled delivery. Without an `assets`
-declaration, existing workspaces continue to copy selected resources
-byte-for-byte. If build or status reports
-`package.assets.optimization-recommended`, explain that the current package is
-valid but contains more than 20 MiB of eligible PNG/JPEG resources. Do not
-install a dependency or edit project configuration automatically. If the user
-chooses to optimize the package, use the exact reported setup command and add
-the reported `kbPackage().assets.optimize` value. The processor is installed in the
-Context workspace, not bundled into Context itself. Optimization changes only
-`dist/`; source snapshots and approved resources remain unchanged.
+Configure `assets.delivery="git-raw"` only when the author explicitly wants
+external links and accepts responsibility for publishing and access. Use a
+confirmed immutable HTTPS prefix where possible; do not infer or probe an
+unknown host convention. Explicit omission keeps unresolved links and must be
+described as such.

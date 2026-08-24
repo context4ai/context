@@ -174,6 +174,7 @@ describe("0.6.0 repository source behavior", () => {
         moduleCount: number;
         modules: Array<{ name: string; path: string; manifests: string[]; version?: string }>;
         recommended_sources: Array<{ module: string; local: string; command: string }>;
+        planning_evidence: Array<{ module: string; entry_candidates: string[] }>;
         agent_hints: string[];
       }>;
 
@@ -197,6 +198,10 @@ describe("0.6.0 repository source behavior", () => {
         module: "@demo/button",
         local: "../product_monorepo/packages/button",
         command: "context source add repo 20260712 --module button --local ../product_monorepo/packages/button",
+      }));
+      expect(inspect[0]?.planning_evidence).toContainEqual(expect.objectContaining({
+        module: "@demo/button",
+        entry_candidates: expect.any(Array),
       }));
       expect(inspect[0]?.agent_hints).toEqual(["source-boundary-confirmation-required"]);
     } finally {

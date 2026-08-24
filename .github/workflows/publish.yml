@@ -42,6 +42,18 @@ jobs:
           package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
           test "${GITHUB_REF_NAME}" = "v${package_version}"
 
+      - name: Normalize release title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh api \
+            --method PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -f name="${RELEASE_TAG}" \
+            >/dev/null
+
       - name: Build workspace
         run: bun run build
 

@@ -12,6 +12,7 @@ function localizeSourceRefs(refs: readonly string[]): {
   sources: string[];
   localRefs: string[];
   parsedRefs: ParsedCanonicalSourceRef[];
+  localByCanonical: ReadonlyMap<string, string>;
 } {
   const parsedRefs = refs.map(parseCanonicalSourceRef);
   const sources = [...new Set(parsedRefs.map((ref) => ref.source))];
@@ -29,6 +30,7 @@ function localizeSourceRefs(refs: readonly string[]): {
     sources: sources.map((source) => `repo:${source}`),
     localRefs,
     parsedRefs,
+    localByCanonical: new Map(refs.map((ref, index) => [ref, localRefs[index]!])),
   };
 }
 
@@ -87,19 +89,30 @@ export function renderApprovedCodegraphMarkdown(input: {
     sources: localized.sources,
     visibility: input.record.visibility,
     code_symbols: codeSymbols,
-    relationship_mode: "source-backed-ast",
+    relationship_mode: input.record.relationship_mode ?? "source-backed-ast",
     code_edges: (input.record.code_edges ?? []).map((edge) => ({
       type: edge.type,
       from: edge.from,
       to: edge.to,
       source_refs: edge.source_refs,
-      relationship_mode: "source-backed-ast",
+      relationship_mode: input.record.relationship_mode ?? "source-backed-ast",
       relation_type: edge.relation_type,
-      note: `AST relation: ${edge.relation_type}`,
+      note: `${input.record.relationship_mode === "source-backed-explicit" ? "Explicit" : "AST"} relation: ${edge.relation_type}`,
     })),
     candidate_fingerprint: input.record.fingerprint,
   }).trimEnd();
   const body = cleanApprovedBody(input.snapshot.markdown);
+  const renderedSections = (input.record.sections ?? []).flatMap((section) => {
+    const sectionRef = localized.localByCanonical.get(section.source_ref) ?? localized.localRefs[0] ?? "";
+    return [
+      section.title === undefined ? undefined : `## ${section.title}`,
+      section.title === undefined ? undefined : "",
+      `<!-- context:section id="${escapeHtmlAttribute(section.id)}" kind="${escapeHtmlAttribute(section.kind ?? "description")}" source_ref="${escapeHtmlAttribute(sectionRef)}" -->`,
+      "",
+      section.body ?? "",
+      "",
+    ].filter((line): line is string => line !== undefined);
+  });
   const sectionRef = localized.localRefs[0] ?? "";
   return [
     "---",
@@ -108,9 +121,13 @@ export function renderApprovedCodegraphMarkdown(input: {
     "",
     `# ${title}`,
     "",
-    `<!-- context:section id="section-1" kind="description" source_ref="${escapeHtmlAttribute(sectionRef)}" -->`,
-    "",
-    body,
-    "",
+    ...(renderedSections.length > 0
+      ? renderedSections
+      : [
+          `<!-- context:section id="section-1" kind="description" source_ref="${escapeHtmlAttribute(sectionRef)}" -->`,
+          "",
+          body,
+          "",
+        ]),
   ].join("\n");
 }

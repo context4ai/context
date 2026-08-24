@@ -9,6 +9,41 @@ import {
   type DocumentMainlineCollection,
 } from "./contracts.js";
 import { DOCUMENT_COMPILE_ACTION_SCHEMA_VERSION } from "./documentEvidence.js";
+import {
+  assertUniqueIndexUnits,
+  ExtractTsConfigurationError,
+  normalizeExtractEntry,
+  normalizeIndexUnit,
+  type CodeIndexCoverageKind,
+  type CodeIndexInspectionAdapter,
+  type CodeIndexUnitPlan,
+} from "./codeIndexPlan.js";
+export {
+  CODE_INDEX_CAPABILITIES,
+  CODE_INDEX_COVERAGE_KINDS,
+  CODE_INDEX_LIFECYCLES,
+  CODE_INDEX_MODULE_FACETS,
+  CODE_INDEX_MODULE_TYPES,
+  CODE_INDEX_OUTPUT_PROFILES,
+  ExtractTsConfigurationError,
+  NO_ENTRY_DETECTED,
+  requiredCodeIndexCoverage,
+} from "./codeIndexPlan.js";
+export type {
+  CodeIndexCapability,
+  CodeIndexCapabilityGap,
+  CodeIndexCoverageKind,
+  CodeIndexInspectionAdapter,
+  CodeIndexInspectionContext,
+  CodeIndexInspectionFinding,
+  CodeIndexInspectionFindingKind,
+  CodeIndexInspectionResult,
+  CodeIndexLifecycle,
+  CodeIndexModuleFacet,
+  CodeIndexModuleType,
+  CodeIndexOutputProfile,
+  CodeIndexUnitPlan,
+} from "./codeIndexPlan.js";
 import type {
   RegistrySourceReference,
   DocumentSourceDefinition,
@@ -100,6 +135,8 @@ export type ExtractTsPhaseDefinition = {
   mode: "exports" | "scan";
   entries?: readonly string[];
   exportedOnly: boolean;
+  indexPlan: "declared" | "inferred";
+  indexUnits: readonly CodeIndexUnitPlan[];
   transform?: MarkdownTransform | readonly MarkdownTransform[];
   out: {
     kind: "codegraph-entities";
@@ -135,24 +172,43 @@ export interface CustomCodeCandidateEdge {
   evidence: readonly CustomCodeEvidence[];
 }
 
+export interface CustomCodeCandidateSection {
+  id: string;
+  kind: CodeIndexCoverageKind;
+  title: string;
+  markdown: string;
+  evidence: readonly CustomCodeEvidence[];
+}
+
 export interface CustomCodeCandidateDraft {
   nodeRef: string;
   kind: string;
   visibility: string;
   module: string;
-  markdown: string;
+  markdown?: string;
+  /** Evidence-scoped aggregate sections used to prove output-profile coverage. */
+  sections?: readonly CustomCodeCandidateSection[];
   evidence: readonly CustomCodeEvidence[];
   review: CustomCodeCandidateReview;
   edges?: readonly CustomCodeCandidateEdge[];
 }
 
 export interface CustomCodeExtractionResult {
-  candidates: readonly CustomCodeCandidateDraft[];
+  candidates:
+    | readonly CustomCodeCandidateDraft[]
+    | Iterable<CustomCodeCandidateDraft>
+    | AsyncIterable<CustomCodeCandidateDraft>;
 }
 
 export interface CustomCodeExtractionContext {
   projectRoot: string;
   runId: string;
+  /** CLI-resolved source roots. Use these paths instead of environment-specific checkout paths. */
+  sources: readonly {
+    name: string;
+    materializedAt: string;
+    absolutePath: string;
+  }[];
 }
 
 export type CustomCodeExtractor = (
@@ -166,33 +222,11 @@ export type ExtractCustomPhaseDefinition = {
   writes: readonly PhaseResourceReference[];
   sources: readonly RepoProjectSourceDefinition[];
   collection: "codegraph";
+  indexPlan: "declared" | "inferred";
+  indexUnits: readonly CodeIndexUnitPlan[];
+  inspect?: CodeIndexInspectionAdapter;
   extract: CustomCodeExtractor;
 };
-
-export const NO_ENTRY_DETECTED = "NO_ENTRY_DETECTED" as const;
-
-export class ExtractTsConfigurationError extends TypeError {
-  readonly code = NO_ENTRY_DETECTED;
-
-  constructor(message: string) {
-    super(message);
-    this.name = "ExtractTsConfigurationError";
-  }
-}
-
-function normalizeExtractEntry(value: string): string {
-  const slashPath = value.trim().replace(/\\/gu, "/");
-  const segments = slashPath.replace(/^\.\//u, "").split("/");
-  if (
-    slashPath.length === 0 ||
-    slashPath.startsWith("/") ||
-    /^[A-Za-z]:\//u.test(slashPath) ||
-    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
-  ) {
-    throw new TypeError(`extractTs entries must be source-relative file paths: ${value}`);
-  }
-  return segments.join("/");
-}
 
 export type CaptureFilePhaseDefinition = {
   kind: "phase.capture.file";
@@ -526,6 +560,7 @@ export const extractTs = (definition: {
   mode?: "exports" | "scan";
   entries?: readonly string[];
   exportedOnly?: boolean;
+  indexUnits?: readonly CodeIndexUnitPlan[];
   transform?: MarkdownTransform | readonly MarkdownTransform[];
 }): ExtractTsPhaseDefinition => {
   const sourceDefinition = bindSourceType(definition.source, "repo", "extractTs source") as RepoProjectSourceDefinition;
@@ -545,6 +580,36 @@ export const extractTs = (definition: {
   const entries = definition.entries === undefined
     ? undefined
     : [...new Set(definition.entries.map(normalizeExtractEntry))];
+  const defaultSourceName = sourceDefinition.kind === "source.collection"
+    ? sourceDefinition.type
+    : sourceDefinition.name;
+  const exportedOnly = definition.exportedOnly ?? mode === "exports";
+  const indexUnits = (definition.indexUnits ?? (sourceDefinition.kind === "source.collection"
+    ? []
+    : [{
+        id: defaultSourceName,
+        inputSources: [defaultSourceName],
+        outputOwner: defaultSourceName,
+        moduleType: mode === "exports" ? "sdk-library" : "unknown",
+        moduleTypes: [mode === "exports" ? "sdk-library" : "unknown"],
+        facets: mode === "exports" ? ["public-api"] : [],
+        moduleTypeEvidence: mode === "exports"
+          ? ["Package export entries selected by extractTs exports mode."]
+          : [],
+        outputProfile: mode === "exports" ? "public-api-reference" : "module-map",
+        responsibility: mode === "exports"
+          ? "Index the stable exported contracts of this module."
+          : "Index the configured structural scope of this module.",
+        entries: entries ?? [],
+        pageKinds: mode === "exports" ? ["public-contract"] : ["module-map"],
+        protocols: [],
+        dependencies: [],
+        exclusions: [],
+        capability: "complete",
+      } satisfies CodeIndexUnitPlan])).map((unit, index) =>
+        normalizeIndexUnit(unit, `extractTs indexUnits[${index}]`)
+      );
+  assertUniqueIndexUnits(indexUnits, "extractTs indexUnits");
   const phase: ExtractTsPhaseDefinition = {
     kind: "phase.extract.ts",
     id: `extract:${sourceId}:${definition.collection}`,
@@ -563,7 +628,12 @@ export const extractTs = (definition: {
     include: definition.include ?? ["src/**/*.{ts,tsx}"],
     mode,
     ...(entries !== undefined ? { entries } : {}),
-    exportedOnly: definition.exportedOnly ?? mode === "exports",
+    exportedOnly,
+    indexPlan: definition.indexUnits !== undefined ||
+        (sourceDefinition.kind !== "source.collection" && mode === "exports" && exportedOnly)
+      ? "declared"
+      : "inferred",
+    indexUnits,
     out: {
       kind: "codegraph-entities",
       candidateFile: ".tmp/context-runtime/lifecycle/candidates.jsonl",
@@ -583,6 +653,8 @@ export const extractCustom = (definition: {
   id: string;
   sources: readonly RepoProjectSourceDefinition[];
   collection: "codegraph";
+  indexUnits?: readonly CodeIndexUnitPlan[];
+  inspect?: CodeIndexInspectionAdapter;
   extract: CustomCodeExtractor;
 }): ExtractCustomPhaseDefinition => {
   const id = definition.id.trim();
@@ -594,6 +666,10 @@ export const extractCustom = (definition: {
   const sources = definition.sources.map((sourceDefinition) =>
     bindSourceType(sourceDefinition, "repo", "extractCustom source") as RepoProjectSourceDefinition
   );
+  const indexUnits = (definition.indexUnits ?? []).map((unit, index) =>
+    normalizeIndexUnit(unit, `extractCustom indexUnits[${index}]`)
+  );
+  assertUniqueIndexUnits(indexUnits, "extractCustom indexUnits");
   return {
     kind: "phase.extract.custom",
     id,
@@ -606,6 +682,9 @@ export const extractCustom = (definition: {
     }],
     sources,
     collection: definition.collection,
+    indexPlan: definition.indexUnits === undefined ? "inferred" : "declared",
+    indexUnits,
+    ...(definition.inspect === undefined ? {} : { inspect: definition.inspect }),
     extract: definition.extract,
   };
 };

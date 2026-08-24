@@ -6,7 +6,7 @@ import type { AlignPayload } from "./proseAlignTypes.js";
 import { STRUCTURE_FILE } from "./proseCompileConstants.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { parseFrontmatterLoose, isDeprecatedApprovedMarkdown } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkMarkdown } from "./verifyProjectFiles.js";
+import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -86,7 +86,7 @@ async function approvedViewRefs(
   planned: ReadonlySet<string>,
 ): Promise<ApprovedViewRef[]> {
   const approved: ApprovedViewRef[] = [];
-  for (const file of await walkMarkdown(join(projectRoot, "knowledge"))) {
+  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
     const content = await readFile(file.absPath, "utf8");
     if (isDeprecatedApprovedMarkdown(content)) continue;

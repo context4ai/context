@@ -5,6 +5,7 @@ import { Command, Option } from "commander";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
+import { registerDocumentOptimizationCommands } from "./commands/documentOptimizationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
 import { ContextError } from "./lib/errors.js";
@@ -58,6 +59,8 @@ const TOP_LEVEL_COMMANDS = new Set([
   "package",
   "clean-cache",
   "debug",
+  "revise",
+  "optimize-docs",
   "logs",
   "help",
 ]);
@@ -225,6 +228,7 @@ export function createCliProgram(): Command {
     await assertProjectWorkflowRevision({
       cwd: process.cwd(),
       expectedRevision: options.workflowRevision,
+      managed: options.workflowManaged === true,
       authorities,
     });
   });
@@ -236,6 +240,7 @@ export function createCliProgram(): Command {
   registerPluginCommands(program);
 
   registerDebugCommands(program);
+  registerDocumentOptimizationCommands(program);
 
   registerContextWorkflowResourceCommands(program);
   registerPackageCommands(program);

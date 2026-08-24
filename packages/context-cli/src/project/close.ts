@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -26,7 +26,7 @@ import {
   approvedStructureSourceInputsRecord,
   mergedApprovedStructureSourceInputs,
 } from "./approvedStructureInputs.js";
-import { isKnowledgeAssetPath } from "./verifyProjectFiles.js";
+import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
 
 interface ApprovedKnowledgeFile {
@@ -76,10 +76,6 @@ function isApprovedStructureRecord(value: unknown): value is Record<string, unkn
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function toPosixPath(path: string): string {
-  return path.split(/[\\/]+/u).join("/");
-}
-
 function viewLocationFromRelPath(relPath: string): { collection: string; containment: string; slug: string } {
   const parts = relPath.split("/");
   const collection = parts[0] ?? "architecture";
@@ -104,26 +100,6 @@ function requiredFrontmatterString(
   });
 }
 
-async function walkFiles(root: string): Promise<Array<{ relPath: string; absPath: string }>> {
-  if (!existsSync(root)) return [];
-  const files: Array<{ relPath: string; absPath: string }> = [];
-  const visit = async (dir: string): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const absPath = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await visit(absPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      files.push({ relPath: toPosixPath(relative(root, absPath)), absPath });
-    }
-  };
-  await visit(root);
-  files.sort((left, right) => left.relPath.localeCompare(right.relPath));
-  return files;
-}
-
 function parseFrontmatter(content: string): Record<string, unknown> {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/u.exec(content);
   if (match?.[1] === undefined) return {};
@@ -138,9 +114,9 @@ function isDeprecated(content: string): boolean {
 }
 
 async function approvedKnowledgeFiles(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
-  const files = await walkFiles(join(projectRoot, KNOWLEDGE_ROOT));
+  const files = await walkApprovedMarkdown(join(projectRoot, KNOWLEDGE_ROOT));
   const markdown = await Promise.all(files
-    .filter((file) => file.relPath.endsWith(".md") && !isKnowledgeAssetPath(file.relPath))
+    .filter((file) => !isKnowledgeAssetPath(file.relPath))
     .map(async (file) => ({
       ...file,
       content: await readFile(file.absPath, "utf8"),

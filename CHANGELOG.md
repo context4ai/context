@@ -4,6 +4,38 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.16 - 2026-08-24
+
+- Added optional source-faithful document optimization that stores only changed
+  pages as adjacent `__revision.md` files and rebuilds unchanged content
+  deterministically from approved knowledge.
+- Added a conversational `context revise` entry backed by an Agent Graph Route,
+  with unique target resolution, conservative Markdown validation, stale-source
+  protection, and automatic return to package build after a valid correction.
+- Added bundled image delivery with deterministic per-file and package budgets,
+  plus path classification that keeps revision files out of ordinary knowledge
+  discovery and published package paths.
+
+## 0.6.15 - 2026-08-23
+
+- Added explicit per-module code index plans that classify module type, stable
+  entries, public protocols, output ownership, exclusions, and source lifecycle
+  before extraction starts.
+- Added business-neutral module archetype and facet procedures so Agents classify
+  all modules first, read only the matching templates, and produce one deduplicated
+  index plan before the measured extraction preview.
+- Added one cached batch preview for all pending code extraction phases, with
+  per-index-unit page estimates and hard stops above 300 pages in both ordinary
+  and fully managed workflows.
+- Added streaming custom extractor previews and generic inspection adapters so
+  unsupported protocols can request supplementary material without coupling the
+  community packages to a specific framework or business domain.
+- Added mandatory structural probe coverage for custom adapters when a known
+  TypeScript, React Router, Go, Rush, or protocol capability matches the source;
+  aggregate pages remain valid only when their evidence covers those facts.
+- Distinguished project-authored source-backed relationships from parser-owned
+  AST relationships in extraction receipts and approved graph projections.
+
 ## 0.6.13 - 2026-08-23
 
 - Clarified debug startup so a new workspace receives `--debug` through

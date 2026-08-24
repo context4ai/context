@@ -15,6 +15,7 @@ import type {
 const SNAPSHOT_ROOT = join(".tmp", "context-runtime", "extract", "candidates");
 const EXTRACT_SOURCE_FINGERPRINT_FILE = join(".tmp", "context-runtime", "extract", "source-fingerprints.json");
 const EXTRACT_SOURCE_SYMBOL_INDEX_FILE = join(".tmp", "context-runtime", "extract", "source-symbols.json");
+const EXTRACTION_PREVIEW_CONTRACT = "context.extraction-preview.v1";
 
 export function stableHash(value: unknown, length?: number): string {
   const hash = createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -96,6 +97,8 @@ export function extractPhaseSourceFingerprint(input: {
         mode: input.phase.mode,
         ...(input.phase.entries !== undefined ? { entries: [...input.phase.entries] } : {}),
         exportedOnly: input.phase.exportedOnly,
+        indexPlan: input.phase.indexPlan ?? "inferred",
+        indexUnits: input.phase.indexUnits ?? [],
         transform: transformFingerprint(input.phase),
       }
     : {
@@ -105,9 +108,13 @@ export function extractPhaseSourceFingerprint(input: {
           ? { kind: source.kind, type: source.type }
           : { kind: source.kind, name: source.name, materializedAt: source.materializedAt }),
         collection: input.phase.collection,
+        indexPlan: input.phase.indexPlan ?? "inferred",
+        indexUnits: input.phase.indexUnits ?? [],
+        ...(input.phase.inspect === undefined ? {} : { inspector: String(input.phase.inspect) }),
         extractor: String(input.phase.extract),
       };
   const fingerprint = stableHash({
+    previewContract: EXTRACTION_PREVIEW_CONTRACT,
     phase,
     sources: freshnessSources,
   });

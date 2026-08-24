@@ -209,6 +209,12 @@ describe("0.6.0 project run and extract", () => {
         "json",
       ])) as {
         preview?: {
+          indexUnits: Array<{
+            id: string;
+            projectedPageCount: number;
+            scale: string;
+            outputProfile: string;
+          }>;
           totals: {
             candidateEstimate: number;
             modules: number;
@@ -232,6 +238,12 @@ describe("0.6.0 project run and extract", () => {
         };
       };
       expect(dryRunJson.preview?.totals.modules).toBe(1);
+      expect(dryRunJson.preview?.indexUnits[0]).toMatchObject({
+        id: "20260712/sample-lib",
+        projectedPageCount: expect.any(Number),
+        scale: "normal",
+        outputProfile: "public-api-reference",
+      });
       expect(dryRunJson.preview?.totals.candidateEstimate).toBeGreaterThan(0);
       expect(dryRunJson.preview?.totals.discoveredFiles).toBeGreaterThan(0);
       expect(dryRunJson.preview?.totals.analyzedFiles).toBeGreaterThan(0);
@@ -254,6 +266,19 @@ describe("0.6.0 project run and extract", () => {
         module: "sample-lib",
       });
       expect(existsSync(join(project, ".tmp", "context-runtime", "runs"))).toBe(false);
+
+      const batchPreview = JSON.parse(await runCliInDir(project, [
+        "run",
+        "--preview-extraction-batch",
+        "--preview-phase",
+        "extract:20260712/sample-lib:codegraph",
+        "--format",
+        "json",
+      ])) as { cache: { reusablePhases: number }; scaleClear: boolean };
+      expect(batchPreview).toMatchObject({
+        cache: { reusablePhases: 1 },
+        scaleClear: true,
+      });
 
       const stdout = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
       expect(stdout).toContain("✓ ran extract:20260712/sample-lib:codegraph");
@@ -434,7 +459,11 @@ describe("0.6.0 project run and extract", () => {
         "export default defineProject({",
         "  sources: [lib],",
         "  phases: [",
-        '    extractTs({ source: lib, collection: "codegraph", include: ["src/**/*.ts"], mode: "scan" }),',
+        '    extractTs({ source: lib, collection: "codegraph", include: ["src/**/*.ts"], mode: "scan", indexUnits: [{',
+        '      id: "no-entry-lib-map", inputSources: ["20260712/no-entry-lib"], outputOwner: "no-entry-lib",',
+        '      moduleType: "sdk-library", moduleTypeEvidence: ["src/index.ts public entry"], outputProfile: "module-map", responsibility: "Map the selected module scope.",',
+        '      entries: ["src/feature.ts"], pageKinds: ["module-map"], protocols: [], dependencies: [], exclusions: [], capability: "complete"',
+        '    }] }),',
         '    reviewValidity({ collection: "codegraph" }),',
         "  ],",
         "  packages: [],",

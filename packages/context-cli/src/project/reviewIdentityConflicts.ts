@@ -5,6 +5,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { parseAlignPayload } from "./proseAlignPayloadParse.js";
 import type { AlignPayload, StructureViewPlan } from "./proseAlignTypes.js";
 import {
@@ -69,7 +70,7 @@ async function approvedPageIdentities(projectRoot: string): Promise<{
         await visit(absolutePath);
         continue;
       }
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      if (!entry.isFile() || !isApprovedKnowledgeMarkdownPath(entry.name)) continue;
       const frontmatter = parseFrontmatterLoose(await readFile(absolutePath, "utf8"));
       const viewRef = typeof frontmatter.view_ref === "string" ? frontmatter.view_ref : undefined;
       if (viewRef === undefined) continue;

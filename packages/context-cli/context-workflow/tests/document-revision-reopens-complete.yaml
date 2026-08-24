@@ -1,0 +1,40 @@
+schema: agent-graph.test.v1
+name: a requested document correction reopens a complete workspace
+graph: workspace
+entry: context
+state:
+  facts:
+    workspace: { project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    resume:
+      prose_declarations_complete: true
+      structure_confirmation_resolved: true
+      structure_confirmed: true
+      compile_complete: true
+      knowledge_review_resolved: true
+      review_gate_clear: true
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      extraction_scope_resolved: true
+      document_classification_resolved: true
+      structure_confirmation_resolved: true
+      knowledge_review_resolved: true
+      package_output_resolved: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, batch_digest: null, complete: true }
+    extract: { declarations_complete: true, plans_complete: true, capability_clear: true, preview_current: true, ownership_clear: true, scale_clear: true, batch_digest: null, complete: true }
+    documents: { classified: true }
+    prose: { declarations_complete: true }
+    align: { prepared: true }
+    structure: { confirmed: true }
+    compile: { complete: true }
+    review: { gate_clear: true, batch_resolved: true }
+    close: { current: true }
+    packages: { declared: true, templates_reviewed: true, current: true }
+    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, revision_requested: true }
+expect:
+  statusCode: actionable
+  primaryNode: revise-document
+  primaryReasonCode: route.document-revision.requested

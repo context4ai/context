@@ -28,8 +28,11 @@ context entry [project-dir] --language <language> --format json
 
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
-`project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
-requested that initialization choice. Pass `--managed` only after the user
+`project-dir`, `--name`, `--dev`, `--debug`, or `--optimize-docs` only when the
+user explicitly requested that initialization choice. Treat requests to enable
+document compilation optimization, document formatting optimization, or
+equivalent conservative build-time cleanup as `--optimize-docs`. Pass
+`--managed` only after the user
 explicitly authorizes fully managed operation in this conversation.
 
 If the `context` process itself cannot start because the command is missing
@@ -59,6 +62,24 @@ Execute only `next_action.command` returned by `context entry`:
   init`, enter the project root, read the generated `AGENTS.md`, and run this
   entry again.
 
+If the user explicitly asks to correct or revise an existing approved or built
+knowledge page, first let `context entry` relocate into the existing workspace
+and evaluate its current Route once. Resolve a blocking workspace diagnostic,
+evidence-maintenance action, or already-pending Review batch first; these may
+change the approved baseline. Before continuing unrelated capture, extraction,
+package configuration, or build work, start the correction with:
+
+```bash
+context revise "<the user's page title, approved path, ViewRef, or wording>" --format json
+```
+
+When the target is unique, run the returned status command and follow
+`route.document-revision.requested`. When candidates are returned, select one
+only if the conversation identifies it uniquely; otherwise ask which page the
+user means. Never edit the approved base page or `dist/` for this operation.
+After the Route validates the revision, continue normally: Context will offer
+the package build when the correction makes its output stale.
+
 ### Conversation modes
 
 Enable debugging only when the user explicitly requests it. If initialization
@@ -68,6 +89,16 @@ before initialization. For an existing workspace, run `context debug enable`
 before workflow evaluation. Debugging records traces below
 `.tmp/context-runtime/debug/` but does not grant workflow authority or provide
 source evidence.
+
+Enable document optimization only when the user explicitly requests it. If
+initialization is required, pass `--optimize-docs` through `context entry`; for
+an existing workspace, run `context optimize-docs enable` before workflow
+evaluation. The feature keeps approved pages source-faithful and stores only
+changed full-page revisions beside them as `knowledge/**/*__revision.md`.
+Default knowledge discovery excludes those reserved sidecars; validation and
+package compilation apply them to the matching base page.
+Follow the resulting Route instead of editing approved knowledge or package
+output by hand.
 
 For explicitly authorized fully managed operation, use:
 
@@ -109,6 +140,10 @@ Treat `workflow.current` as the current-step authority:
    not inside a restricted child sandbox. Follow the Route-selected procedure
    for its audit and approval contract; never invent a payload, destination, or
    substitute command.
+   Treat a code-extraction batch preview as one Route action. Read its complete
+   index-unit report and keep same-kind capability or scale decisions in the
+   single returned Gate; do not ask about modules one by one. A non-delegatable
+   extraction Gate must stop even in fully managed mode.
 4. If `configuration` is present, edit only the named project file and use the
    selected resources as its contract.
 5. After every action or configuration change, run status again. The managed

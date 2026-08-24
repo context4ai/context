@@ -20,7 +20,7 @@ state:
       knowledge_review_resolved: true
       review_gate_clear: true
     sources: { registered: true, repositories_ready: true }
-    capture: { declarations_complete: true, complete: true }
+    capture: { declarations_complete: true, batch_digest: null, complete: true }
 expect:
   statusCode: waiting-user
   primaryNode: choose-extraction-scope
@@ -29,5 +29,6 @@ expect:
     - procedure.code-extraction
     - dialogue.human-gates
     - dialogue.code-extraction
+    - semantic.code-index.classification
     - dialogue.workflow-mode-after-capture
     - context.source-current

@@ -308,6 +308,7 @@ nodes:
         required:
           - resources/procedures/code-extraction.md
           - resources/dialogue/code-extraction.md
+          - resources/semantic/code-index/classification.md
           - resources/views/source-current.yaml
         recommended:
           - resources/procedures/source-capture-detailed.md
@@ -324,6 +325,7 @@ nodes:
         - resources/procedures/code-extraction.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/code-extraction.md
+        - resources/semantic/code-index/classification.md
         - resources/dialogue/workflow-mode-after-capture.md
         - resources/views/source-current.yaml
       recommended:
@@ -336,11 +338,94 @@ nodes:
     satisfiedBy:
       - path: extract.declarations_complete
         equals: true
+      - path: extract.plans_complete
+        equals: true
     resources:
       required:
         - resources/procedures/project-configuration.md
         - resources/procedures/code-extraction.md
+        - resources/semantic/code-index/classification.md
         - resources/views/source-current.yaml
+        - resources/manuals/reference/code-extractors.md
+      recommended:
+        - resources/semantic/code-index/templates/web-application.md
+        - resources/semantic/code-index/templates/api-service.md
+        - resources/semantic/code-index/templates/domain-service.md
+        - resources/semantic/code-index/templates/background-runtime.md
+        - resources/semantic/code-index/templates/sdk-library.md
+        - resources/semantic/code-index/templates/cli-tool.md
+        - resources/semantic/code-index/templates/adapter.md
+        - resources/semantic/code-index/templates/monorepo-container.md
+        - resources/semantic/code-index/templates/contract-source.md
+        - resources/semantic/code-index/templates/derived-source.md
+        - resources/semantic/code-index/templates/protocol-boundary.md
+        - resources/semantic/code-index/templates/event-flow.md
+        - resources/semantic/code-index/templates/persistence-boundary.md
+        - resources/semantic/code-index/templates/plugin-extension.md
+        - resources/semantic/code-index/templates/cross-module-chain.md
+
+  - id: resolve-extraction-capability
+    kind: gate
+    reasonCode: route.extract.capability-required
+    resolutionAction: actions/configure-code-extraction.yaml
+    gate:
+      id: extraction-capability
+      prompt: Revise the batch index plan or provide the missing material required for reliable code knowledge.
+      authority: context.extraction-capability
+      delegatable: false
+    satisfiedBy:
+      - path: extract.capability_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+        - resources/views/source-current.yaml
+      recommended:
+        - resources/manuals/reference/code-extractors.md
+
+  - id: preview-extraction-batch
+    kind: action
+    reasonCode: route.extract.preview-required
+    action: actions/preview-extraction-batch.yaml
+    satisfiedBy:
+      - path: extract.preview_current
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+        - resources/views/source-current.yaml
+
+  - id: repair-extraction-ownership
+    kind: action
+    reasonCode: route.extract.ownership-required
+    action: actions/configure-code-extraction.yaml
+    satisfiedBy:
+      - path: extract.ownership_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/project-configuration.md
+        - resources/procedures/code-extraction.md
+        - resources/views/extraction-preview.yaml
+        - resources/manuals/reference/code-extractors.md
+
+  - id: revise-extraction-scale
+    kind: gate
+    reasonCode: route.extract.scale-limit-exceeded
+    resolutionAction: actions/configure-code-extraction.yaml
+    gate:
+      id: extraction-scale
+      prompt: Revise the affected index units before formal extraction writes candidates.
+      authority: context.extraction-scale
+      delegatable: false
+    satisfiedBy:
+      - path: extract.scale_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+        - resources/views/extraction-preview.yaml
+      recommended:
         - resources/manuals/reference/code-extractors.md
 
   - id: extract-next
@@ -538,6 +623,30 @@ nodes:
         - resources/views/package-current.yaml
         - resources/manuals/reference/package-templates.md
 
+  - id: optimize-documents
+    kind: action
+    reasonCode: route.document-optimization.pending
+    action: actions/optimize-documents.yaml
+    satisfiedBy:
+      - path: document_optimization.current
+        equals: true
+    resources:
+      required:
+        - resources/procedures/document-optimization.md
+        - resources/views/document-optimization-current.yaml
+
+  - id: revise-document
+    kind: action
+    reasonCode: route.document-revision.requested
+    action: actions/revise-document.yaml
+    satisfiedBy:
+      - path: document_optimization.revision_requested
+        exists: false
+    resources:
+      required:
+        - resources/procedures/document-revision.md
+        - resources/views/document-optimization-current.yaml
+
   - id: flush-logs-after-build
     kind: action
     reasonCode: route.logs.delivery-pending
@@ -567,14 +676,19 @@ edges:
   - { from: compile-next, to: resolve-review-identities }
   - { from: resolve-review-identities, to: resume-review-current-batch }
   - { from: resume-review-current-batch, to: apply-resumed-review, kind: gatedBy }
-  - { from: apply-resumed-review, to: choose-source-boundary }
+  - { from: apply-resumed-review, to: revise-document }
+  - { from: revise-document, to: choose-source-boundary }
   - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
   - { from: capture-next, to: choose-extraction-scope }
   - { from: choose-extraction-scope, to: configure-code-extraction, kind: gatedBy }
-  - { from: configure-code-extraction, to: extract-next }
+  - { from: configure-code-extraction, to: resolve-extraction-capability }
+  - { from: resolve-extraction-capability, to: preview-extraction-batch }
+  - { from: preview-extraction-batch, to: repair-extraction-ownership }
+  - { from: repair-extraction-ownership, to: revise-extraction-scale }
+  - { from: revise-extraction-scale, to: extract-next }
   - { from: extract-next, to: review-current-batch }
   - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
   - { from: apply-managed-review, to: classify-document }
@@ -583,6 +697,7 @@ edges:
   - { from: align-next, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: build-next, kind: gatedBy }
+  - { from: review-package-template, to: optimize-documents, kind: gatedBy }
+  - { from: optimize-documents, to: build-next }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }

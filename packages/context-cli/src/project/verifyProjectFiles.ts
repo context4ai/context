@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
 export function toPosixPath(path: string): string {
   return path.split(/[\\/]+/u).join("/");
@@ -28,4 +29,8 @@ export async function walkMarkdown(root: string): Promise<Array<{ relPath: strin
   await visit(root);
   files.sort((left, right) => left.relPath.localeCompare(right.relPath));
   return files;
+}
+
+export async function walkApprovedMarkdown(root: string): Promise<Array<{ relPath: string; absPath: string }>> {
+  return (await walkMarkdown(root)).filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath));
 }

@@ -9,6 +9,7 @@ import {
   markdownInlineLinks,
   replaceMarkdownInlineLinkTargets,
 } from "./markdownLinks.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
 export interface PreparedKnowledgeAsset {
   relPath: string;
@@ -233,7 +234,7 @@ export async function removeOrphanKnowledgeAssets(projectRoot: string): Promise<
   if (!existsSync(assetRoot)) return [];
   const referenced = new Set<string>();
   for (const path of await walkFiles(knowledgeRoot)) {
-    if (!path.endsWith(".md") || path.startsWith(`${assetRoot}${sep}`)) continue;
+    if (!isApprovedKnowledgeMarkdownPath(relative(knowledgeRoot, path)) || path.startsWith(`${assetRoot}${sep}`)) continue;
     const relPath = posixPath(relative(projectRoot, path));
     const content = await readFile(path, "utf8");
     for (const ref of knowledgeAssetReferences({ pageRelPath: relPath, content })) referenced.add(ref);

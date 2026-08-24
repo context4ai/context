@@ -89,26 +89,20 @@ package needs project-specific terminology, entry points, known limits, or
 task workflows. Authors may explicitly accept the generic default when it is
 intentionally sufficient.
 
-When approved pages reference materialized document resources, Context keeps
-their production copies in content-addressed `knowledge/assets/` paths. New KB
-setup should offer Git raw delivery first. It rewrites package links to either
-an automatically derived raw prefix or an explicit author-provided prefix.
-Context does not check whether resource files are committed, pushed, or
-remotely readable; that is the package author's responsibility. With no
-explicit prefix, supported remotes use an immutable commit URL. An explicit
-prefix can contain `{commit}` when the Context workspace is in Git, or name a
-mutable branch when that lifecycle is intentional; a literal prefix also works
-when resources are published from a separate repository.
+When approved pages reference materialized resources, Context keeps their
+production copies in content-addressed `knowledge/assets/` paths and bundles
+selected resources into `others/assets/` by default. Supported images are
+adaptively compressed only when needed: every packaged image must be at most 1
+MiB and all packaged images together must be at most 40 MiB. The CLI owns the
+processor. Optimization changes only `dist/`, content-addresses smaller WebP
+output, and leaves `sources/` and `knowledge/assets/` unchanged.
 
-Workspaces without usable Git or an explicit raw prefix can choose bundled
-delivery, which copies only selected resources to `others/assets/`, or explicit
-omission, which does not copy resources and reports that links remain
-unresolved. Bundled output may
-optionally install `sharp` in the workspace and configure
-`assets.optimize`; Context itself has no image dependency. Optimization changes
-only `dist/`, content-addresses smaller WebP output, and leaves `sources/` and
-`knowledge/assets/` unchanged. Source audit XML and capture reports are never
-distributed as reader assets. See [Lark Resource Materialization](./lark-resources.md).
+Configure Git raw delivery only when external immutable links are an explicit
+project requirement. Context can derive supported Git URLs or use an explicit
+HTTPS `urlPrefix`, but it does not publish or probe those resources. Explicit
+omission remains available and reports unresolved links. Source audit XML and
+capture reports are never distributed as reader assets. See
+[Lark Resource Materialization](./lark-resources.md).
 
 The same inventory exposes `structure.relationship_coverage`. It records
 whether selected codegraph pages have current source-backed AST relationship

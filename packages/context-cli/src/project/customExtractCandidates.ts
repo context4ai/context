@@ -1,39 +1,204 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type {
+  CodeIndexUnitPlan,
   CustomCodeCandidateDraft,
-  CustomCodeEvidence,
   ExtractCustomPhaseDefinition,
 } from "@c4a/context";
+import { requiredCodeIndexCoverage } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { candidateIdFromCollectionNodeRef, viewRefFromCollectionNodeRef } from "./candidateIdentity.js";
 import { readApprovedCodegraphPages } from "./codegraphApproved.js";
 import {
   extractPhaseSourceFingerprint,
   readExtractSourceFingerprints,
   removeCandidateSnapshot,
-  stableHash,
   writeCodeCandidateSnapshot,
   writeExtractSourceFingerprint,
   writeExtractSourceSymbolIndex,
 } from "./extractCandidateArtifacts.js";
 import { mergeCandidates } from "./extractCandidateBuild.js";
-import type { CandidateDraft, ExtractSourceSymbolIndexEntry, ExtractTsRunResult } from "./extractCandidateTypes.js";
-import { assertSafeEntityId } from "./entityId.js";
+import type {
+  ExtractCustomPhasePreview,
+  ExtractionIndexUnitPreview,
+  ExtractSourceSymbolIndexEntry,
+  ExtractTsRunResult,
+  SourceSelection,
+} from "./extractCandidateTypes.js";
 import {
-  knowledgeTargetPathForNode,
   readCandidateRecords,
   writeCandidateRecords,
 } from "./candidateLedger.js";
-import { selectRepoSourcesForExtraction } from "./extractCandidates.js";
+import {
+  candidateFromCustom,
+  customInputError,
+  type BuiltCustomCandidate,
+} from "./customCandidateDraft.js";
+import { selectRepoSourcesForExtraction } from "./extractSourceSelection.js";
+import { applyIndexUnitAdvisoryRisks } from "./extractionIndexUnitRisks.js";
 import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
+import {
+  probeStructuralCapabilities,
+  probesForIndexUnit,
+} from "./structuralCapabilityProbes.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
 const CUSTOM_PHASE_MANIFEST = ".tmp/context-runtime/extract/custom-phase-candidates.json";
+const EXTRACTION_WARNING_PAGE_COUNT = 100;
+const EXTRACTION_BLOCK_PAGE_COUNT = 300;
+
+export interface ExtractCustomPreparedRun {
+  kind: "context.extract-custom-prepared.v1";
+  phaseId: string;
+  fingerprint: ReturnType<typeof extractPhaseSourceFingerprint>;
+  sources: SourceSelection[];
+  built: BuiltCustomCandidate[];
+  preview: ExtractCustomPhasePreview;
+}
+
+function scaleForPages(pages: number): ExtractionIndexUnitPreview["scale"] {
+  if (pages > EXTRACTION_BLOCK_PAGE_COUNT) return "blocked";
+  if (pages > EXTRACTION_WARNING_PAGE_COUNT) return "warning";
+  return "normal";
+}
+
+function previewForPlan(unit: CodeIndexUnitPlan): ExtractionIndexUnitPreview {
+  return {
+    id: unit.id,
+    inputSources: [...unit.inputSources],
+    outputOwner: unit.outputOwner,
+    moduleType: unit.moduleType,
+    moduleTypes: [...(unit.moduleTypes ?? [unit.moduleType])],
+    facets: [...(unit.facets ?? [])],
+    moduleTypeEvidence: [...(unit.moduleTypeEvidence ?? [])],
+    outputProfile: unit.outputProfile,
+    capability: unit.capability,
+    plan: "declared",
+    responsibility: unit.responsibility,
+    entries: [...unit.entries],
+    protocols: [...unit.protocols],
+    exclusions: [...unit.exclusions],
+    lifecycle: unit.lifecycle ?? "authoritative",
+    ...(unit.sourceOfTruth === undefined ? {} : { sourceOfTruth: unit.sourceOfTruth }),
+    currentPageCount: 0,
+    projectedPageCount: 0,
+    candidateEstimate: 0,
+    changes: { added: 0, updated: 0, removed: 0, unchanged: 0, exact: false },
+    scale: "normal",
+    visibility: { exported: 0, internal: 0 },
+    candidateKinds: {},
+    topDirectories: [],
+    contentBytes: { total: 0, max: 0, sampled: false, topPages: [] },
+    risks: [],
+  };
+}
+
+function inferredCustomUnit(input: {
+  module: string;
+  sources: readonly string[];
+}): ExtractionIndexUnitPreview {
+  return {
+    id: input.module,
+    inputSources: [...input.sources].sort(),
+    outputOwner: input.module,
+    moduleType: "unknown",
+    moduleTypes: ["unknown"],
+    facets: [],
+    moduleTypeEvidence: [],
+    outputProfile: "module-map",
+    capability: "project-adapter",
+    plan: "inferred",
+    responsibility: "Index the source-backed knowledge emitted by the project adapter.",
+    entries: [],
+    protocols: [],
+    exclusions: [],
+    lifecycle: "authoritative",
+    currentPageCount: 0,
+    projectedPageCount: 0,
+    candidateEstimate: 0,
+    changes: { added: 0, updated: 0, removed: 0, unchanged: 0, exact: false },
+    scale: "normal",
+    visibility: { exported: 0, internal: 0 },
+    candidateKinds: {},
+    topDirectories: [],
+    contentBytes: { total: 0, max: 0, sampled: false, topPages: [] },
+    risks: ["index-plan-inferred"],
+  };
+}
+
+function incrementCustomDirectory(unit: ExtractionIndexUnitPreview, path: string): void {
+  const segments = path.replaceAll("\\", "/").split("/");
+  const directory = segments.length > 1 ? segments.slice(0, -1).join("/") : ".";
+  const existing = unit.topDirectories.find((item) => item.path === directory);
+  if (existing === undefined) unit.topDirectories.push({ path: directory, count: 1 });
+  else existing.count += 1;
+}
+
+function finalizeCustomUnit(unit: ExtractionIndexUnitPreview): ExtractionIndexUnitPreview {
+  unit.scale = scaleForPages(unit.projectedPageCount);
+  unit.candidateEstimate = unit.projectedPageCount;
+  unit.topDirectories.sort((left, right) => right.count - left.count || left.path.localeCompare(right.path));
+  unit.topDirectories.splice(5);
+  unit.contentBytes.topPages.sort((left, right) => right.bytes - left.bytes || left.path.localeCompare(right.path));
+  unit.contentBytes.topPages.splice(5);
+  applyIndexUnitAdvisoryRisks(unit, { customAggregate: true });
+  if (unit.scale === "warning") unit.risks.push("page-count-warning");
+  if (unit.scale === "blocked") unit.risks.push("page-count-limit-exceeded");
+  unit.risks = [...new Set(unit.risks)].sort();
+  return unit;
+}
+
+function applyCustomUnitCoverage(input: {
+  unit: ExtractionIndexUnitPreview;
+  candidates: readonly BuiltCustomCandidate[];
+  requiredProbes: ReturnType<typeof probesForIndexUnit>;
+}): void {
+  const unitEvidence = input.candidates.flatMap((item) => item.symbols);
+  const uncovered = input.requiredProbes.filter((probe) => !unitEvidence.some((evidence) =>
+    evidence.source === probe.source && probe.paths.includes(evidence.file)
+  ));
+  input.unit.structuralCoverage = {
+    required: input.requiredProbes.length,
+    covered: input.requiredProbes.length - uncovered.length,
+    uncovered: uncovered.map((probe) => ({
+      id: probe.id,
+      capability: probe.capability,
+      kind: probe.kind,
+      source: probe.source,
+      expectedPaths: [...probe.paths],
+    })),
+  };
+  if (uncovered.length > 0) {
+    input.unit.capability = "material-required";
+    input.unit.risks.push("structural-capability-uncovered");
+  }
+
+  const requiredCoverage = requiredCodeIndexCoverage({
+    outputProfile: input.unit.outputProfile,
+    facets: input.unit.facets,
+  });
+  const coveredCoverage = [...new Set(input.candidates.flatMap((item) => item.coverageKinds))].sort();
+  const uncoveredCoverage = requiredCoverage.filter((kind) => !coveredCoverage.includes(kind));
+  input.unit.semanticCoverage = {
+    required: requiredCoverage,
+    covered: coveredCoverage,
+    uncovered: uncoveredCoverage,
+  };
+  if (uncoveredCoverage.length > 0) {
+    input.unit.capability = "material-required";
+    input.unit.risks.push("semantic-coverage-uncovered");
+  }
+  if (
+    input.unit.outputProfile === "cross-module-flow" &&
+    input.candidates.every((item) => (item.candidate.code_edges?.length ?? 0) === 0
+  )) {
+    input.unit.capability = "material-required";
+    input.unit.risks.push("structured-relationship-missing");
+  }
+}
 
 interface CustomPhaseCandidateManifest {
   version: 2;
@@ -43,182 +208,228 @@ interface CustomPhaseCandidateManifest {
   }>;
 }
 
-function customInputError(phaseId: string, message: string, detail: Record<string, unknown> = {}): ContextError {
-  return new ContextError(ExitCode.UserError, `custom extraction '${phaseId}' returned invalid candidates: ${message}`, {
-    category: ErrorCategory.UserInputInvalid,
-    code: "custom-extraction-result-invalid",
-    phaseId,
-    ...detail,
-    next: "Fix the extractCustom result shape and rerun the phase.",
-  });
+function isCandidateIterable(value: unknown): value is
+  | Iterable<CustomCodeCandidateDraft>
+  | AsyncIterable<CustomCodeCandidateDraft> {
+  if (value === null || typeof value !== "object") return false;
+  const candidate = value as Record<PropertyKey, unknown>;
+  return typeof candidate[Symbol.iterator] === "function" ||
+    typeof candidate[Symbol.asyncIterator] === "function";
 }
 
-function nonEmpty(value: string, field: string, phaseId: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) throw customInputError(phaseId, `${field} must be a non-empty string`, { field });
-  return trimmed;
-}
-
-function validateEvidence(input: {
-  phaseId: string;
-  evidence: CustomCodeEvidence;
-  sourceNames: ReadonlySet<string>;
-  field: string;
-}): CustomCodeEvidence {
-  const source = nonEmpty(input.evidence.source, `${input.field}.source`, input.phaseId);
-  const file = nonEmpty(input.evidence.file, `${input.field}.file`, input.phaseId).replaceAll("\\", "/");
-  const symbol = nonEmpty(input.evidence.symbol, `${input.field}.symbol`, input.phaseId);
-  const kind = nonEmpty(input.evidence.kind, `${input.field}.kind`, input.phaseId);
-  const digest = nonEmpty(input.evidence.digest, `${input.field}.digest`, input.phaseId).toLowerCase();
-  if (!input.sourceNames.has(source)) {
-    throw customInputError(input.phaseId, `${input.field}.source is outside the phase source scope`, {
-      field: `${input.field}.source`,
-      source,
-      available_sources: [...input.sourceNames],
-    });
-  }
-  if (
-    file.startsWith("/") ||
-    file.split("/").some((part) => part.length === 0 || part === "." || part === "..") ||
-    symbol.includes(":") || symbol.includes("@") ||
-    kind.includes(":") || kind.includes("@") ||
-    !/^[a-f0-9]{8,64}$/u.test(digest)
-  ) {
-    throw customInputError(input.phaseId, `${input.field} cannot form a canonical code source_ref`, {
-      field: input.field,
-      evidence: input.evidence,
-    });
-  }
-  if (input.evidence.line !== undefined && (!Number.isInteger(input.evidence.line) || input.evidence.line < 1)) {
-    throw customInputError(input.phaseId, `${input.field}.line must be a positive integer`, {
-      field: `${input.field}.line`,
-    });
-  }
-  return {
-    source,
-    file,
-    symbol,
-    kind,
-    digest,
-    ...(input.evidence.line !== undefined ? { line: input.evidence.line } : {}),
-  };
-}
-
-function sourceRef(evidence: CustomCodeEvidence): string {
-  return `repo:${evidence.source}#symbol:${evidence.file}:${evidence.symbol}:${evidence.kind}@${evidence.digest}`;
-}
-
-function candidateFromCustom(input: {
+export async function prepareExtractCustomPhase(input: {
+  projectRoot: string;
   phase: ExtractCustomPhaseDefinition;
-  draft: CustomCodeCandidateDraft;
-  index: number;
-  sourceNames: ReadonlySet<string>;
-}): { candidate: CandidateDraft; markdown: string; primary: CustomCodeEvidence; symbols: ExtractSourceSymbolIndexEntry[] } {
-  const field = `candidates[${input.index}]`;
-  const nodeRef = nonEmpty(input.draft.nodeRef, `${field}.nodeRef`, input.phase.id);
-  assertSafeEntityId(nodeRef);
-  if (!Array.isArray(input.draft.evidence) || input.draft.evidence.length === 0) {
-    throw customInputError(input.phase.id, `${field}.evidence must contain at least one source-backed symbol`, { field: `${field}.evidence` });
-  }
-  const evidence = input.draft.evidence.map((item, index) => validateEvidence({
-    phaseId: input.phase.id,
-    evidence: item,
-    sourceNames: input.sourceNames,
-    field: `${field}.evidence[${index}]`,
-  }));
-  const allEvidence = [...evidence];
-  const sourceRefs = [...new Set(evidence.map(sourceRef))].sort();
-  const codeEdges = (input.draft.edges ?? []).map((edge, edgeIndex) => {
-    if (
-      edge === null || typeof edge !== "object" ||
-      (edge.type !== "contains" && edge.type !== "depends_on") ||
-      !Array.isArray(edge.evidence) || edge.evidence.length === 0
-    ) {
-      throw customInputError(input.phase.id, `${field}.edges[${edgeIndex}] must have a supported type and source-backed evidence`, {
-        field: `${field}.edges[${edgeIndex}]`,
-      });
-    }
-    const edgeEvidence = edge.evidence.map((item, evidenceIndex) => validateEvidence({
-      phaseId: input.phase.id,
-      evidence: item,
-      sourceNames: input.sourceNames,
-      field: `${field}.edges[${edgeIndex}].evidence[${evidenceIndex}]`,
-    }));
-    allEvidence.push(...edgeEvidence);
-    const from = nonEmpty(edge.from, `${field}.edges[${edgeIndex}].from`, input.phase.id);
-    const to = nonEmpty(edge.to, `${field}.edges[${edgeIndex}].to`, input.phase.id);
-    if (from !== nodeRef) {
-      throw customInputError(input.phase.id, `${field}.edges[${edgeIndex}].from must equal nodeRef`, {
-        field: `${field}.edges[${edgeIndex}].from`,
-        expected: nodeRef,
-      });
-    }
-    return {
-      type: edge.type,
-      from,
-      to,
-      source_refs: [...new Set(edgeEvidence.map(sourceRef))].sort(),
-      relation_type: nonEmpty(edge.relationType, `${field}.edges[${edgeIndex}].relationType`, input.phase.id),
-    };
+  runId: string;
+  materialize?: boolean;
+}): Promise<ExtractCustomPreparedRun> {
+  const selectedSources = await selectRepoSourcesForExtraction({
+    projectRoot: input.projectRoot,
+    phase: input.phase,
+    materialize: input.materialize === true,
   });
-  const review = input.draft.review;
-  if (review === null || typeof review !== "object" || !Array.isArray(review.signals) || review.signals.length === 0) {
-    throw customInputError(input.phase.id, `${field}.review.signals must contain at least one signal`, { field: `${field}.review.signals` });
+  const notReady = selectedSources.filter((source) => !source.status.ready);
+  if (notReady.length > 0) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "repo source is not ready for custom extraction", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      sources: notReady.map((source) => source.record.name),
+      next: "Resolve the source diagnostics and rerun the custom extraction preview.",
+    });
   }
-  const candidateId = candidateIdFromCollectionNodeRef(input.phase.collection, nodeRef);
-  const viewRef = viewRefFromCollectionNodeRef(input.phase.collection, nodeRef);
-  const markdown = nonEmpty(input.draft.markdown, `${field}.markdown`, input.phase.id);
-  const candidate: CandidateDraft = {
-    candidate_id: candidateId,
-    node_ref: nodeRef,
-    view_ref: viewRef,
+  const phaseFingerprint = extractPhaseSourceFingerprint({ phase: input.phase, sources: selectedSources });
+  const structuralProbes = await probeStructuralCapabilities({
+    projectRoot: input.projectRoot,
+    sources: selectedSources,
+  });
+  const inspectionResult = input.phase.inspect === undefined
+    ? undefined
+    : await input.phase.inspect({
+        projectRoot: input.projectRoot,
+        sources: selectedSources.map((source) => ({
+          name: source.record.name,
+          materializedAt: source.status.materializedAt,
+          absolutePath: resolve(input.projectRoot, source.status.materializedAt),
+        })),
+      });
+  const inspection = inspectionResult === undefined
+    ? { findings: [], capabilityGaps: [], structuralProbes }
+    : {
+        findings: [...inspectionResult.findings],
+        capabilityGaps: [...(inspectionResult.capabilityGaps ?? [])],
+        structuralProbes,
+      };
+  const output = await input.phase.extract({
+    projectRoot: input.projectRoot,
+    runId: input.runId,
+    sources: selectedSources.map((source) => ({
+      name: source.record.name,
+      materializedAt: source.status.materializedAt,
+      absolutePath: resolve(input.projectRoot, source.status.materializedAt),
+    })),
+  });
+  if (output === null || typeof output !== "object" || !isCandidateIterable(output.candidates)) {
+    throw customInputError(input.phase.id, "extract must return { candidates: iterable }");
+  }
+  const sourceNames = new Set(selectedSources.map((source) => source.record.name));
+  const phaseIndexUnits = input.phase.indexUnits ?? [];
+  const units = new Map(phaseIndexUnits.map((unit) => [unit.id, previewForPlan(unit)]));
+  for (const finding of inspection.findings) {
+    if (!units.has(finding.indexUnitId) || !sourceNames.has(finding.source)) {
+      throw customInputError(input.phase.id, "inspection findings must reference a declared index unit and source", {
+        finding,
+      });
+    }
+  }
+  for (const gap of inspection.capabilityGaps) {
+    const unit = units.get(gap.indexUnitId);
+    if (unit === undefined) {
+      throw customInputError(input.phase.id, "inspection capability gaps must reference a declared index unit", {
+        capability_gap: gap,
+      });
+    }
+    unit.capability = "material-required";
+  }
+  const built: BuiltCustomCandidate[] = [];
+  const candidateIds = new Set<string>();
+  let candidateCount = 0;
+  let evidenceCount = 0;
+  let relationCount = 0;
+  const legacyPreview = Array.isArray(output.candidates);
+  for await (const draft of output.candidates) {
+    const item = candidateFromCustom({
+      phase: input.phase,
+      draft,
+      index: candidateCount,
+      sourceNames,
+    });
+    candidateCount += 1;
+    evidenceCount += item.symbols.length;
+    relationCount += item.candidate.code_edges?.length ?? 0;
+    if (candidateIds.has(item.candidate.candidate_id)) {
+      throw customInputError(input.phase.id, "candidate nodeRef values must be unique", {
+        duplicate_candidate_ids: [item.candidate.candidate_id],
+      });
+    }
+    candidateIds.add(item.candidate.candidate_id);
+    const module = item.candidate.module;
+    const matches = phaseIndexUnits.filter((unit) =>
+      unit.id === module || unit.outputOwner === module
+    );
+    const evidenceSources = [...new Set(item.symbols.map((symbol) => symbol.source))];
+    const unit = matches[0] === undefined
+      ? (() => {
+          const inferred = units.get(module) ?? inferredCustomUnit({ module, sources: evidenceSources });
+          if (phaseIndexUnits.length > 0 && !inferred.risks.includes("ownership-ambiguous")) {
+            inferred.risks.push("ownership-ambiguous");
+          }
+          units.set(module, inferred);
+          return inferred;
+        })()
+      : units.get(matches[0].id)!;
+    if (matches.length > 1 && !unit.risks.includes("ownership-ambiguous")) {
+      unit.risks.push("ownership-ambiguous");
+    }
+    if (legacyPreview && !unit.risks.includes("legacy-preview")) unit.risks.push("legacy-preview");
+    unit.projectedPageCount += 1;
+    if (item.candidate.visibility === "exported") unit.visibility.exported += 1;
+    else unit.visibility.internal += 1;
+    unit.candidateKinds[item.candidate.kind] = (unit.candidateKinds[item.candidate.kind] ?? 0) + 1;
+    const bytes = Buffer.byteLength(item.markdown, "utf8");
+    unit.contentBytes.total += bytes;
+    unit.contentBytes.max = Math.max(unit.contentBytes.max, bytes);
+    unit.contentBytes.topPages.push({ path: item.candidate.path, bytes });
+    incrementCustomDirectory(unit, item.candidate.path);
+    if (unit.projectedPageCount <= EXTRACTION_BLOCK_PAGE_COUNT + 1) built.push(item);
+  }
+  for (const unit of units.values()) {
+    const requiredProbes = probesForIndexUnit({
+      probes: structuralProbes,
+      inputSources: unit.inputSources,
+      outputProfile: unit.outputProfile,
+    });
+    const unitCandidates = built
+      .filter((item) => item.candidate.module === unit.id || item.candidate.module === unit.outputOwner);
+    applyCustomUnitCoverage({ unit, candidates: unitCandidates, requiredProbes });
+  }
+  const indexUnits = [...units.values()].map(finalizeCustomUnit)
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const approvedPages = await readApprovedCodegraphPages({
+    projectRoot: input.projectRoot,
+    sourceNames,
+  });
+  for (const unit of indexUnits) {
+    const current = approvedPages.filter((page) =>
+      unit.inputSources.includes(page.sourceName) &&
+      (page.module === unit.id || page.module === unit.outputOwner)
+    );
+    const candidates = built.filter((item) =>
+      item.candidate.module === unit.id || item.candidate.module === unit.outputOwner
+    ).map((item) => item.candidate);
+    const currentById = new Map(current.map((page) => [page.candidateId, page]));
+    const unitCandidateIds = new Set(candidates.map((candidate) => candidate.candidate_id));
+    unit.currentPageCount = current.length;
+    if (unit.scale === "blocked") {
+      unit.changes = {
+        added: Math.max(0, unit.projectedPageCount - current.length),
+        updated: 0,
+        removed: Math.max(0, current.length - unit.projectedPageCount),
+        unchanged: Math.min(current.length, unit.projectedPageCount),
+        exact: false,
+      };
+      continue;
+    }
+    unit.changes = {
+      added: candidates.filter((candidate) => !currentById.has(candidate.candidate_id)).length,
+      updated: candidates.filter((candidate) => {
+        const page = currentById.get(candidate.candidate_id);
+        return page !== undefined && page.candidateFingerprint !== candidate.fingerprint;
+      }).length,
+      removed: current.filter((page) => !unitCandidateIds.has(page.candidateId)).length,
+      unchanged: candidates.filter((candidate) =>
+        currentById.get(candidate.candidate_id)?.candidateFingerprint === candidate.fingerprint
+      ).length,
+      exact: true,
+    };
+  }
+  const preview: ExtractCustomPhasePreview = {
+    kind: "context.extraction-phase-preview.v1",
+    phaseKind: "phase.extract.custom",
+    phaseId: input.phase.id,
     collection: input.phase.collection,
-    status: "draft",
-    candidate_type: "code-symbol",
-    change: "add",
-    kind: nonEmpty(input.draft.kind, `${field}.kind`, input.phase.id),
-    visibility: nonEmpty(input.draft.visibility, `${field}.visibility`, input.phase.id),
-    module: nonEmpty(input.draft.module, `${field}.module`, input.phase.id),
-    path: knowledgeTargetPathForNode(input.phase.collection, nodeRef),
-    source_refs: sourceRefs,
-    ...(codeEdges.length > 0 ? { code_edges: codeEdges } : {}),
-    fingerprint: stableHash({
-      candidate_id: candidateId,
-      node_ref: nodeRef,
-      view_ref: viewRef,
-      collection: input.phase.collection,
-      kind: input.draft.kind,
-      visibility: input.draft.visibility,
-      module: input.draft.module,
-      source_refs: sourceRefs,
-      code_edges: codeEdges,
-      markdown,
-    }),
-    review: {
-      title: nonEmpty(review.title, `${field}.review.title`, input.phase.id),
-      summary: nonEmpty(review.summary, `${field}.review.summary`, input.phase.id),
-      ...(review.behaviorSummary !== undefined
-        ? { behavior_summary: nonEmpty(review.behaviorSummary, `${field}.review.behaviorSummary`, input.phase.id) }
-        : {}),
-      ...(review.edgeSummary !== undefined
-        ? { edge_summary: nonEmpty(review.edgeSummary, `${field}.review.edgeSummary`, input.phase.id) }
-        : {}),
-      signals: review.signals.map((signal, index) => nonEmpty(signal, `${field}.review.signals[${index}]`, input.phase.id)),
-      reason: nonEmpty(review.reason, `${field}.review.reason`, input.phase.id),
+    indexUnits,
+    sources: selectedSources.map((source) => ({
+      name: source.record.name,
+      ref: source.record.git.ref,
+      ...(source.status.head !== undefined ? { head: source.status.head } : {}),
+      scopeHash: source.status.scopeHash ?? "unknown",
+      materializedAt: source.status.materializedAt,
+    })),
+    inspection,
+    totals: {
+      sources: selectedSources.length,
+      candidates: candidateCount,
+      evidence: evidenceCount,
+      relations: relationCount,
+      contentBytes: indexUnits.reduce((sum, unit) => sum + unit.contentBytes.total, 0),
     },
+    agent_hints: [],
   };
   return {
-    candidate,
-    markdown,
-    primary: evidence[0]!,
-    symbols: allEvidence.map((item) => ({
-      source: item.source,
-      file: item.file,
-      name: item.symbol,
-      kind: item.kind,
-      digest: item.digest,
-    })),
+    kind: "context.extract-custom-prepared.v1",
+    phaseId: input.phase.id,
+    fingerprint: phaseFingerprint,
+    sources: selectedSources,
+    built,
+    preview,
   };
+}
+
+export async function previewExtractCustomPhase(input: {
+  projectRoot: string;
+  phase: ExtractCustomPhaseDefinition;
+  runId: string;
+}): Promise<ExtractCustomPhasePreview> {
+  return (await prepareExtractCustomPhase(input)).preview;
 }
 
 async function readManifest(projectRoot: string): Promise<CustomPhaseCandidateManifest> {
@@ -238,44 +449,59 @@ export async function runExtractCustomPhase(input: {
   projectRoot: string;
   phase: ExtractCustomPhaseDefinition;
   runId: string;
+  prepared?: ExtractCustomPreparedRun;
 }): Promise<ExtractTsRunResult> {
-  const selectedSources = await selectRepoSourcesForExtraction({
+  const prepared = input.prepared ?? await prepareExtractCustomPhase({
     projectRoot: input.projectRoot,
     phase: input.phase,
+    runId: input.runId,
     materialize: true,
   });
-  const notReady = selectedSources.filter((source) => !source.status.ready);
-  if (notReady.length > 0) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "repo source is not ready for custom extraction", {
+  if (prepared.phaseId !== input.phase.id) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "extraction preview does not match the requested phase", {
       category: ErrorCategory.WorkspaceStateInvalid,
-      sources: notReady.map((source) => source.record.name),
-      next: "Resolve the source diagnostics and rerun the custom extraction phase.",
+      code: "extract-preview-phase-mismatch",
+      expected: input.phase.id,
+      actual: prepared.phaseId,
     });
   }
-  const phaseFingerprint = extractPhaseSourceFingerprint({ phase: input.phase, sources: selectedSources });
+  const planUnits = prepared.preview.indexUnits.filter((unit) => unit.plan === "inferred");
+  const classificationUnits = prepared.preview.indexUnits.filter((unit) =>
+    unit.risks.includes("module-classification-required")
+  );
+  const blockedUnits = prepared.preview.indexUnits.filter((unit) => unit.scale === "blocked");
+  const capabilityUnits = prepared.preview.indexUnits.filter((unit) => unit.capability === "material-required");
+  const ownershipUnits = prepared.preview.indexUnits.filter((unit) => unit.risks.includes("ownership-ambiguous"));
+  const blockedBy = planUnits.length > 0
+    ? { code: "extract-plan-required", units: planUnits }
+    : classificationUnits.length > 0
+      ? { code: "extract-plan-required", units: classificationUnits }
+    : blockedUnits.length > 0
+      ? { code: "extract-scale-limit-exceeded", units: blockedUnits }
+      : capabilityUnits.length > 0
+      ? { code: "extract-capability-required", units: capabilityUnits }
+      : ownershipUnits.length > 0
+        ? { code: "extract-ownership-required", units: ownershipUnits }
+        : undefined;
+  if (blockedBy !== undefined) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "custom extraction preview requires an index plan revision before candidates can be written", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      code: blockedBy.code,
+      limit: EXTRACTION_BLOCK_PAGE_COUNT,
+      units: blockedBy.units,
+      next: "Revise the extraction index plan in src/index.ts, then run context status --format json.",
+    });
+  }
+  const selectedSources = prepared.sources;
+  const phaseFingerprint = prepared.fingerprint;
   const previousFingerprint = (await readExtractSourceFingerprints(input.projectRoot)).phases[input.phase.id];
   const sourceState = previousFingerprint === undefined
     ? "first-run" as const
     : previousFingerprint.fingerprint === phaseFingerprint.fingerprint
       ? "unchanged" as const
       : "changed" as const;
-  const output = await input.phase.extract({ projectRoot: input.projectRoot, runId: input.runId });
-  if (output === null || typeof output !== "object" || !Array.isArray(output.candidates)) {
-    throw customInputError(input.phase.id, "extract must return { candidates: [...] }");
-  }
   const sourceNames = new Set(selectedSources.map((source) => source.record.name));
-  const built = output.candidates.map((draft, index) => candidateFromCustom({
-    phase: input.phase,
-    draft,
-    index,
-    sourceNames,
-  }));
-  const duplicateIds = built.map((item) => item.candidate.candidate_id).filter((id, index, ids) => ids.indexOf(id) !== index);
-  if (duplicateIds.length > 0) {
-    throw customInputError(input.phase.id, "candidate nodeRef values must be unique", {
-      duplicate_candidate_ids: [...new Set(duplicateIds)].sort(),
-    });
-  }
+  const built = prepared.built;
 
   const now = new Date().toISOString();
   const candidateIds = new Set(built.map((item) => item.candidate.candidate_id));
@@ -357,7 +583,7 @@ export async function runExtractCustomPhase(input: {
     modules: 0,
     extractedSymbols: built.flatMap((item) => item.symbols).length,
     relationships: {
-      mode: "source-backed-ast",
+      mode: "source-backed-explicit",
       detected: built.reduce((sum, item) => sum + (item.candidate.code_edges?.length ?? 0), 0),
       emitted: built.reduce((sum, item) => sum + (item.candidate.code_edges?.length ?? 0), 0),
       omitted: { external: 0, endpointNotSelected: 0, ambiguousEndpoint: 0 },

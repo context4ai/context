@@ -37,10 +37,7 @@ kbPackage({
     foldDirectoryIndexes: true,
     maxInlineEntries: 50,
   },
-  assets: {
-    delivery: "git-raw",
-    urlPrefix: "https://code.example.com/team/knowledge/raw/{commit}",
-  },
+  assets: { delivery: "bundle" },
 });
 ```
 
@@ -62,10 +59,16 @@ llmsPackage({
 | `template` | yes | Project-relative template directory or `{ path, vars }`. |
 | `select` | no | Approved knowledge selector. Omit to include all approved knowledge. Supports internal `collections`, OKF `okfRoots`, and `include` / `exclude` path patterns relative to `knowledge/`. |
 | `navigation` | no | KB directory-index policy. Defaults to `{ foldDirectoryIndexes: true, maxInlineEntries: 50 }`. |
-| `assets` | no | Resource delivery: Git raw links, bundled files, or explicit omission. New KB setup should offer Git raw first. Omit for legacy byte-for-byte bundling. |
+| `assets` | no | Resource delivery: bundled files by default, explicit Git raw links, or explicit omission. |
 | `distribution` | no | Legacy input accepted from older workspaces. It no longer changes package paths and should not be added to new declarations. |
 
-Use Git raw delivery when resources are published from a Git repository.
+Bundled delivery is the default. Selected resources are written below
+`others/assets/`. Supported images are automatically compressed when required
+to keep each image at or below 1 MiB and all package images at or below 40 MiB.
+The source snapshots and approved `knowledge/assets/` files are never changed.
+
+Use Git raw delivery only when it is explicitly configured for resources
+published from a Git repository.
 Without `urlPrefix`, the Context workspace must be inside Git; GitHub remotes
 are derived automatically and pinned to the current commit. Other hosts accept
 an explicit HTTPS prefix. `{commit}` is replaced only when the workspace is
@@ -76,14 +79,14 @@ appends the project-relative `knowledge/assets/...` path.
 For a non-GitHub service that exposes raw files through the GitHub-compatible
 same-host layout
 `https://<host>/<namespace>/<repository>/raw/<ref>/<path>`, derive and configure
-the explicit prefix before choosing bundled delivery. For example, use
+the explicit prefix before choosing Git raw delivery. For example, use
 `https://git.example.com/team/knowledge/raw/{commit}` for a workspace at the
 repository root. If the workspace is nested, append its repository-relative
 directory to the prefix because Context appends only the project-relative
 `knowledge/assets/...` path. This derivation is appropriate only when the
 service's raw convention and repository identity are confirmed; otherwise ask
-for the prefix or use bundled delivery. The fact that Context does not
-automatically recognize a host is not, by itself, a reason to bundle.
+for the prefix or keep the default bundled delivery. Never invent a raw URL
+only because Context does not automatically recognize a host.
 
 The resolved commit and raw URL participate in package freshness, so changing
 Git HEAD or the selected remote makes an existing package stale. Context does
@@ -114,26 +117,12 @@ assets: { delivery: "bundle" }
 assets: { delivery: "omit" } // keeps unresolved links and reports them
 ```
 
-Bundled resources are copied byte-for-byte unless image optimization is
-configured. When optimizable PNG/JPEG resources exceed 20 MiB, build and status
-return `package.assets.optimization-recommended`. To optimize bundled output:
-
-```bash
-bun add -D sharp
-```
-
-```ts
-assets: {
-  delivery: "bundle",
-  optimize: { processor: "sharp", mode: "lossless-webp" },
-}
-```
-
-`optimize.mode: "webp"` additionally accepts `quality` from 1 to 100. Both modes accept
+Explicit `assets.optimize` overrides the automatic output policy.
+`optimize.mode: "webp"` accepts `quality` from 1 to 100. Both modes accept
 an optional positive `maxDimension`; images are never enlarged. Context adopts
 a generated image only when it is smaller, uses a digest-derived `.webp` path,
-and rewrites package links. A configured but missing processor blocks before
-the previous `dist/` package is replaced.
+and rewrites package links. If explicit settings cannot meet the package image
+budgets, build stops before replacing the previous `dist/` package.
 
 `template` is required. Do not call `kbPackage({ name })` or
 `llmsPackage({ name })`.
@@ -287,13 +276,17 @@ Default navigation rules:
 
 - `wikis/index.md` is the required default bundle index. Other selected OKF
   roots always use their own `<okf-root>/index.md`.
-- With `foldDirectoryIndexes: true`, a non-root directory gets its own
-  `index.md` only when its descendant knowledge-page count is greater than
-  `maxInlineEntries`. The default threshold is `50`.
+- With `foldDirectoryIndexes: true`, directory indexes are planned bottom-up.
+  A non-root directory gets its own `index.md` only when the page and child-index
+  entries it would expose to its parent are greater than `maxInlineEntries`.
+  The default threshold is `50`.
 - A folded directory is not discarded. Its pages are listed in the nearest
-  generated ancestor index, grouped by their relative directory path.
-- The threshold counts selected knowledge pages in the path tree. It does not
-  inspect Markdown line counts, headings, or content semantics.
+  generated ancestor index, grouped by their relative directory path, while
+  retained descendant indexes are linked directly from that ancestor. This
+  also removes large but navigation-thin intermediate directories.
+- The threshold counts visible navigation entries after descendant indexes are
+  planned. It does not inspect Markdown line counts, headings, or content
+  semantics.
 - Set `foldDirectoryIndexes: false` to generate an `index.md` for every
   directory, matching the fully expanded navigation shape.
 - A generated directory index uses OKF frontmatter with `type: Knowledge

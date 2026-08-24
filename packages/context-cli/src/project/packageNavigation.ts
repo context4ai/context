@@ -45,6 +45,40 @@ function directoryPrefixes(item: NavigationKnowledgeItem): string[] {
   );
 }
 
+function directoryDepth(pathWithinOkfRoot: string): number {
+  return pathWithinOkfRoot.split("/").filter(Boolean).length;
+}
+
+function generatedChildPath<TItem extends NavigationKnowledgeItem>(
+  directory: { okfRootPath: string; pathWithinOkfRoot: string },
+  item: TItem,
+  generatedPaths: ReadonlySet<string>,
+): string | undefined {
+  const directorySegments = directory.pathWithinOkfRoot.split("/").filter(Boolean);
+  const parentSegments = item.segments.slice(0, -1);
+  for (let depth = directorySegments.length + 1; depth <= parentSegments.length; depth++) {
+    const candidatePath = parentSegments.slice(0, depth).join("/");
+    if (generatedPaths.has(`${directory.okfRootPath}\u0000${candidatePath}`)) {
+      return candidatePath;
+    }
+  }
+  return undefined;
+}
+
+function exposedNavigationEntryCount<TItem extends NavigationKnowledgeItem>(
+  directory: { okfRootPath: string; pathWithinOkfRoot: string; items: TItem[] },
+  generatedPaths: ReadonlySet<string>,
+): number {
+  const childDirectories = new Set<string>();
+  let pageCount = 0;
+  for (const item of directory.items) {
+    const childPath = generatedChildPath(directory, item, generatedPaths);
+    if (childPath === undefined) pageCount++;
+    else childDirectories.add(childPath);
+  }
+  return childDirectories.size + pageCount;
+}
+
 export function planKnowledgeDirectoryIndexes<TItem extends NavigationKnowledgeItem>(
   items: readonly TItem[],
   navigation: PackageNavigationDefinition,
@@ -75,17 +109,30 @@ export function planKnowledgeDirectoryIndexes<TItem extends NavigationKnowledgeI
     }
   }
 
-  const generatedPaths = new Set(
-    [...directories.values()]
-      .filter((directory) =>
-        directory.pathWithinOkfRoot.length === 0 ||
-        !navigation.foldDirectoryIndexes ||
-        directory.items.length > navigation.maxInlineEntries
-      )
-      .map((directory) => `${directory.okfRootPath}\u0000${directory.pathWithinOkfRoot}`),
-  );
+  const generatedPaths = new Set<string>();
+  const plannedDirectories = [...directories.values()];
+  if (!navigation.foldDirectoryIndexes) {
+    for (const directory of plannedDirectories) {
+      generatedPaths.add(`${directory.okfRootPath}\u0000${directory.pathWithinOkfRoot}`);
+    }
+  } else {
+    for (const directory of [...plannedDirectories].sort((left, right) =>
+      directoryDepth(right.pathWithinOkfRoot) - directoryDepth(left.pathWithinOkfRoot) ||
+      left.pathWithinOkfRoot.localeCompare(right.pathWithinOkfRoot)
+    )) {
+      if (directory.pathWithinOkfRoot.length === 0) continue;
+      if (exposedNavigationEntryCount(directory, generatedPaths) > navigation.maxInlineEntries) {
+        generatedPaths.add(`${directory.okfRootPath}\u0000${directory.pathWithinOkfRoot}`);
+      }
+    }
+    for (const directory of plannedDirectories) {
+      if (directory.pathWithinOkfRoot.length === 0) {
+        generatedPaths.add(`${directory.okfRootPath}\u0000${directory.pathWithinOkfRoot}`);
+      }
+    }
+  }
 
-  return [...directories.values()]
+  return plannedDirectories
     .filter((directory) =>
       generatedPaths.has(`${directory.okfRootPath}\u0000${directory.pathWithinOkfRoot}`)
     )
@@ -96,16 +143,9 @@ export function planKnowledgeDirectoryIndexes<TItem extends NavigationKnowledgeI
 
       for (const item of directory.items) {
         const parentSegments = item.segments.slice(0, -1);
-        let generatedChildPath: string | undefined;
-        for (let depth = directorySegments.length + 1; depth <= parentSegments.length; depth++) {
-          const candidatePath = parentSegments.slice(0, depth).join("/");
-          if (generatedPaths.has(`${directory.okfRootPath}\u0000${candidatePath}`)) {
-            generatedChildPath = candidatePath;
-            break;
-          }
-        }
-        if (generatedChildPath !== undefined) {
-          childDirectoryPaths.add(generatedChildPath);
+        const childPath = generatedChildPath(directory, item, generatedPaths);
+        if (childPath !== undefined) {
+          childDirectoryPaths.add(childPath);
           continue;
         }
 

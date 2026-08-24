@@ -6,6 +6,7 @@ import type {
   StructureCompileResolution,
 } from "./declarationGraph.js";
 import type { PackageFreshness } from "./packageBuilder.js";
+import type { DocumentOptimizationStatus } from "./documentOptimization.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
 import type { ProseCompileBatchProgress } from "./proseCompileBatch.js";
 import type { RepoSourceStatus } from "./repoSources.js";
@@ -13,6 +14,7 @@ import type { StructureDraftStatus } from "./statusReaders.js";
 import type { StructureBatchStatus } from "./statusStructureBatch.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
 import type { ReviewPathIdentityConflictStatus } from "./reviewIdentityConflicts.js";
+import type { ExtractionPreviewState } from "./extractionPreviewCache.js";
 
 export type SourceFreshnessState = "ready" | "stale" | "unknown";
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
@@ -155,10 +157,12 @@ export interface ProjectStatus {
   documentSources: DocumentSourceStatus[];
   phases: string[];
   packages: PackageFreshness[];
+  documentOptimization: DocumentOptimizationStatus;
   packageTemplateReviews: PackageTemplateReviewStatus[];
   sourceFreshness: SourceFreshnessState;
   staleSourcePhases: string[];
   pendingExtractPhases: string[];
+  extractionPreview: ExtractionPreviewState;
   pendingCapturePhases: string[];
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;

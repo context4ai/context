@@ -83,6 +83,9 @@ const RUNTIME_EXTERNALS = [
   "tree-sitter-go",
   // TypeScript is a declared runtime dependency of packages that use its AST.
   "typescript",
+  // sharp loads platform-specific native addons at runtime. Context CLI owns
+  // the dependency so package workspaces do not need to install a processor.
+  "sharp",
 ];
 
 const args = process.argv.slice(2);

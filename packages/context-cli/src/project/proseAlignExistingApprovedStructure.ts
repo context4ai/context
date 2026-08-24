@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import YAML from "yaml";
 import { approvedKnowledgeInputHash } from "./close.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
+import { walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import type {
   AlignDiagnostic,
   AlignPayload,
@@ -128,21 +129,7 @@ function toPosixPath(path: string): string {
 
 async function approvedMarkdownFiles(projectRoot: string): Promise<string[]> {
   const root = join(projectRoot, KNOWLEDGE_ROOT);
-  if (!existsSync(root)) return [];
-  const files: string[] = [];
-  const visit = async (directory: string): Promise<void> => {
-    const entries = await readdir(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolutePath = join(directory, entry.name);
-      if (entry.isDirectory()) {
-        await visit(absolutePath);
-        continue;
-      }
-      if (entry.isFile() && entry.name.endsWith(".md")) files.push(absolutePath);
-    }
-  };
-  await visit(root);
-  return files.sort();
+  return (await walkApprovedMarkdown(root)).map((file) => file.absPath);
 }
 
 function frontmatterRecord(markdown: string): Record<string, unknown> | undefined {

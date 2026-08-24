@@ -266,6 +266,7 @@ async function assertRevision(
   await assertProjectWorkflowRevision({
     cwd,
     expectedRevision: invocation.revision,
+    managed: invocation.managed,
     authorities,
   });
   return authorities;
