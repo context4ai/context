@@ -13,7 +13,10 @@ import {
   writeStarterTemplateReviewMarker,
 } from "./packageTemplateReview.js";
 import { enableContextDebug } from "./debugTrace.js";
-import { enableDocumentOptimization } from "./documentOptimizationConfig.js";
+import {
+  disableDocumentOptimization,
+  enableDocumentOptimization,
+} from "./documentOptimizationConfig.js";
 import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuidanceTemplates.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
@@ -507,6 +510,7 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
 
   if (input.debug === true) await enableContextDebug(projectRoot, "init");
   if (input.optimizeDocs === true) await enableDocumentOptimization(projectRoot);
+  if (input.optimizeDocs === false) await disableDocumentOptimization(projectRoot);
 
   return result;
 }

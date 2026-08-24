@@ -28,12 +28,12 @@ context entry [project-dir] --language <language> --format json
 
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
-`project-dir`, `--name`, `--dev`, `--debug`, or `--optimize-docs` only when the
-user explicitly requested that initialization choice. Treat requests to enable
-document compilation optimization, document formatting optimization, or
-equivalent conservative build-time cleanup as `--optimize-docs`. Pass
-`--managed` only after the user
-explicitly authorizes fully managed operation in this conversation.
+`project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
+requested that initialization choice. New workspaces enable conservative
+document compilation optimization by default. Pass `--no-optimize-docs` only
+when the user explicitly asks to disable it during initialization. Pass
+`--managed` only after the user explicitly authorizes fully managed operation
+in this conversation.
 
 If the `context` process itself cannot start because the command is missing
 (`ENOENT`, or shell exit 127 explicitly identifying `context` as the missing
@@ -90,13 +90,19 @@ before workflow evaluation. Debugging records traces below
 `.tmp/context-runtime/debug/` but does not grant workflow authority or provide
 source evidence.
 
-Enable document optimization only when the user explicitly requests it. If
-initialization is required, pass `--optimize-docs` through `context entry`; for
-an existing workspace, run `context optimize-docs enable` before workflow
-evaluation. The feature keeps approved pages source-faithful and stores only
-changed full-page revisions beside them as `knowledge/**/*__revision.md`.
-Default knowledge discovery excludes those reserved sidecars; validation and
-package compilation apply them to the matching base page.
+Document optimization is enabled by default for newly initialized workspaces.
+It conservatively repairs formatting, Markdown, links, and obvious local errors
+without broadly rewriting source-backed prose. It keeps approved pages
+source-faithful and stores only changed full-page revisions beside them as
+`knowledge/**/*__revision.md`. Default knowledge discovery excludes those
+reserved sidecars; validation and package compilation apply them to the
+matching base page.
+
+For an existing workspace, respect its current `package.json` setting. Run
+`context optimize-docs enable` or `context optimize-docs disable` only when the
+user explicitly changes that preference. If initialization is required and the
+user opts out, pass `--no-optimize-docs` through `context entry`; otherwise let
+the default initialization command enable it.
 Follow the resulting Route instead of editing approved knowledge or package
 output by hand.
 

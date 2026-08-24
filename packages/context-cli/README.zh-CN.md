@@ -143,8 +143,8 @@ context/
 - `context <command> --help` 是当前参数的权威来源；
 - `context plugin status` 检查已安装的 Agent 投影；
 - `context debug enable` 在 `.tmp/context-runtime/debug/` 记录可选轨迹；
-- `context optimize-docs enable` 开启增量排版优化，并保持 `knowledge/`
-  中的正式知识不变；
+- 新工作区默认开启保守的文档修订；`context optimize-docs enable|disable`
+  可调整工作区偏好，同时保持 `knowledge/` 中的正式知识不变；
 - `context revise "<标题或正式知识路径>"` 从对话启动一次单页修正，校验后再由
   Route 提示重新构建；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。

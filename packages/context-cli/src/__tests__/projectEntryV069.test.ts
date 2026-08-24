@@ -14,7 +14,7 @@ describe("single Context agent entry", () => {
       expect(entry.workspace.root).toBe(join(root, "context"));
       expect(entry.next_action).toEqual({
         kind: "initialize-workspace",
-        command: "context init context --language zh-CN",
+        command: "context init context --language zh-CN --optimize-docs",
         effect: "write",
         confirmation: "required-unless-explicitly-requested",
       });
@@ -92,6 +92,22 @@ describe("single Context agent entry", () => {
       expect(entry.state).toBe("workspace-initialization-required");
       expect(entry.next_action.command).toBe(
         "context init custom --language zh-CN --name 'Docs KB' --dev --debug --optimize-docs",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("can explicitly disable document optimization for a new workspace", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-entry-no-optimize-docs-"));
+    try {
+      const entry = resolveContextEntry({
+        cwd: root,
+        language: "en",
+        optimizeDocs: false,
+      });
+      expect(entry.next_action.command).toBe(
+        "context init context --language en --no-optimize-docs",
       );
     } finally {
       await rm(root, { recursive: true, force: true });
