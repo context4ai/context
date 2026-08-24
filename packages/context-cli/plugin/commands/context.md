@@ -62,6 +62,24 @@ Execute only `next_action.command` returned by `context entry`:
   init`, enter the project root, read the generated `AGENTS.md`, and run this
   entry again.
 
+If the user explicitly asks to correct or revise an existing approved or built
+knowledge page, first let `context entry` relocate into the existing workspace
+and evaluate its current Route once. Resolve a blocking workspace diagnostic,
+evidence-maintenance action, or already-pending Review batch first; these may
+change the approved baseline. Before continuing unrelated capture, extraction,
+package configuration, or build work, start the correction with:
+
+```bash
+context revise "<the user's page title, approved path, ViewRef, or wording>" --format json
+```
+
+When the target is unique, run the returned status command and follow
+`route.document-revision.requested`. When candidates are returned, select one
+only if the conversation identifies it uniquely; otherwise ask which page the
+user means. Never edit the approved base page or `dist/` for this operation.
+After the Route validates the revision, continue normally: Context will offer
+the package build when the correction makes its output stale.
+
 ### Conversation modes
 
 Enable debugging only when the user explicitly requests it. If initialization
@@ -75,9 +93,10 @@ source evidence.
 Enable document optimization only when the user explicitly requests it. If
 initialization is required, pass `--optimize-docs` through `context entry`; for
 an existing workspace, run `context optimize-docs enable` before workflow
-evaluation. The feature keeps approved `knowledge/` source-faithful and stores
-incremental presentation pages below `overlays/` using the same relative paths
-as `knowledge/`.
+evaluation. The feature keeps approved pages source-faithful and stores only
+changed full-page revisions beside them as `knowledge/**/*__revision.md`.
+Default knowledge discovery excludes those reserved sidecars; validation and
+package compilation apply them to the matching base page.
 Follow the resulting Route instead of editing approved knowledge or package
 output by hand.
 

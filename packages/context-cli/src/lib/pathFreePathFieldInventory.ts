@@ -49,8 +49,9 @@ const DEFAULT_INTERNAL_FIELDS = [
   "report_path",
   "absolute_path",
   "route_metadata_path",
-  "overlay_root",
   "recovery_path",
+  "requested_approved_path",
+  "revision_path",
   "prompt_path",
   "packageDir",
   "package_dir",
@@ -75,6 +76,9 @@ const DEFAULT_INTERNAL_FIELDS = [
 ] as const;
 
 function policyFor(field: string): PathFieldInventoryEntry["policy"] {
+  if (field === "requested_approved_path" || field === "revision_path") {
+    return "external-input";
+  }
   if (field === "href" || field === "packageDir" || field === "package_dir" || field === "report_path" || field === "absolute_path") {
     return "human-only";
   }

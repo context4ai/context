@@ -15,6 +15,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { buildCommittedEvidenceIndex } from "./documentEvidenceIndex.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { assertSafeEntityId } from "./entityId.js";
 import { extractPhaseSourceFingerprint } from "./extractCandidateArtifacts.js";
 import { selectRepoSourcesForExtraction } from "./extractSourceSelection.js";
@@ -336,7 +337,7 @@ export function findApprovedPageForViewRef(projectRoot: string, viewRef: string)
           if (found !== undefined) return found;
           continue;
         }
-        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+        if (!entry.isFile() || !isApprovedKnowledgeMarkdownPath(rel)) continue;
         const block = frontmatterBlock(readFileSync(absPath, "utf8"));
         if (block === null) continue;
         const parsed = YAML.parse(block.yaml) as unknown;

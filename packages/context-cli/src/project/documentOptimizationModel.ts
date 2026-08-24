@@ -12,7 +12,6 @@ import { DOCUMENT_OPTIMIZATION_POLICY } from "./documentOptimizationConfig.js";
 const SPAN_REF_RE = /^src-\d+#span:/u;
 const SECTION_RE = /<!--\s*context:section\b([\s\S]*?)-->([\s\S]*?)(?:<!--\s*\/context:section\s*-->|$)/giu;
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
-export const DOCUMENT_OVERLAY_SCHEMA = "context.document-overlay.v2";
 
 export interface DocumentOptimizationFragment {
   fragment_id: string;
@@ -29,14 +28,6 @@ export interface DocumentOptimizationFragment {
   input_digest: string;
   context_digest: string;
   policy_digest: string;
-}
-
-export interface DocumentOverlayMetadata {
-  schema: typeof DOCUMENT_OVERLAY_SCHEMA;
-  approved_path: string;
-  base_digest: string;
-  policy_digest: string;
-  optimized_fragments: number;
 }
 
 export function sha256(value: string): string {
@@ -120,13 +111,29 @@ export function collectDocumentOptimizationFragments(
   );
 }
 
+function inlineCodeValues(value: string): string[] {
+  const values: string[] = [];
+  let previousEnd = -1;
+  for (const match of value.matchAll(/`([^`\n]+)`/gu)) {
+    const start = match.index;
+    const content = match[1]!;
+    if (start === previousEnd && values.length > 0) {
+      values[values.length - 1] += content;
+    } else {
+      values.push(content);
+    }
+    previousEnd = start + match[0].length;
+  }
+  return values;
+}
+
 function protectedValues(value: string): { urls: string[]; code: string[]; numbers: string[] } {
   return {
     urls: [...value.matchAll(/(?:https?:\/\/|mailto:)[^\s)\]>]+/gu)].map((match) => match[0]),
     code: [
-      ...value.matchAll(/`([^`\n]+)`/gu),
-      ...value.matchAll(/```[^\n]*\n[\s\S]*?```/gu),
-    ].map((match) => match[0]),
+      ...inlineCodeValues(value),
+      ...[...value.matchAll(/```[^\n]*\n[\s\S]*?```/gu)].map((match) => match[0]),
+    ],
     numbers: [...value.matchAll(/\b\d+(?:\.\d+)*\b/gu)].map((match) => match[0]),
   };
 }
@@ -259,62 +266,48 @@ function canonicalKnowledgeMarkdown(content: string): string | null {
   return `---\n${stringifyYaml(parsed.record).trimEnd()}\n---\n${parsed.body}`;
 }
 
-export function withDocumentOverlayMetadata(input: {
+export function withDocumentRevisionMetadata(input: {
   content: string;
   approvedPath: string;
   baseDigest: string;
-  optimizedFragments: number;
 }): string {
   const parsed = frontmatterRecord(input.content);
   if (parsed === null) throw new ContextError(ExitCode.WorkspaceStateError, `approved knowledge has invalid frontmatter: ${input.approvedPath}`, {
     category: ErrorCategory.WorkspaceStateInvalid,
   });
-  parsed.record.context_overlay = {
-    schema: DOCUMENT_OVERLAY_SCHEMA,
-    approved_path: input.approvedPath,
-    base_digest: input.baseDigest,
-    policy_digest: sha256(DOCUMENT_OPTIMIZATION_POLICY),
-    optimized_fragments: input.optimizedFragments,
-  } satisfies DocumentOverlayMetadata;
+  parsed.record.context_revision = input.baseDigest;
   return `---\n${stringifyYaml(parsed.record).trimEnd()}\n---\n${parsed.body}`;
 }
 
-export function parseDocumentOverlay(content: string): {
-  metadata: DocumentOverlayMetadata;
+export function parseDocumentRevision(content: string): {
+  baseDigest: string;
   content: string;
 } | null {
   const parsed = frontmatterRecord(content);
-  const metadata = parsed?.record.context_overlay;
-  if (
-    parsed === null || !isRecord(metadata) ||
-    metadata.schema !== DOCUMENT_OVERLAY_SCHEMA ||
-    typeof metadata.approved_path !== "string" ||
-    typeof metadata.base_digest !== "string" ||
-    typeof metadata.policy_digest !== "string" ||
-    typeof metadata.optimized_fragments !== "number"
-  ) return null;
-  delete parsed.record.context_overlay;
+  const baseDigest = parsed?.record.context_revision;
+  if (parsed === null || typeof baseDigest !== "string" || !/^[a-f0-9]{64}$/u.test(baseDigest)) return null;
+  delete parsed.record.context_revision;
   return {
-    metadata: metadata as unknown as DocumentOverlayMetadata,
+    baseDigest,
     content: `---\n${stringifyYaml(parsed.record).trimEnd()}\n---\n${parsed.body}`,
   };
 }
 
-export function inferDocumentOverlayReplacements(input: {
+export function inferDocumentRevisionReplacements(input: {
   file: ApprovedKnowledgeFile;
-  overlayContent: string;
+  revisionContent: string;
 }): Map<string, string> | null {
   const baseSections = approvedContextSectionsInMarkdown(input.file.content);
-  const overlaySections = approvedContextSectionsInMarkdown(input.overlayContent);
-  if (baseSections.length !== overlaySections.length) return null;
+  const revisionSections = approvedContextSectionsInMarkdown(input.revisionContent);
+  if (baseSections.length !== revisionSections.length) return null;
   const fragments = collectDocumentOptimizationFragments([input.file]);
   const replacements = new Map<string, string>();
   for (let index = 0; index < baseSections.length; index += 1) {
     const base = baseSections[index]!;
-    const overlay = overlaySections[index]!;
+    const revision = revisionSections[index]!;
     if (
-      base.id !== overlay.id || base.contentMode !== overlay.contentMode ||
-      JSON.stringify(base.refs) !== JSON.stringify(overlay.refs)
+      base.id !== revision.id || base.contentMode !== revision.contentMode ||
+      JSON.stringify(base.refs) !== JSON.stringify(revision.refs)
     ) return null;
     const sectionId = base.id ?? `section-${index + 1}`;
     const sectionFragments = fragments.filter((fragment) => fragment.section_id === sectionId);
@@ -322,16 +315,16 @@ export function inferDocumentOverlayReplacements(input: {
     const baseBlocks = extractRawBlocks(base.readerVisibleBody).filter((block) =>
       fragmentLines(base.readerVisibleBody, block.line_start, block.line_end).trim().length > 0
     );
-    const overlayBlocks = extractRawBlocks(overlay.readerVisibleBody).filter((block) =>
-      fragmentLines(overlay.readerVisibleBody, block.line_start, block.line_end).trim().length > 0
+    const revisionBlocks = extractRawBlocks(revision.readerVisibleBody).filter((block) =>
+      fragmentLines(revision.readerVisibleBody, block.line_start, block.line_end).trim().length > 0
     );
-    if (baseBlocks.length !== sectionFragments.length || overlayBlocks.length !== sectionFragments.length) return null;
+    if (baseBlocks.length !== sectionFragments.length || revisionBlocks.length !== sectionFragments.length) return null;
     for (let blockIndex = 0; blockIndex < sectionFragments.length; blockIndex += 1) {
       const fragment = sectionFragments[blockIndex]!;
       const replacement = fragmentLines(
-        overlay.readerVisibleBody,
-        overlayBlocks[blockIndex]!.line_start,
-        overlayBlocks[blockIndex]!.line_end,
+        revision.readerVisibleBody,
+        revisionBlocks[blockIndex]!.line_start,
+        revisionBlocks[blockIndex]!.line_end,
       );
       if (replacement === fragment.content) continue;
       assertSafeDocumentOptimizationReplacement(fragment, replacement);
@@ -342,7 +335,7 @@ export function inferDocumentOverlayReplacements(input: {
     file: input.file,
     replacements,
   }));
-  const actual = canonicalKnowledgeMarkdown(input.overlayContent);
+  const actual = canonicalKnowledgeMarkdown(input.revisionContent);
   if (expected === null || actual === null || expected !== actual) return null;
   return replacements;
 }

@@ -192,18 +192,17 @@ describe("Context workflow Provider", () => {
         state: "starter-accepted" as const,
       }],
       documentOptimization: {
-        schema: "context.document-optimization-status.v1" as const,
+        schema: "context.document-optimization-status.v2" as const,
         enabled: true,
         policy: "context.document-optimization.v2",
-        overlay_root: "/workspace/overlays",
-        overlay_pages: 0,
+        revision_pages: 0,
         eligible_views: 1,
         eligible_fragments: 2,
-        optimized_fragments: 0,
+        revised_fragments: 0,
         kept_fragments: 0,
-        override_fragments: 0,
         pending_fragments: 2,
         conflict_fragments: 0,
+        revision_requested: false,
         current: false,
         pending_fragment_ids: ["opt-a", "opt-b"],
         conflict_fragment_ids: [],
@@ -215,6 +214,59 @@ describe("Context workflow Provider", () => {
       expect(snapshot.route?.reason_code).toBe("route.document-optimization.pending");
       expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs plan --format json");
       expect(snapshot.route?.action?.input_schema?.id).toBe("schema.optimize-documents.input");
+    }
+  });
+
+  test("routes a conversational document correction before optimization and build", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      approvedPages: 1,
+      close: { state: "ready" as const, diagnostics: [] },
+      packages: [{
+        kind: "package.kb" as const,
+        name: "knowledge",
+        reads: [],
+        writes: [],
+        template: { path: "src/package-templates/kb" },
+        outDir: "dist/knowledge",
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
+      }],
+      packageFreshness: [{
+        name: "knowledge",
+        kind: "kb" as const,
+        state: "stale" as const,
+        inputFiles: 1,
+        outputFiles: 1,
+      }],
+      packageTemplateReviews: [{
+        packageName: "knowledge",
+        templatePath: "src/package-templates/kb",
+        state: "starter-accepted" as const,
+      }],
+      documentOptimization: {
+        schema: "context.document-optimization-status.v2" as const,
+        enabled: true,
+        policy: "context.document-optimization.v2",
+        revision_pages: 0,
+        eligible_views: 1,
+        eligible_fragments: 1,
+        revised_fragments: 0,
+        kept_fragments: 1,
+        pending_fragments: 0,
+        conflict_fragments: 0,
+        revision_requested: true,
+        requested_approved_path: "faq/example.md",
+        current: true,
+        pending_fragment_ids: [],
+        conflict_fragment_ids: [],
+      },
+    };
+    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
+      const snapshot = await evaluateContextWorkflow({ observation, authorities });
+      expect(snapshot.route?.node).toBe("revise-document");
+      expect(snapshot.route?.reason_code).toBe("route.document-revision.requested");
+      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs revise-current --format json");
     }
   });
 

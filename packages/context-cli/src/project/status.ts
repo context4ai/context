@@ -27,6 +27,7 @@ import {
   readProseCompileBatchProgress,
   type ProseCompileBatchProgress,
 } from "./proseCompileBatch.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { structureBatchStatus } from "./statusStructureBatch.js";
 import {
   activeStructureGroups,
@@ -467,14 +468,14 @@ export async function collectProjectStatusSnapshot(
   });
   const approvedPages = await countFiles(
     join(projectRoot, "knowledge"),
-    (rel) => rel.endsWith(".md") && !rel.startsWith("assets/"),
+    (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
   );
   const approvedCollections = (await Promise.all(
     KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
       collection,
       count: await countFiles(
         join(projectRoot, "knowledge", collection),
-        (rel) => rel.endsWith(".md"),
+        (rel) => isApprovedKnowledgeMarkdownPath(rel),
       ),
     })),
   )).filter((item) => item.count > 0).map((item) => item.collection);
@@ -483,7 +484,7 @@ export async function collectProjectStatusSnapshot(
         projectRoot,
         files: await listApprovedKnowledge(projectRoot),
       })
-    : disabledDocumentOptimizationStatus(projectRoot);
+    : disabledDocumentOptimizationStatus();
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const sourceFreshness = phaseStatus.projectEntryValid

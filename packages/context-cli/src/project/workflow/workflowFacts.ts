@@ -469,6 +469,7 @@ export function createContextWorkflowFacts(
     current: true,
     pending_fragments: 0,
     conflict_fragments: 0,
+    revision_requested: false,
   };
 
   return {
@@ -566,6 +567,9 @@ export function createContextWorkflowFacts(
       current: documentOptimization.current,
       pending_count: documentOptimization.pending_fragments,
       conflict_count: documentOptimization.conflict_fragments,
+      ...(documentOptimization.revision_requested
+        ? { revision_requested: true as const }
+        : {}),
     },
     logs: {
       configured: runtimeEvents.configured,

@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: revise-document
+runner: host
+effect: read
+handler: context.document-revision.next

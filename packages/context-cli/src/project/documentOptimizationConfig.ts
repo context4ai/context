@@ -1,12 +1,12 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, rename, rm, rmdir } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
+import { isDocumentRevisionPath } from "./knowledgeFileClassification.js";
 
-export const DOCUMENT_OPTIMIZATION_ROOT = "overlays";
 export const DOCUMENT_OPTIMIZATION_POLICY = "context.document-optimization.v2";
 export const DOCUMENT_OPTIMIZATION_CACHE_ROOT = join(".tmp", "context-runtime", "document-optimization");
 
@@ -51,10 +51,6 @@ async function readPackageJson(projectRoot: string): Promise<ContextPackageJson>
   return result;
 }
 
-export function documentOptimizationRoot(projectRoot: string): string {
-  return join(projectRoot, DOCUMENT_OPTIMIZATION_ROOT);
-}
-
 export function documentOptimizationCacheRoot(projectRoot: string): string {
   return join(projectRoot, DOCUMENT_OPTIMIZATION_CACHE_ROOT);
 }
@@ -80,18 +76,10 @@ function recoveryTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/gu, "-");
 }
 
-async function removeEmptyDirectories(dir: string): Promise<void> {
-  if (!existsSync(dir)) return;
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) await removeEmptyDirectories(join(dir, entry.name));
-  }
-  if ((await readdir(dir)).length === 0) await rmdir(dir);
-}
-
 export async function disableDocumentOptimization(projectRoot: string): Promise<string | undefined> {
-  const overlayRoot = documentOptimizationRoot(projectRoot);
+  const knowledgeRoot = join(projectRoot, "knowledge");
   let recoveryPath: string | undefined;
-  if (existsSync(overlayRoot)) {
+  if (existsSync(knowledgeRoot)) {
     const recoveryRoot = join(projectRoot, ".tmp", "context-runtime", "recovery");
     const candidate = join(recoveryRoot, `document-optimization-${recoveryTimestamp()}`);
     const moved: string[] = [];
@@ -99,27 +87,18 @@ export async function disableDocumentOptimization(projectRoot: string): Promise<
       for (const entry of await readdir(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory()) {
-          if (path === join(overlayRoot, "document-optimization")) {
-            const target = join(candidate, "legacy-v1");
-            await mkdir(dirname(target), { recursive: true });
-            await rename(path, target);
-            moved.push(target);
-          } else {
-            await visit(path);
-          }
+          await visit(path);
           continue;
         }
-        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-        const content = await readFile(path, "utf8");
-        if (!/\bcontext_overlay\s*:/u.test(content)) continue;
-        const target = join(candidate, "overlays", relative(overlayRoot, path));
+        const relPath = relative(knowledgeRoot, path).split(/[\\/]+/u).join("/");
+        if (!entry.isFile() || !isDocumentRevisionPath(relPath)) continue;
+        const target = join(candidate, "knowledge", relPath);
         await mkdir(dirname(target), { recursive: true });
         await rename(path, target);
         moved.push(target);
       }
     };
-    await visit(overlayRoot);
-    await removeEmptyDirectories(overlayRoot);
+    await visit(knowledgeRoot);
     if (moved.length > 0) recoveryPath = candidate;
   }
   await rm(documentOptimizationCacheRoot(projectRoot), { recursive: true, force: true });

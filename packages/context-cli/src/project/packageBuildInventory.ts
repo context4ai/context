@@ -452,11 +452,10 @@ export function packageBuildInventory(input: {
             enabled: input.documentOptimization.enabled,
             policy: input.documentOptimization.policy,
             current: input.documentOptimization.current,
-            overlay_pages: input.documentOptimization.overlay_pages,
+            revision_pages: input.documentOptimization.revision_pages,
             eligible_fragments: input.documentOptimization.eligible_fragments,
-            optimized_fragments: input.documentOptimization.optimized_fragments,
+            revised_fragments: input.documentOptimization.revised_fragments,
             kept_fragments: input.documentOptimization.kept_fragments,
-            override_fragments: input.documentOptimization.override_fragments,
           },
         }),
     structure: {

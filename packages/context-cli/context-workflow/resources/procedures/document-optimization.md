@@ -4,10 +4,10 @@ kind: procedure
 mediaType: text/markdown
 ---
 
-# Document optimization overlays
+# Document revisions
 
 This optional phase improves the presentation of approved file and document
-prose without mutating `knowledge/`. It runs only when
+prose without mutating the approved page. It runs only when
 `package.json.context.documentOptimization` is true.
 
 Run the Route-selected plan command. Read every returned fragment in the
@@ -23,16 +23,21 @@ returned by the plan. Context rejects stale, incomplete, duplicate, or
 semantically broad decisions. Unchanged fragments reuse their previous
 decision; changed fragments alone return to this phase.
 
-Only pages with reader-visible changes are stored. Each page uses the same
-relative path and Markdown evidence protocol as its approved source, for
-example `knowledge/guides/setup.md` becomes `overlays/guides/setup.md`.
-Fragment-level `keep` decisions and incremental state are compact runtime cache
-below `.tmp/context-runtime/document-optimization/`; never edit that cache.
+Only pages with reader-visible changes are stored. A revision is a full
+Markdown sidecar beside its approved page: `knowledge/guides/setup.md` becomes
+`knowledge/guides/setup__revision.md`. Default knowledge discovery excludes the
+reserved suffix. The filename derives the base page; the revision stores only
+the base digest that cannot be derived. Unchanged fragments inside a revision
+are inferred. A page with no changes stores one derived negative cache key
+below `.tmp/context-runtime/document-optimization/`; replacement prose and
+fragment metadata are never duplicated there.
 
-Use `context optimize-docs override <fragment-id>` to create or locate the
-corresponding page overlay, then edit only reader-visible prose inside the
-existing `context:section` boundaries. Run `context optimize-docs validate`
-after editing. It rejects lifecycle metadata changes, stale page baselines,
-unsafe token changes, broad rewrites, and invalid Markdown structure. A source
-change makes the page overlay a blocking conflict instead of silently applying
-it. Do not create fragment JSON files or another overlay namespace.
+For a later user-requested correction, use `context revise "<title or approved
+path>" --format json`. The resulting `route.document-revision.requested` owns
+target selection, revision editing, and validation; it also works when broad
+document optimization was not previously enabled. The compatibility entry
+`context optimize-docs revise` accepts the same selectors. Validation rejects
+lifecycle metadata changes, stale page baselines, unsafe token changes, broad
+rewrites, and invalid Markdown structure. A source change makes the revision a
+blocking conflict instead of silently applying it. Do not create fragment JSON
+files or another revision namespace.

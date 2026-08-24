@@ -635,6 +635,18 @@ nodes:
         - resources/procedures/document-optimization.md
         - resources/views/document-optimization-current.yaml
 
+  - id: revise-document
+    kind: action
+    reasonCode: route.document-revision.requested
+    action: actions/revise-document.yaml
+    satisfiedBy:
+      - path: document_optimization.revision_requested
+        exists: false
+    resources:
+      required:
+        - resources/procedures/document-revision.md
+        - resources/views/document-optimization-current.yaml
+
   - id: flush-logs-after-build
     kind: action
     reasonCode: route.logs.delivery-pending
@@ -664,7 +676,8 @@ edges:
   - { from: compile-next, to: resolve-review-identities }
   - { from: resolve-review-identities, to: resume-review-current-batch }
   - { from: resume-review-current-batch, to: apply-resumed-review, kind: gatedBy }
-  - { from: apply-resumed-review, to: choose-source-boundary }
+  - { from: apply-resumed-review, to: revise-document }
+  - { from: revise-document, to: choose-source-boundary }
   - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }

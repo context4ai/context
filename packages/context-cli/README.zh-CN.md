@@ -145,12 +145,14 @@ context/
 - `context debug enable` 在 `.tmp/context-runtime/debug/` 记录可选轨迹；
 - `context optimize-docs enable` 开启增量排版优化，并保持 `knowledge/`
   中的正式知识不变；
+- `context revise "<标题或正式知识路径>"` 从对话启动一次单页修正，校验后再由
+  Route 提示重新构建；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
 
 绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，
 不能替代当前 Route。参见[安装后快速说明](./docs/quickstart.zh-CN.md)和
 [debug tracing](./docs/debug-tracing.md)。
-文档编译优化参见 [文档编译优化 overlays](./docs/document-optimization.zh-CN.md)。
+文档编译优化与对话修订参见[文档修订页](./docs/document-optimization.zh-CN.md)。
 
 ## 文档与开发
 

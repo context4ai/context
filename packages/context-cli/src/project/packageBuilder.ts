@@ -68,6 +68,7 @@ import {
   PACKAGE_TEMPLATE_REVIEW_FILE,
 } from "./packageTemplateReview.js";
 import { projectDocumentOptimizedKnowledge } from "./documentOptimization.js";
+import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
 export interface ProjectBuildResult {
   projectRoot: string;
@@ -97,7 +98,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v16-page-overlays";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v16-document-revisions";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -128,7 +129,7 @@ function packageFingerprintPath(projectRoot: string, pkg: PackageDefinition): st
 export async function listApprovedKnowledge(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
   const files = await walkPackageFiles(join(projectRoot, KNOWLEDGE_ROOT));
   const knowledge = await Promise.all(files
-    .filter((file) => file.relPath.endsWith(".md") && !file.relPath.startsWith("assets/"))
+    .filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/"))
     .map(async (file) => ({
       ...file,
       content: await readFile(file.absPath, "utf8"),

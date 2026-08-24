@@ -4,6 +4,18 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.16 - 2026-08-24
+
+- Added optional source-faithful document optimization that stores only changed
+  pages as adjacent `__revision.md` files and rebuilds unchanged content
+  deterministically from approved knowledge.
+- Added a conversational `context revise` entry backed by an Agent Graph Route,
+  with unique target resolution, conservative Markdown validation, stale-source
+  protection, and automatic return to package build after a valid correction.
+- Added bundled image delivery with deterministic per-file and package budgets,
+  plus path classification that keeps revision files out of ordinary knowledge
+  discovery and published package paths.
+
 ## 0.6.15 - 2026-08-23
 
 - Added explicit per-module code index plans that classify module type, stable

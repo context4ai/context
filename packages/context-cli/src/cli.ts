@@ -59,6 +59,7 @@ const TOP_LEVEL_COMMANDS = new Set([
   "package",
   "clean-cache",
   "debug",
+  "revise",
   "optimize-docs",
   "logs",
   "help",

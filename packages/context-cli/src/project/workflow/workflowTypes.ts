@@ -129,6 +129,7 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
     current: boolean;
     pending_count: number;
     conflict_count: number;
+    revision_requested?: true;
   };
   logs: {
     configured: boolean;

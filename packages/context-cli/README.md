@@ -169,8 +169,10 @@ for maintainers, automation, and diagnostics:
 - `context plugin status` checks installed Agent projections;
 - `context debug enable` records optional traces below
   `.tmp/context-runtime/debug/`;
-- `context optimize-docs enable` enables incremental presentation overlays
+- `context optimize-docs enable` enables incremental document revisions
   without modifying approved `knowledge/`;
+- `context revise "<title or approved path>"` starts one conversational
+  correction and routes its validation before the next package build;
 - `context clean-cache --dry-run` previews cleanup of Context-owned stale
   plugin caches.
 
@@ -178,7 +180,7 @@ Revision-bound commands should be copied from `workflow.current`; examples in
 documentation are orientation, not a substitute for the current Route. See the
 [installed quickstart](./docs/quickstart.md) and
 [debug tracing guide](./docs/debug-tracing.md).
-See also [document optimization overlays](./docs/document-optimization.md).
+See also [document revisions](./docs/document-optimization.md).
 
 ## Documentation and development
 

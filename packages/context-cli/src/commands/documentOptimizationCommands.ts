@@ -5,10 +5,11 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import {
   applyDocumentOptimizationDecisions,
+  beginDocumentRevision,
   collectDocumentOptimizationStatus,
-  createDocumentOptimizationOverride,
   createDocumentOptimizationPlan,
-  reconcileDocumentOptimizationOverlays,
+  currentDocumentRevisionPlan,
+  validateDocumentOptimizationRevisions,
 } from "../project/documentOptimization.js";
 import {
   disableDocumentOptimization,
@@ -67,9 +68,21 @@ async function readPayload(reference: string, projectRoot: string): Promise<unkn
 }
 
 export function registerDocumentOptimizationCommands(program: Command): void {
+  program.command("revise <target>")
+    .description("Start a source-faithful correction for one approved knowledge page")
+    .option("--format <format>", "output format: text | json", "json")
+    .action(async (target: string, options: Record<string, unknown>) => {
+      const projectRoot = requireProjectRoot();
+      writeResult(await beginDocumentRevision({
+        projectRoot,
+        files: await listApprovedKnowledge(projectRoot),
+        selector: target,
+      }), outputFormat(options.format));
+    });
+
   const optimize = program
     .command("optimize-docs")
-    .description("Configure and apply conservative document presentation overlays");
+    .description("Configure and apply conservative document revisions");
 
   optimize.command("enable")
     .description("Enable document optimization for subsequent package builds")
@@ -84,7 +97,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("disable")
-    .description("Disable document optimization and move its overlays to runtime recovery storage")
+    .description("Disable document optimization and move its revisions to runtime recovery storage")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
@@ -97,7 +110,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("status")
-    .description("Show overlay freshness and pending fragment counts")
+    .description("Show revision freshness and pending fragment counts")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
@@ -108,19 +121,19 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("validate")
-    .description("Validate page overlays and reconcile safe manual edits")
+    .description("Validate revision pages and reconcile safe manual edits")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
-      const status = await reconcileDocumentOptimizationOverlays({
+      const status = await validateDocumentOptimizationRevisions({
         projectRoot,
         files: await listApprovedKnowledge(projectRoot),
       });
       if (status.conflict_fragments > 0) {
-        throw new ContextError(ExitCode.WorkspaceStateError, "document optimization contains stale or invalid page overlays", {
+        throw new ContextError(ExitCode.WorkspaceStateError, "document optimization contains stale or invalid revision pages", {
           category: ErrorCategory.WorkspaceStateInvalid,
           conflicts: status.conflict_fragment_ids,
-          next: "Regenerate or review the listed page overlays, then rerun context optimize-docs validate.",
+          next: "Regenerate or review the listed revision pages, then rerun context optimize-docs validate.",
         });
       }
       writeResult({
@@ -165,15 +178,26 @@ export function registerDocumentOptimizationCommands(program: Command): void {
       }, outputFormat(options.format));
     });
 
-  optimize.command("override <fragment-id>")
-    .description("Open a page-level overlay for a tracked manual fragment adjustment")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (fragmentId: string, options: Record<string, unknown>) => {
+  optimize.command("revise <target>")
+    .description("Start a source-faithful correction by title, approved path, ViewRef, or fragment id")
+    .option("--format <format>", "output format: text | json", "json")
+    .action(async (target: string, options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
-      writeResult(await createDocumentOptimizationOverride({
+      writeResult(await beginDocumentRevision({
         projectRoot,
         files: await listApprovedKnowledge(projectRoot),
-        fragmentId,
+        selector: target,
+      }), outputFormat(options.format));
+    });
+
+  optimize.command("revise-current")
+    .description("Show the active conversational correction target and validation step")
+    .option("--format <format>", "output format: text | json", "json")
+    .action(async (options: Record<string, unknown>) => {
+      const projectRoot = requireProjectRoot();
+      writeResult(await currentDocumentRevisionPlan({
+        projectRoot,
+        files: await listApprovedKnowledge(projectRoot),
       }), outputFormat(options.format));
     });
 }

@@ -42,6 +42,7 @@ codes:
   - { code: route.package.output-required, kind: route-reason, summary: Approved knowledge has no confirmed package output., document: resources/procedures/package-output.md }
   - { code: route.package.configuration-required, kind: route-reason, summary: Declare the confirmed package output in the Context project., document: resources/procedures/package-output.md }
   - { code: route.package.template-review-required, kind: route-reason, summary: "Replace or edit package templates, or explicitly accept the generic defaults.", document: resources/procedures/package-output.md }
-  - { code: route.document-optimization.pending, kind: route-reason, summary: Resolve the current source-faithful document presentation overlay batch before building packages., document: resources/procedures/document-optimization.md }
+  - { code: route.document-revision.requested, kind: route-reason, summary: Apply and validate the user's requested correction on one approved knowledge page., document: resources/procedures/document-revision.md }
+  - { code: route.document-optimization.pending, kind: route-reason, summary: Resolve the current source-faithful document revision batch before building packages., document: resources/procedures/document-optimization.md }
   - { code: route.build.package-stale, kind: route-reason, summary: Build the declared package outputs from current approved knowledge., document: resources/procedures/close-and-build.md }
   - { code: route.logs.delivery-pending, kind: route-reason, summary: Send locally queued runtime logs through the configured generic sink., document: resources/procedures/close-and-build.md }

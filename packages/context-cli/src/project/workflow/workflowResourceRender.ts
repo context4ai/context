@@ -319,23 +319,26 @@ ${bullets(templates)}
 
 function renderDocumentOptimization(status: ProjectStatus): string {
   const current = status.documentOptimization;
-  return `# Current document optimization overlays
+  return `# Current document revisions
 
 - Enabled: ${inline(current.enabled)}
 - Policy: ${inline(current.policy)}
 - Current: ${inline(current.current)}
 - Eligible views: ${current.eligible_views}
 - Eligible fragments: ${current.eligible_fragments}
-- Page overlays: ${current.overlay_pages}
-- Optimized fragments: ${current.optimized_fragments}
+- Revision pages: ${current.revision_pages}
+- Revised fragments: ${current.revised_fragments}
 - Kept fragments: ${current.kept_fragments}
-- Manual overrides: ${current.override_fragments}
 - Pending fragments: ${current.pending_fragments}
 - Conflicts: ${current.conflict_fragments}
+- Conversational correction requested: ${inline(current.revision_requested)}${current.requested_approved_path === undefined
+    ? ""
+    : `\n- Requested approved page: ${inline(current.requested_approved_path)}`}
 
-Page overlays do not modify approved knowledge. They mirror the approved path
-under \`overlays/\`; manual edits are applied only while their recorded source
-baseline and policy remain current.
+Revision pages use the reserved \`__revision.md\` suffix beside their approved
+page under \`knowledge/\`. Default knowledge discovery excludes them; document
+optimization validation and package compilation apply them only while their
+recorded source baseline remains current.
 `;
 }
 

@@ -11,7 +11,7 @@ import {
   type PreparedKnowledgeAsset,
   unprojectedSourceAssetLinks,
 } from "./knowledgeAssets.js";
-import { isKnowledgeAssetPath, walkMarkdown } from "./verifyProjectFiles.js";
+import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import {
   defaultDocumentManifest,
@@ -48,7 +48,7 @@ export async function repairApprovedKnowledgeAssetProjections(
   projectRoot: string,
 ): Promise<KnowledgeAssetRepairResult> {
   const affected: Array<{ relPath: string; absPath: string; content: string }> = [];
-  for (const file of await walkMarkdown(join(projectRoot, "knowledge"))) {
+  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
     const content = await readFile(file.absPath, "utf8");
     if (unprojectedSourceAssetLinks(content).length > 0) affected.push({ ...file, content });

@@ -2,5 +2,5 @@ schema: agent-graph.resource.v1
 id: context.document-optimization-current
 kind: context-view
 mediaType: text/markdown
-description: Current document optimization overlay status and pending batch size.
+description: Current document revision status and pending batch size.
 materializer: actions/materialize-context-view.yaml

@@ -18,10 +18,10 @@ Build runs only after close and verification are current. It writes declared
 packages under `dist/` and records an inventory receipt with added, updated,
 removed, and index changes.
 
-When document optimization is enabled, its current overlay batch must also be
-resolved before build. Build projects approved knowledge through those overlays
-without changing `knowledge/`, and records the overlay policy and decision
-counts in the package inventory.
+When document optimization is enabled, its current revision batch must also be
+resolved before build. Build compiles each approved page through its optional
+`__revision.md` sidecar and records the policy and decision counts in the
+package inventory. Revision sidecars are never emitted as separate knowledge.
 
 Run only the current route command, then evaluate again. A successful build
 means the currently declared scope is current; newly captured or newly declared

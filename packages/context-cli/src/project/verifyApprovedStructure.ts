@@ -17,7 +17,7 @@ import {
   parentIndexChildren,
   parseFrontmatterLoose,
 } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkMarkdown } from "./verifyProjectFiles.js";
+import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import type { ApprovedViewIssueContext, EvidenceIndexCache, SourceRegistryLookup } from "./verifySourceRefs.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
@@ -313,7 +313,7 @@ async function approvedStructureProjection(projectRoot: string): Promise<{
   const views: ApprovedStructureViewProjection[] = [];
   const parentIndexes: Array<{ viewRef: string; path: string; children: ParentIndexChild[] }> = [];
   const codeEdges: Array<Record<string, unknown>> = [];
-  for (const file of await walkMarkdown(join(projectRoot, "knowledge"))) {
+  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
     const content = await readFile(file.absPath, "utf8");
     if (isDeprecatedApprovedMarkdown(content)) continue;

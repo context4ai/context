@@ -65,7 +65,7 @@ export function registerProjectInitCommand(program: Command): void {
     .option("--language <language>", "workspace and starter-template language: en | zh-CN")
     .option("--dev", "initialize with the locally linked @c4a/context SDK")
     .option("--debug", "enable workspace-local command and Agent Graph tracing")
-    .option("--optimize-docs", "enable conservative document optimization overlays")
+    .option("--optimize-docs", "enable conservative document revisions")
     .option("--allow-nonempty", "after explicit confirmation, preserve existing files and initialize inside a non-empty non-Context directory")
     .action(async (projectDir: string | undefined, options: Record<string, unknown>) => {
       const targetRoot = resolveContextProjectInitTarget(process.cwd(), projectDir);
