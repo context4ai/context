@@ -55,5 +55,9 @@ bun run --filter @c4a/dev-cli start
 
 - This repository is developed and released independently from any parent
   monorepo or downstream distribution.
+- `README.md` and `README.zh-CN.md` are the product entrypoints. Long-form
+  integration case studies live under `docs/`, while static replay assets live
+  under `case-studies/` and are published as documentation through GitHub
+  Pages. They are not part of the hosted product or npm runtime.
 - Keep generated files out of source control: `dist/`, `node_modules/`, `.tmp/`,
   coverage, and local caches.

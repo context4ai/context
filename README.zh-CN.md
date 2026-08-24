@@ -57,7 +57,7 @@ context plugin install
 
 ![Context 知识生产工作流](./assets/context-workflow.zh-CN.svg)
 
-你可以[观看真实运行的脱敏交互式回放](https://context4ai.github.io/agent-graph/case-studies/context/?lang=zh)，更直观地了解整个知识构建过程及其[实现原理](https://github.com/context4ai/agent-graph/blob/main/docs/zh-CN/case-studies/context.md)。
+你可以[观看真实运行的脱敏交互式回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)，更直观地了解整个知识构建过程及其[实现原理](https://github.com/context4ai/context/blob/main/docs/zh-CN/case-studies/agent-graph-workflow.md)。
 
 具体路径会随来源和产物变化，但长期稳定的工作流是：
 

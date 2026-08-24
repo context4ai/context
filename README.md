@@ -69,7 +69,7 @@ how to install it instead of guessing or partially initializing a workspace.
 
 ![Context knowledge production workflow](./assets/context-workflow.svg)
 
-You can [watch a sanitized interactive replay of a real run](https://context4ai.github.io/agent-graph/case-studies/context/?lang=en) for a more intuitive view of the complete knowledge-building process and its [implementation principles](https://github.com/context4ai/agent-graph/blob/main/docs/en/case-studies/context.md).
+You can [watch a sanitized interactive replay of a real run](https://context4ai.github.io/context/case-studies/workflow/?lang=en) for a more intuitive view of the complete knowledge-building process and its [implementation principles](https://github.com/context4ai/context/blob/main/docs/en/case-studies/agent-graph-workflow.md).
 
 The exact path depends on the sources and requested output, but the durable
 workflow is:

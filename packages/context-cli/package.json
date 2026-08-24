@@ -40,7 +40,7 @@
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
+    "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__tests__/caseStudyReplay.test.ts src/__tests__/cli.test.ts src/__tests__/document*V062.test.ts src/__tests__/okfTypes.test.ts src/__tests__/pathFreeContractInventory.test.ts src/__tests__/plugin*.test.ts src/__tests__/project*.test.ts src/__tests__/proseAlignBudget.test.ts src/__tests__/sectionContentDigest.test.ts",
     "test:e2e": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__e2e__/*.e2e.test.ts",
     "lint": "eslint src",
     "clean-cache": "bun run src/cli.ts clean-cache"
