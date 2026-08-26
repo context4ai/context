@@ -182,11 +182,11 @@ export async function createApprovedProject(options: {
     options.approvedMarkdownSuffix?.trim() ?? "",
   ].filter((part) => part.length > 0).join("\n\n") + "\n";
   writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-  await runCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
   await acceptCurrentCodeIndexAudit(
     project,
     "The fixture's single exported symbol page matches its intentionally narrow scope.",
   );
+  await runCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
   await options.beforeClose?.(project);
   await runCliInDir(project, ["close", "--format", "json"]);
   return {

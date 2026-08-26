@@ -15,6 +15,8 @@ import {
 } from "../project/extractionPreviewCache.js";
 import { addRepoSource } from "../project/repoSources.js";
 import { initContextProject } from "../project/workspace.js";
+import { applyReviewDecisions } from "../project/reviewApply.js";
+import { candidateIdsHash } from "../project/reviewShared.js";
 
 async function runCliInDir(dir: string, args: string[]): Promise<string> {
   const cwd = process.cwd();
@@ -583,9 +585,19 @@ describe("custom code extraction lifecycle", () => {
       expect(symbolIndex).toContain('"name": "protocol"');
       expect(symbolIndex).toContain('"name": "module"');
 
-      await runCliInDir(initialized.projectRoot, [
-        "review", "approve", "codeindex/service/index", "--collection", "codeindex",
-      ]);
+      await applyReviewDecisions({
+        projectRoot: initialized.projectRoot,
+        payload: {
+          decisions: [{ candidate_id: "codeindex/service/index", status: "approved" }],
+          collection: "codeindex",
+          scope: {
+            kind: "collection",
+            collection: "codeindex",
+            count: 1,
+            ids_sha256: candidateIdsHash(["codeindex/service/index"]),
+          },
+        },
+      });
       const approved = await readFile(join(
         initialized.projectRoot,
         "knowledge/codeindex/service/index-page.md",

@@ -24,7 +24,9 @@ Without explicit session-managed authority:
 
 - open the report returned by the route;
 - let the user approve or reject candidates;
-- apply the exact returned decision payload.
+- apply the exact returned decision payload; and
+- retain the exact report reference and reviewed scope in this conversation for
+  the final completion summary.
 
 The ordinary Route also carries a revision-bound force-approval resolution
 Action as an escape path. Do not advertise it when first presenting Review.
@@ -38,3 +40,4 @@ conversation. It does not bypass source permission, validation, close, or
 verify.
 
 After apply, re-evaluate. Do not infer that close or package output is current.
+Do not persist a duplicate review-report ledger in the workspace.

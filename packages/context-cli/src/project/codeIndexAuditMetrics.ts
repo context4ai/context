@@ -29,8 +29,11 @@ export interface MarkdownQualityMetrics {
   placeholderSectionCount: number;
 }
 
-function body(markdown: string): string {
-  return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, "");
+export function codeIndexReaderMarkdown(markdown: string): string {
+  return markdown
+    .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, "")
+    .replace(/^[\t ]*<!--\s*\/?context:[\s\S]*?-->[\t ]*(?:\r?\n|$)/gimu, "")
+    .replace(/<!--\s*\/?context:[\s\S]*?-->/giu, "");
 }
 
 function containsModuleSpecificIdentity(line: string): boolean {
@@ -81,7 +84,7 @@ function declarationDumpLines(lines: readonly string[]): { signature: Set<number
 }
 
 export function measureCodeIndexMarkdown(markdown: string): MarkdownQualityMetrics {
-  const lines = body(markdown).replace(/\r\n/gu, "\n").split("\n");
+  const lines = codeIndexReaderMarkdown(markdown).replace(/\r\n/gu, "\n").trimEnd().split("\n");
   const dumps = declarationDumpLines(lines);
   let fenced = false;
   let implementationBodyLines = 0;

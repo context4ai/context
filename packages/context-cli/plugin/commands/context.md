@@ -26,6 +26,18 @@ Run:
 context entry [project-dir] --language <language> --format json
 ```
 
+If the request does not already choose ordinary review or fully managed
+operation, first use the read-only entry result to state a short execution
+plan, then ask the user to choose once. Explain that ordinary review pauses at
+human Gates and presents HTML reports, while fully managed operation resolves
+delegatable Gates within this conversation but still stops for permissions,
+hard validation, or non-delegatable decisions. Prefer the host's native choice
+UI. When initialization already needs a confirmation or missing option, combine
+the mode choice with that question instead of adding another round. Keep the
+answer only in this conversation and do not ask again after initialization,
+capture, or resume. An explicit request for review, human confirmation, fully
+managed work, or no further review already resolves this choice.
+
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
 `project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
@@ -177,6 +189,14 @@ Treat `workflow.current` as the current-step authority:
 Explain, ask, confirm, and summarize in the user's current conversation
 language. Keep commands, flags, paths, ids, status values, JSONL keys,
 `source_ref` values, and copied CLI tokens unchanged.
+
+Keep a conversation-local list of HTML review reports that the user actually
+used to make a review decision. Preserve each exact report URL or local path
+and its reviewed scope when the Route provides them. In the final completion
+summary, include one compact `Review reports` section containing those exact
+references. Do not scan workspace internals to reconstruct the list, persist a
+second ledger, invent a public URL, or describe an inaccessible report or a
+fully managed/force approval as user-reviewed.
 
 When the user explicitly asks to publish a completed build, treat publication
 as a downstream distribution step outside the Context Route. Use only an

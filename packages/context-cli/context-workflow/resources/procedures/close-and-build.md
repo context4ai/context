@@ -32,6 +32,14 @@ package inventory. Revision sidecars are never emitted as separate knowledge.
 Run only the current route command, then evaluate again. A successful build
 means the currently declared scope is current; newly captured or newly declared
 targets can reopen earlier graph nodes.
+
+The final completion summary must cover the built outputs, validation status,
+knowledge scale, and unresolved issues. Add a compact `Review reports` section with every
+exact HTML report URL or local report path that the user actually used for a
+review decision in this conversation, together with its reviewed scope. Omit
+the section when no report was user-reviewed. Do not reconstruct it by scanning
+`.tmp`, invent a shareable URL, or classify fully managed or force approval as
+user review.
 # Code-index audit record
 
 When a package selects approved `codeindex` pages, build requires the current

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { hydrateApprovedKnowledgeMarkdown, readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
 import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
-import { measureCodeIndexMarkdown } from "./codeIndexAuditMetrics.js";
+import { codeIndexReaderMarkdown, measureCodeIndexMarkdown } from "./codeIndexAuditMetrics.js";
 import type { CodeIndexAuditPageMetrics, CodeIndexAuditReport } from "./codeIndexAuditTypes.js";
 import { stableHash } from "./extractCandidateArtifacts.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
@@ -56,11 +56,11 @@ function markdownBody(markdown: string): string {
 }
 
 function semanticContentDigest(markdown: string): string {
-  return stableHash(markdownBody(markdown).replace(/\r\n/gu, "\n").trim());
+  return stableHash(codeIndexReaderMarkdown(markdown).replace(/\r\n/gu, "\n").trim());
 }
 
 function genericParagraphs(markdown: string): string[] {
-  return markdownBody(markdown)
+  return codeIndexReaderMarkdown(markdown)
     .split(/\n\s*\n/gu)
     .map((paragraph) => paragraph.replace(/\s+/gu, " ").trim())
     .filter((paragraph) =>
@@ -81,8 +81,7 @@ function lineIsMostlyLocator(line: string): boolean {
 }
 
 export function effectiveMarkdownChars(markdown: string): number {
-  const body = markdownBody(markdown)
-    .replace(/<!--\s*context:[\s\S]*?-->/giu, "")
+  const body = codeIndexReaderMarkdown(markdown)
     .replace(/```[^\n]*\n([\s\S]*?)```/gu, "$1")
     .replace(/!?\[([^\]]*)\]\([^)]*\)/gu, "$1")
     .replace(/https?:\/\/\S+/gu, "");

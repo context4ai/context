@@ -6,9 +6,10 @@ mediaType: text/markdown
 
 # Workflow mode after workspace creation
 
-After the workspace is created, briefly explain the two execution modes in the
-user's current conversation language unless they already selected fully managed
-operation in this conversation.
+After the workspace is created, explain the two execution modes only when the
+conversation has not already selected a mode and no earlier mode question was
+asked. If the entry plan or initialization confirmation already resolved this
+choice, continue without asking again.
 
 - Ordinary review mode is the default. Context pauses at review decisions and
   provides HTML reports for the user to inspect. The current product estimate is
@@ -22,4 +23,5 @@ Make clear that fully managed mode does not bypass source boundaries, external
 permissions, hard validation, evidence checks, verification failures, or other
 non-delegatable safety boundaries. Ask whether the user wants to keep the
 default ordinary review mode or authorize fully managed operation for the
-current conversation. Do not persist the choice in project files.
+current conversation. This is a one-time conversation choice: do not repeat it
+after capture or resume, and do not persist it in project files.

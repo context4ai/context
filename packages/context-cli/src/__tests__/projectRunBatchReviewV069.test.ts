@@ -276,6 +276,17 @@ describe("0.6.19 code-index batched human review", () => {
       expect(auditStatus.codeIndexAudit.report.units.map((unit) => unit.id)).toEqual(
         expect.arrayContaining(["sample-a", "sample-b"]),
       );
+      const prematureReview = await invokeCliInDir(project, [
+        "review", "html", "codeindex", "--format", "json",
+      ]);
+      expect(prematureReview.status).not.toBe(0);
+      expect(prematureReview.stderr).toContain("code-index quality audit must pass before candidate review");
+      expect(prematureReview.stderr).toContain("code-index-audit-required-before-review");
+      const prematureApproval = await invokeCliInDir(project, [
+        "review", "approve-all", "codeindex", "--managed", "--format", "json",
+      ]);
+      expect(prematureApproval.status).not.toBe(0);
+      expect(prematureApproval.stderr).toContain("code-index quality audit must pass before candidate review");
       await acceptCurrentCodeIndexAudit(
         project,
         "Both fixture modules were reviewed together and intentionally expose one symbol page each.",

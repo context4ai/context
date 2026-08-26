@@ -208,6 +208,7 @@ function parseDecisionPayload(value: unknown): CodeIndexAuditDecisionPayload {
       throw new ContextError(ExitCode.UserError, `signal_assessments[${index}] is invalid`, {
         category: ErrorCategory.SchemaInvalid,
         field: `signal_assessments[${index}]`,
+        valid_dispositions: ["fix", "acceptable", "not-applicable"],
       });
     }
     return {
@@ -294,6 +295,7 @@ function validateDecision(report: CodeIndexAuditReport, payload: CodeIndexAuditD
     throw new ContextError(ExitCode.UserError, "revise requires revision_plan.units and revision_plan.actions", {
       category: ErrorCategory.SchemaInvalid,
       field: "revision_plan",
+      required_fields: ["revision_plan.units", "revision_plan.actions"],
     });
   }
   if (payload.decision === "request-input" && payload.requested_material === undefined) {

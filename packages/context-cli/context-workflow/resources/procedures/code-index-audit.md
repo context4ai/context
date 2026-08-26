@@ -10,6 +10,9 @@ This Route is a required semantic review of the complete proposed code index.
 The CLI reports mechanical signals; the Agent reads the affected candidate
 content and evidence, compares registered sources with the user-confirmed
 scope, and decides whether the index is fit for its declared output profiles.
+Reader metrics exclude Context lifecycle comments and evidence annotations.
+Improve the source-backed knowledge itself; do not change Markdown syntax,
+sentence count, or pagination solely to influence a mechanical counter.
 
 The report contains no aggregate score. Every dimension is computed
 independently with its observed value, floor, recommended target, ceiling,
