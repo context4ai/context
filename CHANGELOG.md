@@ -4,6 +4,17 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.19 - 2026-08-26
+
+- Made code-index quality checks precede every candidate review path, so human
+  review only starts after the mechanical coverage and density gates pass.
+- Measured reader-facing code-index content without Context control comments,
+  and kept review guidance consistent with the enforced quality dimensions.
+- Added one conversational workflow-mode choice when a request does not choose
+  ordinary review or fully managed operation, without adding repeated Gates.
+- Included the HTML reports actually used for human review in the final summary
+  while excluding managed and force-approval reports.
+
 ## 0.6.19-preview.2 - 2026-08-26
 
 - Made Lark capture prefer user credentials while safely falling back to the
