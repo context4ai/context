@@ -14,7 +14,7 @@ expect:
   primaryReasonCode: route.evidence.decision-required
   availability: requires-user
   gateResolution: user
-  resolutionCommand: context review maintain --input - --format json
+  resolutionCommand: context review maintain --input .tmp/agent-payloads/evidence-maintenance.json --format json
   resolutionInputSchema: schema.maintain-evidence.input
   requiredResources:
     - procedure.evidence-maintenance

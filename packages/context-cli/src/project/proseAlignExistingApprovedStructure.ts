@@ -10,6 +10,10 @@ import type {
   AlignPayload,
   StructureEdgePlan,
 } from "./proseAlignTypes.js";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 const APPROVED_STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const KNOWLEDGE_ROOT = "knowledge";
@@ -169,9 +173,16 @@ async function parseExistingApprovedMarkdown(projectRoot: string): Promise<Exist
   const nodes = new Map<string, ApprovedStructureNode>();
   const views = new Map<string, ApprovedStructureView>();
   const sections = new Map<string, ApprovedStructureSection>();
+  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   for (const filePath of await approvedMarkdownFiles(projectRoot)) {
-    const markdown = await readFile(filePath, "utf8");
-    if (isDeprecatedApprovedPage(markdown)) continue;
+    const rawMarkdown = await readFile(filePath, "utf8");
+    if (isDeprecatedApprovedPage(rawMarkdown)) continue;
+    const relPath = toPosixPath(relative(join(projectRoot, KNOWLEDGE_ROOT), filePath));
+    const markdown = hydrateApprovedKnowledgeMarkdown({
+      content: rawMarkdown,
+      relPath,
+      metadata,
+    });
     const frontmatter = frontmatterRecord(markdown) ?? {};
     const nodeRef = typeof frontmatter?.node_ref === "string" && frontmatter.node_ref.length > 0
       ? frontmatter.node_ref
@@ -197,7 +208,6 @@ async function parseExistingApprovedMarkdown(projectRoot: string): Promise<Exist
       node_type: existingNode?.node_type ?? nodeType,
       tags: uniqueRefs([...(existingNode?.tags ?? []), ...nodeTags]),
     });
-    const relPath = toPosixPath(relative(join(projectRoot, KNOWLEDGE_ROOT), filePath));
     const location = pathLocation(relPath);
     const collection = viewRef.split(":", 1)[0] ?? location.collection;
     views.set(viewRef, {

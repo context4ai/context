@@ -190,6 +190,31 @@ describe("0.6.2 Lark resource materialization", () => {
     }
   });
 
+  test("uses one selected identity for every materialized resource command", async () => {
+    const identities: string[] = [];
+    const identityRunner: LarkResourceCommandRunner = async (args, options) => {
+      identities.push(argument(args, "--as"));
+      return runner(args, options);
+    };
+    const resources: LarkExternalResource[] = [
+      resource("image", "lark:image:image-token", { token: "image-token" }),
+      resource("sheet", "lark:sheet:sheet-token:sheet-1", { token: "sheet-token", "sheet-id": "sheet-1" }),
+      resource("base", "lark:base:base-token:table-1", { token: "base-token", "table-id": "table-1" }),
+      resource("whiteboard", "lark:whiteboard:board-token", { token: "board-token" }),
+    ];
+
+    const result = await materializeLarkResources({
+      resources,
+      runner: identityRunner,
+      policy,
+      identity: "bot",
+    });
+
+    expect(result.report.status).toBe("complete");
+    expect(identities.length).toBeGreaterThan(0);
+    expect(new Set(identities)).toEqual(new Set(["bot"]));
+  });
+
   test("downloads an image with its XML src token while preserving the block id as locator identity", async () => {
     mediaTokens.length = 0;
     const image = resource("image", "lark:image:stable-block-id", {

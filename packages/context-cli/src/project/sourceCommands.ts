@@ -267,6 +267,10 @@ Payload example:
 
 repo.module is required. file.module and lark.module are optional; when omitted,
 the CLI derives a lowercase path-safe module and rejects duplicate batch identities.
+repo.local is resolved from the Context project root. A valid local Git checkout
+lets the CLI infer origin and the current commit; remote/ref are needed only when
+that local identity cannot be resolved. If local is omitted, the CLI also accepts
+one uniquely named Git directory at <project-root>/<module> or ../<module>.
 `)
     .action(async (namespace: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);

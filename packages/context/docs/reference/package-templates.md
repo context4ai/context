@@ -41,7 +41,7 @@ kbPackage({
 llmsPackage({
   name: "component-lib-llms",
   template: "src/package-templates/llms",
-  select: { include: ["codegraph/component-lib/**"] },
+  select: { include: ["codeindex/component-lib/**"] },
 });
 ```
 
@@ -259,7 +259,7 @@ its pages instead of producing one index per path segment.
 The generated
 `dist/<package-name>/wikis/` tree is the required default
 KB entry surface. Internal collections are mapped into OKF roots during build:
-`codegraph`, `business`, and `product` go to `wikis/`; `architecture`, `sop`,
+`codeindex`, `business`, and `product` go to `wikis/`; `architecture`, `sop`,
 `faq`, `decision`, and `incident` go to `guides/`; `standards` and `test` go to
 `rules/`; and `feats` goes to `feats/`. Treat `wikis/` as the structured
 entity-and-relationship layer. Guides and rules may explain, operationalize,
@@ -307,17 +307,25 @@ wants project-specific behavior beyond knowledge lookup.
 
 ## Context OKF Profiles
 
-Approved Markdown under `knowledge/` is the production source of truth:
+Approved Markdown under `knowledge/` and its deterministic
+`knowledge/structure.yaml` projection form the authoring source of truth:
 
 - top-level YAML frontmatter uses OKF fields such as `type`, `title`,
   `description`, `tags`, `timestamp`, and `resource`;
-- Context production metadata such as `sources`, `node_type`, `visibility`,
-  `code_symbols`, relationship records, and `candidate_fingerprint` also lives
-  at the top level;
+- each Markdown page keeps reader fields, stable page identity, `sources`, and a
+  small recovery capsule (`resource`, `node_type`, containment fields, and
+  relationship mode);
+- large or repeated machine state such as complete `code_symbols`, code
+  evidence, relationship records, candidate fingerprints, and optimization
+  decisions lives once in the corresponding `structure.yaml` view record;
+- Context readers hydrate that machine state in memory before verify, audit,
+  revision, or build. Do not copy a compact page as a new page without using a
+  Context authoring command;
 - do not nest Context production metadata under `context`; fields such as
   `context.sources` and `context.code_symbols` are not part of the 0.6 profile;
 - section provenance lives in `<!-- context:section ... source_ref="..." -->`
-  comments;
+  comments. When a Section needs more than one citation, the CLI preserves the
+  complete set in its adjacent `context:source_refs` block;
 - do not add frontmatter `source_refs`; page-level provenance is derived from
   section source refs when needed;
 - do not add `context` or `schema` fields.
@@ -340,7 +348,7 @@ src-N#span:<heading-hint> L<start>-<end>@<span-hash>
 
 The code symbol form includes the source-relative file so same-name symbols in
 different files resolve to one exact symbol-index row. Consumers should still
-treat the complete `source_ref` as opaque. Production codegraph pages keep
+treat the complete `source_ref` as opaque. Production codeindex pages keep
 `candidate_fingerprint` at the top level and do not duplicate this evidence in
 `code_origin`.
 
@@ -392,8 +400,8 @@ current closed state.
 
 Before writing output, `context build` validates that rendered template paths
 are safe, unique, and do not collide with copied knowledge paths. For example,
-a template file that renders to `wikis/codegraph/foo.md` is rejected if
-selected knowledge such as `knowledge/codegraph/foo.md` maps to that same OKF
+a template file that renders to `wikis/codeindex/foo.md` is rejected if
+selected knowledge such as `knowledge/codeindex/foo.md` maps to that same OKF
 output path. Rename the template file or use `select.exclude` when the
 collision is intentional.
 

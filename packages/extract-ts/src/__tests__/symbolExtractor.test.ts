@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { EdgeSource, EdgeType, Grounding, Visibility } from "@c4a/core";
 import type { ManifestInfo } from "@c4a/extract";
 import { TypeScriptPlugin } from "../plugin.js";
+import { countLines } from "../symbolExtractorAst.js";
 import { getFixtureFs } from "./testUtils.js";
 
 describe("TypeScriptPlugin", () => {
+  test("reports non-empty physical LOC", () => {
+    expect(countLines("export const first = 1;\n\n  \n// contract\n")).toBe(2);
+  });
+
   test("extracts exported symbols through re-export chains and produces v2 relations", async () => {
     const fs = getFixtureFs("trace-project");
     const plugin = new TypeScriptPlugin();

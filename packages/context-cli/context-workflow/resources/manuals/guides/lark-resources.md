@@ -39,6 +39,13 @@ resources remain explicit in the capture report. Unknown non-empty XML blocks
 stay auditable in the raw XML and receive a warning; the CLI does not infer
 their meaning.
 
+Document and resource reads share one access identity. Context first uses the
+user identity; it falls back to the bot identity only when user credentials
+are unavailable, never when the source denies permission or reports missing
+scopes. This prevents a capture from mixing document text read by one identity
+with attachments read by another. A bot fallback is reported in the capture
+result and remains subject to the bot's own access boundary.
+
 ## Storage lifecycle
 
 Resources have three distinct locations:

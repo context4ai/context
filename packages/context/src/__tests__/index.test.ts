@@ -582,7 +582,7 @@ describe("@c4a/context SDK bootstrap", () => {
 
     expect(() =>
       extractTs({ source: sampleLib, collection: "invalid-collection" as never })
-    ).toThrow(/extractTs collection must be codegraph/);
+    ).toThrow(/extractTs collection must be codeindex or legacy codegraph/);
     try {
       extractTs({ source: sampleLib, collection: "codegraph", entries: [] });
       throw new Error("expected empty entries to fail");
@@ -621,7 +621,7 @@ describe("@c4a/context SDK bootstrap", () => {
     ).toThrow(/compileProse source must reference a file or lark source/);
     expect(() =>
       reviewValidity({ collection: "invalid-collection" as never })
-    ).toThrow(/reviewValidity collection must be one of codegraph, business, product, architecture, sop, faq, standards, decision, incident, test/);
+    ).toThrow(/reviewValidity collection must be one of codeindex, codegraph, business, product, architecture, sop, faq, standards, decision, incident, test, feats/);
     expect(() =>
       reviewValidity({ scope: "collection" as never })
     ).toThrow(/reviewValidity scope must be all/);
@@ -639,7 +639,11 @@ describe("@c4a/context SDK bootstrap", () => {
       "incident",
       "test",
     ]);
-    expect(MAINLINE_COLLECTIONS).toEqual(["codegraph", ...DOC_MAINLINE_COLLECTIONS]);
+    expect(MAINLINE_COLLECTIONS).toEqual([
+      "codeindex",
+      "codegraph",
+      ...DOC_MAINLINE_COLLECTIONS,
+    ]);
     expect(KNOWLEDGE_COLLECTIONS).toEqual([...MAINLINE_COLLECTIONS, "feats"]);
     expect(TOP_LEVEL_NAMESPACES).toEqual([...MAINLINE_COLLECTIONS, "feats"]);
     expect(OKF_ROOTS).toEqual(["guides", "rules", "wikis", "feats"]);

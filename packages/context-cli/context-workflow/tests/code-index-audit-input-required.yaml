@@ -26,12 +26,14 @@ state:
       declarations_complete: true
       plans_complete: true
       capability_clear: true
+      migration_required: false
       preview_current: true
       ownership_clear: true
       scale_clear: true
       batch_digest: null
       complete: true
       audit_input_required: true
+      audit_guidance_required: false
       audit_revision_required: false
       audit_resolved: false
     review: { gate_clear: true, batch_resolved: false }
@@ -41,4 +43,3 @@ expect:
   primaryReasonCode: route.extract.audit-input-required
   availability: requires-user
   gateResolution: user
-

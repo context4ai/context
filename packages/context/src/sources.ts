@@ -393,7 +393,7 @@ const parseRepoSourcesRegistry = (
     const existingNamespace = moduleNamespaces.get(entry.name);
     if (existingNamespace !== undefined && existingNamespace !== namespace) {
       throw new TypeError(
-        `Duplicate repo module ${JSON.stringify(entry.name)} across date batches ${existingNamespace} and ${namespace} in ${registryPath}; repo module names are project-wide codegraph identities`,
+        `Duplicate repo module ${JSON.stringify(entry.name)} across date batches ${existingNamespace} and ${namespace} in ${registryPath}; repo module names are project-wide code-index identities`,
       );
     }
     moduleNamespaces.set(entry.name, namespace);

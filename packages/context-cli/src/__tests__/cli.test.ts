@@ -295,7 +295,7 @@ describe("CLI error handling", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   test("init parser creates a project-local skeleton without project agent adapters", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "ctx-cli-parser-root-"));

@@ -1,13 +1,26 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "../project/approvedKnowledgeMetadata.js";
 
-export function writeApprovedGuide(
+export async function hydratedApprovedSource(project: string, sourceApprovedId: string): Promise<string> {
+  const relPath = `${sourceApprovedId}.md`;
+  return hydrateApprovedKnowledgeMarkdown({
+    content: readFileSync(join(project, "knowledge", relPath), "utf8"),
+    relPath,
+    metadata: await readApprovedKnowledgeMetadataIndex(project),
+  });
+}
+
+export async function writeApprovedGuide(
   project: string,
   sourceApprovedId: string,
   relPath = "domain/getting-started.md",
-): string {
+): Promise<string> {
   const outputPath = join(project, "knowledge", "sop", relPath);
-  const sourceContent = readFileSync(join(project, "knowledge", `${sourceApprovedId}.md`), "utf8");
+  const sourceContent = await hydratedApprovedSource(project, sourceApprovedId);
   const nodeRef = relPath.replace(/\.md$/u, "");
   const content = sourceContent
     .replace(/^title: .+$/mu, "title: Getting Started Guide")
@@ -22,13 +35,13 @@ export function writeApprovedGuide(
   return outputPath;
 }
 
-export function writeApprovedRule(
+export async function writeApprovedRule(
   project: string,
   sourceApprovedId: string,
   relPath = "domain/security.md",
-): string {
+): Promise<string> {
   const outputPath = join(project, "knowledge", "standards", relPath);
-  const sourceContent = readFileSync(join(project, "knowledge", `${sourceApprovedId}.md`), "utf8");
+  const sourceContent = await hydratedApprovedSource(project, sourceApprovedId);
   const nodeRef = relPath.replace(/\.md$/u, "");
   const content = sourceContent
     .replace(/^title: .+$/mu, "title: Security Standard")
@@ -43,13 +56,13 @@ export function writeApprovedRule(
   return outputPath;
 }
 
-export function writeApprovedFeature(
+export async function writeApprovedFeature(
   project: string,
   sourceApprovedId: string,
   relPath = "feature/experiments.md",
-): string {
+): Promise<string> {
   const outputPath = join(project, "knowledge", "feats", relPath);
-  const sourceContent = readFileSync(join(project, "knowledge", `${sourceApprovedId}.md`), "utf8");
+  const sourceContent = await hydratedApprovedSource(project, sourceApprovedId);
   const nodeRef = relPath.replace(/\.md$/u, "").replace(/^feature\//u, "action/");
   const content = sourceContent
     .replace(/^title: .+$/mu, "title: Experiment Feature")

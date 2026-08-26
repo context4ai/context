@@ -10,14 +10,26 @@ A source boundary is a user decision about which repositories, modules, or
 documents may become approved knowledge. It affects extraction scope,
 provenance, output paths, and freshness checks.
 
-Do not infer this boundary from the current directory, monorepo layout, package
-names, or Git remotes. Explain the decision in the user's language, obtain the
-specific paths or documents, then use the Context source schema and conditional
-registration command selected by the route. The command uses `--input -`; after
-the current conversation contains the required confirmation, send one YAML or
-JSON payload matching the selected schema to its standard input. Do not run the
-command before confirmation and do not replace it with a command remembered
-from another route.
+Do not infer this boundary by using the current directory, monorepo layout,
+package names, or Git remotes to select additional sources. Once the user has named a concrete local module
+or path, resolving its unique local directory and reading that checkout's Git
+root, `origin`, and current commit are mechanical identity resolution, not a
+new source-boundary decision. Paths in the registration payload are resolved
+from the Context project root; after initializing a child `context/` directory,
+recompute sibling paths from that root instead of reusing the caller's relative
+path. As a final CLI safeguard, an omitted `local` may resolve only to one Git
+directory named by the confirmed module at the project root or its parent; zero
+or multiple matches do not authorize a guess.
+
+Explain the decision in the user's language, obtain the specific paths or
+documents, then use the Context source schema and conditional registration
+command selected by the route. If the current user request already names the
+exact modules or documents, that decision is already present; do not ask for
+their remote URLs when a confirmed local Git checkout can supply them. The
+command names a file below `.tmp/agent-payloads/`; after the current
+conversation contains the required confirmation, write one JSON payload
+matching the selected schema to that exact path. Do not run the command before confirmation and do not replace
+it with a command remembered from another route.
 
 Context source identity has two parts:
 

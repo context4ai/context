@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { DEFAULT_PATH_FILTER } from "@c4a/core";
 import { detectModuleBoundaries, detectModules, scanSourceFiles } from "../scanner.js";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
@@ -17,9 +18,59 @@ describe("scanSourceFiles", () => {
     const files = await scanSourceFiles(repoBasic);
     expect(files).toEqual(["src/a.ts", "src/b.tsx"]);
   });
+
+  test("excludes colocated TSX test and spec files from the default denominator", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-tsx-test-filter-"));
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, "src", "component.tsx"), "export const Component = () => null;\n", "utf8");
+      await writeFile(join(root, "src", "component.test.tsx"), "export const testOnly = true;\n", "utf8");
+      await writeFile(join(root, "src", "component.spec.tsx"), "export const specOnly = true;\n", "utf8");
+      expect(await scanSourceFiles(root)).toEqual(["src/component.tsx"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("detectModules", () => {
+  test("counts non-empty physical LOC for the quality inventory denominator", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-non-empty-loc-"));
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, "package.json"), '{"name":"non-empty-loc"}\n', "utf8");
+      await writeFile(join(root, "src", "index.ts"), "export const first = 1;\n\n  \n// contract\n", "utf8");
+      const modules = await detectModules(root);
+      expect(modules[0]?.totalLines).toBe(2);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("returns complete identities for files removed by the configured code filter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-code-filter-inventory-"));
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, "package.json"), '{"name":"filter-inventory"}\n', "utf8");
+      await writeFile(join(root, "src", "index.ts"), "export const entry = true;\n", "utf8");
+      await writeFile(join(root, "src", "entry.test.ts"), "export const testOnly = true;\n", "utf8");
+      await writeFile(join(root, "src", "entry.spec.tsx"), "export const specOnly = true;\n", "utf8");
+      await writeFile(join(root, "src", "types.d.ts"), "export interface GeneratedType {}\n", "utf8");
+
+      const modules = await detectModules(root, undefined, DEFAULT_PATH_FILTER);
+      expect(modules).toEqual([{
+        name: "filter-inventory",
+        path: ".",
+        files: ["src/index.ts"],
+        excludedFiles: ["src/entry.spec.tsx", "src/entry.test.ts", "src/types.d.ts"],
+        fileCount: 1,
+        totalLines: 1,
+      }]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("detects monorepo modules including root", async () => {
     const modules = await detectModules(repoMonorepo);
 

@@ -84,7 +84,7 @@ export function registerCodeIndexAuditReviewCommand(review: Command): void {
         readFailureNext: "Fix the input path or pass --input - for stdin.",
         parseFailureNext: "Fix the context.code-index-audit-decision.v1 payload and retry.",
       });
-      const record = await applyCodeIndexAuditDecision({ projectRoot: root, payload });
+      const { record, report } = await applyCodeIndexAuditDecision({ projectRoot: root, payload });
       const graphPath = nextGraphPath(record.decision.decision);
       if (format === "json") {
         process.stdout.write(`${JSON.stringify({
@@ -97,9 +97,9 @@ export function registerCodeIndexAuditReviewCommand(review: Command): void {
         symbol: "✓",
         action: "code-index audit",
         subject: "decision",
-        headline: `${record.decision.decision} · ${record.report.summary.units} unit(s) · ${record.report.summary.elevated_signals} elevated signal(s)`,
+        headline: `${record.decision.decision} · ${report.summary.units} unit(s) · ${report.summary.elevated_signals} elevated signal(s)`,
         body: [
-          `- report digest → \`${record.report.digest}\``,
+          `- report digest → \`${report.digest}\``,
           `- reviewed units → ${record.decision.reviewed_units.join(", ")}`,
           `- summary → ${record.decision.summary}`,
           `- Graph path → ${graphPath.join(" → ")}`,

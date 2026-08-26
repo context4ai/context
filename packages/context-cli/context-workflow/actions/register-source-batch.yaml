@@ -3,5 +3,5 @@ id: register-source-batch
 description: Register the source batch explicitly confirmed in the current conversation.
 runner: command
 effect: write
-command: context source add batch --input - --format json
+command: context source add batch --input .tmp/agent-payloads/source-batch.json --format json
 inputSchema: schemas/source-batch-input.schema.json

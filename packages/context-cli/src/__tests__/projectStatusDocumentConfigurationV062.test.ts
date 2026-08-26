@@ -70,7 +70,7 @@ describe("0.6.2 document source and capture status routing", () => {
       expect(status.routing.command_plan).toEqual([
         {
           command: expect.stringContaining(
-            "source add batch --input - --format json",
+            "source add batch --input .tmp/agent-payloads/source-batch.json --format json",
           ),
           availability: "after-human-confirmation",
         },

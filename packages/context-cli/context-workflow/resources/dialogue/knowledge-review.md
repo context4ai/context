@@ -28,7 +28,7 @@ that exact phrase appears in the current conversation. Phrases such as `我批�
 `继续`, or `全部通过` do not invoke this escape path.
 
 Do not open Review for one page or module while another confirmed item in the
-same round is still being generated. If a repeat codegraph run has no delta,
+same round is still being generated. If a repeat codeindex run has no delta,
 state that existing approvals were preserved and no Review gate remains.
 
 When the user explicitly requested fully managed operation, use only the

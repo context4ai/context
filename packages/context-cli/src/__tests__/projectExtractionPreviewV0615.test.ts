@@ -73,7 +73,7 @@ async function initializeLargeProject(root: string, symbols: number): Promise<st
     'const large = source("20260712", "large-lib");',
     "export default defineProject({",
     "  sources: [large],",
-    '  phases: [extractTs({ source: large, collection: "codegraph" })],',
+    '  phases: [extractTs({ source: large, collection: "codeindex" })],',
     "  packages: [],",
     "});",
     "",
@@ -102,7 +102,7 @@ describe("0.6.15 extraction batch preview", () => {
       const project = await initializeLargeProject(root, 301);
       const batch = JSON.parse(await runCliInDir(project, [
         "run", "--preview-extraction-batch", "--preview-phase",
-        "extract:20260712/large-lib:codegraph", "--format", "json",
+        "extract:20260712/large-lib:codeindex", "--format", "json",
       ])) as {
         scaleClear: boolean;
         totals: { blocked: number; projectedPages: number };
@@ -124,7 +124,7 @@ describe("0.6.15 extraction batch preview", () => {
       });
       expect(existsSync(join(project, ".tmp/context-runtime/extract/previews/batch.json"))).toBe(true);
       await expect(runCliInDir(project, [
-        "run", "extract:20260712/large-lib:codegraph",
+        "run", "extract:20260712/large-lib:codeindex",
       ])).rejects.toMatchObject({
         detail: expect.objectContaining({ code: "extract-scale-limit-exceeded" }),
       });
@@ -150,7 +150,7 @@ describe("0.6.15 extraction batch preview", () => {
         totals: { warnings: 1, blocked: 0 },
       });
       expect(batch.phases[0]?.indexUnits[0]?.scale).toBe("warning");
-      await runCliInDir(project, ["run", "extract:20260712/large-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/large-lib:codeindex"]);
       expect(readCandidateRows(project)).toHaveLength(101);
     } finally {
       rmSync(root, { recursive: true, force: true });

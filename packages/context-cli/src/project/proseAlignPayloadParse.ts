@@ -113,7 +113,7 @@ function parseViewCollection(
     return undefined;
   }
   if (!isDocumentMainlineCollection(collection)) {
-    diagnostics.push(diagnostic("error", "schema.collection_invalid", "schema", `View collection must be one of ${DOC_MAINLINE_COLLECTIONS.join(", ")}. codegraph is produced by AST extraction and feats is not a prose align target.`, `views[${index}].collection`, {
+    diagnostics.push(diagnostic("error", "schema.collection_invalid", "schema", `View collection must be one of ${DOC_MAINLINE_COLLECTIONS.join(", ")}. codeindex (and legacy codegraph) is produced by code extraction and feats is not a prose align target.`, `views[${index}].collection`, {
       repair: { action: "choose_document_mainline_collection", allowed_collections: DOC_MAINLINE_COLLECTIONS },
     }));
     return undefined;

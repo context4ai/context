@@ -114,14 +114,14 @@ async function createExtractedProject(): Promise<{ root: string; project: string
     "export default defineProject({",
     "  sources: [sampleA],",
     "  phases: [",
-    '    extractTs({ source: sampleA, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
+    '    extractTs({ source: sampleA, collection: "codeindex" }),',
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [],",
     "});",
     "",
   ].join("\n"), "utf8");
-  await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+  await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
   const [row] = readRows(project);
   if (row === undefined) throw new Error("expected one extracted candidate");
   return { root, project, row };
@@ -132,7 +132,7 @@ describe("0.6.0 review runtime validation", () => {
     const { root, project, row } = await createExtractedProject();
     try {
       writeFileSync(candidateSnapshotPath(project, row.id), "{", "utf8");
-      const html = await invokeCliInDir(project, ["review", "html", "codegraph"]);
+      const html = await invokeCliInDir(project, ["review", "html", "codeindex"]);
       expect(html.status).not.toBe(0);
       expect(html.stderr).toContain("schema-invalid");
       expect(html.stderr).toContain("candidate snapshot is invalid JSON");
@@ -148,7 +148,7 @@ describe("0.6.0 review runtime validation", () => {
       writeFileSync(join(project, "review-payload.jsonl"), [
         JSON.stringify({
           schema: "context.review.decisions.v1",
-          collection: "codegraph",
+          collection: "codeindex",
           default: "approved",
           total: ids.length,
           counts: { approved: ids.length, rejected: 0 },
@@ -159,7 +159,7 @@ describe("0.6.0 review runtime validation", () => {
       ].join("\n"), "utf8");
       const apply = await invokeCliInDir(project, ["review", "apply", "review-payload.jsonl"]);
       expect(apply.status).not.toBe(0);
-      expect(apply.stderr).toContain("review payload decision is outside codegraph draft scope");
+      expect(apply.stderr).toContain("review payload decision is outside codeindex draft scope");
       expect(existsSync(join(project, "knowledge", row.path))).toBe(false);
       expect(readRows(project).map((candidate) => candidate.id)).toEqual([row.id]);
       expect(existsSync(candidateSnapshotPath(project, row.id))).toBe(true);
@@ -167,7 +167,7 @@ describe("0.6.0 review runtime validation", () => {
       writeFileSync(join(project, "duplicate-payload.jsonl"), [
         JSON.stringify({
           schema: "context.review.decisions.v1",
-          collection: "codegraph",
+          collection: "codeindex",
           default: "rejected",
           total: ids.length,
           counts: { approved: 1, rejected: ids.length - 1 },
@@ -184,7 +184,7 @@ describe("0.6.0 review runtime validation", () => {
       expect(readRows(project).map((candidate) => candidate.id)).toEqual([row.id]);
 
       writeFileSync(join(project, "unscoped-payload.jsonl"), [
-        JSON.stringify({ schema: "context.review.decisions.v1", collection: "codegraph", default: "rejected" }),
+        JSON.stringify({ schema: "context.review.decisions.v1", collection: "codeindex", default: "rejected" }),
         JSON.stringify({ candidate_id: row.id, status: "approved" }),
         "",
       ].join("\n"), "utf8");
@@ -217,7 +217,7 @@ describe("0.6.0 review runtime validation", () => {
       writeFileSync(join(project, "review-payload.jsonl"), [
         JSON.stringify({
           schema: "context.review.decisions.v1",
-          collection: "codegraph",
+          collection: "codeindex",
           default: "approved",
           total: ids.length,
           counts: { approved: 1, rejected: 0 },
@@ -250,7 +250,7 @@ describe("0.6.0 review runtime validation", () => {
       const stalePayload = await invokeCliInDir(project, ["review", "apply", "review-payload.jsonl"]);
       expect(stalePayload.status).not.toBe(0);
       expect(stalePayload.stderr).toContain("review payload is stale");
-      const repeat = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      const repeat = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
       expect(repeat.status).not.toBe(0);
       expect(repeat.stderr).toContain("outside scoped draft candidates");
       expect(readFileSync(approvedPath, "utf8")).toBe(approved);
@@ -265,7 +265,7 @@ describe("0.6.0 review runtime validation", () => {
       const ids = [row.id];
       writeFileSync(join(project, "review-payload.json"), `${JSON.stringify({
         schema: "context.review.decisions.v1",
-        collection: "codegraph",
+        collection: "codeindex",
         default: "approved",
         total: ids.length,
         counts: { approved: ids.length, rejected: 0 },

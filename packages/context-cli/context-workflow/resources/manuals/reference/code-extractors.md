@@ -104,7 +104,7 @@ configuration problem, not a Review decision.
 
 If no current capability can parse the source reliably, stop at configuration
 and report the missing generic capability. Do not silently emit an empty
-codegraph or reuse an unrelated parser.
+codeindex or reuse an unrelated parser.
 
 ## Plan Before Parsing
 
@@ -114,7 +114,7 @@ application, adapter, CLI/tool, monorepo container, derived source,
 authoritative contract source, or unknown.
 A hybrid module may declare several `moduleTypes` and several behavior `facets`;
 keep one primary `moduleType` for concise reports. Record inspected paths in
-`moduleTypeEvidence`, then read all matching Route-recommended files below
+`moduleTypeEvidence`, record every Markdown file actually read in `documents`, then read all matching Route-recommended files below
 `resources/semantic/code-index/templates/` and combine them into one plan.
 After that, choose exactly one closed output profile: `module-map`,
 `application-map`, `protocol-index`, `service-boundary`, `runtime-map`,
@@ -136,8 +136,9 @@ selected symbol and permits one owning index unit per source. Use it for an
 intentional granular public reference. Use `extractCustom()` for module-level
 aggregation, registries, protocol indexes, cross-module flows, or multiple
 candidate owners over one source; each candidate declares its `module` and
-evidence-scoped `sections`. Each section's typed coverage and exact evidence is
-checked against the output profile during preview. Resolve repositories from
+at least one evidence-scoped `section`; there is no page-level Markdown
+fallback. Each section's typed coverage and exact evidence is checked against
+the output profile during preview. Resolve repositories from
 the extractor context's `sources[].absolutePath`, never from a
 machine-specific checkout path. Cross-module flow output must also emit
 source-backed structured edges. Generated clients/models, mirrored sources, legacy

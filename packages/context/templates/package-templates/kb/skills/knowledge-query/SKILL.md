@@ -29,7 +29,7 @@ as evidence rather than relying on memory or frontmatter summaries.
 
 | Root | Use |
 |---|---|
-| `{{wikisRoot}}/` | Structured entities and relationships from codegraph, business, and product knowledge. |
+| `{{wikisRoot}}/` | Structured entities and relationships from codeindex, business, and product knowledge. |
 | `{{guidesRoot}}/` | Architecture, procedures, FAQs, decisions, incidents, and troubleshooting. |
 | `{{rulesRoot}}/` | Standards, constraints, acceptance criteria, and test scenarios. |
 | `{{featsRoot}}/` | Feature knowledge when selected into the package. |

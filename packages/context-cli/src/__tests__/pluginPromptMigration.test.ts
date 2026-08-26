@@ -144,6 +144,8 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(source).toContain("calendar date identifies one capture batch");
     expect(source).toContain("module identifies one concrete");
     expect(source).toContain("Do not infer this boundary");
+    expect(source).toContain("mechanical identity resolution");
+    expect(source).toContain("do not ask for\ntheir remote URLs");
     expect(source).toContain("separate authority");
     expect(capture).toContain("does not classify, summarize, approve, or build");
     expect(capture).toContain("Never hand-write or repair captured snapshots");

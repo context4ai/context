@@ -451,19 +451,6 @@ export function packageBuildInventory(input: {
       })),
       collections: collectionSummaries,
     },
-    ...(input.documentOptimization === undefined
-      ? {}
-      : {
-          document_optimization: {
-            enabled: input.documentOptimization.enabled,
-            policy: input.documentOptimization.policy,
-            current: input.documentOptimization.current,
-            revision_pages: input.documentOptimization.revision_pages,
-            eligible_fragments: input.documentOptimization.eligible_fragments,
-            revised_fragments: input.documentOptimization.revised_fragments,
-            kept_fragments: input.documentOptimization.kept_fragments,
-          },
-        }),
     ...(input.codeIndexAudit === undefined
       ? {}
       : {

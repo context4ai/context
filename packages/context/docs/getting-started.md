@@ -186,8 +186,8 @@ For a monorepo or subspace, choose the boundary deliberately:
 The long-term multi-module knowledge shape is stable across capture dates:
 
 ```text
-knowledge/codegraph/module-a/...
-knowledge/codegraph/module-b/...
+knowledge/codeindex/module-a/...
+knowledge/codeindex/module-b/...
 ```
 
 The CLI records each module's git root and subpath, then materializes
@@ -274,8 +274,8 @@ const componentLib = source("20260712", "component-lib");
 export default defineProject({
   sources: [componentLib],
   phases: [
-    extractTs({ source: componentLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
+    extractTs({ source: componentLib, collection: "codeindex" }),
+    reviewValidity({ collection: "codeindex" }),
   ],
   packages: [],
 });
@@ -285,8 +285,8 @@ Inspect and run:
 
 ```bash
 context run --list
-context run extract:20260712/component-lib:codegraph --dry-run
-context run extract:20260712/component-lib:codegraph
+context run extract:20260712/component-lib:codeindex --dry-run
+context run extract:20260712/component-lib:codeindex
 ```
 
 When operating through an Agent, use `--dry-run --format json` as the CLI
@@ -298,11 +298,11 @@ Treat that preview as a structural scope check before producing draft
 candidates; the CLI does not decide which symbols are important to a business
 or audience.
 
-The codegraph path keeps the stable module identity. The date stays in the repo
+The codeindex path keeps the stable module identity. The date stays in the repo
 source ref and phase id, not in the knowledge path:
 
 ```text
-knowledge/codegraph/<module>/symbol/<slug>.md
+knowledge/codeindex/<module>/symbol/<slug>.md
 ```
 
 Show the tree/path preview to the user before first extraction and describe it
@@ -423,8 +423,8 @@ const componentLib = source("20260712", "component-lib");
 export default defineProject({
   sources: [componentLib],
   phases: [
-    extractTs({ source: componentLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
+    extractTs({ source: componentLib, collection: "codeindex" }),
+    reviewValidity({ collection: "codeindex" }),
   ],
   packages: [
     kbPackage({
@@ -433,7 +433,7 @@ export default defineProject({
         path: "src/package-templates/kb",
         vars: { displayName: "Component Library KB" },
       },
-      select: { include: ["codegraph/component-lib/**"] },
+      select: { include: ["codeindex/component-lib/**"] },
     }),
   ],
 });
@@ -446,7 +446,7 @@ of the agent knowledge-base package:
 llmsPackage({
   name: "component-lib-llms",
   template: "src/package-templates/llms",
-  select: { include: ["codegraph/component-lib/**"] },
+  select: { include: ["codeindex/component-lib/**"] },
 });
 ```
 

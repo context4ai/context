@@ -27,6 +27,11 @@ import {
 } from "./codegraphRelationshipProjection.js";
 import { STRUCTURE_FILE as LIFECYCLE_STRUCTURE_PATH } from "./proseCompileConstants.js";
 import { parseApprovedStructureSourceInputs } from "./approvedStructureInputs.js";
+import {
+  approvedKnowledgeMetadataIndex,
+  compactApprovedKnowledgeMarkdown,
+  hydrateApprovedKnowledgeMarkdown,
+} from "./approvedKnowledgeMetadata.js";
 
 const APPROVED_STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const APPROVED_STRUCTURE_SCHEMA_VERSION = "context.approved-structure.v1";
@@ -302,7 +307,10 @@ function validateApprovedStructureShape(input: {
   }
 }
 
-async function approvedStructureProjection(projectRoot: string): Promise<{
+async function approvedStructureProjection(
+  projectRoot: string,
+  parsedStructure?: Record<string, unknown>,
+): Promise<{
   inputFiles: ApprovedStructureInputFile[];
   nodes: Array<{ nodeRef: string; title: string; nodeType: string; summary?: string; tags?: string[] }>;
   views: ApprovedStructureViewProjection[];
@@ -315,11 +323,16 @@ async function approvedStructureProjection(projectRoot: string): Promise<{
   const codeEdges: Array<Record<string, unknown>> = [];
   for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
-    const content = await readFile(file.absPath, "utf8");
-    if (isDeprecatedApprovedMarkdown(content)) continue;
+    const rawContent = await readFile(file.absPath, "utf8");
+    if (isDeprecatedApprovedMarkdown(rawContent)) continue;
+    const content = hydrateApprovedKnowledgeMarkdown({
+      content: rawContent,
+      relPath: file.relPath,
+      metadata: approvedKnowledgeMetadataIndex(parsedStructure),
+    });
     approvedFiles.push({
       relPath: file.relPath,
-      content,
+      content: compactApprovedKnowledgeMarkdown(rawContent),
     });
     const parts = file.relPath.split("/");
     if (parts.length < 2) continue;
@@ -688,7 +701,7 @@ export async function validateApprovedStructureEdges(input: {
 }): Promise<void> {
   const parsed = await readApprovedStructureForVerify(input);
   if (parsed === undefined) return;
-  const approvedProjection = await approvedStructureProjection(input.projectRoot);
+  const approvedProjection = await approvedStructureProjection(input.projectRoot, parsed);
   const endpointRefs = approvedStructureEndpointRefs(approvedProjection);
   const endpointContexts = approvedStructureEndpointContexts(approvedProjection);
   let confirmedEdges: Array<Record<string, unknown>> | null = null;
@@ -728,6 +741,18 @@ export async function validateApprovedStructureEdges(input: {
         files: approvedProjection.inputFiles,
         edges: expectedEdges,
         sourceInputs,
+        metadata: Array.isArray(parsed.views)
+          ? parsed.views.filter(isRecord).map((view) => ({
+              view_ref: view.view_ref,
+              node_type: view.node_type,
+              ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
+              ...(view.generated === undefined ? {} : { generated: view.generated }),
+              ...(view.children === undefined ? {} : { children: view.children }),
+              ...(view.relationship_mode === undefined ? {} : { relationship_mode: view.relationship_mode }),
+              ...(view.source_orphaned === undefined ? {} : { source_orphaned: view.source_orphaned }),
+              ...(view.machine === undefined ? {} : { machine: view.machine }),
+            }))
+          : [],
       });
   validateApprovedStructureShape({
     parsed,

@@ -5,6 +5,7 @@ export { KNOWLEDGE_COLLECTIONS };
 export type OkfOutputRoot = "wikis" | "guides" | "rules" | "feats";
 
 const OKF_TYPE_BY_COLLECTION: Record<KnowledgeCollection, string> = {
+  codeindex: "Wiki",
   codegraph: "Wiki",
   business: "Wiki",
   product: "Wiki",
@@ -19,6 +20,7 @@ const OKF_TYPE_BY_COLLECTION: Record<KnowledgeCollection, string> = {
 };
 
 const OKF_ROOT_BY_COLLECTION: Record<KnowledgeCollection, OkfOutputRoot> = {
+  codeindex: "wikis",
   codegraph: "wikis",
   business: "wikis",
   product: "wikis",

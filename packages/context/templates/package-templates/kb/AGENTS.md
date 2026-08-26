@@ -18,7 +18,7 @@ Selected OKF root directories such as `{{wikisRoot}}/`, `{{guidesRoot}}/`,
 `{{rulesRoot}}/`, and `{{featsRoot}}/` follow an OKF-compatible Context profile:
 OKF fields and Context extension fields stay at the top level, and no `context`
 or `schema` field is emitted. Root mapping:
-`{{wikisRoot}}/` maps from structured `codegraph`, `business`, and `product` knowledge;
+`{{wikisRoot}}/` maps from structured `codeindex`, `business`, and `product` knowledge;
 `{{guidesRoot}}/` maps from `architecture`, `sop`, `faq`, `decision`, and `incident`;
 `{{rulesRoot}}/` maps from `standards` and `test`; `{{featsRoot}}/` maps from `feats`. Treat
 `{{wikisRoot}}/` as the entity-and-relationship layer; guides and rules may

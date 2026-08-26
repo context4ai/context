@@ -4,8 +4,14 @@ import { candidateIdFromViewRef } from "./candidateIdentity.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { parseLocalCodeSymbolSourceRef } from "./codeSymbolSourceRef.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 export interface ApprovedCodegraphPage {
+  collection: "codeindex" | "codegraph";
   candidateId: string;
   nodeRef: string;
   viewRef: string;
@@ -55,7 +61,7 @@ function codeSymbolParts(frontmatter: Record<string, unknown>): { module: string
 function approvedPageIdentity(
   frontmatter: Record<string, unknown>,
   sourceNames: ReadonlySet<string>,
-): { nodeRef: string; viewRef: string; sourceName: string } | undefined {
+): { nodeRef: string; viewRef: string; sourceName: string; collection: "codeindex" | "codegraph" } | undefined {
   const viewRef = stringValue(frontmatter.view_ref);
   const nodeRef = stringValue(frontmatter.node_ref);
   const sourceName = sourceNameFrom(frontmatter);
@@ -63,10 +69,10 @@ function approvedPageIdentity(
     viewRef === undefined ||
     nodeRef === undefined ||
     sourceName === undefined ||
-    !viewRef.startsWith("codegraph:") ||
+    !isCodeIndexCollection(viewRef.split(":", 1)[0] ?? "") ||
     !sourceNames.has(sourceName)
   ) return undefined;
-  return { nodeRef, viewRef, sourceName };
+  return { nodeRef, viewRef, sourceName, collection: viewRef.startsWith("codeindex:") ? "codeindex" : "codegraph" };
 }
 
 function approvedCodeEvidence(
@@ -106,10 +112,17 @@ export async function readApprovedCodegraphPages(input: {
   projectRoot: string;
   sourceNames: ReadonlySet<string>;
 }): Promise<ApprovedCodegraphPage[]> {
-  const root = join(input.projectRoot, "knowledge", "codegraph");
   const pages: ApprovedCodegraphPage[] = [];
-  for (const file of await walkApprovedMarkdown(root)) {
-    const content = await readFile(file.absPath, "utf8");
+  const metadata = await readApprovedKnowledgeMetadataIndex(input.projectRoot);
+  for (const collection of ["codeindex", "codegraph"] as const) {
+    const root = join(input.projectRoot, "knowledge", collection);
+    for (const file of await walkApprovedMarkdown(root)) {
+    const relPath = `${collection}/${file.relPath}`;
+    const content = hydrateApprovedKnowledgeMarkdown({
+      content: await readFile(file.absPath, "utf8"),
+      relPath,
+      metadata,
+    });
     const frontmatter = parseFrontmatterLoose(content);
     const identity = approvedPageIdentity(frontmatter, input.sourceNames);
     if (identity === undefined) continue;
@@ -117,10 +130,11 @@ export async function readApprovedCodegraphPages(input: {
     if (evidence === undefined) continue;
 
     pages.push({
+      collection: identity.collection,
       candidateId: candidateIdFromViewRef(identity.viewRef),
       nodeRef: identity.nodeRef,
       viewRef: identity.viewRef,
-      path: `codegraph/${file.relPath}`,
+      path: relPath,
       absPath: file.absPath,
       title: stringValue(frontmatter.title) ?? evidence.symbol,
       kind: evidence.kind,
@@ -130,6 +144,7 @@ export async function readApprovedCodegraphPages(input: {
       sourceRef: evidence.sourceRef,
       ...(evidence.candidateFingerprint !== undefined ? { candidateFingerprint: evidence.candidateFingerprint } : {}),
     });
+    }
   }
   return pages.sort((left, right) => left.candidateId.localeCompare(right.candidateId));
 }

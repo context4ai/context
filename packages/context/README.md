@@ -58,8 +58,8 @@ const sampleLib = source("20260712", "sample-lib");
 export default defineProject({
   sources: [sampleLib],
   phases: [
-    extractTs({ source: sampleLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
+    extractTs({ source: sampleLib, collection: "codeindex" }),
+    reviewValidity({ collection: "codeindex" }),
   ],
   packages: [
     kbPackage({
@@ -68,7 +68,7 @@ export default defineProject({
         path: "src/package-templates/kb",
         vars: { displayName: "Sample Library KB" },
       },
-      select: { collections: ["codegraph"], okfRoots: ["wikis"] },
+      select: { collections: ["codeindex"], okfRoots: ["wikis"] },
     }),
   ],
 });
@@ -86,7 +86,7 @@ maintain this declaration from the user's requirements.
 |---|---|
 | `defineProject()` | Declares the complete project graph. |
 | `source()` and `allSources()` | References registered repo, file, or Lark source boundaries. |
-| `extractTs()` | Extracts TypeScript/TSX symbols and relationships into `codegraph` candidates. |
+| `extractTs()` | Extracts TypeScript/TSX symbols and relationships into `codeindex` candidates. |
 | `extractCustom()` | Runs a project-owned code extractor while Context owns candidate, evidence, freshness, and Review state. |
 | `alignProse()` and `compileProse()` | Structures document evidence and compiles source-bound knowledge candidates. |
 | `reviewValidity()` | Declares the review gate for one collection or the project. |
@@ -120,7 +120,7 @@ Approved Markdown is organized under `knowledge/<collection>/`:
 
 | Collection | What it contains | Typical sources |
 |---|---|---|
-| `codegraph` | Code symbols, modules, and relationships | Code repositories |
+| `codeindex` | Code symbols, modules, and relationships | Code repositories |
 | `business` | Business concepts, roles, and relationships | Business and Lark documents |
 | `product` | Product capabilities and behavior | Product and requirement documents |
 | `architecture` | System structure and design explanations | Architecture and design documents |

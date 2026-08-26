@@ -22,7 +22,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "optimize-docs status", view: "production-semantic", handles: ["optimization_status", "pending_count", "conflict_count"], notes: "Reports fragment eligibility, revision freshness, and manual edit conflicts." },
   { command: "optimize-docs validate", view: "production-semantic", handles: ["optimization_status", "conflict_count"], notes: "Validates revision pages and reconciles safe manual edits without modifying approved knowledge." },
   { command: "optimize-docs plan", view: "production-semantic", handles: ["view_ref", "section_id", "source_ref", "input_payload"], notes: "Returns the digest-bound fragment batch that requires conservative Agent optimization." },
-  { command: "optimize-docs apply", view: "production-semantic", handles: ["decision_payload", "optimization_status"], notes: "Atomically applies one complete digest-bound batch of keep or replace decisions." },
+  { command: "optimize-docs apply", view: "production-semantic", handles: ["decision_payload", "optimization_status"], notes: "Atomically applies one complete digest-bound batch of keep, repair, reshape, or omit decisions." },
   { command: "optimize-docs revise", view: "production-semantic", handles: ["view_ref", "revision_status", "next_command"], notes: "Compatibility entry for starting one source-faithful conversational correction." },
   { command: "optimize-docs revise-current", view: "production-semantic", handles: ["view_ref", "section_id", "revision_status", "next_command"], notes: "Returns the active correction target and its validation step." },
 
@@ -34,6 +34,8 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "package template", view: "production-semantic", handles: ["package_name", "template_status"], notes: "Package template review namespace." },
   { command: "package template accept", view: "production-semantic", handles: ["package_name", "template_status"], notes: "Explicitly accepts an unchanged generated starter template." },
   { command: "run", view: "production-semantic", handles: ["phase_id", "view", "source_ref", "node_ref", "view_ref", "input_payload"], notes: "Inspects, validates, stages, or executes declared project phases." },
+  { command: "migrate", view: "production-semantic", handles: ["migration_status"], notes: "Workspace protocol migration namespace." },
+  { command: "migrate codeindex", view: "production-semantic", handles: ["migration_status", "rewritten_files", "next_command"], notes: "Migrates one legacy codegraph workspace to the current codeindex protocol under the project write lock." },
   { command: "review", view: "production-semantic", handles: ["candidate_id", "review_status"], notes: "Review namespace for draft project candidates." },
   { command: "review html", view: "production-semantic", handles: ["candidate_id", "review_status", "source_ref"], notes: "Renders self-contained review UI and copyable review payload." },
   { command: "review list", view: "production-semantic", handles: ["candidate_id", "review_status"], notes: "Lists draft candidates without reading workspace files directly." },

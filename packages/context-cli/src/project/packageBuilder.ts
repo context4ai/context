@@ -13,6 +13,7 @@ import {
   type RuntimeEventPendingAgentHint,
 } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
+import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 import {
   packageBuildInventory,
   packageScopedKnowledgeStructure,
@@ -70,6 +71,10 @@ import {
 import { projectDocumentOptimizedKnowledge } from "./documentOptimization.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { packageCodeIndexAudit } from "./codeIndexAuditPackage.js";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 export interface ProjectBuildResult {
   projectRoot: string;
@@ -125,7 +130,9 @@ function packageAuditInventoryReference(report: Record<string, unknown> | undefi
 }
 
 function packageSelectsCodeIndex(selected: readonly ApprovedKnowledgeFile[]): boolean {
-  return selected.some((file) => file.relPath.startsWith("codegraph/"));
+  return selected.some((file) =>
+    file.relPath.startsWith("codeindex/") || file.relPath.startsWith("codegraph/")
+  );
 }
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
@@ -155,12 +162,17 @@ function packageFingerprintPath(projectRoot: string, pkg: PackageDefinition): st
 }
 
 export async function listApprovedKnowledge(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
+  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   const files = await walkPackageFiles(join(projectRoot, KNOWLEDGE_ROOT));
   const knowledge = await Promise.all(files
     .filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/"))
     .map(async (file) => ({
       ...file,
-      content: await readFile(file.absPath, "utf8"),
+      content: hydrateApprovedKnowledgeMarkdown({
+        content: await readFile(file.absPath, "utf8"),
+        relPath: file.relPath,
+        metadata,
+      }),
     })));
   return knowledge.filter((file) => !isDeprecatedKnowledge(file.content));
 }
@@ -429,6 +441,13 @@ export async function collectPackageFreshness(
 }
 
 export async function buildProjectPackages(projectRoot: string): Promise<ProjectBuildResult> {
+  if (await legacyCodeIndexMigrationRequired(projectRoot)) {
+    throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
+      category: ErrorCategory.WorkspaceStateInvalid,
+      reason_code: "package/codeindex-migration-required",
+      next: "Run context status --format json and execute the Route-returned context migrate codeindex command.",
+    });
+  }
   const loaded = await loadContextProjectModule(projectRoot);
   const packages = loaded.project.packages;
   if (packages.length === 0) {

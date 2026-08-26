@@ -278,7 +278,7 @@ function initCommand(input: ProjectInitInput, allowNonempty: boolean): string {
 
 async function assertInitTargetAllowed(input: ProjectInitInput, projectRoot: string): Promise<void> {
   if (!existsSync(projectRoot) || isContextProjectRoot(projectRoot) || input.allowNonempty === true) return;
-  const entries = (await readdir(projectRoot)).sort();
+  const entries = (await readdir(projectRoot)).filter((entry) => entry !== ".git").sort();
   if (entries.length === 0) return;
   const command = initCommand(input, true);
   throw new ContextError(ExitCode.UserError, "init target is non-empty and is not a Context workspace", {

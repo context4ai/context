@@ -49,6 +49,17 @@ describe("0.6.6 close structure projection verification", () => {
         "relationship_mode: source-backed-ast",
         "sources:",
         "  - repo:20260809/sample",
+        "visibility: exported",
+        "code_symbols:",
+        `  - sample|${input.name.toLowerCase()}|function`,
+        "candidate_fingerprint: fixture-fingerprint",
+        "context_optimization:",
+        "  enabled: true",
+        "  sections:",
+        "    overview:",
+        "      policy_digest: policy-a",
+        "    details:",
+        "      policy_digest: policy-a",
         ...(input.edge ? [
           "code_edges:",
           "  - type: depends_on",
@@ -73,6 +84,7 @@ describe("0.6.6 close structure projection verification", () => {
       const structurePath = join(projectRoot, "knowledge", "structure.yaml");
       const first = YAML.parse(readFileSync(structurePath, "utf8")) as {
         edges: Array<{ type: string; from: string; to: string }>;
+        views: Array<{ view_ref: string; machine?: Record<string, unknown> }>;
         relationship_coverage?: unknown;
       };
       expect(first.edges).toEqual([expect.objectContaining({
@@ -81,6 +93,16 @@ describe("0.6.6 close structure projection verification", () => {
         to: "sample/symbol/format",
       })]);
       expect(first.relationship_coverage).toBeUndefined();
+      const compactPage = readFileSync(join(knowledgeRoot, "render.md"), "utf8");
+      expect(compactPage).not.toContain("code_symbols:");
+      expect(compactPage).not.toContain("candidate_fingerprint:");
+      expect(compactPage).not.toContain("context_optimization:");
+      const machine = first.views.find((view) => view.view_ref.endsWith("/render"))?.machine;
+      expect(machine).toMatchObject({
+        candidate_fingerprint: "fixture-fingerprint",
+        code_symbol_table: { module: "sample", entries: ["render|function"] },
+        context_optimization: { policy_digest: "policy-a" },
+      });
 
       writeFileSync(join(knowledgeRoot, "render.md"), page({ name: "Render" }), "utf8");
       await writeApprovedStructureProjection(projectRoot);

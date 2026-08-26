@@ -7,6 +7,7 @@ import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentOptimizationCommands } from "./commands/documentOptimizationCommands.js";
 import { registerCodeIndexAuditReviewCommand } from "./commands/codeIndexAuditCommands.js";
+import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
 import { ContextError } from "./lib/errors.js";
@@ -44,6 +45,8 @@ import {
 } from "./registerProjectLifecycleCommands.js";
 import { registerPluginCommands } from "./registerPluginCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
+import { migrateLegacyCodeIndexIfRequired } from "./project/codeIndexMigration.js";
+import { findContextProjectRoot } from "./project/workspace.js";
 
 const TOP_LEVEL_COMMANDS = new Set([
   "entry",
@@ -62,9 +65,18 @@ const TOP_LEVEL_COMMANDS = new Set([
   "debug",
   "revise",
   "optimize-docs",
+  "migrate",
   "logs",
   "help",
 ]);
+
+const DIRECT_CODE_INDEX_MIGRATION_COMMANDS = new Set(["review", "close", "verify", "build", "run"]);
+
+function topLevelActionName(root: Command, action: Command): string | undefined {
+  let current: Command | null = action;
+  while (current.parent !== null && current.parent !== root) current = current.parent;
+  return current.parent === root ? current.name() : undefined;
+}
 
 function inferErrorCategory(message: string): string {
   const lower = message.toLowerCase();
@@ -219,19 +231,27 @@ export function createCliProgram(): Command {
       new Option("--workflow-resource-receipts <json-or-@file>")
         .hideHelp(),
     );
-  program.hook("preAction", async (rootCommand) => {
+  program.hook("preAction", async (rootCommand, actionCommand) => {
     const options = rootCommand.opts() as Record<string, unknown>;
-    if (typeof options.workflowRevision !== "string") return;
-    const authorities = contextWorkflowAuthorities({
-      managed: options.workflowManaged === true,
-      authorities: workflowAuthorities(options.workflowAuthority),
-    });
-    await assertProjectWorkflowRevision({
-      cwd: process.cwd(),
-      expectedRevision: options.workflowRevision,
-      managed: options.workflowManaged === true,
-      authorities,
-    });
+    if (typeof options.workflowRevision === "string") {
+      const authorities = contextWorkflowAuthorities({
+        managed: options.workflowManaged === true,
+        authorities: workflowAuthorities(options.workflowAuthority),
+      });
+      await assertProjectWorkflowRevision({
+        cwd: process.cwd(),
+        expectedRevision: options.workflowRevision,
+        managed: options.workflowManaged === true,
+        authorities,
+      });
+      return;
+    }
+    const commandName = topLevelActionName(rootCommand, actionCommand);
+    if (commandName === undefined || !DIRECT_CODE_INDEX_MIGRATION_COMMANDS.has(commandName)) return;
+    const actionOptions = actionCommand.opts() as Record<string, unknown>;
+    if (commandName === "run" && actionOptions.managed === true) return;
+    const project = findContextProjectRoot(process.cwd());
+    if (project !== null) await migrateLegacyCodeIndexIfRequired(project.projectRoot);
   });
   const baseHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => `${headerHelpText()}${baseHelpInformation()}${quickstartHelpText()}`;
@@ -242,6 +262,7 @@ export function createCliProgram(): Command {
 
   registerDebugCommands(program);
   registerDocumentOptimizationCommands(program);
+  registerCodeIndexMigrationCommands(program);
 
   registerContextWorkflowResourceCommands(program);
   registerPackageCommands(program);

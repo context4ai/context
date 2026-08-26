@@ -99,6 +99,8 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
     audit_resolved: boolean;
     audit_revision_required: boolean;
     audit_input_required: boolean;
+    audit_guidance_required: boolean;
+    migration_required: boolean;
   };
   documents: {
     classified: boolean;
@@ -166,6 +168,7 @@ export interface ContextWorkflowObservation {
   pendingExtractPhases: readonly string[];
   extractionPreview?: ExtractionPreviewState;
   codeIndexAudit?: CodeIndexAuditStatus;
+  codeIndexMigrationRequired?: boolean;
   pendingCaptureCommands: readonly string[];
   missingCaptureSources: readonly DocumentSourceStatus[];
   evidenceWarnings: EvidenceWarningState;

@@ -3,6 +3,7 @@ import type {
   CodeIndexCapabilityGap,
   CodeIndexCoverageKind,
   CodeIndexInspectionFinding,
+  CodeIndexInspectionInventory,
   CodeIndexModuleFacet,
   CodeIndexModuleType,
   CodeIndexOutputProfile,
@@ -65,7 +66,7 @@ export interface ExtractTsRunResult {
     sourceState: "first-run" | "changed" | "unchanged";
   };
   next_action: {
-    kind: "continue-codegraph-batch" | "continue-automatically";
+    kind: "continue-code-index-batch" | "continue-automatically";
     command: string;
     message: string;
   };
@@ -158,6 +159,7 @@ export interface ExtractCustomPhasePreview {
   inspection: {
     findings: CodeIndexInspectionFinding[];
     capabilityGaps: CodeIndexCapabilityGap[];
+    inventories: CodeIndexInspectionInventory[];
     structuralProbes: ExtractionStructuralProbe[];
   };
   totals: {
@@ -224,6 +226,7 @@ export interface ExtractionIndexUnitPreview {
   moduleTypes: CodeIndexModuleType[];
   facets: CodeIndexModuleFacet[];
   moduleTypeEvidence: string[];
+  documents: string[];
   outputProfile: CodeIndexOutputProfile;
   capability: CodeIndexCapability;
   plan: "declared" | "inferred";
@@ -256,9 +259,47 @@ export interface ExtractionIndexUnitPreview {
     sampled: boolean;
     topPages: Array<{ path: string; bytes: number }>;
   };
+  inventory: ExtractionIndexInventoryPreview;
   structuralCoverage?: ExtractionStructuralCoverage;
   semanticCoverage?: ExtractionSemanticCoverage;
   risks: string[];
+}
+
+export interface ExtractionIndexInventoryPreview {
+  basis: "ast" | "evidence-only";
+  eligibleFiles: number;
+  analyzedFiles: number;
+  eligibleFileTargets: string[];
+  analyzedFileTargets: string[];
+  eligibleLoc: number;
+  analyzedLoc: number;
+  documentsDiscovered: number;
+  documentsRead: number;
+  documentTargets: string[];
+  rootDocumentTargets: string[];
+  readDocumentTargets: string[];
+  referencedDocumentTargets: string[];
+  symbolsDiscovered: number;
+  symbolsAnalyzed: number;
+  targetSymbols: number;
+  exportedSymbols: number;
+  targetSymbolIdentities: string[];
+  exportedTargetIdentities: string[];
+  entryTargets: string[];
+  protocolTargets: string[];
+  boundaryTargets: Array<{
+    kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
+    identity: string;
+  }>;
+  coveredBoundaryTargets: Array<{
+    kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
+    identity: string;
+  }>;
+  excludedFiles: number;
+  excludedFileTargets: string[];
+  excludedReasons: string[];
+  parserSkippedFiles: number;
+  parserSkippedFileTargets: string[];
 }
 
 export interface ExtractionBatchPreview {

@@ -141,7 +141,7 @@ Use collection routing first:
   `product`;
 - architecture, service/module/system design, runtime dependency, code-adjacent
   prose -> `architecture`; if an existing code projection already owns the
-  object, reuse its NodeRef/ViewRef instead of creating a `codegraph` prose
+  object, reuse its NodeRef/ViewRef instead of creating a `codeindex` prose
   view;
 - SOP, runbook, operation drill, workflow, or how-to procedure -> `sop`;
 - FAQ, question/answer, support notes -> `faq` only when the evidence is an
@@ -158,7 +158,7 @@ Use collection routing first:
   Sections under the owning view;
 - test plan, validation scenario, acceptance case -> `test`;
 
-Do not route prose align views to `codegraph` or `feats`: `codegraph` is
+Do not route prose align views to `codeindex` or `feats`: `codeindex` is
 produced by code extraction / AST projection, and `feats` is reserved for the
 dedicated feature workflow. For section-vs-collection overlap, keep a local
 `faq`, `decision`, or `incident` as a Section kind under the owning view unless
@@ -314,7 +314,7 @@ There is no parallel candidate-body authoring path. Emit only the
 
 ### Step 6 — Validate And Submit
 
-Before staging, run `context run align:<type>:<source>:<collection> --validate --input - --format json` with the `context.structure.v1` payload. The CLI applies deterministic boundary repairs internally and returns only remaining blockers. For oversized Views, apply the returned child-View and contains-edge suggestions while classifying child Nodes from evidence. Resolve other blockers from evidence; ask the user only when evidence supports multiple incompatible semantic choices. Stage only after validation state is `ready`. The stage result opens the final HTML report for the Route-selected structure-confirmation gate. Execute the revision-bound confirmation command returned by `workflow.current`; managed session authority may resolve that gate without another question.
+Before staging, write the `context.structure.v1` payload to the Route-selected `.tmp/agent-payloads/` path and run the returned `context run align:<type>:<source>:<collection> --validate --input <payload-file> --format json` command. The CLI applies deterministic boundary repairs internally and returns only remaining blockers. For oversized Views, apply the returned child-View and contains-edge suggestions while classifying child Nodes from evidence. Resolve other blockers from evidence; ask the user only when evidence supports multiple incompatible semantic choices. Stage only after validation state is `ready`. The stage result opens the final HTML report for the Route-selected structure-confirmation gate. Execute the revision-bound confirmation command returned by `workflow.current`; managed session authority may resolve that gate without another question.
 
 After stage succeeds, do not rerun the same write command to confirm success.
 Use `context status --format json` or the returned result for read-only
@@ -331,7 +331,7 @@ editing CLI-managed files.
 - [ ] Evidence was read through returned `next_action.command`, `next_command`, or current CLI schema/view commands only. If not, return to **Step 2**.
 - [ ] Node classification used the semantic gates in `structure-planning/references/gates.md`. If not, return to **Step 4**.
 - [ ] URL/reference ownership followed CLI diagnostics, not static prompt rules. If not, return to **Step 5**.
-- [ ] The requested align payload passed `context run align:<type>:<source>:<collection> --validate --input - --format json` before stage. If not, return to **Step 6**.
+- [ ] The requested align payload passed the exact Route-selected `--validate --input <payload-file>` command before stage. If not, return to **Step 6**.
 - [ ] No `sources/`, `knowledge/`, `dist/`, `.tmp`, host tool-results, or CLI-managed files were read or written with generic tools. If violated, restart from **Step 1**.
 
 </procedures>

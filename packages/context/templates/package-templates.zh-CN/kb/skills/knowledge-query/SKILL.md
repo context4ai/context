@@ -20,7 +20,7 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 
 | 根目录 | 用途 |
 |---|---|
-| `{{wikisRoot}}/` | 来自 codegraph、business、product 的结构化实体和关系。 |
+| `{{wikisRoot}}/` | 来自 codeindex、business、product 的结构化实体和关系。 |
 | `{{guidesRoot}}/` | 架构、流程、FAQ、决策、故障和排障说明。 |
 | `{{rulesRoot}}/` | 标准、约束、验收条件和测试场景。 |
 | `{{featsRoot}}/` | 被选择进入包内的功能知识。 |

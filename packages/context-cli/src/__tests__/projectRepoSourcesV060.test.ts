@@ -50,8 +50,8 @@ describe("0.6.0 repository source behavior", () => {
         "export default defineProject({",
         "  sources: [componentLib],",
         "  phases: [",
-        '    extractTs({ source: componentLib, collection: "codegraph" }),',
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    extractTs({ source: componentLib, collection: "codeindex" }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -129,10 +129,10 @@ describe("0.6.0 repository source behavior", () => {
         }],
       });
 
-      await runCliInDir(project, ["run", "extract:20260712/component-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/component-lib:codeindex"]);
       const ledger = readFileSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"), "utf8");
       expect(ledger).toContain("ComponentButton");
-      expect(ledger).toContain('"candidate_id":"codegraph/component-lib/symbol/componentbutton"');
+      expect(ledger).toContain('"candidate_id":"codeindex/component-lib/symbol/componentbutton"');
       expect(ledger).not.toContain("component-lib/demo-component-lib");
       expect(ledger).toContain("repo:20260712/component-lib#symbol:src/index.ts:ComponentButton:function@");
     } finally {

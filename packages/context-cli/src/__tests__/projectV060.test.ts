@@ -44,10 +44,10 @@ describe("0.6.0 project init and source ensure", () => {
       );
       expect(agents).toContain("`execution.target: agent-host`");
       expect(agents).toContain("Read only the manuals and schemas selected by `workflow.current.resources`");
-      expect(agents).not.toContain("Normal codegraph extraction sends the first run");
+      expect(agents).not.toContain("Normal codeindex extraction sends the first run");
       expect(agents).not.toContain("## State Boundaries");
       expect(agents).not.toContain("parent monorepo/subspace");
-      expect(agents).not.toContain("migrate-codegraph-refs");
+      expect(agents).not.toContain("migrate-codeindex-refs");
       expect(agents).not.toContain("src-N#symbol");
       expect(existsSync(join(project, "package.json"))).toBe(true);
       const readme = await readFile(join(project, "README.md"), "utf8");
@@ -285,6 +285,26 @@ describe("0.6.0 project init and source ensure", () => {
     }
   });
 
+  test("context init treats a repository containing only .git as an empty target", async () => {
+    const project = makeTmp();
+    try {
+      await mkdir(join(project, ".git"));
+
+      const result = await initContextProject({
+        cwd: project,
+        projectDir: ".",
+        dev: true,
+      });
+
+      expect(result.projectRoot).toBe(project);
+      expect(existsSync(join(project, ".git"))).toBe(true);
+      expect(existsSync(join(project, "package.json"))).toBe(true);
+      expect(existsSync(join(project, "src", "index.ts"))).toBe(true);
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
   test("context init --dev uses the local SDK package path", async () => {
     const project = makeTmp();
     try {
@@ -336,12 +356,12 @@ describe("0.6.0 project init and source ensure", () => {
       await writeSampleLibProjectEntry(project);
 
       const list = await runCliInDir(project, ["run", "--list"]);
-      expect(list).toContain("extract:20260712/sample-lib:codegraph");
-      expect(list).toContain("review:codegraph:validity");
+      expect(list).toContain("extract:20260712/sample-lib:codeindex");
+      expect(list).toContain("review:codeindex:validity");
 
       const plan = JSON.parse(await runCliInDir(project, [
         "run",
-        "extract:20260712/sample-lib:codegraph",
+        "extract:20260712/sample-lib:codeindex",
         "--dry-run",
         "--format",
         "json",
@@ -351,11 +371,11 @@ describe("0.6.0 project init and source ensure", () => {
       };
       expect(plan.dryRun).toBe(true);
       expect(plan.phase).toMatchObject({
-        id: "extract:20260712/sample-lib:codegraph",
+        id: "extract:20260712/sample-lib:codeindex",
         kind: "phase.extract.ts",
       });
       expect(plan.phase.reads).toContain("source:repo:20260712/sample-lib");
-      expect(plan.phase.writes).toContain("lifecycle:candidates:codegraph:draft");
+      expect(plan.phase.writes).toContain("lifecycle:candidates:codeindex:draft");
     } finally {
       rmSync(project, { recursive: true, force: true });
     }
@@ -367,7 +387,7 @@ describe("0.6.0 project init and source ensure", () => {
       await runCliInDir(project, ["init", "."]);
       await writeSampleLibProjectEntry(project);
 
-      await expect(runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"])).rejects.toThrow(
+      await expect(runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"])).rejects.toThrow(
         "repo source is not registered",
       );
       expect(existsSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);
@@ -482,9 +502,9 @@ describe("0.6.0 project init and source ensure", () => {
       expect(lstatSync(link).isSymbolicLink()).toBe(true);
 
       const status = await runCliInDir(project, ["status"]);
-      expect(status).toContain("state: route.extract.preview-required");
+      expect(status).toContain("state: route.extract.codeindex-migration-required");
       expect(status).toContain("--workflow-revision");
-      expect(status).toContain("run --preview-extraction-batch");
+      expect(status).toContain("migrate codeindex --format json");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

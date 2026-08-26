@@ -16,7 +16,10 @@ import {
   collectWorkflowAuthorityOption,
   workflowAuthorities,
 } from "./project/workflow/workflowCommandOptions.js";
-import { parseWorkflowResourceReceipts } from "./project/workflow/workflowResourceReceipts.js";
+import {
+  parseWorkflowResourceReceipts,
+  workflowResourceReceiptCwd,
+} from "./project/workflow/workflowResourceReceipts.js";
 import { queueContextRuntimeEvent } from "./runtimeEvents.js";
 import { ExitCode } from "./types/exitCode.js";
 import { formatContextEntry, resolveContextEntry } from "./project/entryCommand.js";
@@ -66,7 +69,7 @@ export function registerProjectInitCommand(program: Command): void {
     .option("--language <language>", "workspace and starter-template language: en | zh-CN")
     .option("--dev", "initialize with the locally linked @c4a/context SDK")
     .option("--debug", "enable workspace-local command and Agent Graph tracing")
-    .option("--optimize-docs", "enable conservative document revisions (default for new workspaces)")
+    .option("--optimize-docs", "enable source-constrained editorial revisions (default for new workspaces)")
     .option("--no-optimize-docs", "disable document revisions for the initialized workspace")
     .option("--allow-nonempty", "after explicit confirmation, preserve existing files and initialize inside a non-empty non-Context directory")
     .action(async (projectDir: string | undefined, options: Record<string, unknown>) => {
@@ -124,11 +127,12 @@ export function registerProjectStatusCommand(program: Command): void {
         : typeof rootOptions.workflowResourceReceipts === "string"
         ? rootOptions.workflowResourceReceipts
         : undefined;
+      const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       const resourceReceipts = resourceReceiptsReference !== undefined
-        ? await parseWorkflowResourceReceipts(resourceReceiptsReference, process.cwd())
+        ? await parseWorkflowResourceReceipts(resourceReceiptsReference, cwd)
         : undefined;
       if (await runProjectStatusCommand({
-        cwd: process.cwd(),
+        cwd,
         format: options.format === "json" ? "json" : "table",
         view: options.view === "full" ? "full" : "summary",
         managed: options.managed === true,

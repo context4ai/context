@@ -21,6 +21,7 @@ export type {
 } from "./larkResourceCommand.js";
 
 export type LarkResourceAssetRole = "evidence" | "presentation" | "audit";
+export type LarkAccessIdentity = "user" | "bot";
 
 export interface LarkMaterializedAsset {
   path: string;
@@ -64,6 +65,7 @@ export interface MaterializeLarkResourcesInput {
   resources: readonly LarkExternalResource[];
   runner: LarkResourceCommandRunner;
   policy: LarkResourceMaterializationPolicy;
+  identity?: LarkAccessIdentity;
   resolveSyncedReference?: (resource: LarkExternalResource) => Promise<SyncedReferenceProjection>;
 }
 
@@ -206,6 +208,7 @@ function findBooleanField(value: unknown, name: string): boolean | undefined {
 
 async function downloadedFile(input: {
   runner: LarkResourceCommandRunner;
+  identity: LarkAccessIdentity;
   token: string;
   type: "media" | "whiteboard";
 }): Promise<{ path: string; bytes: Uint8Array; mediaType: string }> {
@@ -215,7 +218,7 @@ async function downloadedFile(input: {
       "docs",
       "+media-download",
       "--as",
-      "user",
+      input.identity,
       "--token",
       input.token,
       "--type",
@@ -318,7 +321,11 @@ function canonicalWhiteboardPayload(value: unknown): unknown {
   };
 }
 
-async function sheetMaterialization(resource: LarkExternalResource, runner: LarkResourceCommandRunner): Promise<{
+async function sheetMaterialization(
+  resource: LarkExternalResource,
+  runner: LarkResourceCommandRunner,
+  identity: LarkAccessIdentity,
+): Promise<{
   asset: LarkMaterializedAsset;
   replacement: string;
 }> {
@@ -332,7 +339,7 @@ async function sheetMaterialization(resource: LarkExternalResource, runner: Lark
       "sheets",
       "+csv-get",
       "--as",
-      "user",
+      identity,
       "--spreadsheet-token",
       token,
       "--sheet-id",
@@ -414,7 +421,11 @@ function baseRows(records: readonly unknown[], preferredFieldOrder: readonly str
   return [headers, ...normalized.map((record) => headers.map((header) => record[header] ?? ""))];
 }
 
-async function baseMaterialization(resource: LarkExternalResource, runner: LarkResourceCommandRunner): Promise<{
+async function baseMaterialization(
+  resource: LarkExternalResource,
+  runner: LarkResourceCommandRunner,
+  identity: LarkAccessIdentity,
+): Promise<{
   asset: LarkMaterializedAsset;
   replacement: string;
 }> {
@@ -429,7 +440,7 @@ async function baseMaterialization(resource: LarkExternalResource, runner: LarkR
       "base",
       "+record-list",
       "--as",
-      "user",
+      identity,
       "--base-token",
       token,
       "--table-id",
@@ -471,13 +482,17 @@ async function baseMaterialization(resource: LarkExternalResource, runner: LarkR
   };
 }
 
-async function whiteboardMaterialization(resource: LarkExternalResource, runner: LarkResourceCommandRunner): Promise<{
+async function whiteboardMaterialization(
+  resource: LarkExternalResource,
+  runner: LarkResourceCommandRunner,
+  identity: LarkAccessIdentity,
+): Promise<{
   assets: LarkMaterializedAsset[];
   replacement: string;
 }> {
   const token = resourceToken(resource);
   if (token === undefined) throw new Error(`${resource.kind} has no whiteboard token`);
-  const preview = await downloadedFile({ runner, token, type: "whiteboard" });
+  const preview = await downloadedFile({ runner, identity, token, type: "whiteboard" });
   const tempRoot = await mkdtemp(join(tmpdir(), "context-lark-whiteboard-"));
   let rawPayload: unknown;
   try {
@@ -485,7 +500,7 @@ async function whiteboardMaterialization(resource: LarkExternalResource, runner:
       "whiteboard",
       "+export",
       "--as",
-      "user",
+      identity,
       "--whiteboard-token",
       token,
       "--output-type",
@@ -603,6 +618,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
   const items: LarkResourceMaterializationItem[] = [];
   const seen = new Set<string>();
   let totalBytes = 0;
+  const identity = input.identity ?? "user";
 
   const materialize = async (resource: LarkExternalResource, depth: number): Promise<void> => {
     const key = `${resource.kind}\0${resource.locator}`;
@@ -637,8 +653,8 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
 
       if (resource.kind === "sheet" || resource.kind === "base") {
         const result = resource.kind === "sheet"
-          ? await sheetMaterialization(resource, input.runner)
-          : await baseMaterialization(resource, input.runner);
+          ? await sheetMaterialization(resource, input.runner, identity)
+          : await baseMaterialization(resource, input.runner, identity);
         assertBudget(result.asset, input.policy, totalBytes);
         totalBytes += result.asset.bytes.byteLength;
         assets.push(result.asset);
@@ -648,7 +664,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
       }
 
       if (resource.kind === "whiteboard" || resource.kind === "diagram") {
-        const result = await whiteboardMaterialization(resource, input.runner);
+        const result = await whiteboardMaterialization(resource, input.runner, identity);
         for (const asset of result.assets) {
           assertBudget(asset, input.policy, totalBytes);
           totalBytes += asset.bytes.byteLength;
@@ -694,6 +710,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
       if (token === undefined) throw new Error(`${resource.kind} has no downloadable token`);
       const downloaded = await downloadedFile({
         runner: input.runner,
+        identity,
         token,
         type: "media",
       });

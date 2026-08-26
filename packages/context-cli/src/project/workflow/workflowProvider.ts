@@ -10,6 +10,7 @@ import {
   type Diagnostic,
   type LoadedProvider,
   type ResourceReadReceiptSet,
+  type Route,
   type RouteAction,
   type ResourceLocation,
 } from "@c4a/agent-graph";
@@ -447,6 +448,34 @@ function projectRouteAction(input: {
   };
 }
 
+function requireAgentPayload(
+  plan: ReturnType<typeof planForResolvedCommandPlan>,
+  inputSchema: ResourceLocation | undefined,
+): ReturnType<typeof planForResolvedCommandPlan> {
+  if (inputSchema === undefined) return plan;
+  return {
+    ...plan,
+    commands: plan.commands.map((item) => ({
+      ...item,
+      managed_execution: "agent-required" as const,
+    })),
+  };
+}
+
+function optionalActionPlan(
+  action: {
+    commandPlan: Route["commandPlan"];
+    action: { inputSchema?: ResourceLocation };
+  } | undefined,
+  observation: ContextWorkflowObservation,
+): ReturnType<typeof planForResolvedCommandPlan> {
+  if (action === undefined) return { commands: [] };
+  return requireAgentPayload(
+    planForResolvedCommandPlan(action.commandPlan, observation),
+    action.action.inputSchema,
+  );
+}
+
 async function resolveContextRoute(
   provider: LoadedProvider,
   evaluation: ReturnType<typeof evaluateGraph>["evaluation"],
@@ -471,7 +500,10 @@ async function resolveContextRoute(
     },
     evaluation.revision,
   );
-  const hostPlan = planForResolvedCommandPlan(route.commandPlan, observation);
+  const hostPlan = requireAgentPayload(
+    planForResolvedCommandPlan(route.commandPlan, observation),
+    route.action?.inputSchema,
+  );
   const inspectionAction = route.gate?.inspectionAction;
   if (
     inspectionAction !== undefined &&
@@ -481,24 +513,14 @@ async function resolveContextRoute(
       `Context Gate inspection Action must be read-only: ${inspectionAction.action.id}`,
     );
   }
-  const inspectionPlan = inspectionAction === undefined
-    ? { commands: [] }
-    : planForResolvedCommandPlan(
-        inspectionAction.commandPlan,
-        observation,
-      );
+  const inspectionPlan = optionalActionPlan(inspectionAction, observation);
   const resolutionAction = route.gate?.resolutionAction;
   if (resolutionAction?.action.effect === "read") {
     throw new Error(
       `Context Gate resolution Action must mutate observable state: ${resolutionAction.action.id}`,
     );
   }
-  const resolutionPlan = resolutionAction === undefined
-    ? { commands: [] }
-    : planForResolvedCommandPlan(
-        resolutionAction.commandPlan,
-        observation,
-      );
+  const resolutionPlan = optionalActionPlan(resolutionAction, observation);
   const resolutionAvailability: ContextWorkflowCommand["availability"] =
     route.availability === "requires-user"
       ? "after-human-confirmation"

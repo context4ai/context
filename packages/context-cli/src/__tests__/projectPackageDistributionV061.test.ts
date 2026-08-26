@@ -25,8 +25,8 @@ describe("flat knowledge package distribution", () => {
       .toBe("skills/knowledge-query/SKILL.md");
     expect(packageTemplateOutputPath(pkg, "wikis/index.md"))
       .toBe("wikis/index.md");
-    expect(packageKnowledgeOutputPath(pkg, "codegraph/module/symbol.md"))
-      .toBe("wikis/codegraph/module/symbol.md");
+    expect(packageKnowledgeOutputPath(pkg, "codeindex/module/symbol.md"))
+      .toBe("wikis/codeindex/module/symbol.md");
     expect(packageDistributionTemplateVars({ pkg })).toMatchObject({
       knowledgeNamespace: "",
       namespacedKnowledge: false,
@@ -50,8 +50,8 @@ describe("flat knowledge package distribution", () => {
       .toBe("skills/android-query/SKILL.md");
     expect(packageTemplateOutputPath(pkg, "wikis/index.md"))
       .toBe("wikis/index.md");
-    expect(packageKnowledgeOutputPath(pkg, "codegraph/module/symbol.md"))
-      .toBe("wikis/codegraph/module/symbol.md");
+    expect(packageKnowledgeOutputPath(pkg, "codeindex/module/symbol.md"))
+      .toBe("wikis/codeindex/module/symbol.md");
     expect(packageKnowledgeOutputPath(pkg, "architecture/module/overview.md"))
       .toBe("guides/architecture/module/overview.md");
     expect(packageKnowledgeOutputPath(pkg, "standards/module/constraint.md"))
@@ -124,8 +124,8 @@ describe("flat knowledge package distribution", () => {
         expect(existsSync(join(root, "wikis", `${fixture.approvedId}.md`))).toBe(true);
         expect(existsSync(join(root, "wikis", name === "alpha-kb" ? "alpha" : "beta")))
           .toBe(false);
-        expect(readFileSync(join(wikiRoot, "codegraph", "sample-a", "index.md"), "utf8"))
-          .toContain("Approved knowledge pages under wikis/codegraph/sample-a.");
+        expect(readFileSync(join(wikiRoot, "codeindex", "sample-a", "index.md"), "utf8"))
+          .toContain("Approved knowledge pages under wikis/codeindex/sample-a.");
 
         const inventory = JSON.parse(
           readFileSync(join(root, "context-build-inventory.json"), "utf8"),

@@ -121,7 +121,10 @@ function initTsNoEntryFixtureRepo(path: string): string {
   return commitAll(path, "add no-entry ts fixture");
 }
 
-async function writeSampleLibProjectEntry(project: string): Promise<void> {
+async function writeSampleLibProjectEntry(project: string, transformMarker?: string): Promise<void> {
+  const transform = transformMarker === undefined
+    ? ""
+    : `, transform: (markdown) => markdown.replace(\"- kind:\", \"- rendered-by: ${transformMarker}\\n- kind:\")`;
   await writeFile(join(project, "src", "index.ts"), [
     'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
     "",
@@ -130,8 +133,8 @@ async function writeSampleLibProjectEntry(project: string): Promise<void> {
     "export default defineProject({",
     "  sources: [sampleLib],",
     "  phases: [",
-    '    extractTs({ source: sampleLib, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
+    `    extractTs({ source: sampleLib, collection: "codeindex"${transform} }),`,
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [],",
     "});",
@@ -191,19 +194,19 @@ describe("0.6.0 project run and extract", () => {
         ref: head,
       });
 
-      const plan = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph", "--dry-run"]);
+      const plan = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex", "--dry-run"]);
       expect(plan).toContain("reads: source:repo:20260712/sample-lib");
-      expect(plan).toContain("writes: lifecycle:candidates:codegraph:draft");
+      expect(plan).toContain("writes: lifecycle:candidates:codeindex:draft");
       expect(plan).toContain("candidate estimate");
       expect(plan).toContain("AST analyzed");
       expect(plan).toContain("relation(s)");
       expect(plan).toContain("approved knowledge tree preview:");
-      expect(plan).toContain("knowledge/codegraph/sample-lib/symbol/button.md");
+      expect(plan).toContain("knowledge/codeindex/sample-lib/symbol/button.md");
       expect(existsSync(join(project, ".tmp", "context-runtime", "runs"))).toBe(false);
 
       const dryRunJson = JSON.parse(await runCliInDir(project, [
         "run",
-        "extract:20260712/sample-lib:codegraph",
+        "extract:20260712/sample-lib:codeindex",
         "--dry-run",
         "--format",
         "json",
@@ -239,7 +242,7 @@ describe("0.6.0 project run and extract", () => {
       };
       expect(dryRunJson.preview?.totals.modules).toBe(1);
       expect(dryRunJson.preview?.indexUnits[0]).toMatchObject({
-        id: "20260712/sample-lib",
+        id: "sample-lib",
         projectedPageCount: expect.any(Number),
         scale: "normal",
         outputProfile: "public-api-reference",
@@ -259,9 +262,9 @@ describe("0.6.0 project run and extract", () => {
       expect(Object.values(dryRunJson.preview?.sources[0]?.modules[0]?.candidateKinds ?? {})
         .reduce((sum, count) => sum + count, 0)).toBe(dryRunJson.preview?.totals.candidateEstimate ?? 0);
       expect(dryRunJson.preview?.knowledgeTree).toContain("knowledge/");
-      expect(dryRunJson.preview?.knowledgeTree).toContain("  codegraph/");
+      expect(dryRunJson.preview?.knowledgeTree).toContain("  codeindex/");
       expect(dryRunJson.preview?.knowledgePathExamples[0]).toMatchObject({
-        path: "knowledge/codegraph/sample-lib/symbol/button.md",
+        path: "knowledge/codeindex/sample-lib/symbol/button.md",
         source: "20260712/sample-lib",
         module: "sample-lib",
       });
@@ -271,7 +274,7 @@ describe("0.6.0 project run and extract", () => {
         "run",
         "--preview-extraction-batch",
         "--preview-phase",
-        "extract:20260712/sample-lib:codegraph",
+        "extract:20260712/sample-lib:codeindex",
         "--format",
         "json",
       ])) as { cache: { reusablePhases: number }; scaleClear: boolean };
@@ -280,8 +283,8 @@ describe("0.6.0 project run and extract", () => {
         scaleClear: true,
       });
 
-      const stdout = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
-      expect(stdout).toContain("✓ ran extract:20260712/sample-lib:codegraph");
+      const stdout = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
+      expect(stdout).toContain("✓ ran extract:20260712/sample-lib:codeindex");
       expect(stdout).toContain("drafts: +");
       expect(stdout).toContain("next action: context status --format json");
       expect(stdout).toContain("candidate file: .tmp/context-runtime/lifecycle/candidates.jsonl");
@@ -289,7 +292,7 @@ describe("0.6.0 project run and extract", () => {
       const rows = readCandidateRows(project);
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) {
-        expect(row.collection).toBe("codegraph");
+        expect(row.collection).toBe("codeindex");
         expect(row.status).toBe("draft");
         expect(row.source_refs[0] ?? "").toStartWith("repo:20260712/sample-lib#symbol:");
         expect(row.review?.summary).toBeTruthy();
@@ -301,12 +304,12 @@ describe("0.6.0 project run and extract", () => {
 
       const log = latestRunLog(project);
       expect(log).toMatchObject({
-        phase_id: "extract:20260712/sample-lib:codegraph",
+        phase_id: "extract:20260712/sample-lib:codeindex",
         phase_kind: "phase.extract.ts",
         status: "success",
       });
       expect(log.reads).toContain("source:repo:20260712/sample-lib");
-      expect(log.writes).toContain("lifecycle:candidates:codegraph:draft");
+      expect(log.writes).toContain("lifecycle:candidates:codeindex:draft");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -328,8 +331,8 @@ describe("0.6.0 project run and extract", () => {
         "export default defineProject({",
         "  sources: [mono],",
         "  phases: [",
-        '    extractTs({ source: mono, collection: "codegraph", include: ["packages/button/src/**/*.{ts,tsx}"] }),',
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    extractTs({ source: mono, collection: "codeindex", include: ["packages/button/src/**/*.{ts,tsx}"] }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -344,7 +347,7 @@ describe("0.6.0 project run and extract", () => {
         ref: head,
       });
 
-      await expect(runCliInDir(project, ["run", "extract:20260712/mono:codegraph"])).rejects.toThrow(
+      await expect(runCliInDir(project, ["run", "extract:20260712/mono:codeindex"])).rejects.toThrow(
         "repo source contains multiple code modules",
       );
       expect(existsSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);
@@ -369,8 +372,8 @@ describe("0.6.0 project run and extract", () => {
         "export default defineProject({",
         "  sources: [lib],",
         "  phases: [",
-        '    extractTs({ source: lib, collection: "codegraph", include: ["src/**/*.ts"], entries: ["src/feature.ts"] }),',
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    extractTs({ source: lib, collection: "codeindex", include: ["src/**/*.ts"], entries: ["src/feature.ts"] }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -386,7 +389,7 @@ describe("0.6.0 project run and extract", () => {
       });
 
       const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codegraph", "--dry-run", "--format", "json",
+        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
       ])) as { preview: { mode: string; entries: string[]; totals: { candidateEstimate: number } } };
       expect(preview.preview).toMatchObject({
         mode: "exports",
@@ -394,7 +397,7 @@ describe("0.6.0 project run and extract", () => {
       });
       expect(preview.preview.totals.candidateEstimate).toBeGreaterThan(0);
 
-      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"]);
       const ids = readCandidateRows(project).map((row) => row.id);
       expect(ids.some((id) => id.endsWith("/createfeature"))).toBe(true);
       expect(ids.some((id) => id.endsWith("/formatpublic"))).toBe(false);
@@ -416,7 +419,7 @@ describe("0.6.0 project run and extract", () => {
         'const lib = source("20260712", "no-entry-lib");',
         "export default defineProject({",
         "  sources: [lib],",
-        '  phases: [extractTs({ source: lib, collection: "codegraph" })],',
+        '  phases: [extractTs({ source: lib, collection: "codeindex" })],',
         "  packages: [],",
         "});",
       ].join("\n"), "utf8");
@@ -430,10 +433,10 @@ describe("0.6.0 project run and extract", () => {
       });
 
       const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codegraph", "--dry-run", "--format", "json",
+        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
       ])) as { preview_error: { detail: { code: string } } };
       expect(preview.preview_error.detail.code).toBe("NO_ENTRY_DETECTED");
-      await expect(runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codegraph"])).rejects.toMatchObject({
+      await expect(runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"])).rejects.toMatchObject({
         detail: expect.objectContaining({
           error: expect.objectContaining({ code: "NO_ENTRY_DETECTED" }),
         }),
@@ -459,12 +462,12 @@ describe("0.6.0 project run and extract", () => {
         "export default defineProject({",
         "  sources: [lib],",
         "  phases: [",
-        '    extractTs({ source: lib, collection: "codegraph", include: ["src/**/*.ts"], mode: "scan", indexUnits: [{',
+        '    extractTs({ source: lib, collection: "codeindex", include: ["src/**/*.ts"], mode: "scan", indexUnits: [{',
         '      id: "no-entry-lib-map", inputSources: ["20260712/no-entry-lib"], outputOwner: "no-entry-lib",',
         '      moduleType: "sdk-library", moduleTypeEvidence: ["src/index.ts public entry"], outputProfile: "module-map", responsibility: "Map the selected module scope.",',
         '      entries: ["src/feature.ts"], pageKinds: ["module-map"], protocols: [], dependencies: [], exclusions: [], capability: "complete"',
         '    }] }),',
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -480,12 +483,12 @@ describe("0.6.0 project run and extract", () => {
       });
 
       const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codegraph", "--dry-run", "--format", "json",
+        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
       ])) as { preview: { mode: string; exportedOnly: boolean; totals: { candidateEstimate: number } } };
       expect(preview.preview).toMatchObject({ mode: "scan", exportedOnly: false });
       expect(preview.preview.totals.candidateEstimate).toBeGreaterThanOrEqual(4);
 
-      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"]);
       const ids = readCandidateRows(project).map((row) => row.id);
       expect(ids.some((id) => id.endsWith("/createfeature"))).toBe(true);
       expect(ids.some((id) => id.endsWith("/formatpublic"))).toBe(true);
@@ -508,7 +511,7 @@ describe("0.6.0 project run and extract", () => {
         'const lib = source("20260712", "no-entry-lib");',
         "export default defineProject({",
         "  sources: [lib],",
-        '  phases: [extractTs({ source: lib, collection: "codegraph", include: ["src/feature.ts"], entries: ["src/internal/format.ts"] })],',
+        '  phases: [extractTs({ source: lib, collection: "codeindex", include: ["src/feature.ts"], entries: ["src/internal/format.ts"] })],',
         "  packages: [],",
         "});",
       ].join("\n"), "utf8");
@@ -522,7 +525,7 @@ describe("0.6.0 project run and extract", () => {
       });
 
       const output = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codegraph", "--dry-run", "--format", "json",
+        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
       ])) as { preview_error: { message: string } };
       expect(output.preview_error.message).toMatch(/Configured extraction entry is missing or outside extractTs include/u);
       expect(readCandidateRows(project)).toEqual([]);
@@ -548,18 +551,18 @@ describe("0.6.0 project run and extract", () => {
         remote: "https://git.example.com/sample-lib.git",
         ref: head,
       });
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
 
       let rows = readCandidateRows(project);
       const rejected = rows.find((row) => row.id.endsWith("/buttonprops")) ?? rows[0];
       if (!rejected) throw new Error("expected rejected fixture candidate");
       const approved = rows.find((row) => row.id.endsWith("/button") && row.id !== rejected.id) ?? rows.find((row) => row.id !== rejected.id);
       if (!approved) throw new Error("expected approved fixture candidate");
-      await runCliInDir(project, ["review", "reject", rejected.id, "--collection", "codegraph"]);
+      await runCliInDir(project, ["review", "reject", rejected.id, "--collection", "codeindex"]);
       const rejectedUpdated = readCandidateRows(project).find((row) => row.id === rejected.id)?.updated;
-      await runCliInDir(project, ["review", "approve", approved.id, "--collection", "codegraph"]);
+      await runCliInDir(project, ["review", "approve", approved.id, "--collection", "codeindex"]);
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       rows = readCandidateRows(project);
       expect(rows.filter((row) => row.id === rejected.id)).toHaveLength(1);
       expect(rows.find((row) => row.id === rejected.id)?.status).toBe("rejected");
@@ -592,7 +595,7 @@ describe("0.6.0 project run and extract", () => {
         remote: "https://git.example.com/sample-lib.git",
         ref: head,
       });
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       rows = readCandidateRows(project);
       const ids = rows.map((row) => row.id);
       expect(new Set(ids).size).toBe(ids.length);
@@ -613,7 +616,7 @@ describe("0.6.0 project run and extract", () => {
         remote: "https://git.example.com/sample-lib.git",
         ref: head,
       });
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       rows = readCandidateRows(project);
       expect(rows.some((row) => row.id.endsWith("/badge"))).toBe(false);
     } finally {
@@ -621,7 +624,7 @@ describe("0.6.0 project run and extract", () => {
     }
   }, 15000);
 
-  test("codegraph supports delta review and explicit verified auto promotion", async () => {
+  test("codeindex supports delta review and explicit verified auto promotion", async () => {
     const root = makeTmp();
     const repo = join(root, "sample-lib");
     const project = join(root, "kb");
@@ -640,7 +643,7 @@ describe("0.6.0 project run and extract", () => {
       });
 
       const initial = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-lib:codegraph", "--auto-promote", "--format", "json",
+        "run", "extract:20260712/sample-lib:codeindex", "--auto-promote", "--format", "json",
       ])) as { result: { execution: { policy: string; sourceState: string }; review: { required: boolean }; autoPromotion: { close: string; verify: string } } };
       expect(initial.result.execution).toEqual({ policy: "auto-promote", sourceState: "first-run" });
       expect(initial.result.review.required).toBe(false);
@@ -670,7 +673,7 @@ describe("0.6.0 project run and extract", () => {
         ref: head,
       });
       const changed = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-lib:codegraph", "--format", "json",
+        "run", "extract:20260712/sample-lib:codeindex", "--format", "json",
       ])) as { result: { changes: { updated: number }; review: { required: boolean }; next_action: { command: string } } };
       expect(changed.result.changes.updated).toBeGreaterThan(0);
       expect(changed.result.review.required).toBe(true);
@@ -680,7 +683,7 @@ describe("0.6.0 project run and extract", () => {
       expect(readCandidateRows(project).some((row) => row.change === "update")).toBe(true);
 
       const promoted = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-lib:codegraph", "--auto-promote", "--format", "json",
+        "run", "extract:20260712/sample-lib:codeindex", "--auto-promote", "--format", "json",
       ])) as { result: { autoPromotion: { close: string; verify: string } } };
       expect(promoted.result.autoPromotion).toMatchObject({ close: "refreshed", verify: "passed" });
       expect((await readProjectCloseStatus(project)).state).toBe("ready");
@@ -696,10 +699,10 @@ describe("0.6.0 project run and extract", () => {
         remote: "https://git.example.com/sample-lib.git",
         ref: head,
       });
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       expect(readCandidateRows(project).some((row) => row.change === "remove")).toBe(true);
       const removed = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-lib:codegraph", "--auto-promote", "--format", "json",
+        "run", "extract:20260712/sample-lib:codeindex", "--auto-promote", "--format", "json",
       ])) as { result: { autoPromotion: { close: string; removed: number; verify: string } } };
       expect(removed.result.autoPromotion.removed).toBeGreaterThan(0);
       expect(removed.result.autoPromotion.close).toBe("refreshed");
@@ -708,13 +711,56 @@ describe("0.6.0 project run and extract", () => {
       expect(readCandidateRows(project)).toEqual([]);
 
       const unchanged = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-lib:codegraph", "--auto-promote", "--format", "json",
+        "run", "extract:20260712/sample-lib:codeindex", "--auto-promote", "--format", "json",
       ])) as { result: { autoPromotion: { close: string; verify: string } } };
       expect(unchanged.result.autoPromotion).toMatchObject({ close: "current", verify: "passed" });
 
-      await expect(runCliInDir(project, ["run", "review:codegraph:validity", "--auto-promote"])).rejects.toThrow(
+      await expect(runCliInDir(project, ["run", "review:codeindex:validity", "--auto-promote"])).rejects.toThrow(
         "--auto-promote is only valid",
       );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }, 20000);
+
+  test("reader-facing transform changes invalidate approved candidate fingerprints", async () => {
+    const root = makeTmp();
+    const repo = join(root, "sample-lib");
+    const project = join(root, "kb");
+    try {
+      await mkdir(repo, { recursive: true });
+      const head = initTsFixtureRepo(repo);
+      await runCliInDir(root, ["init", "kb"]);
+      await writeSampleLibProjectEntry(project, "v1");
+      await addRepoSource({
+        projectRoot: project,
+        namespace: REPO_NAMESPACE,
+        module: "sample-lib",
+        local: "../sample-lib",
+        remote: "https://git.example.com/sample-lib.git",
+        ref: head,
+      });
+      await runCliInDir(project, [
+        "run", "extract:20260712/sample-lib:codeindex", "--auto-promote", "--format", "json",
+      ]);
+      expect(readCandidateRows(project)).toEqual([]);
+
+      await writeSampleLibProjectEntry(project, "v2");
+      const changed = JSON.parse(await runCliInDir(project, [
+        "run", "extract:20260712/sample-lib:codeindex", "--format", "json",
+      ])) as {
+        result: {
+          execution: { sourceState: string };
+          changes: { updated: number; unchanged: number };
+          review: { required: boolean };
+        };
+      };
+      expect(changed.result.execution.sourceState).toBe("changed");
+      expect(changed.result.changes.updated).toBeGreaterThan(0);
+      expect(changed.result.review.required).toBe(true);
+      expect(readCandidateRows(project)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ change: "update", status: "draft" }),
+      ]));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -735,13 +781,13 @@ describe("0.6.0 project run and extract", () => {
         ref: "a".repeat(40),
       });
 
-      await expect(runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"])).rejects.toThrow(
+      await expect(runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"])).rejects.toThrow(
         "repo source is not ready for extraction",
       );
 
       const log = latestRunLog(project);
       expect(log).toMatchObject({
-        phase_id: "extract:20260712/sample-lib:codegraph",
+        phase_id: "extract:20260712/sample-lib:codeindex",
         phase_kind: "phase.extract.ts",
         status: "failed",
       });

@@ -47,3 +47,12 @@ asset links. If a selected local
 boundary is a documentation site rather than plain Markdown, use the
 Context-provided processor/configuration diagnostic; do not invent rendered
 text or scan outside the confirmed boundary.
+
+For Lark reads, Context prefers the authenticated user identity. If that
+identity is unavailable because its credential is missing, expired, or cannot
+be refreshed, Context may retry the same registered source with the bot
+identity. It does not switch identity after a permission or missing-scope
+response. Once selected, the same identity is used for the document body and
+all embedded resources. If `docs +fetch` lacks the required `--doc-format`
+capability, follow the returned `lark-cli update` recovery and rerun the same
+Route command; do not replace the capture with a hand-written export.

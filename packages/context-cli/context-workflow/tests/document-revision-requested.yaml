@@ -28,11 +28,13 @@ state:
       declarations_complete: true
       plans_complete: true
       capability_clear: true
+      migration_required: false
       preview_current: true
       ownership_clear: true
       scale_clear: true
       batch_digest: null
       complete: true
+      audit_guidance_required: false
     documents: { classified: true }
     prose: { declarations_complete: true }
     align: { prepared: true }

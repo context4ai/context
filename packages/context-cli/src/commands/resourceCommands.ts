@@ -9,7 +9,10 @@ import {
   runContextWorkflowResourceAcknowledgeCommand,
   runContextWorkflowResourceCommand,
 } from "../project/workflow/workflowResource.js";
-import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
+import {
+  parseWorkflowResourceReceipts,
+  workflowResourceReceiptCwd,
+} from "../project/workflow/workflowResourceReceipts.js";
 import { ExitCode } from "../types/exitCode.js";
 
 type ResourceOutputFormat = "text" | "json";
@@ -62,12 +65,13 @@ export function registerContextWorkflowResourceCommands(program: Command): void 
       const resourceReceiptsReference = typeof options.resourceReceipts === "string"
         ? options.resourceReceipts
         : undefined;
+      const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       const resourceReceipts = resourceReceiptsReference === undefined
         ? undefined
-        : await parseWorkflowResourceReceipts(resourceReceiptsReference, process.cwd());
+        : await parseWorkflowResourceReceipts(resourceReceiptsReference, cwd);
 
       await runContextWorkflowResourceAcknowledgeCommand({
-        cwd: process.cwd(),
+        cwd,
         revision,
         managed: options.managed === true,
         authorities: workflowAuthorities(options.authority),
@@ -99,17 +103,21 @@ export function registerContextWorkflowResourceCommands(program: Command): void 
     ) => {
       const format = resourceOutputFormat(options.format);
       const revision = requiredRevision(options.revision);
+      const resourceReceiptsReference = typeof options.resourceReceipts === "string"
+        ? options.resourceReceipts
+        : undefined;
+      const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       await runContextWorkflowResourceCommand({
-        cwd: process.cwd(),
+        cwd,
         resourceId,
         revision,
         managed: options.managed === true,
         authorities: workflowAuthorities(options.authority),
-        ...(typeof options.resourceReceipts === "string"
+        ...(resourceReceiptsReference !== undefined
           ? {
               resourceReceipts: await parseWorkflowResourceReceipts(
-                options.resourceReceipts,
-                process.cwd(),
+                resourceReceiptsReference,
+                cwd,
               ),
             }
           : {}),

@@ -180,11 +180,15 @@ export async function registerSourceBatch(input: {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const code = error instanceof ContextError ? error.code : ExitCode.WorkspaceStateError;
+        const errorDetail = error instanceof ContextError ? error.detail : undefined;
+        const itemNext = typeof errorDetail?.next === "string"
+          ? errorDetail.next
+          : undefined;
         throw new ContextError(code, `source batch stopped at sources[${index}] (${item.type}:${item.module}): ${message}`, {
-          ...(error instanceof ContextError ? error.detail : {}),
+          ...errorDetail,
           batch_completed: registered.map((entry) => ({ type: entry.type, module: entry.module })),
           failed_index: index,
-          next: "Fix the failed item and rerun the same batch. Completed items are idempotently updated; do not edit registry YAML by hand.",
+          next: itemNext ?? "Fix the failed item and rerun the same batch. Completed items are idempotently updated; do not edit registry YAML by hand.",
         });
       }
     }

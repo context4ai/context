@@ -3,5 +3,5 @@ id: restore-repository-sources
 description: Restore registered repository sources from user-confirmed local paths or explicit clones.
 runner: command
 effect: external
-command: context source restore --input - --format json
+command: context source restore --input .tmp/agent-payloads/repository-source-recovery.json --format json
 inputSchema: schemas/repository-source-recovery.schema.json

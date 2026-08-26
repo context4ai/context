@@ -2,6 +2,7 @@ import {
   CODE_INDEX_COVERAGE_KINDS,
   type CodeIndexCoverageKind,
   type CustomCodeCandidateDraft,
+  type CustomCodeCandidateSection,
   type CustomCodeEvidence,
   type ExtractCustomPhaseDefinition,
 } from "@c4a/context";
@@ -47,6 +48,14 @@ function nonEmpty(value: string, field: string, phaseId: string): string {
   return trimmed;
 }
 
+function suggestedEvidenceToken(value: string): string {
+  return value
+    .replace(/[@:]/gu, "-")
+    .replace(/[^A-Za-z0-9._-]+/gu, "-")
+    .replace(/-+/gu, "-")
+    .replace(/^-|-$/gu, "") || "symbol";
+}
+
 function validateEvidence(input: {
   phaseId: string;
   evidence: CustomCodeEvidence;
@@ -65,16 +74,24 @@ function validateEvidence(input: {
       available_sources: [...input.sourceNames],
     });
   }
-  if (
-    file.startsWith("/") ||
-    file.split("/").some((part) => part.length === 0 || part === "." || part === "..") ||
-    symbol.includes(":") || symbol.includes("@") ||
-    kind.includes(":") || kind.includes("@") ||
-    !/^[a-f0-9]{8,64}$/u.test(digest)
-  ) {
-    throw customInputError(input.phaseId, `${input.field} cannot form a canonical code source_ref`, {
-      field: input.field,
-      evidence: input.evidence,
+  if (file.startsWith("/") || file.split("/").some((part) => part.length === 0 || part === "." || part === "..")) {
+    throw customInputError(input.phaseId, `${input.field}.file must be a normalized source-relative path`, {
+      field: `${input.field}.file`,
+      file,
+    });
+  }
+  for (const [name, value] of [["symbol", symbol], ["kind", kind]] as const) {
+    if (!value.includes(":") && !value.includes("@")) continue;
+    throw customInputError(input.phaseId, `${input.field}.${name} cannot contain canonical source_ref delimiters`, {
+      field: `${input.field}.${name}`,
+      invalid_delimiters: [":", "@"].filter((delimiter) => value.includes(delimiter)),
+      suggested_token: suggestedEvidenceToken(value),
+      next: "Use a stable path-safe evidence token. Keep the exact reader-facing signature or qualified name in the Section body instead of the canonical source_ref token.",
+    });
+  }
+  if (!/^[a-f0-9]{8,64}$/u.test(digest)) {
+    throw customInputError(input.phaseId, `${input.field}.digest must be 8-64 lowercase hexadecimal characters`, {
+      field: `${input.field}.digest`,
     });
   }
   if (input.evidence.line !== undefined && (!Number.isInteger(input.evidence.line) || input.evidence.line < 1)) {
@@ -94,6 +111,20 @@ function validateEvidence(input: {
 
 function sourceRef(evidence: CustomCodeEvidence): string {
   return `repo:${evidence.source}#symbol:${evidence.file}:${evidence.symbol}:${evidence.kind}@${evidence.digest}`;
+}
+
+function containsReaderHeading(markdown: string): boolean {
+  let fence: "```" | "~~~" | undefined;
+  for (const line of markdown.split(/\r?\n/u)) {
+    const marker = /^\s*(```|~~~)/u.exec(line)?.[1] as "```" | "~~~" | undefined;
+    if (marker !== undefined) {
+      if (fence === undefined) fence = marker;
+      else if (fence === marker) fence = undefined;
+      continue;
+    }
+    if (fence === undefined && /^\s{0,3}#{1,6}\s+\S/u.test(line)) return true;
+  }
+  return false;
 }
 
 export function candidateFromCustom(input: {
@@ -116,9 +147,15 @@ export function candidateFromCustom(input: {
     sourceNames: input.sourceNames,
     field: `${field}.evidence[${index}]`,
   }));
+  const draftSections = input.draft.sections;
+  if (!Array.isArray(draftSections) || draftSections.length === 0) {
+    throw customInputError(input.phase.id, `${field}.sections must contain at least one evidence-scoped section`, {
+      field: `${field}.sections`,
+    });
+  }
   const allEvidence = [...evidence];
   const sectionIds = new Set<string>();
-  const sections = (input.draft.sections ?? []).map((section, sectionIndex) => {
+  const sections = (draftSections as readonly CustomCodeCandidateSection[]).map((section, sectionIndex) => {
     const sectionField = `${field}.sections[${sectionIndex}]`;
     const id = nonEmpty(section.id, `${sectionField}.id`, input.phase.id);
     if (!/^[a-z0-9][a-z0-9._-]*$/u.test(id) || sectionIds.has(id)) {
@@ -144,13 +181,20 @@ export function candidateFromCustom(input: {
       sourceNames: input.sourceNames,
       field: `${sectionField}.evidence[${evidenceIndex}]`,
     }));
+    const sectionMarkdown = nonEmpty(section.markdown, `${sectionField}.markdown`, input.phase.id);
+    if (containsReaderHeading(sectionMarkdown)) {
+      throw customInputError(input.phase.id, `${sectionField}.markdown must contain Section body content only`, {
+        field: `${sectionField}.markdown`,
+        next: "Remove Markdown headings from the Section body. Context renders the heading from section.title and omits absent Sections instead of preserving template headings.",
+      });
+    }
     allEvidence.push(...sectionEvidence);
     const refs = [...new Set(sectionEvidence.map(sourceRef))].sort();
     return {
       id,
       kind: section.kind,
       title: nonEmpty(section.title, `${sectionField}.title`, input.phase.id),
-      body: nonEmpty(section.markdown, `${sectionField}.markdown`, input.phase.id),
+      body: sectionMarkdown,
       source_ref: refs[0]!,
       source_refs: refs,
     };
@@ -194,16 +238,11 @@ export function candidateFromCustom(input: {
       field: `${field}.review.signals`,
     });
   }
-  const markdown = input.draft.markdown === undefined
-    ? [
-        `# ${nonEmpty(review.title, `${field}.review.title`, input.phase.id)}`,
-        "",
-        ...sections.flatMap((section) => [`## ${section.title}`, "", section.body ?? "", ""]),
-      ].join("\n").trim()
-    : nonEmpty(input.draft.markdown, `${field}.markdown`, input.phase.id);
-  if (sections.length === 0 && input.draft.markdown === undefined) {
-    throw customInputError(input.phase.id, `${field} must provide markdown or evidence-scoped sections`, { field });
-  }
+  const markdown = [
+    `# ${nonEmpty(review.title, `${field}.review.title`, input.phase.id)}`,
+    "",
+    ...sections.flatMap((section) => [`## ${section.title}`, "", section.body ?? "", ""]),
+  ].join("\n").trim();
   const sourceRefs = [...new Set(allEvidence.map(sourceRef))].sort();
   const candidateId = candidateIdFromCollectionNodeRef(input.phase.collection, nodeRef);
   const viewRef = viewRefFromCollectionNodeRef(input.phase.collection, nodeRef);
@@ -221,7 +260,7 @@ export function candidateFromCustom(input: {
     module: nonEmpty(input.draft.module, `${field}.module`, input.phase.id),
     path: knowledgeTargetPathForNode(input.phase.collection, nodeRef),
     source_refs: sourceRefs,
-    ...(sections.length > 0 ? { sections } : {}),
+    sections,
     ...(codeEdges.length > 0 ? { code_edges: codeEdges } : {}),
     fingerprint: stableHash({
       candidate_id: candidateId,

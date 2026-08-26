@@ -4,6 +4,52 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.6.19-preview.2 - 2026-08-26
+
+- Made Lark capture prefer user credentials while safely falling back to the
+  bot identity only when the user credential path is unavailable, and kept the
+  selected identity consistent across document and embedded-resource reads.
+- Added closed handling for zero-exit `ok=false` Lark responses and an explicit
+  `lark-cli update` recovery when structured XML fetch support is unavailable.
+- Treated a repository containing only `.git` as an empty initialization target.
+- Added an independent code and Markdown/MDX inventory baseline so custom
+  extractors cannot report a hand-picked evidence subset as complete coverage.
+- Required independently discovered page entries, route registrations, service
+  operations, and relationship-specific evidence in code-index audits.
+- Rejected template headings in Section bodies and preserved multi-source
+  evidence through approved code-index Markdown.
+- Blocked likely credential literals before Lark evidence snapshots are written.
+- Prevented managed document optimization from keeping actionable signals due
+  to time, workload, batch size, or an unanswered input request.
+
+## 0.6.19-preview.1 - 2026-08-25
+
+- Reduced the disposable code-index audit state by persisting only its decision
+  receipt, scope identity, retry metrics, and conditional reviewed-page hashes;
+  the complete mechanical report is recomputed from current knowledge.
+
+## 0.6.19-preview - 2026-08-25
+
+- Renamed the reader-facing code collection to `codeindex` and added an
+  idempotent, conflict-safe migration for legacy `codegraph` workspaces.
+- Added per-module source inventory and independent mechanical quality
+  dimensions for file/LOC analysis, document reading, stable entries, public
+  exports, profile-selected boundaries, facts, explanation, page size,
+  implementation body, evidence scope, and template residue.
+- Made aggregate custom extraction Section-only, so empty template sections
+  and copied instructions cannot become knowledge pages.
+- Added a shared managed and ordinary audit loop with concrete repair actions,
+  a three-attempt problem ledger, and one aggregated human-guidance Gate when
+  the same modules still fail absolute bounds.
+- Expanded source-backed document revisions from local formatting repairs to
+  Section-scoped `keep`, `repair`, `reshape`, and mechanically justified
+  `omit` decisions.
+- Added deterministic editorial signals for unfinished drafts, placeholders,
+  difficult tables, unstable references, sensitive-value candidates, and
+  other reader-facing quality problems.
+- Preserved destinations, code, numbers, identifiers, source boundaries, and
+  approved baselines while keeping revision audit state out of package output.
+
 ## 0.6.18 - 2026-08-24
 
 - Added a mandatory Agent semantic audit for completed code-index extraction,

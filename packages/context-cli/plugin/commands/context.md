@@ -91,12 +91,14 @@ before workflow evaluation. Debugging records traces below
 source evidence.
 
 Document optimization is enabled by default for newly initialized workspaces.
-It conservatively repairs formatting, Markdown, links, and obvious local errors
-without broadly rewriting source-backed prose. It keeps approved pages
-source-faithful and stores only changed full-page revisions beside them as
-`knowledge/**/*__revision.md`. Default knowledge discovery excludes those
-reserved sidecars; validation and package compilation apply them to the
-matching base page.
+It performs source-constrained editorial revision: the CLI identifies
+readability and knowledge-value signals, and the Agent may keep, repair,
+reshape, or safely omit content only inside its existing source Section. It
+must preserve facts, link targets, images, code, numbers, identifiers, and
+source evidence. Approved pages remain source-faithful; only changed full-page
+revisions are stored beside them as `knowledge/**/*__revision.md`. Default
+knowledge discovery excludes those reserved sidecars, and internal editorial
+audit state is not included in package output.
 
 For an existing workspace, respect its current `package.json` setting. Run
 `context optimize-docs enable` or `context optimize-docs disable` only when the
@@ -122,6 +124,14 @@ The managed loop executes only Route-selected work and returns the current
 `workflow.current` whenever Agent reading, project configuration, a human Gate,
 host execution, diagnostics, or a non-unique plan needs attention. Resume from
 that returned Route; never reconstruct a command from an earlier step.
+
+Code knowledge is published under `codeindex`. Context mechanically audits each
+module's input analysis, stable boundaries, facts, explanation, evidence scope,
+and page shape without producing a total score. In fully managed operation,
+follow returned repair actions automatically; after three failed revisions of
+the same module problem, stop at the one aggregated human-guidance Gate. If a
+legacy workspace returns `route.extract.codeindex-migration-required`, execute
+only its migration command; do not rename `codegraph` paths manually.
 
 ### Follow the current Route
 

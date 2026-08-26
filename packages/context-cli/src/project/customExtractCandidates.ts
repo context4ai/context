@@ -6,7 +6,6 @@ import type {
   CustomCodeCandidateDraft,
   ExtractCustomPhaseDefinition,
 } from "@c4a/context";
-import { requiredCodeIndexCoverage } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -37,6 +36,11 @@ import {
   customInputError,
   type BuiltCustomCandidate,
 } from "./customCandidateDraft.js";
+import { applyCustomUnitCoverage } from "./customExtractPreview.js";
+import {
+  applyCustomInspectionInventory,
+  assertCustomInventoryCoversSourceBaseline,
+} from "./customExtractInventory.js";
 import { selectRepoSourcesForExtraction } from "./extractSourceSelection.js";
 import { applyIndexUnitAdvisoryRisks } from "./extractionIndexUnitRisks.js";
 import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
@@ -74,6 +78,7 @@ function previewForPlan(unit: CodeIndexUnitPlan): ExtractionIndexUnitPreview {
     moduleTypes: [...(unit.moduleTypes ?? [unit.moduleType])],
     facets: [...(unit.facets ?? [])],
     moduleTypeEvidence: [...(unit.moduleTypeEvidence ?? [])],
+    documents: [...(unit.documents ?? [])],
     outputProfile: unit.outputProfile,
     capability: unit.capability,
     plan: "declared",
@@ -92,6 +97,39 @@ function previewForPlan(unit: CodeIndexUnitPlan): ExtractionIndexUnitPreview {
     candidateKinds: {},
     topDirectories: [],
     contentBytes: { total: 0, max: 0, sampled: false, topPages: [] },
+    inventory: {
+      basis: "evidence-only",
+      eligibleFiles: 0,
+      analyzedFiles: 0,
+      eligibleFileTargets: [],
+      analyzedFileTargets: [],
+      eligibleLoc: 0,
+      analyzedLoc: 0,
+      documentsDiscovered: 0,
+      documentsRead: 0,
+      documentTargets: [],
+      rootDocumentTargets: [],
+      readDocumentTargets: [],
+      referencedDocumentTargets: [],
+      symbolsDiscovered: 0,
+      symbolsAnalyzed: 0,
+      targetSymbols: 0,
+      exportedSymbols: 0,
+      targetSymbolIdentities: [],
+      exportedTargetIdentities: [],
+      entryTargets: [...unit.entries],
+      protocolTargets: [...unit.protocols],
+      boundaryTargets: [
+        ...unit.entries.map((identity) => ({ kind: "entry" as const, identity })),
+        ...unit.protocols.map((identity) => ({ kind: "operation" as const, identity })),
+      ],
+      coveredBoundaryTargets: [],
+      excludedFiles: 0,
+      excludedFileTargets: [],
+      excludedReasons: [...unit.exclusions],
+      parserSkippedFiles: 0,
+      parserSkippedFileTargets: [],
+    },
     risks: [],
   };
 }
@@ -108,6 +146,7 @@ function inferredCustomUnit(input: {
     moduleTypes: ["unknown"],
     facets: [],
     moduleTypeEvidence: [],
+    documents: [],
     outputProfile: "module-map",
     capability: "project-adapter",
     plan: "inferred",
@@ -125,6 +164,36 @@ function inferredCustomUnit(input: {
     candidateKinds: {},
     topDirectories: [],
     contentBytes: { total: 0, max: 0, sampled: false, topPages: [] },
+    inventory: {
+      basis: "evidence-only",
+      eligibleFiles: 0,
+      analyzedFiles: 0,
+      eligibleFileTargets: [],
+      analyzedFileTargets: [],
+      eligibleLoc: 0,
+      analyzedLoc: 0,
+      documentsDiscovered: 0,
+      documentsRead: 0,
+      documentTargets: [],
+      rootDocumentTargets: [],
+      readDocumentTargets: [],
+      referencedDocumentTargets: [],
+      symbolsDiscovered: 0,
+      symbolsAnalyzed: 0,
+      targetSymbols: 0,
+      exportedSymbols: 0,
+      targetSymbolIdentities: [],
+      exportedTargetIdentities: [],
+      entryTargets: [],
+      protocolTargets: [],
+      boundaryTargets: [],
+      coveredBoundaryTargets: [],
+      excludedFiles: 0,
+      excludedFileTargets: [],
+      excludedReasons: [],
+      parserSkippedFiles: 0,
+      parserSkippedFileTargets: [],
+    },
     risks: ["index-plan-inferred"],
   };
 }
@@ -144,60 +213,31 @@ function finalizeCustomUnit(unit: ExtractionIndexUnitPreview): ExtractionIndexUn
   unit.topDirectories.splice(5);
   unit.contentBytes.topPages.sort((left, right) => right.bytes - left.bytes || left.path.localeCompare(right.path));
   unit.contentBytes.topPages.splice(5);
+  unit.inventory.targetSymbolIdentities = [...new Set(unit.inventory.targetSymbolIdentities)].sort();
+  unit.inventory.exportedTargetIdentities = [...new Set(unit.inventory.exportedTargetIdentities)].sort();
+  unit.inventory.eligibleFileTargets = [...new Set(unit.inventory.eligibleFileTargets)].sort();
+  unit.inventory.analyzedFileTargets = [...new Set(unit.inventory.analyzedFileTargets)].sort();
+  unit.inventory.excludedFileTargets = [...new Set(unit.inventory.excludedFileTargets)].sort();
+  unit.inventory.parserSkippedFileTargets = [...new Set(unit.inventory.parserSkippedFileTargets)].sort();
+  unit.inventory.documentTargets = [...new Set(unit.inventory.documentTargets)].sort();
+  unit.inventory.rootDocumentTargets = [...new Set(unit.inventory.rootDocumentTargets)].sort();
+  unit.inventory.readDocumentTargets = [...new Set(unit.inventory.readDocumentTargets)].sort();
+  unit.inventory.referencedDocumentTargets = [...new Set(unit.inventory.referencedDocumentTargets)].sort();
+  unit.inventory.entryTargets = [...new Set(unit.inventory.entryTargets)].sort();
+  unit.inventory.protocolTargets = [...new Set(unit.inventory.protocolTargets)].sort();
+  unit.inventory.boundaryTargets = [...new Map(unit.inventory.boundaryTargets.map((target) => [
+    `${target.kind}:${target.identity}`,
+    target,
+  ])).values()].sort((left, right) => left.kind.localeCompare(right.kind) || left.identity.localeCompare(right.identity));
+  unit.inventory.coveredBoundaryTargets = [...new Map(unit.inventory.coveredBoundaryTargets.map((target) => [
+    `${target.kind}:${target.identity}`,
+    target,
+  ])).values()].sort((left, right) => left.kind.localeCompare(right.kind) || left.identity.localeCompare(right.identity));
   applyIndexUnitAdvisoryRisks(unit, { customAggregate: true });
   if (unit.scale === "warning") unit.risks.push("page-count-warning");
   if (unit.scale === "blocked") unit.risks.push("page-count-limit-exceeded");
   unit.risks = [...new Set(unit.risks)].sort();
   return unit;
-}
-
-function applyCustomUnitCoverage(input: {
-  unit: ExtractionIndexUnitPreview;
-  candidates: readonly BuiltCustomCandidate[];
-  requiredProbes: ReturnType<typeof probesForIndexUnit>;
-}): void {
-  const unitEvidence = input.candidates.flatMap((item) => item.symbols);
-  const uncovered = input.requiredProbes.filter((probe) => !unitEvidence.some((evidence) =>
-    evidence.source === probe.source && probe.paths.includes(evidence.file)
-  ));
-  input.unit.structuralCoverage = {
-    required: input.requiredProbes.length,
-    covered: input.requiredProbes.length - uncovered.length,
-    uncovered: uncovered.map((probe) => ({
-      id: probe.id,
-      capability: probe.capability,
-      kind: probe.kind,
-      source: probe.source,
-      expectedPaths: [...probe.paths],
-    })),
-  };
-  if (uncovered.length > 0) {
-    input.unit.capability = "material-required";
-    input.unit.risks.push("structural-capability-uncovered");
-  }
-
-  const requiredCoverage = requiredCodeIndexCoverage({
-    outputProfile: input.unit.outputProfile,
-    facets: input.unit.facets,
-  });
-  const coveredCoverage = [...new Set(input.candidates.flatMap((item) => item.coverageKinds))].sort();
-  const uncoveredCoverage = requiredCoverage.filter((kind) => !coveredCoverage.includes(kind));
-  input.unit.semanticCoverage = {
-    required: requiredCoverage,
-    covered: coveredCoverage,
-    uncovered: uncoveredCoverage,
-  };
-  if (uncoveredCoverage.length > 0) {
-    input.unit.capability = "material-required";
-    input.unit.risks.push("semantic-coverage-uncovered");
-  }
-  if (
-    input.unit.outputProfile === "cross-module-flow" &&
-    input.candidates.every((item) => (item.candidate.code_edges?.length ?? 0) === 0
-  )) {
-    input.unit.capability = "material-required";
-    input.unit.risks.push("structured-relationship-missing");
-  }
 }
 
 interface CustomPhaseCandidateManifest {
@@ -252,10 +292,11 @@ export async function prepareExtractCustomPhase(input: {
         })),
       });
   const inspection = inspectionResult === undefined
-    ? { findings: [], capabilityGaps: [], structuralProbes }
+    ? { findings: [], capabilityGaps: [], inventories: [], structuralProbes }
     : {
         findings: [...inspectionResult.findings],
         capabilityGaps: [...(inspectionResult.capabilityGaps ?? [])],
+        inventories: [...(inspectionResult.inventories ?? [])],
         structuralProbes,
       };
   const output = await input.phase.extract({
@@ -288,6 +329,24 @@ export async function prepareExtractCustomPhase(input: {
       });
     }
     unit.capability = "material-required";
+  }
+  for (const inventory of inspection.inventories) {
+    const unit = units.get(inventory.indexUnitId);
+    if (unit === undefined) {
+      throw customInputError(input.phase.id, "inspection inventories must reference a declared index unit", {
+        inventory,
+      });
+    }
+    applyCustomInspectionInventory({ unit, inventory, phaseId: input.phase.id });
+    await assertCustomInventoryCoversSourceBaseline({
+      unit,
+      inventory,
+      phaseId: input.phase.id,
+      sources: selectedSources.map((source) => ({
+        name: source.record.name,
+        absolutePath: resolve(input.projectRoot, source.status.materializedAt),
+      })),
+    });
   }
   const built: BuiltCustomCandidate[] = [];
   const candidateIds = new Set<string>();
@@ -349,6 +408,44 @@ export async function prepareExtractCustomPhase(input: {
     });
     const unitCandidates = built
       .filter((item) => item.candidate.module === unit.id || item.candidate.module === unit.outputOwner);
+    const uniqueFiles = [...new Set(unitCandidates.flatMap((item) => item.symbols.map((symbol) => symbol.file)))];
+    const uniqueSymbols = [...new Set(unitCandidates.flatMap((item) => item.symbols.map((symbol) =>
+      `${symbol.file}:${symbol.name}:${symbol.kind}`
+    )))];
+    const exportedSymbols = new Set(unitCandidates
+      .filter((item) => item.candidate.visibility === "exported")
+      .flatMap((item) => item.symbols.map((symbol) => `${symbol.file}:${symbol.name}:${symbol.kind}`)));
+    const evidenceIdentities = [
+      ...uniqueFiles,
+      ...unitCandidates.flatMap((item) => item.symbols.map((symbol) => symbol.name)),
+    ].map((identity) => identity.replaceAll("\\", "/").replace(/^\.\//u, "").toLowerCase());
+    unit.inventory.coveredBoundaryTargets.push(...unit.inventory.boundaryTargets.filter((target) => {
+      const identity = target.identity.replaceAll("\\", "/").replace(/^\.\//u, "").toLowerCase();
+      return evidenceIdentities.some((candidate) =>
+        candidate === identity || candidate.endsWith(`/${identity}`) || identity.endsWith(`/${candidate}`)
+      );
+    }));
+    if (unit.inventory.basis === "evidence-only") {
+      unit.inventory.eligibleFiles = uniqueFiles.length;
+      unit.inventory.analyzedFiles = uniqueFiles.length;
+      unit.inventory.eligibleFileTargets = [...uniqueFiles];
+      unit.inventory.analyzedFileTargets = [...uniqueFiles];
+      unit.inventory.symbolsDiscovered = uniqueSymbols.length;
+      unit.inventory.symbolsAnalyzed = uniqueSymbols.length;
+      unit.inventory.targetSymbols = uniqueSymbols.length;
+      unit.inventory.exportedSymbols = exportedSymbols.size;
+      unit.inventory.targetSymbolIdentities = uniqueSymbols.map((identity) => identity.split(":").at(-2) ?? identity);
+      unit.inventory.exportedTargetIdentities = [...exportedSymbols].map((identity) => identity.split(":").at(-2) ?? identity);
+      unit.inventory.documentsDiscovered = uniqueFiles.filter((file) => /\.mdx?$/iu.test(file)).length;
+      unit.inventory.documentsRead = unit.inventory.documentsDiscovered;
+      unit.inventory.documentTargets = uniqueFiles.filter((file) => /\.mdx?$/iu.test(file));
+      unit.inventory.rootDocumentTargets = unit.inventory.documentTargets.filter((file) =>
+        /(?:^|\/)(?:readme|agents|contributing|architecture|developing|development)(?:\.[^/.]+)?\.mdx?$/iu.test(file)
+      );
+      unit.inventory.readDocumentTargets = [...unit.inventory.documentTargets];
+      unit.inventory.referencedDocumentTargets = [...unit.inventory.documentTargets];
+      if (!unit.risks.includes("inventory-evidence-only")) unit.risks.push("inventory-evidence-only");
+    }
     applyCustomUnitCoverage({ unit, candidates: unitCandidates, requiredProbes });
   }
   const indexUnits = [...units.values()].map(finalizeCustomUnit)
@@ -607,7 +704,7 @@ export async function runExtractCustomPhase(input: {
     execution: { policy: "review", sourceState },
     next_action: pending > 0
       ? {
-          kind: "continue-codegraph-batch",
+          kind: "continue-code-index-batch",
           command: "context status --format json",
           message: "Custom code extraction produced source-backed candidates. Context status will finish the extraction batch before opening one Review.",
         }

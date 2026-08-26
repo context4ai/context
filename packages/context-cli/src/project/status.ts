@@ -74,6 +74,7 @@ import { recordAgentGraphEvaluation } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 import { readExtractionPreviewState } from "./extractionPreviewCache.js";
 import { collectCodeIndexAuditStatus } from "./codeIndexAudit.js";
+import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 
 export type {
   ActiveStructuresStatus,
@@ -512,6 +513,8 @@ export async function collectProjectStatusSnapshot(
         resolved: true,
         revision_required: false,
         input_required: false,
+        guidance_required: false,
+        guidance_units: [],
         history: [],
       };
   const verifyStatus = draftStatus.diagnostics.length === 0
@@ -590,6 +593,9 @@ export async function collectProjectStatusSnapshot(
   const compilePhaseResolution = compileRouting.resolution;
   const compileDocumentNext = compileRouting.command;
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
+  const codeIndexMigrationRequired = phaseStatus.projectEntryValid
+    ? await legacyCodeIndexMigrationRequired(projectRoot)
+    : false;
   const observation: ContextWorkflowObservation = {
       projectRoot,
       projectEntryValid: phaseStatus.projectEntryValid,
@@ -624,6 +630,7 @@ export async function collectProjectStatusSnapshot(
       pendingExtractPhases: sourceFreshness.pendingPhases,
       extractionPreview,
       codeIndexAudit,
+      codeIndexMigrationRequired,
       pendingCaptureCommands: pendingCapture.commands,
       missingCaptureSources: pendingCapture.missingSources,
       evidenceWarnings,

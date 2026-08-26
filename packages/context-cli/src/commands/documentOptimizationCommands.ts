@@ -82,7 +82,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
 
   const optimize = program
     .command("optimize-docs")
-    .description("Configure and apply conservative document revisions");
+    .description("Configure and apply source-constrained editorial revisions");
 
   optimize.command("enable")
     .description("Enable document optimization for subsequent package builds")
@@ -110,7 +110,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("status")
-    .description("Show revision freshness and pending fragment counts")
+    .description("Show revision freshness, editorial signals, and pending Section counts")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
@@ -144,7 +144,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
     });
 
   optimize.command("plan")
-    .description("Materialize the current Agent optimization batch")
+    .description("Materialize the current Section-level editorial decision batch")
     .option("--format <format>", "output format: text | json", "json")
     .action(async (options: Record<string, unknown>) => {
       const projectRoot = requireProjectRoot();
@@ -171,7 +171,7 @@ export function registerDocumentOptimizationCommands(program: Command): void {
         payload: await readPayload(options.input, projectRoot),
       });
       writeResult({
-        schema: "context.document-optimization-apply-result.v1",
+        schema: "context.document-optimization-apply-result.v2",
         applied: result.applied,
         status: result.status,
         next_action: { kind: "reevaluate-workspace", command: "context status --format json" },

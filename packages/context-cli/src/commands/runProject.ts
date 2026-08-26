@@ -18,7 +18,10 @@ import {
   formatWorkflowRunResult,
   runWorkflowUntilBlockedOrComplete,
 } from "../project/workflow/workflowRun.js";
-import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
+import {
+  parseWorkflowResourceReceipts,
+  workflowResourceReceiptCwd,
+} from "../project/workflow/workflowResourceReceipts.js";
 import { ExitCode } from "../types/exitCode.js";
 import { recordWorkflowStop } from "../project/debugTrace.js";
 import { WorkspaceExecutionRuntime } from "../project/workflow/workflowExecutionRuntime.js";
@@ -196,6 +199,7 @@ function alignRunOptions(
 }
 
 function projectPhaseRunInput(input: {
+  cwd: string;
   phaseId?: string;
   options: Record<string, unknown>;
   managed: boolean;
@@ -205,7 +209,7 @@ function projectPhaseRunInput(input: {
   resourceReceiptsReference?: string;
 }): ProjectRunInput {
   return {
-    cwd: process.cwd(),
+    cwd: input.cwd,
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
@@ -231,6 +235,7 @@ function projectPhaseRunInput(input: {
 }
 
 async function runManagedUntil(input: {
+  cwd: string;
   cliModuleUrl: string;
   phaseId?: string;
   options: Record<string, unknown>;
@@ -254,7 +259,7 @@ async function runManagedUntil(input: {
       { category: ErrorCategory.UserInputInvalid },
     );
   }
-  const found = findContextProjectRoot(process.cwd());
+  const found = findContextProjectRoot(input.cwd);
   if (found === null) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
@@ -327,7 +332,7 @@ export function registerProjectRunCommand(
         .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
         .default([]),
     )
-    .option("--auto-promote", "with a codegraph extract phase, apply deterministic deltas, refresh close, and verify without review")
+    .option("--auto-promote", "with a code-index extract phase, apply deterministic deltas, refresh close, and verify without review")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
       new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
@@ -371,6 +376,10 @@ export function registerProjectRunCommand(
         rootOptions.workflowAuthority,
         options.authority,
       );
+      const resourceReceiptsReference = typeof rootOptions.workflowResourceReceipts === "string"
+        ? rootOptions.workflowResourceReceipts
+        : undefined;
+      const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       if (options.previewExtractionBatch === true && phaseId !== undefined) {
         throw new ContextError(ExitCode.UserError, "--preview-extraction-batch cannot be combined with a phase id", {
           category: ErrorCategory.UserInputInvalid,
@@ -379,7 +388,7 @@ export function registerProjectRunCommand(
       if (typeof options.batchInput === "string") {
         const operation = assertBatchOptions(phaseId, options);
         const result = await runProseStructureBatch({
-          cwd: process.cwd(),
+          cwd,
           batchInput: options.batchInput,
           operation,
           managed,
@@ -390,28 +399,29 @@ export function registerProjectRunCommand(
           ...(typeof rootOptions.workflowRevision === "string"
             ? { revision: rootOptions.workflowRevision }
             : {}),
-          ...(typeof rootOptions.workflowResourceReceipts === "string"
-            ? { resourceReceiptsReference: rootOptions.workflowResourceReceipts }
-            : {}),
+          ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
         });
         process.stdout.write(formatProseStructureBatchResult(bound, format));
         return;
       }
       if (options.until !== undefined) {
         await runManagedUntil({
+          cwd,
           cliModuleUrl,
           ...(phaseId === undefined ? {} : { phaseId }),
           options,
           managed,
           authorities,
           format,
-          ...(typeof rootOptions.workflowResourceReceipts === "string"
-            ? { resourceReceiptsReference: rootOptions.workflowResourceReceipts }
-            : {}),
+          ...(resourceReceiptsReference === undefined
+            ? {}
+            : { resourceReceiptsReference }
+          ),
         });
         return;
       }
       await runProjectPhaseCommand(projectPhaseRunInput({
+        cwd,
         ...(phaseId === undefined ? {} : { phaseId }),
         options,
         managed,
@@ -420,9 +430,7 @@ export function registerProjectRunCommand(
         ...(typeof rootOptions.workflowRevision === "string"
           ? { workflowRevision: rootOptions.workflowRevision }
           : {}),
-        ...(typeof rootOptions.workflowResourceReceipts === "string"
-          ? { resourceReceiptsReference: rootOptions.workflowResourceReceipts }
-          : {}),
+        ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
       }));
     });
 }

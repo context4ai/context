@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import { queueContextRuntimeEvent } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readApprovedStructureEdges, readConfirmedStructureEdgeProjection } from "./approvedStructureEdges.js";
@@ -28,6 +29,13 @@ import {
 } from "./approvedStructureInputs.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
+import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
+import {
+  approvedViewMachineMetadata,
+  compactApprovedKnowledgeMarkdown,
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 interface ApprovedKnowledgeFile {
   relPath: string;
@@ -136,26 +144,6 @@ function approvedStructureInputFiles(files: readonly ApprovedKnowledgeFile[]): A
   }));
 }
 
-function htmlAttributeDecode(value: string): string {
-  return value
-    .replace(/&quot;/gu, "\"")
-    .replace(/&lt;/gu, "<")
-    .replace(/&gt;/gu, ">")
-    .replace(/&amp;/gu, "&");
-}
-
-function parseAttrs(value: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const regex = /([a-z_][a-z0-9_-]*)="([^"]*)"/giu;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(value)) !== null) {
-    const key = match[1];
-    const raw = match[2];
-    if (key !== undefined && raw !== undefined) attrs[key] = htmlAttributeDecode(raw);
-  }
-  return attrs;
-}
-
 function canonicalizeSourceRef(ref: string, sources: readonly string[]): string {
   const match = LOCAL_REF.exec(ref);
   if (match === null) return ref;
@@ -163,35 +151,6 @@ function canonicalizeSourceRef(ref: string, sources: readonly string[]): string 
   const suffix = match[2];
   const source = sources[index - 1];
   return source === undefined || suffix === undefined ? ref : `${source}${suffix}`;
-}
-
-function parseSummary(body: string): string | undefined {
-  const jsonMatch = /<!--\s*context:summary\s*([\s\S]*?)\/context:summary\s*-->/iu.exec(body);
-  const jsonRaw = jsonMatch?.[1]?.trim();
-  if (jsonRaw !== undefined && jsonRaw.length > 0) {
-    try {
-      const parsed = JSON.parse(jsonRaw) as unknown;
-      if (typeof parsed === "string") return parsed.trim() || undefined;
-      if (
-        parsed !== null
-        && typeof parsed === "object"
-        && !Array.isArray(parsed)
-        && typeof (parsed as { text?: unknown }).text === "string"
-      ) {
-        const text = (parsed as { text: string }).text.trim();
-        return text.length > 0 ? text : undefined;
-      }
-    } catch {
-      return undefined;
-    }
-  }
-  const match = /<!--\s*context:summary\s*-->\s*([\s\S]*?)<!--\s*\/context:summary\s*-->/iu.exec(body);
-  const raw = match?.[1]?.trim();
-  if (raw === undefined || raw.length === 0) return undefined;
-  return raw.split(/\r?\n/u)
-    .map((line) => line.replace(/^>\s?/u, ""))
-    .join("\n")
-    .trim();
 }
 
 function nodeTypeFromRef(id: string): string | undefined {
@@ -211,13 +170,13 @@ function nodeTypeFromFrontmatter(frontmatter: Record<string, unknown>, id: strin
       next: "Repair approved Markdown through review apply, then rerun context close --format json.",
     });
   }
-  if (!APPROVED_NODE_TYPES.has(nodeType) || (collection !== "codegraph" && (expected === undefined || nodeType !== expected))) {
+  if (!APPROVED_NODE_TYPES.has(nodeType) || (!isCodeIndexCollection(collection) && (expected === undefined || nodeType !== expected))) {
     throw new ContextError(ExitCode.WorkspaceStateError, `approved Markdown node_type does not match node_ref: ${relPath}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       path: relPath,
       node_ref: id,
       node_type: nodeType,
-      expected_node_type: collection === "codegraph" ? "entity|domain|action" : expected ?? "entity|domain|action",
+      expected_node_type: isCodeIndexCollection(collection) ? "entity|domain|action" : expected ?? "entity|domain|action",
       next: "Repair approved Markdown through review apply, then rerun context close --format json.",
     });
   }
@@ -225,23 +184,13 @@ function nodeTypeFromFrontmatter(frontmatter: Record<string, unknown>, id: strin
 }
 
 function parseSections(content: string, sources: readonly string[]): Array<Record<string, unknown>> {
-  const sections: Array<Record<string, unknown>> = [];
-  const regex = /<!--\s*context:section\b([\s\S]*?)-->([\s\S]*?)(?:<!--\s*\/context:section\s*-->|$)/giu;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(content)) !== null) {
-    const attrs = parseAttrs(match[1] ?? "");
-    const body = match[2] ?? "";
-    const sourceRefs = (attrs.source_ref === undefined ? [] : [attrs.source_ref])
-      .map((ref) => canonicalizeSourceRef(ref, sources));
-    sections.push({
-      id: attrs.id ?? `section-${sections.length + 1}`,
-      kind: attrs.kind ?? "body",
-      ...(parseSummary(body) !== undefined ? { summary: parseSummary(body) } : {}),
-      source_refs: sourceRefs,
-      ...(attrs.content_mode !== undefined ? { content_mode: attrs.content_mode } : {}),
-    });
-  }
-  return sections;
+  return approvedContextSectionsInMarkdown(content).map((section, index) => ({
+    id: section.id ?? `section-${index + 1}`,
+    kind: section.kind ?? "body",
+    ...(section.summary !== undefined ? { summary: section.summary } : {}),
+    source_refs: section.refs.map((ref) => canonicalizeSourceRef(ref, sources)),
+    ...(section.contentMode !== undefined ? { content_mode: section.contentMode } : {}),
+  }));
 }
 
 function parseParentIndexChildren(frontmatter: Record<string, unknown>): Array<Record<string, unknown>> | undefined {
@@ -273,8 +222,14 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
   inputHash: string;
   structure: Record<string, unknown>;
   edgeWarnings: string[];
+  compactFiles: ApprovedKnowledgeFile[];
 }> {
-  const files = await approvedKnowledgeFiles(projectRoot);
+  const rawFiles = await approvedKnowledgeFiles(projectRoot);
+  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
+  const files = rawFiles.map((file) => ({
+    ...file,
+    content: hydrateApprovedKnowledgeMarkdown({ content: file.content, relPath: file.relPath, metadata }),
+  }));
   const views = files.map((file) => {
     const frontmatter = parseFrontmatter(file.content);
     const location = viewLocationFromRelPath(file.relPath);
@@ -304,6 +259,10 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       ...(typeof frontmatter.relationship_mode === "string"
         ? { relationship_mode: frontmatter.relationship_mode }
         : {}),
+      ...(frontmatter.evidence_status === "source-orphaned" ? { source_orphaned: true } : {}),
+      ...(approvedViewMachineMetadata(frontmatter) === undefined
+        ? {}
+        : { machine: approvedViewMachineMetadata(frontmatter) }),
       code_edges: codegraphEdgesFromFrontmatter(frontmatter, file.relPath),
       sources,
       sections: parseSections(file.content, sources).map((section) => ({
@@ -368,11 +327,26 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
     onMissingEndpoint: (message) => edgeWarnings.push(message),
   }));
   const sourceInputs = await mergedApprovedStructureSourceInputs(projectRoot);
+  const compactFiles = rawFiles.map((file) => ({
+    ...file,
+    content: compactApprovedKnowledgeMarkdown(file.content),
+  }));
+  const metadataHashRecords = projectedViews.map((view) => ({
+    view_ref: view.view_ref,
+    node_type: view.node_type,
+    ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
+    ...(view.generated === undefined ? {} : { generated: view.generated }),
+    ...(view.children === undefined ? {} : { children: view.children }),
+    ...(view.relationship_mode === undefined ? {} : { relationship_mode: view.relationship_mode }),
+    ...(view.source_orphaned === undefined ? {} : { source_orphaned: view.source_orphaned }),
+    ...(view.machine === undefined ? {} : { machine: view.machine }),
+  }));
   const inputHash = approvedStructureInputHash({
     schemaVersion: STRUCTURE_SCHEMA_VERSION,
-    files: approvedStructureInputFiles(files),
+    files: approvedStructureInputFiles(compactFiles),
     edges,
     sourceInputs,
+    metadata: metadataHashRecords,
   });
   return {
     inputHash,
@@ -387,6 +361,7 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
         : { source_inputs: approvedStructureSourceInputsRecord(sourceInputs) }),
     },
     edgeWarnings,
+    compactFiles,
   };
 }
 
@@ -423,7 +398,7 @@ export async function writeApprovedStructureProjection(projectRoot: string): Pro
   structure: string;
   views: number;
 }> {
-  const { inputHash, structure, edgeWarnings } = await deriveApprovedStructure(projectRoot);
+  const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
   const edgeContract = validateStructureEdgeContract(structure);
   if (!edgeContract.valid) {
     throw new ContextError(ExitCode.WorkspaceStateError, "approved structure projection produced invalid edge contract", {
@@ -435,6 +410,9 @@ export async function writeApprovedStructureProjection(projectRoot: string): Pro
   const outputPath = join(projectRoot, STRUCTURE_PATH);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
+  await Promise.all(compactFiles.map((file) =>
+    file.content === undefined ? Promise.resolve() : writeFile(file.absPath, file.content, "utf8")
+  ));
   return {
     edgeWarnings,
     edges: Array.isArray(structure.edges) ? structure.edges.length : 0,
@@ -501,7 +479,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
       });
     }
     const resourceProjection = await repairApprovedKnowledgeAssetProjections(projectRoot);
-    const { inputHash, structure, edgeWarnings } = await deriveApprovedStructure(projectRoot);
+    const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
     const nodes = Array.isArray(structure.nodes) ? structure.nodes.length : 0;
     const views = Array.isArray(structure.views) ? structure.views.length : 0;
     const edges = Array.isArray(structure.edges) ? structure.edges.length : 0;
@@ -530,6 +508,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     const outputPath = join(projectRoot, STRUCTURE_PATH);
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
+    await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
     await clearCompletedLifecycle(projectRoot);
     return {
       action: "closed",
@@ -581,7 +560,7 @@ export async function runProjectCloseCommand(input: {
       `nodes: ${result.nodes}`,
       `views: ${result.views}`,
       `edges: ${result.edges}`,
-      `codegraph relationships: ${result.relationshipCoverage.state} (${result.relationshipCoverage.emitted_edges} edge(s))`,
+      `code-index relationships: ${result.relationshipCoverage.state} (${result.relationshipCoverage.emitted_edges} edge(s))`,
       `edge structural contract: ${result.edgeContract.valid ? "valid" : "invalid"} (${result.edgeContract.checked} edge(s))`,
       ...(result.edgeWarnings.length > 0 ? [`edge warnings: ${result.edgeWarnings.join("; ")}`] : []),
       `references: ${result.references.status}, rewrites verbatim: ${result.references.rewritesVerbatim}`,

@@ -52,6 +52,7 @@ Each module must have:
 - every additional applicable type in `moduleTypes`;
 - relevant behavior and boundary `facets`;
 - concrete inspected paths in `moduleTypeEvidence`;
+- exact source-relative Markdown paths already read in `documents`;
 - an explicit gap when available source cannot support a reliable claim.
 
 Choose the primary type from the boundary through which a reader most often
@@ -152,11 +153,12 @@ Extractor shape is part of the plan, not an implementation detail:
   overlapping cross-source unit causes `ownership-ambiguous`.
 - Use `extractCustom()` for aggregate pages or multiple units over one source.
   Every candidate must declare its owning `module`, and its evidence must cover
-  the Route-reported structural probes. Use evidence-scoped `sections` rather
-  than one undifferentiated `markdown` body: each section declares a coverage
-  kind and the exact source evidence supporting that part of the page. Resolve
-  source roots from the extractor context's `sources[].absolutePath`; never
-  embed a machine-specific checkout path.
+  the Route-reported structural probes. The custom-candidate contract has no
+  page-level Markdown fallback: every candidate must provide at least one
+  evidence-scoped `section`, and each section declares a coverage kind and the
+  exact source evidence supporting that part of the page. Resolve source roots
+  from the extractor context's `sources[].absolutePath`; never embed a
+  machine-specific checkout path.
 - Register independently visible monorepo children as separate sources before
   giving them separate `extractTs()` units. An `include` pattern filters files;
   it does not create a source boundary.
@@ -176,6 +178,7 @@ custom cross-module flow. A minimal plan has this shape:
   moduleTypes: ["web-application"],
   facets: ["page-routing", "protocol-consumer"],
   moduleTypeEvidence: ["package.json", "src/routes.ts"],
+  documents: ["README.md", "docs/architecture.md"],
   outputOwner: "customer-portal",
   outputProfile: "application-map",
   inputSources: ["repo:customer-portal"],

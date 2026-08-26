@@ -2,6 +2,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { STRUCTURE_EDGE_TYPES } from "./proseAlignTypes.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -100,7 +101,9 @@ export function codegraphRelationshipCoverage(input: {
   views: readonly Record<string, unknown>[];
   edges: readonly Record<string, unknown>[];
 }): CodegraphRelationshipCoverage {
-  const codegraphViews = input.views.filter((view) => view.collection === "codegraph");
+  const codegraphViews = input.views.filter((view) =>
+    typeof view.collection === "string" && isCodeIndexCollection(view.collection)
+  );
   const declaredModes = [...new Set(codegraphViews.flatMap((view) =>
     typeof view.relationship_mode === "string" ? [view.relationship_mode] : []
   ))].sort();

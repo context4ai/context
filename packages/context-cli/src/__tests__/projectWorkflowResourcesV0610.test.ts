@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   materializeResource,
@@ -9,6 +9,7 @@ import {
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { collectProjectStatus } from "../project/status.js";
+import type { ProjectStatus } from "../project/statusTypes.js";
 import {
   evaluateContextWorkflow,
   loadContextWorkflowProvider,
@@ -19,13 +20,17 @@ import {
   projectWorkflowResourceAcknowledgeSummary,
   renderContextWorkflowResource,
 } from "../project/workflow/workflowResource.js";
-import { parseWorkflowResourceReceipts } from "../project/workflow/workflowResourceReceipts.js";
+import {
+  parseWorkflowResourceReceipts,
+  workflowResourceReceiptCwd,
+} from "../project/workflow/workflowResourceReceipts.js";
 import { initContextProject } from "../project/workspace.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   emptyObservation,
   receiptPathFromCommand,
 } from "./projectWorkflowProviderV0610.fixtures.js";
+import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 describe("Context workflow resources", () => {
   test("returns a structured recovery action when a receipt file is missing", async () => {
@@ -121,7 +126,7 @@ describe("Context workflow resources", () => {
       command.availability === "immediate"
     )).toBe(true);
     expect(snapshot.route?.commands.some((command) =>
-      command.command.includes("source restore --input - --format json") &&
+      command.command.includes("source restore --input .tmp/agent-payloads/repository-source-recovery.json --format json") &&
       command.availability === "after-human-confirmation"
     )).toBe(true);
     expect(snapshot.route?.gate?.resolution_action?.input_schema?.id).toBe(
@@ -174,11 +179,11 @@ describe("Context workflow resources", () => {
       expect(result.next_action.message).toContain("Materialization alone is not a read receipt");
       expect(await readFile(result.path, "utf8")).toContain("# Current source scope");
       const receiptPath = receiptPathFromCommand(result.next_action.command);
-      expect(receiptPath).toMatch(
-        /^\.tmp\/context-runtime\/workflow\/read-receipts\/[a-f0-9]{64}\.json$/u,
-      );
+      expect(isAbsolute(receiptPath)).toBe(true);
+      expect(receiptPath).toStartWith(join(initialized.projectRoot, ".tmp", "context-runtime", "workflow", "read-receipts"));
+      expect(result.next_action.command).toStartWith(`cd '${initialized.projectRoot}' && context status`);
       const receipts = JSON.parse(await readFile(
-        join(initialized.projectRoot, receiptPath),
+        receiptPath,
         "utf8",
       )) as ResourceReadReceiptSet;
       expect(receipts).toEqual({
@@ -187,6 +192,17 @@ describe("Context workflow resources", () => {
         receipts: [{ id: result.id, digest: result.digest }],
       });
       expect(result.next_action.command).toContain(`--resource-receipts '@${receiptPath}'`);
+      expect(workflowResourceReceiptCwd(`@${receiptPath}`, root)).toBe(initialized.projectRoot);
+      const resumed = JSON.parse(await runCliInDir(root, [
+        "status",
+        "--resource-receipts",
+        `@${receiptPath}`,
+        "--format",
+        "json",
+      ])) as ProjectStatus;
+      expect(resumed.workflow.current?.resources.required.find(
+        (resource) => resource.id === result.id,
+      )?.read_state).toBe("current");
       const reused = await collectProjectStatus(initialized.projectRoot, { resourceReceipts: receipts });
       expect(reused.workflow.current?.resources.required.find(
         (resource) => resource.id === result.id,
@@ -240,8 +256,9 @@ describe("Context workflow resources", () => {
       });
       expect(result.resourceAcknowledgement.acknowledged).toBe(directRequired.length);
       const receiptPath = result.resourceAcknowledgement.receiptReference.slice(1);
+      expect(isAbsolute(receiptPath)).toBe(true);
       const receipts = JSON.parse(await readFile(
-        join(initialized.projectRoot, receiptPath),
+        receiptPath,
         "utf8",
       )) as ResourceReadReceiptSet;
       expect(receipts).toMatchObject({
