@@ -256,7 +256,7 @@ describe("0.6.0 repo source validation", () => {
         local: "../sample-lib",
         remote: "https://git.example.com/sample-lib.git",
         ref: head,
-      })).rejects.toThrow("module names are project-wide codegraph identities");
+      })).rejects.toThrow("module names are project-wide code-index identities");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: migrate-codeindex
+runner: host
+effect: write
+handler: context.code-index.migrate

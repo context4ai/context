@@ -9,7 +9,8 @@ export type DocumentMainlineCollection =
   | "incident"
   | "test";
 export type CodegraphCollection = "codegraph";
-export type MainlineCollection = CodegraphCollection | DocumentMainlineCollection;
+export type CodeIndexCollection = "codeindex" | CodegraphCollection;
+export type MainlineCollection = CodeIndexCollection | DocumentMainlineCollection;
 export type TopLevelNamespace = MainlineCollection | "feats";
 export type OkfRoot = "guides" | "rules" | "wikis" | "feats";
 export type KnowledgeCollection = TopLevelNamespace;
@@ -52,7 +53,7 @@ export const DOC_MAINLINE_COLLECTIONS: readonly DocumentMainlineCollection[] = [
   "incident",
   "test",
 ];
-export const MAINLINE_COLLECTIONS: readonly MainlineCollection[] = ["codegraph", ...DOC_MAINLINE_COLLECTIONS];
+export const MAINLINE_COLLECTIONS: readonly MainlineCollection[] = ["codeindex", "codegraph", ...DOC_MAINLINE_COLLECTIONS];
 export const TOP_LEVEL_NAMESPACES: readonly TopLevelNamespace[] = [...MAINLINE_COLLECTIONS, "feats"];
 export const OKF_ROOTS: readonly OkfRoot[] = ["guides", "rules", "wikis", "feats"];
 export const KNOWLEDGE_COLLECTIONS: readonly KnowledgeCollection[] = TOP_LEVEL_NAMESPACES;

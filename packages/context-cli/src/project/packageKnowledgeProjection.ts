@@ -4,6 +4,7 @@ const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
 const CONTEXT_METADATA_BLOCK_RE = /<!--\s*context:(summary|source_refs|audit)\b[\s\S]*?\/context:\1\s*-->[ \t]*(?:\r?\n){0,2}/giu;
 const CONTEXT_SECTION_OPEN_RE = /^[ \t]*<!--\s*context:section\b[^>]*-->[ \t]*(?:\r?\n){0,2}/gimu;
 const CONTEXT_SECTION_CLOSE_RE = /(?:\r?\n)?^[ \t]*<!--\s*\/context:section\s*-->[ \t]*(?:\r?\n){0,2}/gimu;
+const LARK_RESOURCE_LOCATOR_COMMENT_RE = /[ \t]*<!--\s*lark:[^>\r\n]+-->[ \t]*/giu;
 const PACKAGE_OMITTED_FIELDS = [
   "node_ref",
   "view_ref",
@@ -14,12 +15,14 @@ const PACKAGE_OMITTED_FIELDS = [
   "children",
   "visibility",
   "code_symbols",
+  "code_evidence",
   "relationship_mode",
   "code_edges",
   "candidate_fingerprint",
   "resource",
   "sources",
   "context_revision",
+  "context_optimization",
   "context_overlay",
 ] as const;
 const PACKAGE_INVENTORY_FIELDS = [
@@ -115,7 +118,8 @@ export function projectPackageKnowledgeMarkdown(content: string): string {
     .slice(match[0].length)
     .replace(CONTEXT_METADATA_BLOCK_RE, "")
     .replace(CONTEXT_SECTION_OPEN_RE, "")
-    .replace(CONTEXT_SECTION_CLOSE_RE, "\n");
+    .replace(CONTEXT_SECTION_CLOSE_RE, "\n")
+    .replace(LARK_RESOURCE_LOCATOR_COMMENT_RE, "");
   const yaml = stringifyYaml(packageKnowledgeFrontmatter(frontmatter)).trimEnd();
   return `---\n${yaml}\n---\n${body}`;
 }

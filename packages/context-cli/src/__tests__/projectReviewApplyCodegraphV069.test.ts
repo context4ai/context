@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { commitAll, invokeCliInDir, runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 function makeTmp(): string {
-  return mkdtempSync(join(tmpdir(), "ctx-review-codegraph-v069-"));
+  return mkdtempSync(join(tmpdir(), "ctx-review-codeindex-v069-"));
 }
 
 function initTsRepo(path: string): string {
@@ -43,8 +43,8 @@ function writeProjectEntry(project: string): void {
     "export default defineProject({",
     "  sources: [sampleA],",
     "  phases: [",
-    '    extractTs({ source: sampleA, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
+    '    extractTs({ source: sampleA, collection: "codeindex" }),',
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [],",
     "});",
@@ -102,14 +102,14 @@ async function createDraftProject(): Promise<{ root: string; repo: string; proje
     head,
   ]);
   writeProjectEntry(project);
-  await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+  await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
   const [row] = readRows(project);
-  if (row === undefined) throw new Error("expected extracted codegraph candidate");
+  if (row === undefined) throw new Error("expected extracted codeindex candidate");
   return { root, repo, project, row };
 }
 
-describe("0.6.9 codegraph review apply gates", () => {
-  test("blocks stale codegraph candidates after repo source refresh", async () => {
+describe("0.6.9 codeindex review apply gates", () => {
+  test("blocks stale codeindex candidates after repo source refresh", async () => {
     const { root, repo, project, row } = await createDraftProject();
     try {
       writeFileSync(join(repo, "src", "Button.ts"), [
@@ -135,7 +135,7 @@ describe("0.6.9 codegraph review apply gates", () => {
         nextHead,
       ]);
 
-      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
       expect(apply.status).not.toBe(0);
       expect(apply.stderr).toContain("candidate snapshot is missing or stale");
       expect(existsSync(join(project, "knowledge", row.path))).toBe(false);
@@ -152,25 +152,25 @@ describe("0.6.9 codegraph review apply gates", () => {
       const snapshotPath = candidateSnapshotPath(project, row.id);
       const snapshot = readFileSync(snapshotPath, "utf8");
 
-      await runCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      await runCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
       const oldApprovedPath = join(project, "knowledge", row.path);
       expect(existsSync(oldApprovedPath)).toBe(true);
 
       const movedRow = {
         ...rawRow,
         status: "draft",
-        path: "codegraph/moved/button.md",
+        path: "codeindex/moved/button.md",
         updated: "2026-06-28T00:00:00.000Z",
       };
       writeFileSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"), `${JSON.stringify(movedRow)}\n`, "utf8");
       mkdirSync(dirname(snapshotPath), { recursive: true });
       writeFileSync(snapshotPath, snapshot, "utf8");
 
-      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
       expect(apply.status).not.toBe(0);
       expect(apply.stderr).toContain("approved page already exists for view_ref at a different path");
       expect(existsSync(oldApprovedPath)).toBe(true);
-      expect(existsSync(join(project, "knowledge", "codegraph", "moved", "button.md"))).toBe(false);
+      expect(existsSync(join(project, "knowledge", "codeindex", "moved", "button.md"))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -186,7 +186,7 @@ describe("0.6.9 codegraph review apply gates", () => {
         "title: Existing Other View",
         "type: Wiki",
         "node_ref: entity/other",
-        "view_ref: codegraph:entity/other",
+        "view_ref: codeindex:entity/other",
         "node_type: entity",
         "visibility: exported",
         "tags:",
@@ -202,7 +202,7 @@ describe("0.6.9 codegraph review apply gates", () => {
       ].join("\n");
       writeFileSync(targetPath, existing, "utf8");
 
-      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      const apply = await invokeCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
 
       expect(apply.status).not.toBe(0);
       expect(apply.stderr).toContain("candidate target path already contains a different approved view");

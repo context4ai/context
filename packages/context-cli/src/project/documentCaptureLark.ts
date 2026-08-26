@@ -36,6 +36,7 @@ import {
   type WorkspaceRouteReevaluation,
 } from "./workflow/workflowReceipt.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
 import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
 
 export interface CaptureLarkRunResult {
@@ -170,10 +171,10 @@ function larkErrorRecovery(error: unknown, sourceName: string): {
       next: "Install lark-cli from https://github.com/larksuite/cli, then rerun capture",
     };
   }
-  if (/update|api-version|deprecated|version/iu.test(message)) {
+  if (/does not support --doc-format|api-version|deprecated|unsupported tool version|tool version unsupported/iu.test(message)) {
     return {
       reasonCode: "external.tool-version-unsupported",
-      next: "Upgrade lark-cli and run lark-cli update, then rerun capture",
+      next: "Run lark-cli update, confirm docs +fetch --help lists --doc-format, then rerun capture",
     };
   }
   if (/empty|unsupported payload shape|not JSON|parse/iu.test(message)) {
@@ -306,6 +307,35 @@ function normalizeLarkError(error: unknown, sourceName: string): ContextError {
   });
 }
 
+function assertNoSensitiveLarkSource(input: {
+  sourceName: string;
+  documentPath: string;
+  markdown: string;
+  assets: readonly FetchFeishuDocAsset[];
+}): void {
+  const candidates = [
+    ...sensitiveSourceLiteralCandidates(input.markdown).map((candidate) => ({
+      path: input.documentPath,
+      ...candidate,
+    })),
+    ...input.assets.flatMap((asset) => {
+      if (asset.bytes === undefined || !/\.(?:xml|md|mdx|txt|json|ya?ml)$/iu.test(asset.path)) return [];
+      return sensitiveSourceLiteralCandidates(new TextDecoder().decode(asset.bytes)).map((candidate) => ({
+        path: normalizeSnapshotRelativePath(asset.path),
+        ...candidate,
+      }));
+    }),
+  ];
+  if (candidates.length === 0) return;
+  throw new ContextError(ExitCode.UserError, `lark source ${input.sourceName} contains likely credential literals and was not persisted`, {
+    category: ErrorCategory.UserInputInvalid,
+    code: "lark.capture.sensitive-source-content",
+    sourceName: input.sourceName,
+    candidates,
+    next: "Remove or rotate real credential values in the source document, replace examples with explicit placeholders, then rerun the same capture command. Context does not redact committed evidence snapshots because redaction would invalidate source fidelity.",
+  });
+}
+
 export function isCaptureLarkRunResult(value: unknown): value is CaptureLarkRunResult {
   return value !== null &&
     typeof value === "object" &&
@@ -371,6 +401,12 @@ async function runCaptureLarkPhaseUnlocked(input: {
     const targetPath = normalizeSnapshotRelativePath(`${assetRoot}/${relativePath}`);
     normalized = normalized.split(sourcePath).join(targetPath);
   }
+  assertNoSensitiveLarkSource({
+    sourceName: resolved.sourceName,
+    documentPath,
+    markdown: normalized,
+    assets: fetched.assets,
+  });
   const snapshotFiles: DocumentSnapshotFileInput[] = [{
     path: documentPath,
     bytes: normalized,
@@ -519,6 +555,9 @@ async function runCaptureLarkPhaseUnlocked(input: {
     fidelity: fetched.fidelity,
     resource_materialization: fetched.resourceMaterialization,
     diagnostics: [
+      ...(fetched.identityFallback
+        ? [`info: lark.capture.identity-fallback: user credentials unavailable; captured with ${fetched.accessIdentity} identity`]
+        : []),
       ...fetched.fidelity.issues.map((issue) =>
         `${issue.severity}: ${issue.code}: ${issue.block_type} × ${issue.count}: ${issue.reason}`
       ),

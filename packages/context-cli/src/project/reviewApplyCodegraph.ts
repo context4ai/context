@@ -54,6 +54,16 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/gu, "&gt;");
 }
 
+function renderSectionSourceRefs(refs: readonly string[]): string[] {
+  if (refs.length <= 1) return [];
+  return [
+    "<!-- context:source_refs",
+    JSON.stringify(refs),
+    "/context:source_refs -->",
+    "",
+  ];
+}
+
 export function renderApprovedCodegraphMarkdown(input: {
   record: CandidateRecord;
   snapshot: CandidateSnapshot;
@@ -74,6 +84,14 @@ export function renderApprovedCodegraphMarkdown(input: {
       .filter((member): member is { name: string; kind: string } => typeof member.name === "string" && typeof member.kind === "string")
       .map((member) => `${input.record.module}|${symbolName}|${member.name}|${member.kind}`),
   ])];
+  const codeEdges = (input.record.code_edges ?? []).map((edge) => ({
+    type: edge.type,
+    from: edge.from,
+    to: edge.to,
+    source_refs: edge.source_refs,
+    relationship_mode: input.record.relationship_mode ?? "source-backed-ast",
+    relation_type: edge.relation_type,
+  }));
   const frontmatter = YAML.stringify({
     title,
     type: okfTypeForCollection(input.record.collection),
@@ -89,26 +107,27 @@ export function renderApprovedCodegraphMarkdown(input: {
     sources: localized.sources,
     visibility: input.record.visibility,
     code_symbols: codeSymbols,
+    code_evidence: localized.parsedRefs.map((ref) =>
+      `repo:${ref.source}#symbol:${ref.file}:${ref.symbol}:${ref.kind}@${ref.digest}`
+    ),
     relationship_mode: input.record.relationship_mode ?? "source-backed-ast",
-    code_edges: (input.record.code_edges ?? []).map((edge) => ({
-      type: edge.type,
-      from: edge.from,
-      to: edge.to,
-      source_refs: edge.source_refs,
-      relationship_mode: input.record.relationship_mode ?? "source-backed-ast",
-      relation_type: edge.relation_type,
-      note: `${input.record.relationship_mode === "source-backed-explicit" ? "Explicit" : "AST"} relation: ${edge.relation_type}`,
-    })),
+    ...(codeEdges.length === 0 ? {} : { code_edges: codeEdges }),
     candidate_fingerprint: input.record.fingerprint,
   }).trimEnd();
   const body = cleanApprovedBody(input.snapshot.markdown);
   const renderedSections = (input.record.sections ?? []).flatMap((section) => {
-    const sectionRef = localized.localByCanonical.get(section.source_ref) ?? localized.localRefs[0] ?? "";
+    const canonicalRefs = [...new Set([section.source_ref, ...(section.source_refs ?? [])])];
+    const sectionRefs = canonicalRefs.flatMap((ref) => {
+      const localizedRef = localized.localByCanonical.get(ref);
+      return localizedRef === undefined ? [] : [localizedRef];
+    });
+    const sectionRef = sectionRefs[0] ?? localized.localRefs[0] ?? "";
     return [
       section.title === undefined ? undefined : `## ${section.title}`,
       section.title === undefined ? undefined : "",
       `<!-- context:section id="${escapeHtmlAttribute(section.id)}" kind="${escapeHtmlAttribute(section.kind ?? "description")}" source_ref="${escapeHtmlAttribute(sectionRef)}" -->`,
       "",
+      ...renderSectionSourceRefs(sectionRefs),
       section.body ?? "",
       "",
     ].filter((line): line is string => line !== undefined);

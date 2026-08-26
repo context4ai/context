@@ -119,6 +119,8 @@ export interface CodeIndexUnitPlan {
   facets?: readonly CodeIndexModuleFacet[];
   /** Source-backed reasons for the selected module type. */
   moduleTypeEvidence?: readonly string[];
+  /** Source-relative Markdown documents read while classifying this index unit. */
+  documents?: readonly string[];
   outputProfile: CodeIndexOutputProfile;
   responsibility: string;
   entries: readonly string[];
@@ -153,9 +155,58 @@ export interface CodeIndexCapabilityGap {
   requestedMaterial?: string;
 }
 
+/** Complete source inventory returned by a project adapter for mechanical quality scoring. */
+export interface CodeIndexInspectionInventory {
+  indexUnitId: string;
+  eligibleFiles: number;
+  analyzedFiles: number;
+  /** Complete eligible source identities used as the file denominator. */
+  eligibleFileTargets: readonly string[];
+  /** Complete source identities successfully analyzed by the adapter. */
+  analyzedFileTargets: readonly string[];
+  eligibleLoc: number;
+  analyzedLoc: number;
+  documentsDiscovered: number;
+  documentsRead: number;
+  /** Discovered Markdown identities, relative to the registered source root. */
+  documentTargets?: readonly string[];
+  /** Root README or documentation entry identities that require complete reading. */
+  rootDocumentTargets?: readonly string[];
+  /** Discovered document identities read during module classification. */
+  readDocumentTargets?: readonly string[];
+  /** Documents already referenced by emitted knowledge candidates. */
+  referencedDocumentTargets?: readonly string[];
+  symbolsDiscovered: number;
+  symbolsAnalyzed: number;
+  targetSymbols: number;
+  exportedSymbols: number;
+  /** Stable target identities, normally exported or profile-selected symbol names. */
+  targetSymbolIdentities: readonly string[];
+  /** Public export identities that must remain discoverable. */
+  exportedTargetIdentities: readonly string[];
+  entryTargets: readonly string[];
+  protocolTargets: readonly string[];
+  boundaryTargets?: readonly {
+    kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
+    identity: string;
+  }[];
+  coveredBoundaryTargets?: readonly {
+    kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
+    identity: string;
+  }[];
+  excludedFiles: number;
+  /** Complete identities deliberately excluded after discovery. */
+  excludedFileTargets: readonly string[];
+  excludedReasons: readonly string[];
+  parserSkippedFiles: number;
+  /** Complete eligible identities that the parser could not analyze. */
+  parserSkippedFileTargets: readonly string[];
+}
+
 export interface CodeIndexInspectionResult {
   findings: readonly CodeIndexInspectionFinding[];
   capabilityGaps?: readonly CodeIndexCapabilityGap[];
+  inventories?: readonly CodeIndexInspectionInventory[];
 }
 
 export interface CodeIndexInspectionContext {
@@ -243,6 +294,13 @@ export function normalizeIndexUnit(unit: CodeIndexUnitPlan, field: string): Code
           moduleTypeEvidence: unit.moduleTypeEvidence.map((item, index) =>
             requiredIndexText(item, `${field}.moduleTypeEvidence[${index}]`)
           ),
+        }),
+    ...(unit.documents === undefined
+      ? {}
+      : {
+          documents: [...new Set(unit.documents.map((item, index) =>
+            normalizeExtractEntry(requiredIndexText(item, `${field}.documents[${index}]`))
+          ))],
         }),
     outputProfile: requiredIndexEnum(
       unit.outputProfile,

@@ -44,13 +44,28 @@
           "$ref": "#/$defs/module"
         },
         "local": {
-          "$ref": "#/$defs/nonEmptyString"
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          ],
+          "description": "Local repository or module path resolved from the Context project root. A valid Git checkout supplies origin and current commit when remote/ref are omitted."
         },
         "remote": {
-          "$ref": "#/$defs/nonEmptyString"
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          ],
+          "description": "Repository remote URL. Optional when local resolves to a Git checkout with origin configured."
         },
         "ref": {
-          "$ref": "#/$defs/nonEmptyString"
+          "allOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            }
+          ],
+          "description": "Pinned commit. Optional when local resolves to a Git checkout with a current commit."
         }
       }
     },

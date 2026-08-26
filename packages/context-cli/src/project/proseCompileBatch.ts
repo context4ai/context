@@ -21,6 +21,10 @@ import {
   readApprovedStructureSourceInputs,
 } from "./approvedStructureInputs.js";
 import { readReviewPathIdentityConflicts } from "./reviewIdentityConflicts.js";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 export interface ProseCompileBatchProgress {
   collection: string;
@@ -86,10 +90,16 @@ async function approvedViewRefs(
   planned: ReadonlySet<string>,
 ): Promise<ApprovedViewRef[]> {
   const approved: ApprovedViewRef[] = [];
+  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
-    const content = await readFile(file.absPath, "utf8");
-    if (isDeprecatedApprovedMarkdown(content)) continue;
+    const rawContent = await readFile(file.absPath, "utf8");
+    if (isDeprecatedApprovedMarkdown(rawContent)) continue;
+    const content = hydrateApprovedKnowledgeMarkdown({
+      content: rawContent,
+      relPath: file.relPath,
+      metadata,
+    });
     const frontmatter = parseFrontmatterLoose(content);
     const viewRef = stringField(frontmatter, "view_ref");
     if (viewRef === undefined || !planned.has(viewRef)) continue;

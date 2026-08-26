@@ -9,6 +9,7 @@ import {
 } from "./projectBuildVerifyV060Helpers.js";
 import {
   configureKbNavigation,
+  hydratedApprovedSource,
   writeApprovedFeature,
   writeApprovedGuide,
   writeApprovedRule,
@@ -18,7 +19,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("complete summary closes progress and reports the completed scope", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId);
+      await writeApprovedGuide(fixture.project, fixture.approvedId);
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
       await runCliInDir(fixture.project, ["build", "--format", "json"]);
       const summary = JSON.parse(await runCliInDir(fixture.project, [
@@ -42,7 +43,7 @@ describe("0.6.0 project build, verify, and status", () => {
       expect(summary.completedScope.sourceKeys).toContain(
         "repo:20260712/sample-a",
       );
-      expect(summary.completedScope.collections).toContain("codegraph");
+      expect(summary.completedScope.collections).toContain("codeindex");
       expect(summary.completedScope.collections).toContain("sop");
       expect(summary.completedScope.packages).toContain("sample-kb");
     } finally {
@@ -53,7 +54,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("reports deterministic projection refresh as lifecycle work instead of verification failure", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId);
+      await writeApprovedGuide(fixture.project, fixture.approvedId);
       const status = JSON.parse(await runCliInDir(fixture.project, [
         "status",
         "--format",
@@ -99,7 +100,7 @@ describe("0.6.0 project build, verify, and status", () => {
       expect(createdKb?.changes.added).toContainEqual(expect.objectContaining({
         path: `wikis/${fixture.approvedId}.md`,
         kind: "knowledge-page",
-        group: "wikis/codegraph",
+        group: "wikis/codeindex",
       }));
       expect(createdKb?.changes.added.some((file) => file.kind === "index")).toBe(true);
       expect(createdKb?.changes.updated).toEqual([]);
@@ -133,7 +134,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("build folds small knowledge directories into the OKF root index", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId);
+      await writeApprovedGuide(fixture.project, fixture.approvedId);
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
 
       await runCliInDir(fixture.project, ["build"]);
@@ -179,12 +180,12 @@ describe("0.6.0 project build, verify, and status", () => {
   test("build keeps large leaf indexes while folding thin ancestor indexes", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/first.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/second.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/third.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/first.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/second.md");
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/third.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/first.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/second.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/a/third.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/first.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/second.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/b/third.md");
       configureKbNavigation(fixture.project, {
         foldDirectoryIndexes: true,
         maxInlineEntries: 2,
@@ -214,8 +215,8 @@ describe("0.6.0 project build, verify, and status", () => {
   test("package select filters by internal collection, OKF root, then path globs", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId);
-      writeApprovedRule(fixture.project, fixture.approvedId);
+      await writeApprovedGuide(fixture.project, fixture.approvedId);
+      await writeApprovedRule(fixture.project, fixture.approvedId);
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
       const entryPath = join(fixture.project, "src", "index.ts");
       const entry = readFileSync(entryPath, "utf8");
@@ -267,7 +268,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("package select includes the feats production namespace", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedFeature(fixture.project, fixture.approvedId);
+      await writeApprovedFeature(fixture.project, fixture.approvedId);
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
       const entryPath = join(fixture.project, "src", "index.ts");
       const entry = readFileSync(entryPath, "utf8");
@@ -355,14 +356,14 @@ describe("0.6.0 project build, verify, and status", () => {
         foldDirectoryIndexes: false,
         maxInlineEntries: 50,
       });
-      const collisionPath = join(fixture.project, "src", "package-templates", "kb", "wikis", "codegraph", "index.md");
+      const collisionPath = join(fixture.project, "src", "package-templates", "kb", "wikis", "codeindex", "index.md");
       mkdirSync(dirname(collisionPath), { recursive: true });
       writeFileSync(collisionPath, "# Custom Source Index\n", "utf8");
 
       const build = await invokeCliInDir(fixture.project, ["build"]);
       expect(build.status).not.toBe(0);
       expect(build.stderr).toContain("package template path collides with generated OKF directory index");
-      expect(build.stderr).toContain("wikis/codegraph/index.md");
+      expect(build.stderr).toContain("wikis/codeindex/index.md");
 
       const status = await runCliInDir(fixture.project, ["status"]);
       expect(status).toContain("state: route.workspace.state-invalid");
@@ -375,7 +376,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("build rejects package template paths that collide with generated non-wikis directory indexes", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId);
+      await writeApprovedGuide(fixture.project, fixture.approvedId);
       configureKbNavigation(fixture.project, {
         foldDirectoryIndexes: false,
         maxInlineEntries: 50,
@@ -397,19 +398,19 @@ describe("0.6.0 project build, verify, and status", () => {
   test("build rejects approved concept pages that occupy OKF directory index paths", async () => {
     const fixture = await createApprovedProject();
     try {
-      const approved = readFileSync(join(fixture.project, "knowledge", `${fixture.approvedId}.md`), "utf8");
-      const reservedPath = join(fixture.project, "knowledge", "codegraph", "index.md");
+      const approved = await hydratedApprovedSource(fixture.project, fixture.approvedId);
+      const reservedPath = join(fixture.project, "knowledge", "codeindex", "index.md");
       mkdirSync(dirname(reservedPath), { recursive: true });
       writeFileSync(reservedPath, approved
         .replace("title: Button", "title: Sample A Index")
         .replace(/^node_ref: .+$/mu, "node_ref: index")
-        .replace(/^view_ref: .+$/mu, "view_ref: codegraph:index"), "utf8");
+        .replace(/^view_ref: .+$/mu, "view_ref: codeindex:index"), "utf8");
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
 
       const build = await invokeCliInDir(fixture.project, ["build"]);
       expect(build.status).not.toBe(0);
       expect(build.stderr).toContain("approved knowledge path uses reserved OKF index path");
-      expect(build.stderr).toContain("wikis/codegraph/index.md");
+      expect(build.stderr).toContain("wikis/codeindex/index.md");
 
       const status = await runCliInDir(fixture.project, ["status"]);
       expect(status).toContain("state: route.workspace.state-invalid");
@@ -422,7 +423,7 @@ describe("0.6.0 project build, verify, and status", () => {
   test("build rejects non-wikis approved concept pages that occupy OKF directory index paths", async () => {
     const fixture = await createApprovedProject();
     try {
-      writeApprovedGuide(fixture.project, fixture.approvedId, "domain/index.md");
+      await writeApprovedGuide(fixture.project, fixture.approvedId, "domain/index.md");
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
       const build = await invokeCliInDir(fixture.project, ["build"]);
       expect(build.status).not.toBe(0);
@@ -521,8 +522,8 @@ describe("0.6.0 project build, verify, and status", () => {
       await runCliInDir(fixture.project, ["build"]);
       const inventory = readFileSync(join(fixture.project, "dist", "sample-kb", "meta", "inventory.md"), "utf8");
       expect(inventory).not.toContain("context:template");
-      expect(inventory).toContain("## codegraph group=codegraph root=wikis");
-      expect(inventory).toContain(`1. [Button](../wikis/${fixture.approvedId}.md) collection=codegraph root=wikis`);
+      expect(inventory).toContain("## codeindex group=codeindex root=wikis");
+      expect(inventory).toContain(`1. [Button](../wikis/${fixture.approvedId}.md) collection=codeindex root=wikis`);
       expect(inventory).toContain("Exported function symbol from src/Button.ts");
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });

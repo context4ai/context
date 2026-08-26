@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import YAML from "yaml";
 import {
   appendRejectedCandidate,
   createApprovedProject,
@@ -81,7 +82,7 @@ describe("0.6.0 project package output", () => {
       expect(build).toContain("sample-llms");
       expect(build).toContain("sample-kb (kb, created)");
       expect(build).toContain("added:");
-      expect(build).toContain("wikis/codegraph: 1 page(s)");
+      expect(build).toContain("wikis/codeindex: 1 page(s)");
       expect(build).toContain("indexes:");
       expect(build).toContain("resources: 1 file(s)");
 
@@ -123,11 +124,11 @@ describe("0.6.0 project package output", () => {
       expect(kbIndex).toContain("knowledge_count: 1");
       expect(kbIndex).not.toContain("\ncontext:\n");
       expect(kbIndex).toContain("## Contents");
-      expect(kbIndex).toContain("[Button](./codegraph/sample-a/symbol/button.md) - Wiki");
+      expect(kbIndex).toContain("[Button](./codeindex/sample-a/symbol/button.md) - Wiki");
       expect(kbIndex).not.toContain("context:template");
-      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codegraph", "index.md"))).toBe(false);
-      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codegraph", "sample-a", "index.md"))).toBe(false);
-      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codegraph", "sample-a", "symbol", "index.md"))).toBe(false);
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codeindex", "index.md"))).toBe(false);
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codeindex", "sample-a", "index.md"))).toBe(false);
+      expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", "codeindex", "sample-a", "symbol", "index.md"))).toBe(false);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "meta", "sample-kb.txt"))).toBe(true);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "context-code-index-audit.json"))).toBe(false);
       expect(existsSync(join(fixture.project, "dist", "sample-kb", "wikis", `${fixture.approvedId}.md`))).toBe(true);
@@ -137,7 +138,12 @@ describe("0.6.0 project package output", () => {
       expect(readFileSync(distributedResource, "utf8")).toBe("image-bytes");
       expect(distributedPage).toContain(`others/assets/image/${resourceHash}.png`);
       expect(approvedPage).toContain("node_type: entity");
-      expect(approvedPage).toContain("candidate_fingerprint: sha256:");
+      expect(approvedPage).not.toContain("candidate_fingerprint:");
+      const structure = YAML.parse(readFileSync(join(fixture.project, "knowledge", "structure.yaml"), "utf8")) as {
+        views: Array<{ path: string; machine?: { candidate_fingerprint?: string } }>;
+      };
+      expect(structure.views.find((view) => view.path === `${fixture.approvedId}.md`)?.machine?.candidate_fingerprint)
+        .toMatch(/^sha256:/u);
       expect(distributedPage).not.toContain("sources:");
       expect(distributedPage).not.toContain("context:section");
       expect(distributedPage).not.toContain("context:summary");
@@ -194,14 +200,14 @@ describe("0.6.0 project package output", () => {
       expect(kbInventory.schema_version).toBe("context.package-build-inventory.v1");
       expect(kbInventory.approved_knowledge.count).toBe(1);
       expect(kbInventory.approved_knowledge.files[0]).toMatchObject({
-        collection: "codegraph",
-        internal_collection: "codegraph",
+        collection: "codeindex",
+        internal_collection: "codeindex",
         okf_root: "wikis",
         approved_path: `${fixture.approvedId}.md`,
         dist_path: `wikis/${fixture.approvedId}.md`,
         path_within_collection: `${fixture.approvedId}.md`,
-        node_ref: fixture.approvedId.replace(/^codegraph\//u, ""),
-        view_ref: `codegraph:${fixture.approvedId.replace(/^codegraph\//u, "")}`,
+        node_ref: fixture.approvedId.replace(/^codeindex\//u, ""),
+        view_ref: `codeindex:${fixture.approvedId.replace(/^codeindex\//u, "")}`,
         source: "20260712/sample-a",
         selected_by: [{ kind: "default", value: "all" }],
         production_metadata: {
@@ -211,9 +217,9 @@ describe("0.6.0 project package output", () => {
         },
       });
       expect(kbInventory.approved_knowledge.groups[0]).toMatchObject({
-        name: "codegraph",
-        collection: "codegraph",
-        internal_collection: "codegraph",
+        name: "codeindex",
+        collection: "codeindex",
+        internal_collection: "codeindex",
         okf_root: "wikis",
         edge_count: 0,
         has_index: false,

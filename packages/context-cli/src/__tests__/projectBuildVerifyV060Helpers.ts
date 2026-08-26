@@ -169,20 +169,24 @@ export async function createApprovedProject(options: {
   ]);
   writeProjectEntry(project);
   writePackageTemplates(project);
-  await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+  await runCliInDir(project, [
+    "run", "--preview-extraction-batch", "--preview-phase", "extract:20260712/sample-a:codeindex", "--format", "json",
+  ]);
+  await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
   const [row] = readRows(project);
   if (!row) throw new Error("expected one extracted candidate");
-  if (options.approvedMarkdownSuffix !== undefined) {
-    const snapshotPath = join(project, ".tmp", "context-runtime", "extract", "candidates", `${row.id}.json`);
-    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as { markdown: string };
-    snapshot.markdown = `${snapshot.markdown.trimEnd()}\n\n${options.approvedMarkdownSuffix.trim()}\n`;
-    writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-  }
-  await runCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+  const snapshotPath = join(project, ".tmp", "context-runtime", "extract", "candidates", `${row.id}.json`);
+  const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8")) as { markdown: string };
+  snapshot.markdown = [
+    snapshot.markdown.trimEnd(),
+    options.approvedMarkdownSuffix?.trim() ?? "",
+  ].filter((part) => part.length > 0).join("\n\n") + "\n";
+  writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
   await acceptCurrentCodeIndexAudit(
     project,
     "The fixture's single exported symbol page matches its intentionally narrow scope.",
   );
+  await runCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
   await options.beforeClose?.(project);
   await runCliInDir(project, ["close", "--format", "json"]);
   return {
@@ -265,19 +269,19 @@ function appendCandidate(project: string, input: {
   sourceRef: string;
 }): void {
   const nodeRef = input.id;
-  const viewRef = `codegraph:${nodeRef}`;
-  const candidateId = `codegraph/${nodeRef}`;
+  const viewRef = `codeindex:${nodeRef}`;
+  const candidateId = `codeindex/${nodeRef}`;
   const row: CandidateRow = {
     id: candidateId,
     candidate_id: candidateId,
     node_ref: nodeRef,
     view_ref: viewRef,
-    collection: "codegraph",
+    collection: "codeindex",
     status: input.status,
     kind: "component",
     visibility: "exported",
     module: "sample-lib",
-    path: `codegraph/${nodeRef}.md`,
+    path: `codeindex/${nodeRef}.md`,
     source_refs: [input.sourceRef],
     fingerprint: `sha256:${createHash("sha256").update(`${input.status}:${candidateId}`).digest("hex")}`,
     review: {
@@ -313,8 +317,8 @@ function writeProjectEntry(project: string): void {
     "export default defineProject({",
     "  sources: [sampleA],",
     "  phases: [",
-    '    extractTs({ source: sampleA, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
+    '    extractTs({ source: sampleA, collection: "codeindex" }),',
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [",
     "    kbPackage({",
@@ -324,7 +328,7 @@ function writeProjectEntry(project: string): void {
     "    llmsPackage({",
     '      name: "sample-llms",',
     '      template: "src/package-templates/llms",',
-    '      select: { include: ["codegraph/sample-a/**"] },',
+    '      select: { include: ["codeindex/sample-a/**"] },',
     "    }),",
     "  ],",
     "});",

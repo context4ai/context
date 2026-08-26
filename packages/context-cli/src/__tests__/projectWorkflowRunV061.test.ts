@@ -88,7 +88,7 @@ describe("managed workflow run-to-completion", () => {
     });
   });
 
-  test("does not execute external or stdin actions without automatic eligibility", () => {
+  test("does not execute external or structured-input actions without automatic eligibility", () => {
     expect(selectAutomaticWorkflowCommand(statusWithCommand({
       command: "context source ensure --format json",
       effect: "external",
@@ -98,12 +98,12 @@ describe("managed workflow run-to-completion", () => {
       stop: { reasonCode: "workflow.until.agent-execution-required" },
     });
     expect(selectAutomaticWorkflowCommand(statusWithCommand({
-      command: "context review maintain --input - --format json",
+      command: "context review maintain --input .tmp/agent-payloads/evidence-maintenance.json --format json",
       effect: "write",
-      managed_execution: "automatic",
+      managed_execution: "agent-required",
     }))).toMatchObject({
       state: "blocked",
-      stop: { reasonCode: "workflow.until.agent-input-required" },
+      stop: { reasonCode: "workflow.until.agent-execution-required" },
     });
   });
 

@@ -143,16 +143,19 @@ context/
 - `context <command> --help` 是当前参数的权威来源；
 - `context plugin status` 检查已安装的 Agent 投影；
 - `context debug enable` 在 `.tmp/context-runtime/debug/` 记录可选轨迹；
-- 新工作区默认开启保守的文档修订；`context optimize-docs enable|disable`
+- 新工作区默认开启来源约束的编辑修订；`context optimize-docs enable|disable`
   可调整工作区偏好，同时保持 `knowledge/` 中的正式知识不变；
 - `context revise "<标题或正式知识路径>"` 从对话启动一次单页修正，校验后再由
   Route 提示重新构建；
+- 代码提取写入 `knowledge/codeindex/**`，并在 Review 前分别检查输入分析、稳定边界
+  覆盖、正文密度、证据范围和页面规模；旧 `codegraph` 工作区只通过 Route 返回的
+  迁移动作升级；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
 
 绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，
 不能替代当前 Route。参见[安装后快速说明](./docs/quickstart.zh-CN.md)和
 [debug tracing](./docs/debug-tracing.md)。
-文档编译优化与对话修订参见[文档修订页](./docs/document-optimization.zh-CN.md)。
+文档编译优化与对话修订参见[来源约束的编辑修订](./docs/document-optimization.zh-CN.md)。
 
 ## 文档与开发
 

@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import YAML from "yaml";
 import {
   appendDraftCandidate,
+  acceptCurrentCodeIndexAudit,
   commitAll,
   createApprovedProject,
   invokeCliInDir,
@@ -47,13 +49,13 @@ describe("0.6.0 project verify and status", () => {
 
       rmSync(join(fixture.project, ".tmp", "context-runtime", "extract", "source-fingerprints.json"), { force: true });
       const unknownBaselineStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(unknownBaselineStatus).toContain("state: route.extract.preview-required");
+      expect(unknownBaselineStatus).toContain("state: route.extract.pending-target");
       expect(unknownBaselineStatus).toContain("source freshness: unknown");
       expect(unknownBaselineStatus).toContain("evidence status: pass-with-unverifiable-evidence");
       expect(unknownBaselineStatus).toContain("evidence warning: degraded");
-      expect(unknownBaselineStatus).toContain("run --preview-extraction-batch");
+      expect(unknownBaselineStatus).toContain("run extract:20260712/sample-a:codeindex");
 
-      await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codeindex"]);
       await runCliInDir(fixture.project, ["build"]);
       const builtAgentPath = join(fixture.project, "dist", "sample-kb", "AGENTS.md");
       writeFileSync(builtAgentPath, `${readFileSync(builtAgentPath, "utf8")}tampered=true\n`, "utf8");
@@ -92,7 +94,10 @@ describe("0.6.0 project verify and status", () => {
       expect(sourceStaleStatus).toContain("run --preview-extraction-batch");
       expect(sourceStaleStatus).not.toContain("state: route.review.decision-required");
 
-      await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(fixture.project, [
+        "run", "extract:20260712/sample-a:codeindex", "--auto-promote",
+      ]);
+      await acceptCurrentCodeIndexAudit(fixture.project);
       await runCliInDir(fixture.project, ["build"]);
       const templatePath = join(fixture.project, "src", "package-templates", "kb", "AGENTS.md");
       writeFileSync(templatePath, `${readFileSync(templatePath, "utf8")}template-changed=true\n`, "utf8");
@@ -110,10 +115,20 @@ describe("0.6.0 project verify and status", () => {
 
       const approvedPath = join(fixture.project, "knowledge", `${fixture.approvedId}.md`);
       const approved = readFileSync(approvedPath, "utf8");
-      writeFileSync(approvedPath, approved.replace(/\ncode_symbols:\n(?:  - .+\n)+/u, "\n"), "utf8");
+      const structurePath = join(fixture.project, "knowledge", "structure.yaml");
+      const originalStructure = readFileSync(structurePath, "utf8");
+      const structure = YAML.parse(originalStructure) as {
+        views: Array<{ path: string; machine?: Record<string, unknown> }>;
+      };
+      const approvedView = structure.views.find((view) => view.path === `${fixture.approvedId}.md`);
+      if (approvedView?.machine === undefined) throw new Error("expected approved machine metadata");
+      delete approvedView.machine.code_symbols;
+      delete approvedView.machine.code_symbol_table;
+      writeFileSync(structurePath, YAML.stringify(structure), "utf8");
       const missingCodeSymbols = await invokeCliInDir(fixture.project, ["verify"]);
       expect(missingCodeSymbols.status).not.toBe(0);
       expect(missingCodeSymbols.stdout).toContain("approved-code-symbols-invalid");
+      writeFileSync(structurePath, originalStructure, "utf8");
 
       writeFileSync(approvedPath, approved.replace("repo:20260712/sample-a", "repo:20260712/missing"), "utf8");
       const missingSource = await invokeCliInDir(fixture.project, ["verify"]);
@@ -168,7 +183,7 @@ describe("0.6.0 project verify and status", () => {
       writeFileSync(projectEntry, originalEntry.replace('source("20260712", "sample-a")', 'source("20260712", "missing-a")'), "utf8");
       const missingPhaseSource = await runCliInDir(fixture.project, ["status"]);
       expect(missingPhaseSource).toContain("state: route.workspace.state-invalid");
-      expect(missingPhaseSource).toContain("extract phase extract:20260712/missing-a:codegraph has no matching repo source");
+      expect(missingPhaseSource).toContain("extract phase extract:20260712/missing-a:codeindex has no matching repo source");
       expect(missingPhaseSource).not.toContain("Source inputs changed");
 
       writeFileSync(projectEntry, originalEntry, "utf8");

@@ -27,6 +27,10 @@ selected package's public SDK/README before editing `src/index.ts`; never infer
 its API from bundled output. `moduleTypeEvidence` must identify the inspected
 paths that support the classification. An `unknown` unit or a unit with no
 classification evidence is an incomplete index plan.
+Record exact source-relative Markdown paths read during classification in
+`indexUnits[].documents`. Context inventories module Markdown independently:
+root README or documentation entry files require complete reading, while other
+related Markdown uses the reported Floor and Target coverage.
 
 For every custom extraction preview, Context probes source paths for known
 community structural capabilities: TypeScript symbols, React Router routes, Go
@@ -48,6 +52,15 @@ Exports-only single-package TypeScript extraction has a compatible stable
 public-contract plan. Scan mode, repository collections, and custom extraction
 must declare their index units explicitly; an inferred plan is diagnostic only
 and cannot write candidates.
+
+Every index unit must expose one inventory contract. Built-in parsers produce
+it from AST and source traversal; a project adapter returns the same generic
+shape. The inventory separates eligible/analyzed files and non-empty LOC,
+discovered/read Markdown, discovered/analyzed/target/exported symbols, stable
+entries and profile-selected boundaries, plus excluded files and reasons. JSON,
+YAML, lockfiles and assets may be evidence but do not inflate source LOC.
+Evidence-only adapter output is explicitly `unscorable` and cannot pass the
+mechanical quality Gate as a complete module index.
 
 Extractor output shape must match the semantic plan. `extractTs()` projects one
 candidate page per selected symbol and assigns each source to one index unit;
@@ -82,13 +95,17 @@ rerun the batch preview, then process exactly one pending extraction target and
 evaluate again. Do not add a second classification Gate after the page-count
 Gate; a plan revision returns through the same configuration step.
 
-A batch-total page warning and quality risks such as a thin aggregate are
-advisory only. They remain visible for cost and content-shape review but do not
-become a new Gate. Legal scale recovery includes narrowing `include`, excluding
-generated or mirrored directories, enabling `exportedOnly`, moving from a
-symbol catalog to an aggregated `extractCustom()` plan, or registering real
-child sources. Splitting one `extractTs()` source into overlapping units is not
-a valid workaround.
+A batch-total page warning remains advisory. After extraction, independent
+mechanical dimensions enforce source analysis, target-boundary coverage,
+facts/explanation, evidence scope, implementation ratio, and page shape.
+Aggregate custom candidates are rendered only from evidence-scoped `sections`;
+free Markdown, empty optional sections, template instructions, and placeholders
+cannot become reader-facing knowledge. A required Section without evidence is a
+material/capability gap instead of an empty heading. Legal scale recovery
+includes narrowing `include`, excluding generated or mirrored directories,
+enabling `exportedOnly`, moving from a symbol catalog to an aggregated
+`extractCustom()` plan, or registering real child sources. Splitting one
+`extractTs()` source into overlapping units is not a valid workaround.
 
 Current previews are cached below `.tmp/context-runtime/extract/previews/` and
 formal extraction reuses their validated structural result. Cache identity is
@@ -96,6 +113,12 @@ bound to source scope, phase/adapter declarations, project `src/`, dependency
 locks, and the preview protocol. Deleting
 `.tmp` only causes a fresh preview. Existing approved knowledge is not
 retroactively rejected solely because it is large.
+
+New workspaces write `knowledge/codeindex/**`. If an old workspace contains
+legacy `knowledge/codegraph/**`, follow the Route-returned
+`context migrate codeindex --format json` action. It rewrites formal collection
+identities and invalidates derived extraction/audit state without requiring
+`.tmp`. Never create a permanent dual-write or move the directory by hand.
 
 Do not open Review while another extraction target in the same batch remains.
 Unchanged approved or rejected symbols do not need another decision; new or
@@ -148,10 +171,11 @@ empty or guessed graph.
 
 After every complete code-extraction batch, the Route produces one batch-level
 code-index audit. Mechanical signals cover content depth, evidence scope,
-declared-source coverage, and structured handoffs. They are review evidence,
-not an automatic numeric rejection: the Agent must inspect the affected pages
-and submit one `accept`, `revise`, or `request-input` decision for all index
-units together.
+declared-source coverage, and structured handoffs. A dimension outside its
+absolute bounds is a mechanical rejection and cannot be accepted. Advisory or
+elevated signals inside those bounds remain review evidence: the Agent must
+inspect the affected pages and submit one `accept`, `revise`, or
+`request-input` decision for all index units together.
 
 Do not split this into one confirmation per module. In fully managed operation,
 real issues select `revise` and the Route returns through project configuration,

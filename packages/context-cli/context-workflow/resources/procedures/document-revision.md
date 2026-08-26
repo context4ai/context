@@ -8,7 +8,10 @@ mediaType: text/markdown
 
 Use this procedure only for a correction explicitly requested by the user after
 an approved knowledge page already exists. The request selects one page; it
-does not authorize a broad rewrite or a change to source facts.
+does not authorize a free rewrite or a change to source facts. It may repair or
+reshape reader-visible content within one existing Context Section, and may
+omit a complete Section only when the current source supports a documented
+non-knowledge reason.
 
 1. Run the Route command `context optimize-docs revise-current --format json`.
 2. Read the complete approved page and its sibling `__revision.md` page named
@@ -16,12 +19,14 @@ does not authorize a broad rewrite or a change to source facts.
    could change a fact rather than formatting or wording.
 3. Edit only the returned revision page. Preserve its frontmatter identity,
    `context_revision` baseline, Context section boundaries, evidence markers,
-   links, code, numbers, and unsupported details. Make the smallest change that
-   satisfies the user's request. Never edit the approved base page for this
-   operation.
+   link destinations, images, code, numbers, identifiers, and supported facts.
+   A wide table may become an index plus detail entries, and a source-backed
+   list may be reorganized, but facts cannot move across Section boundaries.
+   Never edit the approved base page for this operation.
 4. Run `context optimize-docs validate --format json`. If validation reports a
-   stale baseline, unsafe replacement, or missing evidence, stop and report the
-   exact finding instead of weakening the correction.
+   stale baseline, protected-value change, unsupported omission, broad rewrite,
+   or missing evidence, stop and report the exact finding instead of weakening
+   the correction.
 5. Continue from the returned `context status --format json` Route. A valid
    correction makes the package stale, so the normal build Route will offer
    compilation without requiring a second correction decision.

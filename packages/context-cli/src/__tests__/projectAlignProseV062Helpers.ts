@@ -322,13 +322,13 @@ export async function writeApprovedStructure(projectRoot: string, sourceRef: str
   })}\n`, "utf8");
 }
 
-export function writeCodegraphApprovedStructure(projectRoot: string): void {
-  mkdirSync(join(projectRoot, "knowledge", "codegraph", "services"), { recursive: true });
-  writeFileSync(join(projectRoot, "knowledge", "codegraph", "services", "gateway.md"), [
+export function writeCodeindexApprovedStructure(projectRoot: string): void {
+  mkdirSync(join(projectRoot, "knowledge", "codeindex", "services"), { recursive: true });
+  writeFileSync(join(projectRoot, "knowledge", "codeindex", "services", "gateway.md"), [
     "---",
     "title: Gateway",
     "type: Wiki",
-    "description: Approved codegraph gateway.",
+    "description: Approved code index gateway.",
     "tags:",
     "  - module",
     "timestamp: 2026-06-24T12:00:00Z",
@@ -336,7 +336,7 @@ export function writeCodegraphApprovedStructure(projectRoot: string): void {
     "sources:",
     "  - repo:product-docs",
     "node_ref: entity/gateway",
-    "view_ref: codegraph:entity/gateway",
+    "view_ref: codeindex:entity/gateway",
     "node_type: entity",
     "visibility: public",
     "code_symbols:",
@@ -355,14 +355,14 @@ export function writeCodegraphApprovedStructure(projectRoot: string): void {
       node_type: "entity",
     }],
     views: [{
-      view_ref: "codegraph:entity/gateway",
+      view_ref: "codeindex:entity/gateway",
       node_ref: "entity/gateway",
-      collection: "codegraph",
+      collection: "codeindex",
       containment: "services",
       slug: "gateway",
       title: "Gateway",
       node_type: "entity",
-      path: "codegraph/services/gateway.md",
+      path: "codeindex/services/gateway.md",
       sections: [],
     }],
     edges: [],

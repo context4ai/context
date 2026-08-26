@@ -458,7 +458,8 @@ export function payloadSchema(
     evidence_snapshot_hash: snapshotHash ?? "<copy read-plan.snapshot.snapshot_hash>",
     legal_collections: DOC_MAINLINE_COLLECTIONS,
     non_targets: {
-      codegraph: "codegraph is produced by AST extraction, not prose align.",
+      codeindex: "codeindex is produced by code extraction, not prose align.",
+      codegraph: "legacy codegraph is produced by code extraction, not prose align.",
       feats: "feats is an OKF output namespace and is not a prose align target.",
     },
     legal_section_kinds: PROSE_SECTION_KINDS,

@@ -138,8 +138,8 @@ function writeProjectEntry(project: string): void {
     "export default defineProject({",
     "  sources: [sampleLib],",
     "  phases: [",
-    '    extractTs({ source: sampleLib, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
+    '    extractTs({ source: sampleLib, collection: "codeindex" }),',
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [",
     "    kbPackage({",
@@ -149,7 +149,7 @@ function writeProjectEntry(project: string): void {
     "    llmsPackage({",
     '      name: "sample-llms",',
     '      template: "src/package-templates/llms",',
-    '      select: { include: ["codegraph/sample-lib/**"] },',
+    '      select: { include: ["codeindex/sample-lib/**"] },',
     "    }),",
     "  ],",
     "});",
@@ -278,12 +278,12 @@ describe("0.6.0 current workflow acceptance", () => {
       const previewedStatus = await runCliInDir(project, ["status"]);
       expect(previewedStatus).toContain("state: route.extract.pending-target");
 
-      const dryRun = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph", "--dry-run"]);
+      const dryRun = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex", "--dry-run"]);
       expect(dryRun).toContain("reads: source:repo:20260712/sample-lib");
-      expect(dryRun).toContain("writes: lifecycle:candidates:codegraph:draft");
+      expect(dryRun).toContain("writes: lifecycle:candidates:codeindex:draft");
       expect(existsSync(join(project, ".tmp", "context-runtime", "runs"))).toBe(false);
 
-      const extract = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      const extract = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       expect(extract).toContain("drafts: +");
       const rows = readRows(project);
       const button = rows.find((row) => row.review.title === "Button");
@@ -291,7 +291,7 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(button).toBeDefined();
       expect(secret).toBeDefined();
       for (const row of rows) {
-        expect(row.collection).toBe("codegraph");
+        expect(row.collection).toBe("codeindex");
         expect(row.status).toBe("draft");
         expect(row.source_refs[0] ?? "").toStartWith("repo:20260712/sample-lib#symbol:");
         expect(row).not.toHaveProperty("content");
@@ -310,12 +310,12 @@ describe("0.6.0 current workflow acceptance", () => {
 
       const needsReview = await runCliInDir(project, ["status"]);
       expect(needsReview).toContain("state: route.review.decision-required");
-      expect(needsReview).toContain("review html codegraph --open");
+      expect(needsReview).toContain("review html codeindex --open");
       expect(needsReview).toContain("--workflow-revision");
       expect(needsReview).toContain("human gate → knowledge-review");
       expect(needsReview).toContain("current candidate batch needs one review decision set");
 
-      const reviewHtml = JSON.parse(await runCliInDir(project, ["review", "html", "codegraph", "--format", "json"])) as {
+      const reviewHtml = JSON.parse(await runCliInDir(project, ["review", "html", "codeindex", "--format", "json"])) as {
         path: string;
         url: string;
         candidates: number;
@@ -339,7 +339,7 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(html).toContain('[item.candidate_id, "pending"]');
       expect(html).toContain("Review payload is not ready");
 
-      const reviewList = JSON.parse(await runCliInDir(project, ["review", "list", "codegraph", "--format", "json"])) as Array<{
+      const reviewList = JSON.parse(await runCliInDir(project, ["review", "list", "codeindex", "--format", "json"])) as Array<{
         candidate_id: string;
         status: string;
         snapshot_ready: boolean;
@@ -353,27 +353,26 @@ describe("0.6.0 current workflow acceptance", () => {
       writeFileSync(join(project, "review-payload.jsonl"), [
         JSON.stringify({
           schema: "context.review.decisions.v1",
-          collection: "codegraph",
-          default: "rejected",
+          collection: "codeindex",
+          default: "approved",
           total: draftIds.length,
-          counts: { approved: 1, rejected: draftIds.length - 1 },
+          counts: { approved: draftIds.length, rejected: 0 },
           scope: {
             count: draftIds.length,
             ids_sha256: idsHash(draftIds),
           },
           note: "apply workflow acceptance decisions",
         }),
-        JSON.stringify({ candidate_id: button?.id, status: "approved" }),
         "",
       ].join("\n"), "utf8");
       const apply = await runCliInDir(project, ["review", "apply", "review-payload.jsonl"]);
-      expect(apply).toContain("approved: 1");
-      expect(apply).toContain("rejected: 1");
-      expect(apply).toContain("materialized: 1");
+      expect(apply).toContain("approved: 2");
+      expect(apply).toContain("rejected: 0");
+      expect(apply).toContain("materialized: 2");
 
       const afterApplyRows = readRows(project);
       expect(afterApplyRows.find((row) => row.id === button?.id)).toBeUndefined();
-      expect(afterApplyRows.find((row) => row.id === secret?.id)?.status).toBe("rejected");
+      expect(afterApplyRows.find((row) => row.id === secret?.id)).toBeUndefined();
       const approvedPath = join(project, "knowledge", button?.path ?? "");
       const approved = readFileSync(approvedPath, "utf8");
       const timestamp = readTimestamp(approved);
@@ -384,7 +383,7 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(approved).toContain("sources:\n  - repo:20260712/sample-lib");
       expect(approved).toContain("visibility: exported");
       expect(approved).toContain("node_ref: sample-lib/symbol/button");
-      expect(approved).toContain("view_ref: codegraph:sample-lib/symbol/button");
+      expect(approved).toContain("view_ref: codeindex:sample-lib/symbol/button");
       expect(approved).toContain("code_symbols:\n  - sample-lib|Button|function");
       expect(approved).toContain('source_ref="src-1#symbol:src/Button.ts:Button:function@');
       expect(approved).toContain("candidate_fingerprint: sha256:");
@@ -400,7 +399,7 @@ describe("0.6.0 current workflow acceptance", () => {
       const stalePayload = await invokeCliInDir(project, ["review", "apply", "review-payload.jsonl"]);
       expect(stalePayload.status).not.toBe(0);
       expect(stalePayload.stderr).toContain("review payload is stale");
-      const repeatApply = await invokeCliInDir(project, ["review", "approve", button?.id ?? "", "--collection", "codegraph"]);
+      const repeatApply = await invokeCliInDir(project, ["review", "approve", button?.id ?? "", "--collection", "codeindex"]);
       expect(repeatApply.status).not.toBe(0);
       expect(repeatApply.stderr).toContain("outside scoped draft candidates");
       const approvedAfterRepeat = readFileSync(approvedPath, "utf8");
@@ -414,14 +413,16 @@ describe("0.6.0 current workflow acceptance", () => {
         verifyErrors: number;
       };
       expect(close.structure).toBe("knowledge/structure.yaml");
-      expect(close.nodes).toBe(1);
+      expect(close.nodes).toBe(2);
       expect(close.edgeContract).toMatchObject({ validationScope: "structure", valid: true });
       expect(close.verifyErrors).toBe(0);
       expect(existsSync(join(project, ".tmp", "context-runtime", "lifecycle"))).toBe(false);
-      expect(JSON.parse(readFileSync(join(project, "knowledge", "decisions.json"), "utf8"))).toEqual({
-        [secret!.id]: secret!.fingerprint,
-      });
+      expect(existsSync(join(project, "knowledge", "decisions.json"))).toBe(false);
 
+      await acceptCurrentCodeIndexAudit(
+        project,
+        "The formally approved subset preserves the exported symbol required by this workflow fixture.",
+      );
       const readyToBuild = await runCliInDir(project, ["status"]);
       expect(readyToBuild).toContain("state: route.build.package-stale");
 
@@ -438,10 +439,10 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(kbIndex).toContain("timestamp:");
       expect(kbIndex).toContain("package: \"sample-kb\"");
       expect(kbIndex).toContain("package_kind: \"kb\"");
-      expect(kbIndex).toContain("knowledge_count: 1");
+      expect(kbIndex).toContain("knowledge_count: 2");
       expect(kbIndex).not.toContain("\ncontext:\n");
       expect(llms).toContain("Primary button used by product screens.");
-      expect(llms).not.toContain("Internal secret exported only for packaging exclusion tests.");
+      expect(llms).toContain("Internal secret exported only for packaging exclusion tests.");
       expect(querySkill).toContain("Evidence Contract");
       expect(querySkill).toContain("Search Fallback");
       expect(querySkill).toContain("Do not infer a relationship from page co-occurrence");
@@ -452,7 +453,14 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(built).toContain("state: workflow.complete");
       expect(built).toContain("verify: 0 error(s)");
 
-      writeFileSync(approvedPath, approved.replace(/@[a-f0-9]+/u, "@000000000000"), "utf8");
+      writeFileSync(
+        approvedPath,
+        approved.replace(
+          /(source_ref="[^"]+@)(?:sha256:)?[a-f0-9]+/u,
+          (_match, prefix: string) => `${prefix}000000000000`,
+        ),
+        "utf8",
+      );
       const brokenVerify = await invokeCliInDir(project, ["verify"]);
       expect(brokenVerify.status).not.toBe(0);
       expect(brokenVerify.stdout).toContain("approved-source-ref-stale");
@@ -490,9 +498,7 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(sourceStale).toContain("--workflow-revision");
       expect(sourceStale).toContain("run --preview-extraction-batch");
       expect(readRows(project)).toEqual([]);
-      expect(JSON.parse(readFileSync(join(project, "knowledge", "decisions.json"), "utf8"))).toEqual({
-        [secret!.id]: secret!.fingerprint,
-      });
+      expect(existsSync(join(project, "knowledge", "decisions.json"))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -521,7 +527,7 @@ describe("0.6.0 current workflow acceptance", () => {
         "--ref",
         head,
       ]);
-      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
 
       const rows = readRows(project);
       const button = rows.find((row) => row.review.title === "Button");
@@ -530,7 +536,7 @@ describe("0.6.0 current workflow acceptance", () => {
       writeFileSync(join(project, "review-payload.jsonl"), [
         JSON.stringify({
           schema: "context.review.decisions.v1",
-          collection: "codegraph",
+          collection: "codeindex",
           default: "rejected",
           total: ids.length,
           counts: { approved: 1, rejected: ids.length - 1 },

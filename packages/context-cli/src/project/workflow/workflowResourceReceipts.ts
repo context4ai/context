@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { isAbsolute, join, sep, resolve } from "node:path";
 import {
   validateSchema,
   type ResourceReadReceiptSet,
@@ -7,6 +7,25 @@ import {
 import { ErrorCategory } from "../../lib/cliFeedback.js";
 import { ContextError } from "../../lib/errors.js";
 import { ExitCode } from "../../types/exitCode.js";
+import { findContextProjectRoot } from "../workspace.js";
+
+const RECEIPT_DIRECTORY = join(
+  ".tmp",
+  "context-runtime",
+  "workflow",
+  "read-receipts",
+);
+
+export function workflowResourceReceiptCwd(value: string | undefined, cwd: string): string {
+  if (value === undefined || !value.startsWith("@")) return cwd;
+  const rawPath = value.slice(1);
+  if (!isAbsolute(rawPath)) return cwd;
+  const marker = `${sep}${RECEIPT_DIRECTORY}${sep}`;
+  const markerIndex = rawPath.lastIndexOf(marker);
+  if (markerIndex <= 0) return cwd;
+  const candidate = rawPath.slice(0, markerIndex);
+  return findContextProjectRoot(candidate)?.projectRoot ?? cwd;
+}
 
 async function receiptDocument(value: string, cwd: string): Promise<unknown> {
   let source = value;

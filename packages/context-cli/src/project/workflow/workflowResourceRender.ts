@@ -223,8 +223,17 @@ function renderCodeIndexAudit(status: ProjectStatus): string {
     return "# Current code-index audit\n\nNo code-index audit scope is available.\n";
   }
   const units = report.units.map((unit) =>
-    `${inline(unit.id)} — profile=${inline(unit.output_profile)}, types=${unit.module_types.map(inline).join("+") || "unknown"}, pages=${unit.page_count}, effective-chars=${unit.effective_chars}, evidence=${unit.evidence_count}, sections=${unit.section_count}, relations=${unit.relation_count}, uncovered-sources=${unit.uncovered_sources.map(inline).join(", ") || "none"}, signals=${unit.signal_count} (${unit.elevated_signal_count} elevated)`
+    `${inline(unit.id)} — profile=${inline(unit.output_profile)}, types=${unit.module_types.map(inline).join("+") || "unknown"}, pages=${unit.page_count}, facts=${unit.dimensions.find((dimension) => dimension.dimension === "semantic-fact-lines")?.observed ?? "unscorable"}, max-page-lines=${unit.max_page_lines}, absolute-failures=${unit.absolute_failure_count}, below-target=${unit.below_target_count}, actions=${unit.recommended_actions.map(inline).join(", ") || "none"}`
   );
+  const dimensions = report.units.flatMap((unit) => unit.dimensions.map((dimension) =>
+    `${inline(unit.id)} / ${inline(dimension.dimension)} — observed=${inline(dimension.observed ?? "unscorable")}${inline(dimension.unit)}, floor=${inline(dimension.floor ?? "n/a")}, target=${inline(dimension.target ?? "n/a")}, ceiling=${inline(dimension.ceiling ?? "n/a")}, score=${inline(dimension.score ?? "n/a")}, status=${inline(dimension.status)}, absolute-gate=${inline(dimension.absolute_gate)}, actions=${dimension.recommended_actions.map(inline).join(", ") || "none"}`
+  ));
+  const actionGuidance = report.units.flatMap((unit) => unit.action_guidance.map((guidance) =>
+    `${inline(unit.id)} / ${inline(guidance.action)} — dimensions=${guidance.failed_dimensions.map(inline).join(", ") || "none"}; pages=${guidance.affected_pages.map(inline).join(", ") || "none"}; templates=${guidance.template_paths.map(inline).join(", ")}; configuration=${guidance.configuration_fields.map(inline).join(", ")}; expected=${guidance.expected_improvement.map(inline).join(", ") || "inspect-current-dimension"}`
+  ));
+  const guidanceDeltas = audit.guidance_units.flatMap((unit) => unit.dimension_deltas.map((delta) =>
+    `${inline(unit.unit_id)} / ${inline(delta.dimension)} — before=${inline(delta.before ?? "unscorable")}, after=${inline(delta.after ?? "unscorable")}, delta=${inline(delta.delta ?? "unscorable")}, status=${inline(delta.status)}`
+  ));
   const signals = report.signals.map((signal) =>
     `${inline(signal.severity)} ${inline(signal.id)} — ${signal.message}` +
     (signal.view_ref === undefined ? "" : `; page=${inline(signal.view_ref)}`)
@@ -234,10 +243,11 @@ function renderCodeIndexAudit(status: ProjectStatus): string {
   );
   return `# Current code-index audit
 
-This is a required Agent semantic review, not a numeric rejection. Inspect the
-reported pages and their evidence, compare all registered sources with the
-user-confirmed scope in the current conversation, then submit one explicit
-decision: \`accept\`, \`revise\`, or \`request-input\`.
+This report combines absolute mechanical quality bounds with a required Agent
+semantic review. Absolute failures must be repaired; dimensions between their
+floor and target should be improved toward target. Inspect the reported pages,
+their evidence, and the user-confirmed scope, then submit one explicit decision:
+\`accept\`, \`revise\`, or \`request-input\`.
 
 ## Batch
 
@@ -252,10 +262,23 @@ decision: \`accept\`, \`revise\`, or \`request-input\`.
 - Relations: ${report.summary.relations}
 - Signals: ${report.summary.signals} (${report.summary.elevated_signals} elevated)
 - Current decision: ${audit.decision === undefined ? "none" : inline(audit.decision.decision)}
+- Human guidance required: ${inline(audit.guidance_required)}
 
 ## Index units
 
 ${bullets(units)}
+
+## Independent mechanical dimensions
+
+${bullets(dimensions)}
+
+## Concrete revision guidance
+
+${bullets(actionGuidance)}
+
+## Three-revision deltas
+
+${bullets(guidanceDeltas)}
 
 ## Signals
 
@@ -392,6 +415,11 @@ function renderDocumentOptimization(status: ProjectStatus): string {
 - Kept fragments: ${current.kept_fragments}
 - Pending fragments: ${current.pending_fragments}
 - Conflicts: ${current.conflict_fragments}
+- Mechanical signals: ${current.signal_count}
+- Repair candidates: ${current.action_candidates.repair}
+- Reshape candidates: ${current.action_candidates.reshape}
+- Omission candidates: ${current.action_candidates.omit}
+- Input-required candidates: ${current.action_candidates.request_input}
 - Conversational correction requested: ${inline(current.revision_requested)}${current.requested_approved_path === undefined
     ? ""
     : `\n- Requested approved page: ${inline(current.requested_approved_path)}`}
@@ -399,7 +427,10 @@ function renderDocumentOptimization(status: ProjectStatus): string {
 Revision pages use the reserved \`__revision.md\` suffix beside their approved
 page under \`knowledge/\`. Default knowledge discovery excludes them; document
 optimization validation and package compilation apply them only while their
-recorded source baseline remains current.
+recorded source baseline remains current. Each pending fragment is one source
+Section. The plan enumerates readability signals and the allowed keep, repair,
+reshape, or omit actions; ambiguous or sensitive signals require one batched
+user decision instead of an automatic omission.
 `;
 }
 

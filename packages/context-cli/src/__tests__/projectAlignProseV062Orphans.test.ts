@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
-import { createCapturedAlignProject, firstSourceRef, makeTmp, runCliInDir, sourceRefForLine, structurePayload, writeCodegraphApprovedStructure, writePayload } from "./projectAlignProseV062Helpers.js";
+import { createCapturedAlignProject, firstSourceRef, makeTmp, runCliInDir, sourceRefForLine, structurePayload, writeCodeindexApprovedStructure, writePayload } from "./projectAlignProseV062Helpers.js";
 
 describe("0.6.6 prose align structure gate", () => {
   test("classifies orphan risks and approved endpoints", async () => {
@@ -351,8 +351,8 @@ describe("0.6.6 prose align structure gate", () => {
       expect(containsRootConfirmed.result.valid).toBe(true);
       expect(containsRootConfirmed.result.diagnostics.map((item) => item.code)).not.toContain("view.orphan_risk");
 
-      writeCodegraphApprovedStructure(projectRoot);
-      const codegraphEndpointPayload = writePayload(projectRoot, "codegraph-endpoint-structure.yaml", {
+      writeCodeindexApprovedStructure(projectRoot);
+      const codeindexEndpointPayload = writePayload(projectRoot, "codeindex-endpoint-structure.yaml", {
         ...structurePayload(projectRoot, sourceRef),
         nodes: [{
           node_ref: "entity/install",
@@ -379,22 +379,22 @@ describe("0.6.6 prose align structure gate", () => {
         edges: [{
           type: "corresponds_to",
           from: "architecture:entity/install",
-          to: "codegraph:entity/gateway",
+          to: "codeindex:entity/gateway",
           source_refs: [sourceRefForLine(projectRoot, "guide.md", 7)],
         }],
         unresolved: [],
       });
-      const codegraphEndpoint = JSON.parse(await runCliInDir(projectRoot, [
+      const codeindexEndpoint = JSON.parse(await runCliInDir(projectRoot, [
         "run",
         "align:file:product-docs:architecture",
         "--validate",
         "--input",
-        codegraphEndpointPayload,
+        codeindexEndpointPayload,
         "--format",
         "json",
       ])) as { result: { valid: boolean; diagnostics: Array<{ code: string }> } };
-      expect(codegraphEndpoint.result.valid).toBe(true);
-      expect(codegraphEndpoint.result.diagnostics.map((item) => item.code)).not.toContain("edge.to_unknown");
+      expect(codeindexEndpoint.result.valid).toBe(true);
+      expect(codeindexEndpoint.result.diagnostics.map((item) => item.code)).not.toContain("edge.to_unknown");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

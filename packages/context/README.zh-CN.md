@@ -54,8 +54,8 @@ const sampleLib = source("20260712", "sample-lib");
 export default defineProject({
   sources: [sampleLib],
   phases: [
-    extractTs({ source: sampleLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
+    extractTs({ source: sampleLib, collection: "codeindex" }),
+    reviewValidity({ collection: "codeindex" }),
   ],
   packages: [
     kbPackage({
@@ -64,7 +64,7 @@ export default defineProject({
         path: "src/package-templates/kb",
         vars: { displayName: "Sample Library KB" },
       },
-      select: { collections: ["codegraph"], okfRoots: ["wikis"] },
+      select: { collections: ["codeindex"], okfRoots: ["wikis"] },
     }),
   ],
 });
@@ -80,7 +80,7 @@ Route 会按需选择维护这份声明所需的操作说明、Schema 和手册�
 |---|---|
 | `defineProject()` | 声明完整的项目处理图。 |
 | `source()` 和 `allSources()` | 引用已经登记的代码仓库、本地文件或飞书来源边界。 |
-| `extractTs()` | 从 TypeScript/TSX 中提取符号和关系，生成 `codegraph` 候选。 |
+| `extractTs()` | 从 TypeScript/TSX 中提取符号和关系，生成 `codeindex` 候选。 |
 | `extractCustom()` | 运行项目自有代码提取器，同时由 Context 维护候选、证据、新鲜度和审核状态。 |
 | `alignProse()` 和 `compileProse()` | 整理文档证据，并生成与来源绑定的知识候选。 |
 | `reviewValidity()` | 声明单个知识类型或整个项目的审核门禁。 |
@@ -109,7 +109,7 @@ Context CLI 不会把所有语言和仓库解析器都打入自身。知识项�
 
 | 知识类型 | 主要内容 | 常见来源 |
 |---|---|---|
-| `codegraph` | 代码符号、模块和调用关系 | 代码仓库 |
+| `codeindex` | 代码符号、模块和调用关系 | 代码仓库 |
 | `business` | 业务概念、角色和业务关系 | 业务文档、飞书文档 |
 | `product` | 产品能力、功能行为和产品关系 | 产品文档、需求文档 |
 | `architecture` | 系统结构、模块职责和设计说明 | 架构文档、设计文档 |

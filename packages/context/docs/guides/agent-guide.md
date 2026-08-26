@@ -146,7 +146,7 @@ action as adding a knowledge source, not as filling CLI placeholders. Treat this
 as a source boundary decision. Document sources use today's local date as their
 name. Repo sources use the date as a batch and require the confirmed module
 identity. Do not invent semantic date suffixes. The concrete repo selector
-appears in source refs, phase ids, and codegraph paths:
+appears in source refs, phase ids, and codeindex paths:
 
 ```text
 knowledge/<collection>/<slug>.md
@@ -177,6 +177,15 @@ If the user supplies several repo/file/Lark sources in one request, create one
 `context source add batch <date> --input <payload> --format json` payload and
 register them under a single project write lock. Never parallelize mutating
 `source add` commands; on a lock-held error, wait and retry.
+
+Do not select sources from repository layout or Git metadata. After the user
+has named an exact local module or path, however, resolving one unique matching
+directory and reading its Git root, `origin`, and current commit are mechanical
+identity checks. Pass the resolved local path relative to the Context project
+root; when the workspace was initialized in a child `context/` directory,
+recompute sibling paths from that new root. In ordinary and fully managed modes,
+do not request a remote URL again when that confirmed local checkout provides
+it.
 
 Current execution supports repo sources, local Markdown/MDX file sources, and Lark /
 Feishu document sources. Local
@@ -286,16 +295,16 @@ prose align. Once a document structure draft exists, keep that current human
 gate and do not switch workflows mid-review.
 
 For monorepos, the date is one registration batch and every selected package is
-a module under it. Stable codegraph paths omit that batch date and therefore
-look like `knowledge/codegraph/module-a/...` and
-`knowledge/codegraph/module-b/...`. Date/module remains in phase ids and
+a module under it. Stable codeindex paths omit that batch date and therefore
+look like `knowledge/codeindex/module-a/...` and
+`knowledge/codeindex/module-b/...`. Date/module remains in phase ids and
 repo source refs. Use the whole repo/subspace
 only for inspection when it contains multiple modules. If the user chooses
 `packages/button`, register it with `--module button` under the same date and
 write `extractTs({ source: source("20260712", "button"), ... })`. Do not use
 `include: ["packages/button/src/**"]` to choose a package from a larger source;
 `include` only filters files inside the selected source. Repo module names are
-project-wide codegraph identities; refresh an existing module through its
+project-wide codeindex identities; refresh an existing module through its
 original date/module selector instead of reusing its name under a later date.
 
 For a non-standard package, configure source-relative `entries` on `extractTs`;
@@ -318,17 +327,17 @@ context source inspect <date>/<module> --format json
 context run <extract-phase-id> --dry-run --format json
 ```
 
-After the preview, run codegraph extraction normally unless the user explicitly
+After the preview, run codeindex extraction normally unless the user explicitly
 asked for CI/CD automation. The first normal run requires Review for all code
 candidates. Subsequent normal runs require Review only for added, changed, or
 removed symbols; unchanged approved symbols stay approved. After each result,
-run `context status --format json`. `continue-codegraph-batch` only requests
+run `context status --format json`. `continue-codeindex-batch` only requests
 workspace re-evaluation. Open Review only when
 `workflow.current.gate.id=knowledge-review`; otherwise execute the current
 route.
 
 For a non-interactive pipeline, use `context run <extract-phase-id>
---auto-promote --format json`. This flag applies only to codegraph, applies its
+--auto-promote --format json`. This flag applies only to codeindex, applies its
 deterministic deltas, refreshes deterministic close when needed, runs verify,
 and fails the command if close or verify fails. Read `autoPromotion.close` and
 `autoPromotion.verify` before continuing. Package build remains explicit: when
@@ -354,7 +363,7 @@ tsconfig/jsconfig `baseUrl` and `paths`, so do not ask users to rewrite `@/`
 imports solely for Context. Explain the concrete output shape:
 
 ```text
-knowledge/codegraph/<module>/symbol/<slug>.md
+knowledge/codeindex/<module>/symbol/<slug>.md
 ```
 
 If the module or resulting path shape looks wrong, stop and repair the

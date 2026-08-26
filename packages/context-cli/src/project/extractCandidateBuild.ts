@@ -174,6 +174,7 @@ function candidateFingerprint(input: {
   moduleSlug: string;
   sourceRefs: readonly string[];
   codeEdges: readonly CodeCandidateEdge[];
+  markdown: string;
 }): string {
   return stableHash({
     candidate_id: input.candidateId,
@@ -189,6 +190,7 @@ function candidateFingerprint(input: {
     endLine: input.symbol.endLine,
     source_refs: input.sourceRefs,
     code_edges: input.codeEdges,
+    content_digest: stableHash(input.markdown),
     params: input.symbol.params,
     returnType: input.symbol.returnType,
     typeAnnotation: input.symbol.typeAnnotation,
@@ -222,6 +224,7 @@ function uniqueCodeEdges(edges: readonly CodeCandidateEdge[]): CodeCandidateEdge
 export interface CodeCandidateBuildResult {
   candidates: CandidateDraft[];
   relationships: ExtractRelationshipCoverage;
+  markdownByCandidateId: ReadonlyMap<string, string>;
 }
 
 function reviewSummary(symbol: SymbolInfo): CandidateReviewSummary {
@@ -246,6 +249,7 @@ export function makeCandidates(input: {
   source: RepoSourceRecord;
 }): CodeCandidateBuildResult {
   const drafts: CandidateDraft[] = [];
+  const markdownByCandidateId = new Map<string, string>();
   const usedIds = new Map<string, number>();
   const relationships: ExtractRelationshipCoverage = {
     mode: "source-backed-ast",
@@ -334,6 +338,8 @@ export function makeCandidates(input: {
     }
     for (const item of resultDrafts) {
       const codeEdges = uniqueCodeEdges(outgoing.get(item.candidate.candidate_id) ?? []);
+      const markdown = applyMarkdownTransforms(renderSymbolMarkdown(item.symbol), input.phase);
+      markdownByCandidateId.set(item.candidate.candidate_id, markdown);
       if (codeEdges.length > 0) item.candidate.code_edges = codeEdges;
       relationships.emitted += codeEdges.length;
       item.candidate.fingerprint = candidateFingerprint({
@@ -345,10 +351,11 @@ export function makeCandidates(input: {
         moduleSlug,
         sourceRefs: item.candidate.source_refs,
         codeEdges,
+        markdown,
       });
     }
   }
-  return { candidates: drafts, relationships };
+  return { candidates: drafts, relationships, markdownByCandidateId };
 }
 
 export function removalCandidate(page: ApprovedCodegraphPage): CandidateDraft {
@@ -356,7 +363,7 @@ export function removalCandidate(page: ApprovedCodegraphPage): CandidateDraft {
     candidate_id: page.candidateId,
     node_ref: page.nodeRef,
     view_ref: page.viewRef,
-    collection: "codegraph",
+    collection: page.collection,
     status: "draft",
     candidate_type: "code-symbol",
     change: "remove",

@@ -26,6 +26,18 @@ Run:
 context entry [project-dir] --language <language> --format json
 ```
 
+If the request does not already choose ordinary review or fully managed
+operation, first use the read-only entry result to state a short execution
+plan, then ask the user to choose once. Explain that ordinary review pauses at
+human Gates and presents HTML reports, while fully managed operation resolves
+delegatable Gates within this conversation but still stops for permissions,
+hard validation, or non-delegatable decisions. Prefer the host's native choice
+UI. When initialization already needs a confirmation or missing option, combine
+the mode choice with that question instead of adding another round. Keep the
+answer only in this conversation and do not ask again after initialization,
+capture, or resume. An explicit request for review, human confirmation, fully
+managed work, or no further review already resolves this choice.
+
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
 `project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
@@ -91,12 +103,14 @@ before workflow evaluation. Debugging records traces below
 source evidence.
 
 Document optimization is enabled by default for newly initialized workspaces.
-It conservatively repairs formatting, Markdown, links, and obvious local errors
-without broadly rewriting source-backed prose. It keeps approved pages
-source-faithful and stores only changed full-page revisions beside them as
-`knowledge/**/*__revision.md`. Default knowledge discovery excludes those
-reserved sidecars; validation and package compilation apply them to the
-matching base page.
+It performs source-constrained editorial revision: the CLI identifies
+readability and knowledge-value signals, and the Agent may keep, repair,
+reshape, or safely omit content only inside its existing source Section. It
+must preserve facts, link targets, images, code, numbers, identifiers, and
+source evidence. Approved pages remain source-faithful; only changed full-page
+revisions are stored beside them as `knowledge/**/*__revision.md`. Default
+knowledge discovery excludes those reserved sidecars, and internal editorial
+audit state is not included in package output.
 
 For an existing workspace, respect its current `package.json` setting. Run
 `context optimize-docs enable` or `context optimize-docs disable` only when the
@@ -122,6 +136,14 @@ The managed loop executes only Route-selected work and returns the current
 `workflow.current` whenever Agent reading, project configuration, a human Gate,
 host execution, diagnostics, or a non-unique plan needs attention. Resume from
 that returned Route; never reconstruct a command from an earlier step.
+
+Code knowledge is published under `codeindex`. Context mechanically audits each
+module's input analysis, stable boundaries, facts, explanation, evidence scope,
+and page shape without producing a total score. In fully managed operation,
+follow returned repair actions automatically; after three failed revisions of
+the same module problem, stop at the one aggregated human-guidance Gate. If a
+legacy workspace returns `route.extract.codeindex-migration-required`, execute
+only its migration command; do not rename `codegraph` paths manually.
 
 ### Follow the current Route
 
@@ -167,6 +189,14 @@ Treat `workflow.current` as the current-step authority:
 Explain, ask, confirm, and summarize in the user's current conversation
 language. Keep commands, flags, paths, ids, status values, JSONL keys,
 `source_ref` values, and copied CLI tokens unchanged.
+
+Keep a conversation-local list of HTML review reports that the user actually
+used to make a review decision. Preserve each exact report URL or local path
+and its reviewed scope when the Route provides them. In the final completion
+summary, include one compact `Review reports` section containing those exact
+references. Do not scan workspace internals to reconstruct the list, persist a
+second ledger, invent a public URL, or describe an inaccessible report or a
+fully managed/force approval as user-reviewed.
 
 When the user explicitly asks to publish a completed build, treat publication
 as a downstream distribution step outside the Context Route. Use only an

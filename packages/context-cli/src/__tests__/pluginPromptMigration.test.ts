@@ -144,6 +144,8 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(source).toContain("calendar date identifies one capture batch");
     expect(source).toContain("module identifies one concrete");
     expect(source).toContain("Do not infer this boundary");
+    expect(source).toContain("mechanical identity resolution");
+    expect(source).toContain("do not ask for\ntheir remote URLs");
     expect(source).toContain("separate authority");
     expect(capture).toContain("does not classify, summarize, approve, or build");
     expect(capture).toContain("Never hand-write or repair captured snapshots");
@@ -203,6 +205,39 @@ describe("plugin prompt and workflow resource contract", () => {
         /\bkind:\s*"(?:review_candidates|confirm_structure|capture-before-document-classification|investigate-and-align)"\b/u,
       );
     }
+  });
+
+  test("execution mode is asked once and reviewed HTML reports reach the final summary", async () => {
+    const [
+      command,
+      afterCreation,
+      afterCapture,
+      reviewDialogue,
+      reviewProcedure,
+      closeProcedure,
+    ] = await Promise.all([
+      read(PLUGIN_ROOT, "commands", "context.md"),
+      read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-creation.md"),
+      read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-capture.md"),
+      read(WORKFLOW_ROOT, "resources", "dialogue", "knowledge-review.md"),
+      read(WORKFLOW_ROOT, "resources", "procedures", "knowledge-review.md"),
+      read(WORKFLOW_ROOT, "resources", "procedures", "close-and-build.md"),
+    ]);
+
+    expect(command).toContain("state a short execution\nplan, then ask the user to choose once");
+    expect(command).toContain("combine\nthe mode choice with that question");
+    expect(command).toContain("do not ask again after initialization");
+    expect(afterCreation).toContain("no earlier mode question was\nasked");
+    expect(afterCreation).toContain("one-time conversation choice");
+    expect(afterCapture).toContain("no earlier mode question was\nasked");
+    expect(afterCapture).toContain("without a reminder or another confirmation");
+
+    for (const source of [command, reviewDialogue, reviewProcedure, closeProcedure]) {
+      expect(source).toMatch(/exact (?:HTML )?report (?:URL|reference)/u);
+      expect(source).toMatch(/final completion\s+summary/u);
+    }
+    expect(command).toContain("`Review reports` section");
+    expect(closeProcedure).toContain("fully managed or force approval");
   });
 
   test("phase source code does not duplicate the Provider semantic resource catalog", async () => {

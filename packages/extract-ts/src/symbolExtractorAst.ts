@@ -48,8 +48,7 @@ const BUILTIN_TYPES = new Set([
 
 export const countLines = (source: string) => {
   if (!source) return 0;
-  const parts = source.split(/\r\n|\r|\n/);
-  return parts[parts.length - 1] === "" ? parts.length - 1 : parts.length;
+  return source.split(/\r\n|\r|\n/).filter((line) => line.trim().length > 0).length;
 };
 
 export const createRelation = (

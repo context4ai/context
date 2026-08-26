@@ -10,6 +10,7 @@ import {
 import {
   applyLarkResourceReplacements,
   materializeLarkResources,
+  type LarkAccessIdentity,
   type LarkResourceAssetRole,
   type LarkResourceMaterializationPolicy,
   type LarkResourceMaterializationReport,
@@ -107,6 +108,12 @@ export interface FetchFeishuDocInput {
    */
   url: string;
   docsApiVersion?: DocsFetchApiVersion | "auto";
+  /**
+   * Identity used to read the document. `auto` prefers the user identity and
+   * falls back to the bot only when user credentials themselves are absent or
+   * cannot be refreshed. It never changes identity after a permission error.
+   */
+  identity?: LarkAccessIdentity | "auto";
   resourcePolicy?: Partial<LarkResourceMaterializationPolicy>;
 }
 
@@ -125,6 +132,8 @@ export interface FetchFeishuDocSnapshotResult {
   assets: FetchFeishuDocAsset[];
   fidelity: LarkCaptureFidelityReport;
   resourceMaterialization: LarkResourceMaterializationReport;
+  accessIdentity: LarkAccessIdentity;
+  identityFallback: boolean;
 }
 
 const DEFAULT_RESOURCE_POLICY: LarkResourceMaterializationPolicy = {
@@ -236,7 +245,19 @@ interface DocsFetchEnvelope {
   ok?: boolean;
   identity?: string;
   data?: DocsFetchPayload;
+  error?: unknown;
   [k: string]: unknown;
+}
+
+function envelopeErrorText(error: unknown): string {
+  if (error === null || typeof error !== "object" || Array.isArray(error)) return String(error ?? "unknown error");
+  const record = error as Record<string, unknown>;
+  const fields = ["type", "subtype", "code", "message", "hint"] as const;
+  const parts = fields.flatMap((field) => {
+    const value = record[field];
+    return typeof value === "string" || typeof value === "number" ? [`${field}=${String(value)}`] : [];
+  });
+  return parts.length > 0 ? parts.join("; ") : JSON.stringify(record);
 }
 
 function parseDocsFetchPayload(stdout: string): DocsFetchPayload {
@@ -256,6 +277,13 @@ function parseDocsFetchPayload(stdout: string): DocsFetchPayload {
       `failed to parse ${LARK_BIN} docs +fetch output (not JSON): ${err instanceof Error ? err.message : String(err)}`,
       0,
       stdout.slice(0, 200),
+    );
+  }
+  if (envelope.ok === false) {
+    throw new LarkCliError(
+      `${LARK_BIN} docs +fetch returned ok=false: ${envelopeErrorText(envelope.error)}`,
+      0,
+      stdout,
     );
   }
   // Tolerate both envelope-wrapped and bare shapes. Real CLI output always
@@ -426,10 +454,35 @@ interface FetchedDocsResponse {
   assets: FetchFeishuDocAsset[];
 }
 
+interface IdentityFetchResult {
+  fetched: FetchedDocsResponse;
+  identity: LarkAccessIdentity;
+  fallback: boolean;
+}
+
+function larkErrorText(error: unknown): string {
+  if (error instanceof LarkCliError) return `${error.message}\n${error.stderr}`;
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * A bot retry is safe only when the user credential path is unavailable.
+ * Permission and scope failures describe access to the requested source and
+ * must remain visible rather than being bypassed with another identity.
+ */
+function userIdentityUnavailable(error: unknown): boolean {
+  const message = larkErrorText(error);
+  if (/permission[_ -]?denied|forbidden|missing[_ -]?scope|insufficient[_ -]?scope|access[_ -]?denied/iu.test(message)) {
+    return false;
+  }
+  return /need_user_authorization|needs[_ -]?refresh|refresh\s+failed|user\s+(?:identity|oauth|credential|token).*(?:missing|unavailable|expired|failed)|(?:missing|no)\s+(?:stored\s+)?user\s+(?:credential|token|login)|strict\s+mode.*bot/iu.test(message);
+}
+
 async function fetchDocsResponse(
   input: FetchFeishuDocInput,
   docsFetchPlan: DocsFetchPlan,
   runner: LarkRunner,
+  identity: LarkAccessIdentity,
 ): Promise<FetchedDocsResponse> {
   const chunks: string[] = [];
   let contentFormat: "xml" | "markdown" | undefined;
@@ -440,7 +493,7 @@ async function fetchDocsResponse(
   let nextOffset: number | undefined;
 
   for (let page = 0; page < MAX_FETCH_PAGES; page++) {
-    const args = ["docs", "+fetch", "--as", "user", "--doc", input.url, "--detail", "full", "--format", "json"];
+    const args = ["docs", "+fetch", "--as", identity, "--doc", input.url, "--detail", "full", "--format", "json"];
     if (docsFetchPlan.apiVersion === "v2") args.push("--api-version", "v2");
     if (docsFetchPlan.docFormat === "xml") args.push("--doc-format", "xml");
     if (nextOffset !== undefined) args.push("--offset", String(nextOffset));
@@ -506,6 +559,43 @@ async function fetchDocsResponse(
   };
 }
 
+async function fetchWithIdentity(
+  input: FetchFeishuDocInput,
+  docsFetchPlan: DocsFetchPlan,
+  runner: LarkRunner,
+): Promise<IdentityFetchResult> {
+  const preference = input.identity ?? "auto";
+  if (preference === "user" || preference === "bot") {
+    return {
+      fetched: await fetchDocsResponse(input, docsFetchPlan, runner, preference),
+      identity: preference,
+      fallback: false,
+    };
+  }
+  try {
+    return {
+      fetched: await fetchDocsResponse(input, docsFetchPlan, runner, "user"),
+      identity: "user",
+      fallback: false,
+    };
+  } catch (userError) {
+    if (!userIdentityUnavailable(userError)) throw userError;
+    try {
+      return {
+        fetched: await fetchDocsResponse(input, docsFetchPlan, runner, "bot"),
+        identity: "bot",
+        fallback: true,
+      };
+    } catch (botError) {
+      throw new LarkCliError(
+        `user identity is unavailable and bot identity also failed: ${larkErrorText(botError)}`,
+        botError instanceof LarkCliError ? botError.exitCode : 0,
+        botError instanceof LarkCliError ? botError.stderr : "",
+      );
+    }
+  }
+}
+
 function hasEmptySubPageList(projection: LarkDocxProjection): boolean {
   return projection.fidelity.issues.some((issue) => issue.code === LARK_EMPTY_SUB_PAGE_LIST_CODE);
 }
@@ -523,12 +613,14 @@ export async function fetchFeishuDocSnapshot(
   runner: LarkRunner = defaultRunner,
 ): Promise<FetchFeishuDocSnapshotResult> {
   const docsFetchPlan = await resolveDocsFetchPlan(input.docsApiVersion ?? "auto", runner);
-  let fetched = await fetchDocsResponse(input, docsFetchPlan, runner);
+  const identityFetch = await fetchWithIdentity(input, docsFetchPlan, runner);
+  let fetched = identityFetch.fetched;
+  const accessIdentity = identityFetch.identity;
   let projection: LarkDocxProjection | undefined;
   for (let attempt = 0; attempt < MAX_STRUCTURAL_FETCH_ATTEMPTS && fetched.contentFormat === "xml"; attempt++) {
     projection = projectLarkDocxXml({ xml: fetched.body, sourceUrl: input.url });
     if (!hasEmptySubPageList(projection) || attempt === MAX_STRUCTURAL_FETCH_ATTEMPTS - 1) break;
-    fetched = await fetchDocsResponse(input, docsFetchPlan, runner);
+    fetched = await fetchDocsResponse(input, docsFetchPlan, runner, accessIdentity);
   }
 
   let body = fetched.body;
@@ -566,13 +658,14 @@ export async function fetchFeishuDocSnapshot(
       resources: projection.resources,
       runner,
       policy,
+      identity: accessIdentity,
       resolveSyncedReference: async (resource) => {
         const sourceToken = resource.attributes["src-token"];
         const blockId = resource.attributes["src-block-id"];
         if (sourceToken === undefined || blockId === undefined) {
           throw new LarkCliError("synced reference requires src-token and src-block-id", 0, "");
         }
-        const synced = await fetchDocsResponse({ url: sourceToken }, docsFetchPlan, runner);
+        const synced = await fetchDocsResponse({ url: sourceToken }, docsFetchPlan, runner, accessIdentity);
         if (synced.contentFormat !== "xml") {
           throw new LarkCliError("synced reference source did not return XML", 0, "");
         }
@@ -610,6 +703,8 @@ export async function fetchFeishuDocSnapshot(
       assets,
       fidelity,
       resourceMaterialization,
+      accessIdentity,
+      identityFallback: identityFetch.fallback,
     };
   }
   return {
@@ -619,6 +714,8 @@ export async function fetchFeishuDocSnapshot(
     assets,
     fidelity,
     resourceMaterialization,
+    accessIdentity,
+    identityFallback: identityFetch.fallback,
   };
 }
 

@@ -97,7 +97,7 @@ function appendExtractTsRunBody(body: string[], result: ExtractTsRunResult): voi
     `drafts: +${result.candidates.added}, ~${result.candidates.updated}, =${result.candidates.unchanged}, -${result.candidates.removed}, approved-skip:${result.candidates.skippedApproved}, rejected-skip:${result.candidates.skippedRejected}`,
     `source state: ${result.execution.sourceState}`,
     `policy: ${result.execution.policy}`,
-    `codegraph changes: +${result.changes.added}, ~${result.changes.updated}, -${result.changes.removed}, unchanged-approved:${result.changes.unchangedApproved}`,
+    `code-index changes: +${result.changes.added}, ~${result.changes.updated}, -${result.changes.removed}, unchanged-approved:${result.changes.unchangedApproved}`,
     `review: ${result.review.required ? `required (${result.review.pendingCandidates})` : "not required"}`,
     `next action: ${result.next_action.command}`,
     `candidate file: ${result.candidateFile}`,

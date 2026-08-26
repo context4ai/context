@@ -44,6 +44,7 @@ describe("0.6.15 code index plans", () => {
         moduleTypes: ["sdk-library", "adapter"],
         facets: ["public-api", "plugin-extension"],
         moduleTypeEvidence: ["package.json exports and src/index.ts"],
+        documents: ["./README.md", "docs/public-api.md"],
         outputProfile: "public-api-reference",
         responsibility: "Document the public package contract.",
         entries: ["src/index.ts"],
@@ -61,6 +62,7 @@ describe("0.6.15 code index plans", () => {
       outputProfile: "public-api-reference",
       moduleTypes: ["sdk-library", "adapter"],
       facets: ["public-api", "plugin-extension"],
+      documents: ["README.md", "docs/public-api.md"],
     })]);
     expect(phase.indexPlan).toBe("declared");
   });

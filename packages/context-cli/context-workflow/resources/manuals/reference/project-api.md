@@ -35,7 +35,7 @@ the date:
 ```text
 knowledge/<collection>/<slug>.md
 knowledge/<collection>/<containment>/<slug>.md  # only for an intentional hierarchy
-knowledge/codegraph/<module>/symbol/<slug>.md
+knowledge/codeindex/<module>/symbol/<slug>.md
 repo:<date>/<module>#symbol:...
 file:<date>/<module>/<document>#span:...
 lark:<date>/<module>/<document>#span:...
@@ -47,12 +47,12 @@ dist/<source-name>-kb/...
 Choose the module boundary before extraction. In a monorepo, register each
 confirmed package/subdirectory under the same date batch. A repo root that
 resolves to multiple modules is for inspection; it is not an extraction unit.
-Approved codegraph paths use the stable module name; the date remains only in
+Approved codeindex paths use the stable module name; the date remains only in
 source selectors, phase ids, and evidence refs:
 
 ```text
-knowledge/codegraph/module-a/...
-knowledge/codegraph/module-b/...
+knowledge/codeindex/module-a/...
+knowledge/codeindex/module-b/...
 ```
 
 For prose Views, provide a stable filename `slug` and omit `path`; the CLI
@@ -63,7 +63,7 @@ it is not a required source/module wrapper.
 
 The registry stores this as one date entry containing several `modules` entries,
 and materializes each module at `sources/repo/<date>/<module>`.
-Repo module names are project-wide codegraph identities and therefore cannot be
+Repo module names are project-wide codeindex identities and therefore cannot be
 reused under another date batch. Refresh an existing module through its original
 date/module selector.
 When a repo module and the Context workspace share the same Git root, the CLI
@@ -408,7 +408,7 @@ alignProse({
 ```
 
 `collection` is an internal knowledge classification, not a package directory.
-Package build maps `codegraph`/`business`/`product` to `wikis/`,
+Package build maps `codeindex`/`business`/`product` to `wikis/`,
 `architecture`/`sop`/`faq`/`decision`/`incident` to `guides/`,
 `standards`/`test` to `rules/`, and `feats` to `feats/`. The complete output
 contract is documented in [Package Outputs](../guides/package-outputs.md).
@@ -598,7 +598,7 @@ Extract exported TypeScript / TSX symbols into draft candidates:
 ```ts
 extractTs({
   source: componentLib,
-  collection: "codegraph",
+  collection: "codeindex",
 });
 ```
 
@@ -607,7 +607,7 @@ Options:
 | Field | Meaning |
 |---|---|
 | `source` | `source("date", "module")` for one repo module |
-| `collection` | Code extraction uses `"codegraph"` |
+| `collection` | Code extraction uses `"codeindex"` |
 | `include` | Optional glob list inside the selected source; default is `["src/**/*.{ts,tsx}"]` |
 | `mode` | `"exports"` (default) traces public exports from automatic or configured entries; `"scan"` uses every file matched by `include` as an entry root |
 | `entries` | Optional source-relative entry files for `"exports"` mode. They override `package.json` entry detection and live only in the Context project configuration |
@@ -620,7 +620,7 @@ An explicit index unit records production intent rather than parser settings:
 ```ts
 extractTs({
   source: componentLib,
-  collection: "codegraph",
+  collection: "codeindex",
   indexUnits: [{
     id: "component-public-api",
     inputSources: ["20260712/component-lib"],
@@ -629,6 +629,7 @@ extractTs({
     moduleTypes: ["sdk-library"],
     facets: ["public-api", "plugin-extension"],
     moduleTypeEvidence: ["package.json exports and src/index.ts public entry"],
+    documents: ["README.md", "docs/public-api.md"],
     outputProfile: "public-api-reference",
     responsibility: "Document stable exported component contracts.",
     entries: ["src/index.ts"],
@@ -655,6 +656,9 @@ behaviors such as routing, protocol consumption, events, persistence, plugins,
 release, or cross-module chains. `moduleTypeEvidence` records the inspected
 paths that support the classification. Classify first, then read the matching
 Route-provided code-index templates, and only then finish the extraction plan.
+`documents` contains exact source-relative Markdown paths read for that plan;
+Context compares it with discovered module documents instead of treating a
+source-code comment as documentation coverage.
 `lifecycle` is `"authoritative"`, `"generated"`, `"mirrored"`, `"legacy"`,
 or `"vendored"`; derived sources normally use `"provenance-only"` rather
 than duplicating reader-facing pages. These are generic project facts, not
@@ -680,7 +684,7 @@ editing the source repository:
 ```ts
 extractTs({
   source: componentLib,
-  collection: "codegraph",
+  collection: "codeindex",
   include: ["src/**/*.ts"],
   entries: ["src/api.ts"],
 });
@@ -740,7 +744,7 @@ remain report signals and do not create another Gate.
 Phase id shape:
 
 ```text
-extract:<source-name-or-repo>:codegraph
+extract:<source-name-or-repo>:codeindex
 ```
 
 Codegraph extraction has two execution policies:
@@ -751,7 +755,7 @@ Codegraph extraction has two execution policies:
   the Agent re-evaluates `context status --format json`; only
   `workflow.current` decides whether Review is now required.
 - `context run <phase-id> --auto-promote` is the explicit CI/CD path. It is valid
-  only for `phase.extract.ts` codegraph phases, applies deterministic code deltas
+  only for `phase.extract.ts` codeindex phases, applies deterministic code deltas
   without Review, refreshes deterministic close when approved knowledge changed,
   then runs project verification. Close or verification errors make the command
   fail; JSON output reports applied/materialized/removed counts plus a `close`
@@ -763,7 +767,7 @@ other semantic knowledge. Agents must not infer a human gate from a phase-local
 result. Human gates and their inspection/resolution Actions are exposed only by
 `workflow.current`.
 
-Approved codegraph sections use the local evidence form
+Approved codeindex sections use the local evidence form
 `src-N#symbol:<file>:<symbol>:<kind>@<digest>`. The file segment makes reverse
 lookup exact when multiple files contain the same symbol name, kind, and digest;
 the complete ref remains opaque to agents. New pages keep only top-level
@@ -779,7 +783,7 @@ aggregated repository protocol:
 extractCustom({
   id: "extract:service:protocol",
   sources: [service],
-  collection: "codegraph",
+  collection: "codeindex",
   indexUnits: [{
     id: "service-protocol",
     inputSources: ["20260811/service"],
@@ -850,6 +854,12 @@ least one source-backed structured edge. `context status` therefore treats this 
 pending code extraction target, and Review can verify snapshot freshness
 without a placeholder `extractTs` phase.
 
+Each `sections[].markdown` value is Section body content only; do not copy the
+template heading into it. Context renders `sections[].title` and rejects nested
+reader headings at the SDK boundary so empty template chapters cannot leak into
+knowledge. Evidence `symbol` and `kind` are canonical-ref tokens and cannot
+contain `:` or `@`; exact qualified signatures remain reader-facing prose.
+
 `indexUnits` is also the batch scale and ownership contract. Candidate
 `module` must match one declared unit id or output owner. Older callbacks that
 omit `indexUnits` remain compatible: Context groups candidates by `module` and
@@ -879,6 +889,21 @@ output profile. Coverage is based on source-backed evidence paths, not Markdown
 page count, so one aggregate page can pass while an entry-only static module
 card cannot.
 
+For a single-source index unit, Context also scans every represented language
+family and Markdown/MDX file after the unit's declared exclusions. The adapter's
+`eligibleFileTargets` and `eligibleLoc` must cover that independent baseline.
+Configuration files may be evidence, but a hand-picked evidence list cannot be
+reused as the source or LOC denominator. Cross-module-flow units remain scored
+against their declared entry, protocol, operation, and handoff boundaries rather
+than treating several repositories as one source-code page.
+
+The same baseline discovers conventional sibling page entries, route-register
+calls in Go router files, and exported receiver operations when a Go handler is
+the declared service source of truth. Every discovered identity must appear in
+the target-symbol and boundary denominators. An aggregate page may summarize
+these identities, but an adapter cannot list one representative sibling and
+silently omit the rest.
+
 The extractor returns knowledge semantics (`nodeRef`, rendered Markdown,
 Review summary and source-backed evidence). It must not write `knowledge/`,
 `.tmp/context-runtime/lifecycle/candidates.jsonl`, extraction fingerprints or
@@ -899,9 +924,9 @@ import { indexGoRepository } from "@c4a/extract-go";
 import { extractCustom } from "@c4a/context";
 
 extractCustom({
-  id: "extract:service:codegraph",
+  id: "extract:service:codeindex",
   sources: [service],
-  collection: "codegraph",
+  collection: "codeindex",
   extract: async ({ projectRoot }) => {
     const facts = await indexGoRepository(resolveServiceCheckout(projectRoot));
     return { candidates: buildServiceCandidates(facts) };
@@ -927,7 +952,7 @@ and its evidence coverage auditable before candidate writes.
 Declare the review step for a collection:
 
 ```ts
-reviewValidity({ collection: "codegraph" });
+reviewValidity({ collection: "codeindex" });
 ```
 
 Declare one review gate for all current draft collections:
@@ -939,7 +964,7 @@ reviewValidity({ scope: "all" });
 Phase id:
 
 ```text
-review:codegraph:validity
+review:codeindex:validity
 review:all:validity
 ```
 
@@ -965,7 +990,7 @@ continue wording does not invoke it.
 
 The gate is batch-scoped: prose waits for every planned View across all active
 structure slots and every declared `pendingStructureTargets` item in the round;
-codegraph waits for every pending extract phase in the confirmed module round.
+codeindex waits for every pending extract phase in the confirmed module round.
 Candidate count/hash therefore describes the complete current batch rather than
 one page, source slot, or module. Deterministic close later merges all active
 slots into `knowledge/structure.yaml`, retains only their source, collection,
@@ -995,13 +1020,13 @@ const sample = source("20260712", "sample");
 
 customPhase("custom:20260712/sample:review", async (ctx) => {
   await ctx.ensureSources({ source: sample });
-  await ctx.extract.ts(extractTs({ source: sample, collection: "codegraph" }));
-  await ctx.review.html(reviewValidity({ collection: "codegraph" }));
+  await ctx.extract.ts(extractTs({ source: sample, collection: "codeindex" }));
+  await ctx.review.html(reviewValidity({ collection: "codeindex" }));
 });
 ```
 
 Custom phases are an orchestration escape hatch. Use `extractCustom()` instead
-when project code needs to publish codegraph candidates. The supported runtime
+when project code needs to publish codeindex candidates. The supported runtime
 helpers are:
 
 - `ctx.ensureSources(...)` for repo source readiness.

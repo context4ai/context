@@ -148,7 +148,7 @@ describe("plugin and workflow workspace guard", () => {
       join(CONTEXT_PACKAGE_ROOT, "templates", "package-templates", "kb", "AGENTS.md"),
       "utf8",
     );
-    expect(agents).toContain("`{{wikisRoot}}/` maps from structured `codegraph`, `business`, and `product` knowledge");
+    expect(agents).toContain("`{{wikisRoot}}/` maps from structured `codeindex`, `business`, and `product` knowledge");
     expect(agents).toContain("`{{guidesRoot}}/` maps from `architecture`, `sop`, `faq`, `decision`, and `incident`");
     expect(agents).toContain("`{{rulesRoot}}/` maps from `standards` and `test`");
 

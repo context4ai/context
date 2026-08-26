@@ -2,6 +2,7 @@ import {
   assertDocumentMainlineCollection,
   assertKnowledgeCollection,
   type FileCaptureProcessorDefinition,
+  type CodeIndexCollection,
   type KnowledgeCollection,
   type MarkdownTransform,
   type PackageKind,
@@ -37,6 +38,7 @@ export type {
   CodeIndexInspectionContext,
   CodeIndexInspectionFinding,
   CodeIndexInspectionFindingKind,
+  CodeIndexInspectionInventory,
   CodeIndexInspectionResult,
   CodeIndexLifecycle,
   CodeIndexModuleFacet,
@@ -130,7 +132,7 @@ export type ExtractTsPhaseDefinition = {
   reads: readonly PhaseResourceReference[];
   writes: readonly PhaseResourceReference[];
   source: RepoProjectSourceDefinition;
-  collection: "codegraph";
+  collection: CodeIndexCollection;
   include: readonly string[];
   mode: "exports" | "scan";
   entries?: readonly string[];
@@ -149,7 +151,9 @@ export type ExtractTsPhaseDefinition = {
 export interface CustomCodeEvidence {
   source: string;
   file: string;
+  /** Stable canonical-ref token. Do not include ':' or '@'; keep exact signatures in Section prose. */
   symbol: string;
+  /** Stable canonical-ref token. Do not include ':' or '@'. */
   kind: string;
   digest: string;
   line?: number;
@@ -176,6 +180,7 @@ export interface CustomCodeCandidateSection {
   id: string;
   kind: CodeIndexCoverageKind;
   title: string;
+  /** Reader-facing Section body only. Context renders the heading from title. */
   markdown: string;
   evidence: readonly CustomCodeEvidence[];
 }
@@ -185,9 +190,8 @@ export interface CustomCodeCandidateDraft {
   kind: string;
   visibility: string;
   module: string;
-  markdown?: string;
-  /** Evidence-scoped aggregate sections used to prove output-profile coverage. */
-  sections?: readonly CustomCodeCandidateSection[];
+  /** Required evidence-scoped sections used to render the page and prove output-profile coverage. */
+  sections: readonly CustomCodeCandidateSection[];
   evidence: readonly CustomCodeEvidence[];
   review: CustomCodeCandidateReview;
   edges?: readonly CustomCodeCandidateEdge[];
@@ -221,7 +225,7 @@ export type ExtractCustomPhaseDefinition = {
   reads: readonly PhaseResourceReference[];
   writes: readonly PhaseResourceReference[];
   sources: readonly RepoProjectSourceDefinition[];
-  collection: "codegraph";
+  collection: CodeIndexCollection;
   indexPlan: "declared" | "inferred";
   indexUnits: readonly CodeIndexUnitPlan[];
   inspect?: CodeIndexInspectionAdapter;
@@ -555,7 +559,7 @@ export const compileProse = (definition: {
 
 export const extractTs = (definition: {
   source: RepoProjectSourceDefinition;
-  collection: "codegraph";
+  collection: CodeIndexCollection;
   include?: readonly string[];
   mode?: "exports" | "scan";
   entries?: readonly string[];
@@ -564,8 +568,8 @@ export const extractTs = (definition: {
   transform?: MarkdownTransform | readonly MarkdownTransform[];
 }): ExtractTsPhaseDefinition => {
   const sourceDefinition = bindSourceType(definition.source, "repo", "extractTs source") as RepoProjectSourceDefinition;
-  if (definition.collection !== "codegraph") {
-    throw new TypeError(`extractTs collection must be codegraph: ${definition.collection}`);
+  if (definition.collection !== "codeindex" && definition.collection !== "codegraph") {
+    throw new TypeError(`extractTs collection must be codeindex or legacy codegraph: ${definition.collection}`);
   }
   const sourceId = sourceDefinition.kind === "source.collection"
     ? sourceDefinition.type
@@ -583,13 +587,14 @@ export const extractTs = (definition: {
   const defaultSourceName = sourceDefinition.kind === "source.collection"
     ? sourceDefinition.type
     : sourceDefinition.name;
+  const defaultOutputOwner = defaultSourceName.split("/").at(-1) ?? defaultSourceName;
   const exportedOnly = definition.exportedOnly ?? mode === "exports";
   const indexUnits = (definition.indexUnits ?? (sourceDefinition.kind === "source.collection"
     ? []
     : [{
-        id: defaultSourceName,
+        id: defaultOutputOwner,
         inputSources: [defaultSourceName],
-        outputOwner: defaultSourceName,
+        outputOwner: defaultOutputOwner,
         moduleType: mode === "exports" ? "sdk-library" : "unknown",
         moduleTypes: [mode === "exports" ? "sdk-library" : "unknown"],
         facets: mode === "exports" ? ["public-api"] : [],
@@ -652,7 +657,7 @@ export const extractTs = (definition: {
 export const extractCustom = (definition: {
   id: string;
   sources: readonly RepoProjectSourceDefinition[];
-  collection: "codegraph";
+  collection: CodeIndexCollection;
   indexUnits?: readonly CodeIndexUnitPlan[];
   inspect?: CodeIndexInspectionAdapter;
   extract: CustomCodeExtractor;
@@ -660,8 +665,8 @@ export const extractCustom = (definition: {
   const id = definition.id.trim();
   if (id.length === 0) throw new TypeError("extractCustom id must be a non-empty phase id");
   if (definition.sources.length === 0) throw new TypeError("extractCustom sources must contain at least one repo source");
-  if (definition.collection !== "codegraph") {
-    throw new TypeError(`extractCustom collection must be codegraph: ${definition.collection}`);
+  if (definition.collection !== "codeindex" && definition.collection !== "codegraph") {
+    throw new TypeError(`extractCustom collection must be codeindex or legacy codegraph: ${definition.collection}`);
   }
   const sources = definition.sources.map((sourceDefinition) =>
     bindSourceType(sourceDefinition, "repo", "extractCustom source") as RepoProjectSourceDefinition

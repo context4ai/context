@@ -5,6 +5,7 @@ import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { candidateIdFromViewRef } from "./candidateIdentity.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import { CANDIDATE_LEDGER_FILE, readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { validateApprovedStructureEdges } from "./verifyApprovedStructure.js";
 import { validateCanonicalSourceRef } from "./verifyCanonicalSourceRefs.js";
@@ -24,6 +25,10 @@ import {
   groupProjectVerifyIssues,
   pagedProjectVerifyIssues,
 } from "./verifyDiagnostics.js";
+import {
+  hydrateApprovedKnowledgeMarkdown,
+  readApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
 
 export type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
 
@@ -136,6 +141,10 @@ export async function verifyProjectWorkspace(
     entries: new Map(),
     ignoredPaths: new Map(),
   };
+  const approvedMetadata = await readApprovedKnowledgeMetadataIndex(
+    projectRoot,
+    options.approvedStructureOverride,
+  );
 
   const { candidateIds, candidatesById, rejectedDecisions } = await readCandidateDecisionState({
     projectRoot,
@@ -146,7 +155,21 @@ export async function verifyProjectWorkspace(
   const seenViewRefs = new Set<string>();
   for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
-    const content = await readFile(file.absPath, "utf8");
+    const rawContent = await readFile(file.absPath, "utf8");
+    const rawFrontmatter = parseFrontmatterLoose(rawContent);
+    if (typeof rawFrontmatter.node_type !== "string" || rawFrontmatter.node_type.trim().length === 0) {
+      issues.push({
+        severity: "error",
+        code: "approved-frontmatter-node-type-invalid",
+        path: file.relPath,
+        message: "approved markdown frontmatter must include non-empty node_type",
+      });
+    }
+    const content = hydrateApprovedKnowledgeMarkdown({
+      content: rawContent,
+      relPath: file.relPath,
+      metadata: approvedMetadata,
+    });
     const frontmatter = parseFrontmatterLoose(content);
     const viewRef = typeof frontmatter.view_ref === "string" ? frontmatter.view_ref : undefined;
     const sourceKeys = approvedDocumentSourceKeys(frontmatter);
@@ -190,7 +213,7 @@ export async function verifyProjectWorkspace(
       try {
         const candidateId = candidateIdFromViewRef(viewRef);
         const pending = candidatesById.get(candidateId);
-        isCodegraphDelta = pending?.collection === "codegraph" &&
+        isCodegraphDelta = pending !== undefined && isCodeIndexCollection(pending.collection) &&
           (pending.status === "draft" || pending.status === "rejected") &&
           (pending.change === "update" || pending.change === "remove");
         const isProseReplacement = pending?.candidate_type === "prose-align" &&

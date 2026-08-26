@@ -66,7 +66,6 @@ function okLarkRunner(calls: string[][]): LarkRunner {
   };
 }
 
-
 function scopedDraftCandidateIds(projectRoot: string, collection: string): string[] {
   return readFileSync(join(projectRoot, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"), "utf8")
     .split(/\r?\n/u)
@@ -753,6 +752,36 @@ describe("0.6.2 Lark capture phase", () => {
       } finally {
         rmSync(root, { recursive: true, force: true });
       }
+    }
+  });
+
+  test("capture:lark gives an executable recovery for an outdated lark-cli", async () => {
+    const root = makeTmp();
+    try {
+      const projectRoot = await createLarkProject(root);
+      const runner: LarkRunner = async () => ({
+        stdout: "Flags:\n      --api-version string\n",
+        stderr: "",
+        exitCode: 0,
+      });
+
+      try {
+        await runPhase({
+          cwd: projectRoot,
+          phaseId: "capture:lark:handbook",
+          format: "json",
+          larkRunner: runner,
+        });
+        throw new Error("expected outdated lark-cli failure");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ContextError);
+        expect((error as ContextError).detail).toMatchObject({
+          reason_code: "external.tool-version-unsupported",
+          next: "Run lark-cli update, confirm docs +fetch --help lists --doc-format, then rerun capture",
+        });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

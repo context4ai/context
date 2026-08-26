@@ -173,6 +173,14 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
       )],
     };
   },
+  "context.code-index.migrate": () => ({
+    commands: [command(
+      "context migrate codeindex --format json",
+      "write",
+      "automatic",
+      { target: "subprocess" },
+    )],
+  }),
   "context.extract.next": (observation) => {
     const phase = observation.staleSourcePhases[0] ??
       observation.pendingExtractPhases[0];
@@ -212,6 +220,20 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
             ? "Improve aggregation, explanatory sections, evidence scope, source coverage, or structured handoffs as reported."
             : `Apply this accepted revision plan: ${actions.join("; ")}.`,
           "Then run context status --format json; the Route will preview, extract, and audit the new revision before review.",
+        ].join(" "),
+      },
+    };
+  },
+  "context.project.apply-code-index-guidance": (observation) => {
+    const units = observation.codeIndexAudit?.guidance_units ?? [];
+    return {
+      commands: [],
+      configuration: {
+        file: "src/index.ts",
+        action: [
+          `Apply the user's current guidance to code-index units ${units.map((unit) => unit.unit_id).join(", ") || "reported by the current audit"}.`,
+          "Change only the confirmed source scope, profile, supplied material, extraction inventory, or Section construction.",
+          "Do not restart modules that already pass. Then run context status --format json and continue from the returned Route.",
         ].join(" "),
       },
     };

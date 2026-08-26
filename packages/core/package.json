@@ -1,7 +1,7 @@
 {
   "name": "@c4a/core",
   "description": "Shared extraction types, schemas, and utilities for Context",
-  "version": "0.6.18",
+  "version": "0.6.19",
   "type": "module",
   "license": "MIT",
   "engines": {

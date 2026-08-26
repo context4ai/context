@@ -57,6 +57,12 @@ describe("package knowledge consumer projection", () => {
       "",
       "Body remains byte-for-byte visible.",
       "",
+      "![Architecture](../assets/image/example.png) <!-- lark:image:example-token -->",
+      "",
+      "[Reference](https://example.test) <!-- lark:cite:reference-token -->",
+      "",
+      "<!-- reader:keep-this-comment -->",
+      "",
       "<!-- /context:section -->",
       "",
     ].join("\n");
@@ -89,7 +95,12 @@ describe("package knowledge consumer projection", () => {
     }
     expect(projected).not.toContain("context:section");
     expect(projected).not.toContain("context:summary");
+    expect(projected).not.toContain("lark:image:");
+    expect(projected).not.toContain("lark:cite:");
     expect(projected).toContain("Body remains byte-for-byte visible.");
+    expect(projected).toContain("![Architecture](../assets/image/example.png)");
+    expect(projected).toContain("[Reference](https://example.test)");
+    expect(projected).toContain("<!-- reader:keep-this-comment -->");
 
     expect(packageKnowledgeMetadata(parseKnowledgeFrontmatter(input))).toMatchObject({
       node_type: "entity",

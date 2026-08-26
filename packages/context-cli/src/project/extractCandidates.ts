@@ -53,6 +53,7 @@ import { ExitCode } from "../types/exitCode.js";
 import { readCandidateRecords, CANDIDATE_LEDGER_FILE, writeCandidateRecords } from "./candidateLedger.js";
 import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import {
   declaredIndexUnitPreview,
   EXTRACTION_BLOCK_PAGE_COUNT,
@@ -66,6 +67,10 @@ import {
   assertSingleModuleSourceBoundaries,
   selectRepoSources,
 } from "./extractSourceSelection.js";
+import {
+  inspectCodeIndexDocuments,
+  markdownPathsFromEvidence,
+} from "./codeIndexDocumentInventory.js";
 
 export {
   extractPhaseSourceFingerprint,
@@ -168,7 +173,7 @@ export async function prepareExtractTsPhase(input: {
       plugins: [new TypeScriptPlugin()],
     });
     extractedSources.push({ source, extraction });
-    const modules = extraction.results.map((result) => {
+    const modules = await Promise.all(extraction.results.map(async (result) => {
       const version = manifestVersion(result.sourceInfo.manifests);
       const selectedSymbols = result.extraction.symbols.filter((symbol) =>
         !input.phase.exportedOnly || symbol.visibility === Visibility.Exported
@@ -209,6 +214,55 @@ export async function prepareExtractTsPhase(input: {
       }
       if (input.phase.mode === "scan" && !unit.risks.includes("full-scan")) unit.risks.push("full-scan");
       if (!input.phase.exportedOnly && !unit.risks.includes("internal-symbols")) unit.risks.push("internal-symbols");
+      const analyzedPaths = new Set(result.extraction.files.map((file) => file.path.replaceAll("\\", "/")));
+      const moduleFiles = result.module.files.map((file) => file.replaceAll("\\", "/"));
+      const excludedFiles = (result.module.excludedFiles ?? []).map((file) => file.replaceAll("\\", "/"));
+      const unanalyzedFiles = moduleFiles.filter((file) => !analyzedPaths.has(file));
+      const documentInventory = await inspectCodeIndexDocuments({
+        moduleRoot: resolve(repoPath, result.module.path),
+        modulePrefix: result.module.path,
+        declaredDocuments: [
+          ...unit.documents,
+          ...markdownPathsFromEvidence(unit.moduleTypeEvidence),
+        ],
+      });
+      unit.inventory.eligibleFiles += result.module.fileCount;
+      unit.inventory.analyzedFiles += result.extraction.stats.files;
+      unit.inventory.eligibleFileTargets.push(...moduleFiles);
+      unit.inventory.analyzedFileTargets.push(...[...analyzedPaths]);
+      unit.inventory.excludedFileTargets.push(...excludedFiles);
+      if (excludedFiles.length > 0) {
+        unit.inventory.excludedReasons.push("matched code include but excluded by the configured code path filter");
+      }
+      unit.inventory.eligibleLoc += result.module.totalLines;
+      unit.inventory.analyzedLoc += result.extraction.stats.lines;
+      unit.inventory.documentsDiscovered += documentInventory.documentTargets.length;
+      unit.inventory.documentsRead += documentInventory.readDocumentTargets.length;
+      unit.inventory.documentTargets.push(...documentInventory.documentTargets);
+      unit.inventory.rootDocumentTargets.push(...documentInventory.rootDocumentTargets);
+      unit.inventory.readDocumentTargets.push(...documentInventory.readDocumentTargets);
+      unit.inventory.symbolsDiscovered += result.extraction.symbols.length;
+      unit.inventory.symbolsAnalyzed += result.extraction.symbols.length;
+      unit.inventory.targetSymbols += selectedSymbols.length;
+      unit.inventory.exportedSymbols += exportedSymbols;
+      unit.inventory.targetSymbolIdentities.push(...selectedSymbols.map((symbol) => symbol.name));
+      unit.inventory.exportedTargetIdentities.push(...selectedSymbols
+        .filter((symbol) => symbol.visibility === Visibility.Exported)
+        .map((symbol) => symbol.name));
+      const resolvedEntries = result.entryDetection.entries.map((entry) => entry.path);
+      unit.inventory.entryTargets.push(...resolvedEntries);
+      unit.inventory.boundaryTargets.push(...resolvedEntries.map((identity) => ({
+        kind: "entry" as const,
+        identity,
+      })));
+      unit.inventory.coveredBoundaryTargets.push(...resolvedEntries.map((identity) => ({
+        kind: "entry" as const,
+        identity,
+      })));
+      unit.inventory.parserSkippedFiles += unanalyzedFiles.length;
+      if (unanalyzedFiles.length > 0) {
+        unit.inventory.parserSkippedFileTargets.push(...unanalyzedFiles);
+      }
       const sampledSymbols = selectedSymbols.slice(0, EXTRACTION_BLOCK_PAGE_COUNT + 1);
       let sampledBytes = 0;
       for (const symbol of sampledSymbols) {
@@ -254,7 +308,7 @@ export async function prepareExtractTsPhase(input: {
         skippedReasons: skippedFiles > 0
           ? ["not reachable from the selected export entries"]
           : [],
-        entryFiles: result.entryDetection.entries.map((entry) => entry.path).sort(),
+        entryFiles: resolvedEntries.sort(),
         totalLines: result.module.totalLines,
         symbols: result.extraction.symbols.length,
         exportedSymbols,
@@ -263,7 +317,7 @@ export async function prepareExtractTsPhase(input: {
         relations: result.extraction.relations.length,
         candidateEstimate,
       };
-    });
+    }));
     const moduleErrors = extraction.moduleErrors.map((error) => {
       const hint = moduleErrorHint({
         sourceName: source.record.name,
@@ -344,7 +398,9 @@ export async function prepareExtractTsPhase(input: {
             candidate,
             source: source.record,
             symbol,
-            markdown: applyMarkdownTransforms(renderSymbolMarkdown(symbol), input.phase),
+            markdown: sourceBuild.markdownByCandidateId.get(candidate.candidate_id) ?? (() => {
+              throw new Error(`missing rendered markdown for candidate ${candidate.candidate_id}`);
+            })(),
           });
         }
       }
@@ -569,20 +625,20 @@ export async function runExtractTsPhase(input: {
   });
 
   const codegraphRows = (await readCandidateRecords(input.projectRoot))
-    .filter((row) => row.collection === "codegraph" && row.status === "draft");
+    .filter((row) => isCodeIndexCollection(row.collection) && row.status === "draft");
   const selectedRows = codegraphRows.filter((row) => row.source_refs.some((ref) =>
     [...sourceNames].some((sourceName) => ref.startsWith(`repo:${sourceName}#`))
   ));
   let autoPromotion: ExtractTsRunResult["autoPromotion"];
   if (input.autoPromote === true) {
     if (selectedRows.length !== codegraphRows.length) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "codegraph auto-promotion cannot include drafts from another source scope", {
+      throw new ContextError(ExitCode.WorkspaceStateError, "code-index auto-promotion cannot include drafts from another source scope", {
         category: ErrorCategory.WorkspaceStateInvalid,
         phaseId: input.phase.id,
         unrelated_candidates: codegraphRows
           .filter((row) => !selectedRows.includes(row))
           .map((row) => row.candidate_id),
-        next: "Review or reject the unrelated codegraph drafts before rerunning --auto-promote.",
+        next: "Review or reject the unrelated code-index drafts before rerunning --auto-promote.",
       });
     }
     const ids = selectedRows.map((row) => row.candidate_id).sort();
@@ -591,10 +647,10 @@ export async function runExtractTsPhase(input: {
       : await applyReviewDecisions({
           projectRoot: input.projectRoot,
           payload: {
-            collection: "codegraph",
+            collection: input.phase.collection,
             default: "approved",
             decisions: [],
-            scope: { kind: "collection", collection: "codegraph", count: ids.length, ids_sha256: candidateIdsHash(ids) },
+            scope: { kind: "collection", collection: input.phase.collection, count: ids.length, ids_sha256: candidateIdsHash(ids) },
           },
         });
     const closeStatus = await readProjectCloseStatus(input.projectRoot);
@@ -609,11 +665,11 @@ export async function runExtractTsPhase(input: {
     }
     const verified = await verifyProjectWorkspace(input.projectRoot);
     if (!verified.ok) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "codegraph auto-promotion failed project verification", {
+      throw new ContextError(ExitCode.WorkspaceStateError, "code-index auto-promotion failed project verification", {
         category: ErrorCategory.WorkspaceStateInvalid,
         phaseId: input.phase.id,
         issues: verified.issues,
-        next: "Fix the reported deterministic verification errors, then rerun the codegraph phase with --auto-promote.",
+        next: "Fix the reported deterministic verification errors, then rerun the code-index phase with --auto-promote.",
       });
     }
     autoPromotion = {
@@ -660,18 +716,18 @@ export async function runExtractTsPhase(input: {
     },
     next_action: pendingCandidates > 0
       ? {
-          kind: "continue-codegraph-batch",
+          kind: "continue-code-index-batch",
           command: "context status --format json",
           message: sourceState === "first-run"
             ? "This module produced first-run candidates. Context status will continue any remaining extract phases before opening one batch Review."
-            : "This module produced codegraph deltas. Context status will continue any remaining extract phases before opening one batch Review; unchanged approved symbols were preserved.",
+            : "This module produced code-index deltas. Context status will continue any remaining extract phases before opening one batch Review; unchanged approved symbols were preserved.",
         }
       : {
           kind: "continue-automatically",
           command: "context status --format json",
           message: input.autoPromote === true
-            ? "Codegraph deltas were automatically applied and verified; no human review gate remains."
-            : "No codegraph delta requires review; continue automatically.",
+            ? "Code-index deltas were automatically applied and verified; no human review gate remains."
+            : "No code-index delta requires review; continue automatically.",
         },
     ...(autoPromotion !== undefined ? { autoPromotion } : {}),
     moduleErrors,

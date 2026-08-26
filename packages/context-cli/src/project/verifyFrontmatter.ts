@@ -12,6 +12,7 @@ import {
   validateApprovedSectionMetadata,
 } from "./verifyContextSections.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import {
   hasRegisteredSource,
   validateApprovedSourceRefs,
@@ -253,7 +254,7 @@ function validateIdentityFrontmatter(input: {
       path: input.relPath,
       message: "approved markdown node_type must be one of entity, domain, action",
     });
-  } else if (input.collection !== "codegraph" && (expectedNodeType === undefined || nodeType !== expectedNodeType)) {
+  } else if (!isCodeIndexCollection(input.collection) && (expectedNodeType === undefined || nodeType !== expectedNodeType)) {
     input.issues.push({
       severity: "error",
       code: "approved-frontmatter-node-type-invalid",

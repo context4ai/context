@@ -23,7 +23,7 @@ recommendation, and describe its package root:
 | `incident` | incident timelines, impact, causes, response, and prevention | `guides/` |
 | `test` | test plans, validation scenarios, matrices, and acceptance cases | `rules/` |
 
-`codegraph` comes from code extraction and `feats` is not a document mainline
+`codeindex` comes from code extraction and `feats` is not a document mainline
 collection. Filenames, URLs, titles, and example collection names are
 insufficient evidence.
 

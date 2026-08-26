@@ -12,4 +12,4 @@ expect:
   statusCode: actionable
   primaryNode: maintain-evidence
   primaryReasonCode: route.evidence.maintenance-required
-  command: context review maintain --input - --format json
+  command: context review maintain --input .tmp/agent-payloads/evidence-maintenance.json --format json

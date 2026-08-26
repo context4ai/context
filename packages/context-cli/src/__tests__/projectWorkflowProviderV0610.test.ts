@@ -192,9 +192,9 @@ describe("Context workflow Provider", () => {
         state: "starter-accepted" as const,
       }],
       documentOptimization: {
-        schema: "context.document-optimization-status.v2" as const,
+        schema: "context.document-optimization-status.v3" as const,
         enabled: true,
-        policy: "context.document-optimization.v2",
+        policy: "context.document-editorial-revision.v3",
         revision_pages: 0,
         eligible_views: 1,
         eligible_fragments: 2,
@@ -206,6 +206,8 @@ describe("Context workflow Provider", () => {
         current: false,
         pending_fragment_ids: ["opt-a", "opt-b"],
         conflict_fragment_ids: [],
+        signal_count: 2,
+        action_candidates: { repair: 1, reshape: 1, omit: 0, request_input: 0 },
       },
     };
     for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
@@ -245,9 +247,9 @@ describe("Context workflow Provider", () => {
         state: "starter-accepted" as const,
       }],
       documentOptimization: {
-        schema: "context.document-optimization-status.v2" as const,
+        schema: "context.document-optimization-status.v3" as const,
         enabled: true,
-        policy: "context.document-optimization.v2",
+        policy: "context.document-editorial-revision.v3",
         revision_pages: 0,
         eligible_views: 1,
         eligible_fragments: 1,
@@ -260,6 +262,8 @@ describe("Context workflow Provider", () => {
         current: true,
         pending_fragment_ids: [],
         conflict_fragment_ids: [],
+        signal_count: 0,
+        action_candidates: { repair: 0, reshape: 0, omit: 0, request_input: 0 },
       },
     };
     for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
@@ -455,10 +459,10 @@ describe("Context workflow Provider", () => {
     expect(snapshot.route?.commands).toHaveLength(1);
     expect(snapshot.route?.commands[0]).toEqual({
       command:
-        `context --workflow-revision '${snapshot.evaluation.revision}' source add batch --input - --format json`,
+        `context --workflow-revision '${snapshot.evaluation.revision}' source add batch --input .tmp/agent-payloads/source-batch.json --format json`,
       effect: "write",
       availability: "after-human-confirmation",
-      managed_execution: "automatic",
+      managed_execution: "agent-required",
     });
     expect(snapshot.route?.resources.required).not.toContainEqual(
       expect.objectContaining({ id: "schema.register-source-batch.input" }),

@@ -77,7 +77,6 @@ async function fixture(input: { includeImplementationEvidence: boolean }) {
         kind: "module-map",
         visibility: "exported",
         module: "service",
-        markdown: "# Service boundary\n",
         evidence,
         sections: [{
           id: "operations",

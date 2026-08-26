@@ -5,6 +5,7 @@ import {
 } from "@c4a/context";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import type { LarkRunner } from "../lib/feishu.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
@@ -467,10 +468,10 @@ export async function runProjectPhaseCommand(input: {
   validateProjectRunOptions({ phase, options: input.align ?? {} });
   if (input.autoPromote === true && (
     phase.kind !== "phase.extract.ts" ||
-    phase.collection !== "codegraph" ||
+    !isCodeIndexCollection(phase.collection) ||
     input.dryRun === true
   )) {
-    throw new ContextError(ExitCode.UserError, "--auto-promote is only valid when executing a phase.extract.ts codegraph phase", {
+    throw new ContextError(ExitCode.UserError, "--auto-promote is only valid when executing a phase.extract.ts code-index phase", {
       category: ErrorCategory.UserInputInvalid,
       phaseId: phase.id,
       phaseKind: phase.kind,

@@ -111,8 +111,8 @@ capture reports are never distributed as reader assets. See
 [Lark Resource Materialization](./lark-resources.md).
 
 The same inventory exposes `structure.relationship_coverage`. It records
-whether selected codegraph pages have current source-backed AST relationship
-metadata, how many codegraph views were selected, and how many package-visible
+whether selected codeindex pages have current source-backed AST relationship
+metadata, how many codeindex views were selected, and how many package-visible
 edges were emitted. An empty edge list is therefore explicit evidence of a
 coverage state, not permission to invent a dependency.
 
@@ -136,7 +136,7 @@ Current collection mapping:
 
 | Internal collection | Package path | Role |
 |---|---|---|
-| `codegraph` | `wikis/codegraph/` | Structured code entities and relationships. |
+| `codeindex` | `wikis/codeindex/` | Source-backed code indexes with optional structured relationships. |
 | `business` | `wikis/business/` | Structured business entities and relationships. |
 | `product` | `wikis/product/` | Structured product entities, behavior, and relationships. |
 | `architecture` | `guides/architecture/` | Architecture explanations and design narratives. |

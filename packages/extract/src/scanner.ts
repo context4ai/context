@@ -16,8 +16,8 @@ export const isScanExcludedDir = (name: string): boolean =>
   name.endsWith(".egg-info");
 
 const DEFAULT_EXCLUDED_FILE_PATTERNS = [
-  /\.test\.ts$/i,
-  /\.spec\.ts$/i,
+  /\.test\.tsx?$/i,
+  /\.spec\.tsx?$/i,
   /\.d\.ts$/i,
 ];
 
@@ -27,6 +27,7 @@ export type ModuleScanResult = {
   name: string;
   path: string;
   files: string[];
+  excludedFiles?: string[];
   fileCount: number;
   totalLines: number;
 };
@@ -248,11 +249,7 @@ export const scanSourceFiles = async (
 const countFileLines = async (filePath: string): Promise<number> => {
   const contents = await readFile(filePath, "utf-8");
   if (contents === "") return 0;
-  const lines = contents.split(/\r\n|\r|\n/);
-  if (lines[lines.length - 1] === "") {
-    lines.pop();
-  }
-  return lines.length;
+  return contents.split(/\r\n|\r|\n/).filter((line) => line.trim().length > 0).length;
 };
 
 /** Manifest file names that mark a directory as a module boundary. */
@@ -448,6 +445,16 @@ const buildModule = async (
   const moduleFiles = gitFiles !== undefined && gitFiles !== null && gitFiles.size > 0
     ? filterGitSourceFiles(resolve(moduleDir), gitFiles, excludes, pathFilter)
     : await scanSourceFiles(moduleDir, excludes, ref, pathFilter);
+  const broadPathFilter = pathFilter === undefined
+    ? undefined
+    : { ...pathFilter, code: { ...pathFilter.code, exclude: [] } };
+  const allMatchedFiles = broadPathFilter === undefined
+    ? moduleFiles
+    : gitFiles !== undefined && gitFiles !== null && gitFiles.size > 0
+      ? filterGitSourceFiles(resolve(moduleDir), gitFiles, excludes, broadPathFilter)
+      : await scanSourceFiles(moduleDir, excludes, ref, broadPathFilter);
+  const included = new Set(moduleFiles);
+  const excludedModuleFiles = allMatchedFiles.filter((file) => !included.has(file));
   const modulePath = toPosixPath(relative(repoRoot, moduleDir)) || ".";
   const totalLines = await Promise.all(
     moduleFiles.map((file) => countFileLines(join(moduleDir, file)))
@@ -455,10 +462,14 @@ const buildModule = async (
   const files = modulePath === "."
     ? moduleFiles
     : moduleFiles.map((file) => toPosixPath(join(modulePath, file)));
+  const excludedFiles = modulePath === "."
+    ? excludedModuleFiles
+    : excludedModuleFiles.map((file) => toPosixPath(join(modulePath, file)));
   return {
     name: moduleName,
     path: modulePath,
     files,
+    ...(excludedFiles.length === 0 ? {} : { excludedFiles }),
     fileCount: files.length,
     totalLines: totalLines.reduce((sum, value) => sum + value, 0),
   };

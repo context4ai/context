@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: apply-code-index-guidance
+runner: host
+effect: write
+handler: context.project.apply-code-index-guidance

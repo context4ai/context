@@ -166,7 +166,7 @@ function sourceTypeMismatchError(input: {
 }): ContextError {
   const expected = input.expectedType ?? "file or lark";
   const next = input.actualType === "repo"
-    ? `use extractTs({ source: ${sourceExpression(input.sourceName, "repo")}, collection: "codegraph" }) for repo sources, or register a file/lark source with a different name`
+    ? `use extractTs({ source: ${sourceExpression(input.sourceName, "repo")}, collection: "codeindex" }) for repo sources, or register a file/lark source with a different name`
     : input.actualType === "file"
       ? `use captureFile({ source: ${sourceExpression(input.sourceName, "file")} }) or register a lark source with a different name`
       : `use captureLark({ source: ${sourceExpression(input.sourceName, "lark")} }) or register a file source with a different name`;

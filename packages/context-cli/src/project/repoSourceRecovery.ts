@@ -187,8 +187,8 @@ export async function repositoryRecoveryPlan(input: {
     next_action: pendingGroups === 0
       ? null
       : {
-          command: "context source restore --input - --format json",
-          input: ".tmp/agent-payloads/repository-source-recovery.yaml",
+          command: "context source restore --input .tmp/agent-payloads/repository-source-recovery.json --format json",
+          input: ".tmp/agent-payloads/repository-source-recovery.json",
         },
   };
 }

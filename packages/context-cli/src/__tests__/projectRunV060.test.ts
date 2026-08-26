@@ -123,8 +123,8 @@ function writeProjectEntry(project: string, mode: "single" | "all"): void {
         "export default defineProject({",
         "  sources: [sampleA],",
         "  phases: [",
-        '    extractTs({ source: sampleA, collection: "codegraph" }),',
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    extractTs({ source: sampleA, collection: "codeindex" }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -139,11 +139,11 @@ function writeProjectEntry(project: string, mode: "single" | "all"): void {
         "export default defineProject({",
         "  sources: repoSources,",
         "  phases: [",
-        '    extractTs({ source: repoSourceCollection, collection: "codegraph", indexUnits: [',
+        '    extractTs({ source: repoSourceCollection, collection: "codeindex", indexUnits: [',
         '      { id: "sample-a", inputSources: ["20260712/sample-a"], outputOwner: "sample-a", moduleType: "sdk-library", moduleTypeEvidence: ["src/index.ts public entry"], outputProfile: "public-api-reference", responsibility: "Document the stable exported API.", entries: ["src/index.ts"], pageKinds: ["public-api-reference"], protocols: [], dependencies: [], exclusions: [], capability: "complete" },',
         '      { id: "sample-b", inputSources: ["20260712/sample-b"], outputOwner: "sample-b", moduleType: "sdk-library", moduleTypeEvidence: ["src/index.ts public entry"], outputProfile: "public-api-reference", responsibility: "Document the stable exported API.", entries: ["src/index.ts"], pageKinds: ["public-api-reference"], protocols: [], dependencies: [], exclusions: [], capability: "complete" },',
         "    ] }),",
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -163,8 +163,8 @@ function writeCustomProjectEntry(project: string): void {
     "  phases: [",
     '    customPhase("custom:sample-a:review", async (ctx) => {',
     "      await ctx.ensureSources({ source: sampleA });",
-    '      await ctx.extract.ts(extractTs({ source: sampleA, collection: "codegraph" }));',
-    '      await ctx.review.html(reviewValidity({ collection: "codegraph" }));',
+    '      await ctx.extract.ts(extractTs({ source: sampleA, collection: "codeindex" }));',
+    '      await ctx.review.html(reviewValidity({ collection: "codeindex" }));',
     "    }),",
     "  ],",
     "  packages: [],",
@@ -203,8 +203,8 @@ describe("0.6.0 project phase runtime edge cases", () => {
 
       const output = await runCliInDir(project, ["run", "custom:sample-a:review"]);
       expect(output).toContain("ran custom:sample-a:review");
-      expect(readRows(project).map((row) => row.id)).toEqual(["codegraph/sample-a/symbol/button"]);
-      expect(existsSync(join(project, ".tmp", "context-runtime", "review", "codegraph.html"))).toBe(true);
+      expect(readRows(project).map((row) => row.id)).toEqual(["codeindex/sample-a/symbol/button"]);
+      expect(existsSync(join(project, ".tmp", "context-runtime", "review", "codeindex.html"))).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -253,16 +253,16 @@ describe("0.6.0 project phase runtime edge cases", () => {
       rmSync(join(project, "sources", "repo", "20260712", "sample-b"), { recursive: true, force: true });
 
       writeProjectEntry(project, "single");
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(existsSync(join(project, "sources", "repo", "20260712", "sample-a"))).toBe(true);
       expect(existsSync(join(project, "sources", "repo", "20260712", "sample-b"))).toBe(false);
       expect(readRows(project).every((row) => row.source_refs[0]?.startsWith("repo:20260712/sample-a#"))).toBe(true);
 
       writeProjectEntry(project, "all");
-      await runCliInDir(project, ["run", "extract:repo:codegraph"]);
+      await runCliInDir(project, ["run", "extract:repo:codeindex"]);
       const ids = readRows(project).map((row) => row.id);
-      expect(ids).toContain("codegraph/sample-a/symbol/button");
-      expect(ids).toContain("codegraph/sample-b/symbol/button");
+      expect(ids).toContain("codeindex/sample-a/symbol/button");
+      expect(ids).toContain("codeindex/sample-b/symbol/button");
       expect(new Set(ids).size).toBe(ids.length);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -294,9 +294,9 @@ describe("0.6.0 project phase runtime edge cases", () => {
       ]);
       writeProjectEntry(project, "single");
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       const [row] = readRows(project);
-      expect(row?.id).toBe("codegraph/sample-a/symbol/button");
+      expect(row?.id).toBe("codeindex/sample-a/symbol/button");
       if (!row) throw new Error("expected one extracted candidate");
       const snapshotPath = join(project, ".tmp", "context-runtime", "extract", "candidates", `${row.id}.json`);
       expect(existsSync(snapshotPath)).toBe(true);
@@ -323,7 +323,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
         nextHead,
       ]);
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(readRows(project)).toEqual([]);
       expect(existsSync(snapshotPath)).toBe(false);
       expect(existsSync(dirname(snapshotPath))).toBe(false);
@@ -357,15 +357,15 @@ describe("0.6.0 project phase runtime edge cases", () => {
       ]);
       writeProjectEntry(project, "single");
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       const [row] = readRows(project);
       if (!row) throw new Error("expected one extracted candidate");
       const snapshotPath = join(project, ".tmp", "context-runtime", "extract", "candidates", `${row.id}.json`);
       expect(existsSync(snapshotPath)).toBe(true);
 
-      await runCliInDir(project, ["review", "approve", row.id, "--collection", "codegraph"]);
+      await runCliInDir(project, ["review", "approve", row.id, "--collection", "codeindex"]);
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(readRows(project)).toEqual([]);
       expect(existsSync(snapshotPath)).toBe(false);
     } finally {
@@ -406,7 +406,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
       expect(status).toContain("next: Inspect and repair the invalid workspace facts: context --workflow-revision");
       expect(status).toContain("verify --format json");
 
-      const result = await runCliProcess(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      const result = await runCliProcess(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("✗ failed: schema-invalid");
       expect(result.stderr).toContain(".tmp/context-runtime/lifecycle/candidates.jsonl:1 invalid JSON");
@@ -416,7 +416,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
       expect(schemaStatus).toContain("state: route.workspace.state-invalid");
       expect(schemaStatus).toContain("diagnostic project: .tmp/context-runtime/lifecycle/candidates.jsonl:1 field candidate_id");
 
-      const schemaResult = await runCliProcess(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      const schemaResult = await runCliProcess(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(schemaResult.status).not.toBe(0);
       expect(schemaResult.stderr).toContain("✗ failed: schema-invalid");
       expect(schemaResult.stderr).toContain(".tmp/context-runtime/lifecycle/candidates.jsonl:1 field candidate_id");
@@ -473,12 +473,12 @@ describe("0.6.0 project phase runtime edge cases", () => {
         head,
       ]);
       writeProjectEntry(project, "single");
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
       const [row] = readRows(project);
       if (!row) throw new Error("expected one extracted candidate");
 
       const htmlPath = join(project, "review.html");
-      const htmlResult = await runCliInDir(project, ["review", "html", "codegraph", "--out", "review.html"]);
+      const htmlResult = await runCliInDir(project, ["review", "html", "codeindex", "--out", "review.html"]);
       expect(htmlResult).toContain("✓ wrote review html");
       expect(htmlResult).toContain("url: file://");
       const html = readFileSync(htmlPath, "utf8");
@@ -499,7 +499,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
       expect(html).toContain('"kind":"collection"');
       expect(html).not.toContain('"visible_candidate_ids"');
       const openResult = JSON.parse(await runCliInDir(project, [
-        "review", "html", "codegraph", "--open", "--format", "json",
+        "review", "html", "codeindex", "--open", "--format", "json",
       ])) as { opened: boolean; open_error?: string; file_url: string; absolute_path: string };
       expect(openResult).toMatchObject({ opened: false, open_error: "auto-open-disabled" });
       expect(openResult.file_url).toStartWith("file://");
@@ -510,10 +510,10 @@ describe("0.6.0 project phase runtime edge cases", () => {
       expect(allHtml).toContain('"kind":"all"');
       expect(allHtml).toContain('"visible_candidate_ids"');
 
-      const list = await runCliInDir(project, ["review", "list", "codegraph"]);
+      const list = await runCliInDir(project, ["review", "list", "codeindex"]);
       expect(list).toContain(`draft ${row.id}`);
 
-      const reject = await runCliInDir(project, ["review", "reject", row.id, "--collection", "codegraph"]);
+      const reject = await runCliInDir(project, ["review", "reject", row.id, "--collection", "codeindex"]);
       expect(reject).toContain("rejected: 1");
       const [rejected] = readFullRows(project);
       expect(rejected?.candidate_id).toBe(row.id);
@@ -532,7 +532,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
       });
 
       const repeated = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-a:codegraph", "--format", "json",
+        "run", "extract:20260712/sample-a:codeindex", "--format", "json",
       ])) as { result: { candidates: { skippedRejected: number } } };
       expect(repeated.result.candidates.skippedRejected).toBe(1);
       expect(readFullRows(project)).toEqual([
@@ -554,7 +554,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
         "--remote", "https://git.example.com/repo-a.git",
         "--ref", changedHead,
       ]);
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph", "--format", "json"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex", "--format", "json"]);
       expect(existsSync(decisionsPath)).toBe(false);
       expect(readFullRows(project)).toEqual([
         expect.objectContaining({ candidate_id: row.id, status: "draft" }),
@@ -598,8 +598,8 @@ describe("0.6.0 project phase runtime edge cases", () => {
         head,
       ]);
       writeProjectEntry(project, "single");
-      await runCliInDir(project, ["run", "extract:20260712/sample-a:codegraph"]);
-      await runCliInDir(project, ["review", "html", "codegraph", "--out", "review.html"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-a:codeindex"]);
+      await runCliInDir(project, ["review", "html", "codeindex", "--out", "review.html"]);
       const html = readFileSync(join(project, "review.html"), "utf8");
       expect(html).not.toContain("</script><img");
       expect(html).toContain("\\u003c/script\\u003e\\u003cimg");
@@ -634,7 +634,7 @@ describe("0.6.0 project phase runtime edge cases", () => {
       writeProjectEntry(project, "single");
       await mkdir(join(project, ".tmp", "context-runtime", "locks", "project-write.lock"), { recursive: true });
 
-      const result = await runCliProcess(project, ["run", "extract:20260712/sample-a:codegraph"]);
+      const result = await runCliProcess(project, ["run", "extract:20260712/sample-a:codeindex"]);
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain("context project write lock is already held");
       expect(result.stderr).toContain('"reason_code": "project-write-in-progress"');

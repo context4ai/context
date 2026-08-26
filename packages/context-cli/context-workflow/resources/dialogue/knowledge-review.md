@@ -18,6 +18,12 @@ The user does not need to create a payload file; the Agent may write the pasted
 payload to ignored scratch storage for the CLI command. Never derive a payload
 from HTML, candidate ids, snapshots, or a default decision.
 
+When the user completes a decision from the report, retain the exact report URL
+or local report path and reviewed scope in the current conversation for the
+final completion summary. Do not persist a separate workspace ledger or count a
+report as user-reviewed when it was inaccessible, fully managed, or bypassed by
+force approval.
+
 Do not mention force approval when first presenting Review. If the user replies
 without a Payload that they approve or want to continue, explain that the
 report Payload remains the normal path. Only at that point, when the report is
@@ -28,7 +34,7 @@ that exact phrase appears in the current conversation. Phrases such as `我批�
 `继续`, or `全部通过` do not invoke this escape path.
 
 Do not open Review for one page or module while another confirmed item in the
-same round is still being generated. If a repeat codegraph run has no delta,
+same round is still being generated. If a repeat codeindex run has no delta,
 state that existing approvals were preserved and no Review gate remains.
 
 When the user explicitly requested fully managed operation, use only the

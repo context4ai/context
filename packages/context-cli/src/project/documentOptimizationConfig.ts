@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
@@ -7,8 +8,40 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { isDocumentRevisionPath } from "./knowledgeFileClassification.js";
 
-export const DOCUMENT_OPTIMIZATION_POLICY = "context.document-optimization.v2";
+export const DOCUMENT_OPTIMIZATION_POLICY = "context.document-editorial-revision.v3";
 export const DOCUMENT_OPTIMIZATION_CACHE_ROOT = join(".tmp", "context-runtime", "document-optimization");
+
+const DOCUMENT_OPTIMIZATION_BASE_POLICY = "context.document-editorial-base.v1";
+const DOCUMENT_OPTIMIZATION_SIGNAL_REVIEW_POLICY = "context.document-editorial-signal-review.v2";
+const DOCUMENT_OPTIMIZATION_SIGNAL_POLICIES: Record<string, string> = {
+  "brainstorm-without-decision": "v1",
+  "duplicate-fragment": "v1",
+  "empty-table-row": "v1",
+  "heading-hierarchy-invalid": "v1",
+  "long-table-cell": "v1",
+  "mixed-facts-and-draft": "v1",
+  "placeholder-content": "v1",
+  "raw-or-unlabeled-link": "v1",
+  "sensitive-value-candidate": "v1",
+  "strikethrough-only-block": "v1",
+  "unanswered-question-set": "v1",
+  "answered-question-set": "v1",
+  "unstable-owner-reference": "v1",
+  "volatile-query-url": "v1",
+  "wide-table": "v1",
+};
+
+export function documentOptimizationPolicyDigest(signalCodes: readonly string[]): string {
+  const policies = [...new Set(signalCodes)].sort().map((code) => [
+    code,
+    DOCUMENT_OPTIMIZATION_SIGNAL_POLICIES[code] ?? "unknown",
+  ]);
+  if (signalCodes.length > 0) policies.push(["signal-review", DOCUMENT_OPTIMIZATION_SIGNAL_REVIEW_POLICY]);
+  return createHash("sha256").update(JSON.stringify({
+    base: DOCUMENT_OPTIMIZATION_BASE_POLICY,
+    policies,
+  }), "utf8").digest("hex");
+}
 
 interface ContextPackageJson extends Record<string, unknown> {
   context?: Record<string, unknown>;

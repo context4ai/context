@@ -55,6 +55,12 @@ Treat those fields as structural scope evidence, not a semantic ranking. Stop
 when the preview crosses the confirmed module boundary or the module
 identity/path shape is wrong.
 
+Also report the unit inventory: eligible/analyzed file and LOC counts,
+discovered/read Markdown, target/exported symbols, stable entry and boundary
+targets, exclusions and parser gaps. After extraction, read every independent
+audit dimension and the exact uncovered identities. Use the CLI-selected
+repair actions and matching templates; do not invent a total score.
+
 Apply the per-index-unit policy exactly: up to 100 pages proceeds; 101–300 pages
 warns and proceeds; more than 300 pages stops even in fully managed mode. Group
 all oversized or capability-gap units into one explanation and one plan-revision
@@ -68,6 +74,12 @@ or mirrored areas, enable `exportedOnly`, change to an aggregate
 `extractCustom()` shape, or register real child sources. Do not split one
 `extractTs()` source into overlapping index units. Report a batch-total page
 advisory as a cost signal, not a new Gate.
+
+In fully managed mode, revise absolute failures automatically and aim for each
+recommended target. After three attempts with the same unit/problem fingerprint,
+stop at the single aggregated guidance Gate and report all failed modules,
+dimensions, attempted actions, and likely missing material together. Ordinary
+mode also makes one batch decision; it does not create one user Gate per module.
 
 For a multi-module round, finish every pending extraction target before opening
 one Review. For an unchanged repeat run, explain that no added, changed, or

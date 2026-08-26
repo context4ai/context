@@ -5,6 +5,7 @@ import type {
 } from "@c4a/context";
 import { verifyErrorsAreCloseRepairable } from "./verifyFacts.js";
 import type { ProjectVerifyIssue } from "../verify.js";
+import { isCodeIndexCollection } from "../codeIndexCollection.js";
 import {
   CONTEXT_WORKFLOW_AUTHORITIES,
   type ContextWorkflowAuthority,
@@ -308,7 +309,7 @@ function reviewGateClear(
 ): boolean {
   if (observation.draftCandidates === 0) return true;
   const hasProseDrafts = observation.draftCollections.some(
-    (collection) => collection !== "codegraph",
+    (collection) => !isCodeIndexCollection(collection),
   );
   if (!hasProseDrafts) return false;
   if (observation.unclassifiedDocumentTargets.length > 0) return true;
@@ -408,6 +409,8 @@ export function createContextWorkflowFacts(
     resolved: true,
     revision_required: false,
     input_required: false,
+    guidance_required: false,
+    guidance_units: [],
     history: [],
   };
   const documentsClassified =
@@ -425,9 +428,9 @@ export function createContextWorkflowFacts(
   const compiled = compileComplete(observation);
   const reviewGateIsClear = reviewGateClear(observation);
   const onlyProseDrafts = observation.draftCollections.length > 0 &&
-    observation.draftCollections.every((collection) => collection !== "codegraph");
+    observation.draftCollections.every((collection) => !isCodeIndexCollection(collection));
   const hasProseDrafts = observation.draftCollections.some(
-    (collection) => collection !== "codegraph",
+    (collection) => !isCodeIndexCollection(collection),
   );
   const structureRefreshRequired = captureComplete &&
     observation.pendingStructureTargets.length > 0 &&
@@ -542,6 +545,8 @@ export function createContextWorkflowFacts(
       audit_resolved: !extractComplete || codeIndexAudit.resolved,
       audit_revision_required: extractComplete && codeIndexAudit.revision_required,
       audit_input_required: extractComplete && codeIndexAudit.input_required,
+      audit_guidance_required: extractComplete && codeIndexAudit.guidance_required,
+      migration_required: observation.codeIndexMigrationRequired === true,
     },
     documents: {
       classified: documentsClassified,

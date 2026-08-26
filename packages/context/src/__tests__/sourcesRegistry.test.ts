@@ -98,7 +98,7 @@ describe("@c4a/context source registry helpers", () => {
       ].join("\n"));
 
       await expect(loadSourcesRegistry({ rootDir: root })).rejects.toThrow(
-        "repo module names are project-wide codegraph identities",
+        "repo module names are project-wide code-index identities",
       );
     } finally {
       await rm(root, { recursive: true, force: true });

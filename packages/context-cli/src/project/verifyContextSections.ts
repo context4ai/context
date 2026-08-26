@@ -65,13 +65,50 @@ function contextSectionBlocks(content: string): ContextSectionBlock[] {
   return sections;
 }
 
-function hasSourceRefsBlock(body: string): boolean {
-  return /<!--\s*context:source_refs\b[\s\S]*?\/context:source_refs\s*-->/iu.test(body);
+type SourceRefsBlockIssueCode =
+  | "approved-section-source-refs-invalid"
+  | "approved-section-source-refs-unsupported";
+
+function sourceRefsBlockPayloads(body: string): Array<{
+  refs: string[];
+  error?: string;
+  issueCode?: SourceRefsBlockIssueCode;
+}> {
+  const payloads: Array<{
+    refs: string[];
+    error?: string;
+    issueCode?: SourceRefsBlockIssueCode;
+  }> = [];
+  const regex = /<!--\s*context:source_refs([\s\S]*?)\/context:source_refs\s*-->/giu;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(body)) !== null) {
+    const raw = match[1] ?? "";
+    if (!raw.startsWith("\n") && !raw.startsWith("\r\n")) {
+      payloads.push({
+        refs: [],
+        error: "legacy inline context:source_refs blocks are unsupported",
+        issueCode: "approved-section-source-refs-unsupported",
+      });
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(raw.trim()) as unknown;
+      if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string" || item.length === 0)) {
+        payloads.push({ refs: [], error: "context:source_refs must contain a JSON string array" });
+        continue;
+      }
+      payloads.push({ refs: parsed as string[] });
+    } catch {
+      payloads.push({ refs: [], error: "context:source_refs must contain valid JSON" });
+    }
+  }
+  return payloads;
 }
 
 function sourceRefsForSection(section: ContextSectionBlock): string[] {
   return [...new Set([
     ...(section.attrs.source_ref !== undefined ? [section.attrs.source_ref] : []),
+    ...sourceRefsBlockPayloads(section.body).flatMap((payload) => payload.refs),
   ])];
 }
 
@@ -194,13 +231,24 @@ export function validateApprovedSectionMetadata(input: {
   for (const section of contextSectionBlocks(input.content)) {
     const rawMode = section.attrs.content_mode;
     const refs = sourceRefsForSection(section);
-    if (hasSourceRefsBlock(section.body)) {
+    const sourceRefPayloads = sourceRefsBlockPayloads(section.body);
+    for (const payload of sourceRefPayloads) {
+      if (payload.error === undefined) continue;
       input.issues.push({
         severity: "error",
-        code: "approved-section-source-refs-unsupported",
+        code: payload.issueCode ?? "approved-section-source-refs-invalid",
         path: input.relPath,
         line: section.line,
-        message: "approved knowledge must not contain context:source_refs blocks; use the context:section source_ref attribute",
+        message: payload.error,
+      });
+    }
+    if (sourceRefPayloads.length > 1) {
+      input.issues.push({
+        severity: "error",
+        code: "approved-section-source-refs-duplicate",
+        path: input.relPath,
+        line: section.line,
+        message: "approved context section must contain at most one context:source_refs block",
       });
     }
     if (rawMode === undefined && refs.some((ref) => LOCAL_SPAN_SOURCE_REF.test(ref))) {

@@ -104,6 +104,23 @@ async function localPathForRegistry(input: {
     : input.gitRootAbs;
 }
 
+async function inferNamedLocalPath(projectRoot: string, module: string): Promise<string | undefined> {
+  const candidates = [
+    resolve(projectRoot, module),
+    resolve(dirname(projectRoot), module),
+  ];
+  const matches = new Map<string, string>();
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    const canonical = await realpath(candidate).catch(() => null);
+    if (canonical === null) continue;
+    const stats = await lstat(canonical).catch(() => null);
+    if (stats?.isDirectory() !== true || await resolveGitRoot(canonical) === null) continue;
+    matches.set(canonical, relative(projectRoot, candidate) || ".");
+  }
+  return matches.size === 1 ? [...matches.values()][0] : undefined;
+}
+
 async function gitOutput(cwd: string, args: readonly string[]): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["-C", cwd, ...args], { encoding: "utf8" });
@@ -321,16 +338,24 @@ function validPinnedRef(ref: string, diagnostics: string[]): boolean {
 
 async function normalizeAddInput(input: AddRepoSourceInput, existing: RepoSourceRecord | undefined): Promise<RepoSourceRecord> {
   const sourceName = `${input.namespace}/${input.module}`;
-  const originalLocal = input.local ?? existing?.local;
+  const explicitRemote = nonEmpty(input.remote);
+  const explicitRef = nonEmpty(input.ref);
+  const inferredLocal = input.local === undefined && existing?.local === undefined &&
+      (explicitRemote === null || explicitRef === null)
+    ? await inferNamedLocalPath(input.projectRoot, input.module)
+    : undefined;
+  const originalLocal = input.local ?? existing?.local ?? inferredLocal;
+  const localWasResolvedFromInput = input.local !== undefined || inferredLocal !== undefined;
   let local = originalLocal;
-  let subpath = input.local !== undefined ? undefined : existing?.subpath;
+  let subpath = localWasResolvedFromInput ? undefined : existing?.subpath;
   let gitRootAbs: string | null = null;
+  let originalLocalAbs: string | null = null;
 
   if (originalLocal !== undefined) {
-    const originalLocalAbs = resolveLocalPath(input.projectRoot, originalLocal);
+    originalLocalAbs = resolveLocalPath(input.projectRoot, originalLocal);
     if (originalLocalAbs !== null && existsSync(originalLocalAbs)) {
       gitRootAbs = await resolveGitRoot(originalLocalAbs);
-      if (gitRootAbs !== null && input.local !== undefined) {
+      if (gitRootAbs !== null && localWasResolvedFromInput) {
         const detectedSubpath = normalizeSubpath(relative(gitRootAbs, originalLocalAbs));
         local = await localPathForRegistry({
           projectRoot: input.projectRoot,
@@ -342,7 +367,28 @@ async function normalizeAddInput(input: AddRepoSourceInput, existing: RepoSource
     }
   }
 
-  const remote = nonEmpty(input.remote) ??
+  if (input.local !== undefined && (explicitRemote === null || explicitRef === null)) {
+    if (originalLocalAbs === null || !existsSync(originalLocalAbs)) {
+      throw new ContextError(ExitCode.UserError, `repo source local path does not exist: ${input.local}`, {
+        category: ErrorCategory.UserInputInvalid,
+        sourceName,
+        local: input.local,
+        ...(originalLocalAbs !== null ? { resolvedLocal: originalLocalAbs } : {}),
+        next: "Pass an existing --local <path> resolved from the Context project root, or provide both --remote <url> and --ref <full-sha> for a source that is not materialized locally.",
+      });
+    }
+    if (gitRootAbs === null) {
+      throw new ContextError(ExitCode.UserError, `repo source local path is not inside a Git checkout: ${input.local}`, {
+        category: ErrorCategory.UserInputInvalid,
+        sourceName,
+        local: input.local,
+        resolvedLocal: originalLocalAbs,
+        next: "Pass --local <path> inside a Git checkout so Context can infer origin and HEAD, or provide both --remote <url> and --ref <full-sha>.",
+      });
+    }
+  }
+
+  const remote = explicitRemote ??
     nonEmpty(gitRootAbs !== null ? await gitOutput(gitRootAbs, ["remote", "get-url", "origin"]) : null) ??
     nonEmpty(gitRootAbs !== null ? await readGitOriginRemote(gitRootAbs) : null) ??
     existing?.git.remote;
@@ -354,7 +400,7 @@ async function normalizeAddInput(input: AddRepoSourceInput, existing: RepoSource
     });
   }
 
-  const rawRef = input.ref ??
+  const rawRef = explicitRef ??
     (gitRootAbs !== null ? await readGitHead(gitRootAbs) : null) ??
     existing?.git.ref;
   if (rawRef == null || rawRef.trim().length === 0) {
@@ -556,7 +602,7 @@ export async function addRepoSourceUnlocked(input: AddRepoSourceInput): Promise<
   if (moduleConflict !== undefined) {
     throw new ContextError(
       ExitCode.UserError,
-      `repo module ${JSON.stringify(input.module)} is already registered in date batch ${moduleConflict.namespace}; module names are project-wide codegraph identities`,
+      `repo module ${JSON.stringify(input.module)} is already registered in date batch ${moduleConflict.namespace}; module names are project-wide code-index identities`,
       {
         category: ErrorCategory.SchemaInvalid,
         sourceId: moduleConflict.name,

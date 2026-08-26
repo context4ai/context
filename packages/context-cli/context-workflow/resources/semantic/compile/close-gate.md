@@ -51,9 +51,10 @@ command. It does not hand-edit rendered knowledge.
 - Never re-run compile actions from close to paper over verify failures. Draft
   failures belong in the compile loop.
 - Do not use Python, Node.js, shell scripts, `ls`, `find`, `rg`, `cat`, or similar ad-hoc commands to inspect `sources/`, `knowledge/`, `dist/`, or `.tmp/context-runtime/lifecycle/` files.
-- Current close can self-heal stale or malformed `knowledge/structure.yaml`
-  projection by deriving it again from approved Markdown and approved edge
-  sources. It must not rewrite verbatim section body.
+- Current close self-heals stale projections. A malformed projection is
+  self-healed when the compact Markdown recovery capsule contains everything
+  required for that page; otherwise restore `knowledge/structure.yaml` from
+  version control and rerun close. It must not rewrite verbatim section body.
 - LLM-assisted repair (`--fix-with-llm`) is not a current close action.
 - Output language: summary prose matches the user's language; CLI output, issue codes, file paths stay as printed.
 - Current align state is internal CLI state, not a file protocol. The CLI owns

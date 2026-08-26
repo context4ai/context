@@ -22,6 +22,7 @@ import { currentCompileStructureDigest } from "./proseCompileStructure.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { verbatimBodyMatchesSpanHash } from "./verifySourceRefs.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import {
   projectKnowledgeAssets,
   removeOrphanKnowledgeAssets,
@@ -548,13 +549,13 @@ export async function applyReviewDecisions(input: {
         }
         seenApprovedIds.set(approvedRef, row.candidate_id);
         if (rejectedDecisions.delete(row.candidate_id)) decisionsUpdated = true;
-        if (row.collection === "codegraph" && row.change === "remove") {
+        if (isCodeIndexCollection(row.collection) && row.change === "remove") {
           const existingPage = findApprovedPageForViewRef(input.projectRoot, row.view_ref);
           if (existingPage === undefined) {
-            throw new ContextError(ExitCode.WorkspaceStateError, `approved codegraph page is missing for removal: ${row.view_ref}`, {
+            throw new ContextError(ExitCode.WorkspaceStateError, `approved code-index page is missing for removal: ${row.view_ref}`, {
               category: ErrorCategory.WorkspaceStateInvalid,
               candidate_id: row.candidate_id,
-              next: "Rerun the codegraph extraction to refresh the deletion delta.",
+              next: "Rerun the code-index extraction to refresh the deletion delta.",
             });
           }
           pagesToRemove.push(existingPage.path);

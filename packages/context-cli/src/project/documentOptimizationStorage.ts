@@ -9,72 +9,22 @@ import {
 } from "./knowledgeFileClassification.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import {
-  isRecord,
+  fragmentSectionState,
   renderDocumentOptimizationPage,
-  sha256,
+  type DocumentOptimizationFragment,
+  type DocumentOptimizationSectionState,
+  withDocumentOptimizationKeepState,
   withDocumentRevisionMetadata,
 } from "./documentOptimizationModel.js";
 import {
-  DOCUMENT_OPTIMIZATION_CACHE_ROOT,
-  DOCUMENT_OPTIMIZATION_POLICY,
-} from "./documentOptimizationConfig.js";
-
-const DECISION_CACHE_SCHEMA = "context.document-optimization-cache.v4";
-
-interface DecisionCache {
-  schema: typeof DECISION_CACHE_SCHEMA;
-  kept_pages: string[];
-}
+  compactApprovedKnowledgeMarkdown,
+  persistApprovedMachineMetadata,
+} from "./approvedKnowledgeMetadata.js";
 
 export interface DocumentRevisionFile {
   relPath: string;
   absPath: string;
   approvedPath: string;
-}
-
-function cachePath(projectRoot: string): string {
-  return join(projectRoot, DOCUMENT_OPTIMIZATION_CACHE_ROOT, "decisions.json");
-}
-
-export function documentOptimizationPageKeepKey(file: ApprovedKnowledgeFile): string {
-  return sha256(JSON.stringify({
-    approved_path: file.relPath,
-    base_digest: sha256(file.content),
-    policy: DOCUMENT_OPTIMIZATION_POLICY,
-  }));
-}
-
-export async function readDocumentOptimizationKeptPages(
-  projectRoot: string,
-): Promise<Set<string>> {
-  const path = cachePath(projectRoot);
-  if (!existsSync(path)) return new Set();
-  try {
-    const value = JSON.parse(await readFile(path, "utf8")) as unknown;
-    if (
-      !isRecord(value) || value.schema !== DECISION_CACHE_SCHEMA ||
-      !Array.isArray(value.kept_pages) || !value.kept_pages.every((item) =>
-        typeof item === "string" && /^[a-f0-9]{64}$/u.test(item)
-      )
-    ) return new Set();
-    return new Set(value.kept_pages);
-  } catch {
-    return new Set();
-  }
-}
-
-export async function writeDocumentOptimizationKeptPages(
-  projectRoot: string,
-  pageKeys: Iterable<string>,
-): Promise<void> {
-  const path = cachePath(projectRoot);
-  const keptPages = [...new Set(pageKeys)].sort();
-  await mkdir(dirname(path), { recursive: true });
-  const value: DecisionCache = {
-    schema: DECISION_CACHE_SCHEMA,
-    kept_pages: keptPages,
-  };
-  await atomicWriteFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export function documentRevisionPath(projectRoot: string, approvedPath: string): string {
@@ -119,6 +69,7 @@ export async function readDocumentRevision(
 export async function ensureDocumentRevision(input: {
   projectRoot: string;
   file: ApprovedKnowledgeFile;
+  fragments: readonly DocumentOptimizationFragment[];
 }): Promise<{ path: string; content: string; created: boolean }> {
   const path = documentRevisionPath(input.projectRoot, input.file.relPath);
   const existing = await readDocumentRevision(input.projectRoot, input.file.relPath);
@@ -126,7 +77,7 @@ export async function ensureDocumentRevision(input: {
   const content = withDocumentRevisionMetadata({
     content: input.file.content,
     approvedPath: input.file.relPath,
-    baseDigest: sha256(input.file.content),
+    sections: new Map(input.fragments.map((fragment) => [fragment.section_id, fragmentSectionState(fragment)])),
   });
   await mkdir(dirname(path), { recursive: true });
   await atomicWriteFile(path, content);
@@ -141,6 +92,7 @@ export async function writeDocumentRevision(input: {
   projectRoot: string;
   file: ApprovedKnowledgeFile;
   replacements: ReadonlyMap<string, string>;
+  fragments: readonly DocumentOptimizationFragment[];
 }): Promise<string | null> {
   if (input.replacements.size === 0) {
     await removeDocumentRevision(input.projectRoot, input.file.relPath);
@@ -150,10 +102,34 @@ export async function writeDocumentRevision(input: {
   const content = withDocumentRevisionMetadata({
     content: rendered,
     approvedPath: input.file.relPath,
-    baseDigest: sha256(input.file.content),
+    sections: new Map(input.fragments
+      .filter((fragment) => input.replacements.has(fragment.fragment_id))
+      .map((fragment) => [fragment.section_id, fragmentSectionState(fragment)])),
   });
   const path = documentRevisionPath(input.projectRoot, input.file.relPath);
   await mkdir(dirname(path), { recursive: true });
   await atomicWriteFile(path, content);
   return path;
+}
+
+export async function writeDocumentOptimizationKeepState(input: {
+  projectRoot: string;
+  file: ApprovedKnowledgeFile;
+  sections: ReadonlyMap<string, DocumentOptimizationSectionState>;
+}): Promise<ApprovedKnowledgeFile> {
+  const content = withDocumentOptimizationKeepState({
+    content: input.file.content,
+    approvedPath: input.file.relPath,
+    sections: input.sections,
+  });
+  const persisted = await persistApprovedMachineMetadata({
+    projectRoot: input.projectRoot,
+    relPath: input.file.relPath,
+    content,
+  });
+  const storedContent = persisted ? compactApprovedKnowledgeMarkdown(content) : content;
+  const absPath = join(input.projectRoot, "knowledge", input.file.relPath);
+  await mkdir(dirname(absPath), { recursive: true });
+  await atomicWriteFile(absPath, storedContent);
+  return { ...input.file, absPath, content };
 }

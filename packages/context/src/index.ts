@@ -10,6 +10,7 @@ import type { ProjectSourceDefinition } from "./sources.js";
 
 export type {
   CodegraphCollection,
+  CodeIndexCollection,
   DocumentMainlineCollection,
   EntityStatus,
   KnowledgeCollection,
@@ -91,6 +92,7 @@ export type {
   CodeIndexInspectionContext,
   CodeIndexInspectionFinding,
   CodeIndexInspectionFindingKind,
+  CodeIndexInspectionInventory,
   CodeIndexInspectionResult,
   CodeIndexLifecycle,
   CodeIndexModuleFacet,

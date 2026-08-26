@@ -72,6 +72,7 @@ function initTsRepo(path: string, packageName: string): string {
   }, null, 2)}\n`, "utf8");
   writeFileSync(join(path, "src", "index.ts"), 'export { Button } from "./Button";\n', "utf8");
   writeFileSync(join(path, "src", "Button.ts"), [
+    "/** Returns the visible button label for the public component contract. */",
     "export function Button(label: string) {",
     "  return label;",
     "}",
@@ -91,10 +92,10 @@ function writeMultiSourceProjectEntry(project: string): void {
     "export default defineProject({",
     "  sources: [sampleA, sampleB, manual],",
     "  phases: [",
-    '    extractTs({ source: sampleA, collection: "codegraph" }),',
-    '    extractTs({ source: sampleB, collection: "codegraph" }),',
+    '    extractTs({ source: sampleA, collection: "codeindex" }),',
+    '    extractTs({ source: sampleB, collection: "codeindex" }),',
     "    captureFile({ source: manual }),",
-    '    reviewValidity({ collection: "codegraph" }),',
+    '    reviewValidity({ collection: "codeindex" }),',
     "  ],",
     "  packages: [],",
     "});",
@@ -112,8 +113,8 @@ function writeRepoOnlyProjectEntry(project: string): void {
     "export default defineProject({",
     "  sources: [sampleA, sampleB],",
     "  phases: [",
-    '    extractTs({ source: sampleA, collection: "codegraph" }),',
-    '    extractTs({ source: sampleB, collection: "codegraph" }),',
+    '    extractTs({ source: sampleA, collection: "codeindex" }),',
+    '    extractTs({ source: sampleB, collection: "codeindex" }),',
     "  ],",
     "  packages: [],",
     "});",
@@ -121,7 +122,7 @@ function writeRepoOnlyProjectEntry(project: string): void {
   ].join("\n"), "utf8");
 }
 
-describe("0.6.9 codegraph batched human review", () => {
+describe("0.6.19 code-index batched human review", () => {
   test("a cold runtime continues all extraction phases before validating existing code evidence", async () => {
     const root = makeTmp();
     const repoA = join(root, "repo-a");
@@ -149,11 +150,11 @@ describe("0.6.9 codegraph batched human review", () => {
       expect(existsSync(join(project, ".tmp", "context-runtime", "extract", "source-symbols.json"))).toBe(false);
 
       await runCliInDir(project, [
-        "run", "extract:20260712/sample-a:codegraph", "--format", "json",
+        "run", "extract:20260712/sample-a:codeindex", "--format", "json",
       ]);
       await writeApproved({
         projectRoot: project,
-        collection: "codegraph",
+        collection: "codeindex",
         sources: ["repo:20260712/sample-b"],
         sourceRef: "src-1#symbol:src/Button.ts:Button:function@abc123abc123",
         body: "Existing sample B knowledge.",
@@ -166,7 +167,7 @@ describe("0.6.9 codegraph batched human review", () => {
 
       await runCliInDir(project, [
         "run", "--preview-extraction-batch",
-        "--preview-phase", "extract:20260712/sample-b:codegraph",
+        "--preview-phase", "extract:20260712/sample-b:codeindex",
         "--format", "json",
       ]);
 
@@ -178,9 +179,9 @@ describe("0.6.9 codegraph batched human review", () => {
       };
       expect(status.state).toBe("route.extract.pending-target");
       expect(status.verifyErrors).toBe(0);
-      expect(status.pendingExtractPhases).toEqual(["extract:20260712/sample-b:codegraph"]);
+      expect(status.pendingExtractPhases).toEqual(["extract:20260712/sample-b:codeindex"]);
       expect(status.routing.command_plan[0]?.command).toContain(
-        "run extract:20260712/sample-b:codegraph --format json",
+        "run extract:20260712/sample-b:codeindex --format json",
       );
 
       const verify = JSON.parse(await runCliInDir(project, ["verify", "--format", "json"])) as {
@@ -197,7 +198,7 @@ describe("0.6.9 codegraph batched human review", () => {
     }
   });
 
-  test("multiple confirmed repo modules finish extraction before one codegraph Review", async () => {
+  test("multiple confirmed repo modules finish extraction before one code-index Review", async () => {
     const root = makeTmp();
     const repoA = join(root, "repo-a");
     const repoB = join(root, "repo-b");
@@ -230,20 +231,17 @@ describe("0.6.9 codegraph batched human review", () => {
       ]);
       writeMultiSourceProjectEntry(project);
       await runCliInDir(project, ["run", "capture:file:20260712/manual", "--format", "json"]);
+      await runCliInDir(project, [
+        "run", "--preview-extraction-batch", "--format", "json",
+      ]);
 
       const first = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/sample-a:codegraph", "--format", "json",
+        "run", "extract:20260712/sample-a:codeindex", "--format", "json",
       ])) as { result: { next_action: { kind: string; command: string } } };
       expect(first.result.next_action).toMatchObject({
-        kind: "continue-codegraph-batch",
+        kind: "continue-code-index-batch",
         command: "context status --format json",
       });
-
-      await runCliInDir(project, [
-        "run", "--preview-extraction-batch",
-        "--preview-phase", "extract:20260712/sample-b:codegraph",
-        "--format", "json",
-      ]);
 
       const batchStatus = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
         state: string;
@@ -253,7 +251,7 @@ describe("0.6.9 codegraph batched human review", () => {
       };
       expect(batchStatus.state).toBe("route.extract.pending-target");
       expect(batchStatus.draftCandidates).toBeGreaterThan(0);
-      expect(batchStatus.pendingExtractPhases).toEqual(["extract:20260712/sample-b:codegraph"]);
+      expect(batchStatus.pendingExtractPhases).toEqual(["extract:20260712/sample-b:codeindex"]);
       expect(batchStatus.routing.human_gate).toMatchObject({
         required: false,
         kind: "none",
@@ -264,10 +262,10 @@ describe("0.6.9 codegraph batched human review", () => {
       });
       expect(batchStatus.routing.command_plan[0]?.command).toContain("--workflow-revision");
       expect(batchStatus.routing.command_plan[0]?.command).toContain(
-        "run extract:20260712/sample-b:codegraph --format json",
+        "run extract:20260712/sample-b:codeindex --format json",
       );
 
-      await runCliInDir(project, ["run", "extract:20260712/sample-b:codegraph", "--format", "json"]);
+      await runCliInDir(project, ["run", "extract:20260712/sample-b:codeindex", "--format", "json"]);
       const auditStatus = JSON.parse(await runCliInDir(project, ["status", "--format", "json", "--view", "full"])) as {
         state: string;
         codeIndexAudit: { current: boolean; resolved: boolean; report: { units: Array<{ id: string }> } };
@@ -278,6 +276,17 @@ describe("0.6.9 codegraph batched human review", () => {
       expect(auditStatus.codeIndexAudit.report.units.map((unit) => unit.id)).toEqual(
         expect.arrayContaining(["sample-a", "sample-b"]),
       );
+      const prematureReview = await invokeCliInDir(project, [
+        "review", "html", "codeindex", "--format", "json",
+      ]);
+      expect(prematureReview.status).not.toBe(0);
+      expect(prematureReview.stderr).toContain("code-index quality audit must pass before candidate review");
+      expect(prematureReview.stderr).toContain("code-index-audit-required-before-review");
+      const prematureApproval = await invokeCliInDir(project, [
+        "review", "approve-all", "codeindex", "--managed", "--format", "json",
+      ]);
+      expect(prematureApproval.status).not.toBe(0);
+      expect(prematureApproval.stderr).toContain("code-index quality audit must pass before candidate review");
       await acceptCurrentCodeIndexAudit(
         project,
         "Both fixture modules were reviewed together and intentionally expose one symbol page each.",
@@ -299,28 +308,28 @@ describe("0.6.9 codegraph batched human review", () => {
       expect(reviewStatus.draftCandidates).toBe(2);
       expect(reviewStatus.pendingReview).toMatchObject({
         scope: "collection",
-        collections: ["codegraph"],
-        collection: "codegraph",
+        collections: ["codeindex"],
+        collection: "codeindex",
         count: 2,
-        command: "context review html codegraph --open",
+        command: "context review html codeindex --open",
       });
       expect(reviewStatus.pendingExtractPhases).toEqual([]);
       expect(reviewStatus.routing).toMatchObject({
         human_gate: { required: true, kind: "knowledge-review" },
         command_plan: [
           {
-            command: expect.stringContaining("review html codegraph --open"),
+            command: expect.stringContaining("review html codeindex --open"),
             availability: "immediate",
           },
           {
-            command: expect.stringContaining("review approve-all codegraph --force --format json"),
+            command: expect.stringContaining("review approve-all codeindex --force --format json"),
             availability: "after-human-confirmation",
           },
         ],
       });
 
       const review = JSON.parse(await runCliInDir(project, [
-        "review", "html", "codegraph", "--format", "json",
+        "review", "html", "codeindex", "--format", "json",
       ])) as { candidates: number };
       expect(review.candidates).toBe(2);
     } finally {

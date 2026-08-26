@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "context.document-optimization-decisions.v1",
-  "title": "Context document optimization decisions",
+  "$id": "context.document-optimization-decisions.v2",
+  "title": "Context source-constrained editorial revision decisions",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "decisions"],
   "properties": {
-    "schema": { "const": "context.document-optimization-decisions.v1" },
+    "schema": { "const": "context.document-optimization-decisions.v2" },
     "decisions": {
       "type": "array",
       "items": {
@@ -18,14 +18,37 @@
           "input_digest": { "type": "string", "minLength": 1 },
           "context_digest": { "type": "string", "minLength": 1 },
           "policy_digest": { "type": "string", "minLength": 1 },
-          "action": { "enum": ["keep", "replace"] },
+          "action": {
+            "enum": ["keep", "repair", "reshape", "omit"],
+            "description": "Keep the Section, repair local presentation, reshape it within the same source boundary, or omit a mechanically eligible non-knowledge Section."
+          },
           "replacement": { "type": "string" },
-          "reason": { "type": "string" }
+          "assessment": {
+            "type": "string",
+            "minLength": 12,
+            "description": "Required when keeping a Section that has mechanical signals. Explain why the signals are false positives or why changing the Section would reduce source fidelity. This value is decision-only and is not published."
+          },
+          "reason": {
+            "enum": [
+              "unanswered-question",
+              "empty-or-placeholder",
+              "draft-without-decision",
+              "duplicate-content",
+              "obsolete-without-replacement",
+              "volatile-reference",
+              "sensitive-value-candidate",
+              "conversion-artifact"
+            ]
+          }
         },
         "allOf": [
           {
-            "if": { "properties": { "action": { "const": "replace" } } },
+            "if": { "properties": { "action": { "enum": ["repair", "reshape"] } } },
             "then": { "required": ["replacement"] }
+          },
+          {
+            "if": { "properties": { "action": { "const": "omit" } } },
+            "then": { "required": ["reason"] }
           }
         ]
       }

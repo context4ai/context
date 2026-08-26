@@ -25,6 +25,12 @@ async function createMonorepo(root: string): Promise<{ root: string; head: strin
       type: "module",
     }, null, 2)}\n`, "utf8");
   }
+  await mkdir(join(repository, "tux-web"), { recursive: true });
+  await writeFile(join(repository, "tux-web", "package.json"), `${JSON.stringify({
+    name: "@demo/tux-web",
+    version: "1.0.0",
+    type: "module",
+  }, null, 2)}\n`, "utf8");
   git(repository, ["init", "-q"]);
   git(repository, ["config", "user.email", "test@example.com"]);
   git(repository, ["config", "user.name", "Test User"]);
@@ -79,8 +85,48 @@ describe("0.6.0 source registration concurrency and batch input", () => {
         "20260712/component-a",
         "20260712/component-b",
       ]);
+      expect(registry.repos.map((source) => source.remote)).toEqual([
+        "git@example.com:demo/product-monorepo.git",
+        "git@example.com:demo/product-monorepo.git",
+      ]);
+      expect(registry.repos.map((source) => source.ref)).toEqual([
+        repository.head,
+        repository.head,
+      ]);
       expect(registry.larks.map((source) => source.name)).toEqual(["20260712/user-manual"]);
       expect(registry.larks[0]?.wikiToken).toBe("wiki-secret-token");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("infers a uniquely named sibling Git module when local is omitted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-source-batch-inferred-local-"));
+    try {
+      const repository = await createMonorepo(root);
+      const initialized = await initContextProject({ cwd: repository.root, projectDir: "context", dev: true });
+      const inputPath = join(initialized.projectRoot, "source-batch.yaml");
+      await writeFile(inputPath, YAML.stringify({
+        sources: [{
+          type: "repo",
+          module: "tux-web",
+        }],
+      }), "utf8");
+
+      const result = await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "batch", "20260712", "--input", inputPath, "--format", "json",
+      ]);
+
+      expect(result.status).toBe(0);
+      const registry = await loadSourcesRegistry({ rootDir: initialized.projectRoot });
+      expect(registry.repos).toHaveLength(1);
+      expect(registry.repos[0]).toMatchObject({
+        name: "20260712/tux-web",
+        local: "..",
+        subpath: "tux-web",
+        remote: "git@example.com:demo/product-monorepo.git",
+        ref: repository.head,
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -157,6 +203,64 @@ describe("0.6.0 source registration concurrency and batch input", () => {
     expect(stdout).toContain("Payload example:");
     expect(stdout).toContain("repo.module is required");
     expect(stdout).toContain("file.module and lark.module are optional");
+    expect(stdout).toContain("repo.local is resolved from the Context project root");
+    expect(stdout).toContain("infer origin and the current commit");
+    expect(stdout).toContain("one uniquely named Git directory");
+  });
+
+  test("reports an unresolved local repo path before asking for remote identity", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-source-batch-missing-local-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "context", dev: true });
+      const inputPath = join(initialized.projectRoot, "source-batch.yaml");
+      await writeFile(inputPath, YAML.stringify({
+        sources: [{
+          type: "repo",
+          module: "component-a",
+          local: "component-a",
+        }],
+      }), "utf8");
+
+      const result = await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "batch", "20260712", "--input", inputPath, "--format", "json",
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("repo source local path does not exist: component-a");
+      expect(result.stderr).not.toContain("repo source remote is required");
+      const registry = await loadSourcesRegistry({ rootDir: initialized.projectRoot });
+      expect(registry.repos).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reports a non-Git local repo path before asking for remote identity", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-source-batch-non-git-local-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "context", dev: true });
+      await mkdir(join(root, "component-a"), { recursive: true });
+      const inputPath = join(initialized.projectRoot, "source-batch.yaml");
+      await writeFile(inputPath, YAML.stringify({
+        sources: [{
+          type: "repo",
+          module: "component-a",
+          local: "../component-a",
+        }],
+      }), "utf8");
+
+      const result = await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "batch", "20260712", "--input", inputPath, "--format", "json",
+      ]);
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("repo source local path is not inside a Git checkout: ../component-a");
+      expect(result.stderr).not.toContain("repo source remote is required");
+      const registry = await loadSourcesRegistry({ rootDir: initialized.projectRoot });
+      expect(registry.repos).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("rejects duplicate batch identities before writing any registry", async () => {

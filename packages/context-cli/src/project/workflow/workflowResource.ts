@@ -123,12 +123,13 @@ async function writeReceiptContinuation(input: {
   receipts: ResourceReadReceiptSet;
 }): Promise<{ path: string; command: string }> {
   const path = receiptSetPath(input.receipts);
-  await writeJsonAtomic(join(input.projectRoot, path), input.receipts);
-  const command = input.managed
+  const absolutePath = join(input.projectRoot, path);
+  await writeJsonAtomic(absolutePath, input.receipts);
+  const contextCommand = input.managed
     ? [
         "context",
         "--workflow-resource-receipts",
-        shellQuote(`@${path}`),
+        shellQuote(`@${absolutePath}`),
         "run",
         authorityCommandOptions(input.authorities, "resource").trim(),
         "--until blocked-or-complete",
@@ -138,10 +139,13 @@ async function writeReceiptContinuation(input: {
         "context status",
         authorityCommandOptions(input.authorities, "resource").trim(),
         "--resource-receipts",
-        shellQuote(`@${path}`),
+        shellQuote(`@${absolutePath}`),
         "--format json",
       ].filter((item) => item.length > 0).join(" ");
-  return { path, command };
+  return {
+    path,
+    command: `cd ${shellQuote(input.projectRoot)} && ${contextCommand}`,
+  };
 }
 
 function workflowResourceId(value: string): ContextWorkflowResourceId {
@@ -355,14 +359,14 @@ export async function acknowledgeCurrentWorkflowResources(input: {
   const reevaluated = await reevaluateProjectStatusWorkflow({
     snapshot,
     resourceReceipts: normalizedReceipts,
-    resourceReceiptsReference: `@${continuation.path}`,
+    resourceReceiptsReference: `@${join(found.projectRoot, continuation.path)}`,
   });
   return {
     ...reevaluated,
     resourceAcknowledgement: {
       protocol: "context.workflow.resource-receipts.v1",
       acknowledged: directResources.length,
-      receiptReference: `@${continuation.path}`,
+      receiptReference: `@${join(found.projectRoot, continuation.path)}`,
     },
   };
 }

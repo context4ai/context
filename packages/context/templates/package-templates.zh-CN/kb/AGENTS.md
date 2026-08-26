@@ -14,7 +14,7 @@
 
 包内可能包含以下 OKF 根目录：
 
-- `{{wikisRoot}}/`：结构化实体和关系，对应 codegraph、business、product。
+- `{{wikisRoot}}/`：结构化实体和关系，对应 codeindex、business、product。
 - `{{guidesRoot}}/`：架构、流程、FAQ、决策和故障记录。
 - `{{rulesRoot}}/`：标准、约束、验收条件和测试场景。
 - `{{featsRoot}}/`：被选择进入包内的功能知识。

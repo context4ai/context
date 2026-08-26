@@ -26,7 +26,6 @@ export async function packageCodeIndexAudit(input: {
     report_digest: current.report.digest,
     scope_digest: current.report.scope_digest,
     decision: current.decision,
-    history: current.history,
     workspace_summary: current.report.summary,
     package_selection: {
       code_pages: selectedPages.length,

@@ -384,6 +384,17 @@ nodes:
       recommended:
         - resources/manuals/reference/code-extractors.md
 
+  - id: migrate-codeindex
+    kind: action
+    reasonCode: route.extract.codeindex-migration-required
+    action: actions/migrate-codeindex.yaml
+    satisfiedBy:
+      - path: extract.migration_required
+        equals: false
+    resources:
+      required:
+        - resources/procedures/code-extraction.md
+
   - id: preview-extraction-batch
     kind: action
     reasonCode: route.extract.preview-required
@@ -451,6 +462,23 @@ nodes:
       delegatable: false
     satisfiedBy:
       - path: extract.audit_input_required
+        equals: false
+    resources:
+      required:
+        - resources/procedures/code-index-audit.md
+        - resources/dialogue/human-gates.md
+        - resources/views/code-index-audit.yaml
+
+  - id: resolve-code-index-audit-guidance
+    kind: gate
+    reasonCode: route.extract.audit-guidance-required
+    resolutionAction: actions/apply-code-index-guidance.yaml
+    gate:
+      id: code-index-audit-guidance
+      prompt: Review the aggregated three-round code-index quality report and provide one scope, profile, source-material, or indexing direction for the failed modules.
+      delegatable: false
+    satisfiedBy:
+      - path: extract.audit_guidance_required
         equals: false
     resources:
       required:
@@ -731,13 +759,15 @@ edges:
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
   - { from: capture-next, to: choose-extraction-scope }
   - { from: choose-extraction-scope, to: configure-code-extraction, kind: gatedBy }
-  - { from: configure-code-extraction, to: resolve-extraction-capability }
+  - { from: configure-code-extraction, to: migrate-codeindex }
+  - { from: migrate-codeindex, to: resolve-extraction-capability }
   - { from: resolve-extraction-capability, to: preview-extraction-batch }
   - { from: preview-extraction-batch, to: repair-extraction-ownership }
   - { from: repair-extraction-ownership, to: revise-extraction-scale }
   - { from: revise-extraction-scale, to: extract-next }
   - { from: extract-next, to: resolve-code-index-audit-input }
-  - { from: resolve-code-index-audit-input, to: revise-code-index-audit, kind: gatedBy }
+  - { from: resolve-code-index-audit-input, to: resolve-code-index-audit-guidance, kind: gatedBy }
+  - { from: resolve-code-index-audit-guidance, to: revise-code-index-audit, kind: gatedBy }
   - { from: revise-code-index-audit, to: audit-code-index }
   - { from: audit-code-index, to: review-current-batch }
   - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }

@@ -15,6 +15,8 @@ import {
 } from "../project/extractionPreviewCache.js";
 import { addRepoSource } from "../project/repoSources.js";
 import { initContextProject } from "../project/workspace.js";
+import { applyReviewDecisions } from "../project/reviewApply.js";
+import { candidateIdsHash } from "../project/reviewShared.js";
 
 async function runCliInDir(dir: string, args: string[]): Promise<string> {
   const cwd = process.cwd();
@@ -83,18 +85,31 @@ describe("custom code extraction lifecycle", () => {
         extract: async () => ({
           candidates: (async function* () {
             for (let index = 0; index < 305; index += 1) {
+              const evidence = {
+                source: "20260811/service",
+                file: "src/index.ts",
+                symbol: `item${index}`,
+                kind: "variable",
+                digest: index.toString(16).padStart(12, "0"),
+              };
               yield {
                 nodeRef: `service/item-${index}`,
                 kind: "service",
                 visibility: "exported",
                 module: "service",
-                markdown: `# Service item ${index}\n`,
-                evidence: [{
-                  source: "20260811/service",
-                  file: "src/index.ts",
-                  symbol: `item${index}`,
-                  kind: "variable",
-                  digest: index.toString(16).padStart(12, "0"),
+                evidence: [evidence],
+                sections: [{
+                  id: "operations",
+                  kind: "operation" as const,
+                  title: "Operations",
+                  markdown: `Service item ${index}.`,
+                  evidence: [evidence],
+                }, {
+                  id: "handoff",
+                  kind: "handoff" as const,
+                  title: "Handoff",
+                  markdown: `Service item ${index} handoff.`,
+                  evidence: [evidence],
                 }],
                 review: {
                   title: `Service item ${index}`,
@@ -164,18 +179,31 @@ describe("custom code extraction lifecycle", () => {
           candidates: (async function* () {
             for (const unitId of unitIds) {
               for (let index = 0; index < 80; index += 1) {
+                const evidence = {
+                  source: "20260811/service",
+                  file: "src/index.ts",
+                  symbol: `${unitId}Item${index}`,
+                  kind: "variable",
+                  digest: `${unitIds.indexOf(unitId) + 1}${index.toString(16).padStart(11, "0")}`,
+                };
                 yield {
                   nodeRef: `${unitId}/item-${index}`,
                   kind: "service",
                   visibility: "exported",
                   module: unitId,
-                  markdown: `# ${unitId} item ${index}\n`,
-                  evidence: [{
-                    source: "20260811/service",
-                    file: "src/index.ts",
-                    symbol: `${unitId}Item${index}`,
-                    kind: "variable",
-                    digest: `${unitIds.indexOf(unitId) + 1}${index.toString(16).padStart(11, "0")}`,
+                  evidence: [evidence],
+                  sections: [{
+                    id: "responsibility",
+                    kind: "responsibility" as const,
+                    title: "Responsibility",
+                    markdown: `${unitId} item ${index}.`,
+                    evidence: [evidence],
+                  }, {
+                    id: "entrypoint",
+                    kind: "entrypoint" as const,
+                    title: "Entrypoint",
+                    markdown: `${unitId} item ${index} entrypoint.`,
+                    evidence: [evidence],
                   }],
                   review: {
                     title: `${unitId} item ${index}`,
@@ -251,18 +279,31 @@ describe("custom code extraction lifecycle", () => {
           candidates: (async function* () {
             for (let index = 0; index < count; index += 1) {
               const sourceName = `20260811/service-${index % 2 === 0 ? "a" : "b"}`;
+              const evidence = {
+                source: sourceName,
+                file: "src/index.ts",
+                symbol: `${id}Item${index}`,
+                kind: "variable",
+                digest: index.toString(16).padStart(12, "0"),
+              };
               yield {
                 nodeRef: `${id}/item-${index}`,
                 kind: "service",
                 visibility: "exported",
                 module: id,
-                markdown: `# ${id} item ${index}\n`,
-                evidence: [{
-                  source: sourceName,
-                  file: "src/index.ts",
-                  symbol: `${id}Item${index}`,
-                  kind: "variable",
-                  digest: index.toString(16).padStart(12, "0"),
+                evidence: [evidence],
+                sections: [{
+                  id: "responsibility",
+                  kind: "responsibility" as const,
+                  title: "Responsibility",
+                  markdown: `${id} item ${index}.`,
+                  evidence: [evidence],
+                }, {
+                  id: "entrypoint",
+                  kind: "entrypoint" as const,
+                  title: "Entrypoint",
+                  markdown: `${id} item ${index} entrypoint.`,
+                  evidence: [evidence],
                 }],
                 review: {
                   title: `${id} item ${index}`,
@@ -463,7 +504,7 @@ describe("custom code extraction lifecycle", () => {
         "    extractCustom({",
         '      id: "extract:20260811/service:protocol",',
         "      sources: [service],",
-        '      collection: "codegraph",',
+        '      collection: "codeindex",',
         "      indexUnits: [{",
         '        id: "service", inputSources: ["20260811/service"], outputOwner: "service",',
         '        moduleType: "api-service", moduleTypeEvidence: ["src/index.ts protocol registration"], outputProfile: "protocol-index", responsibility: "Document the service protocol.",',
@@ -475,7 +516,6 @@ describe("custom code extraction lifecycle", () => {
         '        kind: "protocol",',
         '        visibility: "exported",',
         '        module: "service",',
-        '        markdown: "# Service protocol\\n\\nStable protocol boundary.\\n",',
         "        evidence: [{",
         '          source: "20260811/service", file: "src/protocol.ts", symbol: "protocol", kind: "variable", digest: "0123456789ab", line: 1,',
         "        }, {",
@@ -496,7 +536,7 @@ describe("custom code extraction lifecycle", () => {
         "        },",
         "      }] }),",
         "    }),",
-        '    reviewValidity({ collection: "codegraph" }),',
+        '    reviewValidity({ collection: "codeindex" }),',
         "  ],",
         "  packages: [],",
         "});",
@@ -526,17 +566,17 @@ describe("custom code extraction lifecycle", () => {
       });
 
       const review = JSON.parse(await runCliInDir(initialized.projectRoot, [
-        "review", "list", "codegraph", "--format", "json",
+        "review", "list", "codeindex", "--format", "json",
       ])) as Array<{ candidate_id: string; snapshot_ready: boolean }>;
       expect(review).toEqual([expect.objectContaining({
-        candidate_id: "codegraph/service/index",
+        candidate_id: "codeindex/service/index",
         snapshot_ready: true,
       })]);
       const candidateLedger = await readFile(join(
         initialized.projectRoot,
         ".tmp/context-runtime/lifecycle/candidates.jsonl",
       ), "utf8");
-      expect(candidateLedger).toContain('"path":"codegraph/service/index-page.md"');
+      expect(candidateLedger).toContain('"path":"codeindex/service/index-page.md"');
       const symbolIndex = await readFile(join(
         initialized.projectRoot,
         ".tmp/context-runtime/extract/source-symbols.json",
@@ -545,12 +585,22 @@ describe("custom code extraction lifecycle", () => {
       expect(symbolIndex).toContain('"name": "protocol"');
       expect(symbolIndex).toContain('"name": "module"');
 
-      await runCliInDir(initialized.projectRoot, [
-        "review", "approve", "codegraph/service/index", "--collection", "codegraph",
-      ]);
+      await applyReviewDecisions({
+        projectRoot: initialized.projectRoot,
+        payload: {
+          decisions: [{ candidate_id: "codeindex/service/index", status: "approved" }],
+          collection: "codeindex",
+          scope: {
+            kind: "collection",
+            collection: "codeindex",
+            count: 1,
+            ids_sha256: candidateIdsHash(["codeindex/service/index"]),
+          },
+        },
+      });
       const approved = await readFile(join(
         initialized.projectRoot,
-        "knowledge/codegraph/service/index-page.md",
+        "knowledge/codeindex/service/index-page.md",
       ), "utf8");
       expect(approved).toContain("- service|module|variable");
       expect(approved).toContain("- service|protocol|variable");
