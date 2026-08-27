@@ -415,6 +415,8 @@ function renderDocumentOptimization(status: ProjectStatus): string {
 - Kept fragments: ${current.kept_fragments}
 - Pending fragments: ${current.pending_fragments}
 - Conflicts: ${current.conflict_fragments}
+- Retry attempts for the current problem: ${current.retry_attempts}
+- Human guidance required: ${inline(current.guidance_required)}
 - Mechanical signals: ${current.signal_count}
 - Repair candidates: ${current.action_candidates.repair}
 - Reshape candidates: ${current.action_candidates.reshape}
@@ -423,6 +425,12 @@ function renderDocumentOptimization(status: ProjectStatus): string {
 - Conversational correction requested: ${inline(current.revision_requested)}${current.requested_approved_path === undefined
     ? ""
     : `\n- Requested approved page: ${inline(current.requested_approved_path)}`}
+
+## Three-round guidance report
+
+${bullets(current.guidance_problems.map((problem) =>
+    `attempts=${problem.attempts}; problem=${inline(problem.message)}; fragments=${problem.fragment_ids.map(inline).join(", ") || "current batch"}; signals=${problem.signal_codes.map(inline).join(", ") || "see current plan"}`
+  ))}
 
 Revision pages use the reserved \`__revision.md\` suffix beside their approved
 page under \`knowledge/\`. Default knowledge discovery excludes them; document

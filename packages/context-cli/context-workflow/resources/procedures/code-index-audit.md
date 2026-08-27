@@ -13,6 +13,33 @@ scope, and decides whether the index is fit for its declared output profiles.
 Reader metrics exclude Context lifecycle comments and evidence annotations.
 Improve the source-backed knowledge itself; do not change Markdown syntax,
 sentence count, or pagination solely to influence a mechanical counter.
+The complete inventory is evidence, not the default reader-facing output. Do
+not create one sentence, bullet, table row, or page for every discovered file
+or symbol merely to satisfy coverage or density. Group related identities by a
+reader-visible capability, entrypoint, protocol boundary, lifecycle stage, or
+handoff, then explain the group's responsibility, stable inputs and outputs,
+state or failure boundary when applicable, next handoff, and exact supporting
+sources. A granular catalog is appropriate only for a declared public API,
+protocol, or command reference.
+
+When the report shows low density, add source-backed explanation or a complete
+relationship chain. Never add repeated `Observed ...` rows. When symbol
+coverage is low, use a verified evidence-backed group or a profile-appropriate
+catalog instead of copying the inventory into prose. Normalized template
+repetitions do not count as semantic facts, and enumeration-heavy output has a
+profile-specific ceiling.
+
+Identity groups and chain candidates are mechanical contracts, not optional
+notes. A group counts only when its members belong to the target inventory, its
+source files belong to the eligible inventory, and its reader-facing page cites
+those files. Every chain candidate must be documented, merged into a documented
+candidate, excluded with a concrete reason, or routed to missing-material input.
+For each discovered external boundary family, retain a representative
+source-backed chain or an explicit material gap.
+When the boundary inventory contains adjacent families such as operation and
+handler, handler and downstream, command and effect, event and processor, or a
+cross-source handoff, the adapter must return the corresponding candidate
+family. Returning an empty candidate list does not bypass chain review.
 
 The report contains no aggregate score. Every dimension is computed
 independently with its observed value, floor, recommended target, ceiling,

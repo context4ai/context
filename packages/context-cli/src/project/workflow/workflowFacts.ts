@@ -480,6 +480,7 @@ export function createContextWorkflowFacts(
     current: true,
     pending_fragments: 0,
     conflict_fragments: 0,
+    guidance_required: false,
     revision_requested: false,
   };
 
@@ -584,6 +585,7 @@ export function createContextWorkflowFacts(
       current: documentOptimization.current,
       pending_count: documentOptimization.pending_fragments,
       conflict_count: documentOptimization.conflict_fragments,
+      guidance_required: documentOptimization.guidance_required,
       ...(documentOptimization.revision_requested
         ? { revision_requested: true as const }
         : {}),

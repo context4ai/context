@@ -33,7 +33,7 @@ state:
     review: { gate_clear: true, batch_resolved: true }
     close: { current: true }
     packages: { declared: true, templates_reviewed: true, current: true }
-    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, revision_requested: true }
+    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, guidance_required: false, revision_requested: true }
 expect:
   statusCode: actionable
   primaryNode: revise-document

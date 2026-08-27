@@ -4,6 +4,9 @@ import type {
   CodeIndexCoverageKind,
   CodeIndexInspectionFinding,
   CodeIndexInspectionInventory,
+  CodeIndexIdentityGroup,
+  CodeIndexChainCandidate,
+  CodeIndexChainCandidateDecision,
   CodeIndexModuleFacet,
   CodeIndexModuleType,
   CodeIndexOutputProfile,
@@ -295,6 +298,9 @@ export interface ExtractionIndexInventoryPreview {
     kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
     identity: string;
   }>;
+  identityGroups: CodeIndexIdentityGroup[];
+  chainCandidates: CodeIndexChainCandidate[];
+  chainCandidateDecisions: CodeIndexChainCandidateDecision[];
   excludedFiles: number;
   excludedFileTargets: string[];
   excludedReasons: string[];

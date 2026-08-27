@@ -1,6 +1,7 @@
 import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
 
 export type DocumentEditorialAction = "keep" | "repair" | "reshape" | "omit";
+export type DocumentEditorialSignalConfidence = "high" | "review";
 
 export const DOCUMENT_EDITORIAL_OMISSION_REASONS = [
   "unanswered-question",
@@ -23,6 +24,7 @@ export type DocumentEditorialSignalCode =
   | "wide-table"
   | "long-table-cell"
   | "raw-or-unlabeled-link"
+  | "adjacent-links"
   | "volatile-query-url"
   | "strikethrough-only-block"
   | "brainstorm-without-decision"
@@ -30,6 +32,9 @@ export type DocumentEditorialSignalCode =
   | "unstable-owner-reference"
   | "sensitive-value-candidate"
   | "heading-hierarchy-invalid"
+  | "heading-content-overloaded"
+  | "markdown-syntax-damaged"
+  | "conversion-artifact"
   | "mixed-facts-and-draft";
 
 export interface DocumentEditorialSignal {
@@ -37,13 +42,15 @@ export interface DocumentEditorialSignal {
   line_start: number;
   line_end: number;
   recommended_action: DocumentEditorialAction | "request-input";
+  confidence: DocumentEditorialSignalConfidence;
   omission_reason?: DocumentEditorialOmissionReason;
   detail: string;
 }
 
-interface LocalSignal extends Omit<DocumentEditorialSignal, "line_start" | "line_end"> {
+interface LocalSignal extends Omit<DocumentEditorialSignal, "line_start" | "line_end" | "confidence"> {
   lineStart: number;
   lineEnd: number;
+  confidence?: DocumentEditorialSignalConfidence;
 }
 
 const PLACEHOLDER_RE = /^(?:todo|tbd|wip|n\/?a|none|pending|placeholder|to be (?:decided|defined|completed)|待补充|待确认|未定|暂无)$/iu;
@@ -89,6 +96,31 @@ function hasUrlAsLinkLabel(value: string): boolean {
     .some((match) => /^(?:[a-z][a-z0-9+.-]*:\/\/|mailto:)/iu.test(match[1]!.trim()));
 }
 
+function hasAdjacentMarkdownLinks(value: string): boolean {
+  return /\)\s*\[/u.test(value) && /\)\[/u.test(value.replace(/\s+/gu, ""));
+}
+
+export function documentEditorialSignalConfidence(
+  code: DocumentEditorialSignalCode,
+): DocumentEditorialSignalConfidence {
+  switch (code) {
+    case "empty-table-row":
+    case "placeholder-content":
+    case "wide-table":
+    case "long-table-cell":
+    case "raw-or-unlabeled-link":
+    case "adjacent-links":
+    case "duplicate-fragment":
+    case "heading-hierarchy-invalid":
+    case "heading-content-overloaded":
+    case "markdown-syntax-damaged":
+    case "conversion-artifact":
+      return "high";
+    default:
+      return "review";
+  }
+}
+
 function withoutFencedCode(lines: readonly string[]): string[] {
   let fence: "```" | "~~~" | undefined;
   return lines.map((line) => {
@@ -100,6 +132,21 @@ function withoutFencedCode(lines: readonly string[]): string[] {
     }
     return fence === undefined ? line : "";
   });
+}
+
+function withoutInlineCode(value: string): string {
+  return value.replace(/`[^`\n]*`/gu, (match) => " ".repeat(match.length));
+}
+
+function hasUnclosedFence(lines: readonly string[]): boolean {
+  let fence: "```" | "~~~" | undefined;
+  for (const line of lines) {
+    const marker = /^\s*(```|~~~)/u.exec(line)?.[1] as "```" | "~~~" | undefined;
+    if (marker === undefined) continue;
+    if (fence === undefined) fence = marker;
+    else if (fence === marker) fence = undefined;
+  }
+  return fence !== undefined;
 }
 
 function rawUrls(value: string): string[] {
@@ -212,6 +259,15 @@ function headingSignals(lines: readonly string[], signals: LocalSignal[]): void 
     const match = /^(#{1,6})\s+\S/u.exec(line.trim());
     if (match === null) return;
     const level = match[1]!.length;
+    if (markdownLinkRanges(line).length >= 2 || /(?:^|\s)(?:[-*+] |\d+[.)] )/u.test(line.slice(match[0].length))) {
+      addSignal(signals, {
+        code: "heading-content-overloaded",
+        lineStart: index + 1,
+        lineEnd: index + 1,
+        recommended_action: "repair",
+        detail: "The heading contains multiple links or embedded list content that belongs in the Section body.",
+      });
+    }
     if (previousLevel > 0 && level > previousLevel + 1) {
       addSignal(signals, {
         code: "heading-hierarchy-invalid",
@@ -226,8 +282,18 @@ function headingSignals(lines: readonly string[], signals: LocalSignal[]): void 
 }
 
 export function analyzeDocumentEditorialSignals(content: string): DocumentEditorialSignal[] {
-  const lines = withoutFencedCode(content.split(/\r?\n/u));
+  const rawLines = content.split(/\r?\n/u);
+  const lines = withoutFencedCode(rawLines);
   const signals: LocalSignal[] = [];
+  if (hasUnclosedFence(rawLines)) {
+    addSignal(signals, {
+      code: "markdown-syntax-damaged",
+      lineStart: 1,
+      lineEnd: Math.max(rawLines.length, 1),
+      recommended_action: "repair",
+      detail: "A fenced code block is not closed before the end of the Section.",
+    });
+  }
   questionSignals(lines, signals);
   tableSignals(lines, signals);
   headingSignals(lines, signals);
@@ -246,8 +312,28 @@ export function analyzeDocumentEditorialSignals(content: string): DocumentEditor
   }
 
   lines.forEach((line, index) => {
-    const urls = rawUrls(line);
-    if (urls.length > 0 || hasUrlAsLinkLabel(line)) {
+    const readerLine = withoutInlineCode(line);
+    if (/\[[^\]\n]+\]\([^\)\n]*$/u.test(readerLine)) {
+      addSignal(signals, {
+        code: "markdown-syntax-damaged",
+        lineStart: index + 1,
+        lineEnd: index + 1,
+        recommended_action: "repair",
+        detail: "A Markdown link is missing its closing delimiter.",
+      });
+    }
+    if (/<!--\s*(?:lark|docx|conversion|source)[^>]*-->/iu.test(readerLine)) {
+      addSignal(signals, {
+        code: "conversion-artifact",
+        lineStart: index + 1,
+        lineEnd: index + 1,
+        recommended_action: "omit",
+        omission_reason: "conversion-artifact",
+        detail: "A source-conversion annotation remains in reader-visible content.",
+      });
+    }
+    const urls = rawUrls(readerLine);
+    if (urls.length > 0 || hasUrlAsLinkLabel(readerLine)) {
       addSignal(signals, {
         code: "raw-or-unlabeled-link",
         lineStart: index + 1,
@@ -256,7 +342,16 @@ export function analyzeDocumentEditorialSignals(content: string): DocumentEditor
         detail: "A reader-visible URL has no descriptive link label.",
       });
     }
-    if (VOLATILE_QUERY_RE.test(line)) {
+    if (hasAdjacentMarkdownLinks(readerLine)) {
+      addSignal(signals, {
+        code: "adjacent-links",
+        lineStart: index + 1,
+        lineEnd: index + 1,
+        recommended_action: "repair",
+        detail: "Adjacent Markdown links have no reader-visible separator or relationship label.",
+      });
+    }
+    if (VOLATILE_QUERY_RE.test(readerLine)) {
       addSignal(signals, {
         code: "volatile-query-url",
         lineStart: index + 1,
@@ -266,7 +361,7 @@ export function analyzeDocumentEditorialSignals(content: string): DocumentEditor
         detail: "A URL appears to contain a session, signature, token, or time-bound query value.",
       });
     }
-    if (sensitiveSourceLiteralCandidates(line).length > 0) {
+    if (sensitiveSourceLiteralCandidates(readerLine).length > 0) {
       addSignal(signals, {
         code: "sensitive-value-candidate",
         lineStart: index + 1,
@@ -276,7 +371,7 @@ export function analyzeDocumentEditorialSignals(content: string): DocumentEditor
         detail: "The line resembles a credential or sensitive value and requires explicit review.",
       });
     }
-    if (OWNER_RE.test(line)) {
+    if (OWNER_RE.test(readerLine)) {
       addSignal(signals, {
         code: "unstable-owner-reference",
         lineStart: index + 1,
@@ -325,6 +420,7 @@ export function analyzeDocumentEditorialSignals(content: string): DocumentEditor
       line_start: signal.lineStart,
       line_end: signal.lineEnd,
       recommended_action: signal.recommended_action,
+      confidence: signal.confidence ?? documentEditorialSignalConfidence(signal.code),
       ...(signal.omission_reason === undefined ? {} : { omission_reason: signal.omission_reason }),
       detail: signal.detail,
     }))

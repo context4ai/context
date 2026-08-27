@@ -1,10 +1,12 @@
 import type { CodeIndexOutputProfile } from "@c4a/context";
+import { createHash } from "node:crypto";
 import type { ExtractionIndexUnitPreview } from "./extractCandidateTypes.js";
 import type {
   CodeIndexAuditDimension,
   CodeIndexAuditDimensionStatus,
   CodeIndexAuditPageMetrics,
 } from "./codeIndexAuditTypes.js";
+import { auditChainDimensions } from "./codeIndexAuditChains.js";
 
 const TEMPLATE_PATTERN = /\b(?:describe|document|explain|list|summarize)\s+(?:the|this|each|relevant)\b|(?:在此|这里)(?:描述|说明|列出|补充)/iu;
 
@@ -22,11 +24,50 @@ export interface MarkdownQualityMetrics {
   semanticFactLines: number;
   tableFactRows: number;
   explanatoryLines: number;
+  catalogLines: number;
+  evidenceEnumerationLines: number;
+  templatedObservationLines: number;
+  normalizedTemplateRepetitionLines: number;
+  normalizedTemplateHistogram: Record<string, number>;
+  readerContentLines: number;
   implementationBodyLines: number;
   signatureDumpLines: number;
   generatedTypeLines: number;
   templateResidueCount: number;
   placeholderSectionCount: number;
+}
+
+const OBSERVATION_LINE_RE = /^(?:(?:[-*+] |\d+[.)] )\s*)?(?:observed|discovered|detected|identified|found|发现|识别到|检测到|观察到)\b/iu;
+
+function mostlyIdentityEnumeration(line: string): boolean {
+  const value = line.replace(/^\s*(?:[-*+] |\d+[.)] )/u, "").trim();
+  if (value.length === 0) return false;
+  const prose = value
+    .replace(/`[^`]+`/gu, "")
+    .replace(/https?:\/\/\S+/giu, "")
+    .replace(/(?:^|\s)[A-Za-z0-9_.-]+\/[A-Za-z0-9_./:{}#?-]+/gu, "")
+    .replace(/[\s,;:|/\\()[\]{}<>→—–-]+/gu, "");
+  return prose.length === 0;
+}
+
+function normalizedNarrativeTemplate(line: string): string | undefined {
+  if (!/^(?:[-*+] |\d+[.)] )/u.test(line) && !OBSERVATION_LINE_RE.test(line)) return undefined;
+  const normalized = line
+    .replace(/^\s*(?:[-*+] |\d+[.)] )/u, "")
+    .replace(/!?\[[^\]]*\]\([^)]*\)/gu, "<link>")
+    .replace(/`[^`]+`/gu, "<identity>")
+    .replace(/https?:\/\/\S+/giu, "<url>")
+    .replace(/(?:^|\s)[A-Za-z0-9_.-]+\/[A-Za-z0-9_./:{}#?-]+/gu, " <path>")
+    .replace(/\b(?:[A-Z][A-Za-z0-9_$]*|[A-Za-z_$][\w$]*[_.:][A-Za-z0-9_$_.:-]+)\b/gu, "<identity>")
+    .replace(/\b\d+(?:\.\d+)*\b/gu, "<number>")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .toLowerCase();
+  return normalized.length >= 16 ? normalized : undefined;
+}
+
+function templateFingerprint(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex").slice(0, 16);
 }
 
 export function codeIndexReaderMarkdown(markdown: string): string {
@@ -90,9 +131,14 @@ export function measureCodeIndexMarkdown(markdown: string): MarkdownQualityMetri
   let implementationBodyLines = 0;
   let signatureDumpLines = 0;
   let generatedTypeLines = 0;
-  let semanticFactLines = 0;
-  let tableFactRows = 0;
-  let explanatoryLines = 0;
+  const factLines = new Set<number>();
+  const tableLines = new Set<number>();
+  const explanatoryLines = new Set<number>();
+  const catalogLines = new Set<number>();
+  const evidenceEnumerationLines = new Set<number>();
+  const observationLines = new Set<number>();
+  const readerContentLines = new Set<number>();
+  const templates = new Map<number, string>();
   let templateResidueCount = 0;
   let placeholderSectionCount = 0;
   for (const [index, raw] of lines.entries()) {
@@ -119,26 +165,57 @@ export function measureCodeIndexMarkdown(markdown: string): MarkdownQualityMetri
     if (line.length === 0 || /^<!--\s*context:/u.test(line)) continue;
     if (isPlaceholderMarker(line)) placeholderSectionCount += 1;
     if (/^#{1,6}\s/u.test(line)) continue;
+    readerContentLines.add(index);
     if (TEMPLATE_PATTERN.test(line)) templateResidueCount += 1;
     if (/^\|.*\|$/u.test(line)) {
       if (!/^\|?(?:\s*:?-+:?\s*\|)+\s*$/u.test(line)) {
-        tableFactRows += 1;
-        semanticFactLines += 1;
+        tableLines.add(index);
+        catalogLines.add(index);
+        factLines.add(index);
       }
       continue;
     }
+    const template = normalizedNarrativeTemplate(line);
+    if (template !== undefined) templates.set(index, template);
+    if (OBSERVATION_LINE_RE.test(line)) {
+      observationLines.add(index);
+      continue;
+    }
+    if (/^(?:[-*+] |\d+[.)] )/u.test(line) && mostlyIdentityEnumeration(line)) {
+      evidenceEnumerationLines.add(index);
+      continue;
+    }
     if (/^(?:[-*+] |\d+[.)] )/u.test(line) || containsModuleSpecificIdentity(line)) {
-      semanticFactLines += 1;
+      factLines.add(index);
     }
     if (!/^(?:[-*+] |\d+[.)] )/u.test(line) && containsModuleSpecificIdentity(line) && line.length >= 24) {
-      explanatoryLines += 1;
+      explanatoryLines.add(index);
     }
   }
+  const templateCounts = new Map<string, number>();
+  for (const template of templates.values()) templateCounts.set(template, (templateCounts.get(template) ?? 0) + 1);
+  const normalizedTemplateLines = new Set([...templates]
+    .filter(([, template]) => (templateCounts.get(template) ?? 0) >= 3)
+    .map(([index]) => index));
+  const templatedLines = new Set([...observationLines, ...normalizedTemplateLines]);
+  for (const index of templatedLines) {
+    factLines.delete(index);
+    explanatoryLines.delete(index);
+  }
+  const normalizedTemplateHistogram = Object.fromEntries([...templateCounts.entries()]
+    .map(([template, count]): [string, number] => [templateFingerprint(template), count])
+    .sort(([left], [right]) => left.localeCompare(right)));
   return {
     lineCount: lines.length,
-    semanticFactLines,
-    tableFactRows,
-    explanatoryLines,
+    semanticFactLines: factLines.size,
+    tableFactRows: tableLines.size,
+    explanatoryLines: explanatoryLines.size,
+    catalogLines: catalogLines.size,
+    evidenceEnumerationLines: evidenceEnumerationLines.size,
+    templatedObservationLines: templatedLines.size,
+    normalizedTemplateRepetitionLines: normalizedTemplateLines.size,
+    normalizedTemplateHistogram,
+    readerContentLines: readerContentLines.size,
     implementationBodyLines,
     signatureDumpLines,
     generatedTypeLines,
@@ -373,10 +450,44 @@ export function auditDimensions(input: {
   const inventory = input.unit.inventory;
   const facts = input.pages.reduce((sum, page) => sum + page.semantic_fact_lines, 0);
   const explanatory = input.pages.reduce((sum, page) => sum + page.explanatory_lines, 0);
+  const enumeration = input.pages.reduce((sum, page) => sum +
+    page.catalog_lines + page.evidence_enumeration_lines + page.templated_observation_lines, 0);
+  const templateHistogram = new Map<string, number>();
+  for (const page of input.pages) {
+    for (const [fingerprint, count] of Object.entries(page.normalized_template_histogram ?? {})) {
+      templateHistogram.set(fingerprint, (templateHistogram.get(fingerprint) ?? 0) + count);
+    }
+  }
+  const repeatedTemplates = [...templateHistogram.values()]
+    .filter((count) => count >= 3)
+    .reduce((sum, count) => sum + count, 0);
+  const readerContent = Math.max(1, input.pages.reduce((sum, page) => sum + page.reader_content_lines, 0));
   const maxPageLines = Math.max(0, ...input.pages.map((page) => page.line_count));
   const implementation = input.pages.reduce((sum, page) => sum + page.implementation_body_lines, 0);
   const visibleLines = Math.max(1, input.pages.reduce((sum, page) => sum + page.semantic_fact_lines + page.explanatory_lines + page.implementation_body_lines, 0));
   const dimensions: CodeIndexAuditDimension[] = [];
+  const pageByViewRef = new Map(input.pages.map((page) => [page.view_ref, page]));
+  const validIdentityGroups = inventory.identityGroups.filter((group) => {
+    const page = pageByViewRef.get(group.viewRef);
+    return page !== undefined && group.sourceFiles.every((sourceFile) =>
+      coveredIdentities([sourceFile], page.referenced_files).length === 1
+    );
+  });
+  if (inventory.identityGroups.length > 0) {
+    const invalidGroups = inventory.identityGroups.filter((group) => !validIdentityGroups.includes(group));
+    dimensions.push(evaluated({
+      dimension: "identity-group-evidence-coverage",
+      observed: validIdentityGroups.length / inventory.identityGroups.length * 100,
+      unit: "percent",
+      threshold: coverageThreshold(100, 100),
+      evidence: {
+        groups: inventory.identityGroups.length,
+        valid: validIdentityGroups.length,
+        invalid_group_ids: invalidGroups.map((group) => group.id),
+      },
+      actions: ["repair-identity-group-evidence"],
+    }));
+  }
   if (inventory.basis === "ast" && inventory.eligibleFiles > 0) {
     dimensions.push(evaluated({
       dimension: "eligible-file-analysis",
@@ -452,7 +563,10 @@ export function auditDimensions(input: {
     dimensions.push(unscorable("semantic-fact-lines", "lines", "return-complete-source-inventory"));
   }
   if (inventory.basis === "ast" && inventory.targetSymbols > 0) {
-    const referencedSymbols = new Set(input.pages.flatMap((page) => page.referenced_symbols));
+    const referencedSymbols = new Set([
+      ...input.pages.flatMap((page) => page.referenced_symbols),
+      ...validIdentityGroups.flatMap((group) => group.members),
+    ]);
     const coveredTargets = inventory.targetSymbolIdentities.length > 0
       ? coveredIdentities(inventory.targetSymbolIdentities, [...referencedSymbols])
       : [...referencedSymbols];
@@ -472,6 +586,7 @@ export function auditDimensions(input: {
       actions: ["cover-missing-exports", "cover-missing-routes", "connect-operation-handler"],
     }));
   } else dimensions.push(unscorable("target-symbol-coverage", "percent", "return-target-symbol-inventory"));
+  dimensions.push(...auditChainDimensions(input));
   const referencedFiles = [...new Set(input.pages.flatMap((page) => page.referenced_files))];
   const referencedSymbols = [...new Set(input.pages.flatMap((page) => page.referenced_symbols))];
   const referencedDocumentTargets = coveredIdentities(inventory.documentTargets, [
@@ -571,6 +686,39 @@ export function auditDimensions(input: {
     threshold: explanatoryThreshold(input.unit.outputProfile, inventory.eligibleLoc),
     evidence: { explanatory_lines: explanatory },
     actions: ["add-module-explanation"],
+  }));
+  const catalogHeavyProfile = input.unit.outputProfile === "protocol-index" ||
+    input.unit.outputProfile === "public-api-reference" || input.unit.outputProfile === "command-map";
+  dimensions.push(upperBound({
+    dimension: "enumeration-ratio",
+    observed: enumeration / readerContent * 100,
+    unit: "percent",
+    target: catalogHeavyProfile ? 60 : 35,
+    ceiling: catalogHeavyProfile ? 75 : 50,
+    evidence: {
+      catalog_lines: input.pages.reduce((sum, page) => sum + page.catalog_lines, 0),
+      evidence_enumeration_lines: input.pages.reduce((sum, page) => sum + page.evidence_enumeration_lines, 0),
+      templated_observation_lines: input.pages.reduce((sum, page) => sum + page.templated_observation_lines, 0),
+      reader_content_lines: readerContent,
+      profile: input.unit.outputProfile,
+    },
+    actions: ["group-related-identities", "replace-observation-list-with-explanation", "separate-catalog-from-narrative"],
+  }));
+  dimensions.push(upperBound({
+    dimension: "normalized-template-repetition-ratio",
+    observed: repeatedTemplates / readerContent * 100,
+    unit: "percent",
+    target: 10,
+    ceiling: 20,
+    evidence: {
+      repeated_template_lines: repeatedTemplates,
+      reader_content_lines: readerContent,
+      repeated_template_fingerprints: [...templateHistogram]
+        .filter(([, count]) => count >= 3)
+        .map(([fingerprint]) => fingerprint)
+        .sort(),
+    },
+    actions: ["replace-observation-list-with-explanation", "deduplicate-catalog"],
   }));
   dimensions.push(upperBound({
     dimension: "max-page-lines",

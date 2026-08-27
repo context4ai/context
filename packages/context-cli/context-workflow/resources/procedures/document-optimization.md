@@ -18,8 +18,9 @@ decision for each fragment to the returned `payload_target`:
 - `keep` when it is already useful and readable. If the fragment has any
   mechanical signal, include a concrete `assessment` that explains why every
   signal is a false positive or why changing the Section would reduce source
-  fidelity. Name every reported signal code in that assessment so the CLI can
-  verify complete coverage; do not use one generic assessment for a batch;
+  fidelity. `high` signals cannot be kept unchanged. Name every remaining
+  `review` signal code in that assessment so the CLI can verify complete
+  coverage; do not use one generic assessment for a batch;
 - `repair` for local typography, Markdown, spacing, or a descriptive link label
   whose purpose is already stated in the same Section;
 - `reshape` for source-preserving structural changes such as a wide table into
@@ -33,6 +34,10 @@ with impact and action, and deprecations with a replacement remain knowledge.
 Mechanical signals are review leads, not a complete readability verdict. Read
 every fragment even when it has no signal. A mixture of false positives and
 valid repair candidates does not justify keeping the whole batch unchanged.
+Signals marked `high` are deterministic presentation obligations. A repair or
+reshape is rescanned against the effective replacement and cannot complete
+while one of those signals remains. Signals marked `review` require semantic
+inspection and may be kept only with the signal-specific assessment below.
 Every actionable signal must end in a safe edit, an eligible omission, a
 batched input request, or a Section-specific explanation that the signal is a
 false positive or that the edit would damage source fidelity. Time, token or
@@ -56,6 +61,14 @@ missing-input boundaries. A large repair set is expected work, not a blocker.
 If an `input_requests` batch remains after completing all independently safe
 analysis, ask once for that batch and resume from the returned Route.
 
+If the same current-batch quality problem fails three consecutive apply
+attempts, stop the automatic revision loop and follow
+`route.document-optimization.guidance-required`. Present one aggregated report
+for all affected Sections and ask for content-organization, source-fidelity, or
+missing-material direction. Do not restart Sections that already pass. A
+successful complete-batch apply clears the temporary retry record; retry
+history is never knowledge or package content.
+
 Keep all work inside the same source Section. Preserve link destinations,
 images, code, commands, numbers, identifiers, conditions, and source markers
 exactly. Do not introduce facts, infer an answer, or replace a complete
@@ -64,8 +77,14 @@ contract with a summary.
 After the complete payload is ready, execute the exact `next_action.command`
 returned by the plan. Context rejects stale, incomplete, duplicate,
 cross-Section, protected-value, semantically broad, or unexplained signaled
-`keep` decisions. The assessment is used only to audit the current decision and
-is not stored in approved knowledge, revisions, or package output. Unchanged
+`keep` decisions. It also rescans every repair and reshape against the same
+mechanical analyzer before writing the revision; submitting a decision is not
+proof that the effective Markdown is clean. A repair or reshape that retains a
+review-confidence signal must include a Section-specific assessment naming
+that signal. The apply result reports each signal as `resolved` or `justified`
+with its source and post-revision range. The assessment and rescan detail are
+used only to audit the current decision and are not stored in approved
+knowledge, revisions, or package output. Unchanged
 Sections reuse their previous decision; changed Sections alone return to this
 phase.
 

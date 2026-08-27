@@ -115,6 +115,46 @@ const ACTION_CONTRACTS: Record<string, ActionContract> = {
     fields: ["indexUnits[].sections[].evidence"],
     improves: ["unscoped-section-evidence"],
   },
+  "repair-identity-group-evidence": {
+    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    fields: ["adapter.inventory.identityGroups", "indexUnits[].sections[].evidence"],
+    improves: ["identity-group-evidence-coverage", "target-symbol-coverage"],
+  },
+  "decide-chain-candidates": {
+    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`, `${TEMPLATE_ROOT}/cross-module-chain.md`],
+    fields: ["adapter.inventory.chainCandidates", "adapter.inventory.chainCandidateDecisions", "indexUnits[].edges"],
+    improves: ["chain-candidate-decision-coverage", "relationship-evidence-coverage"],
+  },
+  "discover-chain-candidates": {
+    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    fields: ["adapter.inventory.boundaryTargets", "adapter.inventory.chainCandidates"],
+    improves: ["chain-candidate-family-discovery"],
+  },
+  "document-representative-chain": {
+    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`, `${TEMPLATE_ROOT}/cross-module-chain.md`],
+    fields: ["adapter.inventory.chainCandidateDecisions", "indexUnits[].sections", "indexUnits[].edges"],
+    improves: ["external-boundary-family-closure", "relationship-evidence-coverage"],
+  },
+  "group-related-identities": {
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    fields: ["indexUnits[].sections", "adapter.inventory.targetSymbolIdentities"],
+    improves: ["enumeration-ratio", "semantic-fact-density", "target-symbol-coverage"],
+  },
+  "replace-observation-list-with-explanation": {
+    templates: [CLASSIFICATION_RESOURCE],
+    fields: ["indexUnits[].sections"],
+    improves: ["enumeration-ratio", "normalized-template-repetition-ratio", "explanatory-lines"],
+  },
+  "separate-catalog-from-narrative": {
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/protocol-boundary.md`],
+    fields: ["indexUnits[].pageKinds", "indexUnits[].sections"],
+    improves: ["enumeration-ratio", "max-page-lines"],
+  },
+  "deduplicate-catalog": {
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/protocol-boundary.md`],
+    fields: ["indexUnits[].sections"],
+    improves: ["normalized-template-repetition-ratio", "max-page-lines"],
+  },
 };
 
 const FALLBACK_CONTRACT: ActionContract = {
@@ -132,7 +172,9 @@ export function buildCodeIndexActionGuidance(input: {
     dimension.absolute_gate || dimension.status === "below-target" || dimension.status === "above-ceiling" || (
       dimension.status === "above-target" && (
         dimension.dimension === "max-page-lines" ||
-        dimension.dimension === "implementation-body-ratio"
+        dimension.dimension === "implementation-body-ratio" ||
+        dimension.dimension === "enumeration-ratio" ||
+        dimension.dimension === "normalized-template-repetition-ratio"
       )
     )
   );
@@ -156,6 +198,16 @@ export function buildCodeIndexActionGuidance(input: {
         page.evidence_count > page.section_scoped_evidence_count) return true;
       if (pageDimensions.has("relationship-evidence-coverage") && page.relation_evidence_count < page.relation_count) return true;
       if (pageDimensions.has("implementation-body-ratio") && page.implementation_body_lines > 0) return true;
+      if (pageDimensions.has("enumeration-ratio") && (
+        page.catalog_lines + page.evidence_enumeration_lines + page.templated_observation_lines > 0
+      )) return true;
+      if (pageDimensions.has("normalized-template-repetition-ratio") &&
+        (page.normalized_template_repetition_lines > 0 ||
+          Object.keys(page.normalized_template_histogram ?? {}).length > 0)) return true;
+      if (pageDimensions.has("identity-group-evidence-coverage") ||
+        pageDimensions.has("chain-candidate-family-discovery") ||
+        pageDimensions.has("chain-candidate-decision-coverage") ||
+        pageDimensions.has("external-boundary-family-closure")) return true;
       if (pageDimensions.has("semantic-fact-lines") || pageDimensions.has("semantic-fact-density") ||
         pageDimensions.has("explanatory-lines")) return true;
       return false;

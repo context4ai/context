@@ -54,6 +54,12 @@ export interface CodeIndexAuditPageMetrics {
   semantic_fact_lines: number;
   table_fact_rows: number;
   explanatory_lines: number;
+  catalog_lines: number;
+  evidence_enumeration_lines: number;
+  templated_observation_lines: number;
+  normalized_template_repetition_lines: number;
+  normalized_template_histogram?: Record<string, number>;
+  reader_content_lines: number;
   implementation_body_lines: number;
   signature_dump_lines?: number;
   generated_type_lines?: number;

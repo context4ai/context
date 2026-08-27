@@ -155,6 +155,45 @@ export interface CodeIndexCapabilityGap {
   requestedMaterial?: string;
 }
 
+export interface CodeIndexIdentityGroup {
+  id: string;
+  /** Stable target identities represented by one reader-facing capability group. */
+  members: readonly string[];
+  /** Reader-facing page that explains the common responsibility of the members. */
+  viewRef: string;
+  /** Eligible source files that prove the group membership. */
+  sourceFiles: readonly string[];
+}
+
+export type CodeIndexChainCandidateFamily =
+  | "entry-operation"
+  | "operation-handler"
+  | "handler-downstream"
+  | "event-processing"
+  | "command-effect"
+  | "export-implementation"
+  | "cross-source-handoff";
+
+export interface CodeIndexChainCandidate {
+  id: string;
+  family: CodeIndexChainCandidateFamily;
+  from: string;
+  to: string;
+  sourceFiles: readonly string[];
+  confidence: "structural" | "declared" | "ambiguous";
+}
+
+export interface CodeIndexChainCandidateDecision {
+  candidateId: string;
+  decision: "document" | "merge" | "exclude" | "request-input";
+  /** Required for document decisions and must identify the reader-facing chain page. */
+  viewRef?: string;
+  /** Required when an equivalent candidate is merged into a canonical chain. */
+  canonicalChainId?: string;
+  /** Required for exclude and request-input decisions. */
+  reason?: string;
+}
+
 /** Complete source inventory returned by a project adapter for mechanical quality scoring. */
 export interface CodeIndexInspectionInventory {
   indexUnitId: string;
@@ -194,6 +233,12 @@ export interface CodeIndexInspectionInventory {
     kind: "entry" | "export" | "route" | "operation" | "handler" | "downstream" | "command" | "event" | "plugin" | "handoff";
     identity: string;
   }[];
+  /** Source-constrained groups that cover target identities without listing every member in prose. */
+  identityGroups?: readonly CodeIndexIdentityGroup[];
+  /** Static or declared chain candidates discovered during source inspection. */
+  chainCandidates?: readonly CodeIndexChainCandidate[];
+  /** Explicit disposition for every discovered chain candidate. */
+  chainCandidateDecisions?: readonly CodeIndexChainCandidateDecision[];
   excludedFiles: number;
   /** Complete identities deliberately excluded after discovery. */
   excludedFileTargets: readonly string[];

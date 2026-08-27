@@ -1,6 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import type { CodeIndexInspectionInventory } from "@c4a/context";
+import type {
+  CodeIndexChainCandidate,
+  CodeIndexChainCandidateDecision,
+  CodeIndexIdentityGroup,
+  CodeIndexInspectionInventory,
+} from "@c4a/context";
 import type { ExtractionIndexUnitPreview } from "./extractCandidateTypes.js";
 import { customInputError } from "./customCandidateDraft.js";
 
@@ -231,6 +236,137 @@ function completeIdentities(value: unknown, field: string, phaseId: string): str
   return normalized.sort();
 }
 
+function nonEmpty(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function validateIdentityGroups(input: {
+  groups: readonly CodeIndexIdentityGroup[];
+  eligibleFiles: readonly string[];
+  targetSymbols: readonly string[];
+  phaseId: string;
+}): CodeIndexIdentityGroup[] {
+  const ids = new Set<string>();
+  const groupedMembers = new Set<string>();
+  return input.groups.map((group) => {
+    const members = completeIdentities(group.members, "identityGroups[].members", input.phaseId);
+    const sourceFiles = completeIdentities(group.sourceFiles, "identityGroups[].sourceFiles", input.phaseId);
+    if (!nonEmpty(group.id) || !nonEmpty(group.viewRef) || members.length === 0 || sourceFiles.length === 0) {
+      throw customInputError(input.phaseId, "identity groups require id, viewRef, members, and sourceFiles", {
+        identity_group: group.id,
+      });
+    }
+    if (ids.has(group.id) || members.some((member) => groupedMembers.has(member))) {
+      throw customInputError(input.phaseId, "identity group ids and members must be unique within an index unit", {
+        identity_group: group.id,
+      });
+    }
+    if (
+      members.some((member) => !input.targetSymbols.includes(member)) ||
+      sourceFiles.some((sourceFile) => !input.eligibleFiles.includes(sourceFile))
+    ) {
+      throw customInputError(input.phaseId, "identity group members and sourceFiles must belong to the inspected inventory", {
+        identity_group: group.id,
+      });
+    }
+    ids.add(group.id);
+    members.forEach((member) => groupedMembers.add(member));
+    return { id: group.id, viewRef: group.viewRef, members, sourceFiles };
+  });
+}
+
+function validateChainCandidates(input: {
+  candidates: readonly CodeIndexChainCandidate[];
+  decisions: readonly CodeIndexChainCandidateDecision[];
+  eligibleFiles: readonly string[];
+  boundaryTargets: readonly NonNullable<CodeIndexInspectionInventory["boundaryTargets"]>[number][];
+  phaseId: string;
+}): { candidates: CodeIndexChainCandidate[]; decisions: CodeIndexChainCandidateDecision[] } {
+  const validFamilies = new Set<CodeIndexChainCandidate["family"]>([
+    "entry-operation", "operation-handler", "handler-downstream", "event-processing",
+    "command-effect", "export-implementation", "cross-source-handoff",
+  ]);
+  const validConfidence = new Set<CodeIndexChainCandidate["confidence"]>(["structural", "declared", "ambiguous"]);
+  const validDecisions = new Set<CodeIndexChainCandidateDecision["decision"]>([
+    "document", "merge", "exclude", "request-input",
+  ]);
+  const boundaryKinds = new Map(input.boundaryTargets.map((target) => [target.identity, target.kind]));
+  const familyMatchesEndpoints = (candidate: CodeIndexChainCandidate): boolean => {
+    const from = boundaryKinds.get(candidate.from);
+    const to = boundaryKinds.get(candidate.to);
+    if (from === undefined || to === undefined) return false;
+    if (candidate.family === "entry-operation") return from === "entry" && ["operation", "route", "handler"].includes(to);
+    if (candidate.family === "operation-handler") return from === "operation" && to === "handler";
+    if (candidate.family === "handler-downstream") return from === "handler" && to === "downstream";
+    if (candidate.family === "event-processing") return from === "event" && ["handler", "operation", "downstream"].includes(to);
+    if (candidate.family === "command-effect") return from === "command" && ["operation", "downstream"].includes(to);
+    if (candidate.family === "export-implementation") return from === "export" && ["operation", "handler"].includes(to);
+    return from === "handoff" || to === "handoff";
+  };
+  const candidateIds = new Set<string>();
+  const candidates = input.candidates.map((candidate) => {
+    const sourceFiles = completeIdentities(candidate.sourceFiles, "chainCandidates[].sourceFiles", input.phaseId);
+    if (
+      !nonEmpty(candidate.id) || !nonEmpty(candidate.from) || !nonEmpty(candidate.to) ||
+      sourceFiles.length === 0 || sourceFiles.some((sourceFile) => !input.eligibleFiles.includes(sourceFile))
+    ) {
+      throw customInputError(input.phaseId, "chain candidates require stable endpoints and inspected sourceFiles", {
+        chain_candidate: candidate.id,
+      });
+    }
+    if (!validFamilies.has(candidate.family) || !validConfidence.has(candidate.confidence) || !familyMatchesEndpoints(candidate)) {
+      throw customInputError(input.phaseId, "chain candidate family and endpoints must match the inspected boundary inventory", {
+        chain_candidate: candidate.id,
+        family: candidate.family,
+        from: candidate.from,
+        to: candidate.to,
+      });
+    }
+    if (candidateIds.has(candidate.id)) {
+      throw customInputError(input.phaseId, "chain candidate ids must be unique within an index unit", {
+        chain_candidate: candidate.id,
+      });
+    }
+    candidateIds.add(candidate.id);
+    return { ...candidate, sourceFiles };
+  });
+  const decided = new Set<string>();
+  const decisions = input.decisions.map((decision) => {
+    if (!validDecisions.has(decision.decision)) {
+      throw customInputError(input.phaseId, "chain candidate decision is invalid", {
+        chain_candidate: decision.candidateId,
+        decision: decision.decision,
+      });
+    }
+    if (!candidateIds.has(decision.candidateId) || decided.has(decision.candidateId)) {
+      throw customInputError(input.phaseId, "chain candidate decisions must reference one unique discovered candidate", {
+        chain_candidate: decision.candidateId,
+      });
+    }
+    if (decision.decision === "document" && !nonEmpty(decision.viewRef)) {
+      throw customInputError(input.phaseId, "document chain decisions require a reader-facing viewRef", {
+        chain_candidate: decision.candidateId,
+      });
+    }
+    if (
+      decision.decision === "merge" &&
+      (!nonEmpty(decision.canonicalChainId) || !candidateIds.has(decision.canonicalChainId))
+    ) {
+      throw customInputError(input.phaseId, "merge chain decisions require canonicalChainId", {
+        chain_candidate: decision.candidateId,
+      });
+    }
+    if ((decision.decision === "exclude" || decision.decision === "request-input") && !nonEmpty(decision.reason)) {
+      throw customInputError(input.phaseId, `${decision.decision} chain decisions require a reason`, {
+        chain_candidate: decision.candidateId,
+      });
+    }
+    decided.add(decision.candidateId);
+    return { ...decision };
+  });
+  return { candidates, decisions };
+}
+
 export function applyCustomInspectionInventory(input: {
   unit: ExtractionIndexUnitPreview;
   inventory: CodeIndexInspectionInventory;
@@ -316,6 +452,23 @@ export function applyCustomInspectionInventory(input: {
       index_unit: inventory.indexUnitId,
     });
   }
+  const identityGroups = validateIdentityGroups({
+    groups: inventory.identityGroups ?? [],
+    eligibleFiles: eligibleFileTargets,
+    targetSymbols: targetSymbolIdentities,
+    phaseId,
+  });
+  const boundaryTargets = [...(inventory.boundaryTargets ?? [
+    ...inventory.entryTargets.map((identity) => ({ kind: "entry" as const, identity })),
+    ...inventory.protocolTargets.map((identity) => ({ kind: "operation" as const, identity })),
+  ])];
+  const chain = validateChainCandidates({
+    candidates: inventory.chainCandidates ?? [],
+    decisions: inventory.chainCandidateDecisions ?? [],
+    eligibleFiles: eligibleFileTargets,
+    boundaryTargets,
+    phaseId,
+  });
   unit.inventory = {
     basis: "ast",
     eligibleFiles: inventory.eligibleFiles,
@@ -338,11 +491,11 @@ export function applyCustomInspectionInventory(input: {
     exportedTargetIdentities,
     entryTargets: [...inventory.entryTargets],
     protocolTargets: [...inventory.protocolTargets],
-    boundaryTargets: [...(inventory.boundaryTargets ?? [
-      ...inventory.entryTargets.map((identity) => ({ kind: "entry" as const, identity })),
-      ...inventory.protocolTargets.map((identity) => ({ kind: "operation" as const, identity })),
-    ])],
+    boundaryTargets,
     coveredBoundaryTargets: [...(inventory.coveredBoundaryTargets ?? [])],
+    identityGroups,
+    chainCandidates: chain.candidates,
+    chainCandidateDecisions: chain.decisions,
     excludedFiles: inventory.excludedFiles,
     excludedFileTargets,
     excludedReasons: [...inventory.excludedReasons],

@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CodeIndexInspectionInventory } from "@c4a/context";
-import { assertCustomInventoryCoversSourceBaseline } from "../project/customExtractInventory.js";
+import {
+  applyCustomInspectionInventory,
+  assertCustomInventoryCoversSourceBaseline,
+} from "../project/customExtractInventory.js";
 import type { ExtractionIndexUnitPreview } from "../project/extractCandidateTypes.js";
 
 function unit(): ExtractionIndexUnitPreview {
@@ -57,6 +60,9 @@ function unit(): ExtractionIndexUnitPreview {
       protocolTargets: [],
       boundaryTargets: [],
       coveredBoundaryTargets: [],
+      identityGroups: [],
+      chainCandidates: [],
+      chainCandidateDecisions: [],
       excludedFiles: 0,
       excludedFileTargets: [],
       excludedReasons: [],
@@ -123,5 +129,63 @@ describe("0.6.19 independent custom inventory baseline", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  test("rejects identity groups and chain decisions that escape the inspected inventory", () => {
+    const invalidGroup = inventory();
+    invalidGroup.identityGroups = [{
+      id: "public-contract",
+      members: ["publicApi"],
+      viewRef: "codeindex:sample/public-contract",
+      sourceFiles: ["src/missing.ts"],
+    }];
+    expect(() => applyCustomInspectionInventory({
+      unit: unit(),
+      inventory: invalidGroup,
+      phaseId: "extract:sample",
+    })).toThrow("must belong to the inspected inventory");
+
+    const invalidMerge = inventory();
+    invalidMerge.boundaryTargets = [
+      { kind: "entry", identity: "src/index.ts" },
+      { kind: "operation", identity: "publicApi" },
+    ];
+    invalidMerge.chainCandidates = [{
+      id: "entry-operation",
+      family: "entry-operation",
+      from: "src/index.ts",
+      to: "publicApi",
+      sourceFiles: ["src/index.ts"],
+      confidence: "structural",
+    }];
+    invalidMerge.chainCandidateDecisions = [{
+      candidateId: "entry-operation",
+      decision: "merge",
+      canonicalChainId: "missing-canonical",
+    }];
+    expect(() => applyCustomInspectionInventory({
+      unit: unit(),
+      inventory: invalidMerge,
+      phaseId: "extract:sample",
+    })).toThrow("merge chain decisions require canonicalChainId");
+
+    const mismatchedFamily = inventory();
+    mismatchedFamily.boundaryTargets = [
+      { kind: "entry", identity: "src/index.ts" },
+      { kind: "operation", identity: "publicApi" },
+    ];
+    mismatchedFamily.chainCandidates = [{
+      id: "wrong-family",
+      family: "handler-downstream",
+      from: "src/index.ts",
+      to: "publicApi",
+      sourceFiles: ["src/index.ts"],
+      confidence: "structural",
+    }];
+    expect(() => applyCustomInspectionInventory({
+      unit: unit(),
+      inventory: mismatchedFamily,
+      phaseId: "extract:sample",
+    })).toThrow("must match the inspected boundary inventory");
   });
 });

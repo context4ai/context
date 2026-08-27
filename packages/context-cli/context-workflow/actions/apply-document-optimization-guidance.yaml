@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: apply-document-optimization-guidance
+runner: host
+effect: write
+handler: context.document-optimization.guidance

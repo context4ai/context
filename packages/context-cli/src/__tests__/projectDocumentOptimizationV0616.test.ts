@@ -1,33 +1,29 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   applyDocumentOptimizationDecisions,
-  beginDocumentRevision,
   collectDocumentOptimizationStatus,
-  createDocumentOptimizationRevision,
   createDocumentOptimizationPlan,
-  currentDocumentRevisionPlan,
   projectDocumentOptimizedKnowledge,
   reconcileDocumentOptimizationRevisions,
-  validateDocumentOptimizationRevisions,
 } from "../project/documentOptimization.js";
+import {
+  createDocumentOptimizationRevision,
+} from "../project/documentRevision.js";
 import {
   disableDocumentOptimization,
   enableDocumentOptimization,
 } from "../project/documentOptimizationConfig.js";
 import type { ApprovedKnowledgeFile } from "../project/packageIndexes.js";
-import { listApprovedKnowledge } from "../project/packageBuilder.js";
 import {
   assertSafeDocumentEditorialDecision,
   assertSafeDocumentOptimizationReplacement,
   collectDocumentOptimizationFragments,
-  sha256,
 } from "../project/documentOptimizationModel.js";
 import { analyzeDocumentEditorialSignals } from "../project/documentEditorialSignals.js";
 import { projectPackageKnowledgeMarkdown } from "../project/packageKnowledgeProjection.js";
-import { approvedKnowledgeInputHash } from "../project/close.js";
 
 function workspace(): string {
   const root = mkdtempSync(join(tmpdir(), "context-optimize-docs-"));
@@ -169,9 +165,50 @@ describe("document optimization revisions", () => {
     ].join("\n"));
     expect(signals.filter((item) => item.code === "raw-or-unlabeled-link")).toHaveLength(1);
     expect(signals.find((item) => item.code === "raw-or-unlabeled-link")?.line_start).toBe(1);
+    expect(signals.find((item) => item.code === "raw-or-unlabeled-link")?.confidence).toBe("high");
   });
 
-  test("requires a concrete assessment before keeping a signaled Section", async () => {
+  test("flags adjacent links and headings overloaded with link inventory", () => {
+    const signals = analyzeDocumentEditorialSignals([
+      "## [First](https://example.test/first) [Second](https://example.test/second)",
+      "[Alpha](https://example.test/a)[Beta](https://example.test/b)",
+    ].join("\n"));
+    expect(signals.map((item) => item.code)).toContain("heading-content-overloaded");
+    expect(signals.map((item) => item.code)).toContain("adjacent-links");
+    expect(signals.filter((item) => item.confidence === "high")).toHaveLength(signals.length);
+  });
+
+  test("flags broken Markdown and source-conversion annotations as high-confidence issues", () => {
+    const signals = analyzeDocumentEditorialSignals([
+      "[Guide](https://example.test/guide",
+      "<!-- lark:image:asset-token -->",
+      "```text",
+      "not closed",
+    ].join("\n"));
+    expect(signals.map((item) => item.code)).toEqual(expect.arrayContaining([
+      "markdown-syntax-damaged",
+      "conversion-artifact",
+    ]));
+    expect(signals.filter((item) =>
+      item.code === "markdown-syntax-damaged" || item.code === "conversion-artifact"
+    ).every((item) => item.confidence === "high")).toBe(true);
+  });
+
+  test("rescans repair output and rejects unresolved high-confidence signals", () => {
+    const fragment = collectDocumentOptimizationFragments([
+      approvedFile("Reference: https://example.test/guide"),
+    ])[0]!;
+    expect(() => assertSafeDocumentOptimizationReplacement(
+      fragment,
+      "Reference: https://example.test/guide",
+    )).toThrow("still contains actionable editorial signals");
+    expect(() => assertSafeDocumentOptimizationReplacement(
+      fragment,
+      "Reference: [Reference](https://example.test/guide)",
+    )).not.toThrow();
+  });
+
+  test("requires a repair instead of keeping a high-confidence signal", async () => {
     const projectRoot = workspace();
     const files = [approvedFile("Reference: https://example.test/guide")];
     await enableDocumentOptimization(projectRoot);
@@ -189,7 +226,7 @@ describe("document optimization revisions", () => {
       projectRoot,
       files,
       payload: { schema: "context.document-optimization-decisions.v2", decisions: [decision] },
-    })).rejects.toThrow("requires a concrete assessment");
+    })).rejects.toThrow("cannot be kept unchanged");
 
     const applied = await applyDocumentOptimizationDecisions({
       projectRoot,
@@ -198,24 +235,67 @@ describe("document optimization revisions", () => {
         schema: "context.document-optimization-decisions.v2",
         decisions: [{
           ...decision,
-          assessment: "raw-or-unlabeled-link: the destination is itself the documented identifier and changing it would obscure the source contract.",
+          action: "repair",
+          replacement: "Reference: [Reference](https://example.test/guide)",
         }],
       },
     });
     expect(applied.status.current).toBe(true);
+    expect(applied.rescan.every((item) => item.status === "resolved")).toBe(true);
+  });
+
+  test("routes the third identical quality failure to human guidance and clears it after success", async () => {
+    const projectRoot = workspace();
+    const files = [approvedFile("Reference: https://example.test/guide")];
+    await enableDocumentOptimization(projectRoot);
+    const fragment = (await createDocumentOptimizationPlan({ projectRoot, files })).fragments[0]!;
+    const decision = {
+      fragment_id: fragment.fragment_id,
+      input_digest: fragment.input_digest,
+      context_digest: fragment.context_digest,
+      policy_digest: fragment.policy_digest,
+      action: "keep" as const,
+    };
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(applyDocumentOptimizationDecisions({
+        projectRoot,
+        files,
+        payload: { schema: "context.document-optimization-decisions.v2", decisions: [decision] },
+      })).rejects.toThrow("cannot be kept unchanged");
+    }
+    const blocked = await collectDocumentOptimizationStatus({ projectRoot, files });
+    expect(blocked.retry_attempts).toBe(3);
+    expect(blocked.guidance_required).toBe(true);
+    expect(blocked.guidance_problems).toHaveLength(1);
+
+    const applied = await applyDocumentOptimizationDecisions({
+      projectRoot,
+      files,
+      payload: {
+        schema: "context.document-optimization-decisions.v2",
+        decisions: [{
+          ...decision,
+          action: "repair",
+          replacement: "Reference: [Reference](https://example.test/guide)",
+        }],
+      },
+    });
+    expect(applied.status.guidance_required).toBe(false);
+    expect(applied.status.retry_attempts).toBe(0);
   });
 
   test("rejects one generic keep assessment reused across signaled Sections", async () => {
     const projectRoot = workspace();
     const second = secondApprovedFile();
     const files = [
-      approvedFile("Reference: https://example.test/first"),
-      { ...second, content: second.content.replace("Second  page.", "Reference: https://example.test/second") },
+      approvedFile("Owner: first-team"),
+      { ...second, content: second.content.replace("Second  page.", "Owner: second-team") },
     ];
     await enableDocumentOptimization(projectRoot);
     const plan = await createDocumentOptimizationPlan({ projectRoot, files });
     expect(plan.fragments).toHaveLength(2);
-    const assessment = "raw-or-unlabeled-link: the reported link presentation is acceptable in this source Section.";
+    const assessment = "unstable-owner-reference: false-positive because the owner label is a stable responsibility identifier in this Section.";
 
     await expect(applyDocumentOptimizationDecisions({
       projectRoot,
@@ -236,11 +316,11 @@ describe("document optimization revisions", () => {
 
   test("rejects effort and schedule as reasons to keep actionable signals", async () => {
     for (const assessment of [
-      "Keep this raw link unchanged to save time because the current batch is large.",
-      "当前批次数量太多，为节省时间和工作量，整批保留不再修复。",
+      "unstable-owner-reference: keep this owner unchanged to save time because the current batch is large.",
+      "unstable-owner-reference：当前批次数量太多，为节省时间和工作量，整批保留不再修复。",
     ]) {
       const projectRoot = workspace();
-      const files = [approvedFile("Reference: https://example.test/guide")];
+      const files = [approvedFile("Owner: release-team")];
       await enableDocumentOptimization(projectRoot);
       const fragment = (await createDocumentOptimizationPlan({ projectRoot, files })).fragments[0]!;
 
@@ -264,12 +344,12 @@ describe("document optimization revisions", () => {
 
   test("requires a keep assessment to address every reported signal code", async () => {
     const projectRoot = workspace();
-    const files = [approvedFile("Reference: https://example.test/guide?timestamp=123")];
+    const files = [approvedFile("Owner: release-team\n\nMaybe adopt a different rollout later.")];
     await enableDocumentOptimization(projectRoot);
     const fragment = (await createDocumentOptimizationPlan({ projectRoot, files })).fragments[0]!;
     expect(fragment.signals.map((signal) => signal.code)).toEqual([
-      "raw-or-unlabeled-link",
-      "volatile-query-url",
+      "brainstorm-without-decision",
+      "unstable-owner-reference",
     ]);
 
     await expect(applyDocumentOptimizationDecisions({
@@ -283,7 +363,7 @@ describe("document optimization revisions", () => {
           context_digest: fragment.context_digest,
           policy_digest: fragment.policy_digest,
           action: "keep",
-          assessment: "raw-or-unlabeled-link: the source intentionally exposes the destination as an exact identifier.",
+          assessment: "unstable-owner-reference: the source intentionally names a stable responsibility identifier.",
         }],
       },
     })).rejects.toThrow("requires an assessment for every signal");
@@ -291,7 +371,7 @@ describe("document optimization revisions", () => {
 
   test("does not let managed work silently keep a real request-input signal", async () => {
     const projectRoot = workspace();
-    const files = [approvedFile("Reference: https://example.test/guide?timestamp=123")];
+    const files = [approvedFile("Owner: release-team")];
     await enableDocumentOptimization(projectRoot);
     const fragment = (await createDocumentOptimizationPlan({ projectRoot, files })).fragments[0]!;
     const decision = {
@@ -309,7 +389,7 @@ describe("document optimization revisions", () => {
         schema: "context.document-optimization-decisions.v2",
         decisions: [{
           ...decision,
-          assessment: "raw-or-unlabeled-link and volatile-query-url are preserved to protect source fidelity.",
+          assessment: "unstable-owner-reference is preserved to protect source fidelity.",
         }],
       },
     })).rejects.toThrow("cannot be silently kept");
@@ -321,7 +401,7 @@ describe("document optimization revisions", () => {
         schema: "context.document-optimization-decisions.v2",
         decisions: [{
           ...decision,
-          assessment: "raw-or-unlabeled-link and volatile-query-url are false-positive signals here because the URL itself is the exact stable identifier documented by this Section.",
+          assessment: "unstable-owner-reference is a false-positive signal here because release-team is a stable responsibility identifier documented by this Section.",
         }],
       },
     });
@@ -466,6 +546,10 @@ describe("document optimization revisions", () => {
       },
     });
     expect(applied.status.current).toBe(true);
+    expect(applied.rescan).toEqual(expect.arrayContaining([
+      expect.objectContaining({ signal_code: "wide-table", status: "resolved" }),
+      expect.objectContaining({ signal_code: "raw-or-unlabeled-link", status: "resolved" }),
+    ]));
     const projected = await projectDocumentOptimizedKnowledge({ projectRoot, files });
     expect(projected.files[0]!.content).toContain("[Open the stable example](https://example.test/path?mode=stable)");
     expect(projected.files[0]!.content).toContain("`entry_a`");
@@ -680,58 +764,6 @@ describe("document optimization revisions", () => {
     expect(status.pending_fragment_ids).toEqual([details.fragment_id]);
   });
 
-  test("starts one conversational correction without opening a whole-workspace batch", async () => {
-    const projectRoot = workspace();
-    const files = [approvedFile(), secondApprovedFile()];
-
-    const entry = await beginDocumentRevision({
-      projectRoot,
-      files,
-      selector: "architecture/example.md",
-    });
-    expect(entry).toMatchObject({
-      status: "started",
-      revision_path: "knowledge/architecture/example__revision.md",
-      target: { approved_path: "architecture/example.md" },
-    });
-    expect(existsSync(join(projectRoot, "knowledge", "architecture", "example__revision.md"))).toBe(true);
-    expect(existsSync(join(projectRoot, "knowledge", "guides", "second-example__revision.md"))).toBe(false);
-
-    const started = await collectDocumentOptimizationStatus({ projectRoot, files });
-    expect(started.enabled).toBe(true);
-    expect(started.revision_requested).toBe(true);
-    expect(started.requested_approved_path).toBe("architecture/example.md");
-    expect(started.pending_fragments).toBe(0);
-    const current = await currentDocumentRevisionPlan({ projectRoot, files });
-    expect(current.changed).toBe(false);
-
-    await expect(validateDocumentOptimizationRevisions({ projectRoot, files })).rejects.toThrow(
-      "has not changed",
-    );
-    const revisionPath = join(projectRoot, current.revision_path);
-    writeFileSync(revisionPath, readFileSync(revisionPath, "utf8").replace("Hello  world.", "Hello world."));
-    const validated = await validateDocumentOptimizationRevisions({ projectRoot, files });
-    expect(validated.revision_requested).toBe(false);
-    expect(validated.revised_fragments).toBe(1);
-    expect(validated.current).toBe(true);
-  });
-
-  test("returns ambiguous correction targets without changing workspace state", async () => {
-    const projectRoot = workspace();
-    const entry = await beginDocumentRevision({
-      projectRoot,
-      files: [approvedFile(), secondApprovedFile()],
-      selector: "md",
-    });
-    expect(entry.status).toBe("target-selection-required");
-    expect(entry.candidates).toHaveLength(2);
-    expect((await collectDocumentOptimizationStatus({
-      projectRoot,
-      files: [approvedFile(), secondApprovedFile()],
-    })).enabled).toBe(false);
-    expect(existsSync(join(projectRoot, ".tmp", "context-runtime", "document-optimization"))).toBe(false);
-  });
-
   test("disable removes the active revision and restores baseline projection", async () => {
     const projectRoot = workspace();
     const files = [approvedFile()];
@@ -763,32 +795,4 @@ describe("document optimization revisions", () => {
     expect(packageJson.context.documentOptimization).toBeUndefined();
   });
 
-  test("excludes revision sidecars from approved knowledge discovery", async () => {
-    const projectRoot = workspace();
-    const file = approvedFile();
-    const root = join(projectRoot, "knowledge", "architecture");
-    mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, "example.md"), file.content);
-    writeFileSync(join(root, "example__revision.md"), file.content.replace(
-      "view_ref: architecture:example",
-      `view_ref: architecture:example\ncontext_revision: ${"a".repeat(64)}`,
-    ));
-    expect((await listApprovedKnowledge(projectRoot)).map((item) => item.relPath)).toEqual(["architecture/example.md"]);
-  });
-
-  test("excludes revision sidecars from the deterministic close input", async () => {
-    const projectRoot = workspace();
-    const file = approvedFile();
-    const root = join(projectRoot, "knowledge", "architecture");
-    mkdirSync(root, { recursive: true });
-    writeFileSync(join(root, "example.md"), file.content);
-    const revisionPath = join(root, "example__revision.md");
-    writeFileSync(revisionPath, file.content.replace(
-      "view_ref: architecture:example",
-      `view_ref: architecture:example\ncontext_revision: ${sha256(file.content)}`,
-    ));
-    const before = await approvedKnowledgeInputHash(projectRoot);
-    writeFileSync(revisionPath, readFileSync(revisionPath, "utf8").replace("Hello  world.", "Hello world."));
-    expect(await approvedKnowledgeInputHash(projectRoot)).toBe(before);
-  });
 });

@@ -362,6 +362,11 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
       ? [command("context optimize-docs plan --format json", "read", "agent-required")]
       : [],
   }),
+  "context.document-optimization.guidance": (observation) => ({
+    commands: observation.documentOptimization?.guidance_required === true
+      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
+      : [],
+  }),
   "context.document-revision.next": (observation) => ({
     commands: observation.documentOptimization?.revision_requested === true
       ? [command("context optimize-docs revise-current --format json", "read", "agent-required")]

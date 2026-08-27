@@ -251,7 +251,9 @@ function dimensionSignals(unit: CodeIndexAuditUnitReport): CodeIndexAuditSignal[
       dimension.status === "below-target" ||
       (dimension.status === "above-target" && (
         dimension.dimension === "max-page-lines" ||
-        dimension.dimension === "implementation-body-ratio"
+        dimension.dimension === "implementation-body-ratio" ||
+        dimension.dimension === "enumeration-ratio" ||
+        dimension.dimension === "normalized-template-repetition-ratio"
       ))
     )
     .map((dimension) => ({
@@ -378,6 +380,9 @@ function inferredUnit(page: AuditedPage): ExtractionIndexUnitPreview {
       protocolTargets: [],
       boundaryTargets: [],
       coveredBoundaryTargets: [],
+      identityGroups: [],
+      chainCandidates: [],
+      chainCandidateDecisions: [],
       excludedFiles: 0,
       excludedFileTargets: [],
       excludedReasons: [],

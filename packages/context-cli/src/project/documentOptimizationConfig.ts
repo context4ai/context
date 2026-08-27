@@ -8,16 +8,20 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { isDocumentRevisionPath } from "./knowledgeFileClassification.js";
 
-export const DOCUMENT_OPTIMIZATION_POLICY = "context.document-editorial-revision.v3";
+export const DOCUMENT_OPTIMIZATION_POLICY = "context.document-editorial-revision.v4";
 export const DOCUMENT_OPTIMIZATION_CACHE_ROOT = join(".tmp", "context-runtime", "document-optimization");
 
 const DOCUMENT_OPTIMIZATION_BASE_POLICY = "context.document-editorial-base.v1";
-const DOCUMENT_OPTIMIZATION_SIGNAL_REVIEW_POLICY = "context.document-editorial-signal-review.v2";
+const DOCUMENT_OPTIMIZATION_SIGNAL_REVIEW_POLICY = "context.document-editorial-signal-review.v3";
 const DOCUMENT_OPTIMIZATION_SIGNAL_POLICIES: Record<string, string> = {
   "brainstorm-without-decision": "v1",
+  "adjacent-links": "v1",
   "duplicate-fragment": "v1",
   "empty-table-row": "v1",
   "heading-hierarchy-invalid": "v1",
+  "heading-content-overloaded": "v1",
+  "markdown-syntax-damaged": "v1",
+  "conversion-artifact": "v1",
   "long-table-cell": "v1",
   "mixed-facts-and-draft": "v1",
   "placeholder-content": "v1",

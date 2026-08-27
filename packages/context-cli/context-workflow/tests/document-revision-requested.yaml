@@ -43,7 +43,7 @@ state:
     review: { gate_clear: true, batch_resolved: true, candidate_set_digest: null }
     close: { current: true }
     packages: { declared: false, templates_reviewed: false, current: false }
-    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, revision_requested: true }
+    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, guidance_required: false, revision_requested: true }
     logs: { configured: false }
 expect:
   statusCode: actionable

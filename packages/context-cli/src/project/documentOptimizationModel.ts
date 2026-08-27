@@ -9,6 +9,7 @@ import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { documentOptimizationPolicyDigest } from "./documentOptimizationConfig.js";
 import {
   analyzeDocumentEditorialSignals,
+  documentEditorialSignalConfidence,
   omissionReasonsForSignals,
   type DocumentEditorialAction,
   type DocumentEditorialOmissionReason,
@@ -139,6 +140,7 @@ export function collectDocumentOptimizationFragments(
       line_start: fragment.line_start,
       line_end: fragment.line_end,
       recommended_action: "omit",
+      confidence: documentEditorialSignalConfidence("duplicate-fragment"),
       omission_reason: "duplicate-content",
       detail: "The same reader-visible content already appears in another eligible Section.",
     }];
@@ -195,7 +197,10 @@ function protectedValues(value: string): {
 function semanticTokens(value: string): Set<string> {
   return new Set([
     ...value.toLowerCase().matchAll(/[a-z][a-z0-9_.:/-]{1,}|[\p{Script=Han}]/gu),
-  ].map((match) => match[0]));
+  ].map((match) => {
+    const token = match[0];
+    return token.endsWith(":") && !token.includes("://") ? token.slice(0, -1) : token;
+  }));
 }
 
 export function assertSafeDocumentOptimizationReplacement(
@@ -262,7 +267,14 @@ function similarityMetrics(before: string, after: string): {
 
 function assertRepairEnvelope(fragment: DocumentOptimizationFragment, replacement: string): void {
   const metrics = similarityMetrics(fragment.content, replacement);
-  if (metrics.retained < 0.78 || metrics.introduced > 0.12 || metrics.lengthRatio < 0.7 || metrics.lengthRatio > 1.3) {
+  const labelsRawDestination = fragment.signals.some((signal) => signal.code === "raw-or-unlabeled-link");
+  const maximumLengthRatio = labelsRawDestination ? 1.5 : 1.3;
+  if (
+    metrics.retained < 0.78 ||
+    metrics.introduced > 0.12 ||
+    metrics.lengthRatio < 0.7 ||
+    metrics.lengthRatio > maximumLengthRatio
+  ) {
     throw new ContextError(ExitCode.UserError, `optimized fragment exceeds the repair envelope: ${fragment.fragment_id}`, {
       category: ErrorCategory.UserInputInvalid,
       retained_similarity: metrics.retained,
@@ -284,6 +296,24 @@ function assertReshapeEnvelope(fragment: DocumentOptimizationFragment, replaceme
       next: "Reorganize only facts already present in this Section; do not summarize away constraints or introduce new claims.",
     });
   }
+}
+
+function assertResolvedHighConfidenceSignals(
+  fragment: DocumentOptimizationFragment,
+  replacement: string,
+): void {
+  const unresolved = analyzeDocumentEditorialSignals(replacement)
+    .filter((signal) => documentEditorialSignalConfidence(signal.code) === "high");
+  if (unresolved.length === 0) return;
+  throw new ContextError(ExitCode.UserError, `optimized fragment still contains actionable editorial signals: ${fragment.fragment_id}`, {
+    category: ErrorCategory.UserInputInvalid,
+    signals: unresolved.map((signal) => ({
+      code: signal.code,
+      line_start: signal.line_start,
+      line_end: signal.line_end,
+    })),
+    next: "Repair or reshape every remaining high-confidence readability issue in the effective Section before applying the decision; use keep with a Section-specific assessment only when the original signal is a genuine false positive.",
+  });
 }
 
 export function assertSafeDocumentEditorialDecision(
@@ -326,6 +356,7 @@ export function assertSafeDocumentEditorialDecision(
   assertProtectedValues(fragment, replacement);
   if (action === "repair") assertRepairEnvelope(fragment, replacement);
   else assertReshapeEnvelope(fragment, replacement);
+  assertResolvedHighConfidenceSignals(fragment, replacement);
 }
 
 function inferredOmissionReason(fragment: DocumentOptimizationFragment): DocumentEditorialOmissionReason | undefined {

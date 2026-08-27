@@ -1,5 +1,5 @@
 schema: agent-graph.test.v1
-name: enabled document optimization resolves before package build
+name: repeated document optimization failure requires one human guidance gate
 graph: workspace
 entry: context
 state:
@@ -46,9 +46,9 @@ state:
     review: { gate_clear: true, batch_resolved: true, candidate_set_digest: null }
     close: { current: true }
     packages: { declared: true, templates_reviewed: true, current: false }
-    document_optimization: { enabled: true, current: false, pending_count: 2, conflict_count: 0, guidance_required: false }
+    document_optimization: { enabled: true, current: false, pending_count: 2, conflict_count: 0, guidance_required: true }
     logs: { configured: false }
 expect:
-  statusCode: actionable
-  primaryNode: optimize-documents
-  primaryReasonCode: route.document-optimization.pending
+  statusCode: waiting-user
+  primaryNode: resolve-document-optimization-guidance
+  primaryReasonCode: route.document-optimization.guidance-required

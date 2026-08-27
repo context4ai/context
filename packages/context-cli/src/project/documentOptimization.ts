@@ -6,7 +6,6 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   DOCUMENT_OPTIMIZATION_POLICY,
-  enableDocumentOptimization,
   isDocumentOptimizationEnabled,
 } from "./documentOptimizationConfig.js";
 import {
@@ -17,37 +16,35 @@ import {
   parseDocumentOptimizationKeepState,
   parseDocumentRevision,
   renderDocumentOptimizationPage,
-  sha256,
   type DocumentOptimizationFragment,
 } from "./documentOptimizationModel.js";
 import {
+  analyzeDocumentEditorialSignals,
+  documentEditorialSignalConfidence,
   DOCUMENT_EDITORIAL_OMISSION_REASONS,
   type DocumentEditorialAction,
   type DocumentEditorialOmissionReason,
 } from "./documentEditorialSignals.js";
 import {
-  documentRevisionPath,
-  ensureDocumentRevision,
   listDocumentRevisionFiles,
   readDocumentRevision,
-  removeDocumentRevision,
   writeDocumentOptimizationKeepState,
   writeDocumentRevision,
 } from "./documentOptimizationStorage.js";
 import {
-  clearDocumentRevisionRequest,
-  collectDocumentRevisionTargets,
-  documentRevisionRequestPath,
   readDocumentRevisionRequest,
-  resolveDocumentRevisionTarget,
-  writeDocumentRevisionRequest,
-  type DocumentRevisionTarget,
 } from "./documentRevisionRequest.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import {
   hydrateApprovedKnowledgeMarkdown,
   readApprovedKnowledgeMetadataIndex,
 } from "./approvedKnowledgeMetadata.js";
+import {
+  clearDocumentOptimizationRetry,
+  collectDocumentOptimizationGuidance,
+  recordDocumentOptimizationFailure,
+  type DocumentOptimizationGuidanceProblem,
+} from "./documentOptimizationRetry.js";
 
 export type { DocumentOptimizationFragment } from "./documentOptimizationModel.js";
 
@@ -67,6 +64,9 @@ export interface DocumentOptimizationStatus {
   current: boolean;
   pending_fragment_ids: string[];
   conflict_fragment_ids: string[];
+  retry_attempts: number;
+  guidance_required: boolean;
+  guidance_problems: DocumentOptimizationGuidanceProblem[];
   signal_count: number;
   action_candidates: {
     repair: number;
@@ -103,6 +103,17 @@ interface ApplyDecisionInput {
 export interface DocumentOptimizationApplyInput {
   schema: "context.document-optimization-decisions.v2";
   decisions: ApplyDecisionInput[];
+}
+
+export interface DocumentOptimizationRescanItem {
+  fragment_id: string;
+  approved_path: string;
+  section_id: string;
+  signal_code: string;
+  source_range: string;
+  post_revision_range?: string;
+  selected_action: DocumentEditorialAction;
+  status: "resolved" | "justified";
 }
 
 interface ResolvedFragmentState {
@@ -273,6 +284,9 @@ function statusFromStates(input: {
   enabled: boolean;
   states: readonly ResolvedFragmentState[];
   requestedApprovedPath?: string;
+  retryAttempts?: number;
+  guidanceRequired?: boolean;
+  guidanceProblems?: DocumentOptimizationGuidanceProblem[];
 }): DocumentOptimizationStatus {
   const pending = input.states.filter((item) => item.state === "pending");
   const conflicts = input.states.filter((item) => item.state === "conflict");
@@ -297,6 +311,9 @@ function statusFromStates(input: {
     current: !input.enabled || (pending.length === 0 && conflicts.length === 0),
     pending_fragment_ids: pending.map((item) => item.fragment.fragment_id),
     conflict_fragment_ids: conflicts.map((item) => item.fragment.fragment_id),
+    retry_attempts: input.retryAttempts ?? 0,
+    guidance_required: input.guidanceRequired ?? false,
+    guidance_problems: input.guidanceProblems ?? [],
     signal_count: input.states.reduce((total, item) => total + item.fragment.signals.length, 0),
     action_candidates: {
       repair: input.states.filter((item) => item.fragment.signals.some((signal) => signal.recommended_action === "repair")).length,
@@ -318,9 +335,18 @@ export async function collectDocumentOptimizationStatus(input: {
   const enabled = await isDocumentOptimizationEnabled(input.projectRoot);
   if (!enabled) return statusFromStates({ enabled, states: [] });
   const request = await readDocumentRevisionRequest(input.projectRoot);
+  const states = await resolveFragmentStates(input);
+  const guidance = await collectDocumentOptimizationGuidance({
+    projectRoot: input.projectRoot,
+    fragments: states.filter((state) => state.state === "pending" || state.state === "conflict")
+      .map((state) => state.fragment),
+  });
   return statusFromStates({
     enabled,
-    states: await resolveFragmentStates(input),
+    states,
+    retryAttempts: guidance.retry_attempts,
+    guidanceRequired: guidance.guidance_required,
+    guidanceProblems: guidance.guidance_problems,
     ...(request === null ? {} : { requestedApprovedPath: request.approved_path }),
   });
 }
@@ -332,9 +358,17 @@ export async function createDocumentOptimizationPlan(input: {
   const enabled = await isDocumentOptimizationEnabled(input.projectRoot);
   const states = enabled ? await resolveFragmentStates(input) : [];
   const request = enabled ? await readDocumentRevisionRequest(input.projectRoot) : null;
+  const guidance = enabled ? await collectDocumentOptimizationGuidance({
+    projectRoot: input.projectRoot,
+    fragments: states.filter((state) => state.state === "pending" || state.state === "conflict")
+      .map((state) => state.fragment),
+  }) : { retry_attempts: 0, guidance_required: false, guidance_problems: [] };
   const status = statusFromStates({
     enabled,
     states,
+    retryAttempts: guidance.retry_attempts,
+    guidanceRequired: guidance.guidance_required,
+    guidanceProblems: guidance.guidance_problems,
     ...(request === null ? {} : { requestedApprovedPath: request.approved_path }),
   });
   const payloadTarget = ".tmp/agent-payloads/document-optimization-decisions.json";
@@ -399,11 +433,11 @@ function decisionMatches(fragment: DocumentOptimizationFragment, decision: Apply
     fragment.policy_digest === decision.policy_digest;
 }
 
-export async function applyDocumentOptimizationDecisions(input: {
+async function applyDocumentOptimizationDecisionsUnchecked(input: {
   projectRoot: string;
   files: readonly ApprovedKnowledgeFile[];
   payload: unknown;
-}): Promise<{ applied: number; status: DocumentOptimizationStatus }> {
+}): Promise<{ applied: number; status: DocumentOptimizationStatus; rescan: DocumentOptimizationRescanItem[] }> {
   if (!(await isDocumentOptimizationEnabled(input.projectRoot))) {
     throw new ContextError(ExitCode.UserError, "document optimization is disabled", {
       category: ErrorCategory.WorkspaceStateInvalid,
@@ -425,6 +459,15 @@ export async function applyDocumentOptimizationDecisions(input: {
       });
     }
     seen.add(decision.fragment_id);
+    const highConfidenceSignals = fragment.signals.filter((signal) => signal.confidence === "high");
+    if (decision.action === "keep" && highConfidenceSignals.length > 0) {
+      throw new ContextError(ExitCode.UserError, `high-confidence document signals cannot be kept unchanged: ${decision.fragment_id}`, {
+        category: ErrorCategory.UserInputInvalid,
+        signals: highConfidenceSignals.map((signal) => signal.code),
+        fragment_ids: [decision.fragment_id],
+        next: "Resolve deterministic presentation defects with repair, reshape, or an eligible omission; keep is reserved for review-confidence false positives and source-fidelity risks.",
+      });
+    }
     if (
       decision.action === "keep" && fragment.keep_requires_assessment &&
       (decision.assessment === undefined || decision.assessment.trim().length < 12)
@@ -446,7 +489,29 @@ export async function applyDocumentOptimizationDecisions(input: {
         decision.reason,
       );
     }
-    return { decision, fragment };
+    const postSignals = decision.action === "keep"
+      ? fragment.signals
+      : decision.action === "omit"
+        ? []
+        : analyzeDocumentEditorialSignals(decision.replacement!);
+    const remainingReviewSignals = postSignals.filter((signal) =>
+      documentEditorialSignalConfidence(signal.code) === "review"
+    );
+    if (decision.action !== "keep" && remainingReviewSignals.length > 0) {
+      if (decision.assessment === undefined || decision.assessment.trim().length < 12) {
+        throw new ContextError(ExitCode.UserError, `post-revision document signals require a concrete assessment: ${decision.fragment_id}`, {
+          category: ErrorCategory.UserInputInvalid,
+          signals: remainingReviewSignals.map((signal) => signal.code),
+          next: "Resolve the remaining review signals or explain each signal against this effective Section; effort and schedule are not content-quality evidence.",
+        });
+      }
+      assertQualityGroundedKeepAssessment({
+        ...fragment,
+        signals: remainingReviewSignals,
+        keep_requires_assessment: true,
+      }, decision.assessment);
+    }
+    return { decision, fragment, postSignals };
   });
   const signaledKeepAssessments = new Map<string, string>();
   for (const { decision, fragment } of validated) {
@@ -520,7 +585,65 @@ export async function applyDocumentOptimizationDecisions(input: {
   return {
     applied: validated.length,
     status: await collectDocumentOptimizationStatus({ projectRoot: input.projectRoot, files: updatedFiles }),
+    rescan: validated.flatMap(({ decision, fragment, postSignals }) => {
+      const remainingByCode = new Map(postSignals.map((signal) => [signal.code, signal]));
+      const original = fragment.signals.map((signal): DocumentOptimizationRescanItem => {
+        const remaining = remainingByCode.get(signal.code);
+        return {
+          fragment_id: fragment.fragment_id,
+          approved_path: fragment.approved_path,
+          section_id: fragment.section_id,
+          signal_code: signal.code,
+          source_range: `${signal.line_start}-${signal.line_end}`,
+          ...(remaining === undefined ? {} : {
+            post_revision_range: `${remaining.line_start}-${remaining.line_end}`,
+          }),
+          selected_action: decision.action,
+          status: remaining === undefined ? "resolved" : "justified",
+        };
+      });
+      const originalCodes = new Set(fragment.signals.map((signal) => signal.code));
+      return [...original, ...postSignals.filter((signal) => !originalCodes.has(signal.code)).map((signal) => ({
+        fragment_id: fragment.fragment_id,
+        approved_path: fragment.approved_path,
+        section_id: fragment.section_id,
+        signal_code: signal.code,
+        source_range: fragment.line_range,
+        post_revision_range: `${signal.line_start}-${signal.line_end}`,
+        selected_action: decision.action,
+        status: "justified" as const,
+      }))];
+    }),
   };
+}
+
+export async function applyDocumentOptimizationDecisions(input: {
+  projectRoot: string;
+  files: readonly ApprovedKnowledgeFile[];
+  payload: unknown;
+}): Promise<{ applied: number; status: DocumentOptimizationStatus; rescan: DocumentOptimizationRescanItem[] }> {
+  try {
+    const result = await applyDocumentOptimizationDecisionsUnchecked(input);
+    await clearDocumentOptimizationRetry(input.projectRoot);
+    return {
+      ...result,
+      status: await collectDocumentOptimizationStatus(input),
+    };
+  } catch (error) {
+    if (
+      error instanceof ContextError && error.code === ExitCode.UserError &&
+      error.detail?.category === ErrorCategory.UserInputInvalid
+    ) {
+      const states = await resolveFragmentStates(input);
+      await recordDocumentOptimizationFailure({
+        projectRoot: input.projectRoot,
+        fragments: states.filter((state) => state.state === "pending" || state.state === "conflict")
+          .map((state) => state.fragment),
+        error,
+      });
+    }
+    throw error;
+  }
 }
 
 export async function reconcileDocumentOptimizationRevisions(input: {
@@ -583,183 +706,4 @@ export async function projectDocumentOptimizedKnowledge(input: {
       : { ...file, content: renderDocumentOptimizationPage({ file, replacements }) };
   });
   return { files, status };
-}
-
-export async function createDocumentOptimizationRevision(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-  fragmentId: string;
-}): Promise<{ path: string; created: boolean; approved_path: string; line_range: string }> {
-  const fragments = collectDocumentOptimizationFragments(input.files);
-  const fragment = fragments.find((item) => item.fragment_id === input.fragmentId);
-  if (fragment === undefined) {
-    throw new ContextError(ExitCode.UserError, `document optimization fragment not found: ${input.fragmentId}`, {
-      category: ErrorCategory.UserInputInvalid,
-    });
-  }
-  const file = input.files.find((item) => item.relPath === fragment.approved_path)!;
-  const revision = await ensureDocumentRevision({
-    projectRoot: input.projectRoot,
-    file,
-    fragments: fragments.filter((candidate) => candidate.approved_path === file.relPath),
-  });
-  return { path: revision.path, created: revision.created, approved_path: file.relPath, line_range: fragment.line_range };
-}
-
-export interface DocumentRevisionEntryResult {
-  schema: "context.document-revision-entry.v1";
-  status: "started" | "target-selection-required";
-  selector: string;
-  target?: DocumentRevisionTarget;
-  candidates?: DocumentRevisionTarget[];
-  revision_path?: string;
-  created?: boolean;
-  next_action?: { kind: "reevaluate-workspace"; command: string };
-}
-
-export async function beginDocumentRevision(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-  selector: string;
-}): Promise<DocumentRevisionEntryResult> {
-  const targets = collectDocumentRevisionTargets(input.files);
-  const resolution = resolveDocumentRevisionTarget(targets, input.selector);
-  if (resolution.target === undefined) {
-    return {
-      schema: "context.document-revision-entry.v1",
-      status: "target-selection-required",
-      selector: input.selector,
-      candidates: resolution.candidates.slice(0, 20),
-    };
-  }
-
-  const target = resolution.target;
-  const active = await readDocumentRevisionRequest(input.projectRoot);
-  if (active !== null && active.approved_path === target.approved_path) {
-    return {
-      schema: "context.document-revision-entry.v1",
-      status: "started",
-      selector: input.selector,
-      target,
-      revision_path: documentRevisionRequestPath(target.approved_path),
-      created: false,
-      next_action: { kind: "reevaluate-workspace", command: "context status --format json" },
-    };
-  }
-  if (active !== null) {
-    const activeRevision = await readDocumentRevision(input.projectRoot, active.approved_path);
-    if (activeRevision === null || sha256(activeRevision) !== active.revision_digest) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "another document revision is already awaiting validation", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        approved_path: active.approved_path,
-        next: "Finish the current revision and run context optimize-docs validate before selecting another page.",
-      });
-    }
-    await removeDocumentRevision(input.projectRoot, active.approved_path);
-  }
-
-  const wasEnabled = await isDocumentOptimizationEnabled(input.projectRoot);
-  let currentFiles = [...input.files];
-  if (!wasEnabled) {
-    await enableDocumentOptimization(input.projectRoot);
-    currentFiles = await Promise.all(input.files.map(async (file) => {
-      const fragments = collectDocumentOptimizationFragments([file]);
-      return fragments.length === 0 ? file : writeDocumentOptimizationKeepState({
-        projectRoot: input.projectRoot,
-        file,
-        sections: new Map(fragments.map((fragment) => [fragment.section_id, fragmentSectionState(fragment)])),
-      });
-    }));
-  }
-  const file = currentFiles.find((item) => item.relPath === target.approved_path)!;
-  const revision = await ensureDocumentRevision({
-    projectRoot: input.projectRoot,
-    file,
-    fragments: collectDocumentOptimizationFragments([file]),
-  });
-  await writeDocumentRevisionRequest({
-    projectRoot: input.projectRoot,
-    approvedPath: target.approved_path,
-    revisionContent: revision.content,
-  });
-  return {
-    schema: "context.document-revision-entry.v1",
-    status: "started",
-    selector: input.selector,
-    target,
-    revision_path: documentRevisionRequestPath(target.approved_path),
-    created: revision.created,
-    next_action: { kind: "reevaluate-workspace", command: "context status --format json" },
-  };
-}
-
-export async function currentDocumentRevisionPlan(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-}): Promise<{
-  schema: "context.document-revision-plan.v1";
-  target: DocumentRevisionTarget;
-  revision_path: string;
-  changed: boolean;
-  next_action: { kind: "validate-document-revision"; command: string };
-}> {
-  const request = await readDocumentRevisionRequest(input.projectRoot);
-  if (request === null) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "no document revision is currently requested", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      next: "Run context revise \"<document title or approved path>\" --format json first.",
-    });
-  }
-  const target = collectDocumentRevisionTargets(input.files)
-    .find((item) => item.approved_path === request.approved_path);
-  const revision = await readDocumentRevision(input.projectRoot, request.approved_path);
-  if (target === undefined || revision === null) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "the requested document revision no longer resolves", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      approved_path: request.approved_path,
-      next: "Restore the approved page and its revision, or disable document optimization.",
-    });
-  }
-  return {
-    schema: "context.document-revision-plan.v1",
-    target,
-    revision_path: documentRevisionRequestPath(target.approved_path),
-    changed: sha256(revision) !== request.revision_digest,
-    next_action: {
-      kind: "validate-document-revision",
-      command: "context optimize-docs validate --format json",
-    },
-  };
-}
-
-export async function validateDocumentOptimizationRevisions(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-}): Promise<DocumentOptimizationStatus> {
-  const request = await readDocumentRevisionRequest(input.projectRoot);
-  if (request !== null) {
-    const path = documentRevisionPath(input.projectRoot, request.approved_path);
-    let revision: string;
-    try {
-      revision = await readFile(path, "utf8");
-    } catch {
-      throw new ContextError(ExitCode.WorkspaceStateError, "the requested document revision file is missing", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        approved_path: request.approved_path,
-      });
-    }
-    if (sha256(revision) === request.revision_digest) {
-      throw new ContextError(ExitCode.UserError, "the requested document revision has not changed", {
-        category: ErrorCategory.UserInputInvalid,
-        approved_path: request.approved_path,
-        next: `Edit ${documentRevisionRequestPath(request.approved_path)}, then rerun context optimize-docs validate.`,
-      });
-    }
-  }
-  const status = await reconcileDocumentOptimizationRevisions(input);
-  if (status.conflict_fragments === 0 && request !== null) {
-    await clearDocumentRevisionRequest(input.projectRoot);
-    return collectDocumentOptimizationStatus(input);
-  }
-  return status;
 }

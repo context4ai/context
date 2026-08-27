@@ -26,7 +26,7 @@
           "assessment": {
             "type": "string",
             "minLength": 12,
-            "description": "Required when keeping a Section that has mechanical signals. Explain why the signals are false positives or why changing the Section would reduce source fidelity. This value is decision-only and is not published."
+            "description": "Required when keeping a Section that has mechanical signals and when a repair or reshape retains review-confidence signals after rescan. Name every remaining signal code and explain why it is a false positive or why changing the Section would reduce source fidelity. Repair and reshape replacements cannot retain high-confidence signals. This value is decision-only and is not published."
           },
           "reason": {
             "enum": [

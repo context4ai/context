@@ -5,12 +5,14 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import {
   applyDocumentOptimizationDecisions,
-  beginDocumentRevision,
   collectDocumentOptimizationStatus,
   createDocumentOptimizationPlan,
+} from "../project/documentOptimization.js";
+import {
+  beginDocumentRevision,
   currentDocumentRevisionPlan,
   validateDocumentOptimizationRevisions,
-} from "../project/documentOptimization.js";
+} from "../project/documentRevision.js";
 import {
   disableDocumentOptimization,
   enableDocumentOptimization,

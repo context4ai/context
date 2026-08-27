@@ -89,6 +89,15 @@ helper separately.
 Add structured edges only for concrete registration and call paths. Keep a
 narrative locator when dynamic dispatch prevents an unambiguous edge.
 
+Return `identityGroups` when several target identities share one explained
+adapter responsibility. Return every source-backed adjacency in
+`chainCandidates`, then provide one `chainCandidateDecisions` record for each
+candidate. A documented decision names the reader-facing view and emits its
+structured edge; an equivalent candidate merges into that canonical candidate;
+false positives and missing external material use `exclude` or `request-input`
+with a concrete reason. Read `contracts-and-chains.md` for the complete generic
+contract.
+
 ## Template composition examples
 
 - An HTTP endpoint backed by an RPC client is `api-service` + `adapter`; combine

@@ -383,6 +383,7 @@ nodes:
         - resources/views/source-current.yaml
       recommended:
         - resources/manuals/reference/code-extractors.md
+        - resources/semantic/code-index/templates/contracts-and-chains.md
 
   - id: migrate-codeindex
     kind: action
@@ -710,6 +711,23 @@ nodes:
         - resources/procedures/document-optimization.md
         - resources/views/document-optimization-current.yaml
 
+  - id: resolve-document-optimization-guidance
+    kind: gate
+    reasonCode: route.document-optimization.guidance-required
+    resolutionAction: actions/apply-document-optimization-guidance.yaml
+    gate:
+      id: document-optimization-guidance
+      prompt: Review the aggregated three-round document revision failures and provide one content-organization, source-fidelity, or missing-material direction for the affected Sections.
+      delegatable: false
+    satisfiedBy:
+      - path: document_optimization.guidance_required
+        equals: false
+    resources:
+      required:
+        - resources/procedures/document-optimization.md
+        - resources/dialogue/human-gates.md
+        - resources/views/document-optimization-current.yaml
+
   - id: revise-document
     kind: action
     reasonCode: route.document-revision.requested
@@ -777,7 +795,8 @@ edges:
   - { from: align-next, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: optimize-documents, kind: gatedBy }
+  - { from: review-package-template, to: resolve-document-optimization-guidance, kind: gatedBy }
+  - { from: resolve-document-optimization-guidance, to: optimize-documents, kind: gatedBy }
   - { from: optimize-documents, to: build-next }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }

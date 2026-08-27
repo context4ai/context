@@ -1,16 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { CustomCodeCandidateDraft, ExtractCustomPhaseDefinition } from "@c4a/context";
 import { auditDimensions, measureCodeIndexMarkdown } from "../project/codeIndexAuditMetrics.js";
 import { pageSignals } from "../project/codeIndexAudit.js";
 import { buildCodeIndexActionGuidance } from "../project/codeIndexAuditGuidance.js";
 import { candidateFromCustom } from "../project/customCandidateDraft.js";
-import {
-  applyCustomInspectionInventory,
-  assertCustomInventoryCoversSourceBaseline,
-} from "../project/customExtractInventory.js";
 import type { ExtractionIndexUnitPreview } from "../project/extractCandidateTypes.js";
 import { renderApprovedCodegraphMarkdown } from "../project/reviewApplyCodegraph.js";
 import { approvedContextSectionsInMarkdown } from "../project/verifyContextSections.js";
@@ -66,6 +59,9 @@ function unit(): ExtractionIndexUnitPreview {
       protocolTargets: [],
       boundaryTargets: [{ kind: "entry", identity: "src/index.ts" }],
       coveredBoundaryTargets: [{ kind: "entry", identity: "src/index.ts" }],
+      identityGroups: [],
+      chainCandidates: [],
+      chainCandidateDecisions: [],
       excludedFiles: 0,
       excludedFileTargets: [],
       excludedReasons: [],
@@ -125,6 +121,11 @@ describe("0.6.19 mechanical code-index quality", () => {
         semantic_fact_lines: measured.semanticFactLines,
         table_fact_rows: measured.tableFactRows,
         explanatory_lines: measured.explanatoryLines,
+        catalog_lines: measured.catalogLines,
+        evidence_enumeration_lines: measured.evidenceEnumerationLines,
+        templated_observation_lines: measured.templatedObservationLines,
+        normalized_template_repetition_lines: measured.normalizedTemplateRepetitionLines,
+        reader_content_lines: measured.readerContentLines,
         implementation_body_lines: measured.implementationBodyLines,
         template_residue_count: measured.templateResidueCount,
         placeholder_section_count: measured.placeholderSectionCount,
@@ -158,6 +159,11 @@ describe("0.6.19 mechanical code-index quality", () => {
         semantic_fact_lines: 1,
         table_fact_rows: 0,
         explanatory_lines: 0,
+        catalog_lines: 0,
+        evidence_enumeration_lines: 0,
+        templated_observation_lines: 0,
+        normalized_template_repetition_lines: 0,
+        reader_content_lines: 1,
         implementation_body_lines: 0,
         template_residue_count: 1,
         placeholder_section_count: 1,
@@ -218,6 +224,11 @@ describe("0.6.19 mechanical code-index quality", () => {
         semantic_fact_lines: 40,
         table_fact_rows: 0,
         explanatory_lines: 12,
+        catalog_lines: 0,
+        evidence_enumeration_lines: 0,
+        templated_observation_lines: 0,
+        normalized_template_repetition_lines: 0,
+        reader_content_lines: 52,
         implementation_body_lines: 0,
         template_residue_count: 0,
         placeholder_section_count: 0,
@@ -261,6 +272,11 @@ describe("0.6.19 mechanical code-index quality", () => {
         semantic_fact_lines: 3,
         table_fact_rows: 0,
         explanatory_lines: 1,
+        catalog_lines: 0,
+        evidence_enumeration_lines: 0,
+        templated_observation_lines: 0,
+        normalized_template_repetition_lines: 0,
+        reader_content_lines: 4,
         implementation_body_lines: 0,
         template_residue_count: 0,
         placeholder_section_count: 0,
@@ -296,6 +312,238 @@ describe("0.6.19 mechanical code-index quality", () => {
     ].join("\n"));
     expect(generatedDump.semanticFactLines).toBe(0);
     expect(generatedDump.generatedTypeLines).toBe(5);
+  });
+
+  test("does not let templated observations increase semantic fact density", () => {
+    const measured = measureCodeIndexMarkdown([
+      "Observed `Alpha` in `src/a.ts`.",
+      "Observed `Beta` in `src/b.ts`.",
+      "Observed `Gamma` in `src/c.ts`.",
+      "The `sample.entry` route delegates validated input to `sample.service` and returns its stable result.",
+    ].join("\n"));
+    expect(measured.templatedObservationLines).toBe(3);
+    expect(measured.normalizedTemplateRepetitionLines).toBe(3);
+    expect(Object.values(measured.normalizedTemplateHistogram)).toEqual([3]);
+    expect(measured.semanticFactLines).toBe(1);
+    expect(measured.explanatoryLines).toBe(1);
+  });
+
+  test("detects one normalized observation template repeated across multiple pages", () => {
+    const pages = ["Alpha", "Beta", "Gamma"].map((name) => {
+      const measured = measureCodeIndexMarkdown(`Observed \`${name}\` in \`src/${name.toLowerCase()}.ts\`.`);
+      return {
+        view_ref: `codeindex:sample/${name.toLowerCase()}`,
+        module: "sample",
+        path: `codeindex/sample/${name.toLowerCase()}.md`,
+        candidate_fingerprint: name,
+        content_digest: name,
+        effective_chars: 40,
+        section_count: 1,
+        evidence_count: 1,
+        section_scoped_evidence_count: 1,
+        relation_count: 0,
+        relation_evidence_count: 0,
+        source_count: 1,
+        line_count: measured.lineCount,
+        semantic_fact_lines: measured.semanticFactLines,
+        table_fact_rows: measured.tableFactRows,
+        explanatory_lines: measured.explanatoryLines,
+        catalog_lines: measured.catalogLines,
+        evidence_enumeration_lines: measured.evidenceEnumerationLines,
+        templated_observation_lines: measured.templatedObservationLines,
+        normalized_template_repetition_lines: measured.normalizedTemplateRepetitionLines,
+        normalized_template_histogram: measured.normalizedTemplateHistogram,
+        reader_content_lines: measured.readerContentLines,
+        implementation_body_lines: measured.implementationBodyLines,
+        template_residue_count: measured.templateResidueCount,
+        placeholder_section_count: measured.placeholderSectionCount,
+        referenced_file_count: 1,
+        referenced_symbol_count: 1,
+        referenced_files: [`src/${name.toLowerCase()}.ts`],
+        referenced_symbols: [name],
+      };
+    });
+    const inspected = unit();
+    inspected.outputProfile = "module-map";
+    const repetition = auditDimensions({ unit: inspected, pages })
+      .find((item) => item.dimension === "normalized-template-repetition-ratio");
+    expect(repetition?.status).toBe("above-ceiling");
+    expect(repetition?.evidence.repeated_template_fingerprints).toHaveLength(1);
+  });
+
+  test("applies stricter enumeration limits to module maps than public references", () => {
+    const page = {
+      view_ref: "codeindex:sample/module",
+      module: "sample",
+      path: "codeindex/sample/module.md",
+      candidate_fingerprint: "candidate",
+      content_digest: "content",
+      effective_chars: 500,
+      section_count: 2,
+      evidence_count: 8,
+      section_scoped_evidence_count: 8,
+      relation_count: 0,
+      relation_evidence_count: 0,
+      source_count: 1,
+      line_count: 20,
+      semantic_fact_lines: 8,
+      table_fact_rows: 6,
+      explanatory_lines: 4,
+      catalog_lines: 6,
+      evidence_enumeration_lines: 2,
+      templated_observation_lines: 2,
+      normalized_template_repetition_lines: 2,
+      reader_content_lines: 14,
+      implementation_body_lines: 0,
+      template_residue_count: 0,
+      placeholder_section_count: 0,
+      referenced_file_count: 8,
+      referenced_symbol_count: 8,
+      referenced_files: ["src/index.ts"],
+      referenced_symbols: ["publicApi"],
+    };
+    const moduleDimensions = auditDimensions({
+      unit: { ...unit(), outputProfile: "module-map" },
+      pages: [page],
+    });
+    const referenceDimensions = auditDimensions({ unit: unit(), pages: [page] });
+    expect(moduleDimensions.find((item) => item.dimension === "enumeration-ratio")?.absolute_gate).toBe(true);
+    expect(referenceDimensions.find((item) => item.dimension === "enumeration-ratio")?.absolute_gate).toBe(false);
+  });
+
+  test("covers target identities through a source-constrained reader group without prose enumeration", () => {
+    const grouped = unit();
+    grouped.inventory.symbolsDiscovered = 2;
+    grouped.inventory.symbolsAnalyzed = 2;
+    grouped.inventory.targetSymbols = 2;
+    grouped.inventory.targetSymbolIdentities = ["createClient", "closeClient"];
+    grouped.inventory.identityGroups = [{
+      id: "client-lifecycle",
+      members: ["createClient", "closeClient"],
+      viewRef: "codeindex:sample/lifecycle",
+      sourceFiles: ["src/file-0.ts"],
+    }];
+    const dimensions = auditDimensions({
+      unit: grouped,
+      pages: [{
+        view_ref: "codeindex:sample/lifecycle",
+        module: "sample",
+        path: "codeindex/sample/lifecycle.md",
+        candidate_fingerprint: "candidate",
+        content_digest: "content",
+        effective_chars: 120,
+        section_count: 1,
+        evidence_count: 1,
+        section_scoped_evidence_count: 1,
+        relation_count: 0,
+        relation_evidence_count: 0,
+        source_count: 1,
+        line_count: 8,
+        semantic_fact_lines: 3,
+        table_fact_rows: 0,
+        explanatory_lines: 4,
+        catalog_lines: 0,
+        evidence_enumeration_lines: 0,
+        templated_observation_lines: 0,
+        normalized_template_repetition_lines: 0,
+        reader_content_lines: 7,
+        implementation_body_lines: 0,
+        template_residue_count: 0,
+        placeholder_section_count: 0,
+        referenced_file_count: 1,
+        referenced_symbol_count: 0,
+        referenced_files: ["src/file-0.ts"],
+        referenced_symbols: [],
+      }],
+    });
+    expect(dimensions.find((item) => item.dimension === "identity-group-evidence-coverage")?.status).toBe("target");
+    expect(dimensions.find((item) => item.dimension === "target-symbol-coverage")?.status).toBe("above-target");
+  });
+
+  test("requires every chain candidate decision and an evidence-backed representative external chain", () => {
+    const chained = unit();
+    chained.inventory.chainCandidates = [{
+      id: "handler-to-client",
+      family: "handler-downstream",
+      from: "handleRequest",
+      to: "remoteClient.fetch",
+      sourceFiles: ["src/file-0.ts"],
+      confidence: "structural",
+    }];
+    const page = {
+      view_ref: "codeindex:sample/request-flow",
+      module: "sample",
+      path: "codeindex/sample/request-flow.md",
+      candidate_fingerprint: "candidate",
+      content_digest: "content",
+      effective_chars: 120,
+      section_count: 1,
+      evidence_count: 1,
+      section_scoped_evidence_count: 1,
+      relation_count: 1,
+      relation_evidence_count: 1,
+      source_count: 1,
+      line_count: 8,
+      semantic_fact_lines: 3,
+      table_fact_rows: 0,
+      explanatory_lines: 4,
+      catalog_lines: 0,
+      evidence_enumeration_lines: 0,
+      templated_observation_lines: 0,
+      normalized_template_repetition_lines: 0,
+      reader_content_lines: 7,
+      implementation_body_lines: 0,
+      template_residue_count: 0,
+      placeholder_section_count: 0,
+      referenced_file_count: 1,
+      referenced_symbol_count: 2,
+      referenced_files: ["src/file-0.ts"],
+      referenced_symbols: ["handleRequest", "remoteClient.fetch"],
+    };
+    const missing = auditDimensions({ unit: chained, pages: [page] });
+    expect(missing.find((item) => item.dimension === "chain-candidate-decision-coverage")?.status).toBe("below-floor");
+    expect(missing.find((item) => item.dimension === "external-boundary-family-closure")?.status).toBe("below-floor");
+
+    chained.inventory.chainCandidateDecisions = [{
+      candidateId: "handler-to-client",
+      decision: "document",
+      viewRef: page.view_ref,
+    }];
+    const closed = auditDimensions({ unit: chained, pages: [page] });
+    expect(closed.find((item) => item.dimension === "chain-candidate-decision-coverage")?.status).toBe("target");
+    expect(closed.find((item) => item.dimension === "external-boundary-family-closure")?.status).toBe("target");
+  });
+
+  test("does not allow an empty candidate list to bypass adjacent boundary families", () => {
+    const inspected = unit();
+    inspected.inventory.boundaryTargets = [
+      { kind: "operation", identity: "readItem" },
+      { kind: "handler", identity: "handleRead" },
+      { kind: "downstream", identity: "store.load" },
+    ];
+    const missing = auditDimensions({ unit: inspected, pages: [] });
+    expect(missing.find((item) => item.dimension === "chain-candidate-family-discovery")?.status).toBe("below-floor");
+
+    inspected.inventory.chainCandidates = [
+      {
+        id: "operation-handler",
+        family: "operation-handler",
+        from: "readItem",
+        to: "handleRead",
+        sourceFiles: ["src/file-0.ts"],
+        confidence: "structural",
+      },
+      {
+        id: "handler-downstream",
+        family: "handler-downstream",
+        from: "handleRead",
+        to: "store.load",
+        sourceFiles: ["src/file-0.ts"],
+        confidence: "structural",
+      },
+    ];
+    const discovered = auditDimensions({ unit: inspected, pages: [] });
+    expect(discovered.find((item) => item.dimension === "chain-candidate-family-discovery")?.status).toBe("target");
   });
 
   test("returns every uncovered target identity without report truncation", () => {
@@ -447,261 +695,6 @@ describe("0.6.19 mechanical code-index quality", () => {
     }
   });
 
-  test("requires complete symbol identity denominators from custom inspection", () => {
-    const inspected = unit();
-    const inventory = {
-      indexUnitId: "sample",
-      eligibleFiles: 1,
-      analyzedFiles: 1,
-      eligibleFileTargets: ["src/index.ts"],
-      analyzedFileTargets: ["src/index.ts"],
-      eligibleLoc: 10,
-      analyzedLoc: 10,
-      documentsDiscovered: 0,
-      documentsRead: 0,
-      symbolsDiscovered: 2,
-      symbolsAnalyzed: 2,
-      targetSymbols: 2,
-      exportedSymbols: 1,
-      targetSymbolIdentities: ["publicApi"],
-      exportedTargetIdentities: ["publicApi"],
-      entryTargets: ["src/index.ts"],
-      protocolTargets: [],
-      excludedFiles: 0,
-      excludedFileTargets: [],
-      excludedReasons: [],
-      parserSkippedFiles: 0,
-      parserSkippedFileTargets: [],
-    } as const;
-    expect(() => applyCustomInspectionInventory({
-      unit: inspected,
-      inventory,
-      phaseId: "extract:sample",
-    })).toThrow("symbol identity lists must be complete and match their counts");
-  });
-
-  test("rejects a hand-picked custom inventory that omits adjacent source and MDX files", async () => {
-    const root = mkdtempSync(join(tmpdir(), "context-custom-inventory-"));
-    try {
-      mkdirSync(join(root, "src"), { recursive: true });
-      mkdirSync(join(root, "docs"), { recursive: true });
-      writeFileSync(join(root, "src", "index.ts"), "export const publicApi = 1;\n", "utf8");
-      writeFileSync(join(root, "src", "client.tsx"), "export function Client() { return null; }\n", "utf8");
-      writeFileSync(join(root, "README.md"), "# Package\n", "utf8");
-      writeFileSync(join(root, "docs", "operations.mdx"), "# Operations\n\nRun the service.\n", "utf8");
-      writeFileSync(join(root, "package.json"), "{}\n", "utf8");
-      const inspected = unit();
-      inspected.documents = ["README.md"];
-      const inventory = {
-        indexUnitId: "sample",
-        eligibleFiles: 3,
-        analyzedFiles: 3,
-        eligibleFileTargets: ["src/index.ts", "README.md", "package.json"],
-        analyzedFileTargets: ["src/index.ts", "README.md", "package.json"],
-        eligibleLoc: 3,
-        analyzedLoc: 3,
-        documentsDiscovered: 1,
-        documentsRead: 1,
-        documentTargets: ["README.md"],
-        rootDocumentTargets: ["README.md"],
-        readDocumentTargets: ["README.md"],
-        referencedDocumentTargets: ["README.md"],
-        symbolsDiscovered: 1,
-        symbolsAnalyzed: 1,
-        targetSymbols: 1,
-        exportedSymbols: 1,
-        targetSymbolIdentities: ["publicApi"],
-        exportedTargetIdentities: ["publicApi"],
-        entryTargets: ["src/index.ts"],
-        protocolTargets: [],
-        excludedFiles: 0,
-        excludedFileTargets: [],
-        excludedReasons: [],
-        parserSkippedFiles: 0,
-        parserSkippedFileTargets: [],
-      };
-      await expect(assertCustomInventoryCoversSourceBaseline({
-        unit: inspected,
-        inventory,
-        phaseId: "extract:sample",
-        sources: [{ name: "20260825/sample", absolutePath: root }],
-      })).rejects.toMatchObject({
-        detail: {
-          missing_eligible_files: ["docs/operations.mdx", "src/client.tsx"],
-        },
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("accepts an independently complete custom inventory after declared exclusions", async () => {
-    const root = mkdtempSync(join(tmpdir(), "context-custom-inventory-"));
-    try {
-      mkdirSync(join(root, "src", "generated"), { recursive: true });
-      writeFileSync(join(root, "src", "index.ts"), "export const publicApi = 1;\n", "utf8");
-      writeFileSync(join(root, "src", "generated", "client.ts"), "export const generated = 1;\n", "utf8");
-      const inspected = unit();
-      inspected.exclusions = ["src/generated/**"];
-      const inventory = {
-        indexUnitId: "sample",
-        eligibleFiles: 1,
-        analyzedFiles: 1,
-        eligibleFileTargets: ["src/index.ts"],
-        analyzedFileTargets: ["src/index.ts"],
-        eligibleLoc: 1,
-        analyzedLoc: 1,
-        documentsDiscovered: 0,
-        documentsRead: 0,
-        documentTargets: [],
-        rootDocumentTargets: [],
-        readDocumentTargets: [],
-        referencedDocumentTargets: [],
-        symbolsDiscovered: 1,
-        symbolsAnalyzed: 1,
-        targetSymbols: 1,
-        exportedSymbols: 1,
-        targetSymbolIdentities: ["publicApi"],
-        exportedTargetIdentities: ["publicApi"],
-        entryTargets: ["src/index.ts"],
-        protocolTargets: [],
-        excludedFiles: 1,
-        excludedFileTargets: ["src/generated/client.ts"],
-        excludedReasons: ["generated source"],
-        parserSkippedFiles: 0,
-        parserSkippedFileTargets: [],
-      };
-      await expect(assertCustomInventoryCoversSourceBaseline({
-        unit: inspected,
-        inventory,
-        phaseId: "extract:sample",
-        sources: [{ name: "20260825/sample", absolutePath: root }],
-      })).resolves.toBeUndefined();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("rejects omitted sibling page entries even when file and LOC inventories are complete", async () => {
-    const root = mkdtempSync(join(tmpdir(), "context-custom-boundaries-"));
-    try {
-      mkdirSync(join(root, "src", "pages", "home"), { recursive: true });
-      mkdirSync(join(root, "src", "pages", "settings"), { recursive: true });
-      writeFileSync(join(root, "src", "pages", "home", "entry.tsx"), "export const Home = 1;\n", "utf8");
-      writeFileSync(join(root, "src", "pages", "settings", "entry.tsx"), "export const Settings = 1;\n", "utf8");
-      const inspected = unit();
-      inspected.moduleType = "web-application";
-      inspected.moduleTypes = ["web-application"];
-      inspected.facets = ["page-routing"];
-      inspected.outputProfile = "application-map";
-      const inventory = {
-        indexUnitId: "sample",
-        eligibleFiles: 2,
-        analyzedFiles: 2,
-        eligibleFileTargets: ["src/pages/home/entry.tsx", "src/pages/settings/entry.tsx"],
-        analyzedFileTargets: ["src/pages/home/entry.tsx", "src/pages/settings/entry.tsx"],
-        eligibleLoc: 2,
-        analyzedLoc: 2,
-        documentsDiscovered: 0,
-        documentsRead: 0,
-        documentTargets: [],
-        rootDocumentTargets: [],
-        readDocumentTargets: [],
-        referencedDocumentTargets: [],
-        symbolsDiscovered: 1,
-        symbolsAnalyzed: 1,
-        targetSymbols: 1,
-        exportedSymbols: 0,
-        targetSymbolIdentities: ["home"],
-        exportedTargetIdentities: [],
-        entryTargets: ["src/pages/home/entry.tsx"],
-        protocolTargets: [],
-        boundaryTargets: [{ kind: "route" as const, identity: "home" }],
-        coveredBoundaryTargets: [{ kind: "route" as const, identity: "home" }],
-        excludedFiles: 0,
-        excludedFileTargets: [],
-        excludedReasons: [],
-        parserSkippedFiles: 0,
-        parserSkippedFileTargets: [],
-      };
-      await expect(assertCustomInventoryCoversSourceBaseline({
-        unit: inspected,
-        inventory,
-        phaseId: "extract:sample",
-        sources: [{ name: "20260825/sample", absolutePath: root }],
-      })).rejects.toMatchObject({
-        detail: {
-          missing_target_symbols: [{ kind: "route", identity: "settings", path: "src/pages/settings/entry.tsx" }],
-          missing_boundary_targets: [{ kind: "route", identity: "settings", path: "src/pages/settings/entry.tsx" }],
-        },
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("rejects omitted Go service operations from a declared handler source of truth", async () => {
-    const root = mkdtempSync(join(tmpdir(), "context-custom-operations-"));
-    try {
-      writeFileSync(join(root, "handler.go"), [
-        "package service",
-        "type Service struct{}",
-        "func (s *Service) First() {}",
-        "func (s *Service) Second() {}",
-        "",
-      ].join("\n"), "utf8");
-      const inspected = unit();
-      inspected.moduleType = "service";
-      inspected.moduleTypes = ["service"];
-      inspected.facets = ["protocol-provider"];
-      inspected.outputProfile = "service-boundary";
-      inspected.sourceOfTruth = "handler.go";
-      const inventory = {
-        indexUnitId: "sample",
-        eligibleFiles: 1,
-        analyzedFiles: 1,
-        eligibleFileTargets: ["handler.go"],
-        analyzedFileTargets: ["handler.go"],
-        eligibleLoc: 4,
-        analyzedLoc: 4,
-        documentsDiscovered: 0,
-        documentsRead: 0,
-        documentTargets: [],
-        rootDocumentTargets: [],
-        readDocumentTargets: [],
-        referencedDocumentTargets: [],
-        symbolsDiscovered: 1,
-        symbolsAnalyzed: 1,
-        targetSymbols: 1,
-        exportedSymbols: 0,
-        targetSymbolIdentities: ["First"],
-        exportedTargetIdentities: [],
-        entryTargets: [],
-        protocolTargets: [],
-        boundaryTargets: [{ kind: "operation" as const, identity: "First" }],
-        coveredBoundaryTargets: [{ kind: "operation" as const, identity: "First" }],
-        excludedFiles: 0,
-        excludedFileTargets: [],
-        excludedReasons: [],
-        parserSkippedFiles: 0,
-        parserSkippedFileTargets: [],
-      };
-      await expect(assertCustomInventoryCoversSourceBaseline({
-        unit: inspected,
-        inventory,
-        phaseId: "extract:sample",
-        sources: [{ name: "20260825/sample", absolutePath: root }],
-      })).rejects.toMatchObject({
-        detail: {
-          missing_target_symbols: [{ kind: "operation", identity: "Second", path: "handler.go" }],
-          missing_boundary_targets: [{ kind: "operation", identity: "Second", path: "handler.go" }],
-        },
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   test("preserves every Section evidence ref through approved Markdown", () => {
     const phase = { id: "extract:sample", collection: "codeindex" } as ExtractCustomPhaseDefinition;
     const evidence = ["src/index.ts", "src/client.ts"].map((file, index) => ({
@@ -771,6 +764,11 @@ describe("0.6.19 mechanical code-index quality", () => {
         semantic_fact_lines: 10,
         table_fact_rows: 0,
         explanatory_lines: 5,
+        catalog_lines: 0,
+        evidence_enumeration_lines: 0,
+        templated_observation_lines: 0,
+        normalized_template_repetition_lines: 0,
+        reader_content_lines: 15,
         implementation_body_lines: 0,
         template_residue_count: 0,
         placeholder_section_count: 0,

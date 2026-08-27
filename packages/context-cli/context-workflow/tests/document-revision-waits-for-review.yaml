@@ -17,7 +17,7 @@ state:
       compile_complete: true
       knowledge_review_resolved: false
       review_gate_clear: false
-    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, revision_requested: true }
+    document_optimization: { enabled: true, current: true, pending_count: 0, conflict_count: 0, guidance_required: false, revision_requested: true }
 expect:
   statusCode: waiting-user
   primaryNode: resume-review-current-batch
