@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-rush",
   "description": "Rush workspace structural index for Context",
-  "version": "0.7.0",
+  "version": "0.7.0-preview.2",
   "type": "module",
   "license": "MIT",
   "engines": {

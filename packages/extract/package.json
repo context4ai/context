@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract",
   "description": "Language-plugin framework and repository runner for Context code evidence",
-  "version": "0.7.0",
+  "version": "0.7.0-preview.2",
   "type": "module",
   "license": "MIT",
   "engines": {

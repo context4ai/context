@@ -1,6 +1,6 @@
 schema: agent-graph.provider.v1
 id: c4a/context
-version: 0.7.0
+version: 0.7.0-preview.2
 name: Context workflow
 description: Internal work contract for Context knowledge workspaces.
 graphs:

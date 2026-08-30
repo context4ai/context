@@ -92,5 +92,5 @@ describe("community Indexer scenario fixtures", () => {
         outputRoot: join(root, "output"),
       })).rejects.toThrow(/scenario fixture|scenario rpc-query-catalog/);
     }
-  }, 40_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });
