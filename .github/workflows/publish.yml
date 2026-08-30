@@ -4,16 +4,6 @@ on:
   release:
     types:
       - published
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing release tag to finalize after a post-publish smoke failure
-        required: true
-        type: string
-      preflight_run_id:
-        description: Failed release run containing the pre-publish registry snapshot
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -22,7 +12,7 @@ permissions:
 jobs:
   publish:
     name: Publish packages
-    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: npm
 
@@ -169,90 +159,5 @@ jobs:
           gh api \
             --method PATCH \
             "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
-            -F body=@.tmp/release-body-updated.md \
-            >/dev/null
-
-  finalize:
-    name: Finalize existing release
-    if: github.event_name == 'workflow_dispatch' && startsWith(inputs.release_tag, 'v')
-    runs-on: ubuntu-latest
-    environment: npm
-
-    steps:
-      - name: Check out release tooling
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Verify recovery target
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
-          test "${RELEASE_TAG}" = "v${package_version}"
-
-      - name: Download pre-publish registry snapshot
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          gh run download "${PREFLIGHT_RUN_ID}" \
-            --name "npm-release-preflight-${RELEASE_TAG}" \
-            --dir .tmp/npm-release-preflight
-          test -s .tmp/npm-release-preflight/release-registry-snapshot.json
-
-      - name: Verify release smoke regression
-        run: bun test packages/dev-cli/src/__tests__/publishContextCli.test.ts
-
-      - name: Smoke exact registry release
-        run: |
-          bun run scripts/release-install-smoke.ts \
-            --registry https://registry.npmjs.org \
-            --receipt .tmp/release-install-smoke.json
-
-      - name: Promote final release dist-tags
-        run: |
-          bun run scripts/promote-release-tags.ts \
-            --registry https://registry.npmjs.org \
-            --registry-snapshot .tmp/npm-release-preflight/release-registry-snapshot.json \
-            --smoke-receipt .tmp/release-install-smoke.json \
-            --receipt .tmp/release-dist-tag-promotion.json
-
-      - name: Preserve release receipts
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-release-receipts-${{ inputs.release_tag }}-finalized
-          path: |
-            .tmp/npm-release-preflight/release-registry-snapshot.json
-            .tmp/release-install-smoke.json
-            .tmp/release-dist-tag-promotion.json
-          if-no-files-found: error
-
-      - name: Update release package list
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}" --jq .body > .tmp/release-body.md
-          bun run scripts/release-metadata.ts \
-            --format markdown \
-            --body .tmp/release-body.md \
-            > .tmp/release-body-updated.md
-          gh api \
-            --method PATCH \
-            "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
             -F body=@.tmp/release-body-updated.md \
             >/dev/null
