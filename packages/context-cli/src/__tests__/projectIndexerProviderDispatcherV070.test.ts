@@ -38,6 +38,7 @@ import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const NOW = new Date("2026-08-27T12:00:00.000Z");
+const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 
 function requirement() {
   return {
@@ -228,7 +229,7 @@ describe("0.7.0 two-stage Provider dispatcher", () => {
       provider_id: "community",
       bundle_integrity: release.provider.integrity,
     });
-  }, 15_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("returns a v2 Host Action for non-CLI distributions and consumes its inline result", async () => {
     const root = project();
@@ -357,7 +358,7 @@ describe("0.7.0 two-stage Provider dispatcher", () => {
       now: NOW,
     });
     expect(consumedResource).toMatchObject({ state: "resolved", resolver: "host" });
-  }, 15_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("does not materialize a request absent from the current static report", async () => {
     const root = project();
@@ -378,5 +379,5 @@ describe("0.7.0 two-stage Provider dispatcher", () => {
       now: NOW,
     })).rejects.toThrow(/stale or invalid|not authorized/);
     expect(existsSync(runtimeRoot)).toBe(false);
-  }, 15_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

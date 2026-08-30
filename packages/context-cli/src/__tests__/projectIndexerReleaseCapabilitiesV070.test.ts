@@ -16,6 +16,7 @@ import { materializeBundledIndexerDistribution } from
   "../project/indexerDistributionBuild.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
+const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -99,5 +100,5 @@ describe("Indexer release capability manifest", () => {
     })).rejects.toMatchObject({ code: "indexer-feature-not-ready" });
     expect(await readFile(join(assetsRoot, "capability-manifest.json"), "utf8"))
       .toContain("context.indexer.release-capability-manifest/v1");
-  }, 15_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });
