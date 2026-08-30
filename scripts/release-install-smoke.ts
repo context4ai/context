@@ -52,7 +52,7 @@ const fixtures = {
   ],
   "@c4a/extract-mdx": [
     "fixture.mdx",
-    'import { Button } from "./button";\n# Fixture\n<Button />',
+    "import {Button} from '@fixture/ui'\n\n# Fixture\n\n<Button />",
   ],
   "@c4a/extract-contract": [
     "openapi.yaml",
@@ -65,9 +65,7 @@ const fixtures = {
 const runnerSource = `
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 
 const root = process.cwd();
 const version = ${JSON.stringify(version)};
@@ -87,15 +85,13 @@ for (const name of ["@c4a/core", "@c4a/context", "@c4a/extract", "@c4a/extract-t
   await import(name);
 }
 
-const requireFromCli = createRequire(join(root, "node_modules", "@c4a", "context-cli", "package.json"));
-const agentGraphEntry = requireFromCli.resolve("@c4a/agent-graph");
-const agentGraph = await import(pathToFileURL(agentGraphEntry).href);
+const agentGraph = await import("@c4a/agent-graph");
 const location = {
   schema: "agent-graph.resource-location.v2",
   id: "context.release-smoke",
   kind: "procedure",
   mediaType: "application/json",
-  revision: version,
+  revision: "sha256:" + createHash("sha256").update(version).digest("hex"),
   materialize: {
     handler: "context.release-smoke/v1",
     input: { schema: "context.release-smoke-input/v1", value: { version } },
@@ -107,7 +103,7 @@ const hostResult = {
   handler: location.materialize.handler,
   input_digest: agentGraph.hostActionInputDigest(location),
   output: { schema: location.materialize.output_schema, inline: { state: "accepted", version } },
-  receipt: { adapter: "release-install-smoke", adapter_version: "1" },
+  receipt: { adapter: "release-install-smoke", adapter_version: "1.0.0" },
 };
 await agentGraph.validateHostActionResult(location, hostResult);
 const graphReceipt = await agentGraph.hostActionResourceReadReceipt(location, hostResult);

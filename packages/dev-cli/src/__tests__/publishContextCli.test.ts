@@ -212,6 +212,17 @@ describe("publish package list", () => {
     expect(workflow).toContain("--smoke-receipt .tmp/release-install-smoke.json");
     expect(workflow).not.toContain("npm publish \"${package_dir}\" --access public --provenance\n");
   });
+
+  test("loads the ESM-only Agent Graph entry with dynamic import in registry smoke", async () => {
+    const smoke = await readFile(
+      resolve(import.meta.dir, "../../../..", "scripts/release-install-smoke.ts"),
+      "utf8",
+    );
+    expect(smoke).toContain('await import("@c4a/agent-graph")');
+    expect(smoke).toContain('adapter_version: "1.0.0"');
+    expect(smoke).toContain('revision: "sha256:" + createHash("sha256").update(version).digest("hex")');
+    expect(smoke).not.toContain("createRequire");
+  });
 });
 
 describe("release version synchronization", () => {
