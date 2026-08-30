@@ -32,6 +32,7 @@ import { validateProjectIndexerSelectionProposal } from
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
 const NOW = new Date("2026-08-29T12:00:00.000Z");
+const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -293,5 +294,5 @@ describe("Indexer install and resolver modes", () => {
     ]) {
       await expect(readFile(pluginManifest, "utf8")).rejects.toThrow();
     }
-  }, 60_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

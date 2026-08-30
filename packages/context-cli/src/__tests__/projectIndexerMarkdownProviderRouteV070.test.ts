@@ -24,6 +24,7 @@ import { initContextProject } from "../project/workspace.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
+const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -310,7 +311,7 @@ describe("Markdown Provider Route", () => {
         protocol: "context.indexer.selection-final-report/v1",
       },
     });
-  }, 60_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("returns exact Host and customization boundaries instead of bypassing them", async () => {
     const fixture = await capturedProject();

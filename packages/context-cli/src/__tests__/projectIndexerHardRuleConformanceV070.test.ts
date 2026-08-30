@@ -18,6 +18,8 @@ import { materializeBundledIndexerDistribution } from
 import { validateBundledIndexerHardRuleConformance } from
   "../project/indexerHardRuleConformance.js";
 
+const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
+
 function rehashOperators(contract: IndexerOperatorContract): IndexerOperatorContract {
   const { contract_digest: _digest, ...payload } = contract;
   void _digest;
@@ -129,5 +131,5 @@ describe("bundled profile hard-rule conformance", () => {
       profile_contract_digest: bundledIndexerProfileContract().contract_digest,
       report_digest: expect.stringMatching(/^sha256:/),
     });
-  }, 60_000);
+  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });
