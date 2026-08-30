@@ -1,5 +1,66 @@
 {
   "schema": "context.parser-publisher-receipts/v1",
   "preview_version": "0.7.0-preview.2",
-  "confirmations": []
+  "confirmations": [
+    {
+      "package": "@c4a/extract-thrift",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:1f2d5adf-5e98-4e3a-b669-a03c4827feb6"
+    },
+    {
+      "package": "@c4a/extract-proto",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:9f19b1d8-e5fc-4f53-874a-a30bb2d31edf"
+    },
+    {
+      "package": "@c4a/extract-mdx",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:bd47ef7c-5df2-476c-a060-67a45c3a1a24"
+    },
+    {
+      "package": "@c4a/extract-contract",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:31a5186f-ad2c-4a4d-a2ed-d52ec8688b24"
+    },
+    {
+      "package": "@c4a/extract-style",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:44be5389-c3a5-4f34-bb88-a0f2ceb4b67b"
+    },
+    {
+      "package": "@c4a/extract-sql",
+      "publisher": {
+        "repository": "context4ai/context",
+        "workflow": ".github/workflows/publish.yml",
+        "environment": "npm"
+      },
+      "confirmed_at": "2026-08-30T17:22:54.000Z",
+      "confirmation_ref": "npm-trust:f6a620b4-1e63-4134-9c1a-bebf5ac630bb"
+    }
+  ]
 }
