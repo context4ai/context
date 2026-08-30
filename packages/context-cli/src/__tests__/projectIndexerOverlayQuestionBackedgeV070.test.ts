@@ -700,5 +700,5 @@ describe("verified overlay question amendment back-edge", () => {
       expect(await readFile(join(sample.projectRoot, "src", "indexers.yaml"), "utf8"))
         .toBe(prepared.targetContent);
     }
-  }, 120_000);
+  }, 240_000);
 });

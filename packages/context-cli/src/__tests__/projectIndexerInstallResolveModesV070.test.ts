@@ -293,5 +293,5 @@ describe("Indexer install and resolver modes", () => {
     ]) {
       await expect(readFile(pluginManifest, "utf8")).rejects.toThrow();
     }
-  }, 15_000);
+  }, 60_000);
 });

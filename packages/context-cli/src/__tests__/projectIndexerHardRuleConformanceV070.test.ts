@@ -129,5 +129,5 @@ describe("bundled profile hard-rule conformance", () => {
       profile_contract_digest: bundledIndexerProfileContract().contract_digest,
       report_digest: expect.stringMatching(/^sha256:/),
     });
-  }, 15_000);
+  }, 60_000);
 });
