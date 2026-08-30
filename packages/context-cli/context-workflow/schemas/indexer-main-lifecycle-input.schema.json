@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.main-lifecycle-input/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "profile_contract_digests", "source_inventory_digests", "items"],
+      "properties": {
+        "protocol": { "const": "context.indexer.question-target-inventory-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "profile_contract_digests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/digest" } },
+        "source_inventory_digests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/digest" } },
+        "items": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "worksets"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-partition-workset-build-input/v1" },
+        "worksets": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "request", "result", "workset_read_receipts", "validation"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-validation-input/v1" },
+        "request": { "type": "object" },
+        "result": { "type": "object" },
+        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "validation": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_ref", "subject_key_schema_digest", "approved_subjects", "partitions"],
+      "properties": {
+        "protocol": { "const": "context.indexer.subject-catalog-build-input/v1" },
+        "requirement_ref": { "type": "string", "minLength": 1 },
+        "subject_key_schema_digest": { "$ref": "#/$defs/digest" },
+        "approved_subjects": { "type": "array", "items": { "type": "object" } },
+        "partitions": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "catalog", "queries"],
+      "properties": {
+        "protocol": { "const": "context.indexer.target-resolution-build-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "catalog": { "type": "object" },
+        "queries": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "partitions", "group_contexts"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-author-workset-build-input/v1" },
+        "partitions": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "group_contexts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "partition_plan", "projected_artifact_plan", "artifact_bundles", "artifact_policy_eligibilities"],
+      "properties": {
+        "protocol": { "const": "context.indexer.projected-artifact-fan-out-audit-input/v1" },
+        "partition_plan": { "type": "object" },
+        "projected_artifact_plan": { "type": "object" },
+        "artifact_bundles": { "type": "array", "items": { "type": "object" } },
+        "artifact_policy_eligibilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["logical_unit_ref", "report"],
+            "properties": {
+              "logical_unit_ref": { "type": "string", "minLength": 1 },
+              "report": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "workset_set", "records"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-workset-observation-input/v1" },
+        "workset_set": { "type": "object" },
+        "records": { "type": "array", "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "workset_set", "run_specs"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-ledger-prepare-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "workset_set": { "type": "object" },
+        "run_specs": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "workset_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-store-start-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "workset_digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "workset_digest", "result", "workset_read_receipts"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-partition-convergence-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "result": { "type": "object" },
+        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "request", "convergence", "validation", "workset_read_receipts"],
+      "properties": {
+        "protocol": { "const": "context.indexer.catalog-fallback-build-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "request": { "type": "object" },
+        "convergence": { "type": "object" },
+        "validation": { "type": "object" },
+        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "workset_digest", "result", "workset_read_receipts"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-store-accept-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "result": { "type": "object" },
+        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "workset_digest", "reason_code", "dependency_digests"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-store-fail-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "reason_code": { "type": "string", "minLength": 1 },
+        "dependency_digests": { "type": "array", "items": { "$ref": "#/$defs/digest" } }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-ledger-observation-input/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

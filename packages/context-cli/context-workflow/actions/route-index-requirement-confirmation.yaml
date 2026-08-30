@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: route-index-requirement-confirmation
+description: Revalidate a requirement comparison report and select its exact confirmation Gate.
+runner: command
+effect: read
+command: context indexer route-index-requirement-confirmation --input .tmp/agent-payloads/indexer-requirement-confirmation-route.json --format json
+inputSchema: schemas/indexer-requirement-confirmation-input.schema.json
+outputSchema: schemas/indexer-requirement-confirmation-output.schema.json

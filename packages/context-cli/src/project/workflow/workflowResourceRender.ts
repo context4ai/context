@@ -1,4 +1,6 @@
 import type { ProjectStatus } from "../statusTypes.js";
+import { codeIndexAuditItemsCommand } from "../codeIndexAuditView.js";
+import { extractionPreviewItemsCommand } from "../extractionPreviewView.js";
 
 export const CONTEXT_WORKFLOW_RESOURCE_IDS = [
   "context.workspace-current",
@@ -180,16 +182,20 @@ function renderExtractionPreview(status: ProjectStatus): string {
   if (preview === undefined) {
     return `# Current code extraction preview\n\nNo current preview is available. Run the Route-selected batch preview command.\n`;
   }
-  const units = preview.phases.flatMap((phase) => phase.indexUnits.map((unit) =>
+  const allUnits = preview.phases.flatMap((phase) => phase.indexUnits.map((unit) =>
     `${inline(unit.id)} — owner=${inline(unit.outputOwner)}, types=${unit.moduleTypes.map(inline).join("+")}, facets=${unit.facets.length === 0 ? "none" : unit.facets.map(inline).join("+")}, profile=${inline(unit.outputProfile)}, plan=${inline(unit.plan)}, pages=${unit.currentPageCount}→${unit.projectedPageCount}, changes=+${unit.changes.added}/~${unit.changes.updated}/-${unit.changes.removed}/=${unit.changes.unchanged}${unit.changes.exact ? "" : " (estimated)"}, scale=${inline(unit.scale)}, semantic-coverage=${unit.semanticCoverage === undefined ? "n/a" : `${unit.semanticCoverage.covered.length}/${unit.semanticCoverage.required.length}${unit.semanticCoverage.uncovered.length === 0 ? "" : ` missing:${unit.semanticCoverage.uncovered.map(inline).join("+")}`}`}, exported/internal=${unit.visibility.exported}/${unit.visibility.internal}, bytes=${unit.contentBytes.total}, max-page-bytes=${unit.contentBytes.max}, top-directories=${unit.topDirectories.map((item) => `${inline(item.path)}:${item.count}`).join(", ") || "none"}, risks=${unit.risks.length === 0 ? "none" : unit.risks.map(inline).join(", ")}`
   ));
-  const capabilityGaps = preview.phases.flatMap((phase) =>
+  const allCapabilityGaps = preview.phases.flatMap((phase) =>
     "inspection" in phase
       ? phase.inspection.capabilityGaps.map((gap) =>
           `${inline(gap.indexUnitId)} — ${gap.reason}${gap.requestedMaterial === undefined ? "" : `; requested=${inline(gap.requestedMaterial)}`}`
         )
       : []
   );
+  const itemLimit = 12;
+  const units = allUnits.slice(0, itemLimit);
+  const capabilityGaps = allCapabilityGaps.slice(0, itemLimit);
+  const inspectionCommand = `${extractionPreviewItemsCommand(preview.digest)} --page-size 25 --token-budget 2000 --byte-budget 24000 --format json`;
   return `# Current code extraction preview
 
 ## Batch
@@ -205,14 +211,19 @@ function renderExtractionPreview(status: ProjectStatus): string {
 - Scale clear: ${inline(preview.scaleClear)}
 - Batch advisories: ${inline(preview.advisories.length === 0 ? "none" : preview.advisories.join(", "))}
 - Reusable phase caches: ${preview.cache.reusablePhases}/${preview.totals.phases}
+- Complete inspection: ${inline(inspectionCommand)}
 
-## Index units
+## Index units (${units.length} shown of ${allUnits.length})
 
 ${bullets(units)}
 
-## Capability gaps
+## Capability gaps (${capabilityGaps.length} shown of ${allCapabilityGaps.length})
 
 ${bullets(capabilityGaps)}
+
+The summary is intentionally bounded. Follow the complete inspection command and
+then each returned \`next_action.command\` until \`preview_items_complete\` before
+making a scope, ownership, capability, or scale decision.
 `;
 }
 
@@ -222,25 +233,30 @@ function renderCodeIndexAudit(status: ProjectStatus): string {
   if (report === undefined) {
     return "# Current code-index audit\n\nNo code-index audit scope is available.\n";
   }
-  const units = report.units.map((unit) =>
+  const allUnits = report.units.map((unit) =>
     `${inline(unit.id)} — profile=${inline(unit.output_profile)}, types=${unit.module_types.map(inline).join("+") || "unknown"}, pages=${unit.page_count}, facts=${unit.dimensions.find((dimension) => dimension.dimension === "semantic-fact-lines")?.observed ?? "unscorable"}, max-page-lines=${unit.max_page_lines}, absolute-failures=${unit.absolute_failure_count}, below-target=${unit.below_target_count}, actions=${unit.recommended_actions.map(inline).join(", ") || "none"}`
   );
-  const dimensions = report.units.flatMap((unit) => unit.dimensions.map((dimension) =>
-    `${inline(unit.id)} / ${inline(dimension.dimension)} — observed=${inline(dimension.observed ?? "unscorable")}${inline(dimension.unit)}, floor=${inline(dimension.floor ?? "n/a")}, target=${inline(dimension.target ?? "n/a")}, ceiling=${inline(dimension.ceiling ?? "n/a")}, score=${inline(dimension.score ?? "n/a")}, status=${inline(dimension.status)}, absolute-gate=${inline(dimension.absolute_gate)}, actions=${dimension.recommended_actions.map(inline).join(", ") || "none"}`
-  ));
-  const actionGuidance = report.units.flatMap((unit) => unit.action_guidance.map((guidance) =>
-    `${inline(unit.id)} / ${inline(guidance.action)} — dimensions=${guidance.failed_dimensions.map(inline).join(", ") || "none"}; pages=${guidance.affected_pages.map(inline).join(", ") || "none"}; templates=${guidance.template_paths.map(inline).join(", ")}; configuration=${guidance.configuration_fields.map(inline).join(", ")}; expected=${guidance.expected_improvement.map(inline).join(", ") || "inspect-current-dimension"}`
-  ));
-  const guidanceDeltas = audit.guidance_units.flatMap((unit) => unit.dimension_deltas.map((delta) =>
+  const allGuidanceDeltas = audit.guidance_units.flatMap((unit) => unit.dimension_deltas.map((delta) =>
     `${inline(unit.unit_id)} / ${inline(delta.dimension)} — before=${inline(delta.before ?? "unscorable")}, after=${inline(delta.after ?? "unscorable")}, delta=${inline(delta.delta ?? "unscorable")}, status=${inline(delta.status)}`
   ));
-  const signals = report.signals.map((signal) =>
+  const allSignals = [...report.signals].sort((left, right) =>
+    Number(right.severity === "elevated") - Number(left.severity === "elevated") ||
+    left.id.localeCompare(right.id)
+  ).map((signal) =>
     `${inline(signal.severity)} ${inline(signal.id)} — ${signal.message}` +
     (signal.view_ref === undefined ? "" : `; page=${inline(signal.view_ref)}`)
   );
-  const samples = report.page_samples.map((page) =>
+  const allSamples = report.page_samples.map((page) =>
     `${inline(page.view_ref)} — chars=${page.effective_chars}, evidence=${page.evidence_count}, section-scoped=${page.section_scoped_evidence_count}, sections=${page.section_count}, relations=${page.relation_count}`
   );
+  const itemLimit = 12;
+  const units = allUnits.slice(0, itemLimit);
+  const signals = allSignals.slice(0, itemLimit);
+  const guidanceDeltas = allGuidanceDeltas.slice(0, itemLimit);
+  const samples = allSamples.slice(0, 8);
+  const dimensionCount = report.units.reduce((sum, unit) => sum + unit.dimensions.length, 0);
+  const guidanceCount = report.units.reduce((sum, unit) => sum + unit.action_guidance.length, 0);
+  const inspectionCommand = `${codeIndexAuditItemsCommand(report.digest)} --page-size 25 --token-budget 2000 --byte-budget 24000 --format json`;
   return `# Current code-index audit
 
 This report combines absolute mechanical quality bounds with a required Agent
@@ -263,30 +279,31 @@ their evidence, and the user-confirmed scope, then submit one explicit decision:
 - Signals: ${report.summary.signals} (${report.summary.elevated_signals} elevated)
 - Current decision: ${audit.decision === undefined ? "none" : inline(audit.decision.decision)}
 - Human guidance required: ${inline(audit.guidance_required)}
+- Independent dimensions: ${dimensionCount}
+- Revision guidance records: ${guidanceCount}
+- Complete inspection: ${inline(inspectionCommand)}
 
-## Index units
+## Index units (${units.length} shown of ${allUnits.length})
 
 ${bullets(units)}
 
-## Independent mechanical dimensions
-
-${bullets(dimensions)}
-
-## Concrete revision guidance
-
-${bullets(actionGuidance)}
-
-## Three-revision deltas
-
-${bullets(guidanceDeltas)}
-
-## Signals
+## Priority signals (${signals.length} shown of ${allSignals.length})
 
 ${bullets(signals)}
 
-## Evidence-heavy page samples
+## Three-revision deltas (${guidanceDeltas.length} shown of ${allGuidanceDeltas.length})
+
+${bullets(guidanceDeltas)}
+
+## Evidence-heavy page samples (${samples.length} shown of ${allSamples.length})
 
 ${bullets(samples)}
+
+This Markdown resource is intentionally bounded. Follow the complete inspection
+command and then each returned \`next_action.command\` until
+\`audit_items_complete\`. Those digest-bound pages contain every dimension,
+signal, guidance association, page metric, evidence identity, and prior decision
+needed by this audit.
 
 ## Decision rule
 

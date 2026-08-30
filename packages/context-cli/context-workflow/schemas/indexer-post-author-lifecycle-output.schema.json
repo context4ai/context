@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.post-author-lifecycle-output/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["protocol", "entries", "effective_composer_set_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.effective-composer-set/v1" },
+        "entries": { "type": "array" },
+        "effective_composer_set_digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "plan", "ledger", "status", "expected_envelope"],
+      "properties": {
+        "protocol": { "const": "context.indexer.post-author-workset-build/v1" },
+        "plan": { "type": "object" },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" },
+        "expected_envelope": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "ledger", "request"],
+      "properties": {
+        "protocol": { "const": "context.indexer.post-author-run-start/v1" },
+        "ledger": { "type": "object" },
+        "request": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "ledger"],
+      "properties": {
+        "protocol": { "enum": ["context.indexer.post-author-run-acceptance/v1", "context.indexer.post-author-run-failure/v1"] },
+        "ledger": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "ledger", "status", "expected_envelope"],
+      "properties": {
+        "protocol": { "const": "context.indexer.post-author-observation/v1" },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" },
+        "expected_envelope": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "envelope", "ledger", "status"],
+      "properties": {
+        "protocol": { "const": "context.indexer.post-author-composition/v1" },
+        "envelope": { "type": "object" },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,19 @@
+schema: agent-graph.test.v1
+name: a project-local customization program stops at its independent execution authority
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+    indexer/validate-indexer-customization: completed
+    indexer/prepare-indexer-customization-project: waiting-user
+expect:
+  statusCode: waiting-user
+  primaryNode: authorize-indexer-program-execution
+  primaryReasonCode: route.indexer.program-execution-authorization
+  gateResolution: user
+  resolutionHandler: context.authorize-indexer-program-execution/v1

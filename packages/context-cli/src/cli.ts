@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command, Option } from "commander";
+import { redactIndexerOutput, redactIndexerOutputText } from "@c4a/core";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
@@ -17,6 +18,7 @@ import {
   assertProjectWorkflowRevision,
 } from "./project/statusCommand.js";
 import { registerProjectSourceCommands } from "./project/sourceCommands.js";
+import { registerProjectIndexerCommands } from "./project/indexerCommands.js";
 import {
   runReviewApplyCommand,
   runReviewApproveAllCommand,
@@ -58,6 +60,7 @@ const TOP_LEVEL_COMMANDS = new Set([
   "close",
   "build",
   "source",
+  "indexer",
   "verify",
   "resource",
   "package",
@@ -192,17 +195,20 @@ export function handleCliFailure(
     // Strip `category` from the rest so we don't print it twice.
     const rest = { ...detail };
     delete (rest as Record<string, unknown>).category;
-    const restJson = Object.keys(rest).length > 0 ? `\n  ${JSON.stringify(rest, null, 2).split("\n").join("\n  ")}` : "";
-    stderr.write(`✗ failed: ${category}\n  ${err.message}${restJson}\n`);
+    const filteredRest = redactIndexerOutput({ channel: "stderr", value: rest }).value;
+    const safeMessage = redactIndexerOutputText({ channel: "exception-message", value: err.message });
+    const restJson = Object.keys(filteredRest).length > 0 ? `\n  ${JSON.stringify(filteredRest, null, 2).split("\n").join("\n  ")}` : "";
+    stderr.write(`✗ failed: ${category}\n  ${safeMessage}${restJson}\n`);
     exit(err.code);
     return err.code;
   }
 
   const message = err instanceof Error ? err.message : String(err);
+  const safeMessage = redactIndexerOutputText({ channel: "exception-message", value: message });
   const machineCode = err !== null && typeof err === "object" && "code" in err && typeof err.code === "string"
     ? err.code
     : undefined;
-  stderr.write(`✗ failed: ${inferErrorCategory(message)}\n  ${message}${machineCode === undefined ? "" : `\n  ${JSON.stringify({ code: machineCode })}`}\n`);
+  stderr.write(`✗ failed: ${inferErrorCategory(message)}\n  ${safeMessage}${machineCode === undefined ? "" : `\n  ${JSON.stringify({ code: machineCode })}`}\n`);
   exit(1);
   return 1;
 }
@@ -513,6 +519,7 @@ export function createCliProgram(): Command {
   registerRuntimeEventLogCommands(program);
 
   registerProjectSourceCommands(program);
+  registerProjectIndexerCommands(program);
   registerProjectVerifyCommand(program);
 
   // Distribution to Cursor / Codex / other agents is delegated to the

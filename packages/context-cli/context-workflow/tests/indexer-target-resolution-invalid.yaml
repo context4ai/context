@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: an author Result with an invalid target disposition fails before acceptance
+graph: indexer
+entry: main-run-validation
+state:
+  outcomes:
+    indexer/validate-main-index-author-result: failed
+expect:
+  statusCode: complete
+  outcome: failed

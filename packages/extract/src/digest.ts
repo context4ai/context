@@ -26,6 +26,7 @@ export const generateDigest = (result: ExtractionResult): DigestData => {
     files: result.files,
     symbols: allSymbols,
     relations: result.relations,
+    ...(result.coverage ? { coverage: result.coverage } : {}),
     stats: {
       files: result.stats.files,
       lines: result.stats.lines,

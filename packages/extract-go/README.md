@@ -28,10 +28,19 @@ Context candidates → review → approved knowledge
 ## Public APIs
 
 ```ts
-import { GoPlugin, indexGoRepository, indexGoSource } from "@c4a/extract-go";
+import {
+  GoPlugin,
+  goExtractionToEvidenceAdapterResult,
+  indexGoRepository,
+  indexGoSource,
+} from "@c4a/extract-go";
 ```
 
 - `GoPlugin` implements the standard `@c4a/extract` plugin protocol.
+- `GoPlugin` reports `ast-catalog` capabilities and an explicit disposition for
+  every parsed Go file.
+- `goExtractionToEvidenceAdapterResult()` publishes the common
+  `context.indexer.evidence-adapter-result/v1` wire result.
 - `indexGoSource()` parses one source unit when an adapter needs detailed facts
   before producing candidates.
 - `indexGoRepository()` indexes a repository tree with deterministic controls

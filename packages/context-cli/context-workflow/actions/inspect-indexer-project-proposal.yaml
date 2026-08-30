@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: inspect-indexer-project-proposal
+runner: host
+effect: read
+handler: context.inspect-indexer-project-proposal/v1
+inputSchema: schemas/indexer-project-gate-input.schema.json
+outputSchema: schemas/indexer-project-action-result.schema.json

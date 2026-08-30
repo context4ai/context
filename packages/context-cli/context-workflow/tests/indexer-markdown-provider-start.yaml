@@ -1,0 +1,9 @@
+schema: agent-graph.test.v1
+name: Markdown Provider selection starts by validating current document capture
+graph: indexer
+entry: markdown-provider
+expect:
+  statusCode: actionable
+  primaryNode: inspect-markdown-provider-capture
+  primaryReasonCode: route.indexer.markdown-capture-validation
+  command: context indexer inspect-markdown-provider-capture --input .tmp/agent-payloads/indexer-markdown-provider-capture.json --format json

@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: validate-markdown-provider-selection
+runner: command
+effect: write
+command: context indexer validate-markdown-provider-selection --input .tmp/agent-payloads/indexer-markdown-provider-validation.json --format json
+inputSchema: schemas/indexer-markdown-provider-validation-input.schema.json
+outputSchema: schemas/indexer-markdown-provider-validation-output.schema.json

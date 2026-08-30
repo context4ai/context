@@ -1,0 +1,82 @@
+[
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-public-contract",
+    "anonymized": true,
+    "composer": "public-contract",
+    "profile": "component-library",
+    "primary_input": { "fact_kinds": ["public-surface"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "contract" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-protocol-boundary",
+    "anonymized": true,
+    "composer": "protocol-boundary",
+    "profile": "web-application",
+    "primary_input": { "fact_kinds": ["protocol-operation"], "artifact_kinds": ["contract"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "contract" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-cross-module-chain",
+    "anonymized": true,
+    "composer": "cross-module-chain",
+    "profile": "monorepo-container",
+    "primary_input": { "fact_kinds": ["module-dependency"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "content" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-contracts-and-chains",
+    "anonymized": true,
+    "composer": "contracts-and-chains",
+    "profile": "monorepo-container",
+    "primary_input": { "fact_kinds": ["contract-binding", "module-dependency"], "artifact_kinds": ["contract"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "contract" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-event-flow",
+    "anonymized": true,
+    "composer": "event-flow",
+    "profile": "web-application",
+    "primary_input": { "fact_kinds": ["event-binding"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "content" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-persistence-boundary",
+    "anonymized": true,
+    "composer": "persistence-boundary",
+    "profile": "api-service",
+    "primary_input": { "fact_kinds": ["persistence-binding"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "content" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-examples-and-documentation",
+    "anonymized": true,
+    "composer": "examples-and-documentation",
+    "profile": "monorepo-container",
+    "primary_input": { "fact_kinds": ["example-candidate"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "examples" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  },
+  {
+    "protocol": "context.indexer.composer-fixture/v1",
+    "id": "anonymous-development-and-delivery",
+    "anonymized": true,
+    "composer": "development-and-delivery",
+    "profile": "monorepo-container",
+    "primary_input": { "fact_kinds": ["development-entry"], "artifact_kinds": ["content"] },
+    "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "content" },
+    "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
+  }
+]

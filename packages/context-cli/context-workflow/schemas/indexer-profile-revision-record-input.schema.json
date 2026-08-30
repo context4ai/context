@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.profile-revision-record-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "lineage", "precompile_audit_report_digest", "audit_report_digest", "indexer_result_fingerprint", "actions_taken", "unresolved_reasons", "expected_ledger_digest", "input_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.profile-revision-record-input/v1" },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "requirement_lineage_id", "source_material_epoch", "unit_ref", "problem_class", "lineage_id"],
+      "properties": {
+        "protocol": { "const": "context.indexer.profile-problem-lineage/v1" },
+        "requirement_lineage_id": { "$ref": "#/$defs/digest" },
+        "source_material_epoch": { "$ref": "#/$defs/digest" },
+        "unit_ref": { "type": "string", "minLength": 1 },
+        "problem_class": { "type": "string", "minLength": 1 },
+        "lineage_id": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "precompile_audit_report_digest": { "$ref": "#/$defs/digest" },
+    "audit_report_digest": { "$ref": "#/$defs/digest" },
+    "indexer_result_fingerprint": { "$ref": "#/$defs/digest" },
+    "actions_taken": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "unresolved_reasons": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "expected_ledger_digest": { "$ref": "#/$defs/digest" },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": { "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" } }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.project-observation-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "proposal_digest", "apply_receipt_digest", "staging_validation"],
+  "properties": {
+    "protocol": { "const": "context.indexer.project-observation-input/v1" },
+    "proposal_digest": { "$ref": "#/$defs/digest" },
+    "apply_receipt_digest": { "$ref": "#/$defs/digest" },
+    "staging_validation": { "type": "object" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

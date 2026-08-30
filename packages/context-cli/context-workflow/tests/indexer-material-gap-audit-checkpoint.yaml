@@ -1,0 +1,11 @@
+schema: agent-graph.test.v1
+name: pre-Review material-gap drift routes through the durable checkpoint writer
+graph: indexer
+entry: material-gap-audit
+state:
+  outcomes:
+    indexer/audit-material-gap-state: partial
+    indexer/checkpoint-material-gaps: completed
+expect:
+  statusCode: complete
+  outcome: completed

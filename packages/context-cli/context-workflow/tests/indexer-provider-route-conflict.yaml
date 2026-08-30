@@ -1,0 +1,11 @@
+schema: agent-graph.test.v1
+name: an unresolved primary owner conflict stops for user resolution
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: waiting-user
+expect:
+  statusCode: complete
+  outcome: waiting-user

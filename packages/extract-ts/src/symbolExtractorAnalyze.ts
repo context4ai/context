@@ -6,6 +6,7 @@ import {
   collectEnumValues,
   collectMembers,
   collectParams,
+  containsJsx,
   countLines,
   createRelation,
   DECLARATION_TYPES,
@@ -28,8 +29,12 @@ import {
   type ImportBinding,
   type SyntaxNode,
 } from "./symbolExtractorAst.js";
-import { isRelativeModuleSpecifier, resolveImportSourcePath } from "./pathUtils.js";
+import { analyzeCommonJsModule, type CommonJsModuleAnalysis } from "./commonJsModule.js";
+import { isJsxLikePath } from "./ecmaScriptLanguage.js";
+import { collectStaticCallRelations } from "./staticCallRelations.js";
+import { collectImportBindings } from "./symbolExtractorImports.js";
 import type { TsConfigPathResolver } from "./tsconfigPaths.js";
+import { createEcmaScriptSourceFile, syntaxDiagnostics } from "./typescriptAst.js";
 
 const analyzeDeclaration = (
   node: SyntaxNode,
@@ -160,7 +165,9 @@ const analyzeFunctionDeclaration = (
   declarations.set(name, {
     info: {
       name,
-      kind: SymbolKind.Function,
+      kind: isJsxLikePath(filePath) && /^[A-Z]/u.test(name) && containsJsx(node)
+        ? SymbolKind.Component
+        : SymbolKind.Function,
       visibility: Visibility.Internal,
       file: filePath,
       line: getLine(node),
@@ -313,66 +320,33 @@ const analyzeEnumDeclaration = (
   });
 };
 
-const collectImportBindings = async (
-  root: SyntaxNode,
+const appendCommonJsSyntheticDeclarations = (
+  commonJs: CommonJsModuleAnalysis,
   filePath: string,
-  fs: FileSystem,
-  resolver: TsConfigPathResolver,
-  relations: RelationInfo[],
+  declarations: Map<string, DeclarationRecord>,
 ) => {
-  const bindings = new Map<string, ImportBinding>();
-
-  for (const node of root.namedChildren.filter((child) => child.type === "import_statement")) {
-    const specifierNode = node.namedChildren.find((child) => child.type === "string");
-    if (!specifierNode) continue;
-    const specifier = specifierNode.text.replace(/^['"]/, "").replace(/['"]$/, "");
-    const resolvedAlias = isRelativeModuleSpecifier(specifier)
-      ? null
-      : await resolveImportSourcePath(filePath, specifier, fs, resolver);
-    const isExternal = !isRelativeModuleSpecifier(specifier) && resolvedAlias === null;
-    const relationTarget = resolvedAlias ?? specifier;
-    const statementTypeOnly = node.text.startsWith("import type ");
-    let hasValueImport = !statementTypeOnly;
-    let hasTypeImport = statementTypeOnly;
-
-    const clause = node.namedChildren.find((child) => child.type === "import_clause");
-    for (const part of clause?.namedChildren ?? []) {
-      if (part.type === "identifier") {
-        bindings.set(part.text, { isExternal, typeOnly: statementTypeOnly });
-        continue;
-      }
-
-      if (part.type === "namespace_import") {
-        const identifier = part.namedChildren.find((child) => child.type === "identifier");
-        if (identifier) {
-          bindings.set(identifier.text, { isExternal, typeOnly: statementTypeOnly });
-        }
-        continue;
-      }
-
-      if (part.type !== "named_imports") continue;
-      for (const specifierNode of part.namedChildren.filter((child) => child.type === "import_specifier")) {
-        const identifiers = specifierNode.namedChildren
-          .filter((child) => child.type === "identifier" || child.type === "type_identifier")
-          .map((child) => child.text);
-        const localName = identifiers[1] ?? identifiers[0];
-        if (!localName) continue;
-        const typeOnly = statementTypeOnly || specifierNode.text.trim().startsWith("type ");
-        bindings.set(localName, { isExternal, typeOnly });
-        hasValueImport ||= !typeOnly;
-        hasTypeImport ||= typeOnly;
-      }
-    }
-
-    if (hasValueImport) {
-      relations.push(createRelation(EdgeType.Imports, "", relationTarget, isExternal, getLine(node)));
-    }
-    if (hasTypeImport) {
-      relations.push(createRelation(EdgeType.ImportsType, "", relationTarget, isExternal, getLine(node)));
-    }
+  for (const declaration of commonJs.syntheticDeclarations) {
+    if (declarations.has(declaration.name)) continue;
+    declarations.set(declaration.name, {
+      info: {
+        name: declaration.name,
+        kind: declaration.kind === "function"
+          ? (isJsxLikePath(filePath) && /^[A-Z]/u.test(declaration.name)
+            ? SymbolKind.Component
+            : SymbolKind.Function)
+          : declaration.kind === "class"
+            ? SymbolKind.Class
+            : SymbolKind.Variable,
+        visibility: Visibility.Internal,
+        file: filePath,
+        line: declaration.line,
+        endLine: declaration.endLine,
+        ...(declaration.params.length > 0
+          ? { params: declaration.params.map((name) => ({ name, type: null })) }
+          : {}),
+      },
+    });
   }
-
-  return bindings;
 };
 
 export const analyzeFile = async (
@@ -381,19 +355,44 @@ export const analyzeFile = async (
   resolver: TsConfigPathResolver = { mappings: [] },
 ): Promise<FileAnalysis> => {
   const source = await fs.readFile(filePath);
-  const tree = await parseFile(source, filePath.endsWith(".tsx"));
+  const sourceFile = createEcmaScriptSourceFile(source, filePath);
+  const commonJs = analyzeCommonJsModule(source, filePath);
+  const tree = await parseFile(source, isJsxLikePath(filePath));
   if (!tree) {
+    const diagnostics = syntaxDiagnostics(sourceFile);
+    if (diagnostics.length === 0) {
+      diagnostics.push({
+        code: "ecmascript-parser-unsupported",
+        severity: "error",
+        file: filePath,
+        line: 1,
+        column: 1,
+      });
+    }
     return {
       declarations: new Map(),
       importBindings: new Map(),
       relations: [],
       lines: countLines(source),
+      disposition: "unsupported",
+      diagnostics,
+    };
+  }
+
+  if (commonJs.diagnostics.length > 0) {
+    return {
+      declarations: new Map(),
+      importBindings: new Map(),
+      relations: [],
+      lines: countLines(source),
+      disposition: "unsupported",
+      diagnostics: commonJs.diagnostics,
     };
   }
 
   const root = tree.rootNode;
   const relations: RelationInfo[] = [];
-  const importBindings = await collectImportBindings(root, filePath, fs, resolver, relations);
+  const importBindings = await collectImportBindings(root, filePath, fs, resolver, relations, commonJs);
   const declarations = new Map<string, DeclarationRecord>();
 
   for (const relation of relations) {
@@ -415,10 +414,15 @@ export const analyzeFile = async (
     }
   }
 
+  appendCommonJsSyntheticDeclarations(commonJs, filePath, declarations);
+  relations.push(...collectStaticCallRelations(source, filePath, importBindings));
+
   return {
     declarations,
     importBindings,
     relations,
     lines: countLines(source),
+    disposition: "analyzed",
+    diagnostics: [],
   };
 };

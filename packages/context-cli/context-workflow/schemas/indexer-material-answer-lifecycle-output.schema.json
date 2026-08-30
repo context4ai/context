@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.material-answer-lifecycle-output/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["protocol", "workset", "provider_authority_receipts", "unresolved_question_keys"],
+      "properties": {
+        "protocol": { "const": "context.indexer.build-material-question-workset-result/v1" },
+        "workset": { "type": "object" },
+        "provider_authority_receipts": { "type": "array" },
+        "unresolved_question_keys": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "plan", "ledger", "observation", "receipt"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-run-preparation/v1" },
+        "plan": { "type": "object" },
+        "ledger": { "type": "object" },
+        "observation": { "type": "object" },
+        "receipt": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "plan", "ledger", "observation"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-run-observation-result/v1" },
+        "plan": { "type": "object" },
+        "ledger": { "type": "object" },
+        "observation": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "request", "ledger", "observation", "receipt"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-run-start/v1" },
+        "request": { "type": "object" },
+        "ledger": { "type": "object" },
+        "observation": { "type": "object" },
+        "receipt": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "accepted_record", "candidate_set", "ledger", "observation", "receipt"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-run-acceptance/v1" },
+        "accepted_record": { "type": "object" },
+        "candidate_set": { "type": "object" },
+        "ledger": { "type": "object" },
+        "observation": { "type": "object" },
+        "receipt": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "failure_digest", "ledger", "observation", "receipt"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-run-failure/v1" },
+        "failure_digest": { "$ref": "#/$defs/digest" },
+        "ledger": { "type": "object" },
+        "observation": { "type": "object" },
+        "receipt": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

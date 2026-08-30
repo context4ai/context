@@ -43,13 +43,8 @@ const SOURCE_EXTENSION_FAMILIES = [
 
 const SUPPORTED_SOURCE_EXTENSIONS = new Set(SOURCE_EXTENSION_FAMILIES.flatMap((family) => [...family]));
 
-function globToRegExp(pattern: string): RegExp {
-  const normalized = pattern.replaceAll("\\", "/");
-  if (normalized.endsWith("/**")) {
-    const prefix = normalized.slice(0, -3).replace(/[.+^${}()|[\]\\]/gu, "\\$&");
-    return new RegExp(`^${prefix}(?:/.*)?$`, "u");
-  }
-  let out = "^";
+function globBody(normalized: string): string {
+  let out = "";
   for (let index = 0; index < normalized.length; index += 1) {
     const char = normalized[index];
     const next = normalized[index + 1];
@@ -64,11 +59,24 @@ function globToRegExp(pattern: string): RegExp {
     else if (char === "?") out += "[^/]";
     else out += char?.replace(/[.+^${}()|[\]\\]/gu, "\\$&") ?? "";
   }
-  return new RegExp(`${out}$`, "u");
+  return out;
+}
+
+function globToRegExp(pattern: string): RegExp {
+  const normalized = pattern.replaceAll("\\", "/");
+  if (normalized.endsWith("/**")) {
+    const prefix = globBody(normalized.slice(0, -3));
+    return new RegExp(`^${prefix}(?:/.*)?$`, "u");
+  }
+  return new RegExp(`^${globBody(normalized)}$`, "u");
 }
 
 function isExcluded(path: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => pattern === path || globToRegExp(pattern).test(path));
+}
+
+export function customInventoryPathExcluded(path: string, patterns: readonly string[]): boolean {
+  return isExcluded(path.replaceAll("\\", "/"), patterns);
 }
 
 async function sourceBaseline(input: {

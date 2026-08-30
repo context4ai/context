@@ -1,0 +1,147 @@
+protocol: context.indexer.provider/v1
+id: context-markdown-indexer
+version: 1.0.0
+domains: [markdown]
+
+activation:
+  target_kinds: [document, document-set, documentation-site]
+  required_signals:
+    - id: captured-document
+      description: The registered target scope contains a current captured Markdown or structured document snapshot.
+  supporting_signals:
+    - id: explicit-audience
+      description: The source identifies a reader, task, policy, decision, procedure, or reference boundary.
+    - id: cross-source-evidence
+      description: The readable scope contains current corroborating material for unresolved claims.
+  negative_signals:
+    - id: transient-conversation
+      description: The material is an unapproved transient conversation without a durable source identity.
+  agent_questions:
+    - Which reader goal and authority apply to each source-backed Section?
+
+provides:
+  profiles:
+    - domain-reference
+    - product-requirements
+    - technical-guide
+    - user-and-developer-guide
+    - public-api-reference
+    - runbook
+    - faq-support
+    - standard-policy
+    - decision-record
+    - incident-review
+    - test-validation
+    - release-migration-guide
+    - documentation-site
+  operations:
+    - id: main-index
+      consumes: context.indexer.main-workset/v1
+      produces: context.indexer.main-result/v1
+      accepts_layer_fragments: [fact-enrichment, template-variables]
+    - id: material-answer
+      consumes: context.indexer.material-question-workset/v1
+      produces: context.indexer.material-answer-result/v1
+      supported_evidence_kinds: [contract, configuration, documentation, runbook, decision-record, test-result, runtime-observation, tool-snapshot]
+      accepts_layer_fragments: [fact-enrichment]
+  source_roles: [authoritative-document, supporting-document, operational-document, decision-record]
+  logical_units:
+    - id: reader-subject
+      identity: canonical-subject-key
+      artifacts:
+        recommended: [content]
+        supported_policy_variants: [standard]
+
+provider:
+  instructions:
+    - path: references/indexer.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+    - path: references/classification.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+    - path: references/structure-and-artifacts.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+    - path: references/semantic-planning.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+    - path: references/editorial-policy.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+  forbidden_fallbacks: [whole-document-single-classification, unsupported-section-publication, inferred-authority]
+  completion_checks: [section-disposition-closure, source-authority-binding, material-gap-closure]
+
+customization:
+  supports: [config, instructions-append, template-override, program-extend]
+
+quality_guidance:
+  metric_ids:
+    - inventory-disposition-coverage
+    - duplicated-fact-target-ratio
+    - narrative-enumeration-ratio
+    - normalized-template-repetition-ratio
+    - implementation-body-ratio
+    - reference-only-reader-targets
+    - unresolved-ordinal-partitions
+    - discretionary-artifacts-per-logical-unit

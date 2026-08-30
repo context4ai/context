@@ -1,0 +1,21 @@
+schema: agent-graph.test.v1
+name: an observed customization reruns static selection audit before completion
+graph: indexer
+entry: provider-selection
+state:
+  facts:
+    indexer_project: { confirmed: true }
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+    indexer/validate-indexer-customization: completed
+    indexer/prepare-indexer-customization-project: completed
+    indexer/confirm-indexer-project: completed
+    indexer/observe-indexer-project: completed
+    indexer/validate-indexer-selection-proposal: completed
+expect:
+  statusCode: complete
+  outcome: completed

@@ -4,7 +4,9 @@ import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PLUGIN_ROOT = join(PACKAGE_ROOT, "plugin");
+const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
+const PLUGIN_ROOT = join(REPOSITORY_ROOT, "plugins", "context");
+const ENTRY_PATH = ["skills", "context", "SKILL.md"] as const;
 const WORKFLOW_ROOT = join(PACKAGE_ROOT, "context-workflow");
 const SDK_DOCS_ROOT = join(PACKAGE_ROOT, "..", "context", "docs");
 
@@ -35,7 +37,7 @@ describe("plugin prompt and workflow resource contract", () => {
       optimization,
       hostPlans,
     ] = await Promise.all([
-      read(PLUGIN_ROOT, "commands", "context.md"),
+      read(PLUGIN_ROOT, ...ENTRY_PATH),
       read(WORKFLOW_ROOT, "graphs", "workspace.yaml"),
       read(WORKFLOW_ROOT, "actions", "revise-document.yaml"),
       read(WORKFLOW_ROOT, "resources", "procedures", "document-revision.md"),
@@ -102,16 +104,13 @@ describe("plugin prompt and workflow resource contract", () => {
 
   test("public entry sources stay thin and delegate lifecycle authority to Context", async () => {
     const pluginEntries = await readdir(PLUGIN_ROOT, { withFileTypes: true });
-    expect(pluginEntries.some((entry) => entry.isDirectory() && entry.name === "skills")).toBe(false);
+    expect(pluginEntries.some((entry) => entry.isDirectory() && entry.name === "skills")).toBe(true);
 
-    for (const command of ["context.md"]) {
-      const body = await read(PLUGIN_ROOT, "commands", command);
-      expect(body, command).toContain("context status");
-      expect(body, command).toContain("workflow.current");
-      expect(body, command).not.toContain("references/internal-procedures");
-      expect(body, command).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
-    }
-    const continuation = await read(PLUGIN_ROOT, "commands", "context.md");
+    const continuation = await read(PLUGIN_ROOT, ...ENTRY_PATH);
+    expect(continuation).toContain("context status");
+    expect(continuation).toContain("workflow.current");
+    expect(continuation).not.toContain("references/internal-procedures");
+    expect(continuation).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
     expect(continuation).toContain("context entry");
     expect(continuation).toContain("knowledge management tool built for Agent knowledge workflows");
     expect(continuation).toContain("Feishu/Lark documents");
@@ -216,7 +215,7 @@ describe("plugin prompt and workflow resource contract", () => {
       reviewProcedure,
       closeProcedure,
     ] = await Promise.all([
-      read(PLUGIN_ROOT, "commands", "context.md"),
+      read(PLUGIN_ROOT, ...ENTRY_PATH),
       read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-creation.md"),
       read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-capture.md"),
       read(WORKFLOW_ROOT, "resources", "dialogue", "knowledge-review.md"),
@@ -440,7 +439,10 @@ describe("plugin prompt and workflow resource contract", () => {
 
   test("every authored workflow resource is reachable from the graph", async () => {
     const resourcesRoot = join(WORKFLOW_ROOT, "resources");
-    const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
+    const graph = (await Promise.all([
+      "workspace.yaml",
+      "indexer.yaml",
+    ].map((name) => read(WORKFLOW_ROOT, "graphs", name)))).join("\n");
     const compileIndex = await read(
       resourcesRoot,
       "semantic",

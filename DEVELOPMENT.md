@@ -110,13 +110,13 @@ consume the global CLI and keep only the SDK dependency.
 | Changed files | Required refresh |
 |---|---|
 | CLI or SDK TypeScript | Run `./start.sh link` again |
-| `packages/context-cli/plugin/` | Run `./start.sh link` |
+| `plugins/context/` | Run `./start.sh link` |
 | Agent commands, skills, or manifests | Reinstall the plugin and restart the agent session |
 | Generated project templates owned by the SDK | Run `./start.sh link`, then initialize a fresh scratch workspace |
 
-Never edit `packages/*/dist` or `packages/context-cli/dist/plugins` directly.
-They are generated outputs. Plugin source is maintained under
-`packages/context-cli/plugin/`.
+Never edit `packages/*/dist`, `packages/context-cli/dist/plugins`, or
+`plugins/context/repo-install` directly. They are generated outputs. Plugin
+source is maintained under `plugins/context/`.
 
 Codex plugin refreshes use the version declared by the bundled plugin manifest
 for both link dev and npm/pack installs. Reinstalling the same dev version fully
@@ -189,7 +189,10 @@ version instead of approximating the package layout.
 
 ## Release Automation
 
-Context publishes seven public packages from prepared `dist/` directories:
+Context's final release publishes thirteen public packages from prepared
+`dist/` directories. `preview.1` publishes the seven base coordinates through
+`@c4a/extract-rush` plus `@c4a/context-cli`; the six parser coordinates enter
+the release plan at `preview.2`:
 
 - `@c4a/core`
 - `@c4a/context`
@@ -197,6 +200,12 @@ Context publishes seven public packages from prepared `dist/` directories:
 - `@c4a/extract-ts`
 - `@c4a/extract-go`
 - `@c4a/extract-rush`
+- `@c4a/extract-thrift`
+- `@c4a/extract-proto`
+- `@c4a/extract-mdx`
+- `@c4a/extract-contract`
+- `@c4a/extract-style`
+- `@c4a/extract-sql`
 - `@c4a/context-cli`
 
 The repository version, every workspace package version, and the bundled
@@ -207,6 +216,7 @@ the exact registry artifacts locally with:
 bun run build
 bun run release:prepare
 bun run release:notes
+bun run release:publish-plan
 ```
 
 `release:prepare` reuses the same metadata and runtime-resource rules as the
@@ -218,6 +228,30 @@ manifest. After a successful OIDC publication, the GitHub workflow also
 updates that section on the Release page so its package list cannot silently
 drift from the artifacts it published.
 
+`release:publish-plan` is the machine authority for the milestone package set
+and dist-tags. Preview and RC releases use only `preview` and `rc`. A final
+release is first published under `release-staging`; `latest` changes only after
+the exact registry install harness validates every planned package, the shipped
+capability/catalog manifests, the Agent Graph Host ABI, and all parsers present
+at that milestone. Promotion snapshots prior tags and rolls back packages it
+already changed if a later promotion fails.
+
+`release:parser-coordinates` renders the six new parser packages, eight parser
+capabilities, exact named exports, Evidence ABI and expected npm Trusted
+Publisher tuple from that release manifest. `release:publisher-audit` is a
+blocking live registry check: it requires one explicit npm publisher-setting
+confirmation per parser, resolves the recorded preview version, and verifies
+the package integrity against SLSA provenance from the exact repository,
+workflow, tag and source commit. Empty or stale confirmations intentionally
+fail; local packs are not publisher-readiness evidence.
+
+```bash
+bun run release:parser-coordinates
+bun run release:publisher-audit
+bun run release:install-smoke --registry https://registry.npmjs.org --receipt .tmp/release-install-smoke.json
+bun run release:promote-tags --registry https://registry.npmjs.org --smoke-receipt .tmp/release-install-smoke.json
+```
+
 Audit the prepared directories rather than the source package directories:
 
 ```bash
@@ -227,19 +261,28 @@ npm pack packages/extract/dist --dry-run
 npm pack packages/extract-ts/dist --dry-run
 npm pack packages/extract-go/dist --dry-run
 npm pack packages/extract-rush/dist --dry-run
+npm pack packages/extract-thrift/dist --dry-run
+npm pack packages/extract-proto/dist --dry-run
+npm pack packages/extract-mdx/dist --dry-run
+npm pack packages/extract-contract/dist --dry-run
+npm pack packages/extract-style/dist --dry-run
+npm pack packages/extract-sql/dist --dry-run
 npm pack packages/context-cli/dist --dry-run
 ```
 
 Publishing is driven by a GitHub Release whose tag is exactly `v<version>`.
 Use that exact tag as the Release title; do not prefix the title with the
 product name. The release workflow checks the tag, normalizes the title to the
-tag, runs `bun run verify:full`, builds and audits all seven packages, then
-publishes them in dependency order with npm provenance. Each npm package must
+tag, runs `bun run verify:full`, builds and audits the milestone package set,
+then publishes it in dependency order with npm provenance and the planned
+non-`latest` tag. It runs exact registry smoke before any final promotion and
+preserves non-sensitive plan/install/promotion receipts as workflow artifacts.
+Each npm package must
 trust the `context4ai/context` repository and the
 `.github/workflows/publish.yml` workflow through npm Trusted Publishing. The
 workflow is safe to rerun after a partial registry publication: it skips an
 exact package version that already exists and continues with the remaining
-packages.
+packages without moving `latest` early.
 
 Do not publish source package directories directly and do not create a GitHub
 Release before its commit passes CI.
@@ -252,7 +295,15 @@ Run focused package checks while developing:
 bun run --filter @c4a/context-cli typecheck
 bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
+bun run report:semantic-source-ownership
 ```
+
+`report:semantic-source-ownership` writes the deterministic migration report to
+`.tmp/semantic-source-ownership-report.json`. During the 0.7.0 migration it is
+intentionally report-only: retained legacy resources and duplicate taxonomy are
+visible, but the command cannot authorize deletion or become a blocking gate.
+The owner map records the prerequisites that must be completed before Phase G
+can introduce a separate blocking check.
 
 Run the repository gates before handing off a completed change:
 

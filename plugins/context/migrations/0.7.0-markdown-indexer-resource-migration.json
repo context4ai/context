@@ -1,0 +1,553 @@
+{
+  "schema": "context.markdown-indexer-resource-migration/v1",
+  "semantic_source_ownership": {
+    "path": "plugins/context/migrations/0.7.0-semantic-source-ownership.json",
+    "digest": "sha256:ec76d062f773e52eb4b7de77f1dd7c68950af01e47643aad5468bb0ab7180075"
+  },
+  "coverage": "complete-semantic-blocks",
+  "dispositions": [
+    "retain-verbatim",
+    "rewrite-equivalent",
+    "merge-into",
+    "retire-with-reason"
+  ],
+  "preservation_dimensions": [
+    "applicability",
+    "positive-example",
+    "negative-example",
+    "deletion-condition",
+    "gate-semantics",
+    "recovery-guidance"
+  ],
+  "equivalence_fixture": "plugins/context/skills/context-markdown-indexer/tests/fixtures/migration-equivalence.json",
+  "sources": [
+    {
+      "source": "packages/context-cli/context-workflow/resources/procedures/document-classification.md",
+      "source_digest": "sha256:d248973ad671531334cd0c9f485183f40a9a78d0125186de5980d6b1099b940b",
+      "blocks": [
+        {
+          "id": "evidence-first-classification",
+          "source_anchors": ["Classification chooses the main knowledge collection", "must follow evidence investigation"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/classification.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Classify evidence at Section granularity", "A file name, URL, title", "Read every authorized evidence item"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "complete-authorized-evidence-read",
+          "source_anchors": ["Read every Route-selected", "body was read"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Read every authorized evidence item", "source-wide decision"],
+          "preserves": ["applicability", "negative-example", "recovery-guidance"]
+        },
+        {
+          "id": "classification-continuation",
+          "source_anchors": ["After the decision", "Re-evaluate instead of assuming"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-runtime",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/indexer.md", "packages/context/src/indexerMainRunProtocol.ts", "packages/context/src/indexerMaterialAnswerRunProtocol.ts"],
+          "target_anchors": ["Follow the operation in the supplied run request", "context.indexer.main-result/v1", "context.indexer.material-answer-result/v1"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/dialogue/document-classification.md",
+      "source_digest": "sha256:b26f23c9d99a1287f7fd8e59f5700cdeeafca015d731455fa518825c64477f86",
+      "blocks": [
+        {
+          "id": "evidence-backed-recommendation",
+          "source_anchors": ["Do not recommend a collection", "evidence-backed"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/classification.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["body evidence, source authority, audience", "Positive example"],
+          "preserves": ["applicability", "positive-example", "negative-example"]
+        },
+        {
+          "id": "mainline-semantic-taxonomy",
+          "source_anchors": ["business domains, actors", "requirements, user behavior", "incident timelines", "test plans, validation scenarios"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/classification.md"],
+          "target_anchors": ["understand-domain", "understand-product-intent", "learn-from-incident", "verify-behavior-or-acceptance"],
+          "preserves": ["applicability", "gate-semantics"]
+        },
+        {
+          "id": "collection-and-path-exclusion",
+          "source_anchors": ["comes from code extraction", "Filenames, URLs, titles"],
+          "disposition": "merge-into",
+          "authority": "context-layout",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/classification.md", "packages/context/src/indexerLayoutResolver.ts", "packages/context-cli/src/project/indexerBaseContracts.ts"],
+          "target_anchors": ["storage projection", "resolveIndexerSectionCollection", "collection"],
+          "preserves": ["negative-example", "gate-semantics"]
+        },
+        {
+          "id": "conditional-layout-confirmation",
+          "source_anchors": ["Ask the user to confirm exactly one", "unless session-managed authority", "re-evaluate because other captured targets"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-layout",
+          "targets": ["packages/context/src/indexerLayoutChange.ts", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["confirm-layout-change", "non-destructive addition"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/align/structure-planning.md",
+      "source_digest": "sha256:2930594fe849d3e70d2746c7619cff3ebbe70851c1f00ef3396f3cdf3860949a",
+      "blocks": [
+        {
+          "id": "legacy-envelope-to-main-result",
+          "source_anchors": ["Run `context run align", "produce a `context.structure.v1`"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-runtime",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/indexer.md", "packages/context/src/indexerMainRunProtocol.ts"],
+          "target_anchors": ["Never create a legacy `MarkdownCollectionSlice`", "context.indexer.main-result/v1"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "current-envelope-and-schema-authority",
+          "source_anchors": ["current phase view result is authoritative", "Schema names and enum values", "Structure digests and snapshot hashes are stale guards"],
+          "disposition": "merge-into",
+          "authority": "context-runtime",
+          "targets": ["packages/context/src/indexerMainRunProtocol.ts", "packages/context/src/indexerArtifactResult.ts", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["input_digest", "output_digest", "stale workset"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "authorized-evidence-and-supporting-context",
+          "source_anchors": ["Existing approved knowledge is the lookup registry", "supporting/context-only material", "Non-content spans"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Supporting or context-only material", "proof of subject identity"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "relations-placeholders-and-unresolved",
+          "source_anchors": ["When relation hints are present", "placeholder-only sources", "do not write dangling"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md"],
+          "target_anchors": ["Missing endpoint", "request-material"],
+          "preserves": ["applicability", "negative-example", "deletion-condition", "recovery-guidance"]
+        },
+        {
+          "id": "evidence-read-continuation",
+          "source_anchors": ["Start From The Envelope", "Follow The Evidence Read Path", "treat that response as a partial"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-runtime",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerWorksetRead.ts"],
+          "target_anchors": ["Read every authorized evidence item", "cursor"],
+          "preserves": ["applicability", "negative-example", "recovery-guidance"]
+        },
+        {
+          "id": "reuse-existing-subject",
+          "source_anchors": ["Reuse Existing Knowledge", "Exact title", "reuse the code slug"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerArtifactResult.ts"],
+          "target_anchors": ["reuse-existing", "resolved identity mismatch"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "section-level-routing",
+          "source_anchors": ["Route Collection, Then Classify Semantic Structure", "A mixed source", "section-vs-collection overlap"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/classification.md", "plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md"],
+          "target_anchors": ["Section mixes multiple reader tasks", "mixed reader intents"],
+          "preserves": ["applicability", "positive-example", "gate-semantics"]
+        },
+        {
+          "id": "section-first-and-independent-subject-boundary",
+          "source_anchors": ["Plan source material as Sections first", "Avoid same-source fragmentation", "independent subject identity"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Keep a candidate as a Section by default", "create-independent", "A heading, table row"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "title-language-and-subject-kind",
+          "source_anchors": ["follow the workspace/source language", "Do not copy an English source title", "reserve `domain` for grouping child Nodes"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Titles and headings are evidence, not identity", "supported child identities"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "density-and-candidate-aids",
+          "source_anchors": ["For large or batched payloads", "do not create additional workflow stages"],
+          "disposition": "merge-into",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Density is a private reading and planning strategy", "never choose a SubjectKey"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "canonical-identities-and-derived-paths",
+          "source_anchors": ["Section identities are part of the structure gate", "CLI derives", "Do not invent heading/range/window selectors"],
+          "disposition": "merge-into",
+          "authority": "context-layout",
+          "targets": ["packages/context/src/indexerLayoutResolver.ts", "packages/context/src/indexerLayoutProposalSet.ts"],
+          "target_anchors": ["context.indexer.section-identity/v1", "cannot derive a path from a non-canonical NodeRef", "Section identities"],
+          "preserves": ["gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "source-continuity-and-split-repair",
+          "source_anchors": ["per-Section constraint", "suggested-split repairs", "`part-N` names"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md"],
+          "target_anchors": ["Keep source-backed Sections continuous", "headings are planning hints"],
+          "preserves": ["applicability", "negative-example", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "uncertainty-and-relation-evidence",
+          "source_anchors": ["source sentence itself is uncertain", "Emit `depends_on` edges only", "dependency predicate"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Source-authored uncertainty", "Agent uncertainty", "See also"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "content-purpose-precision",
+          "source_anchors": ["Prefer the strongest source-backed `section_kind`", "Use `decision` only", "drafting quality preference"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "plugins/context/skills/context-markdown-indexer/references/classification.md"],
+          "target_anchors": ["Content-purpose precision", "a decision needs alternatives", "an incident review needs"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "validate-stage-and-recover",
+          "source_anchors": ["Validate And Submit", "If any write is rejected", "Do not retry by guessing"],
+          "disposition": "merge-into",
+          "authority": "context-runtime",
+          "targets": ["packages/context/src/indexerMainRunProtocol.ts", "packages/context/src/indexerMainRunLedger.ts", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["validateIndexerMainRunResult", "accepted", "fresh Context route"],
+          "preserves": ["gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "result-self-verification",
+          "source_anchors": ["Self-verify", "No `sources/`, `knowledge/`, `dist/`, `.tmp`"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "plugins/context/skills/context-markdown-indexer/references/indexer.md"],
+          "target_anchors": ["Before returning the Result", "Do not return output paths"],
+          "preserves": ["negative-example", "gate-semantics", "recovery-guidance"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/align/density-profile.md",
+      "source_digest": "sha256:824327d88444a37f9d2c2386a8ce63cb07b7496a042ca01ba805dd6d34f7a46d",
+      "blocks": [
+        {
+          "id": "density-is-private-reading-strategy",
+          "source_anchors": ["Use density as a private reading", "separate payload", "do not invent a separate coarse-read artifact"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Density is a private reading and planning strategy", "not Result metadata"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "four-density-modes",
+          "source_anchors": ["`macro`", "`meso`", "`micro`", "`single_pass`"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md"],
+          "target_anchors": ["`macro`", "`meso`", "`micro`", "`single-pass`"],
+          "preserves": ["applicability", "positive-example"]
+        },
+        {
+          "id": "heading-boundaries-and-non-authority",
+          "source_anchors": ["heading changes as section-planning hints", "Do not let density alone choose"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["headings are planning hints", "never choose a SubjectKey"],
+          "preserves": ["negative-example", "gate-semantics"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/align/candidate-resolution.md",
+      "source_digest": "sha256:5c34122ec74ebd33b99b73c6c23b11dc7d80bd370133ed5fc77dee7ddadb1598",
+      "blocks": [
+        {
+          "id": "anomaly-dispositions",
+          "source_anchors": ["Anomaly diagnostics are mechanical warnings", "Accept the correction", "Dismiss with rationale", "Keep unresolved"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md"],
+          "target_anchors": ["accept-correction", "dismiss-with-rationale", "keep-unresolved"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "stable-refs-and-derived-paths",
+          "source_anchors": ["Stable References", "derived from collection", "Do not create alternate alias fields"],
+          "disposition": "merge-into",
+          "authority": "context-layout",
+          "targets": ["packages/context/src/indexerLayoutResolver.ts", "packages/context/src/indexerLayoutProposalSet.ts", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["canonical logical-unit Node identity", "Artifact output paths", "do not invent aliases"],
+          "preserves": ["negative-example", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "visible-labels-not-authority",
+          "source_anchors": ["Visible Labels And Audit Rationale", "identity contract", "source-backed evidence"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Keep reader-facing labels", "Titles and headings are evidence, not identity"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "duplicate-conflict-and-destructive-identity-change",
+          "source_anchors": ["Exact duplicate structure", "Conflicting facts", "Replacement or rename"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerLayoutChange.ts"],
+          "target_anchors": ["For duplicates, keep one canonical statement", "When evidence conflicts", "requires_confirmation"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "candidate-self-verification",
+          "source_anchors": ["Every accepted node, section, and edge", "Every unresolved relation or conflict", "No non-schema candidate ledger fields"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["every claim is owned and cited", "duplicate/conflict decision", "unsupported claim appears"],
+          "preserves": ["negative-example", "gate-semantics"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/align/gates.md",
+      "source_digest": "sha256:517be59f675022a5d9e3fa04f9b35f801a80fc32aa42084dac8bce8a45481fea",
+      "blocks": [
+        {
+          "id": "current-schema-boundary",
+          "source_anchors": ["Use these gates before every structure draft", "working notes", "Do not add unknown gate fields"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-runtime",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerArtifactResult.ts"],
+          "target_anchors": ["current `main-index` `ArtifactResult`", "strict()"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "subject-kind-order",
+          "source_anchors": ["Node Type Order", "Action?", "Entity?", "Domain?", "Otherwise do not create a Node"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["concrete product or technical object", "repeatable process", "real grouping scope", "local material as a Section"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "title-placeholder-and-grouping-boundary",
+          "source_anchors": ["Title and Source Heading Rules", "Relation-only sources", "navigation-only / placeholder-only"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Titles and headings are evidence, not identity", "navigation-only placeholder", "request-material"],
+          "preserves": ["applicability", "negative-example", "deletion-condition", "recovery-guidance"]
+        },
+        {
+          "id": "section-promotion-gate",
+          "source_anchors": ["Section Promotion Gate", "FAQ label", "independent subject identity"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/structure-and-artifacts.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["A heading, table row, FAQ label", "independently retrievable", "Keep a candidate as a Section by default"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "subject-shape-and-tag-semantics",
+          "source_anchors": ["Entity Tag Rules", "`term` is mutually exclusive", "Do not inherit scope tags mechanically"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["permitted SubjectKey schema", "distinct durable", "Do not replace it"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "process-subject-gate",
+          "source_anchors": ["Action Gate", "has_steps_or_phases", "Do not emit an Action for a single sentence", "Action anti-examples"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["repeatable process with", "three modes", "component usage"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "fake-subject-gate",
+          "source_anchors": ["Fake Entity Gate", "at least **two** signals", "X impact on Y"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["one-off conclusion", "without an independent referent"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "grouping-scope-gate",
+          "source_anchors": ["Domain Gate", "groups child Nodes", "no resolvable child refs"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["real grouping scope", "supported child identities"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "relation-gate",
+          "source_anchors": ["Edge Gate", "relation type is in the current closed set", "relation is stronger than a vague", "source sentence states the relation with uncertainty"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerGeneratedAuthoringAudit.ts"],
+          "target_anchors": ["Relation and structured-claim gate", "vague “related” mention", "structured claim"],
+          "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "inference-evidence-boundary",
+          "source_anchors": ["Inference Sources", "inferred-from-span", "Each source must include `rationale`"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerGeneratedAuthoringAudit.ts"],
+          "target_anchors": ["cited evidence in that same Section", "evidence_refs"],
+          "preserves": ["applicability", "gate-semantics"]
+        },
+        {
+          "id": "final-semantic-reflection",
+          "source_anchors": ["Final Reflection", "Entity cannot pick a legal tag", "Action only supports one Section", "Domain has no children"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Before returning the Result", "local material as a Section", "supported child identities"],
+          "preserves": ["negative-example", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "mechanical-diagnostics",
+          "source_anchors": ["Current CLI Quality Diagnostics", "Warnings are not automatic blockers", "Resolve them or include"],
+          "disposition": "merge-into",
+          "authority": "context-layout",
+          "targets": ["packages/context/src/indexerArtifactResult.ts", "packages/context/src/indexerLayoutResolver.ts", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Artifact Section projection does not match", "maps Sections to multiple collections", "capability disposition"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        }
+      ]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/procedures/document-optimization.md",
+      "source_digest": "sha256:befefad61c8e9fb400ee0d946d7d728bcbd807faf9f88f8004739be2c27d93aa",
+      "blocks": [
+        {
+          "id": "section-scoped-optional-phase",
+          "source_anchors": ["optional phase improves", "source-backed Context", "returned Section"],
+          "disposition": "merge-into",
+          "authority": "context-revision",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md", "packages/context-cli/src/project/documentOptimization.ts"],
+          "target_anchors": ["every Section has one outcome", "documentOptimization"],
+          "preserves": ["applicability", "gate-semantics"]
+        },
+        {
+          "id": "editorial-outcomes",
+          "source_anchors": ["`keep` when", "`repair` for", "`reshape` for", "`omit` only"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md"],
+          "target_anchors": ["`keep`", "`repair`", "`reshape`", "`omit`"],
+          "preserves": ["applicability", "gate-semantics"]
+        },
+        {
+          "id": "omission-and-retention-boundary",
+          "source_anchors": ["unanswered question set", "Questions with answers", "deprecations with a replacement remain knowledge"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["Eligible omission reason", "answered question", "replacement-bearing deprecation"],
+          "preserves": ["positive-example", "negative-example", "deletion-condition", "gate-semantics"]
+        },
+        {
+          "id": "signal-obligations-and-assessment",
+          "source_anchors": ["Signals marked `high`", "Signals marked `review`", "workload, batch size"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md"],
+          "target_anchors": ["A `high` signal cannot be justified", "reported `review` signal", "time, cost, effort"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "missing-input-boundary",
+          "source_anchors": ["Signals that recommend `request-input`", "ask one concise, batched question", "recovered from the approved Section"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md", "plugins/context/skills/context-markdown-indexer/references/semantic-planning.md"],
+          "target_anchors": ["`request-input`", "ask once for the remaining", "genuinely missing input"],
+          "preserves": ["applicability", "positive-example", "negative-example", "recovery-guidance"]
+        },
+        {
+          "id": "managed-completion",
+          "source_anchors": ["fully managed operation", "Managed authority removes routine review pauses", "large repair set is expected work"],
+          "disposition": "rewrite-equivalent",
+          "authority": "community-instructions",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/editorial-policy.md"],
+          "target_anchors": ["managed operation", "does not lower these rules"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "three-attempt-guidance",
+          "source_anchors": ["fails three consecutive", "one aggregated report", "Do not restart Sections that already pass"],
+          "disposition": "rewrite-equivalent",
+          "authority": "context-revision",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context-cli/src/project/documentOptimizationRetry.ts"],
+          "target_anchors": ["three accepted revision", "keep already-passing Sections intact", "guidance"],
+          "preserves": ["applicability", "negative-example", "recovery-guidance"]
+        },
+        {
+          "id": "protected-source-values",
+          "source_anchors": ["Keep all work inside the same source Section", "Preserve link destinations", "Do not introduce facts"],
+          "disposition": "merge-into",
+          "authority": "context-revision",
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/indexer.md", "packages/context-cli/src/project/documentOptimizationModel.ts"],
+          "target_anchors": ["Preserve exact commands, identifiers, links", "protected"],
+          "preserves": ["applicability", "negative-example", "gate-semantics"]
+        },
+        {
+          "id": "apply-rescan-and-stale-recovery",
+          "source_anchors": ["Context rejects stale", "rescans every repair and reshape", "changed Sections alone return"],
+          "disposition": "merge-into",
+          "authority": "context-revision",
+          "targets": ["packages/context-cli/src/project/documentOptimization.ts", "plugins/context/skills/context-markdown-indexer/references/editorial-policy.md"],
+          "target_anchors": ["stale", "analyzeDocumentEditorialSignals", "Section-specific"],
+          "preserves": ["gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "revision-storage-and-negative-cache",
+          "source_anchors": ["Only pages with reader-visible changes are stored", "revision is a full", "derived negative cache", "absent from `dist/`"],
+          "disposition": "merge-into",
+          "authority": "context-revision",
+          "targets": ["packages/context-cli/src/project/documentOptimizationStorage.ts", "packages/context-cli/src/project/knowledgeFileClassification.ts", "packages/context-cli/src/__tests__/projectDocumentOptimizationV0616.test.ts"],
+          "target_anchors": ["__revision.md", "document-optimization", "projectPackageKnowledgeMarkdown"],
+          "preserves": ["deletion-condition", "gate-semantics", "recovery-guidance"]
+        },
+        {
+          "id": "targeted-revision-entry",
+          "source_anchors": ["later user-requested correction", "context revise", "source change makes the revision a blocking conflict"],
+          "disposition": "merge-into",
+          "authority": "context-revision",
+          "targets": ["packages/context-cli/src/project/documentRevision.ts", "packages/context-cli/src/commands/documentOptimizationCommands.ts"],
+          "target_anchors": ["revise", "conflict"],
+          "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
+        }
+      ]
+    }
+  ]
+}

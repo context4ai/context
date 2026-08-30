@@ -1,0 +1,15 @@
+schema: agent-graph.test.v1
+name: a capability gap remaining after fallback is the only customization proposal entry
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+expect:
+  statusCode: actionable
+  primaryNode: propose-indexer-customization
+  primaryReasonCode: route.indexer.customization-proposal
+  availability: immediate

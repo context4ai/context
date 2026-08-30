@@ -3,6 +3,11 @@ import type { EntryFile, ExtractionResult, FileSystem, RelationInfo } from "@c4a
 import { traceExports } from "./exportTracer.js";
 import { analyzeFile } from "./symbolExtractorAnalyze.js";
 import { createRelation, type FileAnalysis, type PackageInfo } from "./symbolExtractorAst.js";
+import {
+  ecmaScriptLanguage,
+  EXTRACT_TS_CAPABILITIES,
+  EXTRACT_TS_COVERAGE_TIER,
+} from "./ecmaScriptLanguage.js";
 import { loadTsConfigPathResolver } from "./tsconfigPaths.js";
 
 export const extractSymbols = async (
@@ -92,9 +97,24 @@ export const extractSymbols = async (
     .sort()
     .map((filePath) => ({
       path: filePath,
-      language: filePath.endsWith(".tsx") ? "tsx" : "typescript",
+      language: ecmaScriptLanguage(filePath),
       lines: analyses.get(filePath)?.lines ?? 0,
     }));
+  const coverageFiles = files.map((file) => {
+    const analysis = analyses.get(file.path);
+    return {
+      path: file.path,
+      disposition: analysis?.disposition ?? "unsupported" as const,
+      diagnosticCodes: analysis?.diagnostics.map((diagnostic) => diagnostic.code) ?? [
+        "ecmascript-analysis-missing",
+      ],
+    };
+  });
+  const diagnostics = [...analyses.values()]
+    .flatMap((analysis) => analysis.diagnostics)
+    .sort((left, right) =>
+      left.file.localeCompare(right.file) || left.line - right.line || left.column - right.column
+    );
 
   return {
     version: "2",
@@ -102,12 +122,18 @@ export const extractSymbols = async (
       extractedAt: new Date().toISOString(),
       pluginId: options.pluginId,
       commitHash: null,
-      language: "typescript",
+      language: options.packageInfo.language,
     },
     package: options.packageInfo,
     files,
     symbols,
     relations,
+    coverage: {
+      tier: EXTRACT_TS_COVERAGE_TIER,
+      capabilities: [...EXTRACT_TS_CAPABILITIES],
+      files: coverageFiles,
+      diagnostics,
+    },
     stats: {
       files: files.length,
       lines: files.reduce((sum, file) => sum + file.lines, 0),

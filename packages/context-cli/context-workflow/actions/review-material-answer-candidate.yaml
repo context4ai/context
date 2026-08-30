@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: review-material-answer-candidate
+description: Approve or reject only the exact material-answer evidence binding without approving reader content.
+runner: host
+effect: external
+handler: context.review-material-answer-candidate/v1
+inputSchema: schemas/indexer-material-answer-review-resolution-input.schema.json
+outputSchema: schemas/indexer-material-answer-review-resolution-output.schema.json

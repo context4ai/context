@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.markdown-provider-capture-report/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "project_ref",
+    "requested_source_refs",
+    "source_inputs",
+    "unavailable_source_refs",
+    "capture_set_digest",
+    "outcome",
+    "graph_outcome",
+    "report_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.markdown-provider-capture-report/v1" },
+    "project_ref": { "type": "string", "minLength": 1 },
+    "requested_source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "source_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_ref", "snapshot_digest", "normalizer_version"],
+        "properties": {
+          "source_ref": { "type": "string", "minLength": 1 },
+          "snapshot_digest": { "$ref": "#/$defs/digest" },
+          "normalizer_version": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "unavailable_source_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "capture_set_digest": { "$ref": "#/$defs/digest" },
+    "outcome": {
+      "enum": ["markdown-provider-discovery-required", "index-document-capture-not-current"]
+    },
+    "graph_outcome": { "enum": ["completed", "blocked"] },
+    "report_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

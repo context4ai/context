@@ -33,6 +33,7 @@ Provider 将长期知识生产生命周期转化为依据事实选择、可以�
 |---|---|
 | `provider.yaml` | Provider 身份、Graph 目录和导出资源 |
 | `graphs/workspace.yaml` | 稳定的知识工作任务类别和合法转换 |
+| `graphs/indexer.yaml` | digest-bound Indexer 选择、执行、reconciliation 与 gap 子 Route |
 | `actions/` | 由 Context Host adapter 解析的 Action 契约 |
 | `resources/` | Procedure、对话、诊断、手册、Schema 和动态 View 定义 |
 | `schemas/` | Agent 提交的结构化 Payload 契约 |
@@ -62,6 +63,16 @@ Provider 将长期知识生产生命周期转化为依据事实选择、可以�
 14. managed host runtime 只对参数形态已识别且没有外部副作用的命令复用进程；未知形态和外部副作用在子进程执行，两种路径返回相同回执契约。
 15. execution scope 只拥有短生命周期运行资源，不拥有持久工作区状态；知识写入继续使用 revision 校验、写锁和原子提交。
 16. 每个完整代码索引批次在知识 Review 前必须经过一次 Agent 语义审核。CLI 信号只作为审核证据，Agent 必须选择接受、修订或请求补充材料；全托管遇到真实问题时自动回到 Preview、提取和复审循环。完整报告留在工作区，构建清单只保留精简审核摘要，不发布报告文件。
+17. Indexer Graph 只能通过 CLI 校验后的 workset-set Facts 从 partition 进入 author。精确 SubjectKey 解析必须先于 author；post-author composer 只能读取受限 PrimaryResultView。独立 composer 集合未明确标记为 not-required，或尚未全部 accepted 并形成 current envelope 时，不得进入 reconciliation。
+18. Main Indexer 调度前必须恢复本机内容寻址 run ledger。通过校验的 Result、读取回执和 accepted 转换共用一个 durable journal；中断且不完整的 running 项恢复为 pending，完整 accepted 缓存（包括合法空结果）不得再次调度。ordinal/fixed-count partition 会自动进入下一项授权策略；策略耗尽后 Graph 启动绑定 CLI release 的 catalog-fallback request，并机械接受唯一父单元。该路径必须存在已持久化的耗尽前驱，不调用 Agent，也不进入用户 Gate。
+19. post-author composer 使用独立的本机 ledger。每项 accepted Result/receipt 可独立恢复；只有当前集合全部 accepted 后才原子发布 current envelope。若仅 envelope 指针缺失，只重组 envelope，不得重跑 composer。
+20. Result reconciliation 是 CLI 拥有的完成边界。它重新计算 required domain owner，只消费 main author store 中完整 accepted 的 Result，并枚举全部 current question-target pair；Provider 未 emit 的 pair 自动形成 material gap。缺 owner、accepted cache 丢失、unsupported target 或 blocking material gap 时，不得进入 reconciliation ready，也不得报告 complete。
+21. material-answer Review 是独立的 digest-bound Gate，只覆盖一个精确 question-target 与 canonical evidence binding。它可以产生尚未持久化的 `answer-approved` successor-ledger fact，但不能批准读者正文，也不能绕过后续机械审计和主 Candidate Review；只有 `checkpoint-material-gaps` 可以持久化该 fact。
+22. material-answer 调度是基于 CLI 构造的不可变 question workset 的独立二阶段循环。eligibility 必须同时满足 registry operation、enricher binding、primary Provider 声明、read scope、current source 与 evidence kind；独立 durable ledger 会复用 accepted 空 Result、把不完整 running 恢复为 pending，并且只有每个声明 span 都通过 current CLI evidence-read receipt 校验后才产生 candidate。
+23. reconciliation 的 completed/partial/blocked 结果都必须先经过 retained material-gap checkpoint，才能完成、调度回答或停止。批准答案会内联完整 accepted workset，支持清空 `.tmp` 后跨机器恢复；Context 从 canonical source/span binding 派生不含正文的 planned-answer projection，actualization 将该 projection 与 planned landing 绑定到同一个 current layout-proposal-set digest。source authority stale 或 landing 缺失/歧义时原子 reopen 为 unresolved。最终 close 只能从 approved structure 自身读取精确 answer provenance，并与 ledger CAS 共用一次原子写入。`audit-material-gap-state` 只在内存复算 expected ledger，不写工作区，并把主 Review 前的漂移路由到 checkpoint、把已批准的后置状态路由到 close；retained answer 状态和 planned-answer provenance 不进入 reader Markdown 或 package projection。
+24. requirement confirmation 必须使用 CLI 重新计算的 canonical comparator。普通变化只能使用显式 session authority；contraction 与不可比较的义务替换进入不可委托人工 Gate。
+25. SubjectKey schema authority 只来自 CLI base contract 或唯一 owner extension Provider。已有 approved Node 上的 identity-breaking 变化必须 Provider major，并取得绑定精确映射的人工授权；无效映射在 Gate 前失败。target-resolution ambiguous/invalid 是阻塞或失败的类型化 Outcome，不能进入 author work。
+26. Markdown Provider Route 先证明文档 capture current，再把 Agent 的当前可见 Skill discovery 与 CLI 的 routing、静态校验、解析、stage 和最终校验分离。CLI-bundled Bundle 可自动完成；外部 Bundle 返回 v2 Host request，本地定制返回独立 blocking Outcome。Host 重入只携带结构化 Host result，所有 staged path 仍由 CLI 创建。
 
 ## 全托管宿主循环
 

@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: approved Indexer knowledge closes only through the atomic retained-ledger writer
+graph: indexer
+entry: approved-knowledge-close
+state:
+  outcomes:
+    indexer/close-indexer-approved-knowledge: completed
+expect:
+  statusCode: complete
+  outcome: completed

@@ -1,0 +1,151 @@
+{
+  "protocol": "context.indexer.markdown-routing-fixture-set/v1",
+  "anonymized": true,
+  "cases": [
+    {
+      "id": "anonymous-mixed-reader-guide",
+      "profile": "user-and-developer-guide",
+      "source_role": "authoritative-document",
+      "density_mode": "macro",
+      "candidate_signal": "independent-reader-tasks",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [
+        {
+          "artifact_id": "product-intent",
+          "artifact_kind": "content",
+          "boundary_decision": "promote-reader-artifact",
+          "sections": [
+            {
+              "section_key": "reader-outcome",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "product-requirements",
+              "reader_goal": "understand-product-intent",
+              "artifact_kind": "content"
+            }
+          ]
+        },
+        {
+          "artifact_id": "technical-design",
+          "artifact_kind": "content",
+          "boundary_decision": "promote-reader-artifact",
+          "sections": [
+            {
+              "section_key": "runtime-boundary",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "technical-guide",
+              "reader_goal": "understand-technical-design",
+              "artifact_kind": "content"
+            }
+          ]
+        },
+        {
+          "artifact_id": "reader-task",
+          "artifact_kind": "content",
+          "boundary_decision": "promote-reader-artifact",
+          "sections": [
+            {
+              "section_key": "complete-task",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "task-guide",
+              "reader_goal": "complete-reader-task",
+              "artifact_kind": "content"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "anonymous-local-headings",
+      "profile": "technical-guide",
+      "source_role": "supporting-document",
+      "density_mode": "meso",
+      "candidate_signal": "local-heading-only",
+      "candidate_resolution": "dismiss-with-rationale",
+      "artifacts": [
+        {
+          "artifact_id": "technical-content",
+          "artifact_kind": "content",
+          "boundary_decision": "retain-section-group",
+          "sections": [
+            {
+              "section_key": "design",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "technical-guide",
+              "reader_goal": "understand-technical-design",
+              "artifact_kind": "content"
+            },
+            {
+              "section_key": "constraints",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "technical-guide",
+              "reader_goal": "understand-technical-design",
+              "artifact_kind": "content"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "anonymous-fragmented-site",
+      "profile": "documentation-site",
+      "source_role": "supporting-document",
+      "density_mode": "micro",
+      "candidate_signal": "conflicting-authority",
+      "candidate_resolution": "keep-unresolved",
+      "artifacts": [
+        {
+          "artifact_id": "reader-questions",
+          "artifact_kind": "content",
+          "boundary_decision": "promote-reader-artifact",
+          "sections": [
+            {
+              "section_key": "question-answer",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "faq-support",
+              "reader_goal": "resolve-reader-question",
+              "artifact_kind": "content"
+            }
+          ]
+        },
+        {
+          "artifact_id": "decision-context",
+          "artifact_kind": "content",
+          "boundary_decision": "promote-reader-artifact",
+          "sections": [
+            {
+              "section_key": "decision",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "decision-record",
+              "reader_goal": "understand-decision-and-tradeoffs",
+              "artifact_kind": "content"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "anonymous-short-domain-reference",
+      "profile": "domain-reference",
+      "source_role": "authoritative-document",
+      "density_mode": "single-pass",
+      "candidate_signal": "short-coherent-source",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [
+        {
+          "artifact_id": "domain-content",
+          "artifact_kind": "content",
+          "boundary_decision": "retain-section-group",
+          "sections": [
+            {
+              "section_key": "definition",
+              "owner_indexer_id": "anonymous-markdown-indexer",
+              "document_kind": "domain-reference",
+              "reader_goal": "understand-domain",
+              "artifact_kind": "content"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

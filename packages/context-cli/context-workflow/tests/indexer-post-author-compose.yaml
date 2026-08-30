@@ -1,0 +1,24 @@
+schema: agent-graph.test.v1
+name: fully accepted composer receipts require envelope composition before reconciliation
+graph: indexer
+entry: main-index
+state:
+  outcomes:
+    indexer/build-question-target-inventory: completed
+    indexer/build-main-index-partition-worksets: completed
+    indexer/prepare-main-index-partition-runs: completed
+    indexer/observe-main-index-partition-worksets: completed
+    indexer/build-subject-catalog: completed
+    indexer/build-target-resolution-views: completed
+    indexer/audit-projected-artifact-fan-out: completed
+    indexer/build-main-index-author-worksets: completed
+    indexer/prepare-main-index-author-runs: completed
+    indexer/observe-main-index-author-worksets: completed
+    indexer/resolve-effective-composers: completed
+    indexer/build-post-author-composer-worksets: partial
+    indexer/observe-post-author-composer-worksets: unverified
+expect:
+  statusCode: actionable
+  primaryNode: compose-indexer-post-author-fragments
+  primaryReasonCode: route.indexer.post-author-composition
+  command: context indexer compose-indexer-post-author-fragments --input .tmp/agent-payloads/indexer-post-author-lifecycle.json --format json

@@ -1,0 +1,20 @@
+{
+  "name": "c4a",
+  "interface": {
+    "displayName": "C4A Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "c4a",
+      "source": {
+        "source": "local",
+        "path": "./plugins/context/repo-install/codex"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: prepare-main-index-run-ledger
+runner: command
+effect: write
+command: context indexer prepare-main-index-run-ledger --input .tmp/agent-payloads/indexer-main-lifecycle.json --format json
+inputSchema: schemas/indexer-main-lifecycle-input.schema.json
+outputSchema: schemas/indexer-main-lifecycle-output.schema.json

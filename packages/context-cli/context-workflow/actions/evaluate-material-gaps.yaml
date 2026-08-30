@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: evaluate-material-gaps
+description: Derive layout and main Candidate Review admission from the current retained ledger.
+runner: command
+effect: read
+command: context indexer evaluate-material-gaps --input .tmp/agent-payloads/indexer-material-gap-evaluation.json --format json
+inputSchema: schemas/indexer-material-gap-lifecycle-input.schema.json
+outputSchema: schemas/indexer-material-gap-lifecycle-output.schema.json

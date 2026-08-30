@@ -52,3 +52,72 @@ codes:
   - { code: route.document-optimization.guidance-required, kind: route-reason, summary: The same document revision quality problem remains after three attempts and requires one aggregated human direction., document: resources/procedures/document-optimization.md }
   - { code: route.build.package-stale, kind: route-reason, summary: Build the declared package outputs from current approved knowledge., document: resources/procedures/close-and-build.md }
   - { code: route.logs.delivery-pending, kind: route-reason, summary: Send locally queued runtime logs through the configured generic sink., document: resources/procedures/close-and-build.md }
+  - { code: route.indexer.agent-step, kind: route-reason, summary: Run one digest-bound Indexer workset with the static Context Agent Action. }
+  - { code: route.indexer.provider-configuration, kind: route-reason, summary: Configure an exact path-free Provider selection from currently visible Indexer Skills. }
+  - { code: route.indexer.markdown-capture-validation, kind: route-reason, summary: Require exact current document capture before discovering a semantic Markdown Provider. }
+  - { code: route.indexer.markdown-provider-discovery, kind: route-reason, summary: Report visible Markdown Indexer Skills and build one capture-bound Provider route input. }
+  - { code: route.indexer.markdown-provider-validation, kind: route-reason, summary: Revalidate the capture-bound selection and resolve it through the exact CLI or Host boundary. }
+  - { code: route.indexer.provider-selection, kind: route-reason, summary: "Mechanically route Provider composition, community fallback, owner conflicts, and capability gaps." }
+  - { code: route.indexer.community-fallback, kind: route-reason, summary: Retry unmatched owner cells with the applicable CLI-bundled community Indexer profile. }
+  - { code: route.indexer.selection-validation, kind: route-reason, summary: Statically validate the closed Provider selection before resolving any Bundle. }
+  - { code: route.indexer.customization-proposal, kind: route-reason, summary: Propose one minimal dependency-free extend draft from an exact final CLI capability-gap proof. }
+  - { code: route.indexer.customization-validation, kind: route-reason, summary: Validate and content-address stage one exact minimal customization draft without project source writes. }
+  - { code: route.indexer.customization-project-preparation, kind: route-reason, summary: Resolve the exact Providers and stage one CAS-bound customization project proposal. }
+  - { code: route.indexer.project-observation, kind: route-reason, summary: Observe the complete applied target set and rerun finalized selection validation. }
+  - { code: route.indexer.contract-overlay-validation, kind: route-reason, summary: Recompute data-only contract overlay conformance and resolve its trust path. }
+  - { code: route.indexer.requirement-confirmation-routing, kind: route-reason, summary: Revalidate the comparator report and select the ordinary or contraction confirmation Gate. }
+  - { code: route.indexer.requirement-confirmation, kind: route-reason, summary: "Confirm an initial, equivalent, or strengthening requirement workset." }
+  - { code: route.indexer.requirement-contraction, kind: route-reason, summary: Require non-delegable human confirmation for contraction or incomparable obligation replacement. }
+  - { code: route.indexer.contract-overlay-authorization, kind: route-reason, summary: Authorize one exact current-project contract overlay after conformance passes. }
+  - { code: route.indexer.overlay-question-proposal, kind: route-reason, summary: Propose namespaced question bindings from one current trusted overlay. }
+  - { code: route.indexer.overlay-question-rebind, kind: route-reason, summary: Revalidate an overlay requirement and build one coupled registry proposal. }
+  - { code: route.indexer.dependency-authorization, kind: route-reason, summary: Authorize one exact staged dependency intent set with install scripts disabled. }
+  - { code: route.indexer.program-execution-authorization, kind: route-reason, summary: Authorize one exact non-allowlisted Provider program for trusted non-sandboxed execution. }
+  - { code: route.indexer.project-confirmation, kind: route-reason, summary: Confirm and apply one exact staged Indexer project proposal. }
+  - { code: route.indexer.question-target-inventory, kind: route-reason, summary: Build the contract-derived question target denominator before partitioning. }
+  - { code: route.indexer.partition-worksets, kind: route-reason, summary: Build current immutable partition worksets from canonical inventory and owner cohorts. }
+  - { code: route.indexer.main-workset-observation, kind: route-reason, summary: Join the current main workset set with validated run records and select the next digest-bound work. }
+  - { code: route.indexer.main-run-validation, kind: route-reason, summary: Validate one exact partition or author Result before accepting it. }
+  - { code: route.indexer.main-run-ledger-preparation, kind: route-reason, summary: Recover the current content-addressed main run ledger and exact accepted cache hits. }
+  - { code: route.indexer.main-run-start, kind: route-reason, summary: Persist one exact pending main run before issuing its request. }
+  - { code: route.indexer.partition-convergence, kind: route-reason, summary: Accept a semantic partition or durably advance to the next authorized strategy without a user Gate. }
+  - { code: route.indexer.catalog-fallback, kind: route-reason, summary: Mechanically accept one deterministic catalog parent after semantic strategies are exhausted. }
+  - { code: route.indexer.main-run-acceptance, kind: route-reason, summary: "Atomically accept one fully validated main Result, receipts, and ledger transition." }
+  - { code: route.indexer.main-run-failure, kind: route-reason, summary: Persist one exact main run failure and its dependency digests. }
+  - { code: route.indexer.subject-catalog, kind: route-reason, summary: Merge approved Nodes and all validated primary partition group SubjectKeys. }
+  - { code: route.indexer.target-resolution, kind: route-reason, summary: Resolve enrich-or-independent groups by exact SubjectKey before authoring. }
+  - { code: route.indexer.projected-artifact-fan-out, kind: route-reason, summary: Recompute projected Artifact ownership and Bundle eligibility before Candidate materialization. }
+  - { code: route.indexer.subject-key-validation, kind: route-reason, summary: Recompute SubjectKey schema authority and approved-Node identity compatibility. }
+  - { code: route.indexer.subject-reidentification, kind: route-reason, summary: Require a non-delegable confirmation for one exact collision-free breaking SubjectKey mapping. }
+  - { code: route.indexer.author-worksets, kind: route-reason, summary: Build one immutable author workset for each validated partition group. }
+  - { code: route.indexer.effective-composers, kind: route-reason, summary: "Resolve the exact selected, declared, and profile-applicable composer set." }
+  - { code: route.indexer.post-author-worksets, kind: route-reason, summary: Materialize bounded composer worksets or publish an explicit not-required state. }
+  - { code: route.indexer.post-author-run-start, kind: route-reason, summary: Issue the exact request for the next pending or stale post-author composer. }
+  - { code: route.indexer.post-author-agent-step, kind: route-reason, summary: Run one selected post-author composer against the bounded PrimaryResultView. }
+  - { code: route.indexer.post-author-run-acceptance, kind: route-reason, summary: Validate and accept one exact post-author fragment Result. }
+  - { code: route.indexer.post-author-run-failure, kind: route-reason, summary: Record one exact post-author failure without publishing a partial envelope. }
+  - { code: route.indexer.post-author-observation, kind: route-reason, summary: Join current composer worksets with their ledger and publish independent completion Facts. }
+  - { code: route.indexer.post-author-composition, kind: route-reason, summary: Compose the current result envelope after every selected composer is accepted. }
+  - { code: route.indexer.result-reconciliation, kind: route-reason, summary: Recompute per-domain completion and emit exact capability or material gaps before reporting success. }
+  - { code: route.indexer.material-question-workset, kind: route-reason, summary: Build immutable question-target pairs and derive exact answer eligibility from current registry authority. }
+  - { code: route.indexer.material-answer-run-preparation, kind: route-reason, summary: Recover content-addressed material-answer runs and accepted empty or non-empty Results. }
+  - { code: route.indexer.material-answer-observation, kind: route-reason, summary: "Publish material-answer counts, next refs, candidates, and unresolved question keys." }
+  - { code: route.indexer.material-answer-run-start, kind: route-reason, summary: Persist one exact pending or stale material-answer run before dispatch. }
+  - { code: route.indexer.material-answer-agent-step, kind: route-reason, summary: Run one semantic-operation-gated material-answer request without rerunning main extraction. }
+  - { code: route.indexer.material-answer-run-acceptance, kind: route-reason, summary: Validate current source-span read receipts and atomically accept one material-answer Result. }
+  - { code: route.indexer.material-answer-run-failure, kind: route-reason, summary: Persist one exact material-answer failure without accepting partial evidence. }
+  - { code: route.indexer.material-answer-review, kind: route-reason, summary: Approve or reject only one exact material-answer evidence binding; final reader content remains unapproved. }
+  - { code: route.indexer.material-gap-audit, kind: route-reason, summary: Read-only recompute the expected retained material-gap ledger and route pre-Review drift to checkpoint or post-Review closure to close. }
+  - { code: route.indexer.material-gap-checkpoint, kind: route-reason, summary: Recompute and durably checkpoint the retained material-gap ledger before any blocking outcome. }
+  - { code: route.indexer.material-answer-review-checkpoint, kind: route-reason, summary: Persist one exact answer-approved successor under retained ledger CAS. }
+  - { code: route.indexer.candidate-review-readiness, kind: route-reason, summary: Prove exact precompile and postcompile mechanical audits are current for the effective candidate revision. }
+  - { code: route.indexer.candidate-compile, kind: route-reason, summary: Compile Candidate Artifacts from the exact accepted author IndexerResult set and authorized layout. }
+  - { code: route.indexer.incremental-impact, kind: route-reason, summary: "Report exact logical-unit, Artifact, and Section impact from complete current Merkle dependency views." }
+  - { code: route.indexer.profile-revision, kind: route-reason, summary: Revise one exact candidate set against the recorded runtime profile failure without changing baseline authority. }
+  - { code: route.indexer.profile-revision-record, kind: route-reason, summary: Record one distinct result revision under the stable problem lineage and three-attempt ledger CAS. }
+  - { code: route.indexer.profile-failure-report, kind: route-reason, summary: "Persist the complete module, artifact, metric, attempt, missing-input, and capability-loss report after three failures." }
+  - { code: route.indexer.profile-override, kind: route-reason, summary: Require the user to force approve one exact current runtime profile risk through a non-delegable Gate. }
+  - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after the mechanical audit readiness proof passes. }
+  - { code: route.indexer.material-gap-evaluation, kind: route-reason, summary: Derive layout and main Review admission from the current retained ledger. }
+  - { code: route.indexer.material-answer-actualization, kind: route-reason, summary: Map answer-approved landings to current Artifact or Section identities and checkpoint the result. }
+  - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure with exact resolved material-answer provenance. }

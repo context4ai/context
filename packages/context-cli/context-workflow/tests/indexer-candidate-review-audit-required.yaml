@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: main Candidate Review starts with the exact mechanical audit readiness check
+graph: indexer
+entry: candidate-review
+state: {}
+expect:
+  statusCode: actionable
+  primaryNode: inspect-index-candidate-review-readiness
+  primaryReasonCode: route.indexer.candidate-review-readiness
+  command: context indexer inspect-index-candidate-review-readiness --input .tmp/agent-payloads/indexer-candidate-review-readiness.json --format json

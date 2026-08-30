@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: inspect-index-profile-failure
+runner: command
+effect: read
+command: context indexer inspect-index-profile-failure --input .tmp/agent-payloads/indexer-profile-failure-inspection.json --format json
+inputSchema: schemas/indexer-profile-failure-inspection-input.schema.json
+outputSchema: schemas/indexer-profile-failure-inspection-result.schema.json

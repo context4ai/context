@@ -1,0 +1,11 @@
+schema: agent-graph.test.v1
+name: a runtime profile failure starts a bounded candidate revision before Review
+graph: indexer
+entry: candidate-review
+state:
+  outcomes:
+    indexer/inspect-index-candidate-review-readiness: blocked
+expect:
+  statusCode: actionable
+  primaryNode: revise-index-output
+  primaryReasonCode: route.indexer.profile-revision

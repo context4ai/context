@@ -1,0 +1,19 @@
+schema: agent-graph.test.v1
+name: one prepared customization project waits at its exact proposal confirmation
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+    indexer/validate-indexer-customization: completed
+    indexer/prepare-indexer-customization-project: completed
+expect:
+  statusCode: waiting-user
+  primaryNode: confirm-indexer-project
+  primaryReasonCode: route.indexer.project-confirmation
+  gateResolution: user
+  resolutionHandler: context.apply-indexer-project/v1

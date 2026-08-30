@@ -1,0 +1,221 @@
+{
+  "schema": "context.code-indexer-resource-migration/v1",
+  "semantic_source_ownership": {
+    "path": "plugins/context/migrations/0.7.0-semantic-source-ownership.json",
+    "digest": "sha256:ec76d062f773e52eb4b7de77f1dd7c68950af01e47643aad5468bb0ab7180075"
+  },
+  "coverage": "complete",
+  "source_roots": [
+    "packages/context-cli/context-workflow/resources/semantic/code-index",
+    "packages/context-cli/context-workflow/resources/procedures/code-extraction.md",
+    "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
+    "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml"
+  ],
+  "cutover": {
+    "schema": "context.code-indexer-cutover-candidate-set/v1",
+    "state": "registered",
+    "execution_phase": "phase-g",
+    "deletion_authorized": false,
+    "candidate_sources": [
+      "packages/context-cli/context-workflow/resources/semantic/code-index/classification.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/adapter.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/api-service.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/background-runtime.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/cli-tool.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/contract-source.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/contracts-and-chains.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/cross-module-chain.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/derived-source.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/domain-service.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/event-flow.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/monorepo-container.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/persistence-boundary.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/plugin-extension.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/protocol-boundary.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/sdk-library.md",
+      "packages/context-cli/context-workflow/resources/semantic/code-index/templates/web-application.md",
+      "packages/context-cli/context-workflow/resources/procedures/code-extraction.md",
+      "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
+      "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml"
+    ],
+    "candidate_set_digest": "sha256:f9e9fc188f726651ca38b0d03de3fe75d56bbeb723de43161f2866c642dd90ed"
+  },
+  "items": [
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/classification.md",
+      "source_digest": "sha256:6b76d21d95da84938a0cd044734befefe7a72cc05f2222ef95ff1f8ade982da1",
+      "disposition": "merge-into",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/development-and-delivery.md",
+        "plugins/context/skills/context-code-indexer/references/composers/examples-and-documentation.md",
+        "plugins/context/skills/context-code-indexer/references/indexer.md",
+        "packages/context-cli/src/project/indexerBaseComposerCatalog.ts",
+        "packages/context-cli/src/project/indexerBaseContractCatalog.ts",
+        "packages/context-cli/src/project/indexerBaseContracts.ts"
+      ],
+      "semantic_anchors": ["Classify each requested module", "one primary profile", "templates materialized"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/adapter.md",
+      "source_digest": "sha256:526557b0a33199a6cf8a756f1ccbcab4fd55dddeea8bfe10a0ce08012c7307f3",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/adapter-integration.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/api-service.md",
+      "source_digest": "sha256:e9843ae065afe0f3f323c6c8c71c9c40cfbc400093f0d1495019446916d4b5b9",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/api-service.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/background-runtime.md",
+      "source_digest": "sha256:c55d2fcdc32c5d54e7dcafb62bfeac81df5c2b06a17c60173d7ef9664336a65c",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/background-runtime.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/cli-tool.md",
+      "source_digest": "sha256:3583ba14e27f64d72d9ddc8b9eb5dba26ab119600b4cb28b3cbb28d6edb55f63",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/cli-tool.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/contract-source.md",
+      "source_digest": "sha256:a78950484eb39e3acbbfa7b69e3b8902224c93c72510bfcb181e2e4c7158206a",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/contract-source.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/contracts-and-chains.md",
+      "source_digest": "sha256:1c37f0fa253cea69371060657d59d0735f1ec2ad6d816b29a4441ce2acc145a3",
+      "disposition": "merge-into",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/contracts-and-chains.md",
+        "plugins/context/skills/context-code-indexer/references/indexer.md"
+      ],
+      "semantic_anchors": ["explicit trigger", "terminal outcome", "imports or similar names do not prove"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/cross-module-chain.md",
+      "source_digest": "sha256:03dc0d936757a55b7c3cf75054a2694023064bed8032dee4d78e6d68a0d6c1bb",
+      "disposition": "rewrite-equivalent",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/cross-module-chain.md",
+        "plugins/context/skills/context-code-indexer/templates/data-sync-reconciliation.md"
+      ],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/derived-source.md",
+      "source_digest": "sha256:7d7e5b3f1fa1f958cd4fd30ae8c74e869c0d948dc6a2a36b92b8ebe2f7192be8",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/derived-generated-source.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/domain-service.md",
+      "source_digest": "sha256:ce5dfc9e1db5f10efdd9b42cc80de6a5a18d44af9d7093f1defcd7547380f2a3",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/domain-service.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/event-flow.md",
+      "source_digest": "sha256:6688bf567042409e183b7dd7fc677c8b2c1c02066ac8a5b53cfaeadfc5cad6c0",
+      "disposition": "rewrite-equivalent",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/event-flow.md",
+        "plugins/context/skills/context-code-indexer/templates/event-consumer.md"
+      ],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/monorepo-container.md",
+      "source_digest": "sha256:f53271c2725322a003d44a40109d1a36e345ea4646f3bfb0cbd80c260dc1de78",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/monorepo-container.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/persistence-boundary.md",
+      "source_digest": "sha256:f25ddc9529c3ccc3c62969c1c3263db674dc307402a73884832c750287eefe67",
+      "disposition": "rewrite-equivalent",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/persistence-boundary.md",
+        "plugins/context/skills/context-code-indexer/templates/storage-repository.md"
+      ],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/plugin-extension.md",
+      "source_digest": "sha256:c804e6dab4ef46761d1cf66fdf8713944d0af48156b8ddefd1f0288f2d0c56af",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/plugin-extension.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/protocol-boundary.md",
+      "source_digest": "sha256:2057242d57d92cf17a98f2148fe6cd7bde3d3f6a9d49288bab21b26e1f0d40cf",
+      "disposition": "rewrite-equivalent",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/protocol-boundary.md",
+        "plugins/context/skills/context-code-indexer/templates/gateway-facade.md"
+      ],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/sdk-library.md",
+      "source_digest": "sha256:a14f7b006512c00b20194460914aeb2a3e3e345a7ad70859797f4da62bcd265e",
+      "disposition": "rewrite-equivalent",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/composers/public-contract.md",
+        "plugins/context/skills/context-code-indexer/templates/component-library.md",
+        "plugins/context/skills/context-code-indexer/templates/sdk-library.md"
+      ],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/semantic/code-index/templates/web-application.md",
+      "source_digest": "sha256:44af201561876b8f97ee18284ca76dd1aa8ce8db7800639adacaca49c4bf7dc3",
+      "disposition": "rewrite-equivalent",
+      "targets": ["plugins/context/skills/context-code-indexer/templates/web-application.md"],
+      "semantic_anchors": ["## Evidence pass", "## Questions the knowledge must answer"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/procedures/code-extraction.md",
+      "source_digest": "sha256:b64fcaf0ed923c0b96c811be662e2b026608231ce036f9637396602f731f9187",
+      "disposition": "merge-into",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/indexer.md",
+        "packages/context-cli/src/project/indexerBaseContracts.ts"
+      ],
+      "semantic_anchors": ["complete denominator", "one primary owner", "Author Result"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
+      "source_digest": "sha256:9c32f9be4aeaf0749a3f4b36265c65dccbf2093254a5351c940b7a39bd565bb5",
+      "disposition": "merge-into",
+      "targets": [
+        "plugins/context/skills/context-code-indexer/references/indexer.md",
+        "packages/context/src/indexerAuditFacts.ts",
+        "packages/context/src/indexerAuditRevision.ts"
+      ],
+      "semantic_anchors": ["dimensions are independent", "Three failed revisions", "non-delegable profile-risk Gate"]
+    },
+    {
+      "source": "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml",
+      "source_digest": "sha256:b74c2457d2cc2cb37183b6dd1da4c14f198baec56a6cbf6b78c0a1013b38cde6",
+      "disposition": "merge-into",
+      "targets": [
+        "packages/context-cli/context-workflow/schemas/indexer-candidate-review-readiness-output.schema.json",
+        "packages/context-cli/context-workflow/schemas/indexer-profile-failure-report-result.schema.json"
+      ],
+      "semantic_anchors": ["profile_state", "facts_digest", "failed_metric_ids"]
+    }
+  ]
+}

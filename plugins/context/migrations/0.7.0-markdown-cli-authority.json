@@ -1,0 +1,228 @@
+{
+  "schema": "context.markdown-cli-authority-inventory/v1",
+  "authority": "context-sdk-cli",
+  "capabilities": [
+    {
+      "id": "source-capture-and-snapshot-digest",
+      "implementations": [
+        {
+          "path": "packages/context/src/phases.ts",
+          "anchors": ["export const captureFile", "export const captureLark"]
+        },
+        {
+          "path": "packages/context-cli/src/project/documentCapture.ts",
+          "anchors": ["export async function runCaptureFilePhase"]
+        },
+        {
+          "path": "packages/context-cli/src/project/documentCaptureLark.ts",
+          "anchors": ["export async function runCaptureLarkPhase"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectCaptureFileV062.test.ts",
+          "anchors": ["capture:file writes normalized snapshot, manifest, summary, status and idempotent captured_at"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/projectCaptureLarkV062.test.ts",
+          "anchors": ["capture:lark writes committed snapshot metadata and then exposes align evidence"]
+        }
+      ]
+    },
+    {
+      "id": "safe-file-lark-markdown-mdx-materialization",
+      "implementations": [
+        {
+          "path": "packages/context-cli/src/project/documentCaptureAssets.ts",
+          "anchors": ["export async function readLinkedCaptureAssets", "fileSnapshotLinkedAssetMismatchDiagnostic"]
+        },
+        {
+          "path": "packages/context-cli/src/lib/larkResourceMaterialization.ts",
+          "anchors": ["export async function materializeLarkResources", "export function applyLarkResourceReplacements"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectCaptureFileV062.test.ts",
+          "anchors": ["captures relative assets referenced by Markdown inside the source boundary", "captures MDX documents and _meta.json route metadata"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/documentLarkResourcesV062.test.ts",
+          "anchors": ["materializes binary and structured resources with closed reporting", "fails closed for missing required resources and resource budgets"]
+        }
+      ]
+    },
+    {
+      "id": "markdown-ast-span-and-canonical-source-ref",
+      "implementations": [
+        {
+          "path": "packages/context-cli/src/incremental/rawBlocks.ts",
+          "anchors": ["export function extractRawBlocks", "mdastLineRange"]
+        },
+        {
+          "path": "packages/extract/src/documentEvidence.ts",
+          "anchors": ["export function createDocumentSourceSpan", "export function formatCanonicalProseSourceRef"]
+        },
+        {
+          "path": "packages/context-cli/src/project/documentEvidenceIndex.ts",
+          "anchors": ["canonical_source_ref", "buildCommittedEvidenceIndex"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectProseBoundaryV069.test.ts",
+          "anchors": ["blocks repeated fixed line grids that cut across Markdown AST blocks", "accepts equal-sized ranges when they exactly match AST block boundaries"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/documentEvidenceIndexV062.test.ts",
+          "anchors": ["resolves escaped document locator paths and reports line, heading, and content drift"]
+        }
+      ]
+    },
+    {
+      "id": "node-artifact-section-edge-schema-and-view-projection",
+      "implementations": [
+        {
+          "path": "packages/context/src/indexerArtifactResult.ts",
+          "anchors": ["export const indexerArtifactResultSchema", "export const indexerArtifactSectionProjectionSchema"]
+        },
+        {
+          "path": "packages/context/src/indexerLayoutResolver.ts",
+          "anchors": ["export const indexerLayoutProposalSchema", "export function validateIndexerLayoutProposal"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context/src/__tests__/indexerArtifactResultV070.test.ts",
+          "anchors": ["normalizes source spans and logical-unit inputs into Artifact positive and negative dependencies"]
+        },
+        {
+          "path": "packages/context/src/__tests__/indexerLayoutResolverV070.test.ts",
+          "anchors": ["compile-internal deterministic Indexer layout resolver"]
+        }
+      ]
+    },
+    {
+      "id": "source-scope-owner-identity-digest-stale-conflict",
+      "implementations": [
+        {
+          "path": "packages/context/src/indexerArtifactResult.ts",
+          "anchors": ["export function validateIndexerArtifactResult", "ArtifactResult output digest is invalid"]
+        },
+        {
+          "path": "packages/context/src/indexerMainRunLedger.ts",
+          "anchors": ["accepted", "stale"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context/src/__tests__/indexerArtifactResultV070.test.ts",
+          "anchors": ["rejects output digest, provider, or source authority drift"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/projectIndexerMainRunStoreV070.test.ts",
+          "anchors": ["does not report completion after the local accepted cache is removed"]
+        }
+      ]
+    },
+    {
+      "id": "layout-resolver-conditional-confirmation-and-review",
+      "implementations": [
+        {
+          "path": "packages/context/src/indexerLayoutResolver.ts",
+          "anchors": ["export function resolveIndexerLayout"]
+        },
+        {
+          "path": "packages/context/src/indexerLayoutChange.ts",
+          "anchors": ["confirm-layout-change", "export function authorizeIndexerLayoutChange"]
+        },
+        {
+          "path": "packages/context-cli/src/project/review.ts",
+          "anchors": ["export async function runReviewApplyCommand"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context/src/__tests__/indexerLayoutResolverV070.test.ts",
+          "anchors": ["requests a non-delegable human Gate only for destructive layout diffs"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/projectIndexerCandidateReviewOrderV070.test.ts",
+          "anchors": ["keeps the only Graph edge into main Review behind audit readiness"]
+        }
+      ]
+    },
+    {
+      "id": "protected-value-integrity",
+      "implementations": [
+        {
+          "path": "packages/context-cli/src/project/documentOptimizationModel.ts",
+          "anchors": ["function protectedValues", "optimized fragment changed protected destinations, code, numbers, or identifiers"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectDocumentOptimizationV0616.test.ts",
+          "anchors": ["preserves images, attachments, commands, numbers, identifiers, and source refs during reshape", "allows a custom protocol destination to become inline code without changing it"]
+        }
+      ]
+    },
+    {
+      "id": "revision-sidecar-incremental-stale-and-conflict",
+      "implementations": [
+        {
+          "path": "packages/context-cli/src/project/documentOptimization.ts",
+          "anchors": ["state: \"revised\" | \"kept\" | \"pending\" | \"conflict\"", "document optimization decision is stale or duplicated"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectDocumentOptimizationV0616.test.ts",
+          "anchors": ["invalidates only the changed Section while preserving another valid revision", "accepts a safe page edit and blocks it when the approved baseline changes"]
+        }
+      ]
+    },
+    {
+      "id": "verify-build-and-package-projection",
+      "implementations": [
+        {
+          "path": "packages/context-cli/src/project/verify.ts",
+          "anchors": ["export async function verifyProjectWorkspace"]
+        },
+        {
+          "path": "packages/context-cli/src/project/packageBuilder.ts",
+          "anchors": ["export async function buildProjectPackages"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context-cli/src/__tests__/projectBuildVerifyV060.test.ts",
+          "anchors": ["build receipt reports created, incremental, removed, and unchanged output files", "complete summary closes progress and reports the completed scope"]
+        },
+        {
+          "path": "packages/context-cli/src/__tests__/projectVerifyV062.test.ts",
+          "anchors": ["fails when source span hash drifts but document still exists"]
+        }
+      ]
+    },
+    {
+      "id": "section-intent-collection-package-mapping",
+      "implementations": [
+        {
+          "path": "packages/context/src/indexerCollectionMapping.ts",
+          "anchors": ["export function resolveIndexerSectionCollection", "must resolve to exactly one CLI collection mapping"]
+        },
+        {
+          "path": "packages/context/src/indexerLayoutResolver.ts",
+          "anchors": ["resolveIndexerSectionCollection"]
+        }
+      ],
+      "behavior_evidence": [
+        {
+          "path": "packages/context/src/__tests__/indexerCollectionMappingV070.test.ts",
+          "anchors": ["CLI-owned Section collection mapping", "fails closed for unknown roles, semantic intent, and ambiguous mappings"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 import type {
   Evaluation,
+  HostActionResult,
   JsonValue,
   ResourceReadReceiptSet,
   ResourceLocation,
+  ResourceLocationV2,
+  RouteAction,
 } from "@c4a/agent-graph";
 import type {
   KnowledgeCollection,
@@ -35,6 +38,11 @@ export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
 export const CONTEXT_WORKFLOW_ENTRY = "context";
 
 export const CONTEXT_WORKFLOW_AUTHORITIES = {
+  indexerContractOverlay: "context.indexer-contract-overlay",
+  indexerMaterialAnswerReview: "context.indexer-material-answer-review",
+  indexerDependencyInstall: "context.indexer-dependency-install",
+  indexerProgramExecution: "context.indexer-program-execution",
+  indexerProjectConfirmation: "context.indexer-project-confirmation",
   evidenceMaintenance: "context.evidence-maintenance",
   repositoryRestore: "context.repository-restore",
   sourceRead: "context.source-read",
@@ -226,6 +234,37 @@ export interface ContextWorkflowCommand {
   };
 }
 
+export type ContextWorkflowHostMaterialization = ResourceLocationV2["materialize"];
+
+export type ContextWorkflowHostResourceLocation = ResourceLocationV2;
+
+export type ContextWorkflowResourceLocation =
+  | ResourceLocation
+  | ContextWorkflowHostResourceLocation;
+
+export type ContextWorkflowHostInlineOutput = Extract<
+  HostActionResult["output"],
+  { inline: JsonValue }
+>;
+
+export type ContextWorkflowHostManagedOutput = Extract<
+  HostActionResult["output"],
+  { resource: unknown }
+>;
+
+export type ContextWorkflowHostActionResult = HostActionResult;
+
+export interface ContextWorkflowRouteActionSource {
+  id: string;
+  runner: RouteAction["runner"];
+  effect: RouteAction["effect"];
+  handler?: string;
+  skill?: ContextWorkflowResourceLocation;
+  inputSchema?: ContextWorkflowResourceLocation;
+  outputSchema?: ContextWorkflowResourceLocation;
+  input?: JsonValue;
+}
+
 export interface ContextWorkflowResource {
   id: string;
   kind: ResourceLocation["kind"];
@@ -234,6 +273,7 @@ export interface ContextWorkflowResource {
   path?: string;
   revision?: string;
   command?: string;
+  materialize?: ContextWorkflowHostMaterialization;
   read_state: "read-required" | "current";
 }
 
@@ -248,10 +288,13 @@ export interface ContextResolvedWorkflowRoute {
   commands: ContextWorkflowCommand[];
   action?: {
     id: string;
+    runner: RouteAction["runner"];
     effect: "read" | "write" | "external";
+    handler?: string;
     skill?: ContextWorkflowResource;
     input_schema?: ContextWorkflowResource;
     output_schema?: ContextWorkflowResource;
+    input?: JsonValue;
   };
   batch?: {
     kind: "prose-structure";
@@ -297,14 +340,18 @@ export interface ContextResolvedWorkflowRoute {
     resolution: "user" | "session-authority";
     inspection_action?: {
       id: string;
+      runner: RouteAction["runner"];
       effect: "read";
+      handler?: string;
       skill?: ContextWorkflowResource;
       input_schema?: ContextWorkflowResource;
       output_schema?: ContextWorkflowResource;
     };
     resolution_action?: {
       id: string;
+      runner: RouteAction["runner"];
       effect: "write" | "external";
+      handler?: string;
       skill?: ContextWorkflowResource;
       input_schema?: ContextWorkflowResource;
       output_schema?: ContextWorkflowResource;

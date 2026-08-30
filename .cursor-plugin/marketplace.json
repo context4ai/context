@@ -1,0 +1,17 @@
+{
+  "name": "c4a",
+  "owner": {
+    "name": "Context4AI",
+    "email": "support@context4ai.dev"
+  },
+  "metadata": {
+    "description": "C4A Context plugin marketplace"
+  },
+  "plugins": [
+    {
+      "name": "c4a",
+      "source": "./plugins/context/repo-install/cursor",
+      "description": "Start or continue a project-local knowledge workspace through one graph-routed entry."
+    }
+  ]
+}

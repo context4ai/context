@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.agent-step-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "run_request", "instruction_request_digest", "input_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.agent-step-input/v1" },
+    "run_request": {
+      "type": "object",
+      "required": ["protocol", "operation", "workset", "composition_input", "final_authority", "execution_request_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.run-request/v1" },
+        "operation": { "enum": ["main-index", "material-answer"] },
+        "workset": { "type": "object" },
+        "composition_input": { "type": "object" },
+        "final_authority": { "type": "object" },
+        "execution_request_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "instruction_request_digest": { "$ref": "#/$defs/digest" },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

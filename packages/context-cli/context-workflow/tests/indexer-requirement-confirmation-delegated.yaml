@@ -1,0 +1,14 @@
+schema: agent-graph.test.v1
+name: ordinary requirement confirmation may use its explicit session authority
+graph: indexer
+entry: requirement-confirmation
+state:
+  outcomes:
+    indexer/route-index-requirement-confirmation: waiting-user
+  authorities: [context.indexer-requirement-confirmation]
+expect:
+  statusCode: actionable
+  primaryNode: confirm-index-requirements
+  availability: immediate
+  gateResolution: session-authority
+  resolutionHandler: context.confirm-index-requirement-workset/v1

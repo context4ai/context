@@ -1,0 +1,122 @@
+{
+  "protocol": "context.indexer.community-scenario-fixture-set/v1",
+  "anonymized": true,
+  "positive_cases": [
+    {
+      "scenario_id": "rpc-query-catalog",
+      "authoring_fixture_ref": "anonymous-api-service",
+      "member_kind": "protocol-method",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "catalog-only",
+      "expected_artifact_behavior": "no-standalone-artifact",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "http-handler-flow",
+      "authoring_fixture_ref": "anonymous-api-service",
+      "member_kind": "handler",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "gateway-handoff",
+      "authoring_fixture_ref": "anonymous-gateway-facade",
+      "member_kind": "downstream-callsite",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "event-flow",
+      "authoring_fixture_ref": "anonymous-event-consumer",
+      "member_kind": "event-branch",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "function-runtime",
+      "authoring_fixture_ref": "anonymous-background-runtime",
+      "member_kind": "event-branch",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "scheduled-worker",
+      "authoring_fixture_ref": "anonymous-background-runtime",
+      "member_kind": "timer-branch",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "reconciliation-flow",
+      "authoring_fixture_ref": "anonymous-data-sync-reconciliation",
+      "member_kind": "state-transition",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "stateful-service",
+      "authoring_fixture_ref": "anonymous-domain-service",
+      "member_kind": "state-transition",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "detailed",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "repository-boundary",
+      "authoring_fixture_ref": "anonymous-storage-repository",
+      "member_kind": "store",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "boundary-only",
+      "expected_artifact_behavior": "evidence-backed-content",
+      "expected_bundle_artifact_ids": ["content"]
+    },
+    {
+      "scenario_id": "library-capability",
+      "authoring_fixture_ref": "anonymous-sdk-library",
+      "member_kind": "method",
+      "expected_inventory_disposition": "owned",
+      "expected_projection_disposition": "capability-group",
+      "expected_artifact_behavior": "capability-family-artifact",
+      "expected_bundle_artifact_ids": ["content"]
+    }
+  ],
+  "negative_cases": [
+    {
+      "scenario_id": "complete-page-stale-source",
+      "authoring_fixture_ref": "anonymous-api-service",
+      "observed_condition": "source-revision-or-locator-drift",
+      "expected_outcome": "reject-stale-evidence"
+    },
+    {
+      "scenario_id": "one-method-one-page-inflation",
+      "authoring_fixture_ref": "anonymous-api-service",
+      "observed_condition": "method-count-equals-artifact-count",
+      "expected_outcome": "reject-artifact-inflation"
+    },
+    {
+      "scenario_id": "unresolved-authoring-placeholder",
+      "authoring_fixture_ref": "anonymous-background-runtime",
+      "observed_condition": "generated-placeholder-remains",
+      "expected_outcome": "block-generated-placeholder"
+    },
+    {
+      "scenario_id": "missing-runtime-platform-fact",
+      "authoring_fixture_ref": "anonymous-gateway-facade",
+      "observed_condition": "required-runtime-fact-absent",
+      "expected_outcome": "request-material"
+    }
+  ]
+}

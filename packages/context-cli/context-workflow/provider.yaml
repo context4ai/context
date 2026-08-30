@@ -1,12 +1,13 @@
 schema: agent-graph.provider.v1
 id: c4a/context
-version: 0.6.19
+version: 0.7.0
 name: Context workflow
 description: Internal work contract for Context knowledge workspaces.
 graphs:
   - graphs/workspace.yaml
+  - graphs/indexer.yaml
 catalogs:
   codes: codes.yaml
 compatibility:
-  agentGraph: ^0.2.6
+  agentGraph: ^0.2.7
   node: ">=20"

@@ -1,0 +1,16 @@
+schema: agent-graph.test.v1
+name: unsafe projected Artifact fan-out stops before author worksets without a user Gate
+graph: indexer
+entry: main-index
+state:
+  outcomes:
+    indexer/build-question-target-inventory: completed
+    indexer/build-main-index-partition-worksets: completed
+    indexer/prepare-main-index-partition-runs: completed
+    indexer/observe-main-index-partition-worksets: completed
+    indexer/build-subject-catalog: completed
+    indexer/build-target-resolution-views: completed
+    indexer/audit-projected-artifact-fan-out: partial
+expect:
+  statusCode: complete
+  outcome: partial

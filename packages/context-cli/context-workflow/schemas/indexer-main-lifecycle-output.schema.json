@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.main-lifecycle-output/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["protocol", "inventory_digest", "requirement_set_digest", "items"],
+      "properties": {
+        "protocol": { "const": "context.indexer.question-target-inventory/v1" },
+        "inventory_digest": { "$ref": "#/$defs/digest" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "profile_contract_digests": { "type": "array" },
+        "source_inventory_digests": { "type": "array" },
+        "items": { "type": "array" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "worksets", "workset_set"],
+      "properties": {
+        "protocol": { "enum": ["context.indexer.main-partition-workset-build/v1", "context.indexer.main-author-workset-build/v1"] },
+        "worksets": { "type": "array" },
+        "workset_set": { "type": "object" },
+        "graph_outcome": { "const": "completed" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "request", "result", "operation_result", "authoring_audit", "accepted_record", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-validation/v1" },
+        "request": { "type": "object" },
+        "result": { "type": "object" },
+        "operation_result": { "type": "object" },
+        "authoring_audit": { "type": ["object", "null"] },
+        "accepted_record": { "type": "object" },
+        "graph_outcome": { "const": "completed" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_ref", "subject_key_schema_digest", "entries", "catalog_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.subject-catalog/v1" },
+        "requirement_ref": { "type": "string" },
+        "subject_key_schema_digest": { "$ref": "#/$defs/digest" },
+        "approved_subject_set_digest": { "$ref": "#/$defs/digest" },
+        "partition_subject_set_digest": { "$ref": "#/$defs/digest" },
+        "entries": { "type": "array" },
+        "catalog_digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "views", "view_set", "outcome", "conflicts", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.target-resolution-build/v1" },
+        "views": { "type": "array" },
+        "view_set": { "type": "object" },
+        "outcome": { "enum": ["target-resolution-current", "index-target-resolution-ambiguous"] },
+        "conflicts": { "type": "array", "items": { "type": "object" } },
+        "graph_outcome": { "enum": ["completed", "blocked"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "outcome", "conflicts", "message", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.target-resolution-outcome/v1" },
+        "outcome": { "enum": ["index-target-resolution-ambiguous", "index-target-resolution-invalid"] },
+        "conflicts": { "type": "array", "items": { "type": "object" } },
+        "message": { "type": "string", "minLength": 1 },
+        "graph_outcome": { "enum": ["blocked", "failed"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "audit", "can_materialize_candidate", "outcome", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.candidate-materialization-readiness/v1" },
+        "audit": { "type": "object" },
+        "can_materialize_candidate": { "type": "boolean" },
+        "outcome": { "enum": ["projected-artifact-fan-out-current", "indexer-plan-revision-required"] },
+        "graph_outcome": { "enum": ["completed", "partial"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "workset_set_digest", "total_count", "pending_count", "accepted_count", "failed_count", "stale_count", "next_refs", "accepted_result_set_digest", "outcome", "can_advance", "status_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-workset-status/v1" },
+        "workset_set_digest": { "$ref": "#/$defs/digest" },
+        "total_count": { "type": "integer", "minimum": 0 },
+        "pending_count": { "type": "integer", "minimum": 0 },
+        "accepted_count": { "type": "integer", "minimum": 0 },
+        "failed_count": { "type": "integer", "minimum": 0 },
+        "stale_count": { "type": "integer", "minimum": 0 },
+        "next_refs": { "type": "array" },
+        "accepted_result_set_digest": { "$ref": "#/$defs/digest" },
+        "outcome": { "type": "string" },
+        "can_advance": { "type": "boolean" },
+        "status_digest": { "$ref": "#/$defs/digest" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "ledger", "status", "receipt"],
+      "properties": {
+        "protocol": {
+          "enum": [
+            "context.indexer.main-run-ledger-preparation/v1",
+            "context.indexer.main-run-store-acceptance/v1",
+            "context.indexer.main-run-store-failure/v1"
+          ]
+        },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" },
+        "receipt": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "convergence", "next_request", "ledger", "status", "receipt", "outcome", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-partition-convergence/v1" },
+        "convergence": { "type": "object" },
+        "next_request": { "type": ["object", "null"] },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" },
+        "receipt": { "type": ["object", "null"] },
+        "outcome": {
+          "enum": ["accepted", "retry-required", "catalog-fallback-required", "blocked-invalid-input"]
+        },
+        "graph_outcome": { "enum": ["completed", "partial", "blocked", "failed"] }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "request", "fallback", "result", "ledger", "status", "receipt", "outcome", "graph_outcome", "user_gate_required"],
+      "properties": {
+        "protocol": { "const": "context.indexer.catalog-fallback-build/v1" },
+        "request": { "type": "object" },
+        "fallback": { "type": "object" },
+        "result": { "type": "object" },
+        "ledger": { "type": "object" },
+        "status": { "type": "object" },
+        "receipt": { "type": ["object", "null"] },
+        "outcome": { "const": "catalog-fallback-applied" },
+        "graph_outcome": { "const": "completed" },
+        "user_gate_required": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "ledger", "request", "status", "receipt"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-run-store-start/v1" },
+        "ledger": { "type": "object" },
+        "request": { "type": "object" },
+        "status": { "type": "object" },
+        "receipt": { "type": ["object", "null"] }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

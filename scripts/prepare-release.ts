@@ -2,10 +2,11 @@ import { readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  PUBLISH_PACKAGES,
   prepareDistPackageJson,
   type PublishContext,
 } from "../packages/dev-cli/src/commands/publish.js";
+import { releasePackagesForVersion } from
+  "../packages/dev-cli/src/commands/releasePackages.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -19,6 +20,29 @@ async function assertDirectory(path: string): Promise<void> {
   if (!(await stat(path)).isDirectory()) throw new Error(`Missing build output: ${path}`);
 }
 
+async function assertPluginManifestVersions(expectedVersion: string): Promise<void> {
+  for (const host of ["claude", "codex", "cursor"]) {
+    const manifestPath = resolve(
+      projectRoot,
+      "plugins",
+      "context",
+      "repo-install",
+      host,
+      `.${host}-plugin`,
+      "plugin.json",
+    );
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+      name?: string;
+      version?: string;
+    };
+    if (manifest.name !== "c4a" || manifest.version !== expectedVersion) {
+      throw new Error(
+        `${host} plugin manifest is ${String(manifest.version)}, expected ${expectedVersion}`,
+      );
+    }
+  }
+}
+
 const version = await readPackageVersion(resolve(projectRoot, "package.json"));
 const context: PublishContext = {
   projectRoot,
@@ -29,7 +53,8 @@ const context: PublishContext = {
   waitForInput: async () => "",
 };
 
-for (const pkg of PUBLISH_PACKAGES) {
+const releasePackages = releasePackagesForVersion(version);
+for (const pkg of releasePackages) {
   const packageDir = resolve(projectRoot, "packages", pkg.dir);
   const packageVersion = await readPackageVersion(resolve(packageDir, "package.json"));
   if (packageVersion !== version) {
@@ -41,10 +66,12 @@ for (const pkg of PUBLISH_PACKAGES) {
   await prepareDistPackageJson(context, packageDir, distDir, version, pkg.dir);
 }
 
+await assertPluginManifestVersions(version);
+
 console.log(JSON.stringify({
   state: "release-prepared",
   version,
-  packages: PUBLISH_PACKAGES.map((pkg) => ({
+  packages: releasePackages.map((pkg) => ({
     name: pkg.name,
     directory: `packages/${pkg.dir}/dist`,
   })),

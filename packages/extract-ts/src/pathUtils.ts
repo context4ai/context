@@ -1,9 +1,11 @@
 import { posix } from "node:path";
 import type { FileSystem } from "@c4a/extract";
 import { resolveTsConfigCandidates, type TsConfigPathResolver } from "./tsconfigPaths.js";
+import { isJavaScriptPath } from "./ecmaScriptLanguage.js";
 
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
-const BUILD_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs"];
+const TYPESCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+const JAVASCRIPT_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs"];
+const SOURCE_EXTENSIONS = [...TYPESCRIPT_EXTENSIONS, ...JAVASCRIPT_EXTENSIONS];
 const DECLARATION_EXTENSIONS = [".d.ts", ".d.mts", ".d.cts"];
 const KNOWN_CODE_SUFFIXES = [
   ...DECLARATION_EXTENSIONS,
@@ -15,7 +17,7 @@ const KNOWN_CODE_SUFFIXES = [
   ".system.js",
   ".min.js",
   ...SOURCE_EXTENSIONS,
-  ...BUILD_EXTENSIONS,
+  ...JAVASCRIPT_EXTENSIONS,
 ];
 
 /**
@@ -100,14 +102,18 @@ const buildToSourcePaths = (withoutExtension: string): string[] => {
 
 const createCandidatePaths = (
   value: string,
-  options: { allowIndexFallback?: boolean } = {},
+  options: { allowIndexFallback?: boolean; preferJavaScript?: boolean } = {},
 ) => {
   const normalized = normalizeRelativePath(stripResourceQuery(value));
   if (hasUnsupportedExplicitExtension(normalized)) return [];
 
   const withoutExtension = removeKnownExtension(normalized);
   const mappedSourcePaths = buildToSourcePaths(withoutExtension);
-  const directFirst = SOURCE_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+  const isBuildOutput = buildToSourcePaths(withoutExtension).length > 0;
+  const directFirst = SOURCE_EXTENSIONS.some((extension) => normalized.endsWith(extension)) && !isBuildOutput;
+  const preferredExtensions = options.preferJavaScript
+    ? [...JAVASCRIPT_EXTENSIONS, ...TYPESCRIPT_EXTENSIONS]
+    : [...TYPESCRIPT_EXTENSIONS, ...JAVASCRIPT_EXTENSIONS];
 
   const bases = directFirst
     ? unique([normalized, withoutExtension, ...mappedSourcePaths])
@@ -121,12 +127,12 @@ const createCandidatePaths = (
     if (SOURCE_EXTENSIONS.some((ext) => base.endsWith(ext))) {
       candidates.add(base);
     }
-    for (const extension of SOURCE_EXTENSIONS) {
+    for (const extension of preferredExtensions) {
       candidates.add(`${base}${extension}`);
       candidates.add(posix.join(base, `index${extension}`));
     }
-    if (BUILD_EXTENSIONS.some((extension) => normalized.endsWith(extension))) {
-      for (const extension of SOURCE_EXTENSIONS) {
+    if (JAVASCRIPT_EXTENSIONS.some((extension) => normalized.endsWith(extension))) {
+      for (const extension of preferredExtensions) {
         candidates.add(removeKnownExtension(normalized) + extension);
       }
     }
@@ -134,7 +140,7 @@ const createCandidatePaths = (
 
   // Fallback: always try src/index as last resort
   if (options.allowIndexFallback ?? true) {
-    for (const extension of SOURCE_EXTENSIONS) {
+    for (const extension of preferredExtensions) {
       candidates.add(`src/index${extension}`);
     }
   }
@@ -169,7 +175,10 @@ export const resolveImportSourcePath = async (
   if (!isRelativeModuleSpecifier(specifier)) {
     if (resolver === undefined) return null;
     for (const target of resolveTsConfigCandidates(specifier, resolver)) {
-      for (const candidate of createCandidatePaths(target, { allowIndexFallback: false })) {
+      for (const candidate of createCandidatePaths(target, {
+        allowIndexFallback: false,
+        preferJavaScript: isJavaScriptPath(fromFile),
+      })) {
         if (await fs.exists(candidate)) return normalizeRelativePath(candidate);
       }
     }
@@ -177,7 +186,7 @@ export const resolveImportSourcePath = async (
   }
 
   const baseDir = posix.dirname(fromFile);
-  for (const candidate of createCandidatePaths(specifier)) {
+  for (const candidate of createCandidatePaths(specifier, { preferJavaScript: isJavaScriptPath(fromFile) })) {
     const fullPath = baseDir === "." ? candidate : posix.join(baseDir, candidate);
     if (await fs.exists(fullPath)) {
       return normalizeRelativePath(fullPath);

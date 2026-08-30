@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.contract-overlay-validation-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "project_ref",
+    "overlay",
+    "base_contract",
+    "operator_contract",
+    "provider_integrity",
+    "attestation",
+    "trust_bundle_envelope",
+    "project_authorization",
+    "input_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.contract-overlay-validation-input/v1" },
+    "project_ref": { "type": "string", "minLength": 1 },
+    "overlay": {
+      "type": "object",
+      "required": ["protocol", "overlay_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay/v1" },
+        "overlay_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "base_contract": {
+      "type": "object",
+      "required": ["protocol", "contract_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.profile-contract/v1" },
+        "contract_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "operator_contract": {
+      "type": "object",
+      "required": ["protocol", "contract_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.operator-contract/v1" },
+        "contract_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "provider_integrity": { "$ref": "#/$defs/digest" },
+    "attestation": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["protocol", "attestation_digest"],
+          "properties": {
+            "protocol": { "const": "context.indexer.overlay-attestation/v1" },
+            "attestation_digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "trust_bundle_envelope": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["protocol", "bundle"],
+          "properties": {
+            "protocol": { "const": "context.indexer.overlay-trust-bundle-envelope/v1" },
+            "bundle": { "type": "object" }
+          }
+        }
+      ]
+    },
+    "project_authorization": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["protocol", "authorization_receipt_digest"],
+          "properties": {
+            "protocol": { "const": "context.indexer.overlay-project-authorization/v1" },
+            "authorization_receipt_digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

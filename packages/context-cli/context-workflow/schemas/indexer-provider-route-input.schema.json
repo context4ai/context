@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.provider-route-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "project_ref",
+    "registry",
+    "visible_skills",
+    "community_fallback_attempted",
+    "input_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.provider-route-input/v1" },
+    "project_ref": { "type": "string", "minLength": 1 },
+    "registry": { "$ref": "#/$defs/registry" },
+    "visible_skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["skill", "version", "source_type"],
+        "properties": {
+          "skill": { "$ref": "#/$defs/id" },
+          "version": {
+            "anyOf": [
+              { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+              { "type": "null" }
+            ]
+          },
+          "source_type": {
+            "enum": ["community-plugin", "cli-bundled", "workspace", "installed-plugin", "marketplace"]
+          }
+        }
+      }
+    },
+    "community_fallback_attempted": { "type": "boolean" },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "requirements", "indexers"],
+      "properties": {
+        "protocol": { "const": "context.indexer.registry/v1" },
+        "requirements": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "indexers": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.materialize-request/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "handler",
+    "resource_id",
+    "indexer_id",
+    "provider_id",
+    "provider_fingerprint",
+    "provider_integrity",
+    "manifest_digest",
+    "requirement_set_digest",
+    "workset_ref",
+    "workset_digest",
+    "profile",
+    "composer_id",
+    "instruction_set_digest",
+    "customization_fingerprint",
+    "request_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.materialize-request/v1" },
+    "handler": { "const": "context.materialize-indexer-instructions/v1" },
+    "resource_id": { "const": "resolved-indexer-instructions" },
+    "indexer_id": { "type": "string", "minLength": 1 },
+    "provider_id": { "type": "string", "minLength": 1 },
+    "provider_fingerprint": { "$ref": "#/$defs/digest" },
+    "provider_integrity": { "$ref": "#/$defs/digest" },
+    "manifest_digest": { "$ref": "#/$defs/digest" },
+    "requirement_set_digest": { "$ref": "#/$defs/digest" },
+    "workset_ref": { "type": "string", "minLength": 1 },
+    "workset_digest": { "$ref": "#/$defs/digest" },
+    "profile": { "type": "string", "minLength": 1 },
+    "composer_id": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "instruction_set_digest": { "$ref": "#/$defs/digest" },
+    "customization_fingerprint": { "$ref": "#/$defs/digest" },
+    "request_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { EdgeSource, EdgeType, Grounding, SymbolKind, Visibility } from "@c4a/core";
-import type { ExtractionResult, RelationInfo, SymbolInfo } from "@c4a/extract";
+import type { ExtractionDiagnostic, ExtractionResult, RelationInfo, SymbolInfo } from "@c4a/extract";
 import type Parser from "web-tree-sitter";
 
 export type SyntaxNode = Parser.SyntaxNode;
@@ -11,6 +11,8 @@ export type FileAnalysis = {
   importBindings: Map<string, ImportBinding>;
   relations: RelationInfo[];
   lines: number;
+  disposition: "analyzed" | "unsupported";
+  diagnostics: ExtractionDiagnostic[];
 };
 
 export const DECLARATION_TYPES = new Set([
@@ -142,7 +144,7 @@ export const inferReturnType = (node: SyntaxNode | null): string | null => {
   return containsJsx(node) ? "JSX.Element" : null;
 };
 
-const containsJsx = (node: SyntaxNode): boolean => {
+export const containsJsx = (node: SyntaxNode): boolean => {
   if (node.type.startsWith("jsx_")) return true;
   return node.namedChildren.some(containsJsx);
 };
@@ -188,7 +190,7 @@ export const appendTypeRelations = (
 };
 
 export const classifyVariable = (name: string, filePath: string) => {
-  if (filePath.endsWith(".tsx") && /^[A-Z]/.test(name)) {
+  if ((filePath.endsWith(".tsx") || filePath.endsWith(".jsx")) && /^[A-Z]/.test(name)) {
     return SymbolKind.Component;
   }
   return SymbolKind.Variable;

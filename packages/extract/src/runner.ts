@@ -8,6 +8,7 @@ import type { ExtractionPlugin } from "./protocol.js";
 import { buildCodeSnapshot, type CodeSnapshotPayload } from "./codeSnapshot.js";
 import { runRepositoryExtraction, type RepositoryExtractionResult } from "./repository.js";
 import { ExtractionInputError, NO_ENTRY_DETECTED } from "./errors.js";
+import { redactIndexerOutput, redactIndexerOutputText } from "./outputRedaction.js";
 
 export interface CodeExtractRunnerPluginSpec {
   package: string;
@@ -210,10 +211,14 @@ export const runCodeExtractCli = async (): Promise<void> => {
     const input = stdin.trim() ? JSON.parse(stdin) : {};
     const events = await runCodeExtractRunner(input);
     for (const event of events) {
-      process.stdout.write(JSON.stringify(event) + "\n");
+      const filtered = redactIndexerOutput({ channel: "stdout", value: event });
+      process.stdout.write(JSON.stringify(filtered.value) + "\n");
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = redactIndexerOutputText({
+      channel: "exception-message",
+      value: error instanceof Error ? error.message : String(error),
+    });
     process.stdout.write(JSON.stringify({ type: "error", code: "runner-failed", message }) + "\n");
     process.exitCode = 1;
   }

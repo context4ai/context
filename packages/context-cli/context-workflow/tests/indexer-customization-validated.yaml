@@ -1,0 +1,16 @@
+schema: agent-graph.test.v1
+name: a CLI-validated customization draft continues to exact Provider resolution and proposal staging
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+    indexer/validate-indexer-customization: completed
+expect:
+  statusCode: actionable
+  primaryNode: prepare-indexer-customization-project
+  primaryReasonCode: route.indexer.customization-project-preparation

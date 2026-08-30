@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: materialize-indexer-instructions
+runner: host
+effect: read
+handler: context.materialize-indexer-instructions/v1
+inputSchema: schemas/indexer-materialize-request.schema.json
+outputSchema: schemas/indexer-materialized-resource.schema.json

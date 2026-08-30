@@ -159,6 +159,39 @@ describe("Context workspace execution runtime", () => {
     }
   });
 
+  test("filters split stdout, stderr, and exception secrets before receipt hashing and tail retention", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-redacted-runtime-"));
+    const secret = "fixture-secret-do-not-retain";
+    const runtime = new WorkspaceExecutionRuntime({
+      projectRoot: root,
+      cliEntryPath: join(root, "unused.mjs"),
+      inProcess: {
+        supports: () => true,
+        execute: async () => {
+          process.stdout.write("token=fixture-secret-");
+          process.stdout.write("do-not-retain");
+          process.stderr.write("clientSecret=fixture-secret-");
+          process.stderr.write("do-not-retain");
+          throw new Error(`password=${secret}`);
+        },
+      },
+    });
+    try {
+      const receipt = await runtime.execute({
+        cwd: root,
+        command: "context --workflow-revision sha256:test close --format json",
+        effect: "write",
+      });
+      expect(receipt.exitCode).toBe(1);
+      expect(receipt.stderr.tail).not.toContain(secret);
+      expect(receipt.stderr.tail).toContain("[REDACTED:indexer-output]");
+      expect(receipt.stdout.bytes).toBe(Buffer.byteLength("token=\"[REDACTED:indexer-output]\""));
+    } finally {
+      await runtime.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("accepts only exact revision-bound command shapes for in-process execution", () => {
     const executor = createWorkflowInProcessExecutor();
     const revision = ["--workflow-revision", "sha256:test"];

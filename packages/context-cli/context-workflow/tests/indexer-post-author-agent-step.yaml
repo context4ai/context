@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: a selected post-author composer uses the bounded internal Agent Skill
+graph: indexer
+entry: post-author-composer-step
+expect:
+  statusCode: actionable
+  primaryNode: run-indexer-post-author-composer
+  primaryReasonCode: route.indexer.post-author-agent-step
+  requiredResources:
+    - skill.context-run-indexer-post-author-composer

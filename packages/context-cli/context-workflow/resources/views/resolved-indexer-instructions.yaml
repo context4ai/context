@@ -1,0 +1,23 @@
+schema: agent-graph.resource.v2
+id: resolved-indexer-instructions
+kind: procedure
+mediaType: text/markdown
+materializer: actions/materialize-indexer-instructions.yaml
+input:
+  protocol: context.indexer.materialize-request/v1
+  handler: context.materialize-indexer-instructions/v1
+  resource_id: resolved-indexer-instructions
+  indexer_id: __runtime__
+  provider_id: __runtime__
+  provider_fingerprint: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  provider_integrity: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  manifest_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  requirement_set_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  workset_ref: __runtime__
+  workset_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  profile: __runtime__
+  composer_id: null
+  instruction_set_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  customization_fingerprint: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  request_digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+description: Runtime-bound exact Provider instructions; Context replaces the reserved template input before exposing this Route.

@@ -104,24 +104,36 @@ describe("0.6.15 extraction batch preview", () => {
         "run", "--preview-extraction-batch", "--preview-phase",
         "extract:20260712/large-lib:codeindex", "--format", "json",
       ])) as {
-        scaleClear: boolean;
-        totals: { blocked: number; projectedPages: number };
-        advisories: string[];
-        phases: Array<{ indexUnits: Array<{ scale: string; projectedPageCount: number }> }>;
-        cache: { reusablePhases: number };
+        schema: string;
+        preview_digest: string;
+        summary: {
+          scale_clear: boolean;
+          blocked_units: number;
+          projected_pages: number;
+          advisories: string[];
+          reusable_phase_caches: number;
+        };
+        items: { items: Array<{ scale: string; projected_pages: number; module_types: string[]; facets: string[] }> };
+        views: Array<{ command: string }>;
       };
       expect(batch).toMatchObject({
-        scaleClear: false,
-        totals: { blocked: 1, projectedPages: 301 },
-        advisories: ["batch-page-count-warning"],
-        cache: { reusablePhases: 0 },
+        schema: "context.extraction-batch-preview-view.v1",
+        summary: {
+          scale_clear: false,
+          blocked_units: 1,
+          projected_pages: 301,
+          advisories: ["batch-page-count-warning"],
+          reusable_phase_caches: 0,
+        },
       });
-      expect(batch.phases[0]?.indexUnits[0]).toMatchObject({
+      expect(batch.items.items[0]).toMatchObject({
         scale: "blocked",
-        projectedPageCount: 301,
-        moduleTypes: ["sdk-library"],
+        projected_pages: 301,
+        module_types: ["sdk-library"],
         facets: ["public-api"],
       });
+      expect(batch.views[0]?.command).toContain(batch.preview_digest);
+      expect(Buffer.byteLength(JSON.stringify(batch, null, 2))).toBeLessThanOrEqual(24_000);
       expect(existsSync(join(project, ".tmp/context-runtime/extract/previews/batch.json"))).toBe(true);
       await expect(runCliInDir(project, [
         "run", "extract:20260712/large-lib:codeindex",
@@ -141,15 +153,34 @@ describe("0.6.15 extraction batch preview", () => {
       const batch = JSON.parse(await runCliInDir(project, [
         "run", "--preview-extraction-batch", "--format", "json",
       ])) as {
-        scaleClear: boolean;
-        totals: { warnings: number; blocked: number };
-        phases: Array<{ indexUnits: Array<{ scale: string }> }>;
+        preview_digest: string;
+        summary: { scale_clear: boolean; warning_units: number; blocked_units: number };
+        items: { items: Array<{ scale: string }> };
       };
       expect(batch).toMatchObject({
-        scaleClear: true,
-        totals: { warnings: 1, blocked: 0 },
+        summary: { scale_clear: true, warning_units: 1, blocked_units: 0 },
       });
-      expect(batch.phases[0]?.indexUnits[0]?.scale).toBe("warning");
+      expect(batch.items.items[0]?.scale).toBe("warning");
+      const targetSymbols = JSON.parse(await runCliInDir(project, [
+        "run", "--preview-extraction-batch",
+        "--preview-digest", batch.preview_digest,
+        "--view", "items",
+        "--item-kind", "target-symbol",
+        "--page-size", "25",
+        "--format", "json",
+      ])) as {
+        view: string;
+        preview_digest: string;
+        page: { total: number; shown: number; has_more: boolean };
+        items: { item_id_field: string; items: Array<{ item_id: string; text: string }> };
+      };
+      expect(targetSymbols).toMatchObject({
+        view: "items",
+        preview_digest: batch.preview_digest,
+        page: { total: 101, shown: 25, has_more: true },
+        items: { item_id_field: "item_id" },
+      });
+      expect(targetSymbols.items.items.every((item) => item.item_id.length > 0 && item.text.length > 0)).toBe(true);
       await runCliInDir(project, ["run", "extract:20260712/large-lib:codeindex"]);
       expect(readCandidateRows(project)).toHaveLength(101);
     } finally {

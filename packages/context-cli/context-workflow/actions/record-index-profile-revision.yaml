@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: record-index-profile-revision
+runner: command
+effect: write
+command: context indexer record-index-profile-revision --input .tmp/agent-payloads/indexer-profile-revision-record.json --format json
+inputSchema: schemas/indexer-profile-revision-record-input.schema.json
+outputSchema: schemas/indexer-profile-revision-record-result.schema.json

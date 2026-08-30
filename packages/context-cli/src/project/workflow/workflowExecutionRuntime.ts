@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { redactIndexerOutputText } from "@c4a/core";
 import type { ContextWorkflowCommand } from "./workflowTypes.js";
 import {
   ExecutionScope,
@@ -34,11 +35,15 @@ interface StreamDigest {
 }
 
 function digestText(value: string, includeTail: boolean): StreamDigest {
-  const bytes = Buffer.byteLength(value);
+  const filtered = redactIndexerOutputText({
+    channel: includeTail ? "stderr" : "stdout",
+    value,
+  });
+  const bytes = Buffer.byteLength(filtered);
   return {
     bytes,
-    sha256: createHash("sha256").update(value).digest("hex"),
-    ...(includeTail && value.length > 0 ? { tail: value.slice(-8192) } : {}),
+    sha256: createHash("sha256").update(filtered).digest("hex"),
+    ...(includeTail && filtered.length > 0 ? { tail: filtered.slice(-8192) } : {}),
   };
 }
 
@@ -65,26 +70,18 @@ async function captureProcessOutput(
   scope: ExecutionScope,
   action: () => Promise<void>,
 ): Promise<{ stdout: StreamDigest; stderr: StreamDigest; error?: unknown }> {
-  const stdoutHash = createHash("sha256");
-  const stderrHash = createHash("sha256");
-  let stdoutBytes = 0;
-  let stderrBytes = 0;
-  let stderrTail = "";
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
   const stdoutWrite = process.stdout.write;
   const stderrWrite = process.stderr.write;
   process.stdout.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
-    const buffer = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
-    stdoutHash.update(buffer);
-    stdoutBytes += buffer.byteLength;
+    stdoutChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
     const callback = args.find((value): value is () => void => typeof value === "function");
     callback?.();
     return true;
   }) as typeof process.stdout.write;
   process.stderr.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
-    const buffer = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
-    stderrHash.update(buffer);
-    stderrBytes += buffer.byteLength;
-    stderrTail = `${stderrTail}${buffer.toString("utf8")}`.slice(-8192);
+    stderrChunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
     const callback = args.find((value): value is () => void => typeof value === "function");
     callback?.();
     return true;
@@ -99,20 +96,13 @@ async function captureProcessOutput(
   } catch (error) {
     actionError = error;
     const message = error instanceof Error ? error.message : String(error);
-    const buffer = Buffer.from(message);
-    stderrHash.update(buffer);
-    stderrBytes += buffer.byteLength;
-    stderrTail = `${stderrTail}${message}`.slice(-8192);
+    stderrChunks.push(message);
   } finally {
     await outputHandle.release();
   }
   return {
-    stdout: { bytes: stdoutBytes, sha256: stdoutHash.digest("hex") },
-    stderr: {
-      bytes: stderrBytes,
-      sha256: stderrHash.digest("hex"),
-      ...(stderrTail.length === 0 ? {} : { tail: stderrTail }),
-    },
+    stdout: digestText(stdoutChunks.join(""), false),
+    stderr: digestText(stderrChunks.join(""), true),
     ...(actionError === undefined ? {} : { error: actionError }),
   };
 }
@@ -216,11 +206,8 @@ export class WorkspaceExecutionRuntime {
       executor: "subprocess",
       effect: input.effect,
     });
-    const stdoutHash = createHash("sha256");
-    const stderrHash = createHash("sha256");
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
-    let stderrTail = "";
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
     const timeoutMs = 30 * 60 * 1000;
     let receipt: WorkflowCommandReceipt;
     try {
@@ -236,15 +223,10 @@ export class WorkspaceExecutionRuntime {
         if (!settled) child.kill("SIGKILL");
       });
       child.stdout.on("data", (chunk: Buffer | string) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        stdoutHash.update(buffer);
-        stdoutBytes += buffer.byteLength;
+        stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk);
       });
       child.stderr.on("data", (chunk: Buffer | string) => {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        stderrHash.update(buffer);
-        stderrBytes += buffer.byteLength;
-        stderrTail = `${stderrTail}${buffer.toString("utf8")}`.slice(-8192);
+        stderrChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk);
       });
       child.once("error", reject);
       let timedOut = false;
@@ -265,12 +247,8 @@ export class WorkspaceExecutionRuntime {
           signal,
           durationMs: Date.now() - started,
           timedOut,
-          stdout: { bytes: stdoutBytes, sha256: stdoutHash.digest("hex") },
-          stderr: {
-            bytes: stderrBytes,
-            sha256: stderrHash.digest("hex"),
-            ...(stderrTail.length === 0 ? {} : { tail: stderrTail }),
-          },
+          stdout: digestText(stdoutChunks.join(""), false),
+          stderr: digestText(stderrChunks.join(""), true),
         });
       });
       });

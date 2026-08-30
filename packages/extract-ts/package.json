@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-ts",
-  "description": "TypeScript extraction plugin for the Context ExtractionResult v2 contract",
-  "version": "0.6.19",
+  "description": "TypeScript and JavaScript extraction plugin for the Context ExtractionResult v2 contract",
+  "version": "0.7.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -28,10 +28,9 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@c4a/core": "workspace:*",
+    "@c4a/extract": "workspace:*",
     "typescript": "^5.5.4",
     "web-tree-sitter": "^0.20.8"
-  },
-  "devDependencies": {
-    "@c4a/extract": "workspace:*"
   }
 }

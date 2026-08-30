@@ -1,0 +1,15 @@
+schema: agent-graph.test.v1
+name: main Candidate Review is reachable only after the readiness Action passes
+graph: indexer
+entry: candidate-review
+state:
+  outcomes:
+    indexer/inspect-index-candidate-review-readiness: completed
+expect:
+  statusCode: waiting-user
+  primaryNode: review-index-candidates
+  primaryReasonCode: route.indexer.candidate-review
+  availability: requires-user
+  gateResolution: user
+  inspectionHandler: context.review.inspect-current
+  resolutionHandler: context.review.force-approve-current

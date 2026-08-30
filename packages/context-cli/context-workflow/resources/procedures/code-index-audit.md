@@ -49,12 +49,15 @@ dimension. Every elevated signal must receive an assessment tied to inspected
 content. Submit one `context.code-index-audit-decision.v1` payload for the
 complete batch.
 
-Read the complete inventory before deciding. It separates eligible and
-analyzed files/LOC, read documents, target and exported symbols, stable entries,
-protocol boundaries, exclusions, and parser gaps. For each failed or
-below-target dimension, use the returned uncovered identities, affected pages,
-recommended template resources, and action vocabulary. Do not replace those
-facts with an inferred file list.
+Read the complete digest-bound inventory before deciding. The Route-selected
+audit resource returns one budget-safe inspection command. Execute it and then
+each returned `next_action.command` until `audit_items_complete`; do not use
+host output truncation or shell slicing as pagination. The item stream separates
+eligible and analyzed files/LOC, read documents, target and exported symbols,
+stable entries, protocol boundaries, exclusions, and parser gaps. For each
+failed or below-target dimension, use the returned uncovered identities,
+affected pages, recommended template resources, and action vocabulary. Do not
+replace those facts with an inferred file list.
 
 For custom adapters, file and symbol identity arrays are complete denominators,
 not samples: their lengths must match the declared counts, analyzed identities

@@ -12,7 +12,7 @@ Context uses Agent Graph as its work-contract layer. Agent Graph does not extrac
 
 The public Context plugin exposes one Agent entry:
 
-- [`/c4a:context`](https://github.com/context4ai/context/blob/main/packages/context-cli/plugin/commands/context.md), generated from `context.md`, starts a requested knowledge workspace or continues an existing one. Its first `context entry` call resolves initialization, workspace relocation, or current workflow evaluation before handing control to `workflow.current`.
+- [`/c4a:context`](https://github.com/context4ai/context/blob/main/plugins/context/skills/context/SKILL.md), generated from the root Context Skill, starts a requested knowledge workspace or continues an existing one. Its first `context entry` call resolves initialization, workspace relocation, or current workflow evaluation before handing control to `workflow.current`.
 
 The entry is intentionally thin. It describes the CLI bootstrap and Route-consumption contract instead of duplicating the product lifecycle. Detailed guidance stays distributed across independently addressable workflow resources and Action contracts.
 

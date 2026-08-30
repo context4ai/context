@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: authorize-indexer-contract-overlay
+runner: host
+effect: external
+handler: context.authorize-indexer-contract-overlay/v1
+inputSchema: schemas/indexer-contract-overlay-authorization-input.schema.json
+outputSchema: schemas/indexer-contract-overlay-authorization-result.schema.json

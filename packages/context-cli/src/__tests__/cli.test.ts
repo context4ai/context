@@ -56,11 +56,21 @@ function writeInstallablePluginRoot(root: string, version = "1.2.3-test"): void 
   mkdirSync(join(root, "claude", ".claude-plugin"), { recursive: true });
   mkdirSync(join(root, "codex", ".codex-plugin"), { recursive: true });
   mkdirSync(join(root, "codex", "skills", "context"), { recursive: true });
+  mkdirSync(join(root, "cursor", ".cursor-plugin"), { recursive: true });
   writeFileSync(join(root, ".claude-plugin", "marketplace.json"), "{}\n", "utf8");
   writeFileSync(join(root, ".agents", "plugins", "marketplace.json"), "{}\n", "utf8");
   writeFileSync(join(root, "claude", ".claude-plugin", "plugin.json"), `${JSON.stringify({ version })}\n`, "utf8");
   writeFileSync(join(root, "codex", ".codex-plugin", "plugin.json"), `${JSON.stringify({ version })}\n`, "utf8");
+  writeFileSync(join(root, "cursor", ".cursor-plugin", "plugin.json"), `${JSON.stringify({ version })}\n`, "utf8");
   writeFileSync(join(root, "codex", "skills", "context", "SKILL.md"), "---\nname: context\ndescription: test\n---\n", "utf8");
+  for (const name of ["context-code-indexer", "context-markdown-indexer"]) {
+    mkdirSync(join(root, "skills", name), { recursive: true });
+    writeFileSync(
+      join(root, "skills", name, "SKILL.md"),
+      `---\nname: ${name}\ndescription: test\nmetadata:\n  context-role: indexer-provider\n---\n`,
+      "utf8",
+    );
+  }
 }
 
 describe("CLI error handling", () => {
@@ -120,6 +130,21 @@ describe("CLI error handling", () => {
 
     expect(code).toBe(1);
     expect(exitCode).toBe(1);
+  });
+
+  test("filters exception messages and structured error detail before stderr", () => {
+    const chunks: string[] = [];
+    const secret = "fixture-secret-do-not-print";
+    handleCliFailure(new ContextError(ExitCode.UserError, `password=${secret}`, {
+      category: "user-input-invalid",
+      clientSecret: secret,
+    }), {
+      stderr: { write: (chunk: string) => { chunks.push(chunk); return true; } },
+      exit: () => undefined,
+    });
+    const stderr = chunks.join("");
+    expect(stderr).not.toContain(secret);
+    expect(stderr).toContain("[REDACTED:indexer-output]");
   });
 
   test("prints stable machine codes for coded extraction errors", () => {
@@ -387,6 +412,7 @@ describe("CLI error handling", () => {
       expect(stdout).toContain("manual install: use the marketplace path above as the plugin marketplace root.");
       expect(stdout).toContain("✅ claude: planned");
       expect(stdout).toContain("✅ codex: planned");
+      expect(stdout).toContain("✅ cursor: planned");
       expect(stdout).toContain("details:");
       expect(stdout).toContain(pluginRoot);
       expect(stdout).toContain("claude 'plugin' 'marketplace' 'add'");
@@ -478,6 +504,7 @@ describe("CLI error handling", () => {
       const result = await runShell(cwd, ["plugin", "install", "--agent", "codex"], {
         C4A_CONTEXT_PLUGIN_ROOT: pluginRoot,
         CODEX_HOME: codexHome,
+        CONTEXT_SHARED_SKILLS_ROOT: join(cwd, "shared-skills"),
         PATH: `${binDir}:/usr/bin:/bin`,
       });
 
@@ -490,6 +517,9 @@ describe("CLI error handling", () => {
       expect(existsSync(join(cacheRoot, "0.5.9"))).toBe(false);
       expect(existsSync(join(cacheRoot, "local"))).toBe(false);
       expect(readdirSync(cacheRoot).sort()).toEqual([version]);
+      expect(existsSync(join(currentCache, "skills", "context-code-indexer"))).toBe(false);
+      expect(readFileSync(join(cwd, "shared-skills", "context-code-indexer", "SKILL.md"), "utf8"))
+        .toContain("name: context-code-indexer");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -510,6 +540,9 @@ describe("CLI error handling", () => {
         C4A_CONTEXT_PLUGIN_ROOT: pluginRoot,
         C4A_CLAUDE_PLUGIN_CACHE_HOME: join(cwd, "claude-home"),
         CODEX_HOME: join(cwd, "codex-home"),
+        CONTEXT_CLAUDE_SKILLS_ROOT: join(cwd, "claude-skills"),
+        CONTEXT_SHARED_SKILLS_ROOT: join(cwd, "shared-skills"),
+        CONTEXT_CURSOR_PLUGIN_ROOT: join(cwd, "cursor-plugin"),
         PATH: `${binDir}:/usr/bin:/bin`,
       });
 
@@ -517,7 +550,10 @@ describe("CLI error handling", () => {
       expect(result.stdout).toContain("⚠ installed context plugin");
       expect(result.stdout).toContain("✅ claude: installed");
       expect(result.stdout).toContain("⚠ codex: skipped — codex CLI was not found on PATH");
-      expect(result.stdout).toContain("next: Install Codex CLI or rerun `context plugin install --agent claude`");
+      expect(result.stdout).toContain("✅ cursor: installed");
+      expect(result.stdout).toContain("next: Install Codex CLI or rerun for Claude/Cursor.");
+      expect(existsSync(join(cwd, "cursor-plugin", ".cursor-plugin", "plugin.json"))).toBe(true);
+      expect(existsSync(join(cwd, "shared-skills", "context-markdown-indexer", "SKILL.md"))).toBe(true);
       expect(result.stderr).toBe("");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
@@ -558,6 +594,7 @@ describe("CLI error handling", () => {
       const result = await runShell(cwd, ["plugin", "install", "--agent", "claude"], {
         C4A_CONTEXT_PLUGIN_ROOT: pluginRoot,
         C4A_CLAUDE_PLUGIN_CACHE_HOME: claudeHome,
+        CONTEXT_CLAUDE_SKILLS_ROOT: join(cwd, "claude-skills"),
         CLAUDE_COMMAND_LOG: commandLog,
         PATH: `${binDir}:/usr/bin:/bin`,
       });
@@ -572,6 +609,7 @@ describe("CLI error handling", () => {
       expect(commands).toContain("plugin install c4a@c4a --scope user");
       expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-alpha.6"))).toBe(false);
       expect(existsSync(join(claudeHome, ".claude", "plugins", "cache", "c4a", "c4a", "0.6.0-beta.2"))).toBe(true);
+      expect(existsSync(join(cwd, "claude-skills", "context-code-indexer", "SKILL.md"))).toBe(true);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
@@ -594,7 +632,7 @@ describe("CLI error handling", () => {
       expect(result.stderr).toContain("✗ failed: external-tool-failed");
       expect(result.stderr).toContain("no requested agent plugin target could be installed");
       expect(result.stderr).toContain("codex CLI was not found on PATH");
-      expect(result.stderr).toContain("context plugin install --agent claude");
+      expect(result.stderr).toContain("rerun for the filesystem-backed Cursor target");
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }

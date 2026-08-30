@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: run-indexer-post-author-composer
+runner: agent
+effect: write
+skill: skills/run-indexer-post-author-composer/SKILL.md
+inputSchema: schemas/indexer-post-author-fragment-request.schema.json
+outputSchema: schemas/indexer-post-author-fragment-result.schema.json

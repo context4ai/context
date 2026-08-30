@@ -452,6 +452,16 @@ function frontmatterRecord(content: string): { record: Record<string, unknown>; 
   }
 }
 
+function canonicalFrontmatter(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalFrontmatter(item)).join(",")}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalFrontmatter(value[key])}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "undefined";
+}
+
 export function withDocumentRevisionMetadata(input: {
   content: string;
   approvedPath: string;
@@ -577,6 +587,6 @@ export function inferDocumentRevisionReplacements(input: {
   if (currentFrontmatter === null || revisionFrontmatter === null) return null;
   delete currentFrontmatter.record.context_optimization;
   delete revisionFrontmatter.record.context_optimization;
-  if (JSON.stringify(currentFrontmatter.record) !== JSON.stringify(revisionFrontmatter.record)) return null;
+  if (canonicalFrontmatter(currentFrontmatter.record) !== canonicalFrontmatter(revisionFrontmatter.record)) return null;
   return replacements;
 }

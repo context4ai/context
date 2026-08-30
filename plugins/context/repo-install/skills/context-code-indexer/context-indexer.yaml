@@ -1,0 +1,230 @@
+protocol: context.indexer.provider/v1
+id: context-code-indexer
+version: 1.0.0
+domains: [code]
+
+activation:
+  target_kinds: [repository, package, library, service, application]
+  required_signals:
+    - id: supported-source
+      description: The registered target scope contains source or contract files supported by Context.
+  supporting_signals:
+    - id: stable-entry
+      description: The target exposes a stable entry, protocol, command, route, export, or runtime boundary.
+    - id: usage-material
+      description: The readable scope contains examples, tests, documentation, or operational material.
+  negative_signals:
+    - id: generated-only
+      description: The scope contains only generated artifacts with no authoritative source boundary.
+  agent_questions:
+    - Which stable reader capability groups the complete eligible inventory?
+
+provides:
+  profiles:
+    - monorepo-container
+    - web-application
+    - component-library
+    - sdk-library
+    - cli-tool
+    - plugin-extension
+    - api-service
+    - gateway-facade
+    - domain-service
+    - background-runtime
+    - event-consumer
+    - data-sync-reconciliation
+    - storage-repository
+    - adapter-integration
+    - contract-source
+    - derived-generated-source
+  partition_strategies:
+    - id: public-target-family
+      profiles: [component-library, sdk-library, plugin-extension, contract-source]
+      priority: 100
+    - id: canonical-semantic-subject
+      profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
+      priority: 200
+  operations:
+    - id: main-index
+      consumes: context.indexer.main-workset/v1
+      produces: context.indexer.main-result/v1
+      accepts_layer_fragments: [fact-enrichment, template-variables]
+    - id: material-answer
+      consumes: context.indexer.material-question-workset/v1
+      produces: context.indexer.material-answer-result/v1
+      supported_evidence_kinds: [code, contract, configuration, documentation, runbook, test-result, runtime-observation]
+      accepts_layer_fragments: [fact-enrichment]
+  layer_fragments:
+    - kind: derived-artifact-proposal
+      phase: post-author
+      produces: context.indexer.layer-fragment/v1
+  composers:
+    - id: public-contract
+      supported_profiles: [component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, adapter-integration, contract-source, derived-generated-source]
+      contract:
+        instruction: references/composers/public-contract.md
+        primary_requirements: { fact_kinds: [public-surface], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [contract]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: protocol-boundary
+      supported_profiles: [web-application, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      contract:
+        instruction: references/composers/protocol-boundary.md
+        primary_requirements: { fact_kinds: [protocol-operation], artifact_kinds: [contract] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [contract]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: cross-module-chain
+      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration]
+      contract:
+        instruction: references/composers/cross-module-chain.md
+        primary_requirements: { fact_kinds: [module-dependency], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [content]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: contracts-and-chains
+      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      contract:
+        instruction: references/composers/contracts-and-chains.md
+        primary_requirements: { fact_kinds: [contract-binding, module-dependency], artifact_kinds: [contract] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [contract]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: event-flow
+      supported_profiles: [web-application, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, adapter-integration, contract-source]
+      contract:
+        instruction: references/composers/event-flow.md
+        primary_requirements: { fact_kinds: [event-binding], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [content]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: persistence-boundary
+      supported_profiles: [api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration]
+      contract:
+        instruction: references/composers/persistence-boundary.md
+        primary_requirements: { fact_kinds: [persistence-binding], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [content]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: examples-and-documentation
+      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      contract:
+        instruction: references/composers/examples-and-documentation.md
+        primary_requirements: { fact_kinds: [example-candidate], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [examples]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+    - id: development-and-delivery
+      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      contract:
+        instruction: references/composers/development-and-delivery.md
+        primary_requirements: { fact_kinds: [development-entry], artifact_kinds: [content] }
+        derived_artifact_policy:
+          fragment_protocol: context.indexer.layer-fragment/v1
+          fragment_kind: derived-artifact-proposal
+          artifact_policy_variant: standard
+          artifact_kinds: [content]
+        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+  source_roles: [authoritative-source, public-contract-source, example-source, operational-source]
+  logical_units:
+    - id: semantic-subject
+      identity: canonical-subject-key
+      artifacts:
+        recommended: [content, contract, examples]
+        supported_policy_variants: [compact, standard, expanded]
+
+provider:
+  instructions:
+    - path: references/indexer.md
+      profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
+  templates:
+    - { id: monorepo-container, profile: monorepo-container, path: templates/monorepo-container.md }
+    - { id: web-application, profile: web-application, path: templates/web-application.md }
+    - { id: component-library, profile: component-library, path: templates/component-library.md }
+    - { id: sdk-library, profile: sdk-library, path: templates/sdk-library.md }
+    - { id: cli-tool, profile: cli-tool, path: templates/cli-tool.md }
+    - { id: plugin-extension, profile: plugin-extension, path: templates/plugin-extension.md }
+    - { id: api-service, profile: api-service, path: templates/api-service.md }
+    - { id: gateway-facade, profile: gateway-facade, path: templates/gateway-facade.md }
+    - { id: domain-service, profile: domain-service, path: templates/domain-service.md }
+    - { id: background-runtime, profile: background-runtime, path: templates/background-runtime.md }
+    - { id: event-consumer, profile: event-consumer, path: templates/event-consumer.md }
+    - { id: data-sync-reconciliation, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation.md }
+    - { id: storage-repository, profile: storage-repository, path: templates/storage-repository.md }
+    - { id: adapter-integration, profile: adapter-integration, path: templates/adapter-integration.md }
+    - { id: contract-source, profile: contract-source, path: templates/contract-source.md }
+    - { id: derived-generated-source, profile: derived-generated-source, path: templates/derived-generated-source.md }
+  forbidden_fallbacks: [one-page-per-symbol, ordinal-batch-pages, inferred-runtime-chain]
+  completion_checks: [inventory-disposition-closure, subject-owner-closure, evidence-binding]
+
+customization:
+  supports: [config, instructions-append, template-override, program-extend]
+
+quality_guidance:
+  metric_ids:
+    - inventory-disposition-coverage
+    - duplicated-fact-target-ratio
+    - narrative-enumeration-ratio
+    - normalized-template-repetition-ratio
+    - implementation-body-ratio
+    - reference-only-reader-targets
+    - unresolved-ordinal-partitions
+    - discretionary-artifacts-per-logical-unit
+    - example-candidate-decision-coverage
+    - example-representative-coverage
+    - example-public-target-linkage
+  repair: references/metrics.md

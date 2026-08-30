@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.layer-fragment-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "request_digest", "composer_ref", "consumed_primary_result_view_digest", "fragments", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.layer-fragment-result/v1" },
+    "request_digest": { "$ref": "#/$defs/digest" },
+    "composer_ref": { "type": "string", "minLength": 1 },
+    "consumed_primary_result_view_digest": { "$ref": "#/$defs/digest" },
+    "fragments": { "type": "array", "items": { "type": "object" } },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

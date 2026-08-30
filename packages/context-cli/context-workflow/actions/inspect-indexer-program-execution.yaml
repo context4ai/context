@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: inspect-indexer-program-execution
+runner: host
+effect: read
+handler: context.inspect-indexer-program-execution/v1
+inputSchema: schemas/indexer-program-execution-authorization-input.schema.json
+outputSchema: schemas/indexer-program-execution-authorization-result.schema.json

@@ -25,9 +25,9 @@ async function createMonorepo(root: string): Promise<{ root: string; head: strin
       type: "module",
     }, null, 2)}\n`, "utf8");
   }
-  await mkdir(join(repository, "tux-web"), { recursive: true });
-  await writeFile(join(repository, "tux-web", "package.json"), `${JSON.stringify({
-    name: "@demo/tux-web",
+  await mkdir(join(repository, "sample-web"), { recursive: true });
+  await writeFile(join(repository, "sample-web", "package.json"), `${JSON.stringify({
+    name: "@demo/sample-web",
     version: "1.0.0",
     type: "module",
   }, null, 2)}\n`, "utf8");
@@ -109,7 +109,7 @@ describe("0.6.0 source registration concurrency and batch input", () => {
       await writeFile(inputPath, YAML.stringify({
         sources: [{
           type: "repo",
-          module: "tux-web",
+          module: "sample-web",
         }],
       }), "utf8");
 
@@ -121,9 +121,9 @@ describe("0.6.0 source registration concurrency and batch input", () => {
       const registry = await loadSourcesRegistry({ rootDir: initialized.projectRoot });
       expect(registry.repos).toHaveLength(1);
       expect(registry.repos[0]).toMatchObject({
-        name: "20260712/tux-web",
+        name: "20260712/sample-web",
         local: "..",
-        subpath: "tux-web",
+        subpath: "sample-web",
         remote: "git@example.com:demo/product-monorepo.git",
         ref: repository.head,
       });

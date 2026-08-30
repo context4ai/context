@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: authorize-indexer-dependencies
+runner: host
+effect: external
+handler: context.authorize-indexer-dependencies/v1
+inputSchema: schemas/indexer-dependency-authorization-input.schema.json
+outputSchema: schemas/indexer-dependency-authorization-result.schema.json

@@ -1,7 +1,16 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
-import { flattenDiagnosticMessageText, parseConfigFileTextToJson } from "typescript";
 import { parse as parseYaml } from "yaml";
+import { parseRushJsonc } from "./rushJsonc.js";
+import {
+  loadRushWorkspaceFacts,
+  type RushBuildCommandIndex,
+  type RushBuildPhaseIndex,
+  type RushReleaseUnitIndex,
+  type RushSubspaceIndex,
+  type RushWorkspaceFactDiagnostic,
+  type RushWorkspaceFactProject,
+} from "./rushWorkspaceFacts.js";
 
 interface RushProjectConfig {
   packageName: string;
@@ -10,6 +19,8 @@ interface RushProjectConfig {
   decoupledLocalDependencies?: string[];
   tags?: string[];
   shouldPublish?: boolean;
+  versionPolicyName?: string;
+  publishFolder?: string;
 }
 
 interface RushConfig {
@@ -31,6 +42,7 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   optionalDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
 }
 
 export interface RushWorkspaceDependency {
@@ -54,8 +66,12 @@ export interface RushProjectIndex {
   shouldPublish: boolean;
   entrySignals: string[];
   workspaceDependencies: RushWorkspaceDependency[];
+  workspaceDependents: string[];
   owner: RushOwnerBoundary | null;
   packageJsonFile: string | null;
+  versionPolicyName: string | null;
+  publishFolder: string | null;
+  releaseUnitRef: string | null;
 }
 
 export interface RushWorkspaceIndex {
@@ -66,6 +82,16 @@ export interface RushWorkspaceIndex {
   selectedTags: string[];
   projects: RushProjectIndex[];
   ownerBoundaries: RushOwnerBoundary[];
+  subspacesFile: string | null;
+  subspacesEnabled: boolean;
+  preventSelectingAllSubspaces: boolean;
+  subspaces: RushSubspaceIndex[];
+  commandLineFile: string | null;
+  buildPhases: RushBuildPhaseIndex[];
+  buildCommands: RushBuildCommandIndex[];
+  versionPoliciesFile: string | null;
+  releaseUnits: RushReleaseUnitIndex[];
+  diagnostics: RushWorkspaceFactDiagnostic[];
 }
 
 export interface RushIndexOptions {
@@ -73,11 +99,19 @@ export interface RushIndexOptions {
   includeAll?: boolean;
 }
 
-function parseJsonc<T>(file: string, text: string): T {
-  const result = parseConfigFileTextToJson(file, text);
-  if (result.error) throw new Error(`${file}: ${flattenDiagnosticMessageText(result.error.messageText, "\n")}`);
-  return result.config as T;
-}
+export {
+  rushWorkspaceIndexToEvidenceAdapterMaterialization,
+  rushWorkspaceIndexToEvidenceAdapterResult,
+  type RushEvidenceAdapterInvocation,
+} from "./evidenceAdapter.js";
+export type {
+  RushBuildCommandIndex,
+  RushBuildPhaseImplementation,
+  RushBuildPhaseIndex,
+  RushReleaseUnitIndex,
+  RushSubspaceIndex,
+  RushWorkspaceFactDiagnostic,
+} from "./rushWorkspaceFacts.js";
 
 async function exists(file: string): Promise<boolean> {
   try {
@@ -151,31 +185,69 @@ async function findOwnerBoundary(root: string, projectFolder: string): Promise<R
 export async function indexRushWorkspace(repositoryRoot: string, options: RushIndexOptions = {}): Promise<RushWorkspaceIndex> {
   const root = path.resolve(repositoryRoot);
   const rushFile = "rush.json";
-  const rush = parseJsonc<RushConfig>(rushFile, await readFile(path.join(root, rushFile), "utf8"));
+  const rush = parseRushJsonc<RushConfig>(
+    rushFile,
+    await readFile(path.join(root, rushFile), "utf8"),
+  );
   const selectedTags = [...new Set(options.tags ?? [])].sort();
   const selected = options.includeAll === true || selectedTags.length === 0
     ? rush.projects
     : rush.projects.filter((project) => selectedTags.some((tag) => project.tags?.includes(tag)));
   const packageNames = new Set(rush.projects.map((project) => project.packageName));
   const projects: RushProjectIndex[] = [];
+  const factProjects: RushWorkspaceFactProject[] = [];
   for (const project of selected) {
     const packageJsonFile = path.posix.join(project.projectFolder, "package.json");
     const absolutePackageJson = path.join(root, packageJsonFile);
     const hasPackageJson = await exists(absolutePackageJson);
-    const packageJson = hasPackageJson ? parseJsonc<PackageJson>(packageJsonFile, await readFile(absolutePackageJson, "utf8")) : {};
+    const packageJson = hasPackageJson
+      ? parseRushJsonc<PackageJson>(
+        packageJsonFile,
+        await readFile(absolutePackageJson, "utf8"),
+      )
+      : {};
+    const shouldPublish = project.shouldPublish === true;
+    const versionPolicyName = project.versionPolicyName ?? null;
     projects.push({
       packageName: project.packageName,
       packageNameMatches: packageJson.name === project.packageName,
       projectFolder: project.projectFolder,
       subspaceName: project.subspaceName ?? "default",
       tags: [...new Set(project.tags ?? [])].sort(),
-      shouldPublish: project.shouldPublish === true,
+      shouldPublish,
       entrySignals: entrySignals(packageJson),
       workspaceDependencies: workspaceDependencies(packageJson, packageNames, new Set(project.decoupledLocalDependencies ?? [])),
+      workspaceDependents: [],
       owner: await findOwnerBoundary(root, project.projectFolder),
       packageJsonFile: hasPackageJson ? packageJsonFile : null,
+      versionPolicyName,
+      publishFolder: project.publishFolder ?? null,
+      releaseUnitRef: null,
+    });
+    factProjects.push({
+      packageName: project.packageName,
+      subspaceName: project.subspaceName ?? "default",
+      shouldPublish,
+      versionPolicyName,
+      scripts: packageJson.scripts ?? {},
     });
   }
+  const selectedProjectNames = new Set(projects.map((project) => project.packageName));
+  const dependents = new Map<string, string[]>();
+  for (const project of projects) {
+    for (const dependency of project.workspaceDependencies) {
+      if (!selectedProjectNames.has(dependency.packageName)) continue;
+      const current = dependents.get(dependency.packageName) ?? [];
+      current.push(project.packageName);
+      dependents.set(dependency.packageName, current);
+    }
+  }
+  const workspaceFacts = await loadRushWorkspaceFacts({ root, projects: factProjects });
+  const indexedProjects = projects.map((project) => ({
+    ...project,
+    workspaceDependents: [...new Set(dependents.get(project.packageName) ?? [])].sort(),
+    releaseUnitRef: workspaceFacts.projectReleaseUnitRefs[project.packageName] ?? null,
+  })).sort((left, right) => left.projectFolder.localeCompare(right.projectFolder));
   const ownerBoundaries = [...new Map(projects.flatMap((project) => project.owner ? [[project.owner.file, project.owner] as const] : [])).values()]
     .sort((left, right) => left.file.localeCompare(right.file));
   return {
@@ -184,7 +256,17 @@ export async function indexRushWorkspace(repositoryRoot: string, options: RushIn
     pnpmVersion: rush.pnpmVersion ?? null,
     nodeSupportedVersionRange: rush.nodeSupportedVersionRange ?? null,
     selectedTags,
-    projects: projects.sort((left, right) => left.projectFolder.localeCompare(right.projectFolder)),
+    projects: indexedProjects,
     ownerBoundaries,
+    subspacesFile: workspaceFacts.subspacesFile,
+    subspacesEnabled: workspaceFacts.subspacesEnabled,
+    preventSelectingAllSubspaces: workspaceFacts.preventSelectingAllSubspaces,
+    subspaces: workspaceFacts.subspaces,
+    commandLineFile: workspaceFacts.commandLineFile,
+    buildPhases: workspaceFacts.buildPhases,
+    buildCommands: workspaceFacts.buildCommands,
+    versionPoliciesFile: workspaceFacts.versionPoliciesFile,
+    releaseUnits: workspaceFacts.releaseUnits,
+    diagnostics: workspaceFacts.diagnostics,
   };
 }

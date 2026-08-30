@@ -1,0 +1,38 @@
+{
+  "name": "@c4a/extract-mdx",
+  "description": "MDX component and example catalog bridge for Context",
+  "version": "0.7.0",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/extract-mdx"
+  },
+  "keywords": [
+    "mdx",
+    "jsx",
+    "examples",
+    "code-analysis"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts && bun run ../writeLibraryDistPackage.ts . && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@c4a/core": "workspace:*",
+    "remark-mdx": "^3.1.1",
+    "remark-parse": "^11.0.0",
+    "typescript": "^5.5.4",
+    "unified": "^11.0.5"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.selection-proposal-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "project_ref", "registry"],
+  "properties": {
+    "protocol": { "const": "context.indexer.selection-proposal-input/v1" },
+    "project_ref": { "type": "string", "minLength": 1 },
+    "registry": { "type": "object" }
+  }
+}

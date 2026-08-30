@@ -1,5 +1,6 @@
 import { PackageKind } from "@c4a/core";
 import type { EntryDetectionResult, FileSystem, ManifestInfo } from "@c4a/extract";
+import { packageLanguage } from "./ecmaScriptLanguage.js";
 import { resolveEntrySourcePath } from "./pathUtils.js";
 
 type JsonRecord = Record<string, unknown>;
@@ -178,7 +179,7 @@ export const detectEntries = async (
     package: {
       name: readString(pkg.name) ?? "unknown-package",
       kind: detectPackageKind(pkg),
-      language: "typescript",
+      language: packageLanguage(entries.map((entry) => entry.path)),
       version: readString(pkg.version) ?? undefined,
     },
     entries,

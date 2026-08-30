@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.subject-reidentification-output/v1",
+  "type": "object",
+  "required": ["protocol", "report", "graph_outcome"],
+  "properties": {
+    "protocol": {
+      "enum": [
+        "context.indexer.subject-key-validation-result/v1",
+        "context.indexer.subject-reidentification-confirmation-result/v1"
+      ]
+    },
+    "report": { "type": "object" },
+    "authorization": { "type": "object" },
+    "authorization_digest": {
+      "oneOf": [
+        { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        { "type": "null" }
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "subject-key-schema-current",
+        "index-subject-reidentification-required",
+        "index-subject-reidentification-invalid"
+      ]
+    },
+    "graph_outcome": { "enum": ["completed", "blocked", "failed"] }
+  },
+  "additionalProperties": false
+}

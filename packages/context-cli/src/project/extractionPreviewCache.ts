@@ -40,7 +40,7 @@ interface ExtractionPhaseCacheFile {
 }
 
 interface ExtractionBatchCacheFile {
-  version: 2;
+  version: 3;
   preview: ExtractionBatchPreview;
   phaseFingerprints: Record<string, string>;
 }
@@ -221,36 +221,36 @@ export async function previewExtractionBatch(input: {
   ]));
   const indexUnits = phases.flatMap((phase) => phase.indexUnits);
   const projectedPages = indexUnits.reduce((sum, unit) => sum + unit.projectedPageCount, 0);
+  const totals = {
+    phases: phases.length,
+    indexUnits: indexUnits.length,
+    projectedPages,
+    contentBytes: indexUnits.reduce((sum, unit) => sum + unit.contentBytes.total, 0),
+    warnings: indexUnits.filter((unit) => unit.scale === "warning").length,
+    blocked: indexUnits.filter((unit) => unit.scale === "blocked").length,
+  };
+  const advisories = projectedPages > 300 ? ["batch-page-count-warning"] : [];
+  const capabilityClear = indexUnits.every((unit) => unit.capability !== "material-required");
+  const ownershipClear = indexUnits.every((unit) => !unit.risks.includes("ownership-ambiguous"));
+  const scaleClear = indexUnits.every((unit) => unit.scale !== "blocked");
   const preview: ExtractionBatchPreview = {
     schema: "context.extraction-batch-preview.v1",
     digest: stableHash({
       phaseFingerprints,
-      units: indexUnits.map((unit) => ({
-        id: unit.id,
-        owner: unit.outputOwner,
-        moduleTypes: unit.moduleTypes,
-        facets: unit.facets,
-        pages: unit.projectedPageCount,
-        scale: unit.scale,
-        risks: unit.risks,
-      })),
+      phases,
+      totals,
+      advisories,
+      capabilityClear,
+      ownershipClear,
+      scaleClear,
     }),
     createdAt: new Date().toISOString(),
     phases,
-    totals: {
-      phases: phases.length,
-      indexUnits: indexUnits.length,
-      projectedPages,
-      contentBytes: indexUnits.reduce((sum, unit) => sum + unit.contentBytes.total, 0),
-      warnings: indexUnits.filter((unit) => unit.scale === "warning").length,
-      blocked: indexUnits.filter((unit) => unit.scale === "blocked").length,
-    },
-    advisories: projectedPages > 300 ? ["batch-page-count-warning"] : [],
-    capabilityClear: indexUnits.every((unit) => unit.capability !== "material-required"),
-    ownershipClear: indexUnits.every((unit) => !unit.risks.includes("ownership-ambiguous")),
-    scaleClear: indexUnits.every((unit) =>
-      unit.scale !== "blocked"
-    ),
+    totals,
+    advisories,
+    capabilityClear,
+    ownershipClear,
+    scaleClear,
     cache: {
       root: EXTRACTION_PREVIEW_ROOT,
       reusablePhases: cachedPhases.filter((cached) => cached.prepared !== undefined).length,
@@ -262,14 +262,14 @@ export async function previewExtractionBatch(input: {
   const batchPath = join(input.projectRoot, EXTRACTION_BATCH_PREVIEW_FILE);
   await mkdir(dirname(batchPath), { recursive: true });
   await atomicWriteFile(batchPath, `${JSON.stringify({
-    version: 2,
+    version: 3,
     preview,
     phaseFingerprints,
   } satisfies ExtractionBatchCacheFile, null, 2)}\n`);
   await atomicWriteFile(
     join(input.projectRoot, EXTRACTION_PREVIEW_ROOT, `${preview.digest.replace(/^sha256:/u, "")}.json`),
     `${JSON.stringify({
-      version: 2,
+      version: 3,
       preview,
       phaseFingerprints,
     } satisfies ExtractionBatchCacheFile, null, 2)}\n`,
@@ -290,7 +290,20 @@ export async function readLatestExtractionBatchPreview(
   const cached = await parseJson<ExtractionBatchCacheFile>(
     join(projectRoot, EXTRACTION_BATCH_PREVIEW_FILE),
   );
-  return cached?.version === 2 ? cached.preview : undefined;
+  return cached?.version === 3 ? cached.preview : undefined;
+}
+
+export async function readExtractionBatchPreviewByDigest(
+  projectRoot: string,
+  digest: string,
+): Promise<ExtractionBatchPreview | undefined> {
+  const match = /^sha256:([a-f0-9]{64})$/u.exec(digest);
+  if (match?.[1] === undefined) return undefined;
+  const cached = await parseJson<ExtractionBatchCacheFile>(
+    join(projectRoot, EXTRACTION_PREVIEW_ROOT, `${match[1]}.json`),
+  );
+  if (cached?.version !== 3 || cached.preview.digest !== digest) return undefined;
+  return cached.preview;
 }
 
 export async function readExtractionPreviewState(input: {
@@ -304,7 +317,7 @@ export async function readExtractionPreviewState(input: {
   const cached = await parseJson<ExtractionBatchCacheFile>(
     join(input.projectRoot, EXTRACTION_BATCH_PREVIEW_FILE),
   );
-  let current = cached?.version === 2;
+  let current = cached?.version === 3;
   if (current && cached !== undefined) {
     const projectDigest = await projectInputDigest(input.projectRoot);
     for (const phaseId of input.pendingPhaseIds) {

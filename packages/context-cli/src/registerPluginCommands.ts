@@ -24,7 +24,7 @@ export function registerPluginCommands(program: Command): void {
   plugin
     .command("status")
     .description("Inspect the bundled plugin marketplace root and global agent availability")
-    .option("--agent <agent>", "agent target: claude | codex | all", "all")
+    .option("--agent <agent>", "agent target: claude | codex | cursor | all", "all")
     .action(async (options: Record<string, unknown>) => {
       const agent = pluginAgentOption(options.agent);
       process.stdout.write(formatPluginStatusResult(await runPluginStatusCommand({ agent })));
@@ -32,8 +32,8 @@ export function registerPluginCommands(program: Command): void {
 
   plugin
     .command("install")
-    .description("Install the bundled Context plugin globally for Claude and/or Codex")
-    .option("--agent <agent>", "agent target: claude | codex | all", "all")
+    .description("Install the bundled Context plugin and lifecycle Provider skills globally")
+    .option("--agent <agent>", "agent target: claude | codex | cursor | all", "all")
     .option("--dry-run", "Print install commands without mutating global agent config")
     .action(async (options: Record<string, unknown>) => {
       const agent = pluginAgentOption(options.agent);

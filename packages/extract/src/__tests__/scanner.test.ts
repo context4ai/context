@@ -31,6 +31,29 @@ describe("scanSourceFiles", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  test("includes JavaScript module extensions and excludes colocated JS tests", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-javascript-filter-"));
+    try {
+      await mkdir(join(root, "src"), { recursive: true });
+      for (const extension of ["js", "jsx", "mjs", "cjs", "mts", "cts"]) {
+        await writeFile(join(root, "src", `entry.${extension}`), "export const value = true;\n", "utf8");
+      }
+      await writeFile(join(root, "src", "entry.test.js"), "export const testOnly = true;\n", "utf8");
+      await writeFile(join(root, "src", "entry.spec.jsx"), "export const specOnly = true;\n", "utf8");
+
+      expect(await scanSourceFiles(root)).toEqual([
+        "src/entry.cjs",
+        "src/entry.cts",
+        "src/entry.js",
+        "src/entry.jsx",
+        "src/entry.mjs",
+        "src/entry.mts",
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("detectModules", () => {

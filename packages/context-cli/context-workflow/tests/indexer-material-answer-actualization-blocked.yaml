@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: stale material-answer actualization stops before the main Candidate Review
+graph: indexer
+entry: material-answer-actualization
+state:
+  outcomes:
+    indexer/actualize-material-answer-bindings: blocked
+expect:
+  statusCode: complete
+  outcome: blocked

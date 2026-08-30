@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: inspect-index-candidate-review-readiness
+description: Load exact CLI audit records and prove both mechanical audit stages are current before main Candidate Review.
+runner: command
+effect: read
+command: context indexer inspect-index-candidate-review-readiness --input .tmp/agent-payloads/indexer-candidate-review-readiness.json --format json
+inputSchema: schemas/indexer-candidate-review-readiness-input.schema.json
+outputSchema: schemas/indexer-candidate-review-readiness-output.schema.json

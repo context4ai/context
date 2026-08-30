@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.agent-step-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "input_digest",
+    "instruction_payload_digest",
+    "run_result",
+    "execution_receipt",
+    "stable_result_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.agent-step-result/v1" },
+    "input_digest": { "$ref": "#/$defs/digest" },
+    "instruction_payload_digest": { "$ref": "#/$defs/digest" },
+    "run_result": {
+      "type": "object",
+      "required": ["protocol", "operation", "result"],
+      "properties": {
+        "protocol": { "const": "context.indexer.run-result/v1" },
+        "operation": { "enum": ["main-index", "material-answer"] },
+        "result": { "type": "object" }
+      }
+    },
+    "execution_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "adapter_version", "execution_id", "receipt_digest"],
+      "properties": {
+        "adapter": { "type": "string", "minLength": 1 },
+        "adapter_version": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "execution_id": { "type": "string", "minLength": 1 },
+        "receipt_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "stable_result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

@@ -41,6 +41,11 @@ describe("0.6.9 package build inventory collection summaries", () => {
     mkdirSync(join(projectRoot, "knowledge"), { recursive: true });
     writeFileSync(join(projectRoot, "knowledge", "structure.yaml"), `${JSON.stringify({
       schema_version: "context.approved-structure.v1",
+      material_gap_ledger: {
+        protocol: "context.indexer.material-gap-ledger/v1",
+        entries: [{ answer_body: "must-not-enter-dist" }],
+      },
+      material_answers: [{ planned_answer_digest: "must-not-enter-dist" }],
       nodes: [{
         node_ref: "action/alpha",
         title: "Alpha Feature",
@@ -117,6 +122,9 @@ describe("0.6.9 package build inventory collection summaries", () => {
     });
     expect(JSON.stringify(scopedStructure.parsed)).not.toContain("action/gamma");
     expect(JSON.stringify(scopedStructure.parsed)).not.toContain("architecture:action/alpha");
+    expect(scopedStructure.parsed).not.toHaveProperty("material_gap_ledger");
+    expect(scopedStructure.parsed).not.toHaveProperty("material_answers");
+    expect(JSON.stringify(scopedStructure.parsed)).not.toContain("must-not-enter-dist");
 
     const inventory = packageBuildInventory({
       pkg: {

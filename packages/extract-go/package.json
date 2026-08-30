@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-go",
   "description": "Go extraction plugin and structural index for Context",
-  "version": "0.6.19",
+  "version": "0.7.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -35,10 +35,8 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "web-tree-sitter": "^0.25.10"
-  },
-  "devDependencies": {
     "@c4a/core": "workspace:*",
-    "@c4a/extract": "workspace:*"
+    "@c4a/extract": "workspace:*",
+    "web-tree-sitter": "^0.25.10"
   }
 }

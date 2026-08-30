@@ -1,0 +1,15 @@
+schema: agent-graph.test.v1
+name: a material-answer candidate requires the bounded evidence-binding Review
+graph: indexer
+entry: material-answer-review
+state:
+  facts:
+    indexer_material_answer_review:
+      state: review-required
+expect:
+  statusCode: waiting-user
+  primaryNode: review-material-answer-candidates
+  availability: requires-user
+  gateResolution: user
+  inspectionHandler: context.inspect-material-answer-review/v1
+  resolutionHandler: context.review-material-answer-candidate/v1

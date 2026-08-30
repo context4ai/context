@@ -1,0 +1,9 @@
+schema: agent-graph.test.v1
+name: Indexer Provider selection starts with the static configuration Agent Action
+graph: indexer
+entry: provider-selection
+expect:
+  statusCode: actionable
+  primaryNode: configure-indexer-providers
+  primaryReasonCode: route.indexer.provider-configuration
+  availability: immediate

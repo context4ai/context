@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.incremental-impact-report-set/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "previous_accepted_result_set_digest",
+    "logical_unit_count",
+    "stale_logical_unit_count",
+    "stale_artifact_count",
+    "stale_section_count",
+    "recompute_required",
+    "reports",
+    "report_set_digest",
+    "outcome",
+    "graph_outcome"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.incremental-impact-report-set/v1" },
+    "previous_accepted_result_set_digest": { "$ref": "#/$defs/digest" },
+    "logical_unit_count": { "type": "integer", "minimum": 1 },
+    "stale_logical_unit_count": { "type": "integer", "minimum": 0 },
+    "stale_artifact_count": { "type": "integer", "minimum": 0 },
+    "stale_section_count": { "type": "integer", "minimum": 0 },
+    "recompute_required": { "type": "boolean" },
+    "reports": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "protocol",
+          "indexer_id",
+          "logical_unit_ref",
+          "envelope_changes",
+          "dependency_changes",
+          "artifacts",
+          "logical_unit_state",
+          "recompute_scope",
+          "report_digest"
+        ]
+      }
+    },
+    "report_set_digest": { "$ref": "#/$defs/digest" },
+    "outcome": { "const": "indexer-incremental-impact-reported" },
+    "graph_outcome": { "const": "completed" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

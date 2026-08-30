@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: rebind-indexer-selection-to-requirement
+runner: host
+effect: read
+handler: context.rebind-indexer-selection-to-requirement/v1
+inputSchema: schemas/indexer-overlay-question-rebind-input.schema.json
+outputSchema: schemas/indexer-overlay-question-rebind-result.schema.json

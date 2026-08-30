@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: audit-projected-artifact-fan-out
+description: Recompute projected Artifact ownership and stop unsafe fan-out before any Candidate is materialized.
+runner: command
+effect: read
+command: context indexer audit-projected-artifact-fan-out --input .tmp/agent-payloads/indexer-main-lifecycle.json --format json
+inputSchema: schemas/indexer-main-lifecycle-input.schema.json
+outputSchema: schemas/indexer-main-lifecycle-output.schema.json

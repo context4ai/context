@@ -1,0 +1,14 @@
+schema: agent-graph.test.v1
+name: a breaking SubjectKey change over approved Nodes requires a human Gate
+graph: indexer
+entry: subject-key-validation
+state:
+  outcomes:
+    indexer/validate-subject-key-schemas: blocked
+  authorities: [context.indexer-subject-reidentification]
+expect:
+  statusCode: waiting-user
+  primaryNode: confirm-subject-reidentification
+  availability: requires-user
+  gateResolution: user
+  resolutionHandler: context.confirm-subject-reidentification/v1

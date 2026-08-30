@@ -86,7 +86,7 @@ maintain this declaration from the user's requirements.
 |---|---|
 | `defineProject()` | Declares the complete project graph. |
 | `source()` and `allSources()` | References registered repo, file, or Lark source boundaries. |
-| `extractTs()` | Extracts TypeScript/TSX symbols and relationships into `codeindex` candidates. |
+| `extractTs()` | Extracts TypeScript/JavaScript and TSX/JSX symbols and relationships into `codeindex` candidates. |
 | `extractCustom()` | Runs a project-owned code extractor while Context owns candidate, evidence, freshness, and Review state. |
 | `alignProse()` and `compileProse()` | Structures document evidence and compiles source-bound knowledge candidates. |
 | `reviewValidity()` | Declares the review gate for one collection or the project. |

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.material-answer-review-inspection-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "workset", "candidate_set", "question_key", "input_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.material-answer-review-inspection-input/v1" },
+    "workset": {
+      "type": "object",
+      "required": ["protocol", "workset_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-question-workset/v1" },
+        "workset_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "candidate_set": {
+      "type": "object",
+      "required": ["protocol", "workset_digest", "candidate_set_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-candidate-set/v1" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "candidate_set_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "question_key": { "type": "string", "minLength": 1 },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

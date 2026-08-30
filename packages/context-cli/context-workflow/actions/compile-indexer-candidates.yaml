@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: compile-indexer-candidates
+description: Compile Candidate Artifacts only from the exact current accepted author IndexerResult set and authorized layout transition.
+runner: command
+effect: write
+command: context indexer compile-indexer-candidates --input .tmp/agent-payloads/indexer-candidate-compile.json --format json
+inputSchema: schemas/indexer-candidate-compile-input.schema.json
+outputSchema: schemas/indexer-candidate-compile-output.schema.json

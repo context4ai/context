@@ -59,6 +59,12 @@ const createFixturePlugin = (detectedEntries: EntryFile[] = [
         endLine: 1,
       }],
       relations: [],
+      coverage: {
+        tier: "ast-catalog",
+        capabilities: ["fixture-ast"],
+        files: [{ path: firstEntry, disposition: "analyzed", diagnosticCodes: [] }],
+        diagnostics: [],
+      },
       stats: { files: 1, lines: 1, exportedSymbols: 1, internalSymbols: 0, relations: 0 },
     };
   },
@@ -84,6 +90,7 @@ describe("runRepositoryExtraction", () => {
       expect(extraction.meta.commitHash).toBe("abc123");
       expect(extraction.files[0]!.path).toBe("packages/ui/src/Button.ts");
       expect(extraction.symbols[0]!.file).toBe("packages/ui/src/Button.ts");
+      expect(extraction.coverage?.files[0]?.path).toBe("packages/ui/src/Button.ts");
       expect(result.results[0]!.entryDetection.entries[0]!.path).toBe("packages/ui/src/Button.ts");
     } finally {
       await rm(repo, { recursive: true, force: true });

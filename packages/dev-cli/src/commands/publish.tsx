@@ -5,7 +5,11 @@ import { useState } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import { readRootVersion, cmdBumpVersion } from "./bumpVersion.js";
 import { runWithStatus } from "./cliUtils.js";
-import { PUBLISH_PACKAGES, type PackageEntry } from "./releasePackages.js";
+import {
+  PUBLISH_PACKAGES,
+  releasePublishPlan,
+  type PackageEntry,
+} from "./releasePackages.js";
 
 export { PUBLISH_PACKAGES } from "./releasePackages.js";
 
@@ -26,6 +30,20 @@ export type PublishContext = {
 const PUBLISHED_WORKSPACE_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
   "context-cli": new Set(["@c4a/context"]),
 };
+const LIBRARY_PACKAGE_DIRS = new Set([
+  "core",
+  "context",
+  "extract",
+  "extract-ts",
+  "extract-go",
+  "extract-rush",
+  "extract-thrift",
+  "extract-proto",
+  "extract-mdx",
+  "extract-contract",
+  "extract-style",
+  "extract-sql",
+]);
 
 export async function cmdPublish(args: string[], ctx: PublishContext): Promise<void> {
   console.log("\n" + "=".repeat(50));
@@ -53,8 +71,11 @@ export async function cmdPublish(args: string[], ctx: PublishContext): Promise<v
     }
   }
 
-  if (!/^\d+\.\d+\.\d+/.test(targetVersion)) {
-    ctx.error(`Invalid version: ${targetVersion} (expected SemVer format, e.g. 0.4.1)`);
+  let publishTag: string;
+  try {
+    publishTag = releasePublishPlan(targetVersion).publish_tag;
+  } catch (error) {
+    ctx.error(error instanceof Error ? error.message : String(error));
     return;
   }
 
@@ -92,7 +113,7 @@ export async function cmdPublish(args: string[], ctx: PublishContext): Promise<v
     ctx.info(`Publishing ${pkg.name}@${targetVersion}...`);
     const exitCode = await runWithStatus(
       "bunx",
-      ["npm", "publish", distDir, "--access", "public"],
+      ["npm", "publish", distDir, "--access", "public", "--tag", publishTag],
       { cwd: ctx.projectRoot },
     );
 
@@ -109,6 +130,9 @@ export async function cmdPublish(args: string[], ctx: PublishContext): Promise<v
   console.log("=".repeat(50));
   for (const pkg of packages) {
     console.log(`  ${pkg.name}@${targetVersion}`);
+  }
+  if (publishTag === "release-staging") {
+    console.log("  Final packages remain on release-staging until exact install smoke and promotion complete.");
   }
   console.log("");
 }
@@ -265,7 +289,7 @@ export async function prepareDistPackageJson(
 
   // For library packages, set main entry so consumers and createRequire.resolve
   // use the bundled dist entry explicitly instead of Node's index.js fallback.
-  if (dir === "core" || dir === "context" || dir === "extract" || dir === "extract-ts" || dir === "extract-go" || dir === "extract-rush") {
+  if (LIBRARY_PACKAGE_DIRS.has(dir)) {
     distPkg.main = "./index.js";
     if (dir === "core" || dir === "context") {
       distPkg.types = "./index.d.ts";

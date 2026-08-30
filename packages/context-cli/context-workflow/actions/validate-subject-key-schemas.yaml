@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: validate-subject-key-schemas
+description: Recompute SubjectKey schema evolution and exact approved-Node mappings.
+runner: command
+effect: read
+command: context indexer validate-subject-key-schemas --input .tmp/agent-payloads/indexer-subject-key-validation.json --format json
+inputSchema: schemas/indexer-subject-reidentification-input.schema.json
+outputSchema: schemas/indexer-subject-reidentification-output.schema.json

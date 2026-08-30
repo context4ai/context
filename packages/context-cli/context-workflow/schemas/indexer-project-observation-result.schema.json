@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.project-observation-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "state",
+    "proposal_digest",
+    "apply_receipt_digest",
+    "target_set_digest",
+    "requirement_set_digest",
+    "registry_digest",
+    "indexer_selection_digest",
+    "validation_report_digests",
+    "selection_proposal_input",
+    "observation_digest",
+    "result_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.project-observation-result/v1" },
+    "state": { "const": "current" },
+    "proposal_digest": { "$ref": "#/$defs/digest" },
+    "apply_receipt_digest": { "$ref": "#/$defs/digest" },
+    "target_set_digest": { "$ref": "#/$defs/digest" },
+    "requirement_set_digest": { "$ref": "#/$defs/digest" },
+    "registry_digest": { "$ref": "#/$defs/digest" },
+    "indexer_selection_digest": { "$ref": "#/$defs/digest" },
+    "validation_report_digests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/digest" }
+    },
+    "selection_proposal_input": { "type": "object" },
+    "observation_digest": { "$ref": "#/$defs/digest" },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

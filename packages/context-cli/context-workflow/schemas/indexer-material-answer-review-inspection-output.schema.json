@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.material-answer-review-inspection-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "state", "review_scope", "input_digest", "workset_digest", "candidate_set_digest", "baseline_report", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.material-answer-review-inspection-result/v1" },
+    "state": { "const": "review-required" },
+    "review_scope": { "const": "question-target-source-span-evidence-binding" },
+    "input_digest": { "$ref": "#/$defs/digest" },
+    "workset_digest": { "$ref": "#/$defs/digest" },
+    "candidate_set_digest": { "$ref": "#/$defs/digest" },
+    "baseline_report": {
+      "type": "object",
+      "required": ["protocol", "review_scope", "workset_digest", "candidate_set_digest", "question_key", "binding_digest", "report_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-baseline-report/v1" },
+        "review_scope": { "const": "question-target-source-span-evidence-binding" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "candidate_set_digest": { "$ref": "#/$defs/digest" },
+        "question_key": { "type": "string", "minLength": 1 },
+        "binding_digest": { "$ref": "#/$defs/digest" },
+        "report_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

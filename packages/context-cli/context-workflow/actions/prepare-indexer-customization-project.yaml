@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: prepare-indexer-customization-project
+runner: agent
+effect: write
+skill: skills/prepare-indexer-customization-project/SKILL.md
+inputSchema: schemas/indexer-customization-validation-result.schema.json
+outputSchema: schemas/indexer-customization-project-preparation-result.schema.json

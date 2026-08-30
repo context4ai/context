@@ -576,6 +576,25 @@ export async function validateAlignPayload(input: AlignValidationInput): Promise
         projectRoot: input.projectRoot,
         payload,
       });
+  if (payload !== undefined && existingApprovedStructure !== undefined) {
+    const identityMismatches = new Set(existingApprovedStructure.duplicate_or_unresolved
+      .filter((item) => item.kind === "node" && item.reason === "same_node_ref_identity_mismatch")
+      .map((item) => item.planned_ref));
+    const reusableLegacyNodeRefs = new Set(existingApprovedStructure.reusable.node_refs.filter((nodeRef) => {
+      const node = payload.nodes.find((candidate) => candidate.node_ref === nodeRef);
+      return node !== undefined &&
+        !nodeRef.startsWith(`${node.node_type}/`) &&
+        !identityMismatches.has(nodeRef);
+    }));
+    for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+      const item = diagnostics[index]!;
+      if (item.code === "schema.node_ref_type_mismatch" &&
+        item.candidate_id !== undefined &&
+        reusableLegacyNodeRefs.has(item.candidate_id)) {
+        diagnostics.splice(index, 1);
+      }
+    }
+  }
   diagnostics.push(...existingApprovedStructureDiagnostics(existingApprovedStructure));
   let result = buildValidateResult({
     payload,

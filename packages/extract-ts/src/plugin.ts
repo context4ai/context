@@ -1,11 +1,14 @@
 import type { EntryFile, EntryDetectionResult, ExtractionPlugin, ExtractionResult, FileSystem, ManifestInfo, SourceInfo } from "@c4a/extract";
 import { detectEntries } from "./entryDetector.js";
+import { EXTRACT_TS_CAPABILITIES, EXTRACT_TS_COVERAGE_TIER } from "./ecmaScriptLanguage.js";
 import { extractSymbols } from "./symbolExtractor.js";
 
 export class TypeScriptPlugin implements ExtractionPlugin {
   readonly id = "c4a-extract-ts";
-  readonly languages = ["typescript", "tsx"];
+  readonly languages = ["typescript", "tsx", "javascript", "jsx"];
   readonly packageManagers = ["npm"];
+  readonly capabilities = [...EXTRACT_TS_CAPABILITIES];
+  readonly coverageTier = EXTRACT_TS_COVERAGE_TIER;
   readonly manifestTypes: ManifestInfo["type"][] = ["package.json"];
 
   #lastDetection: EntryDetectionResult | null = null;

@@ -2,11 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { cmdBumpVersion } from "../commands/bumpVersion.js";
 import { prepareDistPackageJson, PUBLISH_PACKAGES, type PublishContext } from "../commands/publish.js";
 import {
+  NPM_TRUSTED_PUBLISHER,
+  PARSER_EVIDENCE_ABI,
+  PARSER_EVIDENCE_ABI_DIGEST,
+  PARSER_RELEASE_PACKAGES,
+  parserReleaseMetadata,
+  releaseChannel,
   releasePackageDirectories,
+  releasePublishPlan,
   renderPublishedPackages,
   upsertPublishedPackages,
 } from "../commands/releasePackages.js";
@@ -113,6 +120,12 @@ describe("publish package list", () => {
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-ts", dir: "extract-ts" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-go", dir: "extract-go" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-rush", dir: "extract-rush" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-thrift", dir: "extract-thrift" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-proto", dir: "extract-proto" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-mdx", dir: "extract-mdx" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-contract", dir: "extract-contract" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-style", dir: "extract-style" });
+    expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract-sql", dir: "extract-sql" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context-cli", dir: "context-cli" });
   });
 
@@ -126,6 +139,24 @@ describe("publish package list", () => {
     );
   });
 
+  test("generates every new parser coordinate and expected Trusted Publisher tuple", () => {
+    const metadata = parserReleaseMetadata("0.7.0-preview.2");
+
+    expect(metadata.coordinates).toHaveLength(6);
+    expect(metadata.abi).toBe(PARSER_EVIDENCE_ABI);
+    expect(metadata.abi_digest).toBe(PARSER_EVIDENCE_ABI_DIGEST);
+    expect(metadata.abi_digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    expect(metadata.coordinates.map((coordinate) => coordinate.package)).toEqual(
+      PARSER_RELEASE_PACKAGES.map((pkg) => pkg.name),
+    );
+    for (const coordinate of metadata.coordinates) {
+      expect(coordinate.version).toBe("0.7.0-preview.2");
+      expect(coordinate.export.length).toBeGreaterThan(0);
+      expect(coordinate.capabilities.length).toBeGreaterThan(0);
+      expect(coordinate.publisher).toEqual(NPM_TRUSTED_PUBLISHER);
+    }
+  });
+
   test("appends or replaces the published package section idempotently", () => {
     const initial = "## Highlights\n\n- Stable release.\n\n## Verification\n\n- Passed.\n";
     const appended = upsertPublishedPackages(initial, "1.2.3");
@@ -135,6 +166,51 @@ describe("publish package list", () => {
     expect(replaced).not.toContain("@1.2.3");
     expect(replaced.match(/^## Published packages$/gm)).toHaveLength(1);
     expect(replaced).toContain("`@c4a/context-cli@1.2.4`");
+  });
+
+  test("keeps prereleases off latest and stages final packages before promotion", () => {
+    expect(releaseChannel("0.7.0-preview.1")).toBe("preview");
+    expect(releaseChannel("0.7.0-rc.1")).toBe("rc");
+    expect(releaseChannel("0.7.0")).toBe("latest");
+    expect(() => releaseChannel("0.7.0-beta.1")).toThrow(/only final, preview\.N, and rc\.N/u);
+
+    expect(releasePublishPlan("0.7.0-preview.2")).toMatchObject({
+      channel: "preview",
+      publish_tag: "preview",
+      promotion_tag: null,
+    });
+    expect(releasePublishPlan("0.7.0-preview.1").packages).toHaveLength(7);
+    expect(releasePublishPlan("0.7.0-preview.1").packages.some(
+      (pkg) => pkg.name === "@c4a/extract-thrift",
+    )).toBe(false);
+    expect(releasePublishPlan("0.7.0-preview.2").packages).toHaveLength(
+      PUBLISH_PACKAGES.length,
+    );
+    const finalPlan = releasePublishPlan("0.7.0");
+    expect(finalPlan).toMatchObject({
+      channel: "latest",
+      publish_tag: "release-staging",
+      promotion_tag: "latest",
+    });
+    expect(finalPlan.packages).toHaveLength(PUBLISH_PACKAGES.length);
+    expect(finalPlan.packages.every((pkg) => pkg.exact_spec.endsWith("@0.7.0"))).toBe(true);
+  });
+
+  test("publishes with the planned tag before exact install smoke and final promotion", async () => {
+    const workflow = await readFile(
+      resolve(import.meta.dir, "../../../..", ".github/workflows/publish.yml"),
+      "utf8",
+    );
+    const publish = workflow.indexOf("- name: Publish packages");
+    const smoke = workflow.indexOf("- name: Smoke exact registry release");
+    const promotion = workflow.indexOf("- name: Promote final release dist-tags");
+
+    expect(publish).toBeGreaterThan(0);
+    expect(smoke).toBeGreaterThan(publish);
+    expect(promotion).toBeGreaterThan(smoke);
+    expect(workflow).toContain('--tag "${{ steps.release-metadata.outputs.publish_tag }}"');
+    expect(workflow).toContain("--smoke-receipt .tmp/release-install-smoke.json");
+    expect(workflow).not.toContain("npm publish \"${package_dir}\" --access public --provenance\n");
   });
 });
 
@@ -336,7 +412,7 @@ describe("prepareDistPackageJson — context-cli publish packaging", () => {
   test("copies public English and Chinese READMEs but skips internal Markdown", async () => {
     // CLAUDE.md / AGENTS.md are project-internal developer guidance and
     // must not ship to the npm registry. The previous copy loop took every
-    // *.md, so 26 KB of "禁止使用 TTAstra" rules were being shipped.
+    // *.md, so a large internal-framework rule set was being shipped.
     const root = await mkTmp("md-whitelist");
     const { pkgDir, distDir } = await setupContextCliPkg(root);
 

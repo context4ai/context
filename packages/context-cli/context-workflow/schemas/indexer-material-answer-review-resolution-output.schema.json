@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.material-answer-review-resolution-result/v1",
+  "oneOf": [
+    { "$ref": "#/$defs/approved" },
+    { "$ref": "#/$defs/rejected" }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "base": {
+      "type": "object",
+      "properties": {
+        "protocol": { "const": "context.indexer.material-answer-review-resolution-result/v1" },
+        "review_scope": { "const": "question-target-source-span-evidence-binding" },
+        "input_digest": { "$ref": "#/$defs/digest" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "candidate_set_digest": { "$ref": "#/$defs/digest" },
+        "baseline_report_digest": { "$ref": "#/$defs/digest" },
+        "review_decision": {
+          "type": "object",
+          "required": ["protocol", "review_scope", "decision", "decision_digest"],
+          "properties": {
+            "protocol": { "const": "context.indexer.material-answer-review-decision/v1" },
+            "review_scope": { "const": "question-target-source-span-evidence-binding" },
+            "decision": { "enum": ["approved", "rejected"] },
+            "decision_digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "result_digest": { "$ref": "#/$defs/digest" }
+      },
+      "required": ["protocol", "review_scope", "input_digest", "workset_digest", "candidate_set_digest", "baseline_report_digest", "review_decision", "result_digest"]
+    },
+    "approved": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "state", "review_scope", "input_digest", "workset_digest", "candidate_set_digest", "baseline_report_digest", "review_decision", "answer_approval", "result_digest"],
+          "properties": {
+            "protocol": true,
+            "state": { "const": "approved" },
+            "review_scope": true,
+            "input_digest": true,
+            "workset_digest": true,
+            "candidate_set_digest": true,
+            "baseline_report_digest": true,
+            "review_decision": true,
+            "answer_approval": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["predecessor_ledger_revision", "successor_ledger", "consumed_workset_digest", "binding_digest"],
+              "properties": {
+                "predecessor_ledger_revision": { "$ref": "#/$defs/digest" },
+                "successor_ledger": { "type": "object", "required": ["protocol", "revision"] },
+                "consumed_workset_digest": { "$ref": "#/$defs/digest" },
+                "binding_digest": { "$ref": "#/$defs/digest" }
+              }
+            },
+            "result_digest": true
+          }
+        }
+      ]
+    },
+    "rejected": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "state", "review_scope", "input_digest", "workset_digest", "candidate_set_digest", "baseline_report_digest", "review_decision", "result_digest"],
+          "properties": {
+            "protocol": true,
+            "state": { "const": "rejected" },
+            "review_scope": true,
+            "input_digest": true,
+            "workset_digest": true,
+            "candidate_set_digest": true,
+            "baseline_report_digest": true,
+            "review_decision": true,
+            "result_digest": true
+          }
+        }
+      ]
+    }
+  }
+}

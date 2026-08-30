@@ -67,6 +67,14 @@ Important constraints:
 - `extractSymbols()` must return `ExtractionResult` v2 with stable symbols and relations.
 - `detectEntries()` is called before `extractSymbols()`; plugins may keep per-detection package context between those calls.
 
+For Indexer execution, `extractionResultToEvidenceAdapterResult()` converts a
+coverage-complete `ExtractionResult` into
+`context.indexer.evidence-adapter-result/v1`. The caller supplies the resolved
+package/export/version/digest, authorized source/module scope, input digest,
+precedence, and owner role. Conversion fails when per-file coverage is absent;
+lightweight or enricher output cannot contribute file, LOC, symbol, or protocol
+denominators.
+
 ### 2. ExtractionResult v2
 
 Every plugin returns:
@@ -79,6 +87,12 @@ Every plugin returns:
   files: [{ path, language, lines }],
   symbols: SymbolInfo[],
   relations: RelationInfo[],
+  coverage: {
+    tier,
+    capabilities,
+    files: [{ path, disposition, diagnosticCodes }],
+    diagnostics
+  },
   stats: { files, lines, exportedSymbols, internalSymbols, relations }
 }
 ```

@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md)
 
-`@c4a/extract-ts` turns TypeScript and TSX structure into deterministic code
+`@c4a/extract-ts` turns TypeScript, JavaScript, TSX, and JSX structure into deterministic code
 evidence for Context knowledge production. It implements the
 `ExtractionPlugin` protocol from `@c4a/extract` and is the default plugin used
 by the SDK `extractTs({ source, collection: "codegraph" })` phase for npm-style
@@ -15,12 +15,12 @@ APIs below are for reusable structural analysis and project-owned adapters.
 
 ## Package Role
 
-`@c4a/extract-ts` handles TypeScript package entry detection and AST extraction. It does not write `.context` files directly; `@c4a/extract` runs the plugin and `@c4a/context-cli` persists the resulting raw code snapshot.
+`@c4a/extract-ts` handles npm package entry detection and ECMAScript-family AST extraction. It does not write `.context` files directly; `@c4a/extract` runs the plugin and `@c4a/context-cli` persists the resulting raw code snapshot.
 
-**Depends on:** `@c4a/extract`, `web-tree-sitter`
+**Depends on:** `@c4a/extract`, `typescript`, `web-tree-sitter`
 
 ```text
-confirmed TypeScript boundary
+confirmed TypeScript/JavaScript boundary
           ↓
 entry detection + export tracing + AST facts
           ↓
@@ -55,6 +55,19 @@ import { extractTypeScriptModuleExports } from "@c4a/extract-ts";
 const exports = extractTypeScriptModuleExports(source, "src/index.ts");
 ```
 
+`extractEcmaScriptModuleExports()` is the format-neutral API for `.ts`, `.tsx`,
+`.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, and `.cjs`. In addition to ESM exports,
+it recognizes static CommonJS `require`, `exports.name`, `module.exports.name`,
+and object/wildcard `module.exports` forms. Its result declares the
+`ast-catalog` coverage tier, parser capabilities, and an `analyzed` or
+`unsupported` disposition with file-local diagnostics:
+
+```ts
+import { extractEcmaScriptModuleExports } from "@c4a/extract-ts";
+
+const moduleFacts = extractEcmaScriptModuleExports(source, "src/index.cjs");
+```
+
 ## Current Extraction Coverage
 
 ### Entry Detection
@@ -68,6 +81,7 @@ const exports = extractTypeScriptModuleExports(source, "src/index.ts");
 - `dist/` to `src/` source-path fallback through `resolveEntrySourcePath()`
 - package kind classification: `lib`, `cli`, or `service`
 - package version propagation into `ExtractionResult.package.version`
+- authored `.js`, `.jsx`, `.mjs`, and `.cjs` entry files without remapping them to TypeScript
 
 The Context project may override auto-detection with source-relative
 `extractTs.entries`, or use `mode: "scan"` to make every `include`-matched file
@@ -88,7 +102,7 @@ It currently extracts:
 - type aliases
 - enums
 - variables
-- TSX component-like variables
+- TSX/JSX component-like functions and variables
 - hook-like functions by name in downstream projection
 - class/interface/type members as nested symbols
 - JSDoc on declarations and members
@@ -107,6 +121,7 @@ It emits relations for:
 - `param_type`
 - `return_type`
 - `of_type`
+- `calls`
 
 All emitted relations are code-grounded AST relations with confidence `1`.
 
@@ -120,6 +135,7 @@ All emitted relations are code-grounded AST relations with confidence `1`.
 - `export { A } from "./module"`
 - aliased export specifiers
 - circular re-export chains through an in-flight guard
+- static CommonJS `require` bindings and `exports` / `module.exports` assignments
 
 Only declarations reachable through entries are marked `exported`; other declarations in traced files remain `internal`.
 
@@ -131,6 +147,18 @@ The plugin returns `ExtractionResult` v2. The `@c4a/extract` runner turns that i
 - `symbols.jsonl` receives flattened symbol rows with `symbol_id`, `package_name`, and `module_path`.
 - `edges.jsonl` receives relation rows with package/module/version/hash metadata.
 - `digests.jsonl` receives versioned module digest rows.
+
+The durable digest also retains `coverage.tier`, the complete capability list,
+and a disposition for every reached file. Syntax errors, dynamic CommonJS
+module names, and dynamic CommonJS export keys are `unsupported`; they include
+a stable file/line/column diagnostic and do not publish partial symbols from
+that file.
+
+`typeScriptExtractionToEvidenceAdapterResult()` is the Indexer-facing export.
+It converts only `c4a-extract-ts` output and publishes canonical file/fact
+identities, per-file owner/disposition, explicit denominators, diagnostics, and
+the ordered parser receipt through `context.indexer.evidence-adapter-result/v1`.
+`ExtractionResult` remains available for the existing raw snapshot runner.
 
 The Context CLI consumes those rows during `context run extract:<source>:codegraph`
 to build review candidates for package/category/symbol knowledge Nodes. The
@@ -186,3 +214,13 @@ context run extract:component-lib:codegraph
 
 Agents should not hand-build runner input or raw snapshots for normal Context
 workspace operation.
+
+## Development
+
+```bash
+bun run --filter @c4a/extract-ts build
+bun run --filter @c4a/extract-ts typecheck
+bun run --filter @c4a/extract-ts test
+bun run --filter @c4a/extract-ts lint
+bun run test:dist
+```

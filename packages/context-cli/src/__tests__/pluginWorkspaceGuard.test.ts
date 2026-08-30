@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const PLUGIN_ROOT = join(PACKAGE_ROOT, "plugin");
+const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
+const PLUGIN_ROOT = join(REPOSITORY_ROOT, "plugins", "context");
+const ENTRY_PATH = join(PLUGIN_ROOT, "skills", "context", "SKILL.md");
 const WORKFLOW_ROOT = join(PACKAGE_ROOT, "context-workflow");
 const CONTEXT_PACKAGE_ROOT = join(PACKAGE_ROOT, "..", "context");
 const CONTEXT_DOCS_ROOT = join(CONTEXT_PACKAGE_ROOT, "docs");
@@ -43,11 +45,11 @@ describe("plugin and workflow workspace guard", () => {
     expect(cliPackage.files).not.toContain("plugin");
   });
 
-  test("development docs keep bundled plugin sources authoritative", async () => {
+  test("development docs keep root plugin sources authoritative", async () => {
     const development = await readFile(join(PACKAGE_ROOT, "DEVELOPMENT.md"), "utf8");
-    expect(development).toContain("packages/context-cli/plugin/");
+    expect(development).toContain("plugins/context/");
     expect(development).toContain("packages/context-cli/dist/plugins/");
-    expect(development).toContain("There is no separate marketplace repository");
+    expect(development).toContain("repo-install");
   });
 
   test("plugin entry documents do not request direct workspace file tools", async () => {
@@ -60,7 +62,7 @@ describe("plugin and workflow workspace guard", () => {
 
   test("the single public entry is route-led instead of a duplicated state table", async () => {
     const workflow = await readFile(
-      join(PLUGIN_ROOT, "commands", "context.md"),
+      ENTRY_PATH,
       "utf8",
     );
     expect(workflow).toContain("context entry");
@@ -75,7 +77,7 @@ describe("plugin and workflow workspace guard", () => {
 
   test("managed mode is explicit, current-conversation-only, and bounded", async () => {
     const boundedEntryFiles = [
-      join(PLUGIN_ROOT, "commands", "context.md"),
+      ENTRY_PATH,
       join(PACKAGE_ROOT, "src", "project", "workspaceGuidanceTemplates.ts"),
     ];
     for (const file of boundedEntryFiles) {
@@ -110,7 +112,7 @@ describe("plugin and workflow workspace guard", () => {
     expect(source).toContain("stop using it when the conversation ends or the user revokes it");
     expect(source).toContain("`execution.target: agent-host`");
     expect(source).not.toContain("Execute safe mechanical `next:` steps");
-    const continuation = await readFile(join(PLUGIN_ROOT, "commands", "context.md"), "utf8");
+    const continuation = await readFile(ENTRY_PATH, "utf8");
     expect(continuation).toContain("`execution.target` is `agent-host`");
     expect(continuation).toMatch(/not inside a restricted child\s+sandbox/u);
   });
@@ -191,10 +193,7 @@ describe("plugin and workflow workspace guard", () => {
         expect(text, file).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
       }
       for (const entry of ["context"]) {
-        const name = root.endsWith("skills")
-          && root.includes(`${join("dist", "plugins", "skills")}`)
-          ? `c4a-${entry}`
-          : entry;
+        const name = entry;
         const body = await readFile(join(root, name, "SKILL.md"), "utf8");
         expect(body, `${root}/${name}`).toContain(
           "context entry",

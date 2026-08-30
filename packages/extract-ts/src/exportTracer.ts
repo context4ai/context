@@ -1,6 +1,9 @@
 import { parseFile } from "@c4a/extract";
 import type { FileSystem } from "@c4a/extract";
 import type Parser from "web-tree-sitter";
+import { analyzeCommonJsModule } from "./commonJsModule.js";
+import { traceCommonJsExports } from "./commonJsExportTrace.js";
+import { isJsxLikePath } from "./ecmaScriptLanguage.js";
 import { resolveImportSourcePath } from "./pathUtils.js";
 import type { TsConfigPathResolver } from "./tsconfigPaths.js";
 
@@ -178,12 +181,23 @@ const traceFile = async (
     state.files.add(filePath);
 
     const source = await fs.readFile(filePath);
-    const tree = await parseFile(source, filePath.endsWith(".tsx"));
+    const commonJs = analyzeCommonJsModule(source, filePath);
+    if (commonJs.diagnostics.length > 0) return [];
+    const tree = await parseFile(source, isJsxLikePath(filePath));
     if (!tree) return [];
 
     const root = tree.rootNode;
     const localDeclarations = collectLocalDeclarations(root);
     const importBindings = collectImportBindings(root);
+    for (const declaration of commonJs.syntheticDeclarations) {
+      localDeclarations.set(declaration.name, declaration.name);
+    }
+    for (const binding of commonJs.bindings) {
+      importBindings.set(binding.localName, {
+        source: binding.source,
+        importedName: binding.importedName,
+      });
+    }
     const exportsList: TracedExport[] = [];
 
     for (const node of root.namedChildren) {
@@ -261,6 +275,23 @@ const traceFile = async (
         });
       }
     }
+
+    exportsList.push(...(await traceCommonJsExports({
+      analysis: commonJs,
+      filePath,
+      localDeclarations,
+      traceImported: (source, importedName, exportedName) => traceImportedBinding(
+        filePath,
+        { source, importedName },
+        exportedName,
+        fs,
+        state,
+      ),
+      traceWildcard: async (source) => {
+        const targetPath = await resolveImportSourcePath(filePath, source, fs, state.resolver);
+        return targetPath ? traceFile(targetPath, fs, state) : [];
+      },
+    })));
 
     state.inFlight.delete(filePath);
     return uniqueExports(exportsList);

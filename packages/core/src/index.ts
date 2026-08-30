@@ -5,3 +5,4 @@ export * from "./utils/index.js";
 export * from "./constants.js";
 export * from "./contentTypeRegistry.js";
 export * from "./fileTypes.js";
+export * from "./indexerOutputRedaction.js";

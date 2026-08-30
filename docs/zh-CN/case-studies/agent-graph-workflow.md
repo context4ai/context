@@ -12,7 +12,7 @@ Context 使用 Agent Graph 承载工作契约。Agent Graph 不提取代码、�
 
 Context 插件对外只有一个 Agent 入口：
 
-- [`/c4a:context`](https://github.com/context4ai/context/blob/main/packages/context-cli/plugin/commands/context.md) 由 `context.md` 生成，既能创建用户请求的知识工作区，也能继续已有工作区。首次调用 `context entry` 时，它会先判断应该初始化、定位工作区还是求值当前工作流，再把控制权交给 `workflow.current`。
+- [`/c4a:context`](https://github.com/context4ai/context/blob/main/plugins/context/skills/context/SKILL.md) 由根级 Context Skill 生成，既能创建用户请求的知识工作区，也能继续已有工作区。首次调用 `context entry` 时，它会先判断应该初始化、定位工作区还是求值当前工作流，再把控制权交给 `workflow.current`。
 
 这个入口有意保持很薄：它只描述 CLI 启动方式和 Route 消费契约，不在入口中复制产品生命周期。详细说明继续分布在可以独立寻址的工作流资源和 Action 契约中。
 

@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.program-execution-authorization-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "report", "authority_ref", "authority_scope_digest", "input_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.program-execution-authorization-input/v1" },
+    "report": { "$ref": "#/$defs/report" },
+    "authority_ref": { "type": "string", "minLength": 1 },
+    "authority_scope_digest": { "$ref": "#/$defs/digest" },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "indexer_id",
+        "provider_id",
+        "skill",
+        "version",
+        "bundle_integrity",
+        "manifest_digest",
+        "provider_fingerprint",
+        "issuer",
+        "declared_trust"
+      ],
+      "properties": {
+        "indexer_id": { "type": "string", "minLength": 1 },
+        "provider_id": { "type": "string", "minLength": 1 },
+        "skill": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "bundle_integrity": { "$ref": "#/$defs/digest" },
+        "manifest_digest": { "$ref": "#/$defs/digest" },
+        "provider_fingerprint": { "$ref": "#/$defs/digest" },
+        "issuer": { "type": "string", "minLength": 1 },
+        "declared_trust": {
+          "enum": ["first-party", "verified", "project-authorized", "untrusted"]
+        }
+      }
+    },
+    "program": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "path", "content_digest", "program_digest"],
+          "properties": {
+            "origin": { "const": "provider-bundle" },
+            "path": { "type": "string", "minLength": 1 },
+            "content_digest": { "$ref": "#/$defs/digest" },
+            "program_digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "path", "content_digest", "program_digest"],
+          "properties": {
+            "origin": { "const": "project-local" },
+            "path": {
+              "type": "string",
+              "pattern": "^src/indexer/[a-z0-9][a-z0-9._-]*/index\\.ts$"
+            },
+            "content_digest": { "$ref": "#/$defs/digest" },
+            "program_digest": { "$ref": "#/$defs/digest" }
+          }
+        }
+      ]
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "entry", "args"],
+      "properties": {
+        "runtime": { "const": "node" },
+        "entry": { "type": "string", "minLength": 1 },
+        "args": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "project_ref",
+        "provider",
+        "resource",
+        "program",
+        "execution",
+        "execution_digest",
+        "capabilities",
+        "capability_set_digest",
+        "dependency_set_digest",
+        "scope_digest",
+        "limits",
+        "execution_policy_digest",
+        "requested_level",
+        "sandboxed_program",
+        "report_digest"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.program-execution-authorization-report/v1" },
+        "project_ref": { "type": "string", "minLength": 1 },
+        "provider": { "$ref": "#/$defs/provider" },
+        "resource": { "const": "program" },
+        "program": { "$ref": "#/$defs/program" },
+        "execution": { "$ref": "#/$defs/execution" },
+        "execution_digest": { "$ref": "#/$defs/digest" },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["source.read", "parser-facts.read", "indexer-result.write"]
+          }
+        },
+        "capability_set_digest": { "$ref": "#/$defs/digest" },
+        "dependency_set_digest": { "$ref": "#/$defs/digest" },
+        "scope_digest": { "$ref": "#/$defs/digest" },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "timeout_ms",
+            "max_stdin_bytes",
+            "max_stdout_bytes",
+            "max_stderr_bytes"
+          ],
+          "properties": {
+            "timeout_ms": { "type": "integer", "minimum": 100, "maximum": 300000 },
+            "max_stdin_bytes": { "type": "integer", "minimum": 1 },
+            "max_stdout_bytes": { "type": "integer", "minimum": 1 },
+            "max_stderr_bytes": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "execution_policy_digest": { "$ref": "#/$defs/digest" },
+        "requested_level": { "const": "trusted-program" },
+        "sandboxed_program": { "const": false },
+        "report_digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

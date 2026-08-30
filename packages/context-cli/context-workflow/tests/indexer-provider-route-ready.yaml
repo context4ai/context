@@ -1,0 +1,13 @@
+schema: agent-graph.test.v1
+name: a closed multi Skill selection reaches static Provider validation
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: completed
+expect:
+  statusCode: actionable
+  primaryNode: validate-indexer-selection-proposal
+  primaryReasonCode: route.indexer.selection-validation
+  handler: context.validate-indexer-selection-proposal/v1

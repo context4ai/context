@@ -7,6 +7,10 @@ describe("ContentTypeRegistry", () => {
     expect(defaultRegistry.resolve("README.md")?.id).toBe("markdown");
     expect(defaultRegistry.resolve("notes.txt")?.id).toBe("markdown");
     expect(defaultRegistry.resolve("index.ts")?.id).toBe("typescript");
+    expect(defaultRegistry.resolve("index.mts")?.id).toBe("typescript");
+    expect(defaultRegistry.resolve("index.js")?.id).toBe("javascript");
+    expect(defaultRegistry.resolve("view.jsx")?.id).toBe("javascript");
+    expect(defaultRegistry.resolve("index.cjs")?.id).toBe("javascript");
     expect(defaultRegistry.resolve("package.json")?.id).toBe("package");
     expect(defaultRegistry.resolve("Cargo.toml")?.id).toBe("package");
     expect(defaultRegistry.resolve("report.pdf")?.id).toBe("pdf");
@@ -23,6 +27,7 @@ describe("ContentTypeRegistry", () => {
   test("resolve handles multi-dot filenames", () => {
     expect(defaultRegistry.resolve("archive.tar.md")?.id).toBe("markdown");
     expect(defaultRegistry.resolve("component.spec.tsx")?.id).toBe("typescript");
+    expect(defaultRegistry.resolve("component.spec.jsx")?.id).toBe("javascript");
   });
 
   test("getManifestFilenames returns all package manifests", () => {

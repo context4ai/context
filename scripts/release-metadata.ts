@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  parserReleaseMetadata,
+  releasePublishPlan,
   releasePackageDirectories,
   renderPublishedPackages,
   upsertPublishedPackages,
@@ -28,12 +30,16 @@ if (bodyIndex >= 0 && !bodyPath) {
 }
 
 if (format === "directories") {
-  process.stdout.write(`${releasePackageDirectories().join("\n")}\n`);
+  process.stdout.write(`${releasePackageDirectories(rootPackage.version).join("\n")}\n`);
 } else if (format === "markdown") {
   const output = bodyPath
     ? upsertPublishedPackages(await readFile(resolve(bodyPath), "utf8"), rootPackage.version)
     : `${renderPublishedPackages(rootPackage.version)}\n`;
   process.stdout.write(output);
+} else if (format === "parser-coordinates") {
+  process.stdout.write(`${JSON.stringify(parserReleaseMetadata(rootPackage.version), null, 2)}\n`);
+} else if (format === "publish-plan") {
+  process.stdout.write(`${JSON.stringify(releasePublishPlan(rootPackage.version), null, 2)}\n`);
 } else {
   throw new Error(`Unsupported release metadata format: ${format}`);
 }

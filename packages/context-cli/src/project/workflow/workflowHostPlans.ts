@@ -120,6 +120,78 @@ function verificationRepairPlan(
 }
 
 const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
+  "context.confirm-index-requirement-workset/v1": () => ({
+    commands: [command(
+      "context indexer confirm-index-requirement-workset --input .tmp/agent-payloads/indexer-requirement-confirmation.json --format json",
+      "external",
+      "agent-required",
+    )],
+  }),
+  "context.route-indexer-provider-selection/v1": () => ({
+    commands: [],
+  }),
+  "context.validate-indexer-selection-proposal/v1": () => ({
+    commands: [],
+  }),
+  "context.validate-indexer-customization/v1": () => ({
+    commands: [],
+  }),
+  "context.materialize-indexer-instructions/v1": () => ({
+    commands: [],
+  }),
+  "context.inspect-indexer-project-proposal/v1": () => ({
+    commands: [],
+  }),
+  "context.apply-indexer-project/v1": () => ({
+    commands: [],
+  }),
+  "context.observe-indexer-project/v1": () => ({
+    commands: [],
+  }),
+  "context.inspect-indexer-dependencies/v1": () => ({
+    commands: [],
+  }),
+  "context.authorize-indexer-dependencies/v1": () => ({
+    commands: [],
+  }),
+  "context.inspect-indexer-program-execution/v1": () => ({
+    commands: [],
+  }),
+  "context.authorize-indexer-program-execution/v1": () => ({
+    commands: [],
+  }),
+  "context.validate-indexer-contract-overlay/v1": () => ({
+    commands: [],
+  }),
+  "context.authorize-indexer-contract-overlay/v1": () => ({
+    commands: [],
+  }),
+  "context.confirm-subject-reidentification/v1": () => ({
+    commands: [command(
+      "context indexer confirm-subject-reidentification --input .tmp/agent-payloads/indexer-subject-reidentification-confirmation.json --format json",
+      "external",
+      "agent-required",
+    )],
+  }),
+  "context.inspect-material-answer-review/v1": () => ({
+    commands: [command(
+      "context indexer inspect-material-answer-review --input .tmp/agent-payloads/indexer-material-answer-review-inspection.json --format json",
+      "read",
+    )],
+  }),
+  "context.review-material-answer-candidate/v1": () => ({
+    commands: [command(
+      "context indexer review-material-answer-candidate --input .tmp/agent-payloads/indexer-material-answer-review-resolution.json --format json",
+      "external",
+      "agent-required",
+    )],
+  }),
+  "context.propose-overlay-question-amendment/v1": () => ({
+    commands: [],
+  }),
+  "context.rebind-indexer-selection-to-requirement/v1": () => ({
+    commands: [],
+  }),
   "context.verification.repair-next": verificationRepairPlan,
   "context.project.repair-entry": () => ({
     commands: [],

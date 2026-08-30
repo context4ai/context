@@ -40,6 +40,7 @@ protocol and its commands are not a user-facing dependency.
 |---|---|
 | `provider.yaml` | Provider identity, graph catalog, and exported resources |
 | `graphs/workspace.yaml` | Stable knowledge-work task categories and legal transitions |
+| `graphs/indexer.yaml` | Digest-bound Indexer selection, execution, reconciliation, and gap subroutes |
 | `actions/` | Action contracts resolved by the Context host adapter |
 | `resources/` | Procedures, dialogue, diagnostics, manuals, schemas, and dynamic-view definitions |
 | `schemas/` | Structured Agent payload contracts |
@@ -105,6 +106,65 @@ The Provider is considered valid only when all of the following are true:
     issues and repeats Preview/extraction/audit until accepted. The complete
     report stays in the workspace; package inventory carries only a compact
     audit summary and no report file is published.
+17. The Indexer graph advances from partition to author work only through
+    CLI-validated workset-set Facts. Exact SubjectKey resolution happens before
+    authoring; post-author composers receive only a bounded PrimaryResultView,
+    and reconciliation is unreachable until the independent composer set is
+    either explicitly not required or fully accepted with a current envelope.
+18. Main Indexer dispatch first recovers a local content-addressed run ledger.
+    A validated Result, its read receipts, and the accepted transition share one
+    durable journal; interrupted running work returns to pending, while a complete
+    accepted cache hit, including an empty Result, is not dispatched again.
+    Ordinal/fixed-count partition output advances to the next authorized strategy.
+    Once those strategies are exhausted, the graph starts a release-bound CLI
+    catalog-fallback request and mechanically accepts one parent unit; a persisted
+    exhausted-convergence predecessor is mandatory and no Agent or user Gate is used.
+19. Post-author composers use a separate local ledger. Accepted composer Results
+    and receipts survive process recovery independently; a current envelope is
+    published atomically only after the complete set is accepted. If only the
+    envelope pointer is absent, composition is replayed without rerunning a composer.
+20. Result reconciliation is a CLI-owned completion boundary. It recomputes
+    required-domain owners, consumes only accepted author-store Results, enumerates
+    every current question-target pair, and turns omitted pairs into material gaps.
+    Missing owners, missing accepted cache, unsupported targets, or blocking
+    material gaps cannot reach reconciliation readiness or a complete report.
+21. Material-answer Review is a separate digest-bound Gate over one exact
+    question-target and canonical evidence binding. It may emit an unpersisted
+    `answer-approved` successor-ledger fact, but cannot approve reader content or
+    bypass the later mechanical audit and main candidate Review. Only
+    `checkpoint-material-gaps` may persist that fact.
+22. Material-answer dispatch is a second-phase loop over a CLI-built immutable
+    question workset. Eligibility is the intersection of registry operation,
+    enricher binding, primary Provider declaration, read scope, current source,
+    and evidence kind. Its independent durable ledger recovers accepted empty
+    Results, resets incomplete running work to pending, and admits candidates
+    only after current CLI evidence-read receipts validate every claimed span.
+23. Every reconciliation outcome passes through the retained material-gap
+    checkpoint before it can complete, dispatch answer work, or block. An
+    approved answer retains its full accepted workset for cross-machine recovery.
+    Context derives a body-free planned-answer projection from the canonical
+    source/span binding. Actualization binds that projection and its landing to one
+    current layout-proposal-set digest; stale source authority or a missing/ambiguous
+    landing reopens the question as unresolved. Final close derives exact answer
+    provenance from the approved structure itself and shares the ledger CAS write.
+    `audit-material-gap-state` performs the expected-ledger comparison in memory
+    without a write and routes pre-Review drift to checkpoint or approved
+    post-Review state to close. Retained answer state and planned-answer provenance
+    are excluded from reader Markdown and package projections.
+24. Requirement confirmation always uses the CLI-recomputed canonical comparator.
+    Ordinary changes may use only their explicit session authority; contraction
+    and incomparable obligation replacement enter a non-delegable human Gate.
+25. SubjectKey schema authority is resolved from the CLI base contract or the one
+    owning extension Provider. Identity-breaking changes over approved Nodes need
+    a Provider major and one exact human re-identification authorization; invalid
+    mappings fail before the Gate. Ambiguous and invalid target resolution are
+    typed blocking/failure Outcomes and cannot enter author work.
+26. The Markdown Provider Route starts by proving current document capture,
+    then separates Agent-only visible-Skill discovery from CLI routing, static
+    validation, resolution, staging, and final validation. CLI-bundled Bundles
+    may complete automatically; external Bundles return a v2 Host request and
+    project customization returns its own blocking Outcome. Host re-entry carries
+    only structured Host results; the CLI owns all staged paths.
 
 ## Managed host-loop receipts
 

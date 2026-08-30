@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: observe-material-answer-runs
+runner: command
+effect: write
+command: context indexer observe-material-answer-runs --input .tmp/agent-payloads/indexer-material-answer-observation.json --format json
+inputSchema: schemas/indexer-material-answer-lifecycle-input.schema.json
+outputSchema: schemas/indexer-material-answer-lifecycle-output.schema.json

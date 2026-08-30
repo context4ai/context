@@ -1,0 +1,11 @@
+schema: agent-graph.test.v1
+name: post-Review material-gap audit routes closure through the atomic close writer
+graph: indexer
+entry: material-gap-audit
+state:
+  outcomes:
+    indexer/audit-material-gap-state: unverified
+    indexer/close-indexer-approved-knowledge: completed
+expect:
+  statusCode: complete
+  outcome: completed

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.selection-proposal-validation/v1",
+  "type": "object",
+  "required": [
+    "protocol",
+    "proposal",
+    "static_report",
+    "outcome",
+    "next_provider_requests",
+    "resolution_requests",
+    "validation_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.selection-proposal-validation/v1" },
+    "proposal": { "type": "object" },
+    "static_report": { "type": "object" },
+    "outcome": { "const": "provider-resolution-required" },
+    "next_provider_requests": { "type": "array", "items": { "type": "object" } },
+    "resolution_requests": { "type": "array", "items": { "type": "object" } },
+    "validation_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

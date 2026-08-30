@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.overlay-question-rebind-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "trusted_validation_input",
+    "trusted_validation_result",
+    "base_registry",
+    "amendment",
+    "confirmation",
+    "base_static_report",
+    "base_final_report",
+    "resolved",
+    "customizations",
+    "input_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.overlay-question-rebind-input/v1" },
+    "trusted_validation_input": { "type": "object" },
+    "trusted_validation_result": { "type": "object" },
+    "base_registry": { "type": "object" },
+    "amendment": { "type": "object" },
+    "confirmation": { "type": "object" },
+    "base_static_report": { "type": "object" },
+    "base_final_report": { "type": "object" },
+    "resolved": { "type": "array", "items": { "type": "object" } },
+    "customizations": { "type": "array", "items": { "type": "object" } },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

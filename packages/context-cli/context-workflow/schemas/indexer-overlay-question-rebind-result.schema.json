@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.overlay-question-rebind-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "rebind_receipt", "proposal", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.overlay-question-rebind-result/v1" },
+    "rebind_receipt": { "type": "object" },
+    "proposal": {
+      "type": "object",
+      "required": ["protocol", "proposal_digest"],
+      "properties": {
+        "protocol": {
+          "const": "context.indexer.overlay-question-registry-apply-proposal/v1"
+        },
+        "proposal_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

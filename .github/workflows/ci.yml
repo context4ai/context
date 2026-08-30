@@ -47,5 +47,16 @@ jobs:
       - name: Build workspace
         run: bun run build
 
+      - name: Verify generated plugin projection
+        run: >-
+          git diff --exit-code --
+          plugins/context/repo-install
+          .agents/plugins/marketplace.json
+          .claude-plugin/marketplace.json
+          .cursor-plugin/marketplace.json
+
+      - name: Report semantic source ownership
+        run: bun run report:semantic-source-ownership
+
       - name: Verify
         run: bun run verify:full

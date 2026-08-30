@@ -7,6 +7,15 @@ export * from "./repository";
 export * from "./codeSnapshot";
 export * from "./runner";
 export * from "./errors";
+export * from "./evidenceAdapter";
+export * from "./configEvidenceTypes";
+export * from "./outputRedaction";
+export { parseConfigSources } from "./configEvidenceParser";
+export {
+  configSourcesToEvidenceAdapterMaterialization,
+  configSourcesToEvidenceAdapterResult,
+} from "./configEvidenceAdapter";
+export const CONFIG_EVIDENCE_ADAPTER_EXPORT = "configSourcesToEvidenceAdapterResult";
 export {
   scanSourceFiles,
   detectModules,

@@ -1,0 +1,36 @@
+{
+  "name": "@c4a/extract-contract",
+  "description": "OpenAPI and GraphQL contract catalog adapter for Context",
+  "version": "0.7.0",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/context4ai/context.git",
+    "directory": "packages/extract-contract"
+  },
+  "keywords": [
+    "openapi",
+    "graphql",
+    "schema",
+    "code-analysis"
+  ],
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts && bun run ../writeLibraryDistPackage.ts . && cp ../../LICENSE dist/LICENSE",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@c4a/core": "workspace:*",
+    "graphql": "^16.14.2",
+    "yaml": "^2.8.2"
+  }
+}

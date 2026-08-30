@@ -17,8 +17,9 @@ npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-安装后重启或刷新 Agent 宿主。同一份入口源会被安装器投影到支持的 Claude、Codex、
-Cursor 和 Skill-compatible 目录。
+安装后重启或刷新 Agent 宿主。一次安装会生成一个带宿主命名空间的 Context 主入口，
+并把 `context-code-indexer`、`context-markdown-indexer` 作为无命名空间的生命周期
+Provider Skill 投影到 Claude、Codex 和 Cursor 的用户技能目录。
 
 社区版公开入口是 `/c4a:context`。它可以创建用户请求的工作区、定位已有工作区，
 或从当前状态继续流程。用户应该从知识意图开始，而不是内部命令：
@@ -150,6 +151,41 @@ context/
 - 代码提取写入 `knowledge/codeindex/**`，并在 Review 前分别检查输入分析、稳定边界
   覆盖、正文密度、证据范围和页面规模；旧 `codegraph` 工作区只通过 Route 返回的
   迁移动作升级；
+- `context indexer` 生命周期以内容寻址 ledger 恢复 main/post-author 运行，再由 CLI
+  根据 current owner、accepted Result 和完整 question-target 集重新计算 coverage；
+  capability/material gap 不能被报告为 complete。ordinal/fixed-count partition 按授权顺序自动重试；
+  策略耗尽后只允许带持久化前驱的 CLI catalog fallback 生成唯一父单元，不调用 Agent 或用户 Gate；
+- `markdown-provider` Indexer Route 只能从精确 current 的文档 capture 开始。Agent
+  只报告当前会话可见的 `context-markdown-indexer*` Skill，不持久化 discovery list；
+  CLI 重新计算 Route 与静态校验，自动解析并 stage 精确 CLI-bundled Bundle，外部解析
+  或本地定制则分别停在显式 Host/customization Outcome；
+- `route-index-requirement-confirmation` 会重新计算 canonical requirement comparator；普通确认
+  只可使用显式 authority，contraction 或不可比较的义务替换始终进入不可委托人工 Gate。
+  `validate-subject-key-schemas` 对已有 approved Node 上的 identity-breaking 变化要求 Provider
+  major 与精确 re-identification 授权，漏映射、split、merge 或 collision 在 Gate 前失败；精确
+  target 命中多个 Node 返回 `index-target-resolution-ambiguous`，非法复用返回
+  `index-target-resolution-invalid`；
+- `context indexer build-material-question-workset` 从 current registry、Provider、scope、
+  source 与 evidence-kind authority 的交集派生二阶段回答资格；
+  `prepare|observe|start|accept|fail-material-answer-*` 使用独立 durable ledger，完整空 Result
+  也作为 cache hit，candidate evidence 则必须携带精确的 current source-span 读取回执；
+- material-answer candidate 使用独立的受限 Review Route，只批准一个精确问题目标与
+  canonical source-span evidence binding。批准结果只是供后续 checkpoint 写入的
+  `answer-approved` successor-ledger fact，不批准 Artifact、读者页面或主知识候选；
+- 主 Candidate Review 只有 `inspect-index-candidate-review-readiness` 一个 Graph 前驱。CLI
+  只接受内容寻址 precompile/postcompile audit record 的 digest，并复核 requirement、registry、
+  inventory、layout、candidate set 与 effective revision 绑定；record 缺失、stale、基础失败或
+  profile 未通过时都不能解析 Review Gate。profile 失败进入 `revise-index-output`；
+  `record-index-profile-revision` 按稳定 problem lineage 最多记录三个不同的 Result fingerprint。
+  第三轮后 `report-index-profile-failure` 才持久化包含指标、示例、历史、缺失输入与能力损失的完整
+  报告；`inspect-index-profile-failure` 只读展示该报告，随后
+  `override-index-profile-audit` 使用不可委托 Gate。回执精确绑定报告、审计、候选 revision、失败
+  指标、用户和时间；baseline 失败不能生成或消费该回执；
+- `checkpoint-material-gaps` 是 reconciliation 任何停止前的 retained writer。批准答案会
+  内联 accepted workset；`actualize-material-answer-bindings` 按同一个 current layout proposal
+  set 映射并在 source stale 时 reopen，`close-indexer-approved-knowledge` 只接受其同时关闭的
+  approved structure 内部 provenance，并原子收敛 ledger；`audit-material-gap-state` 始终只读，
+  内存复算 expected ledger，并把主 Review 前的漂移路由到 checkpoint、把已批准的后置状态路由到 close；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
 
 绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，
@@ -159,7 +195,7 @@ context/
 
 ## 文档与开发
 
-- [插件契约](./plugin/README_CN.md)
+- [插件契约](../../plugins/context/README_CN.md)
 - [Workflow Provider 内部说明](./context-workflow/README.zh-CN.md)
 - [SDK 文档索引](../context/docs/README.zh-CN.md)
 - [知识项目完整示例](../context/docs/getting-started.md)
@@ -176,8 +212,9 @@ bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
 ```
 
-构建会在 `dist/plugins` 生成可安装的宿主投影；只修改 `plugin/` 和 Workflow
-Provider 源码，不要直接编辑生成产物。
+构建会在 `dist/plugins` 生成 npm 宿主投影，并在
+`../../plugins/context/repo-install` 生成 Git 直装投影；只修改
+`../../plugins/context/` 和 Workflow Provider 源码，不要直接编辑生成产物。
 
 ## License
 

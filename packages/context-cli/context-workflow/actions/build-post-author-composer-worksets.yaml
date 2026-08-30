@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: build-post-author-composer-worksets
+runner: command
+effect: write
+command: context indexer build-post-author-composer-worksets --input .tmp/agent-payloads/indexer-post-author-lifecycle.json --format json
+inputSchema: schemas/indexer-post-author-lifecycle-input.schema.json
+outputSchema: schemas/indexer-post-author-lifecycle-output.schema.json

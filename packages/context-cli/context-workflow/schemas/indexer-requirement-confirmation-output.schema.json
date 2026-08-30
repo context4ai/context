@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.requirement-confirmation-output/v1",
+  "type": "object",
+  "required": ["protocol", "graph_outcome"],
+  "properties": {
+    "protocol": {
+      "enum": [
+        "context.indexer.requirement-confirmation-route-result/v1",
+        "context.indexer.requirement-confirmation-action-result/v1"
+      ]
+    },
+    "report": { "type": "object" },
+    "confirmation": { "type": "object" },
+    "outcome": {
+      "enum": [
+        "requirement-confirmation-required",
+        "requirement-contraction-confirmation-required"
+      ]
+    },
+    "graph_outcome": { "enum": ["completed", "waiting-user", "blocked"] }
+  },
+  "additionalProperties": false
+}

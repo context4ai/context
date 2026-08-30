@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.requirement-confirmation-input/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["protocol", "report"],
+      "properties": {
+        "protocol": { "const": "context.indexer.requirement-confirmation-route-input/v1" },
+        "report": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "report", "authority", "confirmed_by", "confirmed_at"],
+      "properties": {
+        "protocol": { "const": "context.indexer.requirement-confirmation-action-input/v1" },
+        "report": { "type": "object" },
+        "authority": { "enum": ["managed", "human"] },
+        "confirmed_by": { "type": "string", "minLength": 1 },
+        "confirmed_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    }
+  ]
+}

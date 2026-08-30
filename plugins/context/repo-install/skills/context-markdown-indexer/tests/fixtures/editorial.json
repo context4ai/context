@@ -1,0 +1,309 @@
+{
+  "protocol": "context.indexer.markdown-editorial-fixture-set/v1",
+  "anonymized": true,
+  "cases": [
+    {
+      "id": "anonymous-unanswered-questions",
+      "profile": "faq-support",
+      "detection_scope": "section",
+      "source_markdown": "Should the interface expose a summary?\n\nHow should retries be verified?",
+      "expected_signal": {
+        "code": "unanswered-question-set",
+        "confidence": "review",
+        "recommended_action": "omit",
+        "omission_reason": "unanswered-question"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-answered-questions",
+      "profile": "faq-support",
+      "detection_scope": "section",
+      "source_markdown": "How is stable mode enabled?\nUse `stableMode`.\n\nHow is the result verified?\nRun `tool verify` and inspect the success state.",
+      "expected_signal": {
+        "code": "answered-question-set",
+        "confidence": "review",
+        "recommended_action": "reshape",
+        "omission_reason": null
+      },
+      "selected_outcome": "reshape",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-empty-table-row",
+      "profile": "test-validation",
+      "detection_scope": "section",
+      "source_markdown": "| Check | Result |\n| --- | --- |\n| | |",
+      "expected_signal": {
+        "code": "empty-table-row",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-placeholder-only",
+      "profile": "standard-policy",
+      "detection_scope": "section",
+      "source_markdown": "TBD",
+      "expected_signal": {
+        "code": "placeholder-content",
+        "confidence": "high",
+        "recommended_action": "omit",
+        "omission_reason": "empty-or-placeholder"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-wide-complex-table",
+      "profile": "technical-guide",
+      "detection_scope": "section",
+      "source_markdown": "| Mode | Input | Output | Recovery | Reference |\n| --- | --- | --- | --- | --- |\n| stable | request | result | retry | [Guide](https://example.invalid/guide) |",
+      "expected_signal": {
+        "code": "wide-table",
+        "confidence": "high",
+        "recommended_action": "reshape",
+        "omission_reason": null
+      },
+      "selected_outcome": "reshape",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-long-table-cell",
+      "profile": "technical-guide",
+      "detection_scope": "section",
+      "source_markdown": "| Item | Detail |\n| --- | --- |\n| stable | This cell contains a deliberately extended evidence-preserving explanation of the runtime boundary, its input contract, its output contract, its recovery condition, and the exact reader task. The explanation remains in one lookup cell even though it is long enough that a reader would benefit from a short index and a separate detail entry with the same facts and evidence. |",
+      "expected_signal": {
+        "code": "long-table-cell",
+        "confidence": "high",
+        "recommended_action": "reshape",
+        "omission_reason": null
+      },
+      "selected_outcome": "reshape",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-raw-link",
+      "profile": "user-and-developer-guide",
+      "detection_scope": "section",
+      "source_markdown": "Read https://example.invalid/guide for the procedure.",
+      "expected_signal": {
+        "code": "raw-or-unlabeled-link",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-adjacent-links",
+      "profile": "user-and-developer-guide",
+      "detection_scope": "section",
+      "source_markdown": "[First guide](https://example.invalid/first)[Second guide](https://example.invalid/second)",
+      "expected_signal": {
+        "code": "adjacent-links",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-volatile-destination",
+      "profile": "public-api-reference",
+      "detection_scope": "section",
+      "source_markdown": "Open [the diagnostic view](https://example.invalid/view?expires=temporary-value).",
+      "expected_signal": {
+        "code": "volatile-query-url",
+        "confidence": "review",
+        "recommended_action": "request-input",
+        "omission_reason": "volatile-reference"
+      },
+      "selected_outcome": "request-input",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-obsolete-only-block",
+      "profile": "incident-review",
+      "detection_scope": "section",
+      "source_markdown": "~~The retired mode is no longer available.~~",
+      "expected_signal": {
+        "code": "strikethrough-only-block",
+        "confidence": "review",
+        "recommended_action": "omit",
+        "omission_reason": "obsolete-without-replacement"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-open-proposal",
+      "profile": "product-requirements",
+      "detection_scope": "section",
+      "source_markdown": "Maybe add a second feedback path?",
+      "expected_signal": {
+        "code": "brainstorm-without-decision",
+        "confidence": "review",
+        "recommended_action": "omit",
+        "omission_reason": "draft-without-decision"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-duplicate-representation",
+      "profile": "domain-reference",
+      "detection_scope": "cross-section",
+      "source_markdown": "The same definition appears in two source-backed Sections with equivalent authority and lifecycle.",
+      "expected_signal": {
+        "code": "duplicate-fragment",
+        "confidence": "high",
+        "recommended_action": "omit",
+        "omission_reason": "duplicate-content"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-unstable-owner",
+      "profile": "runbook",
+      "detection_scope": "section",
+      "source_markdown": "Owner: sample-person",
+      "expected_signal": {
+        "code": "unstable-owner-reference",
+        "confidence": "review",
+        "recommended_action": "request-input",
+        "omission_reason": null
+      },
+      "selected_outcome": "request-input",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-sensitive-value-boundary",
+      "profile": "public-api-reference",
+      "detection_scope": "safety-baseline",
+      "source_markdown": "A credential-shaped value is present in the authorized source view but is intentionally not reproduced in this fixture.",
+      "expected_signal": {
+        "code": "sensitive-value-candidate",
+        "confidence": "review",
+        "recommended_action": "request-input",
+        "omission_reason": "sensitive-value-candidate"
+      },
+      "selected_outcome": "request-input",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-heading-hierarchy",
+      "profile": "documentation-site",
+      "detection_scope": "section",
+      "source_markdown": "## Runtime\n\n#### Recovery",
+      "expected_signal": {
+        "code": "heading-hierarchy-invalid",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-overloaded-heading",
+      "profile": "documentation-site",
+      "detection_scope": "section",
+      "source_markdown": "## [Guide](https://example.invalid/guide) [Reference](https://example.invalid/reference)",
+      "expected_signal": {
+        "code": "heading-content-overloaded",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-damaged-markdown",
+      "profile": "documentation-site",
+      "detection_scope": "section",
+      "source_markdown": "```text\nunclosed example",
+      "expected_signal": {
+        "code": "markdown-syntax-damaged",
+        "confidence": "high",
+        "recommended_action": "repair",
+        "omission_reason": null
+      },
+      "selected_outcome": "repair",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-conversion-residue",
+      "profile": "release-migration-guide",
+      "detection_scope": "section",
+      "source_markdown": "<!-- conversion:source-marker -->",
+      "expected_signal": {
+        "code": "conversion-artifact",
+        "confidence": "high",
+        "recommended_action": "omit",
+        "omission_reason": "conversion-artifact"
+      },
+      "selected_outcome": "omit",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-facts-and-draft",
+      "profile": "decision-record",
+      "detection_scope": "section",
+      "source_markdown": "The current mode uses stable processing.\n\nMaybe add another strategy later.",
+      "expected_signal": {
+        "code": "mixed-facts-and-draft",
+        "confidence": "review",
+        "recommended_action": "reshape",
+        "omission_reason": null
+      },
+      "selected_outcome": "reshape",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-clean-reference",
+      "profile": "domain-reference",
+      "detection_scope": "section",
+      "source_markdown": "A stable term names the durable boundary described by this source.",
+      "expected_signal": null,
+      "selected_outcome": "keep",
+      "assessment": null
+    },
+    {
+      "id": "anonymous-stable-role-assessment",
+      "profile": "runbook",
+      "detection_scope": "section",
+      "source_markdown": "Owner: platform-operations",
+      "expected_signal": {
+        "code": "unstable-owner-reference",
+        "confidence": "review",
+        "recommended_action": "request-input",
+        "omission_reason": null
+      },
+      "selected_outcome": "keep",
+      "assessment": "unstable-owner-reference: false-positive because this Section defines platform-operations as a stable responsibility."
+    },
+    {
+      "id": "anonymous-historical-source-fidelity",
+      "profile": "incident-review",
+      "detection_scope": "section",
+      "source_markdown": "~~Historical label retained from the source record.~~",
+      "expected_signal": {
+        "code": "strikethrough-only-block",
+        "confidence": "review",
+        "recommended_action": "omit",
+        "omission_reason": "obsolete-without-replacement"
+      },
+      "selected_outcome": "keep",
+      "assessment": "strikethrough-only-block: keeping the quoted historical label preserves source fidelity for this incident record."
+    }
+  ]
+}

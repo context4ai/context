@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { redactIndexerOutputText } from "@c4a/core";
 import { detectExternalEnvironmentIssue } from "../../lib/externalEnvironment.js";
 import type { ProjectStatus } from "../statusTypes.js";
 import type {
@@ -500,11 +501,8 @@ export async function executeRevisionBoundContextCommand(input: {
 }): Promise<WorkflowCommandReceipt> {
   const args = parseContextCommand(input.command);
   const started = Date.now();
-  const stdoutHash = createHash("sha256");
-  const stderrHash = createHash("sha256");
-  let stdoutBytes = 0;
-  let stderrBytes = 0;
-  let stderrTail = "";
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
   const timeoutMs = input.timeoutMs ?? 30 * 60 * 1000;
   return await new Promise<WorkflowCommandReceipt>((resolve, reject) => {
     const child = spawn(process.execPath, [input.cliEntryPath, ...args], {
@@ -514,15 +512,10 @@ export async function executeRevisionBoundContextCommand(input: {
       shell: false,
     });
     child.stdout.on("data", (chunk: Buffer | string) => {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      stdoutHash.update(buffer);
-      stdoutBytes += buffer.byteLength;
+      stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk);
     });
     child.stderr.on("data", (chunk: Buffer | string) => {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      stderrHash.update(buffer);
-      stderrBytes += buffer.byteLength;
-      stderrTail = `${stderrTail}${buffer.toString("utf8")}`.slice(-8192);
+      stderrChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : chunk);
     });
     child.once("error", reject);
     let timedOut = false;
@@ -535,21 +528,23 @@ export async function executeRevisionBoundContextCommand(input: {
     child.once("close", (exitCode, signal) => {
       clearTimeout(timer);
       if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
+      const stdout = redactIndexerOutputText({ channel: "stdout", value: stdoutChunks.join("") });
+      const stderr = redactIndexerOutputText({ channel: "stderr", value: stderrChunks.join("") });
       resolve({
         exitCode,
         signal,
         durationMs: Date.now() - started,
         timedOut,
         stdout: {
-          bytes: stdoutBytes,
-          sha256: stdoutHash.digest("hex"),
+          bytes: Buffer.byteLength(stdout),
+          sha256: createHash("sha256").update(stdout).digest("hex"),
         },
         stderr: {
-          bytes: stderrBytes,
-          sha256: stderrHash.digest("hex"),
-          ...(stderrTail.length === 0
+          bytes: Buffer.byteLength(stderr),
+          sha256: createHash("sha256").update(stderr).digest("hex"),
+          ...(stderr.length === 0
             ? {}
-            : { tail: stderrTail }),
+            : { tail: stderr.slice(-8192) }),
         },
       });
     });

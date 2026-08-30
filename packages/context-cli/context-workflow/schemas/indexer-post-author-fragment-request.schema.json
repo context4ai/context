@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.layer-fragment-request/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "operation", "phase", "target_layer_ref", "target_layer_integrity", "target_bundle_digest", "allowed_fragment_kinds", "allowed_target_refs", "workset", "composer_ref", "composer_selection_entry_digest", "current_profile_binding_digest", "primary_result_view", "request_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.layer-fragment-request/v1" },
+    "operation": { "const": "main-index" },
+    "phase": { "const": "post-author" },
+    "target_layer_ref": { "type": "string", "minLength": 1 },
+    "target_layer_integrity": { "$ref": "#/$defs/digest" },
+    "target_bundle_digest": { "$ref": "#/$defs/digest" },
+    "allowed_fragment_kinds": { "const": ["derived-artifact-proposal"] },
+    "allowed_target_refs": { "type": "array", "items": { "type": "string" } },
+    "workset": { "type": "object" },
+    "composer_ref": { "type": "string", "minLength": 1 },
+    "composer_selection_entry_digest": { "$ref": "#/$defs/digest" },
+    "current_profile_binding_digest": { "$ref": "#/$defs/digest" },
+    "primary_result_view": { "type": "object" },
+    "request_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

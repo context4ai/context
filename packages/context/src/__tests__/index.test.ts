@@ -126,6 +126,7 @@ describe("@c4a/context SDK bootstrap", () => {
     expect(docs.materializedAt).toBe("sources/product-docs");
     expect(handbook.materializedAt).toBe("sources/handbook");
     expect(extract.id).toBe("extract:sample-lib:codegraph");
+    expect(extract.include).toEqual(["src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]);
     expect(captureDocs.id).toBe("capture:file:product-docs");
     expect(captureHandbook.id).toBe("capture:lark:handbook");
     expect(captureHandbook.resources).toEqual({

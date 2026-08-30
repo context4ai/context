@@ -1,0 +1,11 @@
+schema: agent-graph.test.v1
+name: a baseline audit failure cannot reach main Candidate Review
+graph: indexer
+entry: candidate-review
+state:
+  outcomes:
+    indexer/inspect-index-candidate-review-readiness: failed
+  authorities: [context.indexer-profile-risk-override]
+expect:
+  statusCode: complete
+  outcome: failed

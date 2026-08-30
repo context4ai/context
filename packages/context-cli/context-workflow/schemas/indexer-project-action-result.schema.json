@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.project-action-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "proposal_digest", "state", "receipt_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.project-action-result/v1" },
+    "proposal_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "state": { "enum": ["inspected", "applied"] },
+    "receipt_digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}

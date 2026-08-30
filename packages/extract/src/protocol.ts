@@ -96,6 +96,8 @@ export interface ExtractionPlugin {
   id: string;
   languages: string[];
   packageManagers: string[];
+  capabilities?: string[];
+  coverageTier?: "ast-catalog" | "lightweight-evidence";
   manifestTypes?: ManifestInfo["type"][];
   canHandle(source: SourceInfo): boolean;
   detectEntries(manifest: ManifestInfo, fs: FileSystem): Promise<EntryDetectionResult>;

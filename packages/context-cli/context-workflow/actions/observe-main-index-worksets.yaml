@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: observe-main-index-worksets
+runner: command
+effect: read
+command: context indexer observe-main-index-worksets --input .tmp/agent-payloads/indexer-main-lifecycle.json --format json
+inputSchema: schemas/indexer-main-lifecycle-input.schema.json
+outputSchema: schemas/indexer-main-lifecycle-output.schema.json

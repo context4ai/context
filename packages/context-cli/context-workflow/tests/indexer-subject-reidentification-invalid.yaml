@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: an incomplete or colliding SubjectKey mapping cannot reach its Gate
+graph: indexer
+entry: subject-key-validation
+state:
+  outcomes:
+    indexer/validate-subject-key-schemas: failed
+expect:
+  statusCode: complete
+  outcome: failed

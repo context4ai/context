@@ -110,6 +110,18 @@ describe("generateDigest", () => {
       relations: 1,
     });
   });
+
+  test("keeps parser coverage and degradation dispositions in the durable digest", () => {
+    const extraction = baseExtractionResult();
+    extraction.coverage = {
+      tier: "ast-catalog",
+      capabilities: ["typescript-ast"],
+      files: [{ path: "src/index.ts", disposition: "analyzed", diagnosticCodes: [] }],
+      diagnostics: [],
+    };
+
+    expect(generateDigest(extraction).coverage).toEqual(extraction.coverage);
+  });
 });
 
 describe("generateSymbolDiff", () => {

@@ -1,0 +1,15 @@
+schema: agent-graph.test.v1
+name: a capture-bound CLI Provider reaches final Markdown validation
+graph: indexer
+entry: markdown-provider
+state:
+  outcomes:
+    indexer/inspect-markdown-provider-capture: completed
+    indexer/discover-markdown-indexer-providers: completed
+    indexer/route-markdown-indexer-provider-selection: completed
+    indexer/validate-markdown-indexer-selection-proposal: completed
+expect:
+  statusCode: actionable
+  primaryNode: validate-markdown-provider-selection
+  primaryReasonCode: route.indexer.markdown-provider-validation
+  command: context indexer validate-markdown-provider-selection --input .tmp/agent-payloads/indexer-markdown-provider-validation.json --format json

@@ -42,6 +42,19 @@ jobs:
           package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
           test "${GITHUB_REF_NAME}" = "v${package_version}"
 
+      - name: Capture pre-publish registry state
+        run: |
+          bun run scripts/release-registry-snapshot.ts \
+            --registry https://registry.npmjs.org \
+            --receipt .tmp/release-registry-snapshot.json
+
+      - name: Preserve pre-publish registry state
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-release-preflight-${{ github.event.release.tag_name }}
+          path: .tmp/release-registry-snapshot.json
+          if-no-files-found: error
+
       - name: Normalize release title
         env:
           GH_TOKEN: ${{ github.token }}
@@ -64,10 +77,15 @@ jobs:
         run: bun run release:prepare
 
       - name: Prepare release metadata
+        id: release-metadata
         run: |
           mkdir -p .tmp
           bun run scripts/release-metadata.ts --format directories > .tmp/release-package-dirs.txt
+          bun run scripts/release-metadata.ts --format publish-plan > .tmp/release-publish-plan.json
           test -s .tmp/release-package-dirs.txt
+          publish_tag="$(node --input-type=module -e "import { readFileSync } from 'node:fs'; const plan = JSON.parse(readFileSync('.tmp/release-publish-plan.json', 'utf8')); process.stdout.write(plan.publish_tag)")"
+          test -n "${publish_tag}"
+          echo "publish_tag=${publish_tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Audit npm packages
         run: |
@@ -85,9 +103,48 @@ jobs:
             if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
               echo "${package_name}@${package_version} is already published; skipping"
             else
-              npm publish "${package_dir}" --access public --provenance
+              npm publish "${package_dir}" \
+                --access public \
+                --provenance \
+                --tag "${{ steps.release-metadata.outputs.publish_tag }}"
             fi
           done < .tmp/release-package-dirs.txt
+
+      - name: Smoke exact registry release
+        run: |
+          succeeded=false
+          for attempt in 1 2 3 4 5 6
+          do
+            if bun run scripts/release-install-smoke.ts \
+              --registry https://registry.npmjs.org \
+              --receipt .tmp/release-install-smoke.json
+            then
+              succeeded=true
+              break
+            fi
+            echo "Exact registry smoke attempt ${attempt} failed; waiting for registry propagation"
+            sleep 10
+          done
+          test "${succeeded}" = true
+
+      - name: Promote final release dist-tags
+        run: |
+          bun run scripts/promote-release-tags.ts \
+            --registry https://registry.npmjs.org \
+            --registry-snapshot .tmp/release-registry-snapshot.json \
+            --smoke-receipt .tmp/release-install-smoke.json \
+            --receipt .tmp/release-dist-tag-promotion.json
+
+      - name: Preserve release receipts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-release-receipts-${{ github.event.release.tag_name }}
+          path: |
+            .tmp/release-publish-plan.json
+            .tmp/release-registry-snapshot.json
+            .tmp/release-install-smoke.json
+            .tmp/release-dist-tag-promotion.json
+          if-no-files-found: error
 
       - name: Update release package list
         env:

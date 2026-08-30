@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.markdown-provider-validation-result/v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "outcome",
+        "capture_report_digest",
+        "provider_route_report_digest",
+        "static_validation_digest",
+        "final_report",
+        "graph_outcome"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.markdown-provider-validation-result/v1" },
+        "outcome": { "const": "markdown-provider-selection-current" },
+        "capture_report_digest": { "$ref": "#/$defs/digest" },
+        "provider_route_report_digest": { "$ref": "#/$defs/digest" },
+        "static_validation_digest": { "$ref": "#/$defs/digest" },
+        "final_report": { "type": "object" },
+        "graph_outcome": { "const": "completed" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "outcome",
+        "capture_report_digest",
+        "provider_route_report_digest",
+        "static_validation_digest",
+        "host_requests",
+        "graph_outcome"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.markdown-provider-validation-result/v1" },
+        "outcome": { "const": "markdown-provider-host-resolution-required" },
+        "capture_report_digest": { "$ref": "#/$defs/digest" },
+        "provider_route_report_digest": { "$ref": "#/$defs/digest" },
+        "static_validation_digest": { "$ref": "#/$defs/digest" },
+        "host_requests": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "graph_outcome": { "const": "partial" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "outcome",
+        "capture_report_digest",
+        "provider_route_report_digest",
+        "static_validation_digest",
+        "indexer_ids",
+        "graph_outcome"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.markdown-provider-validation-result/v1" },
+        "outcome": { "const": "indexer-customization-required" },
+        "capture_report_digest": { "$ref": "#/$defs/digest" },
+        "provider_route_report_digest": { "$ref": "#/$defs/digest" },
+        "static_validation_digest": { "$ref": "#/$defs/digest" },
+        "indexer_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "graph_outcome": { "const": "blocked" }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.material-answer-review-resolution-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "ledger", "workset", "candidate_set", "baseline_report", "decision", "input_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.material-answer-review-resolution-input/v1" },
+    "ledger": { "type": "object", "required": ["protocol", "revision"] },
+    "workset": { "type": "object", "required": ["protocol", "workset_digest", "predecessor_ledger_revision"] },
+    "candidate_set": { "type": "object", "required": ["protocol", "workset_digest", "candidate_set_digest"] },
+    "baseline_report": { "type": "object", "required": ["protocol", "review_scope", "report_digest"] },
+    "decision": { "enum": ["approved", "rejected"] },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

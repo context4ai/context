@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: actualize-material-answer-bindings
+description: Map answer-approved landings to exact Artifact or Section identities and checkpoint the successor ledger.
+runner: command
+effect: write
+command: context indexer actualize-material-answer-bindings --input .tmp/agent-payloads/indexer-material-answer-actualization.json --format json
+inputSchema: schemas/indexer-material-gap-lifecycle-input.schema.json
+outputSchema: schemas/indexer-material-gap-lifecycle-output.schema.json

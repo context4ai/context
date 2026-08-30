@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: confirm-index-requirement-workset
+description: Confirm one exact requirement workset with the authority required by its recomputed comparator.
+runner: host
+effect: external
+handler: context.confirm-index-requirement-workset/v1
+inputSchema: schemas/indexer-requirement-confirmation-input.schema.json
+outputSchema: schemas/indexer-requirement-confirmation-output.schema.json

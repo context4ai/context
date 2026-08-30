@@ -1,0 +1,16 @@
+schema: agent-graph.test.v1
+name: one dependency-free extend draft stops before CLI validation and apply
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+expect:
+  statusCode: actionable
+  primaryNode: validate-indexer-customization
+  primaryReasonCode: route.indexer.customization-validation
+  handler: context.validate-indexer-customization/v1

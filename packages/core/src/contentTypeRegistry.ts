@@ -33,7 +33,15 @@ const DEFAULT_CONTENT_TYPES: ContentTypeDefinition[] = [
   {
     id: "typescript",
     category: "code",
-    match: { extensions: [".ts", ".tsx"] },
+    match: { extensions: [".ts", ".tsx", ".mts", ".cts"] },
+    cas: { encoding: "utf8", hashInput: "content" },
+    pipeline: { digest: ["ast", "summary"], extraction: ["entities", "relations"] },
+    display: { icon: "📜", renderer: "code" },
+  },
+  {
+    id: "javascript",
+    category: "code",
+    match: { extensions: [".js", ".jsx", ".mjs", ".cjs"] },
     cas: { encoding: "utf8", hashInput: "content" },
     pipeline: { digest: ["ast", "summary"], extraction: ["entities", "relations"] },
     display: { icon: "📜", renderer: "code" },

@@ -1,0 +1,17 @@
+schema: agent-graph.test.v1
+name: a pending material-answer run routes only to the second-phase Indexer Agent step
+graph: indexer
+entry: material-answer
+state:
+  outcomes:
+    indexer/build-material-question-workset: completed
+    indexer/prepare-material-answer-runs: completed
+    indexer/observe-material-answer-runs: partial
+    indexer/start-material-answer-run: completed
+expect:
+  statusCode: actionable
+  primaryNode: run-material-answer-indexers
+  primaryReasonCode: route.indexer.material-answer-agent-step
+  requiredResources:
+    - skill.context-run-indexer-agent-step
+    - resolved-indexer-instructions

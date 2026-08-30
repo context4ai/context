@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: propose-indexer-customization
+runner: agent
+effect: write
+skill: skills/propose-indexer-customization/SKILL.md
+inputSchema: schemas/indexer-provider-route-report.schema.json
+outputSchema: schemas/indexer-customization-proposal-draft.schema.json

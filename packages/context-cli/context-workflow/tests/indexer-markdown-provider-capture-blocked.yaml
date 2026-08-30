@@ -1,0 +1,10 @@
+schema: agent-graph.test.v1
+name: Markdown Provider discovery cannot run before current capture
+graph: indexer
+entry: markdown-provider
+state:
+  outcomes:
+    indexer/inspect-markdown-provider-capture: blocked
+expect:
+  statusCode: complete
+  outcome: blocked

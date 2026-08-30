@@ -80,47 +80,6 @@ function initTsFixtureRepo(path: string): string {
   return commitAll(path, "add ts fixture");
 }
 
-function initTsMonorepoFixture(path: string): string {
-  execFileSync("git", ["init", "-q"], { cwd: path });
-  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: path });
-  execFileSync("git", ["config", "user.name", "Test User"], { cwd: path });
-  for (const name of ["button", "link"]) {
-    const moduleRoot = join(path, "packages", name);
-    execFileSync("mkdir", ["-p", join("packages", name, "src")], { cwd: path });
-    writeFileSync(join(moduleRoot, "package.json"), `${JSON.stringify({
-      name: `@demo/${name}`,
-      version: "1.0.0",
-      type: "module",
-      exports: "./src/index.ts",
-    }, null, 2)}\n`, "utf8");
-    writeFileSync(join(moduleRoot, "src", "index.ts"), `export const ${name} = "${name}";\n`, "utf8");
-  }
-  return commitAll(path, "add monorepo fixture");
-}
-
-function initTsNoEntryFixtureRepo(path: string): string {
-  execFileSync("git", ["init", "-q"], { cwd: path });
-  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: path });
-  execFileSync("git", ["config", "user.name", "Test User"], { cwd: path });
-  execFileSync("mkdir", ["-p", "src/internal"], { cwd: path });
-  writeFileSync(join(path, "package.json"), `${JSON.stringify({
-    name: "no-entry-lib",
-    version: "1.0.0",
-    type: "module",
-  }, null, 2)}\n`, "utf8");
-  writeFileSync(join(path, "src", "feature.ts"), [
-    "export interface FeatureOptions { enabled: boolean }",
-    "export function createFeature(options: FeatureOptions) { return options.enabled; }",
-    "",
-  ].join("\n"), "utf8");
-  writeFileSync(join(path, "src", "internal", "format.ts"), [
-    "function formatInternal(value: string) { return value.trim(); }",
-    "export const formatPublic = formatInternal;",
-    "",
-  ].join("\n"), "utf8");
-  return commitAll(path, "add no-entry ts fixture");
-}
-
 async function writeSampleLibProjectEntry(project: string, transformMarker?: string): Promise<void> {
   const transform = transformMarker === undefined
     ? ""
@@ -277,11 +236,25 @@ describe("0.6.0 project run and extract", () => {
         "extract:20260712/sample-lib:codeindex",
         "--format",
         "json",
-      ])) as { cache: { reusablePhases: number }; scaleClear: boolean };
+      ])) as {
+        schema: string;
+        preview_digest: string;
+        summary: {
+          reusable_phase_caches: number;
+          scale_clear: boolean;
+        };
+        next_action: { command: string };
+      };
       expect(batchPreview).toMatchObject({
-        cache: { reusablePhases: 1 },
-        scaleClear: true,
+        schema: "context.extraction-batch-preview-view.v1",
+        summary: {
+          reusable_phase_caches: 1,
+          scale_clear: true,
+        },
       });
+      expect(/^sha256:[0-9a-f]{64}$/u.test(batchPreview.preview_digest)).toBe(true);
+      expect(batchPreview.next_action.command.includes(batchPreview.preview_digest)).toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(batchPreview), "utf8")).toBeLessThanOrEqual(24_000);
 
       const stdout = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"]);
       expect(stdout).toContain("✓ ran extract:20260712/sample-lib:codeindex");
@@ -310,225 +283,6 @@ describe("0.6.0 project run and extract", () => {
       });
       expect(log.reads).toContain("source:repo:20260712/sample-lib");
       expect(log.writes).toContain("lifecycle:candidates:codeindex:draft");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("project extract rejects multi-module repo sources before writing drafts", async () => {
-    const root = makeTmp();
-    const repo = join(root, "monorepo");
-    const project = join(root, "kb");
-    try {
-      await mkdir(repo, { recursive: true });
-      const head = initTsMonorepoFixture(repo);
-      await runCliInDir(root, ["init", "kb"]);
-      await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
-        "",
-        'const mono = source("20260712", "mono");',
-        "",
-        "export default defineProject({",
-        "  sources: [mono],",
-        "  phases: [",
-        '    extractTs({ source: mono, collection: "codeindex", include: ["packages/button/src/**/*.{ts,tsx}"] }),',
-        '    reviewValidity({ collection: "codeindex" }),',
-        "  ],",
-        "  packages: [],",
-        "});",
-        "",
-      ].join("\n"), "utf8");
-      await addRepoSource({
-        projectRoot: project,
-        namespace: REPO_NAMESPACE,
-        module: "mono",
-        local: "../monorepo",
-        remote: "https://git.example.com/monorepo.git",
-        ref: head,
-      });
-
-      await expect(runCliInDir(project, ["run", "extract:20260712/mono:codeindex"])).rejects.toThrow(
-        "repo source contains multiple code modules",
-      );
-      expect(existsSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("project extraction uses Context-configured entries when package.json has no entry fields", async () => {
-    const root = makeTmp();
-    const repo = join(root, "no-entry-lib");
-    const project = join(root, "kb");
-    try {
-      await mkdir(repo, { recursive: true });
-      const head = initTsNoEntryFixtureRepo(repo);
-      await runCliInDir(root, ["init", "kb"]);
-      await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
-        "",
-        'const lib = source("20260712", "no-entry-lib");',
-        "",
-        "export default defineProject({",
-        "  sources: [lib],",
-        "  phases: [",
-        '    extractTs({ source: lib, collection: "codeindex", include: ["src/**/*.ts"], entries: ["src/feature.ts"] }),',
-        '    reviewValidity({ collection: "codeindex" }),',
-        "  ],",
-        "  packages: [],",
-        "});",
-        "",
-      ].join("\n"), "utf8");
-      await addRepoSource({
-        projectRoot: project,
-        namespace: REPO_NAMESPACE,
-        module: "no-entry-lib",
-        local: "../no-entry-lib",
-        remote: "https://git.example.com/no-entry-lib.git",
-        ref: head,
-      });
-
-      const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
-      ])) as { preview: { mode: string; entries: string[]; totals: { candidateEstimate: number } } };
-      expect(preview.preview).toMatchObject({
-        mode: "exports",
-        entries: ["src/feature.ts"],
-      });
-      expect(preview.preview.totals.candidateEstimate).toBeGreaterThan(0);
-
-      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"]);
-      const ids = readCandidateRows(project).map((row) => row.id);
-      expect(ids.some((id) => id.endsWith("/createfeature"))).toBe(true);
-      expect(ids.some((id) => id.endsWith("/formatpublic"))).toBe(false);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("project extraction exposes NO_ENTRY_DETECTED when no entry policy can select files", async () => {
-    const root = makeTmp();
-    const repo = join(root, "no-entry-lib");
-    const project = join(root, "kb");
-    try {
-      await mkdir(repo, { recursive: true });
-      const head = initTsNoEntryFixtureRepo(repo);
-      await runCliInDir(root, ["init", "kb"]);
-      await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, source } from "@c4a/context";',
-        'const lib = source("20260712", "no-entry-lib");',
-        "export default defineProject({",
-        "  sources: [lib],",
-        '  phases: [extractTs({ source: lib, collection: "codeindex" })],',
-        "  packages: [],",
-        "});",
-      ].join("\n"), "utf8");
-      await addRepoSource({
-        projectRoot: project,
-        namespace: REPO_NAMESPACE,
-        module: "no-entry-lib",
-        local: "../no-entry-lib",
-        remote: "https://git.example.com/no-entry-lib.git",
-        ref: head,
-      });
-
-      const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
-      ])) as { preview_error: { detail: { code: string } } };
-      expect(preview.preview_error.detail.code).toBe("NO_ENTRY_DETECTED");
-      await expect(runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"])).rejects.toMatchObject({
-        detail: expect.objectContaining({
-          error: expect.objectContaining({ code: "NO_ENTRY_DETECTED" }),
-        }),
-      });
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("project scan mode extracts include-matched files without package entries", async () => {
-    const root = makeTmp();
-    const repo = join(root, "no-entry-lib");
-    const project = join(root, "kb");
-    try {
-      await mkdir(repo, { recursive: true });
-      const head = initTsNoEntryFixtureRepo(repo);
-      await runCliInDir(root, ["init", "kb"]);
-      await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
-        "",
-        'const lib = source("20260712", "no-entry-lib");',
-        "",
-        "export default defineProject({",
-        "  sources: [lib],",
-        "  phases: [",
-        '    extractTs({ source: lib, collection: "codeindex", include: ["src/**/*.ts"], mode: "scan", indexUnits: [{',
-        '      id: "no-entry-lib-map", inputSources: ["20260712/no-entry-lib"], outputOwner: "no-entry-lib",',
-        '      moduleType: "sdk-library", moduleTypeEvidence: ["src/index.ts public entry"], outputProfile: "module-map", responsibility: "Map the selected module scope.",',
-        '      entries: ["src/feature.ts"], pageKinds: ["module-map"], protocols: [], dependencies: [], exclusions: [], capability: "complete"',
-        '    }] }),',
-        '    reviewValidity({ collection: "codeindex" }),',
-        "  ],",
-        "  packages: [],",
-        "});",
-        "",
-      ].join("\n"), "utf8");
-      await addRepoSource({
-        projectRoot: project,
-        namespace: REPO_NAMESPACE,
-        module: "no-entry-lib",
-        local: "../no-entry-lib",
-        remote: "https://git.example.com/no-entry-lib.git",
-        ref: head,
-      });
-
-      const preview = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
-      ])) as { preview: { mode: string; exportedOnly: boolean; totals: { candidateEstimate: number } } };
-      expect(preview.preview).toMatchObject({ mode: "scan", exportedOnly: false });
-      expect(preview.preview.totals.candidateEstimate).toBeGreaterThanOrEqual(4);
-
-      await runCliInDir(project, ["run", "extract:20260712/no-entry-lib:codeindex"]);
-      const ids = readCandidateRows(project).map((row) => row.id);
-      expect(ids.some((id) => id.endsWith("/createfeature"))).toBe(true);
-      expect(ids.some((id) => id.endsWith("/formatpublic"))).toBe(true);
-      expect(ids.some((id) => id.endsWith("/formatinternal"))).toBe(true);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("configured entries must stay inside include", async () => {
-    const root = makeTmp();
-    const repo = join(root, "no-entry-lib");
-    const project = join(root, "kb");
-    try {
-      await mkdir(repo, { recursive: true });
-      const head = initTsNoEntryFixtureRepo(repo);
-      await runCliInDir(root, ["init", "kb"]);
-      await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, source } from "@c4a/context";',
-        'const lib = source("20260712", "no-entry-lib");',
-        "export default defineProject({",
-        "  sources: [lib],",
-        '  phases: [extractTs({ source: lib, collection: "codeindex", include: ["src/feature.ts"], entries: ["src/internal/format.ts"] })],',
-        "  packages: [],",
-        "});",
-      ].join("\n"), "utf8");
-      await addRepoSource({
-        projectRoot: project,
-        namespace: REPO_NAMESPACE,
-        module: "no-entry-lib",
-        local: "../no-entry-lib",
-        remote: "https://git.example.com/no-entry-lib.git",
-        ref: head,
-      });
-
-      const output = JSON.parse(await runCliInDir(project, [
-        "run", "extract:20260712/no-entry-lib:codeindex", "--dry-run", "--format", "json",
-      ])) as { preview_error: { message: string } };
-      expect(output.preview_error.message).toMatch(/Configured extraction entry is missing or outside extractTs include/u);
-      expect(readCandidateRows(project)).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

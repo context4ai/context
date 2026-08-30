@@ -1,0 +1,51 @@
+{
+  "schema": "context.plugin-source-migration/v1",
+  "source": "packages/context-cli/plugin/commands/context.md",
+  "target": "plugins/context/skills/context/SKILL.md",
+  "coverage": "complete",
+  "blocks": [
+    {
+      "id": "frontmatter-description",
+      "disposition": "rewrite-equivalent",
+      "new_location": "plugins/context/skills/context/SKILL.md#frontmatter",
+      "reason": "Express the same entry contract as portable Skill metadata."
+    },
+    {
+      "id": "task-and-product-boundary",
+      "disposition": "retain-verbatim",
+      "new_location": "plugins/context/skills/context/SKILL.md#your-task"
+    },
+    {
+      "id": "workspace-entry-and-revision",
+      "disposition": "retain-verbatim",
+      "new_location": "plugins/context/skills/context/SKILL.md#enter-the-workspace"
+    },
+    {
+      "id": "conversation-modes",
+      "disposition": "retain-verbatim",
+      "new_location": "plugins/context/skills/context/SKILL.md#conversation-modes"
+    },
+    {
+      "id": "current-route-execution",
+      "disposition": "retain-verbatim",
+      "new_location": "plugins/context/skills/context/SKILL.md#follow-the-current-route"
+    },
+    {
+      "id": "review-report-ledger",
+      "disposition": "merge-into",
+      "new_location": "plugins/context/skills/context/SKILL.md#follow-the-current-route",
+      "reason": "Remain part of the single Route execution contract."
+    },
+    {
+      "id": "publication-boundary",
+      "disposition": "retain-verbatim",
+      "new_location": "plugins/context/skills/context/SKILL.md#follow-the-current-route"
+    },
+    {
+      "id": "legacy-command-container",
+      "disposition": "retire-with-reason",
+      "new_location": "packages/context-cli/plugin/commands/context.md",
+      "reason": "Legacy file is a temporary Phase G deletion pointer, not an editable semantic body."
+    }
+  ]
+}

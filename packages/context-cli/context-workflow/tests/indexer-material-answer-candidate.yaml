@@ -1,0 +1,17 @@
+schema: agent-graph.test.v1
+name: a validated material-answer candidate reaches only the bounded evidence Review
+graph: indexer
+entry: material-answer
+state:
+  outcomes:
+    indexer/build-material-question-workset: completed
+    indexer/prepare-material-answer-runs: completed
+    indexer/observe-material-answer-runs: unverified
+  facts:
+    indexer_material_answer_review:
+      state: review-required
+expect:
+  statusCode: waiting-user
+  primaryNode: review-material-answer-candidates
+  availability: requires-user
+  gateResolution: user

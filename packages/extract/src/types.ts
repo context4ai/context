@@ -86,6 +86,25 @@ export const fileInfoSchema = z.object({
   lines: z.number().int().nonnegative(),
 });
 
+export const extractionDiagnosticSchema = z.object({
+  code: z.string().min(1),
+  severity: z.enum(["info", "warning", "error"]),
+  file: z.string().min(1),
+  line: z.number().int().positive(),
+  column: z.number().int().positive(),
+});
+
+export const extractionCoverageSchema = z.object({
+  tier: z.enum(["ast-catalog", "lightweight-evidence"]),
+  capabilities: z.array(z.string().min(1)),
+  files: z.array(z.object({
+    path: z.string().min(1),
+    disposition: z.enum(["analyzed", "unsupported", "excluded"]),
+    diagnosticCodes: z.array(z.string().min(1)),
+  })),
+  diagnostics: z.array(extractionDiagnosticSchema),
+});
+
 export const extractionMetaSchema = z.object({
   extractedAt: z.string().datetime(),
   pluginId: z.string().min(1),
@@ -115,6 +134,7 @@ export const extractionResultSchema = z.object({
   files: z.array(fileInfoSchema),
   symbols: z.array(symbolInfoSchema),
   relations: z.array(relationInfoSchema),
+  coverage: extractionCoverageSchema.optional(),
   stats: extractionStatsSchema,
 });
 
@@ -133,6 +153,7 @@ export const digestDataSchema = z.object({
   files: z.array(fileInfoSchema),
   symbols: z.array(symbolInfoSchema),
   relations: z.array(relationInfoSchema),
+  coverage: extractionCoverageSchema.optional(),
   stats: digestStatsSchema,
 });
 
@@ -146,6 +167,8 @@ export type FileInfo = z.infer<typeof fileInfoSchema>;
 export type ExtractionMeta = z.infer<typeof extractionMetaSchema>;
 export type ExtractionPackageInfo = z.infer<typeof extractionPackageSchema>;
 export type ExtractionStats = z.infer<typeof extractionStatsSchema>;
+export type ExtractionDiagnostic = z.infer<typeof extractionDiagnosticSchema>;
+export type ExtractionCoverage = z.infer<typeof extractionCoverageSchema>;
 export type ExtractionResult = z.infer<typeof extractionResultSchema>;
 export type DigestData = z.infer<typeof digestDataSchema>;
 export type SymbolDiff = z.infer<typeof symbolDiffSchema>;

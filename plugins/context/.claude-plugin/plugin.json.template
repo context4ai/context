@@ -1,0 +1,8 @@
+{
+  "name": "c4a",
+  "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
+  "version": "__VERSION__",
+  "author": { "name": "c4a" },
+  "license": "MIT",
+  "keywords": ["context", "knowledge-base", "wiki", "claude-plugin", "c4a"]
+}

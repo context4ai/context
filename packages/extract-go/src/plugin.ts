@@ -36,6 +36,13 @@ export class GoPlugin implements ExtractionPlugin {
   readonly id = "c4a-extract-go";
   readonly languages = ["go"];
   readonly packageManagers = ["go"];
+  readonly coverageTier = "ast-catalog" as const;
+  readonly capabilities = [
+    "go-ast",
+    "go-call-relations",
+    "go-http-routes",
+    "parser.go",
+  ];
   readonly manifestTypes: ManifestInfo["type"][] = ["go.mod"];
   #lastDetection: EntryDetectionResult | null = null;
 
@@ -121,6 +128,16 @@ export class GoPlugin implements ExtractionPlugin {
       files,
       symbols,
       relations,
+      coverage: {
+        tier: this.coverageTier,
+        capabilities: [...this.capabilities],
+        files: files.map((file) => ({
+          path: file.path,
+          disposition: "analyzed" as const,
+          diagnosticCodes: [],
+        })),
+        diagnostics: [],
+      },
       stats: {
         files: files.length,
         lines: files.reduce((sum, file) => sum + file.lines, 0),

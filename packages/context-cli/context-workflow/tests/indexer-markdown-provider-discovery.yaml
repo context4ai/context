@@ -1,0 +1,12 @@
+schema: agent-graph.test.v1
+name: current document capture advances to visible Markdown Provider discovery
+graph: indexer
+entry: markdown-provider
+state:
+  outcomes:
+    indexer/inspect-markdown-provider-capture: completed
+expect:
+  statusCode: actionable
+  primaryNode: discover-markdown-indexer-providers
+  primaryReasonCode: route.indexer.markdown-provider-discovery
+  availability: immediate

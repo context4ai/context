@@ -11,7 +11,6 @@ import {
   type LoadedProvider,
   type ResourceReadReceiptSet,
   type Route,
-  type RouteAction,
   type ResourceLocation,
 } from "@c4a/agent-graph";
 import {
@@ -25,6 +24,8 @@ import {
   type ContextWorkflowDiagnostic,
   type ContextWorkflowObservation,
   type ContextWorkflowResource,
+  type ContextWorkflowResourceLocation,
+  type ContextWorkflowRouteActionSource,
   type ContextWorkflowSnapshot,
   type ContextWorkflowStatus,
 } from "./workflowTypes.js";
@@ -196,7 +197,7 @@ async function attachDiagnosticResources(
       if (located.document === undefined) return diagnostic;
       return {
         ...diagnostic,
-        details_resource: projectResource(
+        details_resource: projectWorkflowResourceLocation(
           located.document,
           revision,
           authorities,
@@ -310,19 +311,36 @@ function sourceReadResumeCommand(
   };
 }
 
-function projectResource(
-  location: ResourceLocation,
+export function projectWorkflowResourceLocation(
+  location: ContextWorkflowResourceLocation,
   revision: string,
   authorities: readonly ContextWorkflowAuthority[],
   resourceReceiptsReference?: string,
 ): ContextResolvedWorkflowRoute["resources"]["required"][number] {
-  return {
+  const projected = {
     id: location.id,
     kind: location.kind,
     media_type: location.mediaType,
+    ...(location.revision === undefined ? {} : { revision: location.revision }),
+    read_state: location.readState ?? "read-required",
+  };
+  if (location.schema === "agent-graph.resource-location.v2") {
+    return {
+      ...projected,
+      materialize: {
+        handler: location.materialize.handler,
+        input: {
+          schema: location.materialize.input.schema,
+          value: location.materialize.input.value,
+        },
+        output_schema: location.materialize.output_schema,
+      },
+    };
+  }
+  return {
+    ...projected,
     ...(location.digest === undefined ? {} : { digest: location.digest }),
     ...(location.filePath === undefined ? {} : { path: location.filePath }),
-    ...(location.revision === undefined ? {} : { revision: location.revision }),
     ...(location.materialize === undefined
       ? {}
       : {
@@ -333,12 +351,11 @@ function projectResource(
             resourceReceiptsReference,
           ),
         }),
-    read_state: location.readState ?? "read-required",
   };
 }
 
 function projectActionResources(
-  action: RouteAction,
+  action: ContextWorkflowRouteActionSource,
   revision: string,
   authorities: readonly ContextWorkflowAuthority[],
   resourceReceiptsReference?: string,
@@ -350,11 +367,18 @@ function projectActionResources(
   return {
     ...(action.skill === undefined
       ? {}
-      : { skill: projectResource(action.skill, revision, authorities, resourceReceiptsReference) }),
+      : {
+          skill: projectWorkflowResourceLocation(
+            action.skill,
+            revision,
+            authorities,
+            resourceReceiptsReference,
+          ),
+        }),
     ...(action.inputSchema === undefined
       ? {}
       : {
-          input_schema: projectResource(
+          input_schema: projectWorkflowResourceLocation(
             action.inputSchema,
             revision,
             authorities,
@@ -364,7 +388,7 @@ function projectActionResources(
     ...(action.outputSchema === undefined
       ? {}
       : {
-          output_schema: projectResource(
+          output_schema: projectWorkflowResourceLocation(
             action.outputSchema,
             revision,
             authorities,
@@ -395,7 +419,7 @@ function projectStructureBatch(input: {
   return {
     kind: "prose-structure",
     schema: "context.prose.structure-batch.v1",
-    input_schema: projectResource(
+    input_schema: projectWorkflowResourceLocation(
       input.inputSchema,
       input.revision,
       input.authorities,
@@ -423,8 +447,8 @@ function projectStructureBatch(input: {
   };
 }
 
-function projectRouteAction(input: {
-  action: RouteAction | undefined;
+export function projectWorkflowRouteAction(input: {
+  action: ContextWorkflowRouteActionSource | undefined;
   node: string;
   hasStructureBatch: boolean;
   revision: string;
@@ -443,7 +467,10 @@ function projectRouteAction(input: {
   }
   return {
     id: input.action.id,
+    runner: input.action.runner,
     effect: input.action.effect,
+    ...(input.action.handler === undefined ? {} : { handler: input.action.handler }),
+    ...(input.action.input === undefined ? {} : { input: input.action.input }),
     ...resources,
   };
 }
@@ -505,6 +532,9 @@ async function resolveContextRoute(
     route.action?.inputSchema,
   );
   const inspectionAction = route.gate?.inspectionAction;
+  const inspectionRouteAction = inspectionAction?.action as
+    | ContextWorkflowRouteActionSource
+    | undefined;
   if (
     inspectionAction !== undefined &&
     inspectionAction.action.effect !== "read"
@@ -515,6 +545,9 @@ async function resolveContextRoute(
   }
   const inspectionPlan = optionalActionPlan(inspectionAction, observation);
   const resolutionAction = route.gate?.resolutionAction;
+  const resolutionRouteAction = resolutionAction?.action as
+    | ContextWorkflowRouteActionSource
+    | undefined;
   if (resolutionAction?.action.effect === "read") {
     throw new Error(
       `Context Gate resolution Action must mutate observable state: ${resolutionAction.action.id}`,
@@ -564,7 +597,7 @@ async function resolveContextRoute(
   const requiredResources = [...new Map(
     route.resources.required.map((location) => [location.id, location]),
   ).values()].map((location) =>
-    projectResource(
+    projectWorkflowResourceLocation(
       location,
       route.revision,
       authorities,
@@ -587,7 +620,7 @@ async function resolveContextRoute(
     resource.path !== undefined &&
     resource.digest !== undefined
   ).length;
-  const projectedAction = projectRouteAction({
+  const projectedAction = projectWorkflowRouteAction({
     action: route.action,
     node: route.node,
     hasStructureBatch: structureBatch !== undefined,
@@ -614,7 +647,7 @@ async function resolveContextRoute(
     resources: {
       required: projectedRequiredResources,
       recommended: route.resources.recommended.map((location) =>
-        projectResource(
+        projectWorkflowResourceLocation(
           location,
           route.revision,
           authorities,
@@ -644,28 +677,36 @@ async function resolveContextRoute(
               : { authority: route.gate.authority }),
             delegatable: route.gate.delegatable === true,
             resolution: route.gate.resolution,
-            ...(inspectionAction === undefined
+            ...(inspectionRouteAction === undefined
               ? {}
               : {
                   inspection_action: {
-                    id: inspectionAction.action.id,
+                    id: inspectionRouteAction.id,
+                    runner: inspectionRouteAction.runner,
                     effect: "read" as const,
+                    ...(inspectionRouteAction.handler === undefined
+                      ? {}
+                      : { handler: inspectionRouteAction.handler }),
                     ...projectActionResources(
-                      inspectionAction.action,
+                      inspectionRouteAction,
                       route.revision,
                       authorities,
                       resourceReceiptsReference,
                     ),
                   },
                 }),
-            ...(resolutionAction === undefined
+            ...(resolutionRouteAction === undefined
               ? {}
               : {
                   resolution_action: {
-                    id: resolutionAction.action.id,
-                    effect: resolutionAction.action.effect,
+                    id: resolutionRouteAction.id,
+                    runner: resolutionRouteAction.runner,
+                    effect: resolutionRouteAction.effect as "write" | "external",
+                    ...(resolutionRouteAction.handler === undefined
+                      ? {}
+                      : { handler: resolutionRouteAction.handler }),
                     ...projectActionResources(
-                      resolutionAction.action,
+                      resolutionRouteAction,
                       route.revision,
                       authorities,
                       resourceReceiptsReference,

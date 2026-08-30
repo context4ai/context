@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: confirm-subject-reidentification
+description: Confirm one activation-safe, complete, collision-free old-to-new SubjectKey mapping.
+runner: host
+effect: external
+handler: context.confirm-subject-reidentification/v1
+inputSchema: schemas/indexer-subject-reidentification-input.schema.json
+outputSchema: schemas/indexer-subject-reidentification-output.schema.json

@@ -21,6 +21,7 @@ const DEFAULT_INTERNAL_FIELDS = [
   "bucket_dir",
   "target_dir",
   "target_path",
+  "expected_target_path",
   "expected_path",
   "current_path",
   "candidate_path",
@@ -52,12 +53,17 @@ const DEFAULT_INTERNAL_FIELDS = [
   "recovery_path",
   "requested_approved_path",
   "revision_path",
+  "structure_path",
+  "stage_path",
+  "entry_path",
   "prompt_path",
   "packageDir",
   "package_dir",
   "manifestPath",
   "manifest",
+  "base_manifest",
   "manifest_path",
+  "program_path",
   "runnerBinPath",
   "runner_config_path",
   "snapshot_file",
@@ -90,6 +96,9 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "repo_root" ||
     field === "ctxDir" ||
     field === "runner_config_path" ||
+    field === "stage_path" ||
+    field === "entry_path" ||
+    field === "program_path" ||
     field.startsWith("output") ||
     field === "out_dir" ||
     field === "index_path" ||

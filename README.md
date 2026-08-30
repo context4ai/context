@@ -152,7 +152,7 @@ upload path when available instead of reconstructing a remote installation.
 | `@c4a/context-cli` | Local workflow runtime and Agent integration | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
 | `@c4a/core` | Shared schemas, identities, errors, and extraction contracts | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
 | `@c4a/extract` | Language-plugin protocol and repository extraction runner | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
-| `@c4a/extract-ts` | TypeScript/TSX structure extraction | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
+| `@c4a/extract-ts` | TypeScript/JavaScript and TSX/JSX structure extraction | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
 | `@c4a/extract-go` | Optional Go structure extraction | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
 | `@c4a/extract-rush` | Optional Rush workspace structure index | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
 | `@c4a/dev-cli` | Repository development and release menu | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
@@ -168,7 +168,7 @@ separate brand model.
 - [SDK documentation index](./packages/context/docs/README.md)
 - [Knowledge-project walkthrough](./packages/context/docs/getting-started.md)
 - [Agent integration guide](./packages/context-cli/README.md)
-- [Plugin contract](./packages/context-cli/plugin/README.md)
+- [Plugin contract](./plugins/context/README.md)
 - [Workflow Provider internals](./packages/context-cli/context-workflow/README.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Support](./SUPPORT.md)

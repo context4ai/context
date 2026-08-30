@@ -64,6 +64,12 @@ interface ExtractionPlugin {
 - `detectEntries()` 先于 `extractSymbols()` 调用，插件可以在两步之间保留本次检测
   的 package 上下文。
 
+Indexer 执行通过 `extractionResultToEvidenceAdapterResult()` 将 coverage 完整的
+`ExtractionResult` 转成 `context.indexer.evidence-adapter-result/v1`。调用方传入已解析的
+package/export/version/digest、授权 source/module scope、input digest、precedence 和 owner role。
+缺少逐文件 coverage 时转换直接失败；轻量或 enricher 输出不能贡献 file、LOC、symbol 或 protocol
+denominator。
+
 ### 2. ExtractionResult v2
 
 每个插件返回：
@@ -76,6 +82,12 @@ interface ExtractionPlugin {
   files: [{ path, language, lines }],
   symbols: SymbolInfo[],
   relations: RelationInfo[],
+  coverage: {
+    tier,
+    capabilities,
+    files: [{ path, disposition, diagnosticCodes }],
+    diagnostics
+  },
   stats: { files, lines, exportedSymbols, internalSymbols, relations }
 }
 ```

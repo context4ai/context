@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: route-indexer-provider-selection
+runner: host
+effect: read
+handler: context.route-indexer-provider-selection/v1
+inputSchema: schemas/indexer-provider-route-input.schema.json
+outputSchema: schemas/indexer-provider-route-report.schema.json

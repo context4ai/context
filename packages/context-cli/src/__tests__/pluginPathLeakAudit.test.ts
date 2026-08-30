@@ -10,7 +10,13 @@ const PLUGINS_ROOT = resolve(PKG_ROOT, "dist", "plugins");
 const GENERATED_PLUGIN_DIRS = ["claude", "codex", "cursor", "skills"];
 const TEXT_EXTENSIONS = [".md", ".json", ".template", ".yaml", ".yml"];
 
-const AUDIT_ROOTS = ["plugin", "README.md", "CLAUDE.md", "DEVELOPMENT.md"];
+const AUDIT_ROOTS = [
+  "../../plugins/context",
+  "plugin",
+  "README.md",
+  "CLAUDE.md",
+  "DEVELOPMENT.md",
+];
 const SRC_ROOT = join(PKG_ROOT, "src");
 const SOURCE_AUDIT_EXCLUDED_SOURCE_FILES = new Set([
   "src/commands/debug.ts",
@@ -92,7 +98,9 @@ async function collectFiles(path: string, out: AuditFile[] = []): Promise<AuditF
   }
 
   for (const entry of entries) {
-    await collectFiles(join(path, entry.name), out);
+    const child = join(path, entry.name);
+    if (toRepoPath(child) === "../../plugins/context/repo-install") continue;
+    await collectFiles(child, out);
   }
 
   return out;
@@ -127,7 +135,11 @@ async function collectSourceFiles(path = SRC_ROOT, out: AuditFile[] = []): Promi
 }
 
 function isProductionDoc(rel: string): boolean {
-  return rel === "README.md" || rel === "CLAUDE.md" || rel === "DEVELOPMENT.md" || rel.startsWith("plugin/");
+  return rel === "README.md"
+    || rel === "CLAUDE.md"
+    || rel === "DEVELOPMENT.md"
+    || rel.startsWith("plugin/")
+    || rel.startsWith("../../plugins/context/");
 }
 
 function isDebugOnlyContext(line: string, matchIndex: number): boolean {
@@ -310,9 +322,10 @@ describe("path-free plugin source audit", () => {
     const files = await collectAuditFiles();
     const rels = files.map((file) => file.rel);
 
-    expect(rels).toContain("plugin/.claude-plugin/plugin.json.template");
-    expect(rels).toContain("plugin/.codex-plugin/plugin.json.template");
-    expect(rels).toContain("plugin/.cursor-plugin/plugin.json.template");
+    expect(rels).toContain("../../plugins/context/.claude-plugin/plugin.json.template");
+    expect(rels).toContain("../../plugins/context/.codex-plugin/plugin.json.template");
+    expect(rels).toContain("../../plugins/context/.cursor-plugin/plugin.json.template");
+    expect(rels.some((rel) => rel.startsWith("../../plugins/context/repo-install/"))).toBe(false);
 
     expect(rels.some((rel) => GENERATED_PLUGIN_DIRS.includes(rel.split("/")[0]!))).toBe(false);
 

@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: validate-indexer-customization
+runner: host
+effect: write
+handler: context.validate-indexer-customization/v1
+inputSchema: schemas/indexer-customization-proposal-draft.schema.json
+outputSchema: schemas/indexer-customization-validation-result.schema.json

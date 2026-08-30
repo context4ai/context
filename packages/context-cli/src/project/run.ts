@@ -41,8 +41,13 @@ import {
 } from "./customExtractCandidates.js";
 import {
   previewExtractionBatch,
+  readExtractionBatchPreviewByDigest,
   readReusableExtractionPreparation,
 } from "./extractionPreviewCache.js";
+import {
+  buildExtractionPreviewOutput,
+  type ExtractionPreviewOutputOptions,
+} from "./extractionPreviewView.js";
 import type {
   ExtractionBatchPreview,
   ExtractionPhasePreview,
@@ -316,10 +321,18 @@ function previewBody(preview: PhaseRunPreview): string[] {
 function writeExtractionBatchPreview(
   preview: ExtractionBatchPreview,
   format: ProjectRunFormat,
+  options: ExtractionPreviewOutputOptions,
 ): void {
   if (format === "json") {
-    process.stdout.write(`${JSON.stringify(preview, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(buildExtractionPreviewOutput(preview, options), null, 2)}\n`);
     return;
+  }
+  if (options.view !== undefined && options.view !== "summary") {
+    throw new ContextError(ExitCode.UserError, "extraction preview item views require --format json", {
+      category: ErrorCategory.UserInputInvalid,
+      view: options.view,
+      next: "Rerun the returned preview item command with --format json.",
+    });
   }
   process.stdout.write(formatFeedback({
     symbol: preview.scaleClear && preview.capabilityClear && preview.ownershipClear ? "✓" : "⚠",
@@ -405,6 +418,8 @@ export async function runProjectPhaseCommand(input: {
   list?: boolean;
   previewExtractionBatch?: boolean;
   previewPhaseIds?: readonly string[];
+  previewDigest?: string;
+  previewOutput?: ExtractionPreviewOutputOptions;
   dryRun?: boolean;
   autoPromote?: boolean;
   managed?: boolean;
@@ -426,12 +441,30 @@ export async function runProjectPhaseCommand(input: {
   const loaded = await loadContextProjectModule(found.projectRoot);
   const format = input.format ?? "text";
   if (input.previewExtractionBatch === true) {
-    const preview = await previewExtractionBatch({
-      projectRoot: found.projectRoot,
-      phases: loaded.project.phases,
-      ...(input.previewPhaseIds === undefined ? {} : { phaseIds: input.previewPhaseIds }),
-    });
-    writeExtractionBatchPreview(preview, format);
+    if (input.previewDigest !== undefined && (input.previewPhaseIds?.length ?? 0) > 0) {
+      throw new ContextError(ExitCode.UserError, "--preview-digest cannot be combined with --preview-phase", {
+        category: ErrorCategory.UserInputInvalid,
+      });
+    }
+    const preview = input.previewDigest === undefined
+      ? await previewExtractionBatch({
+          projectRoot: found.projectRoot,
+          phases: loaded.project.phases,
+          ...(input.previewPhaseIds === undefined ? {} : { phaseIds: input.previewPhaseIds }),
+        })
+      : await readExtractionBatchPreviewByDigest(found.projectRoot, input.previewDigest);
+    if (preview === undefined) {
+      throw new ContextError(ExitCode.WorkspaceStateError, "the requested extraction preview digest is unavailable", {
+        category: ErrorCategory.WorkflowRevisionStale,
+        preview_digest: input.previewDigest,
+        next_action: {
+          kind: "refresh_extraction_preview",
+          command: "context run --preview-extraction-batch --format json",
+        },
+        next: "context run --preview-extraction-batch --format json",
+      });
+    }
+    writeExtractionBatchPreview(preview, format, input.previewOutput ?? {});
     return;
   }
   if (input.list === true || input.phaseId === undefined) {

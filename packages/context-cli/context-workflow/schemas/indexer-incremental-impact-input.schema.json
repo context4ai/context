@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.incremental-impact-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "current_runs"],
+  "properties": {
+    "protocol": { "const": "context.indexer.incremental-impact-input/v1" },
+    "current_runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "previous_acceptance_digest",
+          "current_request",
+          "current_dependency_view"
+        ],
+        "properties": {
+          "previous_acceptance_digest": { "$ref": "#/$defs/digest" },
+          "current_request": { "type": "object" },
+          "current_dependency_view": { "type": "object" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

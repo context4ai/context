@@ -429,6 +429,16 @@ async function pruneExtractRuntime(projectRoot: string, source: RemovableSource)
     await atomicWriteFile(fingerprintPath, `${JSON.stringify({ ...parsed, phases: next }, null, 2)}\n`);
   }
 
+  const phaseOwnershipPath = join(projectRoot, ".tmp/context-runtime/extract/custom-phase-candidates.json");
+  if (existsSync(phaseOwnershipPath) && removedPhaseIds.size > 0) {
+    const parsed = JSON.parse(await readFile(phaseOwnershipPath, "utf8")) as {
+      phases?: Record<string, unknown>;
+    };
+    const phases = Object.fromEntries(Object.entries(parsed.phases ?? {})
+      .filter(([phaseId]) => !removedPhaseIds.has(phaseId)));
+    await atomicWriteFile(phaseOwnershipPath, `${JSON.stringify({ ...parsed, phases }, null, 2)}\n`);
+  }
+
   const symbolPath = join(projectRoot, ".tmp/context-runtime/extract/source-symbols.json");
   if (existsSync(symbolPath)) {
     const parsed = JSON.parse(await readFile(symbolPath, "utf8")) as {

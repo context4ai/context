@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: report-indexer-incremental-impact
+description: Compare the complete current author dependency views with the durable accepted Merkle projections and report exact Artifact and Section impact.
+runner: command
+effect: read
+command: context indexer report-indexer-incremental-impact --input .tmp/agent-payloads/indexer-incremental-impact.json --format json
+inputSchema: schemas/indexer-incremental-impact-input.schema.json
+outputSchema: schemas/indexer-incremental-impact-output.schema.json

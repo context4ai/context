@@ -1,0 +1,129 @@
+{
+  "schema": "context.semantic-source-ownership-map/v1",
+  "mode": "blocking",
+  "cli_authority_inventory": "plugins/context/migrations/0.7.0-markdown-cli-authority.json",
+  "migration_matrices": [
+    {
+      "kind": "code",
+      "path": "plugins/context/migrations/0.7.0-code-indexer-resource-migration.json"
+    },
+    {
+      "kind": "markdown",
+      "path": "plugins/context/migrations/0.7.0-markdown-indexer-resource-migration.json"
+    }
+  ],
+  "legacy_inventory": [
+    {
+      "kind": "directory",
+      "path": "packages/context-cli/context-workflow/resources/semantic/code-index",
+      "migration": "code"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/procedures/code-extraction.md",
+      "migration": "code"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
+      "migration": "code"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml",
+      "migration": "code"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/procedures/document-classification.md",
+      "migration": "markdown"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/dialogue/document-classification.md",
+      "migration": "markdown"
+    },
+    {
+      "kind": "directory",
+      "path": "packages/context-cli/context-workflow/resources/semantic/align",
+      "migration": "markdown"
+    },
+    {
+      "kind": "file",
+      "path": "packages/context-cli/context-workflow/resources/procedures/document-optimization.md",
+      "migration": "markdown"
+    }
+  ],
+  "provider_bundles": [
+    {
+      "domain": "code",
+      "path": "plugins/context/skills/context-code-indexer"
+    },
+    {
+      "domain": "markdown",
+      "path": "plugins/context/skills/context-markdown-indexer"
+    }
+  ],
+  "owner_rules": [
+    {
+      "semantic_kind": "profile-taxonomy-template-editorial",
+      "canonical_owner": "community-provider-bundle",
+      "allowed_paths": [
+        "plugins/context/skills/context-code-indexer/**",
+        "plugins/context/skills/context-markdown-indexer/**"
+      ],
+      "legacy_paths": [
+        "packages/context-cli/context-workflow/resources/semantic/code-index/**",
+        "packages/context-cli/context-workflow/resources/procedures/document-classification.md",
+        "packages/context-cli/context-workflow/resources/dialogue/document-classification.md",
+        "packages/context-cli/context-workflow/resources/semantic/align/**",
+        "packages/context-cli/context-workflow/resources/procedures/document-optimization.md"
+      ]
+    },
+    {
+      "semantic_kind": "canonical-reader-question-contract",
+      "canonical_owner": "cli-base-contract-or-verified-data-only-overlay",
+      "allowed_paths": [
+        "packages/context-cli/src/project/indexerBaseContractCatalog.ts",
+        "packages/context-cli/src/project/indexerBaseContracts.ts",
+        "packages/context/src/indexerOverlayTrust.ts"
+      ],
+      "legacy_paths": []
+    },
+    {
+      "semantic_kind": "mechanical-metric-threshold",
+      "canonical_owner": "cli-base-contract-or-verified-data-only-overlay",
+      "allowed_paths": [
+        "packages/context-cli/src/project/indexerBaseContracts.ts",
+        "packages/context-cli/src/project/indexerBaseMetricAudit.ts",
+        "packages/context/src/indexerOverlayTrust.ts"
+      ],
+      "legacy_paths": []
+    },
+    {
+      "semantic_kind": "workflow-protocol-and-safety-baseline",
+      "canonical_owner": "context-cli-workflow",
+      "allowed_paths": [
+        "packages/context-cli/context-workflow/**",
+        "packages/context-cli/src/project/**",
+        "packages/context/src/**"
+      ],
+      "legacy_paths": []
+    },
+    {
+      "semantic_kind": "context-entry-body",
+      "canonical_owner": "root-context-skill",
+      "allowed_paths": [
+        "plugins/context/skills/context/SKILL.md"
+      ],
+      "legacy_paths": [
+        "packages/context-cli/plugin/commands/context.md"
+      ]
+    }
+  ],
+  "blocking_prerequisites": {
+    "migration_disposition": "complete",
+    "forward_fixtures": "complete",
+    "phase_g_cutover": false
+  }
+}

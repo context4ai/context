@@ -16,12 +16,15 @@ export const isScanExcludedDir = (name: string): boolean =>
   name.endsWith(".egg-info");
 
 const DEFAULT_EXCLUDED_FILE_PATTERNS = [
-  /\.test\.tsx?$/i,
-  /\.spec\.tsx?$/i,
-  /\.d\.ts$/i,
+  /\.test\.(?:[cm]?[jt]sx?)$/i,
+  /\.spec\.(?:[cm]?[jt]sx?)$/i,
+  /\.d\.(?:ts|mts|cts)$/i,
 ];
 
-const SUPPORTED_EXTENSIONS = new Set([".ts", ".tsx"]);
+const SUPPORTED_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".mts", ".cts",
+  ".js", ".jsx", ".mjs", ".cjs",
+]);
 
 export type ModuleScanResult = {
   name: string;

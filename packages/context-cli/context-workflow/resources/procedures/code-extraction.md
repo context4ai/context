@@ -77,6 +77,10 @@ separately, together with each index unit's output owner, output profile,
 projected Markdown count, total bytes, largest sampled page, and risk flags.
 For custom phases, also report detected structural probes, covered and uncovered
 probe counts, representative evidence paths, and the affected output profile.
+The preview command returns a bounded summary plus one digest-bound item view.
+Follow its `next_action.command` pages until `preview_items_complete` when the
+Route requires semantic scope, ownership, capability, or scale inspection;
+never recover omitted inventory with host-output slicing.
 Use resolved entry files, exported/internal counts, and symbol-kind counts as
 structural scope evidence only. Resolve TypeScript/JavaScript
 configuration and aliases through the extractor rather than guessing paths
@@ -124,7 +128,7 @@ Do not open Review while another extraction target in the same batch remains.
 Unchanged approved or rejected symbols do not need another decision; new or
 changed candidates remain subject to the current Review policy.
 
-For TypeScript sources, Context also carries extractor-reported AST relations
+For TypeScript, JavaScript, TSX, and JSX sources, Context also carries extractor-reported AST relations
 between selected symbols. A relation is projected only when both endpoints
 resolve uniquely inside the selected module; external, unselected, and
 ambiguous endpoints are counted as omissions instead of guessed. The extract
@@ -142,7 +146,7 @@ source-backed extraction that found no approved edges from an older or
 otherwise unknown relationship mode. Never infer missing edges from symbol
 co-occurrence, filenames, or package size.
 
-When the built-in TypeScript extractor cannot represent the code source, use a
+When the built-in ECMAScript-family extractor cannot represent the code source, use a
 declared `extractCustom` phase. The project-owned callback returns candidate
 semantics plus structured source evidence; Context owns canonical refs,
 fingerprints, candidate storage, Review snapshots, freshness, and rerun cleanup.

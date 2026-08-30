@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: reconcile-indexer-results
+runner: command
+effect: write
+command: context indexer reconcile-indexer-results --input .tmp/agent-payloads/indexer-reconciliation.json --format json
+inputSchema: schemas/indexer-result-reconciliation-input.schema.json
+outputSchema: schemas/indexer-result-reconciliation-output.schema.json

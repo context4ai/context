@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: observe-indexer-project
+runner: host
+effect: read
+handler: context.observe-indexer-project/v1
+inputSchema: schemas/indexer-project-observation-input.schema.json
+outputSchema: schemas/indexer-project-observation-result.schema.json

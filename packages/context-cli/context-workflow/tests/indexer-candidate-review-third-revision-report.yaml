@@ -1,0 +1,14 @@
+schema: agent-graph.test.v1
+name: the third failed profile revision produces the complete report
+graph: indexer
+entry: candidate-review
+state:
+  outcomes:
+    indexer/inspect-index-candidate-review-readiness: blocked
+    indexer/revise-index-output: completed
+    indexer/record-index-profile-revision: completed
+expect:
+  statusCode: actionable
+  primaryNode: report-index-profile-failure
+  primaryReasonCode: route.indexer.profile-failure-report
+  command: context indexer report-index-profile-failure --input .tmp/agent-payloads/indexer-profile-failure-report.json --format json

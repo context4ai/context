@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.overlay-question-proposal-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "trusted_validation_input",
+    "trusted_validation_result",
+    "registry",
+    "requirement_id",
+    "input_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.overlay-question-proposal-input/v1" },
+    "trusted_validation_input": {
+      "type": "object",
+      "required": ["protocol", "input_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay-validation-input/v1" },
+        "input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "trusted_validation_result": {
+      "type": "object",
+      "required": ["protocol", "outcome", "result_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay-validation-result/v1" },
+        "outcome": { "const": "trusted" },
+        "result_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "registry": { "type": "object" },
+    "requirement_id": { "type": "string", "minLength": 1 },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.customization-project-preparation-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "outcome", "validation_digest", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.customization-project-preparation-result/v1" },
+    "outcome": {
+      "enum": ["program-authorization-required", "project-confirmation-required"]
+    },
+    "validation_digest": { "$ref": "#/$defs/digest" },
+    "authorization_report": { "type": "object" },
+    "proposal": { "type": "object" },
+    "stage_receipt": { "type": "object" },
+    "staging_validation": { "type": "object" },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "program-authorization-required" } } },
+      "then": {
+        "required": ["authorization_report"],
+        "not": {
+          "anyOf": [
+            { "required": ["proposal"] },
+            { "required": ["stage_receipt"] },
+            { "required": ["staging_validation"] }
+          ]
+        }
+      }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "project-confirmation-required" } } },
+      "then": {
+        "required": ["proposal", "stage_receipt", "staging_validation"],
+        "not": { "required": ["authorization_report"] }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

@@ -16,26 +16,29 @@ export const DOCUMENT_EDITORIAL_OMISSION_REASONS = [
 
 export type DocumentEditorialOmissionReason = typeof DOCUMENT_EDITORIAL_OMISSION_REASONS[number];
 
-export type DocumentEditorialSignalCode =
-  | "unanswered-question-set"
-  | "answered-question-set"
-  | "empty-table-row"
-  | "placeholder-content"
-  | "wide-table"
-  | "long-table-cell"
-  | "raw-or-unlabeled-link"
-  | "adjacent-links"
-  | "volatile-query-url"
-  | "strikethrough-only-block"
-  | "brainstorm-without-decision"
-  | "duplicate-fragment"
-  | "unstable-owner-reference"
-  | "sensitive-value-candidate"
-  | "heading-hierarchy-invalid"
-  | "heading-content-overloaded"
-  | "markdown-syntax-damaged"
-  | "conversion-artifact"
-  | "mixed-facts-and-draft";
+export const DOCUMENT_EDITORIAL_SIGNAL_CODES = [
+  "unanswered-question-set",
+  "answered-question-set",
+  "empty-table-row",
+  "placeholder-content",
+  "wide-table",
+  "long-table-cell",
+  "raw-or-unlabeled-link",
+  "adjacent-links",
+  "volatile-query-url",
+  "strikethrough-only-block",
+  "brainstorm-without-decision",
+  "duplicate-fragment",
+  "unstable-owner-reference",
+  "sensitive-value-candidate",
+  "heading-hierarchy-invalid",
+  "heading-content-overloaded",
+  "markdown-syntax-damaged",
+  "conversion-artifact",
+  "mixed-facts-and-draft",
+] as const;
+
+export type DocumentEditorialSignalCode = typeof DOCUMENT_EDITORIAL_SIGNAL_CODES[number];
 
 export interface DocumentEditorialSignal {
   code: DocumentEditorialSignalCode;

@@ -44,10 +44,10 @@ Current reusable capabilities are:
 
 | Source fact | Preferred capability | Lifecycle integration |
 |---|---|---|
-| TypeScript/TSX package or file scope | `extractTs()` | Context-owned phase |
+| TypeScript/JavaScript package or TSX/JSX file scope | `extractTs()` | Context-owned phase |
 | Go declarations, imports, calls, and common HTTP routes | `@c4a/extract-go` | call from `extractCustom()` |
 | Rush workspace packages, tags, dependencies, entries, and owners | `@c4a/extract-rush` | call from `extractCustom()`; may complement a language extractor |
-| React Router route declarations | `extractReactRouterRoutes()` from `@c4a/extract-ts` | call from `extractCustom()`; complements TypeScript symbols |
+| React Router route declarations | `extractReactRouterRoutes()` from `@c4a/extract-ts` | call from `extractCustom()`; complements ECMAScript symbols |
 | Rust, Python, Java/JVM, or an unsupported framework/protocol | no assumed built-in parser | project-owned `extractCustom()` adapter |
 
 The custom extraction preview verifies this selection mechanically. Context

@@ -84,9 +84,13 @@ describe("createPathMatcher", () => {
 describe("matchesPathFilter", () => {
   test("matches code category with default config", () => {
     expect(matchesPathFilter("src/index.ts", "code", DEFAULT_PATH_FILTER)).toBe(true);
-    expect(matchesPathFilter("src/index.js", "code", DEFAULT_PATH_FILTER)).toBe(false);
+    expect(matchesPathFilter("src/index.js", "code", DEFAULT_PATH_FILTER)).toBe(true);
+    expect(matchesPathFilter("src/view.jsx", "code", DEFAULT_PATH_FILTER)).toBe(true);
+    expect(matchesPathFilter("src/index.mjs", "code", DEFAULT_PATH_FILTER)).toBe(true);
+    expect(matchesPathFilter("src/index.cjs", "code", DEFAULT_PATH_FILTER)).toBe(true);
     expect(matchesPathFilter("src/__tests__/foo.ts", "code", DEFAULT_PATH_FILTER)).toBe(false);
     expect(matchesPathFilter("src/foo.test.ts", "code", DEFAULT_PATH_FILTER)).toBe(false);
+    expect(matchesPathFilter("src/foo.test.js", "code", DEFAULT_PATH_FILTER)).toBe(false);
     expect(matchesPathFilter("src/foo.d.ts", "code", DEFAULT_PATH_FILTER)).toBe(false);
   });
 

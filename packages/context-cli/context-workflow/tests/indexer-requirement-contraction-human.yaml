@@ -1,0 +1,14 @@
+schema: agent-graph.test.v1
+name: requirement contraction remains human-only despite an exact session authority
+graph: indexer
+entry: requirement-confirmation
+state:
+  outcomes:
+    indexer/route-index-requirement-confirmation: blocked
+  authorities: [context.indexer-requirement-contraction]
+expect:
+  statusCode: waiting-user
+  primaryNode: confirm-index-requirement-contraction
+  availability: requires-user
+  gateResolution: user
+  resolutionHandler: context.confirm-index-requirement-workset/v1

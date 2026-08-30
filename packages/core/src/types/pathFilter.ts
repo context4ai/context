@@ -31,10 +31,11 @@ export const DEFAULT_PATH_FILTER: PathFilterConfig = {
     ],
   },
   code: {
-    include: ["**/*.{ts,tsx}"],
+    include: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     exclude: [
       "**/__{tests,test,e2e,mocks,fixtures,snapshots}__/**",
-      "**/*.{test,spec,d}.{ts,tsx}",
+      "**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.d.{ts,mts,cts}",
     ],
   },
   doc: {

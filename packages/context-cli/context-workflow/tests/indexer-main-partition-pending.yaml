@@ -1,0 +1,18 @@
+schema: agent-graph.test.v1
+name: a pending partition workset routes to the digest-bound Indexer Agent step
+graph: indexer
+entry: main-index
+state:
+  outcomes:
+    indexer/build-question-target-inventory: completed
+    indexer/build-main-index-partition-worksets: completed
+    indexer/prepare-main-index-partition-runs: completed
+    indexer/observe-main-index-partition-worksets: partial
+    indexer/start-main-index-partition-run: completed
+expect:
+  statusCode: actionable
+  primaryNode: run-main-index-partition-workset
+  primaryReasonCode: route.indexer.agent-step
+  requiredResources:
+    - skill.context-run-indexer-agent-step
+    - resolved-indexer-instructions

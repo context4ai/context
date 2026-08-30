@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: build-material-question-workset
+runner: command
+effect: read
+command: context indexer build-material-question-workset --input .tmp/agent-payloads/indexer-material-question-workset.json --format json
+inputSchema: schemas/indexer-material-answer-lifecycle-input.schema.json
+outputSchema: schemas/indexer-material-answer-lifecycle-output.schema.json

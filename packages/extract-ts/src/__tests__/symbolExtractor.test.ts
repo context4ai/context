@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EdgeSource, EdgeType, Grounding, Visibility } from "@c4a/core";
+import { EdgeSource, EdgeType, Grounding, SymbolKind, Visibility } from "@c4a/core";
 import type { ManifestInfo } from "@c4a/extract";
 import { TypeScriptPlugin } from "../plugin.js";
 import { countLines } from "../symbolExtractorAst.js";
@@ -134,5 +134,91 @@ describe("TypeScriptPlugin", () => {
     expect(byName.get("ChatInput")?.typeAnnotation).toBe("forwardRef<ChatInputRef, ChatInputProps>");
     expect(byName.get("TinyIcon")?.returnType).toBe("JSX.Element");
     expect(byName.get("Service")?.members?.some((member) => member.name === "constructor")).toBe(true);
+  });
+
+  test("gives JS, JSX, MJS, and CJS the same AST catalog, export, and call capabilities", async () => {
+    const fs = getFixtureFs("ecmascript-project");
+    const plugin = new TypeScriptPlugin();
+    const manifest: ManifestInfo = {
+      type: "package.json",
+      path: "package.json",
+      content: await fs.readJson("package.json"),
+    };
+
+    const entryResult = await plugin.detectEntries(manifest, fs);
+    const result = await plugin.extractSymbols(entryResult.entries, fs);
+    const exported = result.symbols
+      .filter((item) => item.visibility === Visibility.Exported)
+      .map((item) => item.name)
+      .sort();
+
+    expect(result.meta.language).toBe("javascript");
+    expect(result.coverage?.tier).toBe("ast-catalog");
+    expect(result.coverage?.capabilities).toEqual([
+      "commonjs-module",
+      "esm-module",
+      "javascript-ast",
+      "jsx-ast",
+      "parser.javascript",
+      "parser.typescript",
+      "static-call-relations",
+      "tsx-ast",
+      "typescript-ast",
+    ]);
+    expect(result.files.map((file) => `${file.path}:${file.language}`).sort()).toEqual([
+      "src/index.mjs:javascript",
+      "src/legacy.cjs:javascript",
+      "src/plain.js:javascript",
+      "src/unsupported.cjs:javascript",
+      "src/view.jsx:jsx",
+    ]);
+    expect(exported).toEqual(["Panel", "alias", "createTask", "legacyRun"]);
+    expect(result.symbols.find((item) => item.name === "Panel")?.kind).toBe(SymbolKind.Component);
+    expect(result.relations).toContainEqual(expect.objectContaining({
+      type: EdgeType.Calls,
+      from: "createTask",
+      to: "helper",
+      isExternal: false,
+    }));
+    expect(result.relations).toContainEqual(expect.objectContaining({
+      type: EdgeType.Calls,
+      from: "legacyRun",
+      to: "formatValue",
+      isExternal: false,
+    }));
+    expect(result.relations).toContainEqual(expect.objectContaining({
+      type: EdgeType.Calls,
+      from: "Panel",
+      to: "formatLabel",
+      isExternal: false,
+    }));
+  });
+
+  test("marks unsupported dynamic CommonJS as a file-scoped diagnostic instead of silent success", async () => {
+    const fs = getFixtureFs("ecmascript-project");
+    const plugin = new TypeScriptPlugin();
+    const manifest: ManifestInfo = {
+      type: "package.json",
+      path: "package.json",
+      content: await fs.readJson("package.json"),
+    };
+
+    const entryResult = await plugin.detectEntries(manifest, fs);
+    const result = await plugin.extractSymbols(entryResult.entries, fs);
+    const file = result.coverage?.files.find((item) => item.path === "src/unsupported.cjs");
+
+    expect(file).toEqual({
+      path: "src/unsupported.cjs",
+      disposition: "unsupported",
+      diagnosticCodes: ["dynamic-commonjs-require"],
+    });
+    expect(result.coverage?.diagnostics).toContainEqual({
+      code: "dynamic-commonjs-require",
+      severity: "error",
+      file: "src/unsupported.cjs",
+      line: 2,
+      column: 18,
+    });
+    expect(result.symbols.some((item) => item.file === "src/unsupported.cjs")).toBe(false);
   });
 });

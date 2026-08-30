@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.provider-route-report/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "project_ref",
+    "input_digest",
+    "requirement_set_digest",
+    "registry_digest",
+    "visible_skill_set_digest",
+    "selected_skill_ids",
+    "composition_mode",
+    "community_fallback_attempted",
+    "unowned_required_owner_cells",
+    "conflicting_owner_cells",
+    "read_scope_overlaps",
+    "capability_gaps",
+    "capability_gap_proof",
+    "route",
+    "selection_proposal_input",
+    "report_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.provider-route-report/v1" },
+    "project_ref": { "type": "string", "minLength": 1 },
+    "input_digest": { "$ref": "#/$defs/digest" },
+    "requirement_set_digest": { "$ref": "#/$defs/digest" },
+    "registry_digest": { "$ref": "#/$defs/digest" },
+    "visible_skill_set_digest": { "$ref": "#/$defs/digest" },
+    "selected_skill_ids": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+    "composition_mode": { "enum": ["none", "single-skill", "multi-skill"] },
+    "community_fallback_attempted": { "type": "boolean" },
+    "unowned_required_owner_cells": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "conflicting_owner_cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["owner_cell_ref", "indexer_ids", "skill_ids"],
+        "properties": {
+          "owner_cell_ref": { "type": "string", "minLength": 1 },
+          "indexer_ids": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/id" } },
+          "skill_ids": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/id" } }
+        }
+      }
+    },
+    "read_scope_overlaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["left_indexer_id", "right_indexer_id", "scope_refs"],
+        "properties": {
+          "left_indexer_id": { "$ref": "#/$defs/id" },
+          "right_indexer_id": { "$ref": "#/$defs/id" },
+          "scope_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "capability_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["owner_cell_ref", "requirement_ref", "coverage_domain", "capability"],
+        "properties": {
+          "owner_cell_ref": { "type": ["string", "null"] },
+          "requirement_ref": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+          "coverage_domain": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+          "capability": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "capability_gap_proof": {
+      "anyOf": [
+        { "$ref": "#/$defs/capabilityGapProof" },
+        { "type": "null" }
+      ]
+    },
+    "route": {
+      "oneOf": [
+        { "$ref": "#/$defs/selectionRoute" },
+        { "$ref": "#/$defs/fallbackRoute" },
+        { "$ref": "#/$defs/conflictRoute" },
+        { "$ref": "#/$defs/gapRoute" }
+      ]
+    },
+    "selection_proposal_input": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "project_ref", "registry"],
+          "properties": {
+            "protocol": { "const": "context.indexer.selection-proposal-input/v1" },
+            "project_ref": { "type": "string", "minLength": 1 },
+            "registry": { "type": "object" }
+          }
+        },
+        { "type": "null" }
+      ]
+    },
+    "report_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "capabilityGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_cell_ref", "requirement_ref", "coverage_domain", "capability"],
+      "properties": {
+        "owner_cell_ref": { "type": ["string", "null"] },
+        "requirement_ref": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "coverage_domain": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "capability": { "type": "string", "minLength": 1 }
+      }
+    },
+    "capabilityGapProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "project_ref",
+        "route_input_digest",
+        "requirement_set_digest",
+        "registry_digest",
+        "visible_skill_set_digest",
+        "community_fallback_attempted",
+        "gaps",
+        "gap_digest"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.capability-gap-proof/v1" },
+        "project_ref": { "type": "string", "minLength": 1 },
+        "route_input_digest": { "$ref": "#/$defs/digest" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "registry_digest": { "$ref": "#/$defs/digest" },
+        "visible_skill_set_digest": { "$ref": "#/$defs/digest" },
+        "community_fallback_attempted": { "const": true },
+        "gaps": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capabilityGap" }
+        },
+        "gap_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "selectionRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "graph_outcome", "next_action"],
+      "properties": {
+        "outcome": { "const": "selection-validation-required" },
+        "graph_outcome": { "const": "completed" },
+        "next_action": { "const": "validate-indexer-selection-proposal" }
+      }
+    },
+    "fallbackRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "graph_outcome", "next_action"],
+      "properties": {
+        "outcome": { "const": "community-fallback-required" },
+        "graph_outcome": { "const": "partial" },
+        "next_action": { "const": "configure-community-indexer-fallback" }
+      }
+    },
+    "conflictRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "graph_outcome", "next_action"],
+      "properties": {
+        "outcome": { "const": "indexer-provider-conflict" },
+        "graph_outcome": { "const": "waiting-user" },
+        "next_action": { "const": "configure-indexer-providers" }
+      }
+    },
+    "gapRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "graph_outcome", "next_action"],
+      "properties": {
+        "outcome": { "const": "indexer-customization-required" },
+        "graph_outcome": { "const": "blocked" },
+        "next_action": { "const": "propose-indexer-customization" }
+      }
+    }
+  }
+}

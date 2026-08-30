@@ -14,16 +14,19 @@ in one npm package:
 - Cursor commands under `dist/plugins/cursor/commands/`;
 - standalone skills under `dist/plugins/skills/`.
 
-There is no separate marketplace repository. Maintain plugin source only under
-`packages/context-cli/plugin/`. The package build generates
-`packages/context-cli/dist/plugins/`; never edit that tree directly.
-Do not
-update any standalone marketplace checkout as a production surface.
+Maintain plugin source only under the repository-root `plugins/context/` tree.
+The package build generates both `packages/context-cli/dist/plugins/` for npm
+installation and `plugins/context/repo-install/` for direct Git marketplace
+installation; never edit either generated tree directly. Repository-root
+Claude, Codex, and Cursor marketplace manifests point to their corresponding
+host roots under `repo-install/{claude,codex,cursor}/`. The build injects
+Claude-only invocation frontmatter only into the Claude projection; portable
+Codex/Cursor Skill sources remain Agent Skills-spec compatible.
 Keep entry commands and Skills thin. If a lifecycle procedure, diagnostic,
 semantic rule, schema, or dynamic view is missing, add it under
 `packages/context-cli/context-workflow/`, reference it from the graph, and
 rebuild. Keep only plugin entry descriptions and the instructions for consuming
-`workflow.current` under `packages/context-cli/plugin/`.
+`workflow.current` under `plugins/context/skills/context/`.
 
 ## Build And Refresh
 

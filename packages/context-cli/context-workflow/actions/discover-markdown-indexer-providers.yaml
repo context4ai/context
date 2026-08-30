@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: discover-markdown-indexer-providers
+runner: agent
+effect: write
+skill: skills/configure-indexer-providers/SKILL.md
+outputSchema: schemas/indexer-provider-route-input.schema.json

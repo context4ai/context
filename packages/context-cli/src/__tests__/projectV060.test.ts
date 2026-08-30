@@ -121,7 +121,7 @@ describe("0.6.0 project init and source ensure", () => {
         documentOptimization: true,
       });
       expect(pkg.dependencies?.["@c4a/context"]).toBe(cliPkg.version);
-      expect(pkg.devDependencies?.typescript).toBe("latest");
+      expect(pkg.devDependencies?.typescript).toBe("^5.5.4");
       expect(pkg.devDependencies?.["@c4a/context-cli"]).toBeUndefined();
       const entry = await readFile(join(project, "src", "index.ts"), "utf8");
       expect(entry).toContain("defineProject");

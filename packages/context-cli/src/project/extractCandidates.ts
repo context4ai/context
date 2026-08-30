@@ -71,6 +71,11 @@ import {
   inspectCodeIndexDocuments,
   markdownPathsFromEvidence,
 } from "./codeIndexDocumentInventory.js";
+import {
+  candidateBelongsToSourceScope,
+  readExtractPhaseCandidateOwnership,
+  writeExtractPhaseCandidateOwnership,
+} from "./extractPhaseCandidateOwnership.js";
 
 export {
   extractPhaseSourceFingerprint,
@@ -407,10 +412,15 @@ export async function prepareExtractTsPhase(input: {
     }
   }
 
-  const approvedPages = await readApprovedCodegraphPages({
+  const previousOwned = (await readExtractPhaseCandidateOwnership(input.projectRoot)).phases[input.phase.id];
+  const phaseCandidateIds = new Set([
+    ...(previousOwned?.candidateIds ?? []),
+    ...allCandidates.map((candidate) => candidate.candidate_id),
+  ]);
+  const approvedPages = (await readApprovedCodegraphPages({
     projectRoot: input.projectRoot,
     sourceNames: new Set(selectedSources.map((source) => source.record.name)),
-  });
+  })).filter((page) => previousOwned === undefined || phaseCandidateIds.has(page.candidateId));
   for (const unit of indexUnits) {
     const current = approvedPages.filter((page) => unit.inputSources.includes(page.sourceName));
     const candidates = allCandidates.filter((candidate) => candidate.source_refs.some((ref) =>
@@ -560,28 +570,58 @@ export async function runExtractTsPhase(input: {
   const relationships = prepared.relationships;
 
   const sourceNames = new Set(selectedSources.map((source) => source.record.name));
-  const approvedPages = await readApprovedCodegraphPages({ projectRoot: input.projectRoot, sourceNames });
+  const ownership = await readExtractPhaseCandidateOwnership(input.projectRoot);
+  const previousOwned = ownership.phases[input.phase.id];
+  const generatedCandidateIds = new Set(allCandidates.map((candidate) => candidate.candidate_id));
+  const phaseCandidateIds = new Set([
+    ...(previousOwned?.candidateIds ?? []),
+    ...generatedCandidateIds,
+  ]);
+  const approvedPages = (await readApprovedCodegraphPages({ projectRoot: input.projectRoot, sourceNames }))
+    .filter((page) => previousOwned === undefined || phaseCandidateIds.has(page.candidateId));
   const approvedById = new Map(approvedPages.map((page) => [page.candidateId, page]));
-  const currentCandidateIds = new Set(allCandidates.map((candidate) => candidate.candidate_id));
   const removalCandidates = approvedPages
-    .filter((page) => !currentCandidateIds.has(page.candidateId))
+    .filter((page) => !generatedCandidateIds.has(page.candidateId))
     .map(removalCandidate);
   allCandidates.push(...removalCandidates);
+  const lifecycleCandidateIds = new Set(allCandidates.map((candidate) => candidate.candidate_id));
   const merged = await withProjectWriteLock(input.projectRoot, "extract-candidates", async () => {
-    const existing = await readCandidateRecords(input.projectRoot);
+    const manifest = await readExtractPhaseCandidateOwnership(input.projectRoot);
+    const ownedBeforeRun = manifest.phases[input.phase.id];
+    const previousOwnedIds = new Set(ownedBeforeRun?.candidateIds ?? []);
+    const recordedIds = new Set(Object.values(manifest.phases)
+      .flatMap((phaseOwnership) => phaseOwnership.candidateIds));
+    const currentRows = await readCandidateRecords(input.projectRoot);
+    const staleOwnedRows = currentRows.filter((row) =>
+      !lifecycleCandidateIds.has(row.candidate_id) && (
+        previousOwnedIds.has(row.candidate_id) || (
+          !recordedIds.has(row.candidate_id) &&
+          row.collection === input.phase.collection &&
+          candidateBelongsToSourceScope(row.source_refs, sourceNames)
+        )
+      )
+    );
+    const staleOwnedIds = new Set(staleOwnedRows.map((row) => row.candidate_id));
+    const existing = ownedBeforeRun === undefined
+      ? currentRows
+      : currentRows.filter((row) =>
+          !staleOwnedIds.has(row.candidate_id)
+        );
+    for (const row of staleOwnedRows) await removeCandidateSnapshot(input.projectRoot, row.candidate_id);
     const rejectedDecisions = await readRejectedDecisions(input.projectRoot);
+    for (const row of staleOwnedRows) rejectedDecisions.delete(row.candidate_id);
     const mergeResult = mergeCandidates({
       existing,
       candidates: allCandidates,
       approvedById,
       rejectedDecisions,
-      sourceNames,
+      sourceNames: ownedBeforeRun === undefined ? sourceNames : new Set(),
       collection: input.phase.collection,
       now,
     });
     for (const candidateId of mergeResult.decisionsToRemove) rejectedDecisions.delete(candidateId);
     await writeCandidateRecords(input.projectRoot, mergeResult.rows);
-    if (mergeResult.decisionsToRemove.length > 0) {
+    if (mergeResult.decisionsToRemove.length > 0 || staleOwnedRows.length > 0) {
       await writeRejectedDecisions(input.projectRoot, rejectedDecisions);
     }
     await Promise.all(mergeResult.snapshotCleanupIds.map((id) => removeCandidateSnapshot(input.projectRoot, id)));
@@ -618,10 +658,18 @@ export async function runExtractTsPhase(input: {
     await writeExtractSourceSymbolIndex({
       projectRoot: input.projectRoot,
       phaseFingerprint: sourceFingerprint,
-      sourceNames,
+      sourceNames: ownedBeforeRun === undefined ? sourceNames : new Set(),
+      symbols: sourceSymbolIndex,
+      removeSymbols: ownedBeforeRun?.symbols ?? [],
+    });
+    await writeExtractPhaseCandidateOwnership({
+      projectRoot: input.projectRoot,
+      manifest,
+      phaseId: input.phase.id,
+      candidateIds: [...lifecycleCandidateIds],
       symbols: sourceSymbolIndex,
     });
-    return mergeResult;
+    return { ...mergeResult, removed: mergeResult.removed + staleOwnedRows.length };
   });
 
   const codegraphRows = (await readCandidateRecords(input.projectRoot))

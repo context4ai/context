@@ -111,7 +111,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 - **避免裸露内部模块名**。`extractTs`、`reviewValidity`、`include`、`exportedOnly`、phase id、payload schema 等只在代码修改总结、精确命令、或用户要求细节时出现。默认对话应说“读取 `src/` 下 TS/TSX 导出符号,生成待审 wiki 草稿;非导出/internal helper 默认跳过;审阅通过后才写入 `knowledge/`”。
 - **每个确认问题都要说明影响面**。source 边界影响输出路径和引用前缀;抽取范围影响哪些文件/符号会进入草稿;review 影响哪些候选会变成 approved Markdown;package 选择影响 `dist/` 输出结构和 Agent 消费方式。
 - **不要把 CLI placeholder 原样转成用户问题**。看到 `<name>` / `<repo-or-subdir>` / `<phase-id>` / `<collection>` 时,先翻译成用户决策,并给 1-2 个基于当前上下文的候选示例。只有用户确认后才执行命令。
-- **不要把“默认范围”讲成黑盒**。默认提取必须解释为具体范围:选定 source 内的 `src/**/*.{ts,tsx}`、导出符号、draft candidates、先 dry-run 展示数量和 `knowledgeTree`,再真实抽取。
+- **不要把“默认范围”讲成黑盒**。默认提取必须解释为具体范围:选定 source 内的 `src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`、导出符号、draft candidates、先 dry-run 展示数量和 `knowledgeTree`,再真实抽取。
 - **不要替用户做语义决策**。可以执行安全机械命令;不能自行决定 source 边界、抽取 include/exclude、review approve/reject、package 类型、远程 clone/checkout。
 - **输出要短,但不能省掉决策含义**。报告格式优先是:已完成什么、当前状态、下一步需要用户决定什么、该决定的影响。
 
@@ -135,14 +135,13 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 
 ### 命名边界（必须遵守）
 
-- **Slash command**：只发布 `/c4a:context`。源 `plugin/commands/context.md`，产物 `dist/plugins/claude/commands/context.md`。
+- **Slash command**：只发布 `/c4a:context`。源 `../../plugins/context/skills/context/SKILL.md`，产物 `dist/plugins/claude/commands/context.md`。
 - **CLI primitive**：`context <subcommand> ...`（如 `context status`,
   `context run ...`, `context close`）。Slash command / skill 内部调用。
-- **Cursor command entry**：全局命令名 `c4a-context`，由 `build:plugin` 从 `plugin/commands/context.md` 生成到 `dist/plugins/cursor/commands/`。
+- **Cursor command entry**：全局命令名 `c4a-context`，由 `build:plugin` 从根级 Context Skill 生成到 `dist/plugins/cursor/commands/`。
 - **Public skill — Codex**（plugin namespace via `.codex-plugin/plugin.json`）：裸 slug `context`，由 plugin namespace 暴露为 `c4a:context`。源 `dist/plugins/codex/skills/context/`，frontmatter `name: context`。
-- **Public skill — Vercel-style**（无 plugin manifest，全局空间）：名称 `c4a-context`。源 `dist/plugins/skills/c4a-context/`，frontmatter `name: c4a-context`。
-- 命名差异源于 namespace 机制差异（Codex 有 plugin namespace，Vercel 无），`scripts/build-plugin.ts` 的 `codexSkillNameForCommand` / `skillNameForCommand` 各自实现这两套约定，不要对齐成同一种命名。
-- 不发布阶段型 Skill。来源、采集、对齐、编译、审核和构建能力由 `workflow.current.resources` 动态选择；宿主入口始终由 `plugin/commands/context.md` 生成。
+- **Standalone Provider skills**：`context-code-indexer` 与 `context-markdown-indexer` 由同一根级 source 直接投影，不获得 plugin namespace，只能经 Indexer lifecycle 激活。
+- 不发布生命周期阶段型 Skill。来源、采集、对齐、编译、审核和构建能力由 `workflow.current.resources` 动态选择；宿主入口始终由根级 `skills/context/SKILL.md` 生成。
 - 禁止把底层 CLI primitive 写成公开 Agent 命令,例如 `/context:source`、`/context:run`、`/context:review`、`/context:build`、`/context:verify`、`/context:status`。描述时写“continue will run `context status` and may call `context run ...`”。
 - **Workflow resource** 是当前 Route 选择的文件或 Context View，不是 Skill 之间的静态引用。Agent 只消费 `workflow.current.resources.required/recommended` 返回的 `path` 或 `command`，不拼接插件安装路径。
 
@@ -297,29 +296,29 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 ### 分发路径
 
-`plugin/` 是唯一人工维护的 plugin source。`bun run --filter @c4a/context-cli build` / `build:plugin` 把 `plugin/` 编译进 `dist/plugins/{claude,codex,cursor,skills}/` + 顶层 3 个 marketplace.json。`dist/plugins` 随 `@c4a/context-cli` npm 包发布,`context plugin install` 从已安装 CLI 包动态定位该目录并安装到全局 Claude / Codex。
-
-新版不维护独立 marketplace repo,也不生成或提交独立 plugin 仓库。
+仓库根 `plugins/context/` 是唯一人工维护的 plugin source。`build` / `build:plugin`
+同时生成 `dist/plugins/{claude,codex,cursor,skills}/`、根级 marketplace 和只读
+`plugins/context/repo-install/`。`dist/plugins` 随 npm 包发布；`repo-install` 支持
+无需安装阶段 build 的 Git marketplace 安装。
 
 | Source（手改） | Build 产物（只读） | 消费者 |
 |---|---|---|
-| `plugin/commands/*.md` | `dist/plugins/claude/commands/`，`dist/plugins/cursor/commands/context*.md`，Codex/Vercel public skill 入口 | Claude / Cursor 用户入口 |
+| `../../plugins/context/skills/context/SKILL.md` | Claude/Cursor command adapter 与 Codex/standalone Context Skill | Agent 用户入口 |
+| `../../plugins/context/skills/context-*-indexer/` | npm/Git 顶层 `skills/` 中的 Provider Skills | Context Indexer lifecycle |
 | `context-workflow/` | `dist/providers/context/` | 唯一 Graph、Procedure、Diagnostic、语义规则和动态 View 定义 |
-| `plugin/assets/` | `dist/plugins/codex/assets/`，`dist/plugins/cursor/assets/` | plugin 品牌资产 |
-| `plugin/.{claude,codex,cursor}-plugin/plugin.json.template` | `dist/plugins/{claude,codex,cursor}/.{...}-plugin/plugin.json` | manifest，构建时替换 `__VERSION__` |
-| —（由 command 派生） | `dist/plugins/codex/skills/context/`，`dist/plugins/skills/c4a-context/` | Codex / Vercel-style public skill |
+| `../../plugins/context/assets/` | npm 与 Git 宿主投影资产 | plugin 品牌资产 |
+| `../../plugins/context/.{claude,codex,cursor}-plugin/plugin.json.template` | npm 与 Git 投影 manifest | 构建时替换 `__VERSION__` |
 
 构建不变量：
 
 - `dist/plugins/claude/` 只通过 `commands/context.md` 发布单一入口。
 - `dist/plugins/cursor/` 只通过 `commands/c4a-context.md` 发布用户入口。
-- `dist/plugins/codex/skills/context/` 和 `dist/plugins/skills/c4a-context/` 只放单一 public entry，不出现 `skill-*` 顶层目录。两边命名差异源自 namespace 机制差异，不是 build 不一致。
-- Codex/Vercel public entries 直接由 `plugin/commands/context.md`
-  生成，不复制 Provider 的长篇 Procedure 或语义规则。
+- `dist/plugins/codex/skills/` 只包含 `context`，由 plugin namespace 暴露为 `c4a:context`；Claude/Cursor plugin root 也不内嵌 Provider。
+- `dist/plugins/skills/` 直接投影根级全部 Skills；安装器把其中 lifecycle Provider 原子复制到 `~/.agents/skills` 和 `~/.claude/skills`，而不是复制进 Host plugin root。
 - `dist/plugins/{claude,codex,cursor}/` 各带 generated guard（`CLAUDE.md` 或 `AGENTS.md` + `.generated`）；看到 guard 不要编辑 build 产物。`dist/plugins/skills/` 顶层 README 统一说明。
 - 生命周期规则、长诊断、Schema 发现说明和语义规则统一住在
   `context-workflow/` Route resources 或 CLI 动态 View，不复制到入口文档。
-- npm tarball（`@c4a/context-cli`）包含 CLI + `dist/plugins`。plugin 安装统一走 `context plugin install`,不再有独立 repo 分发链路。
+- npm tarball（`@c4a/context-cli`）包含 CLI + `dist/plugins`；一次 `context plugin install` 同时安装 Host 主入口和无命名空间 Provider Skills，并支持 Claude、Codex、Cursor。根级 marketplace 另行指向 `repo-install`。
 
 ### Shipped Docs 写作禁忌
 

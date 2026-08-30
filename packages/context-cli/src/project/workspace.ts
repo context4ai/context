@@ -18,6 +18,7 @@ import {
   enableDocumentOptimization,
 } from "./documentOptimizationConfig.js";
 import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuidanceTemplates.js";
+import { assertTrustedContextProjectConfigBoundary } from "./projectModulePolicy.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
 const PROJECT_SCRATCH_DIRS = [join(".tmp", "agent-payloads")] as const;
@@ -414,7 +415,7 @@ function renderPackageJson(
       "@c4a/context": resolveSdkDependency(dev, version),
     },
     devDependencies: {
-      typescript: "latest",
+      typescript: "^5.5.4",
     },
   }, null, 2)}\n`;
 }
@@ -542,6 +543,7 @@ export async function loadContextProjectModule(root: string): Promise<ContextPro
     });
   }
   const projectModule = loadedProject as unknown as ContextProjectModule;
+  assertTrustedContextProjectConfigBoundary(projectModule);
   const firstPhaseById = new Map<string, { index: number; kind: string }>();
   for (const [index, phase] of projectModule.project.phases.entries()) {
     const first = firstPhaseById.get(phase.id);

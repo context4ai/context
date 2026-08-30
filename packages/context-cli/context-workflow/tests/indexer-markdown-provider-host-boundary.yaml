@@ -1,0 +1,14 @@
+schema: agent-graph.test.v1
+name: external Markdown Provider resolution stops at the explicit Host boundary
+graph: indexer
+entry: markdown-provider
+state:
+  outcomes:
+    indexer/inspect-markdown-provider-capture: completed
+    indexer/discover-markdown-indexer-providers: completed
+    indexer/route-markdown-indexer-provider-selection: completed
+    indexer/validate-markdown-indexer-selection-proposal: completed
+    indexer/validate-markdown-provider-selection: partial
+expect:
+  statusCode: complete
+  outcome: blocked

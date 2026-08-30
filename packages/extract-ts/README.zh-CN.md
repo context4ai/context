@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-`@c4a/extract-ts` 将 TypeScript 和 TSX 结构转化为 Context 知识生产可使用的确定性
+`@c4a/extract-ts` 将 TypeScript、JavaScript、TSX 和 JSX 结构转化为 Context 知识生产可使用的确定性
 代码证据。它实现 `@c4a/extract` 的 `ExtractionPlugin` 协议，也是 npm-style
 package 使用 `extractTs({ source, collection: "codegraph" })` 阶段时的默认插件。
 
@@ -13,17 +13,17 @@ package 使用 `extractTs({ source, collection: "codegraph" })` 阶段时的默�
 ## 在知识生产链中的职责
 
 ```text
-已确认的 TypeScript 边界
+已确认的 TypeScript/JavaScript 边界
           ↓
 入口检测 + 导出追踪 + AST 事实
           ↓
 原始代码快照 → 审核候选 → 正式知识
 ```
 
-`@c4a/extract-ts` 负责 TypeScript package 入口检测和 AST 提取。它不直接写工作区；
+`@c4a/extract-ts` 负责 npm package 入口检测和 ECMAScript-family AST 提取。它不直接写工作区；
 `@c4a/extract` 运行插件，Context runtime 保存并校验原始代码快照。
 
-**依赖：** `@c4a/extract`、`web-tree-sitter`
+**依赖：** `@c4a/extract`、`typescript`、`web-tree-sitter`
 
 ## 可复用结构 API
 
@@ -57,6 +57,18 @@ const exports = extractTypeScriptModuleExports(source, "src/index.ts");
 
 它不解析文件依赖，也不判断业务含义，适合由项目自有提取器继续映射为领域事实。
 
+`extractEcmaScriptModuleExports()` 是 `.ts`、`.tsx`、`.mts`、`.cts`、`.js`、
+`.jsx`、`.mjs` 和 `.cjs` 共用的接口。除 ESM 外，它还识别静态 CommonJS
+`require`、`exports.name`、`module.exports.name` 及 object/wildcard
+`module.exports`。结果显式返回 `ast-catalog` coverage tier、capability、逐文件
+`analyzed | unsupported` 状态和定位诊断：
+
+```ts
+import { extractEcmaScriptModuleExports } from "@c4a/extract-ts";
+
+const moduleFacts = extractEcmaScriptModuleExports(source, "src/index.cjs");
+```
+
 ## 当前提取范围
 
 ### 入口检测
@@ -69,6 +81,7 @@ const exports = extractTypeScriptModuleExports(source, "src/index.ts");
 - 通过 `resolveEntrySourcePath()` 将 `dist/` 入口回退到 `src/`；
 - `lib`、`cli`、`service` package 类型识别；
 - 将 package version 写入 `ExtractionResult.package.version`。
+- 直接识别源码目录中的 `.js`、`.jsx`、`.mjs` 和 `.cjs`，不会误映射为 TypeScript。
 
 Context 项目可以使用 source-relative `extractTs.entries` 覆盖自动检测，或用
 `mode: "scan"` 把所有 `include` 命中的文件作为提取根。这些设置属于知识工作区，
@@ -83,7 +96,7 @@ repo-relative 前缀。
 当前支持：
 
 - function、class、interface、type alias、enum 和 variable；
-- TSX component-like variable；
+- TSX/JSX component-like function 和 variable；
 - 下游投影按名称识别的 hook-like function；
 - class/interface/type 的嵌套成员；
 - 声明和成员 JSDoc；
@@ -94,7 +107,7 @@ repo-relative 前缀。
 - 通过 `FC<Props>` 或 `{ComponentName}Props` 约定识别的 `propsType`。
 
 输出关系包括 `imports`、`imports_type`、`extends`、`implements`、
-`param_type`、`return_type` 和 `of_type`。这些关系均由 AST 直接支撑，confidence
+`param_type`、`return_type`、`of_type` 和 `calls`。这些关系均由 AST 直接支撑，confidence
 为 `1`。
 
 ### 导出追踪
@@ -107,6 +120,7 @@ repo-relative 前缀。
 - `export { A } from "./module"`；
 - 别名 export specifier；
 - 通过 in-flight guard 处理循环 re-export。
+- 静态 CommonJS `require` binding 和 `exports` / `module.exports` assignment。
 
 只有从入口导出面可达的声明会标记为 `exported`，同一已追踪文件中的其他声明保持
 `internal`。
@@ -119,6 +133,15 @@ repo-relative 前缀。
 - `symbols.jsonl`：带 `symbol_id`、`package_name` 和 `module_path` 的扁平符号；
 - `edges.jsonl`：带 package、module、version 和 hash 元数据的关系；
 - `digests.jsonl`：版本化模块 digest。
+
+模块 digest 同时保留 `coverage.tier`、完整 capability 列表和每个已到达文件的
+disposition。语法错误、动态 CommonJS module name 或动态 export key 会标为
+`unsupported`，返回稳定的文件/行/列诊断，并且不会发布该文件的部分符号。
+
+Indexer 使用 `typeScriptExtractionToEvidenceAdapterResult()` 作为正式导出。它只接受
+`c4a-extract-ts` 的输出，并通过 `context.indexer.evidence-adapter-result/v1` 发布 canonical
+file/fact identity、逐文件 owner/disposition、显式 denominator、诊断和有序 parser receipt。
+既有原始快照 Runner 继续使用 `ExtractionResult`。
 
 Context runtime 使用这些行生成 package/category/symbol 知识候选。重要输入是稳定
 package 名和版本、稳定导出符号、准确 kind/visibility、文件与行范围、关系端点、
@@ -166,4 +189,5 @@ bun run --filter @c4a/extract-ts build
 bun run --filter @c4a/extract-ts typecheck
 bun run --filter @c4a/extract-ts test
 bun run --filter @c4a/extract-ts lint
+bun run test:dist
 ```

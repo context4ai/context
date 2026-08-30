@@ -21,9 +21,10 @@ npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-Restart or refresh the Agent host after installation. The bundled installer
-projects the same source entry into supported Claude, Codex, Cursor, and
-Skill-compatible layouts.
+Restart or refresh the Agent host after installation. One install creates the
+host-namespaced Context entry and projects `context-code-indexer` and
+`context-markdown-indexer` as unnamespaced lifecycle Provider Skills for
+Claude, Codex, and Cursor.
 
 The public community entry is `/c4a:context`. It creates a requested workspace,
 locates an existing workspace, or resumes the current workflow. Users should
@@ -178,6 +179,65 @@ for maintainers, automation, and diagnostics:
   source analysis, stable-boundary coverage, content density, evidence scope,
   and page size before Review; legacy `codegraph` workspaces migrate through
   the returned Route action;
+- the `context indexer` lifecycle builds contract-derived question targets,
+  digest-bound partition and author worksets, exact SubjectKey resolution
+  views, and independent post-author composer worksets. Main runs use a local
+  content-addressed ledger whose accepted Result/receipt transition is atomic;
+  ordinal/fixed-count partitions advance through the authorized strategy order,
+  and exhausted strategies use a persisted-predecessor CLI catalog fallback that
+  creates one parent unit without an Agent or user Gate;
+  post-author runs use a separate ledger and atomic envelope record. Observe
+  commands publish pending/accepted/failed/stale counts and never use numeric
+  cursors. Reconciliation then recomputes every required coverage domain from
+  current owner cells, accepted author Results, registered materials, and the
+  complete CLI-owned question-target set; capability or material gaps cannot be
+  reported as complete;
+- the `markdown-provider` Indexer Route starts only from exact current document
+  capture. Agent discovery reports visible `context-markdown-indexer*` Skills
+  without persisting the discovery list; the CLI recomputes the route and
+  static validation, resolves and stages exact CLI-bundled Bundles, and stops
+  external resolution or local customization at explicit Host/customization
+  Outcomes;
+- `route-index-requirement-confirmation` recomputes the canonical requirement
+  comparison before routing. Ordinary confirmation may use its explicit
+  authority, while contraction or incomparable obligation replacement always
+  enters the human-only Gate. `validate-subject-key-schemas` likewise requires
+  an exact Provider-major re-identification authorization for identity-breaking
+  changes over approved Nodes; incomplete, split, merged, or colliding mappings
+  fail before that Gate. Exact target matches that resolve to multiple Nodes
+  return `index-target-resolution-ambiguous`, and invalid reuse returns
+  `index-target-resolution-invalid`;
+- `context indexer build-material-question-workset` derives second-phase answer
+  eligibility from current registry, Provider, scope, source, and evidence-kind
+  authority. `prepare|observe|start|accept|fail-material-answer-*` use an
+  independent durable ledger; complete empty Results are cache hits, while
+  candidate evidence requires exact current source-span read receipts;
+- material-answer candidates use a separate limited Review Route. Its baseline
+  and decision bind one exact question target and canonical source-span evidence
+  set. Approval returns an `answer-approved` successor-ledger fact for the later
+  checkpoint writer; it does not approve an Artifact, reader page, or final
+  knowledge candidate;
+- main Candidate Review has one Graph predecessor:
+  `inspect-index-candidate-review-readiness`. The CLI accepts only digests of
+  content-addressed precompile/postcompile audit records and verifies their
+  requirement, registry, inventory, layout, candidate-set, and effective
+  revision bindings. Missing, stale, baseline-failed, or profile-blocked audits
+  cannot resolve the Review Gate. A profile failure enters
+  `revise-index-output`; `record-index-profile-revision` retains a stable
+  problem lineage and at most three distinct result fingerprints. After the
+  third failure, `report-index-profile-failure` persists the full metrics,
+  examples, history, missing inputs, and capability-loss report.
+  `inspect-index-profile-failure` is read-only, and the following
+  `override-index-profile-audit` Gate is non-delegable. Its receipt binds the
+  report, audit, candidate revision, failed metrics, user, and timestamp.
+  Baseline failures cannot issue or consume that receipt;
+- `checkpoint-material-gaps` is the mandatory retained writer before any
+  reconciliation stop. Approved answers inline their accepted workset;
+  `actualize-material-answer-bindings` maps them against one current layout
+  proposal set and reopens stale sources, while `close-indexer-approved-knowledge`
+  accepts provenance only from the approved structure it closes atomically.
+  `audit-material-gap-state` is read-only: it recomputes the expected ledger and
+  routes pre-Review drift to checkpoint or approved post-Review state to close;
 - `context clean-cache --dry-run` previews cleanup of Context-owned stale
   plugin caches.
 
@@ -189,7 +249,7 @@ See also [source-constrained editorial revisions](./docs/document-optimization.m
 
 ## Documentation and development
 
-- [Plugin contract](./plugin/README.md)
+- [Plugin contract](../../plugins/context/README.md)
 - [Workflow Provider internals](./context-workflow/README.md)
 - [SDK documentation index](../context/docs/README.md)
 - [Knowledge-project walkthrough](../context/docs/getting-started.md)
@@ -207,8 +267,9 @@ bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
 ```
 
-Build generates the installable host projections under `dist/plugins`; edit
-only `plugin/` and the bundled workflow source, never generated output.
+Build generates installable host projections under `dist/plugins` and the
+direct-Git projection under `../../plugins/context/repo-install`; edit only
+`../../plugins/context/` and the bundled workflow source, never generated output.
 
 ## License
 

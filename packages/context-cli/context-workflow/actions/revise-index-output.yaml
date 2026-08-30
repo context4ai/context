@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: revise-index-output
+runner: agent
+effect: write
+skill: skills/revise-index-output/SKILL.md
+inputSchema: schemas/indexer-profile-revision-agent-input.schema.json
+outputSchema: schemas/indexer-profile-revision-record-input.schema.json

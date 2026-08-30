@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.contract-overlay-authorization-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "trusted_validation_input",
+    "validation",
+    "project_authorization",
+    "result_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.contract-overlay-authorization-result/v1" },
+    "trusted_validation_input": {
+      "type": "object",
+      "required": ["protocol", "project_authorization", "input_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay-validation-input/v1" },
+        "project_authorization": { "type": "object" },
+        "input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "outcome",
+        "graph_outcome",
+        "validation_input_digest",
+        "trust_receipt",
+        "result_digest"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay-validation-result/v1" },
+        "outcome": { "const": "trusted" },
+        "graph_outcome": { "const": "completed" },
+        "validation_input_digest": { "$ref": "#/$defs/digest" },
+        "trust_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocol",
+            "trust_class",
+            "project_ref",
+            "overlay_digest",
+            "attestation_digest",
+            "base_contract_digest",
+            "provider_integrity",
+            "operator_contract_digest",
+            "conformance_report_digest",
+            "trust_adapter",
+            "trust_adapter_version",
+            "trust_management_authority_digest",
+            "trust_policy_digest",
+            "authorization_receipt_digest",
+            "receipt_digest"
+          ],
+          "properties": {
+            "protocol": { "const": "context.indexer.overlay-trust-receipt/v1" },
+            "trust_class": { "const": "project-authorized-exact-digest" },
+            "project_ref": { "type": "string", "minLength": 1 },
+            "overlay_digest": { "$ref": "#/$defs/digest" },
+            "attestation_digest": { "$ref": "#/$defs/nullableDigest" },
+            "base_contract_digest": { "$ref": "#/$defs/digest" },
+            "provider_integrity": { "$ref": "#/$defs/digest" },
+            "operator_contract_digest": { "$ref": "#/$defs/digest" },
+            "conformance_report_digest": { "$ref": "#/$defs/digest" },
+            "trust_adapter": { "type": "null" },
+            "trust_adapter_version": { "type": "null" },
+            "trust_management_authority_digest": { "type": "null" },
+            "trust_policy_digest": { "type": "null" },
+            "authorization_receipt_digest": { "$ref": "#/$defs/digest" },
+            "receipt_digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "result_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "project_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "project_ref",
+        "overlay_digest",
+        "attestation_digest",
+        "base_contract_digest",
+        "provider_integrity",
+        "operator_contract_digest",
+        "conformance_report_digest",
+        "authority_ref",
+        "authority_scope_digest",
+        "authorization_receipt_digest"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.overlay-project-authorization/v1" },
+        "project_ref": { "type": "string", "minLength": 1 },
+        "overlay_digest": { "$ref": "#/$defs/digest" },
+        "attestation_digest": { "$ref": "#/$defs/nullableDigest" },
+        "base_contract_digest": { "$ref": "#/$defs/digest" },
+        "provider_integrity": { "$ref": "#/$defs/digest" },
+        "operator_contract_digest": { "$ref": "#/$defs/digest" },
+        "conformance_report_digest": { "$ref": "#/$defs/digest" },
+        "authority_ref": { "const": "context.indexer-contract-overlay" },
+        "authority_scope_digest": { "$ref": "#/$defs/digest" },
+        "authorization_receipt_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "nullableDigest": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/digest" }
+      ]
+    }
+  }
+}

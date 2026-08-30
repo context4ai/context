@@ -71,6 +71,10 @@ function assertUntilOptions(
   }
   const incompatible = [
     "list",
+    "previewExtractionBatch",
+    "previewDigest",
+    "indexUnit",
+    "itemKind",
     "autoPromote",
     "view",
     "schema",
@@ -124,6 +128,10 @@ function assertBatchOptions(
   }
   const incompatible = [
     "list",
+    "previewExtractionBatch",
+    "previewDigest",
+    "indexUnit",
+    "itemKind",
     "dryRun",
     "autoPromote",
     "until",
@@ -216,6 +224,22 @@ function projectPhaseRunInput(input: {
     ...(input.options.previewExtractionBatch === true ? { previewExtractionBatch: true } : {}),
     ...(Array.isArray(input.options.previewPhase)
       ? { previewPhaseIds: input.options.previewPhase.filter((value): value is string => typeof value === "string") }
+      : {}),
+    ...(typeof input.options.previewDigest === "string"
+      ? { previewDigest: input.options.previewDigest }
+      : {}),
+    ...(input.options.previewExtractionBatch === true
+      ? {
+          previewOutput: {
+            ...(typeof input.options.view === "string" ? { view: input.options.view } : {}),
+            ...(typeof input.options.tokenBudget === "string" ? { tokenBudget: input.options.tokenBudget } : {}),
+            ...(typeof input.options.byteBudget === "string" ? { byteBudget: input.options.byteBudget } : {}),
+            ...(typeof input.options.pageSize === "string" ? { pageSize: input.options.pageSize } : {}),
+            ...(typeof input.options.pageToken === "string" ? { pageToken: input.options.pageToken } : {}),
+            ...(typeof input.options.indexUnit === "string" ? { indexUnit: input.options.indexUnit } : {}),
+            ...(typeof input.options.itemKind === "string" ? { itemKind: input.options.itemKind } : {}),
+          },
+        }
       : {}),
     ...(input.options.autoPromote === true ? { autoPromote: true } : {}),
     ...(input.managed ? { managed: true } : {}),
@@ -332,6 +356,9 @@ export function registerProjectRunCommand(
         .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
         .default([]),
     )
+    .addOption(new Option("--preview-digest <digest>").hideHelp())
+    .addOption(new Option("--index-unit <id>").hideHelp())
+    .addOption(new Option("--item-kind <kind>").hideHelp())
     .option("--auto-promote", "with a code-index extract phase, apply deterministic deltas, refresh close, and verify without review")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
@@ -382,6 +409,16 @@ export function registerProjectRunCommand(
       const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       if (options.previewExtractionBatch === true && phaseId !== undefined) {
         throw new ContextError(ExitCode.UserError, "--preview-extraction-batch cannot be combined with a phase id", {
+          category: ErrorCategory.UserInputInvalid,
+        });
+      }
+      if (options.previewExtractionBatch !== true && (
+        options.previewDigest !== undefined ||
+        options.indexUnit !== undefined ||
+        options.itemKind !== undefined ||
+        (Array.isArray(options.previewPhase) && options.previewPhase.length > 0)
+      )) {
+        throw new ContextError(ExitCode.UserError, "--preview-phase, --preview-digest, --index-unit, and --item-kind require --preview-extraction-batch", {
           category: ErrorCategory.UserInputInvalid,
         });
       }

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.contract-overlay-authorization-input/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "validation_input",
+    "expected_conformance_report_digest",
+    "authority_ref",
+    "authority_scope_digest",
+    "input_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.contract-overlay-authorization-input/v1" },
+    "validation_input": {
+      "type": "object",
+      "required": ["protocol", "input_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.contract-overlay-validation-input/v1" },
+        "input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "expected_conformance_report_digest": { "$ref": "#/$defs/digest" },
+    "authority_ref": { "type": "string", "minLength": 1 },
+    "authority_scope_digest": { "$ref": "#/$defs/digest" },
+    "input_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

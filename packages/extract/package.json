@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract",
   "description": "Language-plugin framework and repository runner for Context code evidence",
-  "version": "0.6.19",
+  "version": "0.7.0",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -34,7 +34,9 @@
   },
   "dependencies": {
     "@c4a/core": "workspace:*",
+    "toml-eslint-parser": "^1.0.3",
     "web-tree-sitter": "^0.20.8",
+    "yaml": "^2.8.2",
     "zod": "^3.23.8"
   }
 }

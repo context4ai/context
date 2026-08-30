@@ -5,6 +5,7 @@ import {
   applyCodeIndexAuditDecision,
   collectCodeIndexAuditStatus,
 } from "../project/codeIndexAudit.js";
+import { buildCodeIndexAuditView } from "../project/codeIndexAuditView.js";
 import { readYamlOrJsonInput } from "../project/payloadInput.js";
 import { findContextProjectRoot } from "../project/workspace.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -45,6 +46,14 @@ export function registerCodeIndexAuditReviewCommand(review: Command): void {
     .command("code-index")
     .description("Inspect or resolve the current code-index quality audit")
     .option("--input <file>", "apply a context.code-index-audit-decision.v1 YAML/JSON payload, or - for stdin")
+    .option("--view <view>", "inspection view: summary | items", "summary")
+    .option("--report-digest <digest>", "bind a paginated inspection to one report digest")
+    .option("--unit <id>", "with --view items, narrow to one code-index unit")
+    .option("--item-kind <kind>", "with --view items, narrow to one stable item kind")
+    .option("--token-budget <n>", "limit approximate report item tokens")
+    .option("--byte-budget <n>", "limit total report output bytes")
+    .option("--page-size <n>", "limit report items selected for this page")
+    .option("--page-token <token>", "continue a digest-bound report view")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (options: Record<string, unknown>) => {
       const format = outputFormat(options.format);
@@ -52,8 +61,23 @@ export function registerCodeIndexAuditReviewCommand(review: Command): void {
       if (typeof options.input !== "string") {
         const status = await collectCodeIndexAuditStatus(root);
         if (format === "json") {
-          process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+          process.stdout.write(`${JSON.stringify(buildCodeIndexAuditView(status, {
+            ...(typeof options.view === "string" ? { view: options.view } : {}),
+            ...(typeof options.reportDigest === "string" ? { reportDigest: options.reportDigest } : {}),
+            ...(typeof options.unit === "string" ? { unit: options.unit } : {}),
+            ...(typeof options.itemKind === "string" ? { itemKind: options.itemKind } : {}),
+            ...(typeof options.tokenBudget === "string" ? { tokenBudget: options.tokenBudget } : {}),
+            ...(typeof options.byteBudget === "string" ? { byteBudget: options.byteBudget } : {}),
+            ...(typeof options.pageSize === "string" ? { pageSize: options.pageSize } : {}),
+            ...(typeof options.pageToken === "string" ? { pageToken: options.pageToken } : {}),
+          }), null, 2)}\n`);
           return;
+        }
+        if (options.view !== "summary") {
+          throw new ContextError(ExitCode.UserError, "code-index audit item views require --format json", {
+            category: ErrorCategory.UserInputInvalid,
+            view: options.view,
+          });
         }
         process.stdout.write(formatFeedback({
           symbol: status.resolved ? "✓" : "⚠",

@@ -48,6 +48,15 @@ function limited(paths: readonly string[]): string[] {
   return [...new Set(paths)].sort().slice(0, MAX_PROBE_PATHS);
 }
 
+function prioritizedPaths(authoritative: readonly string[], heuristic: readonly string[]): string[] {
+  const required = [...new Set(authoritative)].sort();
+  const optional = [...new Set(heuristic)]
+    .filter((path) => !required.includes(path))
+    .sort()
+    .slice(0, Math.max(0, MAX_PROBE_PATHS - required.length));
+  return [...required, ...optional];
+}
+
 function values(value: unknown): string[] {
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) return value.flatMap(values);
@@ -72,9 +81,9 @@ async function packageFacts(root: string): Promise<{
       manifest.optionalDependencies,
     ].filter((item): item is Record<string, unknown> => item !== null && typeof item === "object");
     return {
-      entries: limited([manifest.main, manifest.module, manifest.types, manifest.bin, manifest.exports]
+      entries: [...new Set([manifest.main, manifest.module, manifest.types, manifest.bin, manifest.exports]
         .flatMap(values)
-        .map((entry) => entry.replace(/^\.\//u, ""))),
+        .map((entry) => entry.replace(/^\.\//u, "")))].sort(),
       dependencies: new Set(dependencyFields.flatMap((field) => Object.keys(field))),
     };
   } catch {
@@ -121,8 +130,8 @@ async function probeSource(input: {
   const goFiles = files.filter((path) => /\.go$/iu.test(path) && !/(?:^|\/)(?:vendor|generated)(?:\/|$)|_test\.go$/iu.test(path));
 
   if (existsSync(join(root, "package.json")) && scriptFiles.length > 0) {
-    const entries = limited([
-      ...packageInfo.entries.filter((path) => files.includes(path)),
+    const manifestEntries = packageInfo.entries.filter((path) => files.includes(path));
+    const entries = prioritizedPaths(manifestEntries, [
       ...commonEntries(scriptFiles, /\.(?:cjs|cts|js|jsx|mjs|mts|ts|tsx)$/iu),
       ...(scriptFiles.length > 0 ? [scriptFiles[0]!] : []),
     ]);
@@ -222,8 +231,11 @@ export function probesForIndexUnit(input: {
   probes: readonly ExtractionStructuralProbe[];
   inputSources: readonly string[];
   outputProfile: CodeIndexOutputProfile;
+  entries?: readonly string[];
 }): ExtractionStructuralProbe[] {
-  return input.probes.filter((item) =>
-    input.inputSources.includes(item.source) && item.profiles.includes(input.outputProfile)
-  );
+  return input.probes
+    .filter((item) => input.inputSources.includes(item.source) && item.profiles.includes(input.outputProfile))
+    .map((item) => item.capability === "typescript-symbols" && item.kind === "entry"
+      ? { ...item, paths: prioritizedPaths(input.entries ?? [], item.paths) }
+      : item);
 }

@@ -1,13 +1,28 @@
-import Parser from "web-tree-sitter";
+import type ParserTypes from "web-tree-sitter";
+import * as WebTreeSitter from "web-tree-sitter";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-type Language = Parser.Language;
-type Tree = Parser.Tree;
+type Language = ParserTypes.Language;
+type Tree = ParserTypes.Tree;
+type ParserConstructor = {
+  new(): ParserTypes;
+  init(options?: Parameters<typeof ParserTypes.init>[0]): Promise<void>;
+};
+type LanguageConstructor = { load(path: string): Promise<Language> };
+const treeSitterRuntime = WebTreeSitter as unknown as {
+  default?: ParserConstructor & { Language?: LanguageConstructor };
+  Parser?: ParserConstructor;
+  Language?: LanguageConstructor;
+};
+const Parser = treeSitterRuntime.default ?? treeSitterRuntime.Parser;
+if (!Parser) {
+  throw new TypeError("web-tree-sitter runtime does not expose Parser");
+}
 
 let parserInitPromise:
   | Promise<{
-      parser: Parser;
+      parser: ParserTypes;
       tsLanguage: Language;
       tsxLanguage: Language;
     }>
@@ -26,7 +41,7 @@ const resolveWasmPath = (relativePath: string) =>
   fileURLToPath(new URL(relativePath, import.meta.url));
 
 const createParserInstance = async (): Promise<{
-  parser: Parser;
+  parser: ParserTypes;
   tsLanguage: Language;
   tsxLanguage: Language;
 }> => {
@@ -40,18 +55,22 @@ const createParserInstance = async (): Promise<{
     ? { locateFile: (scriptName: string) => resolveWasmPath(`./wasm/${scriptName}`) }
     : undefined;
   await Parser.init(initOptions);
+  const LanguageRuntime = treeSitterRuntime.default?.Language ?? treeSitterRuntime.Language;
+  if (!LanguageRuntime) {
+    throw new TypeError("web-tree-sitter runtime does not expose Language after initialization");
+  }
   const parser = new Parser();
-  const tsLanguage = await Parser.Language.load(
+  const tsLanguage = await LanguageRuntime.load(
     resolveWasmPath("./wasm/tree-sitter-typescript.wasm")
   );
-  const tsxLanguage = await Parser.Language.load(
+  const tsxLanguage = await LanguageRuntime.load(
     resolveWasmPath("./wasm/tree-sitter-tsx.wasm")
   );
   return { parser, tsLanguage, tsxLanguage };
 };
 
 export const initParser = async (): Promise<{
-  parser: Parser;
+  parser: ParserTypes;
   tsLanguage: Language;
   tsxLanguage: Language;
 }> => {

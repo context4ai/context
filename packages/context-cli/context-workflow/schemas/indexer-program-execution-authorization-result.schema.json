@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.program-execution-authorization-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "report_digest", "authorization", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.program-execution-authorization-result/v1" },
+    "report_digest": { "$ref": "#/$defs/digest" },
+    "authorization": { "$ref": "#/$defs/authorization" },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol",
+        "project_ref",
+        "provider_integrity",
+        "provider_fingerprint",
+        "manifest_digest",
+        "resource",
+        "program_origin",
+        "program_digest",
+        "execution_digest",
+        "capability_set_digest",
+        "dependency_set_digest",
+        "scope_digest",
+        "execution_policy_digest",
+        "report_digest",
+        "authority_ref",
+        "authority_scope_digest",
+        "sandboxed_program",
+        "receipt_digest"
+      ],
+      "properties": {
+        "protocol": { "const": "context.indexer.program-authorization/v1" },
+        "project_ref": { "type": "string", "minLength": 1 },
+        "provider_integrity": { "$ref": "#/$defs/digest" },
+        "provider_fingerprint": { "$ref": "#/$defs/digest" },
+        "manifest_digest": { "$ref": "#/$defs/digest" },
+        "resource": { "const": "program" },
+        "program_origin": { "enum": ["provider-bundle", "project-local"] },
+        "program_digest": { "$ref": "#/$defs/digest" },
+        "execution_digest": { "$ref": "#/$defs/digest" },
+        "capability_set_digest": { "$ref": "#/$defs/digest" },
+        "dependency_set_digest": { "$ref": "#/$defs/digest" },
+        "scope_digest": { "$ref": "#/$defs/digest" },
+        "execution_policy_digest": { "$ref": "#/$defs/digest" },
+        "report_digest": { "$ref": "#/$defs/digest" },
+        "authority_ref": { "type": "string", "minLength": 1 },
+        "authority_scope_digest": { "$ref": "#/$defs/digest" },
+        "sandboxed_program": { "const": false },
+        "receipt_digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

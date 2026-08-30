@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.profile-revision-record-result/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "state", "lineage_id", "attempt", "attempt_digest", "ledger_digest", "audit_facts", "graph_outcome", "reason_code", "result_digest"],
+  "properties": {
+    "protocol": { "const": "context.indexer.profile-revision-record-result/v1" },
+    "state": { "enum": ["revision-required", "human-report-required"] },
+    "lineage_id": { "$ref": "#/$defs/digest" },
+    "attempt": { "type": "integer", "minimum": 1, "maximum": 3 },
+    "attempt_digest": { "$ref": "#/$defs/digest" },
+    "ledger_digest": { "$ref": "#/$defs/digest" },
+    "audit_facts": { "$ref": "#/$defs/auditFacts" },
+    "graph_outcome": { "enum": ["partial", "completed"] },
+    "reason_code": { "enum": ["index-profile-revision-required", "index-profile-human-report-required"] },
+    "result_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "auditFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "audit", "facts_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.audit-facts/v1" },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["baseline_clear", "profile_state", "problem_lineage_id", "profile_attempt_count", "profile_report_digest", "profile_override_eligible", "profile_override_receipt_digest"],
+          "properties": {
+            "baseline_clear": { "type": "boolean" },
+            "profile_state": { "enum": ["not-applicable", "passed", "revision-required", "human-guidance-required"] },
+            "problem_lineage_id": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+            "profile_attempt_count": { "type": "integer", "minimum": 0, "maximum": 3 },
+            "profile_report_digest": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+            "profile_override_eligible": { "type": "boolean" },
+            "profile_override_receipt_digest": { "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] }
+          }
+        },
+        "facts_digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

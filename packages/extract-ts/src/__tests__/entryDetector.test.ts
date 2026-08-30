@@ -110,4 +110,24 @@ describe("detectEntries", () => {
       "@fixture/pkg-b",
     ]);
   });
+
+  test("detects JavaScript, JSX, MJS, and CJS source entries without build-output remapping", async () => {
+    const fs = getFixtureFs("ecmascript-project");
+    const manifest: ManifestInfo = {
+      type: "package.json",
+      path: "package.json",
+      content: await fs.readJson("package.json"),
+    };
+
+    const result = await detectEntries(manifest, fs);
+
+    expect(result.package.language).toBe("javascript");
+    expect(result.entries.map((entry) => entry.path).sort()).toEqual([
+      "src/index.mjs",
+      "src/legacy.cjs",
+      "src/plain.js",
+      "src/unsupported.cjs",
+      "src/view.jsx",
+    ]);
+  });
 });

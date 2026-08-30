@@ -91,7 +91,7 @@ function moduleRelativeEntryPath(modulePath: string, sourcePath: string): string
 
 function entrySubpath(filePath: string, index: number): string {
   if (index === 0) return ".";
-  const withoutExtension = filePath.replace(/\.(?:d\.)?(?:ts|tsx|mts|cts|go)$/u, "");
+  const withoutExtension = filePath.replace(/\.(?:d\.)?(?:ts|tsx|mts|cts|js|jsx|mjs|cjs|go)$/u, "");
   return `./${withoutExtension}`;
 }
 
@@ -273,6 +273,19 @@ export const prefixExtractionPaths = (
     path: resolveRepoRelativePath(modulePath, file.path),
   })),
   symbols: extraction.symbols.map((symbol) => prefixSymbolPaths(symbol, modulePath)),
+  ...(extraction.coverage ? {
+    coverage: {
+      ...extraction.coverage,
+      files: extraction.coverage.files.map((file) => ({
+        ...file,
+        path: resolveRepoRelativePath(modulePath, file.path),
+      })),
+      diagnostics: extraction.coverage.diagnostics.map((diagnostic) => ({
+        ...diagnostic,
+        file: resolveRepoRelativePath(modulePath, diagnostic.file),
+      })),
+    },
+  } : {}),
 });
 
 export const normalizeExtractionPaths = (

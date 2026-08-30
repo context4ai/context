@@ -16,6 +16,8 @@
 | 理解完整知识项目的形态 | [Getting Started](./getting-started.md) |
 | 判断 Agent 可以决定或修改什么 | [Agent Guide](./guides/agent-guide.md) 和 [Agent Dialogue](./guides/agent-dialogue.md) |
 | 配置来源、阶段、审核或产物 | [Project API](./reference/project-api.md) |
+| 选择或定制 Indexer Provider | [Provider Selection and Customization](./guides/indexer-provider-and-customization.md) |
+| 编写 Code/Markdown Indexer Skill | [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md) 和 [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md) |
 | 选择代码提取方式 | [Code Extractor Selection](./reference/code-extractors.md) |
 | 选择 Agent 知识包或 LLM 文档 | [Package Outputs](./guides/package-outputs.md) |
 | 自定义包文件和索引 | [Package Templates](./reference/package-templates.md) 和 [Template Variables](./reference/template-variables.md) |
@@ -29,6 +31,9 @@
 - [Package Outputs](./guides/package-outputs.md)：如何选择 Agent 知识包、LLM 文本或不构建产物。
 - [Lark Resource Materialization](./guides/lark-resources.md)：内嵌资源如何从来源证据进入正式知识和知识包。
 - [Project API](./reference/project-api.md)：`defineProject`、来源、阶段、审核和知识包声明。
+- [Provider Selection and Customization](./guides/indexer-provider-and-customization.md)：registry-only 选择、六级最小定制阶梯、升级冲突、调试与退出条件。
+- [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md)：Code Provider Skill 的 23 项作者/发布契约。
+- [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md)：capture/semantic 边界、Section 投影、material answer、编辑策略与局部增量。
 - [Code Extractor Selection](./reference/code-extractors.md)：如何根据技术信号选择内建提取器、结构库或项目适配器。
 - [Package Templates](./reference/package-templates.md)：`kbPackage`、`llmsPackage`、模板变量和示例。
 - [Template Variables](./reference/template-variables.md)：Handlebars 变量、循环、注释和默认知识清单。

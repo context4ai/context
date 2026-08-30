@@ -126,7 +126,7 @@ Context 在生成完整本地产物后结束。将产物发布到托管知识服
 | `@c4a/context-cli` | 本地工作流运行时和 Agent 接入 | [English](./packages/context-cli/README.md) · [中文](./packages/context-cli/README.zh-CN.md) |
 | `@c4a/core` | 共享 Schema、身份、错误和提取契约 | [English](./packages/core/README.md) · [中文](./packages/core/README.zh-CN.md) |
 | `@c4a/extract` | 语言插件协议和仓库提取 Runner | [English](./packages/extract/README.md) · [中文](./packages/extract/README.zh-CN.md) |
-| `@c4a/extract-ts` | TypeScript/TSX 结构提取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
+| `@c4a/extract-ts` | TypeScript/JavaScript 与 TSX/JSX 结构提取 | [English](./packages/extract-ts/README.md) · [中文](./packages/extract-ts/README.zh-CN.md) |
 | `@c4a/extract-go` | 可选 Go 结构提取 | [English](./packages/extract-go/README.md) · [中文](./packages/extract-go/README.zh-CN.md) |
 | `@c4a/extract-rush` | 可选 Rush 工作区结构索引 | [English](./packages/extract-rush/README.md) · [中文](./packages/extract-rush/README.zh-CN.md) |
 | `@c4a/dev-cli` | 仓库开发和发布菜单 | [English](./packages/dev-cli/README.md) · [中文](./packages/dev-cli/README.zh-CN.md) |
@@ -140,7 +140,7 @@ Context 产品语义，下游分发无需继承另一套品牌模型。
 - [SDK 文档索引](./packages/context/docs/README.zh-CN.md)
 - [知识项目完整示例](./packages/context/docs/getting-started.md)
 - [Agent 接入指南](./packages/context-cli/README.zh-CN.md)
-- [插件契约](./packages/context-cli/plugin/README_CN.md)
+- [插件契约](./plugins/context/README_CN.md)
 - [Workflow Provider 内部说明](./packages/context-cli/context-workflow/README.zh-CN.md)
 - [参与贡献](./CONTRIBUTING.md)
 - [获取支持](./SUPPORT.md)

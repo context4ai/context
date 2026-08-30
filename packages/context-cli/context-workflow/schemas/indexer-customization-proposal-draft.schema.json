@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.customization-proposal-draft/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "capability_gap",
+    "capability_gap_digest",
+    "indexer_id",
+    "mode",
+    "selected_step",
+    "rejected_smaller_steps",
+    "gap_summary",
+    "affected_scope_refs",
+    "files",
+    "dependency_intents"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.customization-proposal-draft/v1" },
+    "capability_gap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route_input", "route_report"],
+      "properties": {
+        "route_input": { "type": "object" },
+        "route_report": { "type": "object" }
+      }
+    },
+    "capability_gap_digest": { "$ref": "#/$defs/digest" },
+    "indexer_id": { "$ref": "#/$defs/id" },
+    "mode": { "const": "extend" },
+    "selected_step": {
+      "enum": ["instructions-append", "template-override", "program-extend"]
+    },
+    "rejected_smaller_steps": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["step", "disposition", "reason_code", "evidence_digest"],
+        "properties": {
+          "step": { "enum": ["provider-only", "config", "instructions-append", "template-override"] },
+          "disposition": { "enum": ["unsupported", "insufficient"] },
+          "reason_code": { "$ref": "#/$defs/id" },
+          "evidence_digest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "gap_summary": { "type": "string", "minLength": 1 },
+    "affected_scope_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "content"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^src/indexer/[a-z0-9][a-z0-9._/-]*/(?:instructions\\.md|templates/[a-z0-9][a-z0-9._/-]*\\.md|(?:index|variables|helpers)\\.ts)$"
+          },
+          "content": { "type": "string", "minLength": 1, "maxLength": 4194304 }
+        }
+      }
+    },
+    "dependency_intents": {
+      "type": "array",
+      "maxItems": 0
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]*$" },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

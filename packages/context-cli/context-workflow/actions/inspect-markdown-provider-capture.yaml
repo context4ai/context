@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: inspect-markdown-provider-capture
+runner: command
+effect: read
+command: context indexer inspect-markdown-provider-capture --input .tmp/agent-payloads/indexer-markdown-provider-capture.json --format json
+inputSchema: schemas/indexer-markdown-provider-capture-input.schema.json
+outputSchema: schemas/indexer-markdown-provider-capture-output.schema.json

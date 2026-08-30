@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: propose-overlay-question-amendment
+runner: host
+effect: read
+handler: context.propose-overlay-question-amendment/v1
+inputSchema: schemas/indexer-overlay-question-proposal-input.schema.json
+outputSchema: schemas/indexer-overlay-question-amendment.schema.json

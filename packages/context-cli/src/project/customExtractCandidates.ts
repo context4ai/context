@@ -1,12 +1,9 @@
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import type {
   CodeIndexUnitPlan,
   CustomCodeCandidateDraft,
   ExtractCustomPhaseDefinition,
 } from "@c4a/context";
-import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -23,7 +20,6 @@ import { mergeCandidates } from "./extractCandidateBuild.js";
 import type {
   ExtractCustomPhasePreview,
   ExtractionIndexUnitPreview,
-  ExtractSourceSymbolIndexEntry,
   ExtractTsRunResult,
   SourceSelection,
 } from "./extractCandidateTypes.js";
@@ -49,8 +45,12 @@ import {
   probesForIndexUnit,
 } from "./structuralCapabilityProbes.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import {
+  candidateBelongsToSourceScope,
+  readExtractPhaseCandidateOwnership,
+  writeExtractPhaseCandidateOwnership,
+} from "./extractPhaseCandidateOwnership.js";
 
-const CUSTOM_PHASE_MANIFEST = ".tmp/context-runtime/extract/custom-phase-candidates.json";
 const EXTRACTION_WARNING_PAGE_COUNT = 100;
 const EXTRACTION_BLOCK_PAGE_COUNT = 300;
 
@@ -246,14 +246,6 @@ function finalizeCustomUnit(unit: ExtractionIndexUnitPreview): ExtractionIndexUn
   return unit;
 }
 
-interface CustomPhaseCandidateManifest {
-  version: 2;
-  phases: Record<string, {
-    candidateIds: string[];
-    symbols: ExtractSourceSymbolIndexEntry[];
-  }>;
-}
-
 function isCandidateIterable(value: unknown): value is
   | Iterable<CustomCodeCandidateDraft>
   | AsyncIterable<CustomCodeCandidateDraft> {
@@ -411,6 +403,7 @@ export async function prepareExtractCustomPhase(input: {
       probes: structuralProbes,
       inputSources: unit.inputSources,
       outputProfile: unit.outputProfile,
+      entries: unit.entries,
     });
     const unitCandidates = built
       .filter((item) => item.candidate.module === unit.id || item.candidate.module === unit.outputOwner);
@@ -456,10 +449,15 @@ export async function prepareExtractCustomPhase(input: {
   }
   const indexUnits = [...units.values()].map(finalizeCustomUnit)
     .sort((left, right) => left.id.localeCompare(right.id));
-  const approvedPages = await readApprovedCodegraphPages({
+  const previousOwned = (await readExtractPhaseCandidateOwnership(input.projectRoot)).phases[input.phase.id];
+  const phaseCandidateIds = new Set([
+    ...(previousOwned?.candidateIds ?? []),
+    ...candidateIds,
+  ]);
+  const approvedPages = (await readApprovedCodegraphPages({
     projectRoot: input.projectRoot,
     sourceNames,
-  });
+  })).filter((page) => previousOwned === undefined || phaseCandidateIds.has(page.candidateId));
   for (const unit of indexUnits) {
     const current = approvedPages.filter((page) =>
       unit.inputSources.includes(page.sourceName) &&
@@ -535,19 +533,6 @@ export async function previewExtractCustomPhase(input: {
   return (await prepareExtractCustomPhase(input)).preview;
 }
 
-async function readManifest(projectRoot: string): Promise<CustomPhaseCandidateManifest> {
-  const path = join(projectRoot, CUSTOM_PHASE_MANIFEST);
-  if (!existsSync(path)) return { version: 2, phases: {} };
-  try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as CustomPhaseCandidateManifest;
-    return parsed.version === 2 && parsed.phases !== null && typeof parsed.phases === "object"
-      ? parsed
-      : { version: 2, phases: {} };
-  } catch {
-    return { version: 2, phases: {} };
-  }
-}
-
 export async function runExtractCustomPhase(input: {
   projectRoot: string;
   phase: ExtractCustomPhaseDefinition;
@@ -613,16 +598,30 @@ export async function runExtractCustomPhase(input: {
     .filter((page) => candidateIds.has(page.candidateId))
     .map((page) => [page.candidateId, page]));
   const merged = await withProjectWriteLock(input.projectRoot, "extract-custom-candidates", async () => {
-    const manifest = await readManifest(input.projectRoot);
+    const manifest = await readExtractPhaseCandidateOwnership(input.projectRoot);
     const previousOwned = manifest.phases[input.phase.id];
     const previousOwnedIds = new Set(previousOwned?.candidateIds ?? []);
-    const existing = (await readCandidateRecords(input.projectRoot)).filter((row) =>
-      !previousOwnedIds.has(row.candidate_id) || candidateIds.has(row.candidate_id)
+    const recordedIds = new Set(Object.values(manifest.phases)
+      .flatMap((phaseOwnership) => phaseOwnership.candidateIds));
+    const currentRows = await readCandidateRecords(input.projectRoot);
+    const staleOwnedRows = currentRows.filter((row) =>
+      !candidateIds.has(row.candidate_id) && (
+        previousOwnedIds.has(row.candidate_id) || (
+          !recordedIds.has(row.candidate_id) &&
+          row.collection === input.phase.collection &&
+          candidateBelongsToSourceScope(row.source_refs, sourceNames)
+        )
+      )
+    );
+    const staleOwnedIds = new Set(staleOwnedRows.map((row) => row.candidate_id));
+    const existing = currentRows.filter((row) =>
+      !staleOwnedIds.has(row.candidate_id)
     );
     for (const staleId of previousOwnedIds) {
       if (!candidateIds.has(staleId)) await removeCandidateSnapshot(input.projectRoot, staleId);
     }
     const rejectedDecisions = await readRejectedDecisions(input.projectRoot);
+    for (const row of staleOwnedRows) rejectedDecisions.delete(row.candidate_id);
     const mergeResult = mergeCandidates({
       existing,
       candidates: built.map((item) => item.candidate),
@@ -634,7 +633,9 @@ export async function runExtractCustomPhase(input: {
     });
     for (const candidateId of mergeResult.decisionsToRemove) rejectedDecisions.delete(candidateId);
     await writeCandidateRecords(input.projectRoot, mergeResult.rows);
-    if (mergeResult.decisionsToRemove.length > 0) await writeRejectedDecisions(input.projectRoot, rejectedDecisions);
+    if (mergeResult.decisionsToRemove.length > 0 || staleOwnedRows.length > 0) {
+      await writeRejectedDecisions(input.projectRoot, rejectedDecisions);
+    }
     await Promise.all(mergeResult.snapshotCleanupIds.map((id) => removeCandidateSnapshot(input.projectRoot, id)));
     const skipped = new Set([...mergeResult.skippedApprovedIds, ...mergeResult.skippedRejectedIds]);
     for (const item of built) {
@@ -663,17 +664,14 @@ export async function runExtractCustomPhase(input: {
       symbols: built.flatMap((item) => item.symbols),
       removeSymbols: previousOwned?.symbols ?? [],
     });
-    await atomicWriteFile(join(input.projectRoot, CUSTOM_PHASE_MANIFEST), `${JSON.stringify({
-      version: 2,
-      phases: {
-        ...manifest.phases,
-        [input.phase.id]: {
-          candidateIds: [...candidateIds].sort(),
-          symbols: built.flatMap((item) => item.symbols),
-        },
-      },
-    }, null, 2)}\n`);
-    return mergeResult;
+    await writeExtractPhaseCandidateOwnership({
+      projectRoot: input.projectRoot,
+      manifest,
+      phaseId: input.phase.id,
+      candidateIds: [...candidateIds],
+      symbols: built.flatMap((item) => item.symbols),
+    });
+    return { ...mergeResult, removed: mergeResult.removed + staleOwnedRows.length };
   });
 
   const pending = (await readCandidateRecords(input.projectRoot)).filter((row) =>

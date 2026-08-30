@@ -1,0 +1,24 @@
+schema: agent-graph.test.v1
+name: a required material gap is checkpointed before second-phase work is built
+graph: indexer
+entry: main-index
+state:
+  outcomes:
+    indexer/build-question-target-inventory: completed
+    indexer/build-main-index-partition-worksets: completed
+    indexer/prepare-main-index-partition-runs: completed
+    indexer/observe-main-index-partition-worksets: completed
+    indexer/build-subject-catalog: completed
+    indexer/build-target-resolution-views: completed
+    indexer/audit-projected-artifact-fan-out: completed
+    indexer/build-main-index-author-worksets: completed
+    indexer/prepare-main-index-author-runs: completed
+    indexer/observe-main-index-author-worksets: completed
+    indexer/resolve-effective-composers: completed
+    indexer/build-post-author-composer-worksets: completed
+    indexer/reconcile-indexer-results: partial
+    indexer/checkpoint-material-gaps: partial
+expect:
+  statusCode: actionable
+  primaryNode: build-material-question-workset
+  primaryReasonCode: route.indexer.material-question-workset

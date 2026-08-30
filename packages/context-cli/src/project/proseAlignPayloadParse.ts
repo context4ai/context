@@ -236,6 +236,7 @@ function validateNodeIdentity(input: {
   }
   if (nodeRef !== undefined && nodeType !== undefined && !nodeRef.startsWith(`${nodeType}/`)) {
     diagnostics.push(diagnostic("error", "schema.node_ref_type_mismatch", "schema", "NodeRef must start with node_type followed by '/'.", `nodes[${index}].node_ref`, {
+      candidate_id: nodeRef,
       repair: { action: "rename_node_ref_or_node_type", expected_prefix: `${nodeType}/` },
     }));
   }

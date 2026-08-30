@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.candidate-compile-action/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "outcome",
+    "graph_outcome",
+    "compile",
+    "transaction",
+    "receipt_digest"
+  ],
+  "properties": {
+    "protocol": { "const": "context.indexer.candidate-compile-action/v1" },
+    "outcome": { "const": "indexer-candidates-compiled" },
+    "graph_outcome": { "const": "completed" },
+    "compile": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "layout_proposal_set_digest",
+        "layout_transition_digest",
+        "accepted_result_set_digest",
+        "result_bindings",
+        "files",
+        "artifact_manifest",
+        "physical_artifact_audit",
+        "compile_digest"
+      ]
+    },
+    "transaction": { "type": "object" },
+    "receipt_digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+  }
+}

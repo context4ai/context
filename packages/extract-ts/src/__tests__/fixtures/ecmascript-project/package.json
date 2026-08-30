@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/ecmascript-project",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./legacy": "./src/legacy.cjs",
+    "./plain": "./src/plain.js",
+    "./unsupported": "./src/unsupported.cjs",
+    "./view": "./src/view.jsx"
+  }
+}

@@ -634,7 +634,7 @@ export const extractTs = (definition: {
     }],
     source: sourceDefinition,
     collection: definition.collection,
-    include: definition.include ?? ["src/**/*.{ts,tsx}"],
+    include: definition.include ?? ["src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     mode,
     ...(entries !== undefined ? { entries } : {}),
     exportedOnly,

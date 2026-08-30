@@ -1,0 +1,9 @@
+schema: agent-graph.test.v1
+name: main Indexer lifecycle starts by building its question target denominator
+graph: indexer
+entry: main-index
+expect:
+  statusCode: actionable
+  primaryNode: build-question-target-inventory
+  primaryReasonCode: route.indexer.question-target-inventory
+  command: context indexer build-question-target-inventory --input .tmp/agent-payloads/indexer-main-lifecycle.json --format json

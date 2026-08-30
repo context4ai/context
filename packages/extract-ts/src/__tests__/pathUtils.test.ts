@@ -135,6 +135,11 @@ describe("resolveEntrySourcePath", () => {
       const fs = mockFs(["src/index.ts"]);
       expect(await resolveEntrySourcePath("", "src/index.ts", fs)).toBe("src/index.ts");
     });
+
+    test("src/index.js remains JavaScript when it is an authored source", async () => {
+      const fs = mockFs(["src/index.js", "src/index.ts"]);
+      expect(await resolveEntrySourcePath("", "src/index.js", fs)).toBe("src/index.js");
+    });
   });
 });
 
@@ -142,6 +147,11 @@ describe("resolveImportSourcePath", () => {
   test("resolves relative import with extension swap", async () => {
     const fs = mockFs(["src/utils.ts"]);
     expect(await resolveImportSourcePath("src/index.ts", "./utils", fs)).toBe("src/utils.ts");
+  });
+
+  test("prefers authored JavaScript from a JavaScript importer", async () => {
+    const fs = mockFs(["src/utils.ts", "src/utils.js"]);
+    expect(await resolveImportSourcePath("src/index.js", "./utils", fs)).toBe("src/utils.js");
   });
 
   test("resolves relative import to index file", async () => {

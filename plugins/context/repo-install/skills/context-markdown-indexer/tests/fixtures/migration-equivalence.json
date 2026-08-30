@@ -1,0 +1,186 @@
+{
+  "protocol": "context.indexer.markdown-migration-equivalence-fixture-set/v1",
+  "anonymized": true,
+  "cases": [
+    {
+      "id": "evidence-first",
+      "rule_id": "evidence-first",
+      "authority": "community-instructions",
+      "source_shape": "A captured page has an operations-looking path but its body is a product acceptance specification.",
+      "expected_decision": "classify-from-body-authority-and-reader-task",
+      "forbidden_decision": "classify-from-path",
+      "recovery": "Read the complete authorized evidence before returning a Section intent."
+    },
+    {
+      "id": "complete-evidence-read",
+      "rule_id": "complete-evidence-read",
+      "authority": "community-instructions",
+      "source_shape": "A long page preview shows only headings while the required evidence view still has unread pages.",
+      "expected_decision": "continue-current-evidence-read",
+      "forbidden_decision": "decide-from-heading-preview",
+      "recovery": "Follow the current workset evidence continuation before authoring."
+    },
+    {
+      "id": "mixed-section-intents",
+      "rule_id": "mixed-section-intents",
+      "authority": "community-instructions",
+      "source_shape": "One document contains product behavior, technical design, and a recovery procedure.",
+      "expected_decision": "classify-each-section",
+      "forbidden_decision": "force-one-document-classification",
+      "recovery": "Split along continuous reader-task boundaries and return registered intents."
+    },
+    {
+      "id": "reuse-exact-subject",
+      "rule_id": "reuse-exact-subject",
+      "authority": "community-instructions",
+      "source_shape": "The target-resolution view contains an exact current subject with matching evidence.",
+      "expected_decision": "reuse-existing",
+      "forbidden_decision": "create-title-alias",
+      "recovery": "Use the supplied target identity and leave identity derivation to Context."
+    },
+    {
+      "id": "independent-subject",
+      "rule_id": "independent-subject",
+      "authority": "community-instructions",
+      "source_shape": "A separately named component has its own contract, lifecycle, and standalone reader questions.",
+      "expected_decision": "create-independent",
+      "forbidden_decision": "merge-into-unrelated-parent",
+      "recovery": "Bind the independent decision to current evidence and a permitted SubjectKey schema."
+    },
+    {
+      "id": "local-heading-stays-section",
+      "rule_id": "local-heading-stays-section",
+      "authority": "community-instructions",
+      "source_shape": "A local heading contains one warning that only makes sense inside the parent guide.",
+      "expected_decision": "retain-section-group",
+      "forbidden_decision": "create-thin-subject",
+      "recovery": "Keep the warning as a source-backed Section under the owning Artifact."
+    },
+    {
+      "id": "navigation-only",
+      "rule_id": "navigation-only",
+      "authority": "community-instructions",
+      "source_shape": "A page contains labels and unresolved links but no citable reader content.",
+      "expected_decision": "request-material",
+      "forbidden_decision": "publish-empty-artifact",
+      "recovery": "Return the registered missing-material or unsupported disposition."
+    },
+    {
+      "id": "density-only-guides-reading",
+      "rule_id": "density-only-guides-reading",
+      "authority": "community-instructions",
+      "source_shape": "A fragmented note contains many short independent claims.",
+      "expected_decision": "use-micro-reading",
+      "forbidden_decision": "infer-quality-from-density",
+      "recovery": "Keep evidence windows narrow, then apply the normal semantic gates."
+    },
+    {
+      "id": "duplicate-same-boundary",
+      "rule_id": "duplicate-same-boundary",
+      "authority": "community-instructions",
+      "source_shape": "Two paragraphs repeat the same claim for the same reader task and authority.",
+      "expected_decision": "collapse-duplicate",
+      "forbidden_decision": "publish-repeated-sections",
+      "recovery": "Retain one canonical statement with its evidence boundary."
+    },
+    {
+      "id": "conflicting-evidence",
+      "rule_id": "conflicting-evidence",
+      "authority": "community-instructions",
+      "source_shape": "Two current sources disagree and the workset supplies no precedence.",
+      "expected_decision": "keep-unresolved",
+      "forbidden_decision": "choose-by-file-order",
+      "recovery": "Return a material question or supported diagnostic instead of guessing."
+    },
+    {
+      "id": "source-backed-relation",
+      "rule_id": "source-backed-relation",
+      "authority": "community-instructions",
+      "source_shape": "A cited Section explicitly states that one authorized component consumes another component's output.",
+      "expected_decision": "emit-owned-cited-claim",
+      "forbidden_decision": "emit-endpoint-only-relation",
+      "recovery": "Keep the claim only under the Section carrying relation evidence."
+    },
+    {
+      "id": "source-authored-uncertainty",
+      "rule_id": "source-authored-uncertainty",
+      "authority": "community-instructions",
+      "source_shape": "The source explicitly describes a possible cause, while the structured schema has no confidence field.",
+      "expected_decision": "preserve-uncertainty-in-prose",
+      "forbidden_decision": "invent-confidence-field",
+      "recovery": "Keep Agent uncertainty unresolved and preserve only source-authored uncertainty."
+    },
+    {
+      "id": "canonical-layout-identity",
+      "rule_id": "canonical-layout-identity",
+      "authority": "context-layout",
+      "source_shape": "An accepted Result carries a current SubjectKey and Section projection intents.",
+      "expected_decision": "derive-node-artifact-view-section-and-path",
+      "forbidden_decision": "accept-hand-authored-path",
+      "recovery": "Recompute the proposal from the current Result and contract."
+    },
+    {
+      "id": "layout-collision",
+      "rule_id": "layout-collision",
+      "authority": "context-layout",
+      "source_shape": "Two proposals claim the same Node, Artifact, Section, or output path.",
+      "expected_decision": "reject-collision",
+      "forbidden_decision": "resolve-with-alias",
+      "recovery": "Return to current subject resolution instead of mutating a path."
+    },
+    {
+      "id": "destructive-layout-change",
+      "rule_id": "destructive-layout-change",
+      "authority": "context-layout",
+      "source_shape": "A current Artifact would be removed or moved after a new Result.",
+      "expected_decision": "require-confirm-layout-change",
+      "forbidden_decision": "apply-destructive-change-silently",
+      "recovery": "Bind one human confirmation to the exact base and target digests."
+    },
+    {
+      "id": "eligible-omission",
+      "rule_id": "eligible-omission",
+      "authority": "community-instructions",
+      "source_shape": "A Section is only an unanswered placeholder and the analyzer supplies an eligible omission reason.",
+      "expected_decision": "omit-with-exact-reason",
+      "forbidden_decision": "publish-placeholder",
+      "recovery": "Use the exact eligible omission reason and preserve lifecycle audit in Context."
+    },
+    {
+      "id": "protected-knowledge-retention",
+      "rule_id": "protected-knowledge-retention",
+      "authority": "community-instructions",
+      "source_shape": "A question has an evidence-backed answer and a deprecation names its replacement.",
+      "expected_decision": "retain-knowledge",
+      "forbidden_decision": "omit-by-label",
+      "recovery": "Repair or reshape without removing the answer or replacement."
+    },
+    {
+      "id": "missing-input",
+      "rule_id": "missing-input",
+      "authority": "community-instructions",
+      "source_shape": "A Section contains an ambiguous owner or link purpose that current evidence cannot recover.",
+      "expected_decision": "request-input",
+      "forbidden_decision": "keep-to-avoid-pause",
+      "recovery": "Ask one concise batched question after completing independent safe work."
+    },
+    {
+      "id": "stale-recovery",
+      "rule_id": "stale-recovery",
+      "authority": "context-layout",
+      "source_shape": "The workset, profile contract, or source digest changes before layout acceptance.",
+      "expected_decision": "reject-stale-and-recompute",
+      "forbidden_decision": "patch-digest-or-path",
+      "recovery": "Resume from the fresh Context route and recompute the bound Result and layout."
+    },
+    {
+      "id": "three-attempt-guidance",
+      "rule_id": "three-attempt-guidance",
+      "authority": "context-revision",
+      "source_shape": "The same current quality problem survives three accepted revision attempts while other Sections pass.",
+      "expected_decision": "request-aggregated-guidance",
+      "forbidden_decision": "restart-passing-sections",
+      "recovery": "Ask for content organization, source fidelity, or missing material once."
+    }
+  ]
+}

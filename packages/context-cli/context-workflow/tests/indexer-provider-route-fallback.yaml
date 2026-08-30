@@ -1,0 +1,13 @@
+schema: agent-graph.test.v1
+name: an unmatched external selection routes to the community fallback Agent Action
+graph: indexer
+entry: provider-selection
+state:
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+expect:
+  statusCode: actionable
+  primaryNode: configure-community-indexer-fallback
+  primaryReasonCode: route.indexer.community-fallback
+  availability: immediate

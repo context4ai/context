@@ -1,0 +1,31 @@
+{
+  "protocol": "context.indexer.authoring-fixture/v1",
+  "id": "anonymous-technical-guide",
+  "anonymized": true,
+  "profile": "technical-guide",
+  "source_role": "authoritative-document",
+  "logical_unit_id": "reader-subject",
+  "logical_unit_ref": "node:anonymous-technical-guide",
+  "canonical_facts": {
+    "target": {
+      "eligible": true
+    }
+  },
+  "artifact_policy_variant": "standard",
+  "artifacts": [
+    {
+      "artifact_id": "guide",
+      "artifact_kind": "content",
+      "purpose": "required",
+      "reader_question_refs": [
+        "question:source-authority"
+      ],
+      "evidence_refs": [
+        "evidence:anonymous-guide-source"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "evidence:anonymous-guide-source"
+  ]
+}

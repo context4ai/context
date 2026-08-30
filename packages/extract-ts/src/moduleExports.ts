@@ -1,9 +1,19 @@
 import * as ts from "typescript";
+import { analyzeCommonJsModule } from "./commonJsModule.js";
+import { EXTRACT_TS_CAPABILITIES, EXTRACT_TS_COVERAGE_TIER } from "./ecmaScriptLanguage.js";
+import { createEcmaScriptSourceFile, syntaxDiagnostics } from "./typescriptAst.js";
 
 export interface TypeScriptModuleExports {
   named: string[];
   wildcard: string[];
   targets: string[];
+}
+
+export interface EcmaScriptModuleExports extends TypeScriptModuleExports {
+  coverageTier: typeof EXTRACT_TS_COVERAGE_TIER;
+  capabilities: string[];
+  disposition: "analyzed" | "unsupported";
+  diagnostics: Array<{ code: string; line: number; column: number }>;
 }
 
 function exportedDeclarationName(statement: ts.Statement): string | undefined {
@@ -24,13 +34,7 @@ function exportedDeclarationName(statement: ts.Statement): string | undefined {
 }
 
 export function extractTypeScriptModuleExports(source: string, filePath = "module.ts"): TypeScriptModuleExports {
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    filePath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = createEcmaScriptSourceFile(source, filePath);
   const named = new Set<string>();
   const wildcard = new Set<string>();
   const targets = new Set<string>();
@@ -65,5 +69,46 @@ export function extractTypeScriptModuleExports(source: string, filePath = "modul
     named: [...named].sort(),
     wildcard: [...wildcard].sort(),
     targets: [...targets].sort(),
+  };
+}
+
+export function extractEcmaScriptModuleExports(
+  source: string,
+  filePath = "module.ts",
+): EcmaScriptModuleExports {
+  const esm = extractTypeScriptModuleExports(source, filePath);
+  const sourceFile = createEcmaScriptSourceFile(source, filePath);
+  const commonJs = analyzeCommonJsModule(source, filePath);
+  const diagnostics = [
+    ...syntaxDiagnostics(sourceFile),
+    ...commonJs.diagnostics,
+  ].map(({ code, line, column }) => ({ code, line, column }));
+  if (diagnostics.length > 0) {
+    return {
+      named: [],
+      wildcard: [],
+      targets: [],
+      coverageTier: EXTRACT_TS_COVERAGE_TIER,
+      capabilities: [...EXTRACT_TS_CAPABILITIES],
+      disposition: "unsupported",
+      diagnostics,
+    };
+  }
+  return {
+    named: [...new Set([
+      ...esm.named,
+      ...commonJs.exports.map((item) => item.exportedName),
+    ])].sort(),
+    wildcard: [...new Set([...esm.wildcard, ...commonJs.wildcardSources])].sort(),
+    targets: [...new Set([
+      ...esm.targets,
+      ...commonJs.bindings.map((binding) => binding.source),
+      ...commonJs.exports.flatMap((item) => item.source ? [item.source] : []),
+      ...commonJs.wildcardSources,
+    ])].sort(),
+    coverageTier: EXTRACT_TS_COVERAGE_TIER,
+    capabilities: [...EXTRACT_TS_CAPABILITIES],
+    disposition: "analyzed",
+    diagnostics,
   };
 }

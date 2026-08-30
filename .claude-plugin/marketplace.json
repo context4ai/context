@@ -1,0 +1,13 @@
+{
+  "name": "c4a",
+  "owner": {
+    "name": "c4a"
+  },
+  "plugins": [
+    {
+      "name": "c4a",
+      "source": "./plugins/context/repo-install/claude",
+      "description": "Start or continue a local knowledge workspace through one graph-routed entry."
+    }
+  ]
+}

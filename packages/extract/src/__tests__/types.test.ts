@@ -91,4 +91,28 @@ describe("extractionResultSchema", () => {
     const result = extractionResultSchema.safeParse(invalid);
     expect(result.success).toBe(false);
   });
+
+  test("validates explicit parser capability, coverage tier, and degradation diagnostics", () => {
+    const result = extractionResultSchema.safeParse({
+      ...baseResult,
+      coverage: {
+        tier: "ast-catalog",
+        capabilities: ["javascript-ast"],
+        files: [{
+          path: "src/index.ts",
+          disposition: "unsupported",
+          diagnosticCodes: ["ecmascript-syntax-error"],
+        }],
+        diagnostics: [{
+          code: "ecmascript-syntax-error",
+          severity: "error",
+          file: "src/index.ts",
+          line: 1,
+          column: 4,
+        }],
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
 });

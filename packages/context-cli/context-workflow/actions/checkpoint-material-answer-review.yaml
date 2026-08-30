@@ -1,0 +1,8 @@
+schema: agent-graph.action.v1
+id: checkpoint-material-answer-review
+description: Persist one exact answer-approved Review successor under retained ledger CAS.
+runner: command
+effect: write
+command: context indexer checkpoint-material-answer-review --input .tmp/agent-payloads/indexer-material-answer-review-checkpoint.json --format json
+inputSchema: schemas/indexer-material-gap-lifecycle-input.schema.json
+outputSchema: schemas/indexer-material-gap-lifecycle-output.schema.json

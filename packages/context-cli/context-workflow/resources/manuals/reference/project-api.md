@@ -593,7 +593,7 @@ does not infer relationships or inject relation markers into verbatim body.
 
 ### `extractTs`
 
-Extract exported TypeScript / TSX symbols into draft candidates:
+Extract exported TypeScript / JavaScript / TSX / JSX symbols into draft candidates:
 
 ```ts
 extractTs({
@@ -608,7 +608,7 @@ Options:
 |---|---|
 | `source` | `source("date", "module")` for one repo module |
 | `collection` | Code extraction uses `"codeindex"` |
-| `include` | Optional glob list inside the selected source; default is `["src/**/*.{ts,tsx}"]` |
+| `include` | Optional glob list inside the selected source; default is `["src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"]` |
 | `mode` | `"exports"` (default) traces public exports from automatic or configured entries; `"scan"` uses every file matched by `include` as an entry root |
 | `entries` | Optional source-relative entry files for `"exports"` mode. They override `package.json` entry detection and live only in the Context project configuration |
 | `exportedOnly` | Defaults to `true` in `"exports"` mode and `false` in `"scan"` mode |

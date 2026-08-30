@@ -8,6 +8,268 @@ import { DEFAULT_PACKAGE_NAVIGATION } from "./contracts.js";
 import type { PhaseDefinition, PhaseResourceReference } from "./phases.js";
 import type { ProjectSourceDefinition } from "./sources.js";
 
+export * from "./indexerCoreExports.js";
+export {
+  indexerComposerContractSchema,
+  indexerComposerDeclarationSchema,
+  indexerExecutionSchema,
+  indexerProviderLayerFragmentSchema,
+  indexerProviderManifestSchema,
+  indexerProviderOperationSchema,
+  indexerToolSourceDeclarationSchema,
+  isIndexerLayerFragmentKind,
+  isIndexerProviderProtocol,
+  loadIndexerProviderManifest,
+  parseIndexerProviderManifest,
+} from "./indexerProvider.js";
+export type {
+  IndexerComposerContract,
+  IndexerComposerDeclaration,
+  IndexerExecution,
+  IndexerProviderLayerFragment,
+  IndexerProviderManifest,
+  IndexerProviderOperation,
+  IndexerToolSourceDeclaration,
+} from "./indexerProvider.js";
+export {
+  canonicalOwnerCellRef,
+  indexRequirementSchema,
+  indexRequirementSetSchema,
+  indexerRegistryDigests,
+  indexerDistributionSchema,
+  indexerRegistryEntrySchema,
+  indexerRegistrySchema,
+  loadIndexerRegistry,
+  parseIndexerRegistry,
+  requirementSetFromRegistry,
+  validateFinalizedIndexerRegistry,
+} from "./indexerRegistry.js";
+export type {
+  IndexRequirement,
+  IndexRequirementSet,
+  IndexerJson,
+  IndexerDistribution,
+  IndexerRegistry,
+  IndexerRegistryEntry,
+  IndexerScopeTarget,
+  LoadedIndexerRegistry,
+} from "./indexerRegistry.js";
+export { compareIndexRequirementContraction } from "./indexerRequirementComparison.js";
+export type {
+  RequirementComparisonChange,
+  RequirementContractionComparatorOptions,
+  RequirementContractionComparison,
+  RequirementContractionRelation,
+  ResolvedQuestionContractView,
+} from "./indexerRequirementComparison.js";
+export * from "./indexerRequirementConfirmation.js";
+export * from "./indexerRequirementLifecycle.js";
+export {
+  deriveIndexerProgramExecutionPolicy,
+  indexerCliReleaseManifestSchema,
+  indexerHostExecutionCapabilitiesSchema,
+  indexerProviderBundleIntegrity,
+  indexerProgramAuthorizationSchema,
+  indexerProgramIdentityDigest,
+  resolvedProviderBundleSchema,
+  resolvedProviderReceiptDigest,
+  resolvedProviderStableFingerprint,
+  validateIndexerProgramAuthorization,
+  validateResolvedProviderBundle,
+} from "./indexerProviderResolution.js";
+export * from "./indexerProviderResolutionAction.js";
+export type {
+  ExpectedProviderResolution,
+  IndexerCliReleaseManifest,
+  IndexerHostExecutionCapabilities,
+  IndexerProgramAuthorization,
+  IndexerProgramExecutionLevel,
+  IndexerProgramExecutionPolicy,
+  ProviderResolutionRequest,
+  ResolvedProviderBundle,
+} from "./indexerProviderResolution.js";
+export * from "./indexerProviderComposition.js";
+export * from "./indexerProviderSelectionProposal.js";
+export * from "./indexerCustomizationLadder.js";
+export {
+  indexerMetricContractSchema,
+  indexerArtifactPolicyVariantSchema,
+  indexerInventoryDomainSchema,
+  indexerOperatorContractDigest,
+  indexerOperatorContractSchema,
+  indexerProfileContractDigest,
+  indexerProfileContractEntrySchema,
+  indexerProfileContractSchema,
+  indexerProfileSubjectKeySchema,
+  indexerQuestionTargetDomainSchema,
+  indexerReaderQuestionContractSchema,
+  indexerSubjectKeyContractSchema,
+  inflationSensitiveHardMaximum,
+  validateIndexerOperatorContract,
+  validateIndexerProfileContract,
+} from "./indexerProfileContract.js";
+export type {
+  IndexerMetricContract,
+  IndexerOperatorContract,
+  IndexerProfileContract,
+  IndexerProfileContractEntry,
+  IndexerProfileSubjectKey,
+  IndexerReaderQuestionContract,
+  IndexerSubjectKeyContract,
+} from "./indexerProfileContract.js";
+export {
+  authorizeProjectIndexerOverlay,
+  indexerContractOverlayDigest,
+  indexerContractOverlaySchema,
+  indexerOverlayAttestationDigest,
+  indexerOverlayAttestationSchema,
+  indexerOverlayAttestationSigningPayload,
+  indexerOverlayProjectAuthorizationDigest,
+  indexerOverlayProjectAuthorizationSchema,
+  indexerOverlayTrustBundleDigest,
+  indexerOverlayTrustBundleEnvelopeSchema,
+  indexerOverlayTrustBundleSchema,
+  indexerOverlayTrustReceiptDigest,
+  indexerOverlayTrustReceiptSchema,
+  validateIndexerContractOverlay,
+  validateIndexerOverlayAttestation,
+  validateIndexerOverlayTrustBundleEnvelope,
+  verifyEnterpriseIndexerOverlayTrust,
+} from "./indexerOverlayTrust.js";
+export type {
+  IndexerContractOverlay,
+  IndexerOverlayAttestation,
+  IndexerOverlayConformanceReport,
+  IndexerOverlayProjectAuthorization,
+  IndexerOverlayTrustBundle,
+  IndexerOverlayTrustBundleEnvelope,
+  IndexerOverlayTrustReceipt,
+} from "./indexerOverlayTrust.js";
+export * from "./indexerOverlayQuestionAmendment.js";
+export * from "./indexerOverlayQuestionApplyProposal.js";
+export * from "./indexerBaseQuestionAmendment.js";
+export {
+  composeIndexerLayerInput,
+  DEFAULT_INDEXER_LAYER_FRAGMENT_LIMITS,
+  indexerCanonicalRefSchema,
+  indexerComposerRefSchema,
+  indexerEvidenceRefSchema,
+  indexerLayerCompositionInputDigest,
+  indexerLayerCompositionInputSchema,
+  indexerLayerFragmentDigest,
+  indexerLayerFragmentPayloadSchema,
+  indexerLayerFragmentSchema,
+  indexerMaterializedLayerFragmentSchema,
+  indexerProviderLayerRefSchema,
+  validateAndMaterializeIndexerLayerFragment,
+  validateIndexerLayerCompositionInput,
+  validateIndexerMaterializedLayerFragment,
+} from "./indexerLayerComposition.js";
+export type {
+  IndexerEvidenceRef,
+  IndexerLayerCompositionInput,
+  IndexerLayerFragment,
+  IndexerLayerFragmentLimits,
+  IndexerLayerFragmentPayload,
+  IndexerMaterializedLayerFragment,
+} from "./indexerLayerComposition.js";
+export {
+  canonicalIndexerNodeRef,
+  indexerSubjectKeySchema,
+} from "./indexerSubjectIdentity.js";
+export type { IndexerSubjectKey } from "./indexerSubjectIdentity.js";
+export * from "./indexerSubjectKeyAuthority.js";
+export {
+  buildIndexerPostAuthorFragmentRequest,
+  composeIndexerPostAuthorEnvelope,
+  indexerComposedResultEnvelopeSchema,
+  indexerComposerInvocationReceiptSchema,
+  indexerEffectiveComposerSchema,
+  indexerEffectiveComposerSetSchema,
+  indexerLayerFragmentRunResultSchema,
+  indexerPostAuthorFragmentRequestSchema,
+  indexerPostAuthorWorksetDigest,
+  indexerPostAuthorWorksetSchema,
+  indexerPostAuthorWorksetSetDigest,
+  indexerPostAuthorWorksetSetSchema,
+  indexerPrimaryResultViewDigest,
+  indexerPrimaryResultViewSchema,
+  materializeIndexerPrimaryResultView,
+  planIndexerPostAuthorComposition,
+  resolveEffectiveIndexerComposers,
+  validateIndexerPostAuthorFragmentResult,
+  validateIndexerPostAuthorFragmentRequest,
+  validateIndexerEffectiveComposerSet,
+  validateIndexerPrimaryResultView,
+} from "./indexerPostAuthorComposition.js";
+export type {
+  IndexerComposedResultEnvelope,
+  IndexerComposerInvocationReceipt,
+  IndexerEffectiveComposer,
+  IndexerEffectiveComposerSet,
+  IndexerLayerFragmentRunResult,
+  IndexerPostAuthorFragmentRequest,
+  IndexerPostAuthorPlan,
+  IndexerPostAuthorWorkset,
+  IndexerPostAuthorWorksetSet,
+  IndexerPrimaryArtifactView,
+  IndexerPrimaryFactView,
+  IndexerPrimaryResultView,
+} from "./indexerPostAuthorComposition.js";
+export {
+  buildIndexerMainWorkset,
+  buildIndexerMainWorksetSet,
+  buildIndexerMainTransportBatch,
+  buildIndexerTargetResolutionView,
+  indexerMainWorksetDigest,
+  indexerMainWorksetSchema,
+  indexerMainWorksetSetDigest,
+  indexerMainWorksetSetSchema,
+  indexerMainTransportBatchSchema,
+  indexerOwnerCohortRef,
+  indexerTargetResolutionViewDigest,
+  indexerTargetResolutionViewSchema,
+  validateIndexerMainWorkset,
+  validateIndexerMainWorksetSet,
+  validateIndexerTargetResolutionView,
+} from "./indexerMainWorkset.js";
+export type {
+  IndexerMainAuthorWorkset,
+  IndexerMainPartitionWorkset,
+  IndexerMainWorkset,
+  IndexerMainWorksetSet,
+  IndexerMainTransportBatch,
+  IndexerTargetResolutionView,
+} from "./indexerMainWorkset.js";
+export {
+  indexerPartitionGroupProjectionDigest,
+  indexerPartitionPlanBindingDigest,
+  indexerPartitionPlanCanonicalHash,
+  indexerPartitionPlanSchema,
+  indexerPartitionStrategySchema,
+  indexerPartitionStrategySetDigest,
+  validateIndexerPartitionPlan,
+} from "./indexerPartitionPlan.js";
+export type {
+  IndexerMemberDisposition,
+  IndexerPartitionGroup,
+  IndexerPartitionPlan,
+  IndexerPartitionStrategy,
+} from "./indexerPartitionPlan.js";
+export * from "./indexerPartitionConvergence.js";
+export * from "./indexerArtifactDependencies.js";
+export * from "./indexerDependencyView.js";
+export * from "./indexerRunEnvelope.js";
+export * from "./indexerSharedArtifactFingerprint.js";
+export * from "./indexerIncrementalImpact.js";
+export * from "./indexerMainRunProtocol.js";
+export * from "./indexerMainLifecycle.js";
+export * from "./indexerSubjectCatalog.js";
+export * from "./indexerMaterialAnswerRunProtocol.js";
+export * from "./indexerProgramRunProtocol.js";
+export * from "./indexerAgentStepProtocol.js";
+export * from "./indexerLifecycle.js";
+
 export type {
   CodegraphCollection,
   CodeIndexCollection,

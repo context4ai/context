@@ -1,0 +1,21 @@
+schema: agent-graph.test.v1
+name: an applied customization project must be observed before completion
+graph: indexer
+entry: provider-selection
+state:
+  facts:
+    indexer_project: { confirmed: true }
+  outcomes:
+    indexer/configure-indexer-providers: completed
+    indexer/route-indexer-provider-selection: partial
+    indexer/configure-community-indexer-fallback: completed
+    indexer/route-community-indexer-fallback: blocked
+    indexer/propose-indexer-customization: completed
+    indexer/validate-indexer-customization: completed
+    indexer/prepare-indexer-customization-project: completed
+    indexer/confirm-indexer-project: completed
+expect:
+  statusCode: actionable
+  primaryNode: observe-indexer-project
+  primaryReasonCode: route.indexer.project-observation
+  handler: context.observe-indexer-project/v1

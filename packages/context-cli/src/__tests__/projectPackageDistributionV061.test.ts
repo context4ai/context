@@ -189,6 +189,77 @@ describe("flat knowledge package distribution", () => {
     }
   });
 
+  test("builds current approved knowledge without resolving an unavailable Provider", async () => {
+    const fixture = await createApprovedProject();
+    try {
+      const digest = `sha256:${"a".repeat(64)}`;
+      mkdirSync(join(fixture.project, "src"), { recursive: true });
+      writeFileSync(join(fixture.project, "src", "indexers.yaml"), `${JSON.stringify({
+        protocol: "context.indexer.registry/v1",
+        requirements: [{
+          id: "approved-knowledge",
+          reader_goals: ["understand-public-contract"],
+          coverage_domains: { public_contract: "required" },
+          target_scope: {
+            targets: [{
+              source_ref: "repo:20260712/sample-a",
+              module_refs: [],
+            }],
+          },
+          evidence_source_scope: {
+            targets: [{
+              source_ref: "repo:20260712/sample-a",
+              module_refs: [],
+            }],
+          },
+          exclusions: [],
+        }],
+        indexers: [{
+          id: "unavailable-indexer",
+          operations: ["main-index"],
+          requirement_bindings: [{
+            requirement_ref: "approved-knowledge",
+            coverage_domains: ["public_contract"],
+            owned_scope: { ref: "requirement:approved-knowledge#target_scope" },
+            role: "primary",
+          }],
+          read_scope: {
+            refs: ["requirement:approved-knowledge#target_scope"],
+          },
+          profile: {
+            primary: { id: "sdk-library", provider: "missing-package" },
+            additional: [],
+            composers: [],
+          },
+          providers: [{
+            id: "missing-package",
+            role: "primary",
+            skill: "context-code-indexer",
+            version: "0.7.0",
+            integrity: digest,
+            distribution: {
+              kind: "package",
+              locator: "package://npm/%40missing%2Findexers#bundles/context-code-indexer",
+            },
+          }],
+        }],
+      }, null, 2)}\n`, "utf8");
+
+      const result = await invokeCliInDir(fixture.project, ["build"]);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("✓ built project packages");
+      expect(existsSync(join(
+        fixture.project,
+        "dist",
+        "sample-kb",
+        "wikis",
+        `${fixture.approvedId}.md`,
+      ))).toBe(true);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   test("treats a package manifest from before the current builder protocol as stale", async () => {
     const fixture = await createApprovedProject();
     try {

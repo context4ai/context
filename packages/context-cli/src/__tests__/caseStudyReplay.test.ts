@@ -39,10 +39,9 @@ describe("Context case study replay", () => {
     const text = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
     const forbidden = [
       /\/Users\//u,
-      /bytedance/iu,
-      /\bTUX\b/u,
-      /\bLynx\b/iu,
-      /lark:/iu,
+      /\/home\/[^/\s]+\//u,
+      /(?:https?:\/\/|git@)[^\s"']*(?:\.corp\b|\.internal\b)/iu,
+      /@context-(?:internal|private)/iu,
       /wiki-[a-z0-9]{12,}/iu,
       /sha256:[a-f0-9]{32,}/iu,
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/iu,
@@ -122,7 +121,7 @@ describe("Context case study replay", () => {
     );
     const combined = bodies.join("\n");
 
-    expect(combined).toContain("packages/context-cli/plugin/commands/context.md");
+    expect(combined).toContain("plugins/context/skills/context/SKILL.md");
     expect(combined).toContain("/c4a:context");
     expect(combined).not.toContain("packages/context-cli/plugin/commands/init.md");
     expect(combined).not.toContain("packages/context-cli/plugin/commands/continue.md");
