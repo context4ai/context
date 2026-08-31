@@ -1,6 +1,6 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   indexerContractOverlayDigest,
@@ -49,6 +49,24 @@ async function workspace(): Promise<string> {
 }
 
 describe("Indexer contract overlay validation", () => {
+  test("keeps proposal input validation_result aligned with the canonical result schema", async () => {
+    const schemasRoot = resolve(import.meta.dir, "../..", "context-workflow", "schemas");
+    const canonical = JSON.parse(await readFile(
+      join(schemasRoot, "indexer-contract-overlay-validation-result.schema.json"),
+      "utf8",
+    )) as Record<string, unknown>;
+    const proposal = JSON.parse(await readFile(
+      join(schemasRoot, "indexer-overlay-question-proposal-input.schema.json"),
+      "utf8",
+    )) as { properties: { validation_result: unknown } };
+    const inlineCanonical = { ...canonical };
+    Reflect.deleteProperty(inlineCanonical, "$schema");
+    Reflect.deleteProperty(inlineCanonical, "$id");
+    Reflect.deleteProperty(inlineCanonical, "$defs");
+
+    expect(proposal.properties.validation_result).toEqual(inlineCanonical);
+  });
+
   test("returns one project- and Provider-bound validation receipt without a Gate", async () => {
     const root = await workspace();
     const input = buildIndexerContractOverlayValidationInput({

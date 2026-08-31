@@ -39,7 +39,6 @@
     "release:publish-plan": "bun run scripts/release-metadata.ts --format publish-plan",
     "release:registry-snapshot": "bun run scripts/release-registry-snapshot.ts",
     "release:install-smoke": "bun run scripts/release-install-smoke.ts",
-    "release:promote-tags": "bun run scripts/promote-release-tags.ts",
     "release:publisher-audit": "bun run scripts/publisher-audit.ts",
     "report:semantic-source-ownership": "bun run --filter @c4a/context-cli report:semantic-source-ownership",
     "typecheck:core": "bun run --filter @c4a/core typecheck",

@@ -131,9 +131,6 @@ export async function cmdPublish(args: string[], ctx: PublishContext): Promise<v
   for (const pkg of packages) {
     console.log(`  ${pkg.name}@${targetVersion}`);
   }
-  if (publishTag === "release-staging") {
-    console.log("  Final packages remain on release-staging until exact install smoke and promotion complete.");
-  }
   console.log("");
 }
 

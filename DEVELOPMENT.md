@@ -230,11 +230,10 @@ drift from the artifacts it published.
 
 `release:publish-plan` is the machine authority for the milestone package set
 and dist-tags. Preview and RC releases use only `preview` and `rc`. A final
-release is first published under `release-staging`; `latest` changes only after
-the exact registry install harness validates every planned package, the shipped
-capability/catalog manifests, the Agent Graph Host ABI, and all parsers present
-at that milestone. Promotion snapshots prior tags and rolls back packages it
-already changed if a later promotion fails.
+release publishes directly under `latest`. The workflow still performs the
+exact registry install harness after publication to validate every planned
+package, the shipped capability/catalog manifests, the Agent Graph Host ABI,
+and all parsers present at that milestone.
 
 `release:parser-coordinates` renders the six new parser packages, eight parser
 capabilities, exact named exports, Evidence ABI and expected npm Trusted
@@ -249,7 +248,6 @@ fail; local packs are not publisher-readiness evidence.
 bun run release:parser-coordinates
 bun run release:publisher-audit
 bun run release:install-smoke --registry https://registry.npmjs.org --receipt .tmp/release-install-smoke.json
-bun run release:promote-tags --registry https://registry.npmjs.org --smoke-receipt .tmp/release-install-smoke.json
 ```
 
 Audit the prepared directories rather than the source package directories:

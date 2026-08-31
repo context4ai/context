@@ -19,7 +19,6 @@ export interface ReleaseRegistrySnapshotReceipt {
   version: string;
   channel: ReleasePublishPlan["channel"];
   publish_tag: ReleasePublishPlan["publish_tag"];
-  promotion_tag: ReleasePublishPlan["promotion_tag"];
   captured_at: string;
   packages: ReleaseRegistryPackageSnapshot[];
   receipt_digest: string;
@@ -101,7 +100,6 @@ export async function captureReleaseRegistryState(input: {
     version: input.plan.version,
     channel: input.plan.channel,
     publish_tag: input.plan.publish_tag,
-    promotion_tag: input.plan.promotion_tag,
     captured_at: input.capturedAt,
     packages,
   };
@@ -122,7 +120,6 @@ export function parseReleaseRegistrySnapshotReceipt(
     raw.version !== plan.version ||
     raw.channel !== plan.channel ||
     raw.publish_tag !== plan.publish_tag ||
-    raw.promotion_tag !== plan.promotion_tag ||
     !Number.isFinite(Date.parse(string(raw.captured_at, "registry snapshot captured_at"))) ||
     !Array.isArray(raw.packages) ||
     raw.packages.length !== plan.packages.length
