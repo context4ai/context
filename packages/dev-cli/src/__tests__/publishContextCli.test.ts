@@ -214,7 +214,7 @@ describe("publish package list", () => {
     expect(publish).toBeGreaterThan(0);
     expect(smoke).toBeGreaterThan(publish);
     expect(workflow).toContain('--tag "${{ steps.release-metadata.outputs.publish_tag }}"');
-    expect(workflow).toContain("--smoke-receipt .tmp/release-install-smoke.json");
+    expect(workflow).toContain("--receipt .tmp/release-install-smoke.json");
     expect(workflow).not.toContain("Promote final release dist-tags");
     expect(workflow).not.toContain("npm publish \"${package_dir}\" --access public --provenance\n");
   });
