@@ -177,7 +177,7 @@ describe("publish package list", () => {
     expect(replaced).toContain("`@c4a/context-cli@1.2.4`");
   });
 
-  test("keeps prereleases off latest and stages final packages before promotion", () => {
+  test("keeps prereleases off latest and publishes final packages directly to latest", () => {
     expect(releaseChannel("0.7.0-preview.1")).toBe("preview");
     expect(releaseChannel("0.7.0-rc.1")).toBe("rc");
     expect(releaseChannel("0.7.0")).toBe("latest");
@@ -186,7 +186,6 @@ describe("publish package list", () => {
     expect(releasePublishPlan("0.7.0-preview.2")).toMatchObject({
       channel: "preview",
       publish_tag: "preview",
-      promotion_tag: null,
     });
     expect(releasePublishPlan("0.7.0-preview.1").packages).toHaveLength(7);
     expect(releasePublishPlan("0.7.0-preview.1").packages.some(
@@ -198,27 +197,25 @@ describe("publish package list", () => {
     const finalPlan = releasePublishPlan("0.7.0");
     expect(finalPlan).toMatchObject({
       channel: "latest",
-      publish_tag: "release-staging",
-      promotion_tag: "latest",
+      publish_tag: "latest",
     });
     expect(finalPlan.packages).toHaveLength(PUBLISH_PACKAGES.length);
     expect(finalPlan.packages.every((pkg) => pkg.exact_spec.endsWith("@0.7.0"))).toBe(true);
   });
 
-  test("publishes with the planned tag before exact install smoke and final promotion", async () => {
+  test("publishes with the planned tag before exact install smoke", async () => {
     const workflow = await readFile(
       resolve(import.meta.dir, "../../../..", ".github/workflows/publish.yml"),
       "utf8",
     );
     const publish = workflow.indexOf("- name: Publish packages");
     const smoke = workflow.indexOf("- name: Smoke exact registry release");
-    const promotion = workflow.indexOf("- name: Promote final release dist-tags");
 
     expect(publish).toBeGreaterThan(0);
     expect(smoke).toBeGreaterThan(publish);
-    expect(promotion).toBeGreaterThan(smoke);
     expect(workflow).toContain('--tag "${{ steps.release-metadata.outputs.publish_tag }}"');
     expect(workflow).toContain("--smoke-receipt .tmp/release-install-smoke.json");
+    expect(workflow).not.toContain("Promote final release dist-tags");
     expect(workflow).not.toContain("npm publish \"${package_dir}\" --access public --provenance\n");
   });
 

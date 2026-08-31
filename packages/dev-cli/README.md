@@ -50,9 +50,8 @@ bun run --filter @c4a/dev-cli start publish <version>
 Real publishing remains governed by the repository release workflow and
 requires explicit authorization. A successful local build or link is not proof
 that a package was published. The scripted publisher uses the same strict
-release plan as CI: preview/RC packages never update `latest`, and final
-packages remain on `release-staging` until exact registry smoke and dist-tag
-promotion complete.
+release plan as CI: preview/RC packages never update `latest`, while final
+packages publish directly under `latest`.
 
 See the repository [Development guide](../../DEVELOPMENT.md) for source,
 packaged-install, and release checks.

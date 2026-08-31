@@ -3,14 +3,13 @@ import { createHash } from "node:crypto";
 export type PackageEntry = { name: string; dir: string };
 
 export type ReleaseChannel = "preview" | "rc" | "latest";
-export type ReleasePublishTag = "preview" | "rc" | "release-staging";
+export type ReleasePublishTag = ReleaseChannel;
 
 export interface ReleasePublishPlan {
   schema: "context.release-publish-plan/v1";
   version: string;
   channel: ReleaseChannel;
   publish_tag: ReleasePublishTag;
-  promotion_tag: "latest" | null;
   packages: Array<{
     name: string;
     directory: string;
@@ -122,8 +121,7 @@ export function releasePublishPlan(version: string): ReleasePublishPlan {
     schema: "context.release-publish-plan/v1",
     version,
     channel,
-    publish_tag: channel === "latest" ? "release-staging" : channel,
-    promotion_tag: channel === "latest" ? "latest" : null,
+    publish_tag: channel,
     packages: packages.map((pkg) => ({
       name: pkg.name,
       directory: `packages/${pkg.dir}/dist`,

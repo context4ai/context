@@ -4,12 +4,6 @@ on:
   release:
     types:
       - published
-  workflow_dispatch:
-    inputs:
-      recover_version:
-        description: Existing release version whose dist-tags should be recovered
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -18,13 +12,12 @@ permissions:
 jobs:
   publish:
     name: Publish packages
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'v')
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: npm
 
     steps:
       - name: Check out release
-        if: github.event_name == 'release'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.release.tag_name }}
@@ -37,30 +30,25 @@ jobs:
           package-manager-cache: false
 
       - name: Set up Bun
-        if: github.event_name == 'release'
         uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        if: github.event_name == 'release'
         # Release artifacts use committed/generated WASM assets and do not
         # require dependency lifecycle scripts on the runner.
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Verify release version
-        if: github.event_name == 'release'
         run: |
           package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
           test "${GITHUB_REF_NAME}" = "v${package_version}"
 
       - name: Capture pre-publish registry state
-        if: github.event_name == 'release'
         run: |
           bun run scripts/release-registry-snapshot.ts \
             --registry https://registry.npmjs.org \
             --receipt .tmp/release-registry-snapshot.json
 
       - name: Preserve pre-publish registry state
-        if: github.event_name == 'release'
         uses: actions/upload-artifact@v4
         with:
           name: npm-release-preflight-${{ github.event.release.tag_name }}
@@ -68,7 +56,6 @@ jobs:
           if-no-files-found: error
 
       - name: Normalize release title
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ github.event.release.id }}
@@ -81,19 +68,15 @@ jobs:
             >/dev/null
 
       - name: Build workspace
-        if: github.event_name == 'release'
         run: bun run build
 
       - name: Verify repository
-        if: github.event_name == 'release'
         run: bun run verify:full
 
       - name: Prepare publish artifacts
-        if: github.event_name == 'release'
         run: bun run release:prepare
 
       - name: Prepare release metadata
-        if: github.event_name == 'release'
         id: release-metadata
         run: |
           mkdir -p .tmp
@@ -105,7 +88,6 @@ jobs:
           echo "publish_tag=${publish_tag}" >> "${GITHUB_OUTPUT}"
 
       - name: Audit npm packages
-        if: github.event_name == 'release'
         run: |
           while IFS= read -r package_dir
           do
@@ -113,7 +95,6 @@ jobs:
           done < .tmp/release-package-dirs.txt
 
       - name: Publish packages
-        if: github.event_name == 'release'
         run: |
           while IFS= read -r package_dir
           do
@@ -130,7 +111,6 @@ jobs:
           done < .tmp/release-package-dirs.txt
 
       - name: Smoke exact registry release
-        if: github.event_name == 'release'
         run: |
           succeeded=false
           for attempt in 1 2 3 4 5 6
@@ -147,17 +127,7 @@ jobs:
           done
           test "${succeeded}" = true
 
-      - name: Promote final release dist-tags
-        if: github.event_name == 'release'
-        run: |
-          bun run scripts/promote-release-tags.ts \
-            --registry https://registry.npmjs.org \
-            --registry-snapshot .tmp/release-registry-snapshot.json \
-            --smoke-receipt .tmp/release-install-smoke.json \
-            --receipt .tmp/release-dist-tag-promotion.json
-
       - name: Preserve release receipts
-        if: github.event_name == 'release'
         uses: actions/upload-artifact@v4
         with:
           name: npm-release-receipts-${{ github.event.release.tag_name }}
@@ -165,11 +135,9 @@ jobs:
             .tmp/release-publish-plan.json
             .tmp/release-registry-snapshot.json
             .tmp/release-install-smoke.json
-            .tmp/release-dist-tag-promotion.json
           if-no-files-found: error
 
       - name: Update release package list
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ID: ${{ github.event.release.id }}
@@ -184,39 +152,3 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
             -F body=@.tmp/release-body-updated.md \
             >/dev/null
-
-      - name: Recover final release dist-tags
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          RELEASE_VERSION: ${{ inputs.recover_version }}
-        run: |
-          case "${RELEASE_VERSION}" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Invalid release version: ${RELEASE_VERSION}" >&2; exit 1 ;;
-          esac
-
-          packages=(
-            @c4a/core
-            @c4a/context
-            @c4a/extract
-            @c4a/extract-ts
-            @c4a/extract-go
-            @c4a/extract-rush
-            @c4a/extract-thrift
-            @c4a/extract-proto
-            @c4a/extract-mdx
-            @c4a/extract-contract
-            @c4a/extract-style
-            @c4a/extract-sql
-            @c4a/context-cli
-          )
-
-          for package_name in "${packages[@]}"
-          do
-            npm view "${package_name}@${RELEASE_VERSION}" version >/dev/null
-          done
-
-          for package_name in "${packages[@]}"
-          do
-            npm dist-tag add "${package_name}@${RELEASE_VERSION}" latest
-          done
