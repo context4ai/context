@@ -59,5 +59,7 @@ export function emptyObservation(): ContextWorkflowObservation {
     reviewIdentityConflicts: { count: 0, sourceKeys: [], conflicts: [] },
     approvedPages: 0,
     close: { state: "missing", diagnostics: [] },
+    indexerRegistry: { state: "current", sourceRefs: [] },
+    indexerCandidateCompile: { state: "current" },
   };
 }

@@ -105,6 +105,7 @@ function approvedStructureEndpointRefs(input: Awaited<ReturnType<typeof approved
 }
 
 function collectionFromViewRef(viewRef: string): string | undefined {
+  if (viewRef.startsWith("view:artifact:")) return undefined;
   const separator = viewRef.indexOf(":");
   return separator > 0 ? viewRef.slice(0, separator) : undefined;
 }

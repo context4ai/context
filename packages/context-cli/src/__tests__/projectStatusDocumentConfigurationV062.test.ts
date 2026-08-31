@@ -104,10 +104,9 @@ describe("0.6.2 document source and capture status routing", () => {
 
       expect(status.verifyErrors).toBe(0);
       expect(status.evidenceStatus).toBe("pass");
-      expect(status.state).toBe("route.close.projection-stale");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.close.state).toBe("missing");
-      expect(status.next).toContain("--workflow-revision");
-      expect(status.next).toContain("close --format json");
+      expect(status.next).toContain("registry-and-Provider indexing lifecycle");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -142,14 +141,14 @@ describe("0.6.2 document source and capture status routing", () => {
 
       const status = await collectProjectStatus(initialized.projectRoot);
 
-      expect(status.state).toBe("route.prose.configuration-required");
-      expect(status.routing.current_state).toBe("route.prose.configuration-required");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.current_state).toBe("route.indexer.lifecycle-required");
       expect(status.routing.human_gate).toMatchObject({
         required: false,
         kind: "none",
       });
-      expect(status.routing.reason).toBe("route.prose.configuration-required");
-      expect(status.routing.configuration?.file).toBe("src/index.ts");
+      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.configuration).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }

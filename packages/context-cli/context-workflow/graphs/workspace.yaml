@@ -74,137 +74,31 @@ nodes:
         - resources/views/verification-current.yaml
       recommended: [resources/diagnostics/verification.md]
 
-  - id: resume-prose-lifecycle
+  - id: close-approved-knowledge
     kind: action
-    reasonCode: route.prose.configuration-required
-    action: actions/configure-prose-lifecycle.yaml
+    reasonCode: route.close.projection-stale
+    action: actions/close-approved-knowledge.yaml
     satisfiedBy:
-      - path: resume.prose_declarations_complete
+      - path: close.current
         equals: true
     resources:
       required:
-        - resources/procedures/project-configuration.md
-        - resources/procedures/document-classification.md
-        - resources/views/structure-current.yaml
-        - resources/manuals/reference/project-api.md
+        - resources/procedures/close-and-build.md
+        - resources/views/verification-current.yaml
+      recommended:
+        - resources/diagnostics/projection-stale.md
 
-  - id: confirm-structure
-    kind: gate
-    reasonCode: route.structure.confirmation-required
-    inspectionAction: actions/inspect-structure.yaml
-    resolutionAction: actions/apply-structure-confirmation.yaml
-    delegated:
-      inspection: skip
-      resources:
-        required: []
-        recommended: []
-    gate:
-      id: structure-confirmation
-      prompt: Confirm the proposed knowledge structure before candidates are compiled.
-      authority: context.structure-confirmation
-      delegatable: true
-    satisfiedBy:
-      - path: resume.structure_confirmation_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/prose-align.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/structure-confirmation.md
-        - resources/views/structure-current.yaml
-
-  - id: resume-align-next
+  - id: revise-document
     kind: action
-    reasonCode: route.structure.pending-target
-    action: actions/align-next.yaml
+    reasonCode: route.document-revision.requested
+    action: actions/revise-document.yaml
     satisfiedBy:
-      - path: resume.structure_refresh_required
+      - path: document_optimization.revision_requested
         exists: false
     resources:
       required:
-        - resources/procedures/prose-align.md
-        - resources/views/structure-current.yaml
-      recommended:
-        - resources/semantic/align/structure-planning.md
-        - resources/semantic/align/gates.md
-        - resources/semantic/align/density-profile.md
-        - resources/semantic/align/candidate-resolution.md
-
-  - id: apply-structure-confirmation
-    kind: action
-    reasonCode: route.structure.confirm
-    action: actions/apply-structure-confirmation.yaml
-    satisfiedBy:
-      - path: resume.structure_confirmed
-        equals: true
-    resources:
-      required:
-        - resources/procedures/prose-align.md
-        - resources/views/structure-current.yaml
-
-  - id: compile-next
-    kind: action
-    reasonCode: route.compile.pending-target
-    action: actions/compile-next.yaml
-    satisfiedBy:
-      - path: resume.compile_complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/prose-compile.md
-      recommended:
-        - resources/views/structure-current.yaml
-        - resources/semantic/compile/index.md
-
-  - id: resolve-review-identities
-    kind: action
-    reasonCode: route.review.identity-conflict
-    action: actions/reconcile-review-identities.yaml
-    satisfiedBy:
-      - path: review.identity_conflicts_present
-        exists: false
-    resources:
-      required:
-        - resources/procedures/knowledge-review.md
-        - resources/views/review-current.yaml
-
-  - id: resume-review-current-batch
-    kind: gate
-    reasonCode: route.review.decision-required
-    inspectionAction: actions/inspect-review.yaml
-    resolutionAction: actions/apply-forced-review.yaml
-    delegated:
-      inspection: skip
-      resolutionAction: actions/apply-managed-review.yaml
-      resources:
-        required: []
-        recommended: []
-    gate:
-      id: knowledge-review
-      prompt: Review the complete current document candidate batch before it enters approved knowledge.
-      authority: context.knowledge-review
-      delegatable: true
-    satisfiedBy:
-      - path: resume.knowledge_review_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/knowledge-review.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/knowledge-review.md
-        - resources/views/review-current.yaml
-
-  - id: apply-resumed-review
-    kind: action
-    reasonCode: route.review.apply-managed
-    action: actions/apply-managed-review.yaml
-    satisfiedBy:
-      - path: resume.review_gate_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/knowledge-review.md
-        - resources/views/review-current.yaml
+        - resources/procedures/document-revision.md
+        - resources/views/document-optimization-current.yaml
 
   - id: choose-source-boundary
     kind: gate
@@ -300,277 +194,25 @@ nodes:
         - resources/procedures/source-capture-detailed.md
         - resources/manuals/guides/lark-resources.md
 
-  - id: choose-extraction-scope
-    kind: gate
-    reasonCode: route.extract.scope-required
-    inspectionAction: actions/inspect-code-extraction.yaml
-    delegated:
-      resources:
-        required:
-          - resources/procedures/code-extraction.md
-          - resources/dialogue/code-extraction.md
-          - resources/semantic/code-index/classification.md
-          - resources/views/source-current.yaml
-        recommended:
-          - resources/procedures/source-capture-detailed.md
-    gate:
-      id: extraction-scope
-      prompt: Confirm which registered code modules and symbol boundaries should enter code knowledge.
-      authority: context.extraction-scope
-      delegatable: true
-    satisfiedBy:
-      - path: gates.extraction_scope_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-extraction.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/code-extraction.md
-        - resources/semantic/code-index/classification.md
-        - resources/dialogue/workflow-mode-after-capture.md
-        - resources/views/source-current.yaml
-      recommended:
-        - resources/procedures/source-capture-detailed.md
-
-  - id: configure-code-extraction
+  - id: run-indexer-lifecycle
     kind: action
-    reasonCode: route.extract.configuration-required
-    action: actions/configure-code-extraction.yaml
+    reasonCode: route.indexer.lifecycle-required
+    action: actions/run-indexer-lifecycle.yaml
     satisfiedBy:
-      - path: extract.declarations_complete
+      - path: indexer.lifecycle_current
         equals: true
-      - path: extract.plans_complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/project-configuration.md
-        - resources/procedures/code-extraction.md
-        - resources/semantic/code-index/classification.md
-        - resources/views/source-current.yaml
-        - resources/manuals/reference/code-extractors.md
-      recommended:
-        - resources/semantic/code-index/templates/web-application.md
-        - resources/semantic/code-index/templates/api-service.md
-        - resources/semantic/code-index/templates/domain-service.md
-        - resources/semantic/code-index/templates/background-runtime.md
-        - resources/semantic/code-index/templates/sdk-library.md
-        - resources/semantic/code-index/templates/cli-tool.md
-        - resources/semantic/code-index/templates/adapter.md
-        - resources/semantic/code-index/templates/monorepo-container.md
-        - resources/semantic/code-index/templates/contract-source.md
-        - resources/semantic/code-index/templates/derived-source.md
-        - resources/semantic/code-index/templates/protocol-boundary.md
-        - resources/semantic/code-index/templates/event-flow.md
-        - resources/semantic/code-index/templates/persistence-boundary.md
-        - resources/semantic/code-index/templates/plugin-extension.md
-        - resources/semantic/code-index/templates/cross-module-chain.md
 
-  - id: resolve-extraction-capability
-    kind: gate
-    reasonCode: route.extract.capability-required
-    resolutionAction: actions/configure-code-extraction.yaml
-    gate:
-      id: extraction-capability
-      prompt: Revise the batch index plan or provide the missing material required for reliable code knowledge.
-      authority: context.extraction-capability
-      delegatable: false
-    satisfiedBy:
-      - path: extract.capability_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-extraction.md
-        - resources/views/source-current.yaml
-      recommended:
-        - resources/manuals/reference/code-extractors.md
-        - resources/semantic/code-index/templates/contracts-and-chains.md
-
-  - id: migrate-codeindex
+  - id: resolve-review-identities
     kind: action
-    reasonCode: route.extract.codeindex-migration-required
-    action: actions/migrate-codeindex.yaml
+    reasonCode: route.review.identity-conflict
+    action: actions/reconcile-review-identities.yaml
     satisfiedBy:
-      - path: extract.migration_required
-        equals: false
+      - path: review.identity_conflicts_present
+        exists: false
     resources:
       required:
-        - resources/procedures/code-extraction.md
-
-  - id: preview-extraction-batch
-    kind: action
-    reasonCode: route.extract.preview-required
-    action: actions/preview-extraction-batch.yaml
-    satisfiedBy:
-      - path: extract.preview_current
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-extraction.md
-        - resources/views/source-current.yaml
-
-  - id: repair-extraction-ownership
-    kind: action
-    reasonCode: route.extract.ownership-required
-    action: actions/configure-code-extraction.yaml
-    satisfiedBy:
-      - path: extract.ownership_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/project-configuration.md
-        - resources/procedures/code-extraction.md
-        - resources/views/extraction-preview.yaml
-        - resources/manuals/reference/code-extractors.md
-
-  - id: revise-extraction-scale
-    kind: gate
-    reasonCode: route.extract.scale-limit-exceeded
-    resolutionAction: actions/configure-code-extraction.yaml
-    gate:
-      id: extraction-scale
-      prompt: Revise the affected index units before formal extraction writes candidates.
-      authority: context.extraction-scale
-      delegatable: false
-    satisfiedBy:
-      - path: extract.scale_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-extraction.md
-        - resources/views/extraction-preview.yaml
-      recommended:
-        - resources/manuals/reference/code-extractors.md
-
-  - id: extract-next
-    kind: action
-    reasonCode: route.extract.pending-target
-    action: actions/extract-next.yaml
-    satisfiedBy:
-      - path: extract.complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-extraction.md
-        - resources/views/source-boundary.yaml
-
-  - id: resolve-code-index-audit-input
-    kind: gate
-    reasonCode: route.extract.audit-input-required
-    resolutionAction: actions/submit-code-index-audit.yaml
-    gate:
-      id: code-index-audit-input
-      prompt: Provide the specific missing source or protocol material required to complete the code-index audit.
-      delegatable: false
-    satisfiedBy:
-      - path: extract.audit_input_required
-        equals: false
-    resources:
-      required:
-        - resources/procedures/code-index-audit.md
-        - resources/dialogue/human-gates.md
-        - resources/views/code-index-audit.yaml
-
-  - id: resolve-code-index-audit-guidance
-    kind: gate
-    reasonCode: route.extract.audit-guidance-required
-    resolutionAction: actions/apply-code-index-guidance.yaml
-    gate:
-      id: code-index-audit-guidance
-      prompt: Review the aggregated three-round code-index quality report and provide one scope, profile, source-material, or indexing direction for the failed modules.
-      delegatable: false
-    satisfiedBy:
-      - path: extract.audit_guidance_required
-        equals: false
-    resources:
-      required:
-        - resources/procedures/code-index-audit.md
-        - resources/dialogue/human-gates.md
-        - resources/views/code-index-audit.yaml
-
-  - id: revise-code-index-audit
-    kind: action
-    reasonCode: route.extract.audit-revision-required
-    action: actions/revise-code-index-audit.yaml
-    satisfiedBy:
-      - path: extract.audit_revision_required
-        equals: false
-    resources:
-      required:
-        - resources/procedures/code-index-audit.md
-        - resources/semantic/code-index/classification.md
-        - resources/views/code-index-audit.yaml
-      recommended:
-        - resources/manuals/reference/code-extractors.md
-
-  - id: audit-code-index
-    kind: action
-    reasonCode: route.extract.audit-required
-    action: actions/submit-code-index-audit.yaml
-    satisfiedBy:
-      - path: extract.audit_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/code-index-audit.md
-        - resources/semantic/code-index/classification.md
-        - resources/views/code-index-audit.yaml
-
-  - id: classify-document
-    kind: gate
-    reasonCode: route.document.classification-required
-    inspectionAction: actions/inspect-document-classification.yaml
-    delegated:
-      resources:
-        required:
-          - resources/procedures/document-classification.md
-          - resources/dialogue/document-classification.md
-          - resources/views/source-current.yaml
-    gate:
-      id: document-classification
-      prompt: Confirm the evidence-backed knowledge collection for the next captured document.
-      authority: context.document-classification
-      delegatable: true
-    satisfiedBy:
-      - path: gates.document_classification_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/document-classification.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/document-classification.md
-        - resources/dialogue/workflow-mode-after-capture.md
-        - resources/views/source-current.yaml
-
-  - id: configure-prose-lifecycle
-    kind: action
-    reasonCode: route.prose.configuration-required
-    action: actions/configure-prose-lifecycle.yaml
-    satisfiedBy:
-      - path: prose.declarations_complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/project-configuration.md
-        - resources/procedures/document-classification.md
-        - resources/views/structure-current.yaml
-        - resources/manuals/reference/project-api.md
-
-  - id: align-next
-    kind: action
-    reasonCode: route.structure.pending-target
-    action: actions/align-next.yaml
-    satisfiedBy:
-      - path: align.prepared
-        equals: true
-    resources:
-      required:
-        - resources/procedures/prose-align.md
-        - resources/views/structure-current.yaml
-      recommended:
-        - resources/semantic/align/structure-planning.md
-        - resources/semantic/align/gates.md
-        - resources/semantic/align/density-profile.md
-        - resources/semantic/align/candidate-resolution.md
+        - resources/procedures/knowledge-review.md
+        - resources/views/review-current.yaml
 
   - id: review-current-batch
     kind: gate
@@ -609,20 +251,6 @@ nodes:
       required:
         - resources/procedures/knowledge-review.md
         - resources/views/review-current.yaml
-
-  - id: close-approved-knowledge
-    kind: action
-    reasonCode: route.close.projection-stale
-    action: actions/close-approved-knowledge.yaml
-    satisfiedBy:
-      - path: close.current
-        equals: true
-    resources:
-      required:
-        - resources/procedures/close-and-build.md
-        - resources/views/verification-current.yaml
-      recommended:
-        - resources/diagnostics/projection-stale.md
 
   - id: choose-package-output
     kind: gate
@@ -664,18 +292,6 @@ nodes:
         - resources/manuals/reference/package-templates.md
         - resources/manuals/reference/template-variables.md
 
-  - id: build-next
-    kind: action
-    reasonCode: route.build.package-stale
-    action: actions/build-next.yaml
-    satisfiedBy:
-      - path: packages.current
-        equals: true
-    resources:
-      required:
-        - resources/procedures/close-and-build.md
-        - resources/views/package-current.yaml
-
   - id: review-package-template
     kind: gate
     reasonCode: route.package.template-review-required
@@ -699,46 +315,17 @@ nodes:
         - resources/views/package-current.yaml
         - resources/manuals/reference/package-templates.md
 
-  - id: optimize-documents
+  - id: build-next
     kind: action
-    reasonCode: route.document-optimization.pending
-    action: actions/optimize-documents.yaml
+    reasonCode: route.build.package-stale
+    action: actions/build-next.yaml
     satisfiedBy:
-      - path: document_optimization.current
+      - path: packages.current
         equals: true
     resources:
       required:
-        - resources/procedures/document-optimization.md
-        - resources/views/document-optimization-current.yaml
-
-  - id: resolve-document-optimization-guidance
-    kind: gate
-    reasonCode: route.document-optimization.guidance-required
-    resolutionAction: actions/apply-document-optimization-guidance.yaml
-    gate:
-      id: document-optimization-guidance
-      prompt: Review the aggregated three-round document revision failures and provide one content-organization, source-fidelity, or missing-material direction for the affected Sections.
-      delegatable: false
-    satisfiedBy:
-      - path: document_optimization.guidance_required
-        equals: false
-    resources:
-      required:
-        - resources/procedures/document-optimization.md
-        - resources/dialogue/human-gates.md
-        - resources/views/document-optimization-current.yaml
-
-  - id: revise-document
-    kind: action
-    reasonCode: route.document-revision.requested
-    action: actions/revise-document.yaml
-    satisfiedBy:
-      - path: document_optimization.revision_requested
-        exists: false
-    resources:
-      required:
-        - resources/procedures/document-revision.md
-        - resources/views/document-optimization-current.yaml
+        - resources/procedures/close-and-build.md
+        - resources/views/package-current.yaml
 
   - id: flush-logs-after-build
     kind: action
@@ -760,43 +347,20 @@ edges:
   - { from: repair-workspace-state, to: repair-verification }
   - { from: repair-verification, to: choose-evidence-maintenance }
   - { from: choose-evidence-maintenance, to: maintain-evidence, kind: gatedBy }
-  - { from: maintain-evidence, to: close-approved-knowledge }
-  - { from: close-approved-knowledge, to: resume-prose-lifecycle }
-  - { from: resume-prose-lifecycle, to: resume-align-next }
-  - { from: resume-align-next, to: confirm-structure }
-  - { from: confirm-structure, to: apply-structure-confirmation, kind: gatedBy }
-  - { from: apply-structure-confirmation, to: compile-next }
-  - { from: compile-next, to: resolve-review-identities }
-  - { from: resolve-review-identities, to: resume-review-current-batch }
-  - { from: resume-review-current-batch, to: apply-resumed-review, kind: gatedBy }
-  - { from: apply-resumed-review, to: revise-document }
+  - { from: maintain-evidence, to: revise-document }
   - { from: revise-document, to: choose-source-boundary }
   - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
-  - { from: capture-next, to: choose-extraction-scope }
-  - { from: choose-extraction-scope, to: configure-code-extraction, kind: gatedBy }
-  - { from: configure-code-extraction, to: migrate-codeindex }
-  - { from: migrate-codeindex, to: resolve-extraction-capability }
-  - { from: resolve-extraction-capability, to: preview-extraction-batch }
-  - { from: preview-extraction-batch, to: repair-extraction-ownership }
-  - { from: repair-extraction-ownership, to: revise-extraction-scale }
-  - { from: revise-extraction-scale, to: extract-next }
-  - { from: extract-next, to: resolve-code-index-audit-input }
-  - { from: resolve-code-index-audit-input, to: resolve-code-index-audit-guidance, kind: gatedBy }
-  - { from: resolve-code-index-audit-guidance, to: revise-code-index-audit, kind: gatedBy }
-  - { from: revise-code-index-audit, to: audit-code-index }
-  - { from: audit-code-index, to: review-current-batch }
+  - { from: capture-next, to: run-indexer-lifecycle }
+  - { from: run-indexer-lifecycle, to: resolve-review-identities }
+  - { from: resolve-review-identities, to: review-current-batch }
   - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
-  - { from: apply-managed-review, to: classify-document }
-  - { from: classify-document, to: configure-prose-lifecycle, kind: gatedBy }
-  - { from: configure-prose-lifecycle, to: align-next }
-  - { from: align-next, to: choose-package-output }
+  - { from: apply-managed-review, to: close-approved-knowledge }
+  - { from: close-approved-knowledge, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: resolve-document-optimization-guidance, kind: gatedBy }
-  - { from: resolve-document-optimization-guidance, to: optimize-documents, kind: gatedBy }
-  - { from: optimize-documents, to: build-next }
+  - { from: review-package-template, to: build-next, kind: gatedBy }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }

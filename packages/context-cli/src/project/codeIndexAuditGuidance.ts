@@ -11,8 +11,10 @@ interface ActionContract {
   improves: string[];
 }
 
-const TEMPLATE_ROOT = "context-workflow/resources/semantic/code-index/templates";
-const CLASSIFICATION_RESOURCE = "context-workflow/resources/semantic/code-index/classification.md";
+const PROVIDER_ROOT = "plugins/context/skills/context-code-indexer";
+const TEMPLATE_ROOT = `${PROVIDER_ROOT}/templates`;
+const COMPOSER_ROOT = `${PROVIDER_ROOT}/references/composers`;
+const CLASSIFICATION_RESOURCE = `${PROVIDER_ROOT}/references/indexer.md`;
 
 const ACTION_CONTRACTS: Record<string, ActionContract> = {
   "expand-input-scope": {
@@ -46,17 +48,17 @@ const ACTION_CONTRACTS: Record<string, ActionContract> = {
     improves: ["route-coverage", "operation-coverage"],
   },
   "connect-operation-handler": {
-    templates: [`${TEMPLATE_ROOT}/api-service.md`, `${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${TEMPLATE_ROOT}/api-service.md`, `${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["indexUnits[].sections", "indexUnits[].edges"],
     improves: ["operation-coverage", "handler-coverage"],
   },
   "connect-handler-downstream": {
-    templates: [`${TEMPLATE_ROOT}/domain-service.md`, `${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${TEMPLATE_ROOT}/domain-service.md`, `${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["indexUnits[].sections", "indexUnits[].edges"],
     improves: ["downstream-coverage", "handoff-coverage"],
   },
   "connect-adjacent-handoffs": {
-    templates: [`${TEMPLATE_ROOT}/cross-module-chain.md`],
+    templates: [`${COMPOSER_ROOT}/cross-module-chain.md`],
     fields: ["indexUnits[].sections", "indexUnits[].edges"],
     improves: ["handoff-coverage"],
   },
@@ -66,7 +68,7 @@ const ACTION_CONTRACTS: Record<string, ActionContract> = {
     improves: ["command-coverage"],
   },
   "cover-missing-events": {
-    templates: [`${TEMPLATE_ROOT}/event-flow.md`, `${TEMPLATE_ROOT}/background-runtime.md`],
+    templates: [`${COMPOSER_ROOT}/event-flow.md`, `${TEMPLATE_ROOT}/background-runtime.md`],
     fields: ["indexUnits[].sections", "adapter.inventory.boundaryTargets"],
     improves: ["event-coverage"],
   },
@@ -96,47 +98,47 @@ const ACTION_CONTRACTS: Record<string, ActionContract> = {
     improves: ["max-page-lines", "max-referenced-files-per-page", "max-target-symbols-per-page"],
   },
   "reduce-implementation-body": {
-    templates: [`${TEMPLATE_ROOT}/derived-source.md`],
+    templates: [`${TEMPLATE_ROOT}/derived-generated-source.md`],
     fields: ["indexUnits[].sections"],
     improves: ["implementation-body-ratio", "semantic-fact-density"],
   },
   "return-complete-source-inventory": {
-    templates: [`${TEMPLATE_ROOT}/adapter.md`],
+    templates: [`${TEMPLATE_ROOT}/adapter-integration.md`],
     fields: ["adapter.inventory"],
     improves: ["eligible-file-analysis", "eligible-loc-analysis", "semantic-fact-density"],
   },
   "return-target-symbol-inventory": {
-    templates: [`${TEMPLATE_ROOT}/adapter.md`],
+    templates: [`${TEMPLATE_ROOT}/adapter-integration.md`],
     fields: ["adapter.inventory.targetSymbolIdentities"],
     improves: ["target-symbol-coverage"],
   },
   "scope-section-evidence": {
-    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["indexUnits[].sections[].evidence"],
     improves: ["unscoped-section-evidence"],
   },
   "repair-identity-group-evidence": {
-    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["adapter.inventory.identityGroups", "indexUnits[].sections[].evidence"],
     improves: ["identity-group-evidence-coverage", "target-symbol-coverage"],
   },
   "decide-chain-candidates": {
-    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`, `${TEMPLATE_ROOT}/cross-module-chain.md`],
+    templates: [`${COMPOSER_ROOT}/contracts-and-chains.md`, `${COMPOSER_ROOT}/cross-module-chain.md`],
     fields: ["adapter.inventory.chainCandidates", "adapter.inventory.chainCandidateDecisions", "indexUnits[].edges"],
     improves: ["chain-candidate-decision-coverage", "relationship-evidence-coverage"],
   },
   "discover-chain-candidates": {
-    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["adapter.inventory.boundaryTargets", "adapter.inventory.chainCandidates"],
     improves: ["chain-candidate-family-discovery"],
   },
   "document-representative-chain": {
-    templates: [`${TEMPLATE_ROOT}/contracts-and-chains.md`, `${TEMPLATE_ROOT}/cross-module-chain.md`],
+    templates: [`${COMPOSER_ROOT}/contracts-and-chains.md`, `${COMPOSER_ROOT}/cross-module-chain.md`],
     fields: ["adapter.inventory.chainCandidateDecisions", "indexUnits[].sections", "indexUnits[].edges"],
     improves: ["external-boundary-family-closure", "relationship-evidence-coverage"],
   },
   "group-related-identities": {
-    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/contracts-and-chains.md`],
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${COMPOSER_ROOT}/contracts-and-chains.md`],
     fields: ["indexUnits[].sections", "adapter.inventory.targetSymbolIdentities"],
     improves: ["enumeration-ratio", "semantic-fact-density", "target-symbol-coverage"],
   },
@@ -146,12 +148,12 @@ const ACTION_CONTRACTS: Record<string, ActionContract> = {
     improves: ["enumeration-ratio", "normalized-template-repetition-ratio", "explanatory-lines"],
   },
   "separate-catalog-from-narrative": {
-    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/protocol-boundary.md`],
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${COMPOSER_ROOT}/protocol-boundary.md`],
     fields: ["indexUnits[].pageKinds", "indexUnits[].sections"],
     improves: ["enumeration-ratio", "max-page-lines"],
   },
   "deduplicate-catalog": {
-    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${TEMPLATE_ROOT}/protocol-boundary.md`],
+    templates: [`${TEMPLATE_ROOT}/sdk-library.md`, `${COMPOSER_ROOT}/protocol-boundary.md`],
     fields: ["indexUnits[].sections"],
     improves: ["normalized-template-repetition-ratio", "max-page-lines"],
   },

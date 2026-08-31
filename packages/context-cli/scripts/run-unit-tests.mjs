@@ -20,6 +20,10 @@ const selectedPatterns = [
   /^plugin.*\.test\.ts$/u,
   /^project.*\.test\.ts$/u,
 ];
+const isolatedTests = new Set([
+  "projectCompileProseV066Evidence.test.ts",
+  "projectIndexerProviderDispatcherV070.test.ts",
+]);
 const chunkSize = 32;
 
 function selectedTest(name) {
@@ -59,9 +63,19 @@ const tests = (await readdir(testsRoot))
 if (tests.length === 0) throw new Error(`no Context CLI unit tests found under ${testsRoot}`);
 
 const chunks = [];
-for (let index = 0; index < tests.length; index += chunkSize) {
-  chunks.push(tests.slice(index, index + chunkSize));
+const sharedProcessTests = tests.filter((name) => !isolatedTests.has(name));
+for (let index = 0; index < sharedProcessTests.length; index += chunkSize) {
+  chunks.push(sharedProcessTests.slice(index, index + chunkSize));
 }
+chunks.push(...tests.filter((name) => isolatedTests.has(name)).map((name) => [name]));
+const failures = [];
 for (const [index, files] of chunks.entries()) {
-  await runChunk(files, index + 1, chunks.length, forwardedArgs);
+  try {
+    await runChunk(files, index + 1, chunks.length, forwardedArgs);
+  } catch (error) {
+    failures.push(error);
+  }
+}
+if (failures.length > 0) {
+  throw new AggregateError(failures, `${failures.length} Context CLI unit-test chunks failed`);
 }

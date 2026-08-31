@@ -24,6 +24,7 @@ import {
 import YAML from "yaml";
 import { actualizeProjectIndexerMaterialAnswerBindings } from
   "../project/indexerMaterialAnswerActualizationActions.js";
+import { approvedKnowledgeInputHash } from "../project/close.js";
 import { buildIndexerMaterialAnswerEvidenceReadReceipt } from
   "../project/indexerMaterialAnswerEvidenceReads.js";
 import { checkpointProjectIndexerMaterialAnswerReview } from
@@ -319,7 +320,7 @@ describe("project material-answer actualization", () => {
       };
       const approvedStructure = {
         schema_version: "context.approved-structure.v1",
-        input_hash: digest("d"),
+        input_hash: await approvedKnowledgeInputHash(current.projectRoot),
         layout_digest: result.layout_proposal.layout_digest,
         nodes: [],
         views: [],
@@ -338,6 +339,18 @@ describe("project material-answer actualization", () => {
       })).rejects.toThrow(/absent from approved structure/);
       expect((await readIndexerMaterialGapStructure(current.projectRoot))?.ledger.entries[0])
         .toHaveProperty("state", "resolved");
+      await expect(closeProjectIndexerApprovedKnowledge({
+        projectRoot: current.projectRoot,
+        value: {
+          protocol: "context.indexer.close-approved-knowledge-input/v1",
+          expected_ledger_revision: result.ledger.revision,
+          approved_structure: {
+            ...approvedStructure,
+            input_hash: digest("d"),
+            material_answers: [materialAnswer],
+          },
+        },
+      })).rejects.toThrow(/input_hash is stale/);
       const closed = await closeProjectIndexerApprovedKnowledge({
         projectRoot: current.projectRoot,
         value: {
@@ -406,7 +419,13 @@ describe("project material-answer actualization", () => {
   });
 
   test("atomically reopens the same retained entry when span, Provider, or question authority is stale", async () => {
-    const scenarios = ["span", "provider", "question-revision", "question-missing"] as const;
+    const scenarios = [
+      "span",
+      "provider",
+      "question-revision",
+      "question-missing",
+      "owner-missing",
+    ] as const;
     for (const scenario of scenarios) {
       const current = await workspace();
       try {
@@ -427,9 +446,13 @@ describe("project material-answer actualization", () => {
             registry.indexers[0]!.providers[0]!.version = "1.0.1";
           } else if (scenario === "question-revision") {
             registry.indexers[0]!.requirement_bindings[0]!.role = "primary";
-          } else {
+          } else if (scenario === "question-missing") {
             registry.requirements[0]!.questions = [];
             value.resolved_questions = [];
+          } else {
+            registry.requirements[0]!.target_scope.targets[0]!.module_refs = [
+              "module:packages/replacement",
+            ];
           }
           await writeFile(
             join(current.projectRoot, "src", "indexers.yaml"),
@@ -460,9 +483,13 @@ describe("project material-answer actualization", () => {
           expect(result.evaluations[0]?.reason_codes).toContain(
             "question-or-binding-stale",
           );
-        } else {
+        } else if (scenario === "question-missing") {
           expect(result.evaluations[0]?.reason_codes).toContain(
             "question-authority-unavailable",
+          );
+        } else {
+          expect(result.evaluations[0]?.reason_codes).toContain(
+            "owner-authority-unavailable",
           );
         }
       } finally {

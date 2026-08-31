@@ -122,12 +122,11 @@ Present only the current workflow surface:
 |---|---|
 | Register a knowledge boundary | `context source add file/lark/repo ...`, followed by the matching project phase declaration. Source registration is a user-confirmed boundary decision. |
 | Capture document sources | Run the declared `capture:file:<date>/<module>` or `capture:lark:<date>/<module>` phase only after read permission. Capture writes a sibling document file under the matching date directory, updates that directory's single `manifest.json`, and mechanically materializes supported Lark resources. Do not download or rewrite embedded resources outside the CLI. |
-| Investigate captured material | Use `context status` and the returned `context run align:<type>:<source>:<collection> --view ...` commands. Evidence views drive reading; raw directory grep is not the workflow. |
-| Confirm prose structure | `alignProse` validates and stages CLI-managed lifecycle structure. Validation does not equal user confirmation; only confirmed lifecycle state may enter prose compile. |
-| Compile source-bound drafts | `compileProse` turns confirmed structure into source-bound draft pages. It does not approve knowledge. |
-| Review and apply | Use `context review html` and `context review apply`. Approved prose pages are source-mirrored; rewrite/compression problems should return to structure/compile repair before apply. |
+| Investigate captured material | Follow `route.indexer.lifecycle-required` and its `run-indexer-lifecycle` resource. Use only the evidence views and `context indexer ...` commands returned by the current subroute; raw directory grep is not the workflow. |
+| Index documents and code | Confirm requirements, resolve exact Providers, execute/recover worksets, reconcile Results, derive layout, audit, and compile the current Indexer Candidate batch. There is no separate default extraction, classification, align, or structure-confirmation route. |
+| Review and apply | Use `context review html` and `context review apply`. Approved pages retain their exact Indexer Result/evidence binding; quality problems return to the affected Indexer revision before apply. |
 | Close, verify, build | Run `context close`, `context verify`, then `context build`. Close derives `knowledge/structure.yaml`, approved edge projection, and the final verify gate. |
-| Code extraction | Use `context source inspect <source-name>` and the declared extract phase preview before code draft writes. |
+| Code evidence | The Code Indexer uses registered parser capabilities and evidence adapters through the same Indexer Route. Legacy explicit extract phases are migration/repair entrypoints, not the default workflow. |
 | Source retraction | Follow the current status or lifecycle command if one exists. Do not delete `sources/`, `knowledge/`, `dist/`, or `.tmp` to simulate lifecycle actions. |
 
 Judgment behavior is part of evidence views, source span resolvers, repair
@@ -197,9 +196,10 @@ workspace-relative repo root plus `subpath`; do not rewrite it back to an
 absolute machine path. Local Markdown/MDX sources
 are registered with `context source add file [YYYYMMDD] --module <module> --local <path>` plus any
 needed `--include` patterns, captured with `captureFile`, then planned through
-`alignProse` and compiled with
-`compileProse`. A one-file-to-one-page outcome is a degenerate structure plan,
-not a separate content path. Remote Git operations require explicit user approval before any
+the confirmed requirement set and exact Markdown Indexer registry in
+`src/indexers.yaml`. Artifact and Section layout is derived from the validated
+Provider Result; it does not require a default align/structure-confirmation
+round. Remote Git operations require explicit user approval before any
 clone/checkout; clone into an ignored local path, checkout the requested commit,
 then register that local checkout. Do not commit cloned source content. Lark /
 Feishu sources are registered as document modules under a shared date batch,
@@ -238,47 +238,37 @@ revision-bound Context command and read the returned file. Long procedures and
 semantic rules live in these resources; they are loaded progressively, not
 discarded or shortened into the status response.
 
-Status also returns `declarationGraph` and `configurationGaps`. These expose
-capture, align, compile, and Review coverage for each canonical document source
-and declared align collection. Missing declarations are early warnings while
-structure is still being planned; after confirmation, every collection planned
-by the structure must have an exact compile route for the same source. Do not
-run a compile command from another collection as a fallback. A
-`reviewValidity({ scope: "all" })` declaration covers every collection.
+Status also returns `declarationGraph` and `configurationGaps`. For new
+workspaces, use them to diagnose source/capture/review/package declarations;
+requirements, owner cells, Provider selection, worksets, audit, and Candidate
+progress come from the Indexer lifecycle. `reviewValidity({ scope: "all" })`
+covers the unified Candidate batch.
 
-When `workflow.current.reason_code` is
-`route.document.classification-required`, execute its read-only
-`inspection_action` commands before adding align/compile declarations. Inspect
-every unclassified target, explain the evidence behind the proposed mainline
-collection, and wait for user confirmation. Filenames, URLs, source titles,
-and collection names are hints, not sufficient classification evidence.
+When `workflow.current.reason_code` is `route.indexer.lifecycle-required`, read
+the selected lifecycle resource and follow the first structured Indexer
+outcome. Do not invent a collection from filenames, URLs, source titles, or old
+align declarations. The confirmed requirement set and exact Provider registry
+are the durable authority.
 
-Also inspect `pendingStructureTargets`. A non-empty list means captured document
-work remains outside the active structure snapshots, even if the current package
-is already built. Follow `needs-prose-configuration` first when declarations are
-missing, then run the exact returned align command. Continue in the same
-workspace; do not replace a valid earlier structure round or create a second
-workspace merely to add the next document. Missing declarations are selected
-by `route.prose.configuration-required`; do not branch on an old top-level
-`needs-prose-configuration` state.
-
-Use `structureBatch` for the complete multi-source slot overview. Evidence View
-commands are workspace-read-only and parallel-safe; structure stage/confirm,
-compile stage, Review apply, and close mutate workspace state and must run
-serially.
-
-The confirmation and Review scopes are different: confirm each canonical source
-plus collection structure slot independently, but do not open Review while
-another declared slot remains pending in the same round. Compile every View from
-all slots first, open one collection-level Review, and let deterministic close
-merge the active slots into `knowledge/structure.yaml`.
+Indexer evidence reads may be parallel when the current worksets and Host permit
+it. Ledger transitions, Candidate compile, Review apply, and close mutate
+workspace state and must follow their exact CAS-bound commands. Do not open
+Review until every required owner cell has an accepted current Result and the
+batch audit is ready.
 
 Do not infer permission from the presence of a command. When
 `workflow.current.commands` is empty, do not derive a lifecycle command from
 prose; complete the returned `configuration` action or resolve the returned
 gate, then rerun status.
 
-Extraction scope is also a human gate. If no extract phase is declared, explain
+## Legacy Explicit Code Extraction Commands
+
+The following `extractTs`/`extractCustom` route applies only when maintaining an
+existing project that still declares an explicit extraction phase. New
+workspaces express code ownership and scope as Indexer requirements and use the
+Code Indexer through `route.indexer.lifecycle-required`.
+
+For an existing explicit phase, extraction scope is a human gate. If no extract phase is declared, explain
 what code area and symbol policy will become draft knowledge, then ask which
 registered source and file/symbol range to ingest. Do not inspect the source
 repository to choose packages or globs on the user's behalf. The
@@ -390,10 +380,15 @@ count packages, parse `package.json`, or sample the lifecycle candidate ledger.
   These commands still enforce the scoped candidate-id gate.
 - Do not edit approved Markdown by hand as part of review apply.
 
-## Prose Align And Compile Rules
+## Legacy Prose Migration And Repair Commands
 
-After document capture, do not ask the user to choose an SDK path. Explain the
-product sequence:
+`alignProse` and `compileProse` remain callable for existing workspace
+migration, explicit diagnostics, and repair. They are not selected by the
+default Graph and must not be added to a new project as an alternate indexing
+workflow. Use the commands below only when the current CLI explicitly returns
+one of these legacy phase ids.
+
+For such an existing declaration, the compatibility sequence is:
 
 1. investigate material through Context evidence views;
 2. propose a structure draft with nodes, section plans, supported edges, and

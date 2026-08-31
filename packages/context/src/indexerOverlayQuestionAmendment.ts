@@ -20,13 +20,13 @@ import {
   type IndexerRegistry,
 } from "./indexerRegistry.js";
 import {
-  indexerOverlayTrustReceiptSchema,
-  indexerOverlayTrustReceiptDigest,
+  indexerOverlayValidationReceiptSchema,
+  indexerOverlayValidationReceiptDigest,
   validateIndexerContractOverlay,
   type IndexerContractOverlay,
   type IndexerOverlayConformanceReport,
-  type IndexerOverlayTrustReceipt,
-} from "./indexerOverlayTrust.js";
+  type IndexerOverlayValidationReceipt,
+} from "./indexerContractOverlay.js";
 import type {
   IndexerOperatorContract,
   IndexerProfileContract,
@@ -100,7 +100,7 @@ export const indexerOverlayQuestionAmendmentSchema = z.object({
   target_registry: indexerRegistrySchema,
   target_registry_digest: indexerDigestSchema,
   overlay_digest: indexerDigestSchema,
-  overlay_trust_receipt_digest: indexerDigestSchema,
+  overlay_validation_receipt_digest: indexerDigestSchema,
   conformance_report_digest: indexerDigestSchema,
   added_target_domains: z.array(amendmentTargetDomainSchema).min(1),
   added_questions: z.array(amendmentQuestionSchema).min(1),
@@ -122,10 +122,10 @@ function withoutDigest<T extends object, K extends keyof T>(
   return payload as Omit<T, K>;
 }
 
-function trustReceiptDigest(receipt: IndexerOverlayTrustReceipt): string {
+function validationReceiptDigest(receipt: IndexerOverlayValidationReceipt): string {
   const payload = withoutDigest(receipt, "receipt_digest");
-  if (indexerOverlayTrustReceiptDigest(payload) !== receipt.receipt_digest) {
-    throw new TypeError("overlay trust receipt digest is invalid");
+  if (indexerOverlayValidationReceiptDigest(payload) !== receipt.receipt_digest) {
+    throw new TypeError("overlay validation receipt digest is invalid");
   }
   return receipt.receipt_digest;
 }
@@ -176,8 +176,8 @@ function assertNamespacedTargetDomain(id: string): void {
   }
 }
 
-function assertTrustReceipt(input: {
-  receipt: IndexerOverlayTrustReceipt;
+function assertValidationReceipt(input: {
+  receipt: IndexerOverlayValidationReceipt;
   projectRef: string;
   providerIntegrity: string;
   overlay: IndexerContractOverlay;
@@ -190,15 +190,10 @@ function assertTrustReceipt(input: {
     input.receipt.base_contract_digest !== input.base.contract_digest ||
     input.receipt.provider_integrity !== input.providerIntegrity ||
     input.receipt.operator_contract_digest !== input.operators.contract_digest ||
-    input.receipt.conformance_report_digest !== input.report.report_digest
-  ) {
-    throw new TypeError("overlay trust receipt is stale or bound to another validation");
-  }
-  if (
-    input.receipt.trust_class === "project-authorized-exact-digest" &&
+    input.receipt.conformance_report_digest !== input.report.report_digest ||
     input.receipt.project_ref !== input.projectRef
   ) {
-    throw new TypeError("project overlay trust receipt belongs to another project");
+    throw new TypeError("overlay validation receipt is stale or bound to another validation");
   }
 }
 
@@ -297,7 +292,7 @@ export interface IndexerOverlayQuestionAuthorityProof {
   requirement_id: string;
   provider_integrity: string;
   overlay_validation: ReturnType<typeof validateIndexerContractOverlay>;
-  trust_receipt: IndexerOverlayTrustReceipt;
+  validation_receipt: IndexerOverlayValidationReceipt;
 }
 
 export function resolveIndexerOverlayQuestionBindingAuthority(input: {
@@ -327,8 +322,10 @@ export function resolveIndexerOverlayQuestionBindingAuthority(input: {
   ) {
     throw new TypeError("overlay question authority requires the current conformance report");
   }
-  const receipt = indexerOverlayTrustReceiptSchema.parse(input.proof.trust_receipt);
-  assertTrustReceipt({
+  const receipt = indexerOverlayValidationReceiptSchema.parse(
+    input.proof.validation_receipt,
+  );
+  assertValidationReceipt({
     receipt,
     projectRef: input.proof.project_ref,
     providerIntegrity: input.proof.provider_integrity,
@@ -337,7 +334,7 @@ export function resolveIndexerOverlayQuestionBindingAuthority(input: {
     operators: input.operator_contract,
     report: validation.report,
   });
-  trustReceiptDigest(receipt);
+  validationReceiptDigest(receipt);
   const authorityRef = overlayAuthorityRef(validation.overlay);
   if (
     binding.authority.ref !== authorityRef ||
@@ -399,7 +396,7 @@ export function buildIndexerOverlayQuestionAmendment(input: {
   base_contract: IndexerProfileContract;
   operator_contract: IndexerOperatorContract;
   provider_integrity: string;
-  trust_receipt: unknown;
+  validation_receipt: unknown;
 }): IndexerOverlayQuestionAmendment {
   validateFinalizedIndexerRegistry(input.registry);
   const baseRequirement = input.registry.requirements.find((requirement) =>
@@ -417,8 +414,10 @@ export function buildIndexerOverlayQuestionAmendment(input: {
   ) {
     throw new TypeError("overlay question amendment requires the current conformance report");
   }
-  const receipt = indexerOverlayTrustReceiptSchema.parse(input.trust_receipt);
-  assertTrustReceipt({
+  const receipt = indexerOverlayValidationReceiptSchema.parse(
+    input.validation_receipt,
+  );
+  assertValidationReceipt({
     receipt,
     projectRef: input.project_ref,
     providerIntegrity: input.provider_integrity,
@@ -463,7 +462,7 @@ export function buildIndexerOverlayQuestionAmendment(input: {
     target_registry: targetRegistry,
     target_registry_digest: targetDigests.registryDigest,
     overlay_digest: validation.overlay.overlay_digest,
-    overlay_trust_receipt_digest: trustReceiptDigest(receipt),
+    overlay_validation_receipt_digest: validationReceiptDigest(receipt),
     conformance_report_digest: validation.report.report_digest,
     added_target_domains: additions.targetDomains,
     added_questions: additions.questions,

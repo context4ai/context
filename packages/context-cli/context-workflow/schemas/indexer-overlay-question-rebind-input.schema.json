@@ -5,8 +5,8 @@
   "additionalProperties": false,
   "required": [
     "protocol",
-    "trusted_validation_input",
-    "trusted_validation_result",
+    "validation_input",
+    "validation_result",
     "base_registry",
     "amendment",
     "confirmation",
@@ -18,8 +18,8 @@
   ],
   "properties": {
     "protocol": { "const": "context.indexer.overlay-question-rebind-input/v1" },
-    "trusted_validation_input": { "type": "object" },
-    "trusted_validation_result": { "type": "object" },
+    "validation_input": { "type": "object" },
+    "validation_result": { "type": "object" },
     "base_registry": { "type": "object" },
     "amendment": { "type": "object" },
     "confirmation": { "type": "object" },

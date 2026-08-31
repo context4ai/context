@@ -86,7 +86,7 @@
       "allowed_paths": [
         "packages/context-cli/src/project/indexerBaseContractCatalog.ts",
         "packages/context-cli/src/project/indexerBaseContracts.ts",
-        "packages/context/src/indexerOverlayTrust.ts"
+        "packages/context/src/indexerContractOverlay.ts"
       ],
       "legacy_paths": []
     },
@@ -96,7 +96,7 @@
       "allowed_paths": [
         "packages/context-cli/src/project/indexerBaseContracts.ts",
         "packages/context-cli/src/project/indexerBaseMetricAudit.ts",
-        "packages/context/src/indexerOverlayTrust.ts"
+        "packages/context/src/indexerContractOverlay.ts"
       ],
       "legacy_paths": []
     },
@@ -124,6 +124,6 @@
   "blocking_prerequisites": {
     "migration_disposition": "complete",
     "forward_fixtures": "complete",
-    "phase_g_cutover": false
+    "phase_g_cutover": true
   }
 }

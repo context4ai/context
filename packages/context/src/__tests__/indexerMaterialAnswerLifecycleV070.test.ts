@@ -8,6 +8,8 @@ import {
   closeIndexerResolvedMaterialAnswers,
   decideIndexerMaterialAnswerReview,
   deriveIndexerMaterialAnswerFlowStatus,
+  indexerMaterialAnswerSourceInputSetDigest,
+  indexerMaterialGapQuestionKey,
   indexerProtocolDigest,
   invalidateIndexerMaterialAnswerActualizations,
   validateIndexerPlannedMaterialAnswer,
@@ -25,6 +27,17 @@ import {
 } from "./indexerMaterialAnswerV070.fixture.js";
 
 describe("Material Answer limited Review and actualization", () => {
+  test("hashes source input digests with set semantics", () => {
+    expect(indexerMaterialAnswerSourceInputSetDigest([
+      digest("1"),
+      digest("2"),
+      digest("1"),
+    ])).toBe(indexerMaterialAnswerSourceInputSetDigest([
+      digest("2"),
+      digest("1"),
+    ]));
+  });
+
   test("applies answer Review with predecessor CAS and does not self-stale", () => {
     const initial = ledger();
     const approved = approve(initial);
@@ -250,6 +263,17 @@ describe("Material Answer limited Review and actualization", () => {
     })).toMatchObject({
       layout_allowed: false,
       conditional_layout_gate_allowed: false,
+      main_candidate_review_allowed: false,
+      effective_blocking_gap_count: 1,
+    });
+    expect(deriveIndexerMaterialAnswerFlowStatus({
+      ledger: initial,
+      current_layout_digest: digest("8"),
+      owner_domain_authorities: [],
+    })).toMatchObject({
+      blocking_unresolved_question_keys: [
+        indexerMaterialGapQuestionKey(initial.entries[0]!),
+      ],
       main_candidate_review_allowed: false,
       effective_blocking_gap_count: 1,
     });

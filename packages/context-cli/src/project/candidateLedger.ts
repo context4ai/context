@@ -11,7 +11,7 @@ import { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
 export type CandidateStatus = "draft" | "rejected";
-export type CandidateType = "code-symbol" | "prose-align";
+export type CandidateType = "code-symbol" | "prose-align" | "indexer-artifact";
 export type CandidateChange = "add" | "update" | "remove";
 export type CodeRelationshipMode = "source-backed-ast" | "source-backed-explicit";
 
@@ -64,6 +64,37 @@ export interface CodeCandidateEdge {
   relation_type: string;
 }
 
+export interface IndexerCandidateEvidenceBinding {
+  evidence_ref: string;
+  kind: string;
+  source_ref: string;
+  module_ref: string | null;
+  locator: {
+    path: string;
+    start_line: number;
+    end_line: number;
+  };
+  content_digest: string;
+  coverage_tier: "ast-catalog" | "lightweight-evidence";
+  binding_digest: string;
+}
+
+export interface IndexerCandidateBinding {
+  compile_digest: string;
+  file_digest: string;
+  artifact_ref: string;
+  section_refs: string[];
+  source_ref: string;
+  evidence_bindings: IndexerCandidateEvidenceBinding[];
+  sections: Array<{
+    section_ref: string;
+    section_key: string;
+    evidence_refs: string[];
+    markdown: string;
+    markdown_digest: string;
+  }>;
+}
+
 export interface CandidateRecord {
   candidate_id: string;
   node_ref: string;
@@ -87,6 +118,7 @@ export interface CandidateRecord {
   sections?: ProseCandidateSection[];
   code_edges?: CodeCandidateEdge[];
   relationship_mode?: CodeRelationshipMode;
+  indexer_candidate?: IndexerCandidateBinding;
   fingerprint: string;
   review: CandidateReviewSummary;
   updated: string;
@@ -94,7 +126,11 @@ export interface CandidateRecord {
 
 const KNOWLEDGE_COLLECTION_SET = new Set<KnowledgeCollection>(KNOWLEDGE_COLLECTIONS);
 const CANDIDATE_STATUSES = new Set<CandidateStatus>(["draft", "rejected"]);
-const CANDIDATE_TYPES = new Set<CandidateType>(["code-symbol", "prose-align"]);
+const CANDIDATE_TYPES = new Set<CandidateType>([
+  "code-symbol",
+  "prose-align",
+  "indexer-artifact",
+]);
 const CANDIDATE_CHANGES = new Set<CandidateChange>(["add", "update", "remove"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -184,9 +220,101 @@ function reviewField(record: Record<string, unknown>, line: number): CandidateRe
 function candidateTypeField(record: Record<string, unknown>, line: number): CandidateType | undefined {
   if (record.candidate_type === undefined) return undefined;
   if (typeof record.candidate_type !== "string" || !CANDIDATE_TYPES.has(record.candidate_type as CandidateType)) {
-    throw schemaError(line, "field candidate_type must be one of code-symbol, prose-align");
+    throw schemaError(
+      line,
+      "field candidate_type must be one of code-symbol, prose-align, indexer-artifact",
+    );
   }
   return record.candidate_type as CandidateType;
+}
+
+export function indexerCandidateId(fileDigest: string): string {
+  const match = /^sha256:([a-f0-9]{64})$/u.exec(fileDigest);
+  if (match?.[1] === undefined) {
+    throw new TypeError(`Indexer Candidate file digest is invalid: ${fileDigest}`);
+  }
+  return `indexer/${match[1]}`;
+}
+
+function indexerCandidateBindingField(
+  record: Record<string, unknown>,
+  candidateType: CandidateType | undefined,
+  line: number,
+): IndexerCandidateBinding | undefined {
+  if (candidateType !== "indexer-artifact") {
+    if (record.indexer_candidate !== undefined) {
+      throw schemaError(line, "field indexer_candidate is supported only for indexer-artifact candidates");
+    }
+    return undefined;
+  }
+  if (!isRecord(record.indexer_candidate)) {
+    throw schemaError(line, "field indexer_candidate is required for indexer-artifact candidates");
+  }
+  const binding = record.indexer_candidate;
+  const sectionRefs = stringArrayField(binding, "section_refs", line);
+  if (!Array.isArray(binding.evidence_bindings)) {
+    throw schemaError(line, "field indexer_candidate.evidence_bindings must be an array");
+  }
+  const evidenceBindings = binding.evidence_bindings.map<IndexerCandidateEvidenceBinding>((value, index) => {
+    if (!isRecord(value) || !isRecord(value.locator)) {
+      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}] must be an object`);
+    }
+    const startLine = value.locator.start_line;
+    const endLine = value.locator.end_line;
+    if (
+      !Number.isSafeInteger(startLine) || Number(startLine) < 1 ||
+      !Number.isSafeInteger(endLine) || Number(endLine) < Number(startLine)
+    ) {
+      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].locator lines are invalid`);
+    }
+    const coverageTier = value.coverage_tier;
+    if (coverageTier !== "ast-catalog" && coverageTier !== "lightweight-evidence") {
+      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].coverage_tier is invalid`);
+    }
+    return {
+      evidence_ref: stringField(value, "evidence_ref", line),
+      kind: stringField(value, "kind", line),
+      source_ref: stringField(value, "source_ref", line),
+      module_ref: value.module_ref === null
+        ? null
+        : stringField(value, "module_ref", line),
+      locator: {
+        path: stringField(value.locator, "path", line),
+        start_line: Number(startLine),
+        end_line: Number(endLine),
+      },
+      content_digest: stringField(value, "content_digest", line),
+      coverage_tier: coverageTier,
+      binding_digest: stringField(value, "binding_digest", line),
+    };
+  });
+  if (!Array.isArray(binding.sections) || binding.sections.length === 0) {
+    throw schemaError(line, "field indexer_candidate.sections must be a non-empty array");
+  }
+  const sections = binding.sections.map((value, index) => {
+    if (!isRecord(value)) {
+      throw schemaError(line, `field indexer_candidate.sections[${index}] must be an object`);
+    }
+    return {
+      section_ref: stringField(value, "section_ref", line),
+      section_key: stringField(value, "section_key", line),
+      evidence_refs: value.evidence_refs === undefined ||
+          (Array.isArray(value.evidence_refs) && value.evidence_refs.length === 0)
+        ? []
+        : stringArrayField(value, "evidence_refs", line),
+      markdown: stringField(value, "markdown", line),
+      markdown_digest: stringField(value, "markdown_digest", line),
+    };
+  });
+  return {
+    compile_digest: stringField(binding, "compile_digest", line),
+    file_digest: stringField(binding, "file_digest", line),
+    artifact_ref: stringField(binding, "artifact_ref", line),
+    section_refs: sectionRefs,
+    source_ref: stringField(binding, "source_ref", line),
+    evidence_bindings: evidenceBindings,
+    sections,
+  };
 }
 
 function candidateChangeField(record: Record<string, unknown>, line: number): CandidateChange | undefined {
@@ -369,16 +497,30 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
   const nodeRef = stringField(value, "node_ref", line);
   const collection = collectionField(value, line);
   const path = stringField(value, "path", line);
-  const expectedCandidateId = candidateIdFromViewRef(viewRef);
-  if (candidateId !== expectedCandidateId) {
-    throw schemaError(line, `field candidate_id must be derived from view_ref: ${expectedCandidateId}`);
-  }
-  const expectedNodeRef = nodeRefFromViewRef(viewRef);
-  if (expectedNodeRef === undefined || nodeRef !== expectedNodeRef) {
-    throw schemaError(line, "field node_ref must equal the suffix of view_ref");
-  }
-  if (!viewRef.startsWith(`${collection}:`)) {
-    throw schemaError(line, "field view_ref must start with <collection>:");
+  const indexerCandidate = indexerCandidateBindingField(value, candidateType, line);
+  if (candidateType === "indexer-artifact") {
+    const expectedCandidateId = indexerCandidateId(indexerCandidate!.file_digest);
+    if (candidateId !== expectedCandidateId) {
+      throw schemaError(line, `field candidate_id must bind Indexer file digest: ${expectedCandidateId}`);
+    }
+    if (!/^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef)) {
+      throw schemaError(line, "field node_ref must be a canonical Indexer Subject ref");
+    }
+    if (!viewRef.startsWith("view:artifact:")) {
+      throw schemaError(line, "field view_ref must be a canonical Indexer Artifact view ref");
+    }
+  } else {
+    const expectedCandidateId = candidateIdFromViewRef(viewRef);
+    if (candidateId !== expectedCandidateId) {
+      throw schemaError(line, `field candidate_id must be derived from view_ref: ${expectedCandidateId}`);
+    }
+    const expectedNodeRef = nodeRefFromViewRef(viewRef);
+    if (expectedNodeRef === undefined || nodeRef !== expectedNodeRef) {
+      throw schemaError(line, "field node_ref must equal the suffix of view_ref");
+    }
+    if (!viewRef.startsWith(`${collection}:`)) {
+      throw schemaError(line, "field view_ref must start with <collection>:");
+    }
   }
   if (!isSafeKnowledgeTargetPath(collection, path)) {
     throw schemaError(line, "field path must be an approved knowledge path relative to knowledge/<collection>/");
@@ -423,6 +565,7 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
     ...(sections !== undefined ? { sections } : {}),
     ...(codeEdges !== undefined ? { code_edges: codeEdges } : {}),
     ...(relationshipMode !== undefined ? { relationship_mode: relationshipMode } : {}),
+    ...(indexerCandidate !== undefined ? { indexer_candidate: indexerCandidate } : {}),
     fingerprint: stringField(value, "fingerprint", line),
     review: reviewField(value, line),
     updated: stringField(value, "updated", line),

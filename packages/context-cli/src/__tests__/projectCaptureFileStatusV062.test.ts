@@ -62,8 +62,8 @@ describe("0.6.2 capture:file status and refresh", () => {
         }>;
       };
       expect(status.workflow.current).toMatchObject({
-        node: "configure-prose-lifecycle",
-        reason_code: "route.prose.configuration-required",
+        node: "run-indexer-lifecycle",
+        reason_code: "route.indexer.lifecycle-required",
       });
       expect(status.pendingStructureTargets).toContainEqual(expect.objectContaining({
         sourceKey: "file:product-docs",
@@ -125,7 +125,7 @@ describe("0.6.2 capture:file status and refresh", () => {
           configurationGaps: string[];
         }>;
       };
-      expect(status.workflow.current.node).toBe("configure-prose-lifecycle");
+      expect(status.workflow.current.node).toBe("run-indexer-lifecycle");
       expect(status.pendingStructureTargets.map((target) => target.collection).sort()).toEqual([
         "architecture",
         "product",

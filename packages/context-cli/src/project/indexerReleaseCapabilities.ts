@@ -5,22 +5,20 @@ import {
 import { z } from "zod";
 
 export const INDEXER_RELEASE_CAPABILITIES = [
-  "host-action-v2",
+  "resource-protocols",
   "provider-lifecycle",
   "code-indexer",
   "markdown-indexer",
-  "enterprise-overlay-trust",
   "phase-g-cutover",
 ] as const;
 
 export type IndexerReleaseCapability = typeof INDEXER_RELEASE_CAPABILITIES[number];
 
 const capabilityMilestones: Readonly<Record<IndexerReleaseCapability, string>> = {
-  "host-action-v2": "0.7.0-preview.1",
+  "resource-protocols": "0.7.1",
   "provider-lifecycle": "0.7.0-preview.1",
   "code-indexer": "0.7.0-preview.2",
   "markdown-indexer": "0.7.0-preview.3",
-  "enterprise-overlay-trust": "0.7.0-rc.1",
   "phase-g-cutover": "0.7.0",
 };
 
@@ -47,13 +45,20 @@ export type IndexerReleaseCapabilityManifest = z.infer<
   typeof indexerReleaseCapabilityManifestSchema
 >;
 
+export interface IndexerReleaseCapabilityEvidence {
+  phaseGCutover?: boolean;
+}
+
 interface ReleaseStage {
   channel: IndexerReleaseCapabilityManifest["channel"];
   rank: number;
 }
 
 function releaseStage(version: string): ReleaseStage {
-  if (version === "0.7.0") return { channel: "latest", rank: 5 };
+  if (version === "0.7.1") return { channel: "latest", rank: 5 };
+  if (/^0\.7\.1-preview\.\d+$/u.test(version)) return { channel: "preview", rank: 5 };
+  if (/^0\.7\.1-rc\.\d+$/u.test(version)) return { channel: "rc", rank: 5 };
+  if (version === "0.7.0") return { channel: "latest", rank: 4 };
   const preview = /^0\.7\.0-preview\.(\d+)$/u.exec(version);
   if (preview !== null) {
     return { channel: "preview", rank: Math.min(Number(preview[1]), 3) };
@@ -63,15 +68,16 @@ function releaseStage(version: string): ReleaseStage {
 }
 
 function capabilityRank(capability: IndexerReleaseCapability): number {
-  if (capability === "host-action-v2" || capability === "provider-lifecycle") return 1;
+  if (capability === "provider-lifecycle") return 1;
   if (capability === "code-indexer") return 2;
   if (capability === "markdown-indexer") return 3;
-  if (capability === "enterprise-overlay-trust") return 4;
+  if (capability === "phase-g-cutover") return 4;
   return 5;
 }
 
 export function buildIndexerReleaseCapabilityManifest(
   versionValue: string,
+  evidence: IndexerReleaseCapabilityEvidence = {},
 ): IndexerReleaseCapabilityManifest {
   const version = indexerSemverSchema.parse(versionValue);
   const stage = releaseStage(version);
@@ -83,7 +89,9 @@ export function buildIndexerReleaseCapabilityManifest(
     dist_tag: stage.channel,
     capabilities: INDEXER_RELEASE_CAPABILITIES.map((id) => ({
       id,
-      state: stage.rank >= capabilityRank(id) ? "ready" : "not-ready",
+      state: stage.rank >= capabilityRank(id) && (
+        id === "phase-g-cutover" ? evidence.phaseGCutover === true : true
+      ) ? "ready" : "not-ready",
       required_milestone: capabilityMilestones[id],
     })),
   });

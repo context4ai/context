@@ -450,10 +450,8 @@ describe("0.6.6 close structure projection verification", () => {
         state: string;
         next: string;
       };
-      expect(brokenStatus.state).toBe("route.close.projection-stale");
-      expect(brokenStatus.next).toContain("--workflow-revision");
-      expect(brokenStatus.next).toContain("close --format json");
-      expect(brokenStatus.next).not.toContain("review/knowledge gate");
+      expect(brokenStatus.state).toBe("route.indexer.lifecycle-required");
+      expect(brokenStatus.next).toContain("registry-and-Provider indexing lifecycle");
 
       await runCliInDir(projectRoot, ["close", "--format", "json"]);
       const rebuilt = YAML.parse(readFileSync(structurePath, "utf8")) as {
@@ -507,9 +505,8 @@ describe("0.6.6 close structure projection verification", () => {
         state: string;
         next: string;
       };
-      expect(brokenStatus.state).toBe("route.close.projection-stale");
-      expect(brokenStatus.next).toContain("--workflow-revision");
-      expect(brokenStatus.next).toContain("close --format json");
+      expect(brokenStatus.state).toBe("route.indexer.lifecycle-required");
+      expect(brokenStatus.next).toContain("registry-and-Provider indexing lifecycle");
 
       const close = JSON.parse(await runCliInDir(projectRoot, ["close", "--format", "json"])) as {
         edgeWarnings: string[];

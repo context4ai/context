@@ -22,6 +22,9 @@ import {
 } from "./indexerProviderStage.js";
 import { validateIndexerProgramStaticSource } from "./indexerProgramStaticValidation.js";
 
+export const INDEXER_PROGRAM_EXECUTION_AUTHORITY =
+  "context.indexer-program-execution" as const;
+
 export interface IndexerProgramExecutionAuthorizationInput {
   protocol: "context.indexer.program-execution-authorization-input/v1";
   report: IndexerProgramExecutionAuthorizationReport;
@@ -93,7 +96,7 @@ export function validateIndexerProgramExecutionAuthorizationInput(
   const input = value as Partial<IndexerProgramExecutionAuthorizationInput>;
   if (
     input.protocol !== "context.indexer.program-execution-authorization-input/v1" ||
-    typeof input.authority_ref !== "string" || input.authority_ref.length === 0 ||
+    input.authority_ref !== INDEXER_PROGRAM_EXECUTION_AUTHORITY ||
     typeof input.authority_scope_digest !== "string" ||
     typeof input.input_digest !== "string"
   ) {

@@ -1,0 +1,7 @@
+schema: agent-graph.action.v1
+id: run-indexer-lifecycle
+description: Continue the unique registry-and-Provider Indexer lifecycle until current Candidates exist.
+runner: agent
+effect: write
+skill: skills/run-indexer-lifecycle/SKILL.md
+outputSchema: schemas/indexer-lifecycle-continuation.schema.json

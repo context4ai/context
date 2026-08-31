@@ -2,7 +2,7 @@
   "schema": "context.code-indexer-resource-migration/v1",
   "semantic_source_ownership": {
     "path": "plugins/context/migrations/0.7.0-semantic-source-ownership.json",
-    "digest": "sha256:ec76d062f773e52eb4b7de77f1dd7c68950af01e47643aad5468bb0ab7180075"
+    "digest": "sha256:31ff8df91060bcd494a48ef830962f2ec58e6b649e52b9d24951c2c304656216"
   },
   "coverage": "complete",
   "source_roots": [
@@ -13,9 +13,9 @@
   ],
   "cutover": {
     "schema": "context.code-indexer-cutover-candidate-set/v1",
-    "state": "registered",
+    "state": "executed",
     "execution_phase": "phase-g",
-    "deletion_authorized": false,
+    "deletion_authorized": true,
     "candidate_sources": [
       "packages/context-cli/context-workflow/resources/semantic/code-index/classification.md",
       "packages/context-cli/context-workflow/resources/semantic/code-index/templates/adapter.md",
@@ -38,7 +38,7 @@
       "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
       "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml"
     ],
-    "candidate_set_digest": "sha256:f9e9fc188f726651ca38b0d03de3fe75d56bbeb723de43161f2866c642dd90ed"
+    "candidate_set_digest": "sha256:ebd5324880f8acc3b3a6aae3777ab92f9c942f48537f7f4dfb01cf0283a81175"
   },
   "items": [
     {

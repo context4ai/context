@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -43,6 +43,41 @@ async function assertPluginManifestVersions(expectedVersion: string): Promise<vo
   }
 }
 
+async function assertWorkspacePublicationBoundary(
+  releasePackages: ReadonlyArray<{ name: string; dir: string }>,
+): Promise<void> {
+  const allowed = new Map(releasePackages.map((pkg) => [pkg.dir, pkg.name]));
+  const packageDirs = await readdir(resolve(projectRoot, "packages"), { withFileTypes: true });
+
+  for (const entry of packageDirs) {
+    if (!entry.isDirectory()) continue;
+    const manifestPath = resolve(projectRoot, "packages", entry.name, "package.json");
+    let manifest: { name?: string; private?: boolean };
+    try {
+      manifest = JSON.parse(await readFile(manifestPath, "utf8")) as typeof manifest;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+
+    const expectedName = allowed.get(entry.name);
+    if (expectedName !== undefined) {
+      if (manifest.name !== expectedName || manifest.private === true) {
+        throw new Error(
+          `Release package ${entry.name} must be public and named ${expectedName}`,
+        );
+      }
+      continue;
+    }
+
+    if (manifest.private !== true) {
+      throw new Error(
+        `Workspace package ${String(manifest.name ?? entry.name)} is outside the release allowlist and must be private`,
+      );
+    }
+  }
+}
+
 const version = await readPackageVersion(resolve(projectRoot, "package.json"));
 const context: PublishContext = {
   projectRoot,
@@ -54,6 +89,7 @@ const context: PublishContext = {
 };
 
 const releasePackages = releasePackagesForVersion(version);
+await assertWorkspacePublicationBoundary(releasePackages);
 for (const pkg of releasePackages) {
   const packageDir = resolve(projectRoot, "packages", pkg.dir);
   const packageVersion = await readPackageVersion(resolve(packageDir, "package.json"));

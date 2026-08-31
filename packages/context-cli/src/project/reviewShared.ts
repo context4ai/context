@@ -299,6 +299,16 @@ export async function readReviewCandidateSnapshot(
   projectRoot: string,
   record: CandidateRecord,
 ): Promise<CandidateSnapshot | undefined> {
+  if (record.candidate_type === "indexer-artifact") {
+    if (record.body === undefined || record.indexer_candidate === undefined) return undefined;
+    return {
+      candidate_id: record.candidate_id,
+      collection: record.collection,
+      source: record.indexer_candidate.source_ref,
+      source_refs: record.source_refs,
+      markdown: record.body,
+    };
+  }
   if (record.candidate_type === "prose-align") {
     return hydrateProseCandidateSnapshot(projectRoot, record);
   }
@@ -316,18 +326,23 @@ export function findApprovedPageForViewRef(projectRoot: string, viewRef: string)
       next: "Use <collection>:<node_ref>, for example architecture:entity/install.",
     });
   }
-  const collection = viewRef.slice(0, separator);
-  if (!(KNOWLEDGE_COLLECTIONS as readonly string[]).includes(collection)) {
+  const prefix = viewRef.slice(0, separator);
+  const indexerView = viewRef.startsWith("view:artifact:");
+  if (!indexerView && !(KNOWLEDGE_COLLECTIONS as readonly string[]).includes(prefix)) {
     throw new ContextError(ExitCode.UserError, `approved maintenance view_ref has unsupported collection: ${viewRef}`, {
       category: ErrorCategory.UserInputInvalid,
       view_ref: viewRef,
       next: `Use one of ${KNOWLEDGE_COLLECTIONS.join(", ")} as the view_ref prefix.`,
     });
   }
-  const nodeRef = viewRef.slice(separator + 1);
-  assertSafeEntityId(nodeRef);
-  const collectionRoot = join(projectRoot, "knowledge", collection);
-  if (existsSync(collectionRoot)) {
+  const nodeRef = indexerView ? "" : viewRef.slice(separator + 1);
+  if (!indexerView) assertSafeEntityId(nodeRef);
+  const collections = indexerView
+    ? KNOWLEDGE_COLLECTIONS
+    : [prefix as KnowledgeCollection];
+  for (const collection of collections) {
+    const collectionRoot = join(projectRoot, "knowledge", collection);
+    if (!existsSync(collectionRoot)) continue;
     const visit = (dir: string, relDir: string): { path: string; relPath: string; nodeRef: string } | undefined => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const absPath = join(dir, entry.name);
@@ -355,7 +370,7 @@ export function findApprovedPageForViewRef(projectRoot: string, viewRef: string)
     };
     const found = visit(collectionRoot, "");
     if (found !== undefined) {
-      return { collection: collection as KnowledgeCollection, nodeRef: found.nodeRef, path: found.path, relPath: found.relPath };
+      return { collection, nodeRef: found.nodeRef, path: found.path, relPath: found.relPath };
     }
   }
   return undefined;

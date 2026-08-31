@@ -224,21 +224,18 @@ inventing overlapping file ranges.
 
 ### Status declaration coverage
 
-`context status --format json --view full` includes a `declarationGraph` and
-`configurationGaps` for document workflows. Each row reports capture, align,
-compile, and Review coverage for a canonical source plus collection. Gaps are
-non-blocking before structure confirmation. Once a structure is confirmed,
-compile routing is exact: phase selection uses canonical source plus collection,
-and candidate progress remains bound to the current `structure_digest`. A
-compile phase from another collection is never used as fallback.
+`context status --format json --view full` includes `declarationGraph` and
+`configurationGaps` for source/capture/review/package declarations. New
+workspaces do not add align or compile rows: confirmed requirements, owner
+cells, exact Provider selection, workset progress, audit, and Candidate compile
+belong to the Indexer lifecycle selected by
+`route.indexer.lifecycle-required`.
 
-Captured align targets that do not yet have an active confirmed structure are
-reported in `pendingStructureTargets`. They remain unfinished even when the
-currently active structures have been closed, verified, and built. Missing
-compile or Review declarations route to `needs-prose-configuration`; once the
-declarations are complete, status returns the exact align investigation command
-for the next target. A built package does not freeze the workspace or require a
-new workspace for later sources.
+`pendingStructureTargets` and align/compile coverage may still appear while
+diagnosing an existing workspace that explicitly declares legacy prose phases.
+They are compatibility diagnostics, not a second default workflow and not a
+fallback when an Indexer Result is unavailable. A built package does not freeze
+the workspace or require a new workspace for later sources.
 
 `context status --format json` defaults to the compact workflow route, target,
 progress, counts, and aggregated diagnostics. Use `--view full` only when
@@ -398,7 +395,12 @@ const localDocs = source("20260712", "local-manual", { type: "file" });
 
 ### `alignProse`
 
-Open the prose structure gate for document evidence:
+Legacy compatibility factory for an existing workspace that explicitly owns a
+prose structure phase. New projects must use `src/indexers.yaml` and the
+Markdown Indexer lifecycle; the default Graph never selects `alignProse` as an
+alternate authoring route.
+
+For migration or repair of an existing declaration:
 
 ```ts
 alignProse({
@@ -511,19 +513,14 @@ ranges are never structure boundaries. Structure validation blocks repeated
 fixed-width line grids that cut through AST blocks and reports sections that
 cross multiple heading paths, without classifying document topics.
 
-After capture, the capture phase itself exposes collection-neutral `read-plan`,
-`source-index`, `span-detail`, `span-text`, and other read-only evidence views.
-Status selects `route.document.classification-required` until every captured
-target has an evidence-backed, user-confirmed align declaration. Align then
-adds `schema` and `structure-summary` for structure work. Agents should not
-scan `sources/` or `.tmp` to invent evidence. They may read only the exact
-source-body files selected as required resources by the current Route; those
-files carry stable content digests and must be read in full before a receipt is
-reported. Read all required direct paths, then execute the Route's single
-`resources.after_read.command`; the CLI writes and carries the merged receipt
-set without requiring Agent-authored JSON. That acknowledgement response
-already contains the re-evaluated `workflow.current`, so no additional status
-command is needed.
+For a new workspace, capture is followed by
+`route.indexer.lifecycle-required`; the Markdown Provider receives exact
+captured evidence and returns a schema-validated Result from which Context
+derives layout. The align evidence views below apply only when the current CLI
+explicitly selects a legacy phase for migration or repair. Agents must not scan
+`sources/` or `.tmp` to invent evidence. Read only the exact source-body files
+selected as required resources by that Route and execute its
+`resources.after_read.command` after the complete read.
 
 Generated Context Views use the same content-addressed rule. Materialization
 returns a receipt-set path and an exact post-read command. Read the complete
@@ -545,7 +542,11 @@ separate Agent-authored payload or approval step.
 
 ### `compileProse`
 
-Compile confirmed prose structure into reviewable source-bound draft pages:
+Legacy compatibility factory that compiles an already confirmed legacy prose
+structure. New workspaces compile the accepted Indexer Result store through the
+Indexer Candidate compile Route and do not declare this phase.
+
+For migration or repair of an existing declaration:
 
 ```ts
 compileProse({
@@ -988,16 +989,16 @@ prompt. After the user reports that limitation, the exact conversation phrase
 `context review approve-all ... --force` command. Other generic approval or
 continue wording does not invoke it.
 
-The gate is batch-scoped: prose waits for every planned View across all active
-structure slots and every declared `pendingStructureTargets` item in the round;
-codeindex waits for every pending extract phase in the confirmed module round.
+The gate is batch-scoped: the current Indexer Candidate batch waits for every
+required owner cell to have an accepted current Result and a ready audit.
 Candidate count/hash therefore describes the complete current batch rather than
-one page, source slot, or module. Deterministic close later merges all active
-slots into `knowledge/structure.yaml`, retains only their source, collection,
-and consumed snapshot hash as `source_inputs`, then removes the lifecycle slots.
+one page, source slot, or module. Deterministic close projects approved Indexer
+Nodes, Views, Sections, edges, and exact source/Result bindings into
+`knowledge/structure.yaml`.
 
-`status.structureBatch` lists unclassified, configuration-required, pending,
-and active structure slots together with the execution policy for the round.
+`status.structureBatch` is retained only as a diagnostic for an existing
+workspace with explicit legacy prose phases; it does not participate in the
+default Indexer Route.
 
 If the user explicitly asks for an automated or quick approval/rejection path,
 use the scoped quick commands instead of hand-writing a payload:

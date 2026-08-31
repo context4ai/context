@@ -118,33 +118,19 @@ export type {
   IndexerSubjectKeyContract,
 } from "./indexerProfileContract.js";
 export {
-  authorizeProjectIndexerOverlay,
+  createIndexerOverlayValidationReceipt,
   indexerContractOverlayDigest,
   indexerContractOverlaySchema,
-  indexerOverlayAttestationDigest,
-  indexerOverlayAttestationSchema,
-  indexerOverlayAttestationSigningPayload,
-  indexerOverlayProjectAuthorizationDigest,
-  indexerOverlayProjectAuthorizationSchema,
-  indexerOverlayTrustBundleDigest,
-  indexerOverlayTrustBundleEnvelopeSchema,
-  indexerOverlayTrustBundleSchema,
-  indexerOverlayTrustReceiptDigest,
-  indexerOverlayTrustReceiptSchema,
+  indexerOverlayValidationReceiptDigest,
+  indexerOverlayValidationReceiptSchema,
   validateIndexerContractOverlay,
-  validateIndexerOverlayAttestation,
-  validateIndexerOverlayTrustBundleEnvelope,
-  verifyEnterpriseIndexerOverlayTrust,
-} from "./indexerOverlayTrust.js";
+  validateIndexerOverlayValidationReceipt,
+} from "./indexerContractOverlay.js";
 export type {
   IndexerContractOverlay,
-  IndexerOverlayAttestation,
   IndexerOverlayConformanceReport,
-  IndexerOverlayProjectAuthorization,
-  IndexerOverlayTrustBundle,
-  IndexerOverlayTrustBundleEnvelope,
-  IndexerOverlayTrustReceipt,
-} from "./indexerOverlayTrust.js";
+  IndexerOverlayValidationReceipt,
+} from "./indexerContractOverlay.js";
 export * from "./indexerOverlayQuestionAmendment.js";
 export * from "./indexerOverlayQuestionApplyProposal.js";
 export * from "./indexerBaseQuestionAmendment.js";

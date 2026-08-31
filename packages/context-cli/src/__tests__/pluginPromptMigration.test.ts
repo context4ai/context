@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
 const PLUGIN_ROOT = join(REPOSITORY_ROOT, "plugins", "context");
+const CODE_INDEXER_ROOT = join(PLUGIN_ROOT, "skills", "context-code-indexer");
+const MARKDOWN_INDEXER_ROOT = join(PLUGIN_ROOT, "skills", "context-markdown-indexer");
 const ENTRY_PATH = ["skills", "context", "SKILL.md"] as const;
 const WORKFLOW_ROOT = join(PACKAGE_ROOT, "context-workflow");
 const SDK_DOCS_ROOT = join(PACKAGE_ROOT, "..", "context", "docs");
@@ -16,7 +18,16 @@ async function read(...segments: string[]): Promise<string> {
 
 async function listFiles(root: string): Promise<string[]> {
   const files: string[] = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return files;
+    }
+    throw error;
+  }
+  for (const entry of entries) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) files.push(...await listFiles(path));
     else if (entry.isFile()) files.push(path);
@@ -136,7 +147,13 @@ describe("plugin prompt and workflow resource contract", () => {
   test("source and gate discipline lives in selected workflow procedures", async () => {
     const source = await read(WORKFLOW_ROOT, "resources", "procedures", "source-boundary.md");
     const capture = await read(WORKFLOW_ROOT, "resources", "procedures", "document-capture.md");
-    const extraction = await read(WORKFLOW_ROOT, "resources", "procedures", "code-extraction.md");
+    const indexerLifecycle = await read(
+      WORKFLOW_ROOT,
+      "skills",
+      "run-indexer-lifecycle",
+      "SKILL.md",
+    );
+    const codeIndexer = await read(CODE_INDEXER_ROOT, "references", "indexer.md");
     const review = await read(WORKFLOW_ROOT, "resources", "procedures", "knowledge-review.md");
     const detailed = await read(WORKFLOW_ROOT, "resources", "procedures", "source-capture-detailed.md");
 
@@ -149,10 +166,10 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(capture).toContain("does not classify, summarize, approve, or build");
     expect(capture).toContain("Never hand-write or repair captured snapshots");
     expect(capture).toContain("Never treat one\nsuccessful module as completion");
-    expect(extraction).toContain("`include` filters files inside a selected source");
-    expect(extraction).toContain("scan mode");
-    expect(extraction).toContain("AST-analyzed files");
-    expect(extraction).toContain("Do not open Review while another extraction target");
+    expect(indexerLifecycle).toContain("sole Context registry-and-Provider indexing route");
+    expect(indexerLifecycle).toContain("The Indexer\nGraph is the authority");
+    expect(codeIndexer).toContain("For author work, produce exactly one Result");
+    expect(codeIndexer).toContain("Context independently validates");
     expect(review).toMatch(/complete current candidate set|complete\s+current batch/u);
     for (const invariant of [
       "Capture is entirely CLI-driven",
@@ -173,14 +190,10 @@ describe("plugin prompt and workflow resource contract", () => {
       ["human-gates.md", ["user's conversation language", "placeholder commands"]],
       ["source-boundary.md", ["whole repository/subspace", "`include`"]],
       ["document-capture.md", ["permission to read", "documentation site"]],
-      ["document-classification.md", ["mainline collection", "insufficient evidence"]],
-      ["structure-confirmation.md", ["final staged HTML report", "multi-source round"]],
-      ["code-extraction.md", ["preview", "multi-module round"]],
       ["knowledge-review.md", ["exact Payload", "fully managed operation"]],
       ["package-output.md", ["output", "package"]],
       ["evidence-maintenance.md", ["source evidence", "content refresh"]],
       ["workflow-mode-after-creation.md", ["Ordinary review mode", "about 40% slower"]],
-      ["workflow-mode-after-capture.md", ["fully managed operation", "about 40% slower"]],
     ] as const;
 
     for (const [file, snippets] of dialogue) {
@@ -246,63 +259,31 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(types).not.toContain("resources/semantic/align/");
     expect(types).not.toContain("resources/semantic/compile/");
 
-    for (const scope of ["align", "compile"]) {
-      const root = join(WORKFLOW_ROOT, "resources", "semantic", scope);
-      for (const entry of await readdir(root, { withFileTypes: true })) {
-        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-        const body = await readFile(join(root, entry.name), "utf8");
-        expect(body, `${scope}/${entry.name}`).toMatch(
-          /^---\n[\s\S]*?\napplies-to:\n(?:\s+- [a-z0-9_-]+\n)+[\s\S]*?\n---\n/u,
-        );
-      }
+    const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
+    expect(rules).toContain('source: "context-markdown-indexer"');
+    expect(rules).toContain("bundle:context-markdown-indexer/references/");
+    const compileRoot = join(WORKFLOW_ROOT, "resources", "semantic", "compile");
+    for (const entry of await readdir(compileRoot, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const body = await readFile(join(compileRoot, entry.name), "utf8");
+      expect(body, `compile/${entry.name}`).toMatch(
+        /^---\n[\s\S]*?\napplies-to:\n(?:\s+- [a-z0-9_-]+\n)+[\s\S]*?\n---\n/u,
+      );
     }
   });
 
-  test("semantic judgment resources are published outside skills and remain deep", async () => {
-    const resources = [
-      ["align", "structure-planning.md", ["Structure Planning Procedure", "context.structure.v1", "Keep cache-friendly prompt order"]],
-      ["align", "gates.md", ["Node Type Order", "Fake Entity Gate", "Edge Gate"]],
-      ["align", "density-profile.md", ["Evidence Density Selection", "`macro`", "`single_pass`"]],
-      ["align", "candidate-resolution.md", ["Candidate Resolution Rules", "Stable References", "Keep unresolved"]],
-      ["compile", "compile-actions.md", ["Section Kind Choice", "context.compile-actions.v1", "Do not write `content`"]],
-      ["compile", "action-domain-gates.md", ["answerability", "No trigger Section"]],
-      ["compile", "notes.md", ["Note snippets", "How to route a note snippet"]],
-      ["compile", "refresh-and-update.md", ["Refresh and update", "Replacement vs `update` semantics"]],
-      ["compile", "structural-challenges.md", ["Structural and ownership challenges", "When to challenge"]],
-      ["compile", "compile-judgment.md", ["Verdict Meanings", "explicit user confirmation"]],
-      ["compile", "semantic-judgment.md", ["Judgment Vocabulary", "Decision Routing"]],
-      ["compile", "disposition-semantics.md", ["Disposition Semantics", "Replacement And Withdrawal"]],
-      ["compile", "temporal-and-evidence.md", ["Temporal Priors", "Evidence Boundary Repair"]],
-      ["compile", "leakage-and-ownership.md", ["Context-only Leakage", "Repair Routes"]],
-      ["compile", "scope-review-and-omit.md", ["Scope Review", "No-write Discipline"]],
-      ["compile", "user-confirmation.md", ["User Confirmation Paths", "What Counts As Confirmation"]],
-      ["compile", "close-gate.md", ["knowledge/structure.yaml", "verify"]],
-    ] as const;
-
-    expect((await readdir(join(WORKFLOW_ROOT, "resources", "semantic", "align"))).sort()).toEqual(
-      resources.filter(([scope]) => scope === "align").map(([, file]) => file).sort(),
+  test("semantic planning has one Provider-owned source after Phase G", async () => {
+    expect(await listFiles(join(WORKFLOW_ROOT, "resources", "semantic", "align"))).toEqual([]);
+    const planning = await read(MARKDOWN_INDEXER_ROOT, "references", "semantic-planning.md");
+    const structure = await read(
+      MARKDOWN_INDEXER_ROOT,
+      "references",
+      "structure-and-artifacts.md",
     );
-    expect((await readdir(join(WORKFLOW_ROOT, "resources", "semantic", "compile"))).sort()).toEqual(
-      [
-        ...resources.filter(([scope]) => scope === "compile").map(([, file]) => file),
-        "index.md",
-      ].sort(),
-    );
-
-    let totalBytes = 0;
-    for (const [scope, file, snippets] of resources) {
-      const body = await read(WORKFLOW_ROOT, "resources", "semantic", scope, file);
-      totalBytes += Buffer.byteLength(body, "utf8");
-      expect(body, `${scope}/${file}`).toMatch(/^---\n/u);
-      expect(body, `${scope}/${file}`).toContain(`id: context.semantic.${scope}.`);
-      expect(body, `${scope}/${file}`).toContain("kind: procedure");
-      expect(Buffer.byteLength(body, "utf8"), `${scope}/${file} must remain a full procedure, not a summary`)
-        .toBeGreaterThan(2_000);
-      for (const snippet of snippets) {
-        expect(body, `${scope}/${file}:${snippet}`).toContain(snippet);
-      }
-    }
-    expect(totalBytes, "semantic procedures must not be collapsed into short hints").toBeGreaterThan(130_000);
+    expect(planning).toContain("Evidence, subject, and claim planning");
+    expect(planning).toContain("On\na stale workset");
+    expect(structure).toContain("Section first, Artifact when justified");
+    expect(structure).toContain("Candidate resolution");
 
     const detailedCapture = await read(
       WORKFLOW_ROOT,
@@ -316,103 +297,33 @@ describe("plugin prompt and workflow resource contract", () => {
     ).toBeGreaterThan(13_000);
   });
 
-  test("code-index archetype templates remain usable without prior project context", async () => {
-    const classification = await read(
-      WORKFLOW_ROOT,
-      "resources",
-      "semantic",
-      "code-index",
-      "classification.md",
-    );
-    for (const required of [
-      "Use one batch evidence pass",
-      "Record classification before reading templates",
-      "Read matching templates",
-      "Match the plan to the extractor",
-      "Produce one deduplicated plan",
-      "Capability gaps and preview",
-      "up to 100 pages",
-      "101–300 pages",
-      "more than 300 pages",
-    ]) {
-      expect(classification, required).toContain(required);
-    }
-
-    const templates = new Map<string, readonly string[]>([
-      ["web-application.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["api-service.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["domain-service.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["background-runtime.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["sdk-library.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["cli-tool.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["adapter.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["monorepo-container.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["derived-source.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprints", "Granularity and relationships", "Revise or stop when"]],
-      ["contract-source.md", ["Evidence pass", "Questions the knowledge must answer", "Suggested knowledge units", "Chapter blueprint", "Granularity and stop conditions"]],
-      ["protocol-boundary.md", ["Evidence pass", "Questions the knowledge must answer", "Canonical operation record", "Generated and authoritative contracts", "Granularity and relationships"]],
-      ["event-flow.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
-      ["persistence-boundary.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
-      ["plugin-extension.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Granularity and stop conditions"]],
-      ["cross-module-chain.md", ["Evidence pass", "Questions the knowledge must answer", "Chapter blueprint", "Extractor and ownership rule", "Granularity and stop conditions"]],
-    ]);
-
-    for (const [file, requiredSections] of templates) {
-      const body = await read(
-        WORKFLOW_ROOT,
-        "resources",
-        "semantic",
-        "code-index",
-        "templates",
-        file,
-      );
-      expect(body, `${file}:chapter blueprint`).toContain("```markdown");
-      for (const section of requiredSections) {
-        expect(body, `${file}:${section}`).toContain(section);
-      }
+  test("code-index archetype templates live only in the Provider Bundle", async () => {
+    const manifest = await read(CODE_INDEXER_ROOT, "context-indexer.yaml");
+    const templates = await readdir(join(CODE_INDEXER_ROOT, "templates"));
+    expect(templates.length).toBeGreaterThan(10);
+    expect(manifest).toContain("provider:");
+    for (const file of templates) {
+      const body = await read(CODE_INDEXER_ROOT, "templates", file);
+      expect(body, file).toContain("Evidence pass");
+      expect(body, file).toContain("Questions the knowledge must answer");
     }
   });
 
-  test("workflow graph exposes the complete semantic inventory as progressive context", async () => {
+  test("workflow graph delegates semantic indexing through the sole lifecycle Skill", async () => {
     const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
-    const compileIndex = await read(
-      WORKFLOW_ROOT,
-      "resources",
-      "semantic",
-      "compile",
-      "index.md",
-    );
-    for (const file of [
-      "align/structure-planning.md",
-      "align/gates.md",
-      "align/density-profile.md",
-      "align/candidate-resolution.md",
-    ]) {
-      expect(graph, file).toContain(`resources/semantic/${file}`);
-    }
-    expect(graph).toContain("resources/semantic/compile/index.md");
-    for (const file of [
-      "compile/compile-actions.md",
-      "compile/action-domain-gates.md",
-      "compile/notes.md",
-      "compile/refresh-and-update.md",
-      "compile/structural-challenges.md",
-      "compile/compile-judgment.md",
-      "compile/semantic-judgment.md",
-      "compile/disposition-semantics.md",
-      "compile/temporal-and-evidence.md",
-      "compile/leakage-and-ownership.md",
-      "compile/scope-review-and-omit.md",
-      "compile/user-confirmation.md",
-      "compile/close-gate.md",
-    ]) {
-      expect(compileIndex, file).toContain(file.replace("compile/", ""));
-    }
+    expect(graph).toContain("id: run-indexer-lifecycle");
+    expect(graph).toContain("actions/run-indexer-lifecycle.yaml");
+    expect(graph).not.toContain("resources/semantic/align/");
+    expect(graph).not.toContain("resources/semantic/code-index/");
     expect(graph).toContain("resources/procedures/source-capture-detailed.md");
+    expect(graph).toContain("- { from: apply-managed-review, to: close-approved-knowledge }");
+    expect(graph).toContain("- { from: close-approved-knowledge, to: choose-package-output }");
+    expect(graph).not.toContain("- { from: maintain-evidence, to: close-approved-knowledge }");
+    expect(graph).not.toContain("- { from: close-approved-knowledge, to: revise-document }");
 
     const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
     expect(rules).toContain("semanticRuleDescriptors");
-    expect(rules).toContain('metadata["applies-to"]');
-    expect(rules).toContain('source: "context-workflow"');
+    expect(rules).toContain('source: "context-markdown-indexer"');
   });
 
   test("route-selected SDK manuals remain complete mirrors of the public docs", async () => {
@@ -437,31 +348,17 @@ describe("plugin prompt and workflow resource contract", () => {
     }
   });
 
-  test("every authored workflow resource is reachable from the graph", async () => {
+  test("every workflow resource selected by a graph exists", async () => {
     const resourcesRoot = join(WORKFLOW_ROOT, "resources");
     const graph = (await Promise.all([
       "workspace.yaml",
       "indexer.yaml",
     ].map((name) => read(WORKFLOW_ROOT, "graphs", name)))).join("\n");
-    const compileIndex = await read(
-      resourcesRoot,
-      "semantic",
-      "compile",
-      "index.md",
-    );
-    for (const file of await listFiles(resourcesRoot)) {
-      const resourcePath = `resources/${relative(resourcesRoot, file)}`;
-      const compileFile = relative(
-        join(resourcesRoot, "semantic", "compile"),
-        file,
-      );
-      const selectedTransitively = !compileFile.startsWith("..") &&
-        compileFile !== "index.md" &&
-        compileIndex.includes(`](${compileFile})`);
-      expect(
-        graph.includes(resourcePath) || selectedTransitively,
-        `${resourcePath} is not selected by any route or resource index`,
-      ).toBe(true);
+    const referenced = [...graph.matchAll(/(?:^|[\s[])resources\/([a-z0-9_./-]+)/gmu)]
+      .map((match) => match[1]!.replace(/[\],}]$/u, ""));
+    expect(referenced.length).toBeGreaterThan(10);
+    for (const path of new Set(referenced)) {
+      expect((await stat(join(resourcesRoot, path))).isFile(), path).toBe(true);
     }
   });
 

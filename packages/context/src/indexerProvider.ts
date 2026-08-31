@@ -195,12 +195,6 @@ export const indexerPartitionStrategyDeclarationSchema = z.object({
   addDuplicateIssues(value.profiles, context, "partition strategy profiles");
 });
 
-const overlayAttestationResourceSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-attestation/v1"),
-  resource: portableIndexerPathSchema,
-  integrity: indexerDigestSchema,
-}).strict();
-
 const contractOverlayResourceSchema = z.object({
   id: indexerIdSchema,
   protocol: z.literal("context.indexer.contract-overlay/v1"),
@@ -210,7 +204,6 @@ const contractOverlayResourceSchema = z.object({
   }).strict(),
   resource: portableIndexerPathSchema,
   integrity: indexerDigestSchema,
-  attestation: overlayAttestationResourceSchema.optional(),
 }).strict();
 
 const providesSchema = z.object({
@@ -543,10 +536,7 @@ function referencedProviderPaths(manifest: IndexerProviderManifest): string[] {
     ...(manifest.quality_guidance?.repair === undefined
       ? []
       : [manifest.quality_guidance.repair]),
-    ...(manifest.provides.contract_overlays ?? []).flatMap((overlay) => [
-      overlay.resource,
-      ...(overlay.attestation === undefined ? [] : [overlay.attestation.resource]),
-    ]),
+    ...(manifest.provides.contract_overlays ?? []).map((overlay) => overlay.resource),
   ];
 }
 

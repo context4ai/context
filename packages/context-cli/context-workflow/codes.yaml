@@ -3,10 +3,6 @@ codes:
   - { code: diagnostic.project-entry-invalid, kind: diagnostic, severity: error, summary: The Context project entry cannot be loaded., document: resources/diagnostics/workspace-state.md }
   - { code: diagnostic.workspace-state-invalid, kind: diagnostic, severity: error, summary: Context cannot establish valid lifecycle facts for the workspace., document: resources/diagnostics/workspace-state.md }
   - { code: diagnostic.structure-snapshot-invalid, kind: diagnostic, severity: error, summary: An active source-bound structure snapshot is invalid., document: resources/diagnostics/workspace-state.md }
-  - { code: diagnostic.phase-source-unresolved, kind: diagnostic, severity: error, summary: A document lifecycle phase cannot resolve its canonical source., document: resources/diagnostics/workspace-state.md }
-  - { code: diagnostic.structure-route-unresolved, kind: diagnostic, severity: error, summary: A staged structure cannot resolve to one source and collection lifecycle., document: resources/diagnostics/workspace-state.md }
-  - { code: diagnostic.compile-route-ambiguous, kind: diagnostic, severity: error, summary: More than one compile lifecycle owns the same source and collection., document: resources/diagnostics/workspace-state.md }
-  - { code: diagnostic.structure-snapshot-missing, kind: diagnostic, severity: error, summary: A compile batch references a missing confirmed structure snapshot., document: resources/diagnostics/workspace-state.md }
   - { code: diagnostic.verify-failed, kind: diagnostic, severity: error, summary: Verification found one or more blocking findings., document: resources/diagnostics/verification.md }
   - { code: diagnostic.projection-stale, kind: diagnostic, severity: info, summary: Approved knowledge changed and deterministic close must refresh its derived projection., document: resources/diagnostics/projection-stale.md }
   - { code: diagnostic.evidence-degraded, kind: diagnostic, severity: warning, summary: Approved knowledge has evidence that cannot currently be rechecked., document: resources/diagnostics/verification.md }
@@ -22,24 +18,6 @@ codes:
   - { code: route.capture.configuration-required, kind: route-reason, summary: Registered document sources are missing capture declarations., document: resources/procedures/project-configuration.md }
   - { code: route.capture.permission-required, kind: route-reason, summary: External document capture requires source-read permission., document: resources/procedures/document-capture.md }
   - { code: route.capture.pending-target, kind: route-reason, summary: Capture the next declared document target., document: resources/procedures/document-capture.md }
-  - { code: route.extract.scope-required, kind: route-reason, summary: Code extraction scope has not been confirmed., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.configuration-required, kind: route-reason, summary: Registered repository sources are missing extraction declarations., document: resources/procedures/project-configuration.md }
-  - { code: route.extract.capability-required, kind: route-reason, summary: One or more code index units require missing material or a narrower plan., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.preview-required, kind: route-reason, summary: Preview all pending code index units before candidate writes., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.ownership-required, kind: route-reason, summary: Revise the index plan so every projected page has one output owner., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.scale-limit-exceeded, kind: route-reason, summary: At least one index unit exceeds the supported page limit., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.pending-target, kind: route-reason, summary: Extract the next pending code target before another workflow family., document: resources/procedures/code-extraction.md }
-  - { code: route.extract.audit-input-required, kind: route-reason, summary: The code-index audit requires specific source or protocol material that is not currently available., document: resources/procedures/code-index-audit.md }
-  - { code: route.extract.audit-guidance-required, kind: route-reason, summary: One or more code-index units still fail absolute quality bounds after three revisions and require one aggregated human direction., document: resources/procedures/code-index-audit.md }
-  - { code: route.extract.audit-revision-required, kind: route-reason, summary: Revise the code-index plan and content for issues confirmed by the Agent audit., document: resources/procedures/code-index-audit.md }
-  - { code: route.extract.audit-required, kind: route-reason, summary: The complete proposed code index requires one Agent semantic audit decision., document: resources/procedures/code-index-audit.md }
-  - { code: route.extract.codeindex-migration-required, kind: route-reason, summary: This workspace still uses the legacy codegraph collection and must be migrated deterministically before code extraction continues., document: resources/procedures/code-extraction.md }
-  - { code: route.document.classification-required, kind: route-reason, summary: A captured document needs an evidence-backed collection decision., document: resources/procedures/document-classification.md }
-  - { code: route.prose.configuration-required, kind: route-reason, summary: A document target is missing a complete prose lifecycle declaration., document: resources/procedures/project-configuration.md }
-  - { code: route.structure.pending-target, kind: route-reason, summary: Prepare the next document structure slot from source evidence., document: resources/procedures/prose-align.md }
-  - { code: route.structure.confirmation-required, kind: route-reason, summary: A staged structure is waiting for confirmation., document: resources/procedures/prose-align.md }
-  - { code: route.structure.confirm, kind: route-reason, summary: Persist the confirmed structure slot., document: resources/procedures/prose-align.md }
-  - { code: route.compile.pending-target, kind: route-reason, summary: Compile the next planned source-bound knowledge view., document: resources/procedures/prose-compile.md }
   - { code: route.review.identity-conflict, kind: route-reason, summary: Preserve approved ViewRef and path identity before Review., document: resources/procedures/knowledge-review.md }
   - { code: route.review.decision-required, kind: route-reason, summary: The complete current candidate batch needs one review decision set., document: resources/procedures/knowledge-review.md }
   - { code: route.review.apply-managed, kind: route-reason, summary: Apply the current candidate batch under explicit session-managed authority., document: resources/procedures/knowledge-review.md }
@@ -48,10 +26,9 @@ codes:
   - { code: route.package.configuration-required, kind: route-reason, summary: Declare the confirmed package output in the Context project., document: resources/procedures/package-output.md }
   - { code: route.package.template-review-required, kind: route-reason, summary: "Replace or edit package templates, or explicitly accept the generic defaults.", document: resources/procedures/package-output.md }
   - { code: route.document-revision.requested, kind: route-reason, summary: Apply and validate the user's requested correction on one approved knowledge page., document: resources/procedures/document-revision.md }
-  - { code: route.document-optimization.pending, kind: route-reason, summary: Resolve the current source-faithful document revision batch before building packages., document: resources/procedures/document-optimization.md }
-  - { code: route.document-optimization.guidance-required, kind: route-reason, summary: The same document revision quality problem remains after three attempts and requires one aggregated human direction., document: resources/procedures/document-optimization.md }
   - { code: route.build.package-stale, kind: route-reason, summary: Build the declared package outputs from current approved knowledge., document: resources/procedures/close-and-build.md }
   - { code: route.logs.delivery-pending, kind: route-reason, summary: Send locally queued runtime logs through the configured generic sink., document: resources/procedures/close-and-build.md }
+  - { code: route.indexer.lifecycle-required, kind: route-reason, summary: Continue the sole registry-and-Provider indexing lifecycle until current Candidates exist. }
   - { code: route.indexer.agent-step, kind: route-reason, summary: Run one digest-bound Indexer workset with the static Context Agent Action. }
   - { code: route.indexer.provider-configuration, kind: route-reason, summary: Configure an exact path-free Provider selection from currently visible Indexer Skills. }
   - { code: route.indexer.markdown-capture-validation, kind: route-reason, summary: Require exact current document capture before discovering a semantic Markdown Provider. }
@@ -64,12 +41,11 @@ codes:
   - { code: route.indexer.customization-validation, kind: route-reason, summary: Validate and content-address stage one exact minimal customization draft without project source writes. }
   - { code: route.indexer.customization-project-preparation, kind: route-reason, summary: Resolve the exact Providers and stage one CAS-bound customization project proposal. }
   - { code: route.indexer.project-observation, kind: route-reason, summary: Observe the complete applied target set and rerun finalized selection validation. }
-  - { code: route.indexer.contract-overlay-validation, kind: route-reason, summary: Recompute data-only contract overlay conformance and resolve its trust path. }
+  - { code: route.indexer.contract-overlay-validation, kind: route-reason, summary: Recompute data-only contract overlay conformance and issue a digest-bound validation receipt. }
   - { code: route.indexer.requirement-confirmation-routing, kind: route-reason, summary: Revalidate the comparator report and select the ordinary or contraction confirmation Gate. }
   - { code: route.indexer.requirement-confirmation, kind: route-reason, summary: "Confirm an initial, equivalent, or strengthening requirement workset." }
   - { code: route.indexer.requirement-contraction, kind: route-reason, summary: Require non-delegable human confirmation for contraction or incomparable obligation replacement. }
-  - { code: route.indexer.contract-overlay-authorization, kind: route-reason, summary: Authorize one exact current-project contract overlay after conformance passes. }
-  - { code: route.indexer.overlay-question-proposal, kind: route-reason, summary: Propose namespaced question bindings from one current trusted overlay. }
+  - { code: route.indexer.overlay-question-proposal, kind: route-reason, summary: Propose namespaced question bindings from one current validated overlay. }
   - { code: route.indexer.overlay-question-rebind, kind: route-reason, summary: Revalidate an overlay requirement and build one coupled registry proposal. }
   - { code: route.indexer.dependency-authorization, kind: route-reason, summary: Authorize one exact staged dependency intent set with install scripts disabled. }
   - { code: route.indexer.program-execution-authorization, kind: route-reason, summary: Authorize one exact non-allowlisted Provider program for trusted non-sandboxed execution. }

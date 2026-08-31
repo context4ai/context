@@ -6,7 +6,7 @@ import {
   type HostActionResult,
   type JsonValue,
   type ResourceLocation,
-  type ResourceLocationV2,
+  type HostActionResourceLocation,
 } from "@c4a/agent-graph";
 import {
   buildIndexerProviderResolutionActionOutput,
@@ -61,10 +61,10 @@ function locationId(input: IndexerProviderResolutionActionInput): string {
 
 export function indexerProviderResolutionHostLocation(
   value: unknown,
-): ResourceLocationV2 {
+): HostActionResourceLocation {
   const input = validateIndexerProviderResolutionActionInput(value);
   return {
-    schema: "agent-graph.resource-location.v2",
+    schema: "agent-graph.resource-location.host-action.v1",
     id: locationId(input),
     kind: "procedure",
     mediaType: "application/json",

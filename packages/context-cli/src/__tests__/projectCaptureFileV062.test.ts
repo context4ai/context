@@ -225,7 +225,7 @@ describe("0.6.2 capture:file runtime", () => {
         allowed_actions: ["view", "propose_collection"],
         classification_state: {
           required: true,
-          reason_code: "route.document.classification-required",
+          reason_code: "route.indexer.lifecycle-required",
         },
       });
       expect(investigation.result).not.toHaveProperty("collection");
@@ -280,25 +280,19 @@ describe("0.6.2 capture:file runtime", () => {
       expect(status).toMatchObject({
         sourceCount: 1,
         readySources: 1,
-        state: "route.document.classification-required",
+        state: "route.indexer.lifecycle-required",
       });
       expect(status).toMatchObject({
         routing: {
-          current_state: "route.document.classification-required",
+          current_state: "route.indexer.lifecycle-required",
           human_gate: {
-            required: true,
-            kind: "document-classification",
+            required: false,
+            kind: "none",
           },
-          command_plan: [{
-            availability: "immediate",
-            command: expect.stringContaining(
-              "run capture:file:product-docs --view read-plan --format json",
-            ),
-          }],
+          command_plan: [],
         },
       });
-      expect(String(status.next)).toContain("evidence-backed collection decision");
-      expect((status.routing as { command_plan: unknown[] }).command_plan).toHaveLength(1);
+      expect(String(status.next)).toContain("sole registry-and-Provider indexing lifecycle");
 
       const secondOutput = JSON.parse(await runCliInDir(projectRoot, [
         "run",

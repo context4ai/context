@@ -100,45 +100,6 @@ function rootDiagnostics(
       count: observation.activeStructures.diagnostics.length,
     });
   }
-  if (observation.declarationGraph.unresolvedPhases.length > 0) {
-    diagnostics.push({
-      code: "diagnostic.phase-source-unresolved",
-      severity: "error",
-      message: "One or more document lifecycle phases cannot resolve their canonical source.",
-      count: observation.declarationGraph.unresolvedPhases.length,
-    });
-  }
-  if (
-    observation.alignPhaseResolution?.state === "unresolved" ||
-    observation.alignPhaseResolution?.state === "ambiguous"
-  ) {
-    diagnostics.push({
-      code: "diagnostic.structure-route-unresolved",
-      severity: "error",
-      message: "The staged structure cannot be resolved to one declared source and collection lifecycle.",
-      count: observation.alignPhaseResolution.requestedTargets.length,
-    });
-  }
-  if (observation.compilePhaseResolution?.state === "ambiguous") {
-    diagnostics.push({
-      code: "diagnostic.compile-route-ambiguous",
-      severity: "error",
-      message:
-        "More than one compile lifecycle can own the same staged source and collection.",
-      count: observation.compilePhaseResolution.ambiguousCollections.length,
-    });
-  }
-  const missingStructureDigestCount =
-    observation.compileBatch?.missingStructureDigests.length ?? 0;
-  if (missingStructureDigestCount > 0) {
-    diagnostics.push({
-      code: "diagnostic.structure-snapshot-missing",
-      severity: "error",
-      message:
-        "A compile batch references a confirmed structure snapshot that is missing.",
-      count: missingStructureDigestCount,
-    });
-  }
   if (observation.projectionRefreshIssues > 0) {
     diagnostics.push({
       code: "diagnostic.projection-stale",
@@ -324,7 +285,7 @@ export function projectWorkflowResourceLocation(
     ...(location.revision === undefined ? {} : { revision: location.revision }),
     read_state: location.readState ?? "read-required",
   };
-  if (location.schema === "agent-graph.resource-location.v2") {
+  if (location.schema === "agent-graph.resource-location.host-action.v1") {
     return {
       ...projected,
       materialize: {
@@ -341,7 +302,7 @@ export function projectWorkflowResourceLocation(
     ...projected,
     ...(location.digest === undefined ? {} : { digest: location.digest }),
     ...(location.filePath === undefined ? {} : { path: location.filePath }),
-    ...(location.materialize === undefined
+    ...(!("materialize" in location)
       ? {}
       : {
           command: resourceMaterializeCommand(

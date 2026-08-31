@@ -72,7 +72,7 @@ Provider 将长期知识生产生命周期转化为依据事实选择、可以�
 23. reconciliation 的 completed/partial/blocked 结果都必须先经过 retained material-gap checkpoint，才能完成、调度回答或停止。批准答案会内联完整 accepted workset，支持清空 `.tmp` 后跨机器恢复；Context 从 canonical source/span binding 派生不含正文的 planned-answer projection，actualization 将该 projection 与 planned landing 绑定到同一个 current layout-proposal-set digest。source authority stale 或 landing 缺失/歧义时原子 reopen 为 unresolved。最终 close 只能从 approved structure 自身读取精确 answer provenance，并与 ledger CAS 共用一次原子写入。`audit-material-gap-state` 只在内存复算 expected ledger，不写工作区，并把主 Review 前的漂移路由到 checkpoint、把已批准的后置状态路由到 close；retained answer 状态和 planned-answer provenance 不进入 reader Markdown 或 package projection。
 24. requirement confirmation 必须使用 CLI 重新计算的 canonical comparator。普通变化只能使用显式 session authority；contraction 与不可比较的义务替换进入不可委托人工 Gate。
 25. SubjectKey schema authority 只来自 CLI base contract 或唯一 owner extension Provider。已有 approved Node 上的 identity-breaking 变化必须 Provider major，并取得绑定精确映射的人工授权；无效映射在 Gate 前失败。target-resolution ambiguous/invalid 是阻塞或失败的类型化 Outcome，不能进入 author work。
-26. Markdown Provider Route 先证明文档 capture current，再把 Agent 的当前可见 Skill discovery 与 CLI 的 routing、静态校验、解析、stage 和最终校验分离。CLI-bundled Bundle 可自动完成；外部 Bundle 返回 v2 Host request，本地定制返回独立 blocking Outcome。Host 重入只携带结构化 Host result，所有 staged path 仍由 CLI 创建。
+26. Markdown Provider Route 先证明文档 capture current，再把 Agent 的当前可见 Skill discovery 与 CLI 的 routing、静态校验、解析、stage 和最终校验分离。CLI-bundled Bundle 可自动完成；外部 Bundle 返回 Host-action Resource request，本地定制返回独立 blocking Outcome。Host 重入只携带结构化 Host result，所有 staged path 仍由 CLI 创建。
 
 ## 全托管宿主循环
 

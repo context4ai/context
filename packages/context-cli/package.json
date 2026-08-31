@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -48,7 +48,7 @@
     "clean-cache": "bun run src/cli.ts clean-cache"
   },
   "dependencies": {
-    "@c4a/agent-graph": "0.2.7",
+    "@c4a/agent-graph": "0.3.0",
     "@c4a/context": "workspace:*",
     "commander": "^11.0.0",
     "fast-xml-parser": "^5.10.1",

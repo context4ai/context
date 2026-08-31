@@ -79,26 +79,7 @@ function reviewForceApproveCommand(
 function workspaceRepairPlan(
   observation: ContextWorkflowObservation,
 ): ResolvedHostPlan {
-  if (observation.compilePhaseResolution?.state === "ambiguous") {
-    return {
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-        action:
-          "Make the compileProse lifecycle owner unique for each source and collection reported by diagnostic.compile-route-ambiguous.",
-      },
-    };
-  }
-  if ((observation.compileBatch?.missingStructureDigests.length ?? 0) > 0) {
-    return {
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-        action:
-          "Restore the missing confirmed structure snapshot or declare a new align/compile lifecycle for the affected source and collection.",
-      },
-    };
-  }
+  void observation;
   return { commands: [command("context verify --format json --compact", "read")] };
 }
 
@@ -109,11 +90,6 @@ function verificationRepairPlan(
   if (recapture !== undefined) {
     return {
       commands: [command(withJsonFormat(recapture), "external", "automatic")],
-    };
-  }
-  if (observation.compileDocumentNext !== undefined) {
-    return {
-      commands: [command(withJsonFormat(observation.compileDocumentNext), "write")],
     };
   }
   return { commands: [command("context verify --format json --compact", "read")] };
@@ -161,9 +137,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
     commands: [],
   }),
   "context.validate-indexer-contract-overlay/v1": () => ({
-    commands: [],
-  }),
-  "context.authorize-indexer-contract-overlay/v1": () => ({
     commands: [],
   }),
   "context.confirm-subject-reidentification/v1": () => ({

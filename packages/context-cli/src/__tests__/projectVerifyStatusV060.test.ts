@@ -38,7 +38,7 @@ describe("0.6.0 project verify and status", () => {
       expect(verify).toContain("✓ verified context project");
 
       const builtStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(builtStatus).toContain("state: workflow.complete");
+      expect(builtStatus).toContain("state: route.indexer.lifecycle-required");
       expect(builtStatus).toContain("package sample-kb: ready");
       expect(builtStatus).toContain("verify: 0 error(s), 0 warning(s)");
 
@@ -49,18 +49,18 @@ describe("0.6.0 project verify and status", () => {
 
       rmSync(join(fixture.project, ".tmp", "context-runtime", "extract", "source-fingerprints.json"), { force: true });
       const unknownBaselineStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(unknownBaselineStatus).toContain("state: route.extract.pending-target");
+      expect(unknownBaselineStatus).toContain("state: route.indexer.lifecycle-required");
       expect(unknownBaselineStatus).toContain("source freshness: unknown");
       expect(unknownBaselineStatus).toContain("evidence status: pass-with-unverifiable-evidence");
       expect(unknownBaselineStatus).toContain("evidence warning: degraded");
-      expect(unknownBaselineStatus).toContain("run extract:20260712/sample-a:codeindex");
+      expect(unknownBaselineStatus).not.toContain("run extract:20260712/sample-a:codeindex");
 
       await runCliInDir(fixture.project, ["run", "extract:20260712/sample-a:codeindex"]);
       await runCliInDir(fixture.project, ["build"]);
       const builtAgentPath = join(fixture.project, "dist", "sample-kb", "AGENTS.md");
       writeFileSync(builtAgentPath, `${readFileSync(builtAgentPath, "utf8")}tampered=true\n`, "utf8");
       const tamperedOutputStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(tamperedOutputStatus).toContain("state: route.build.package-stale");
+      expect(tamperedOutputStatus).toContain("state: route.indexer.lifecycle-required");
       expect(tamperedOutputStatus).toContain("package sample-kb: stale");
 
       await runCliInDir(fixture.project, ["build"]);
@@ -88,10 +88,9 @@ describe("0.6.0 project verify and status", () => {
         nextHead,
       ]);
       const sourceStaleStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(sourceStaleStatus).toContain("state: route.extract.preview-required");
+      expect(sourceStaleStatus).toContain("state: route.indexer.lifecycle-required");
       expect(sourceStaleStatus).toContain("source freshness: stale");
-      expect(sourceStaleStatus).toContain("--workflow-revision");
-      expect(sourceStaleStatus).toContain("run --preview-extraction-batch");
+      expect(sourceStaleStatus).not.toContain("run --preview-extraction-batch");
       expect(sourceStaleStatus).not.toContain("state: route.review.decision-required");
 
       await runCliInDir(fixture.project, [
@@ -102,10 +101,9 @@ describe("0.6.0 project verify and status", () => {
       const templatePath = join(fixture.project, "src", "package-templates", "kb", "AGENTS.md");
       writeFileSync(templatePath, `${readFileSync(templatePath, "utf8")}template-changed=true\n`, "utf8");
       const staleStatus = await runCliInDir(fixture.project, ["status"]);
-      expect(staleStatus).toContain("state: route.build.package-stale");
+      expect(staleStatus).toContain("state: route.indexer.lifecycle-required");
       expect(staleStatus).toContain("package sample-kb: stale");
-      expect(staleStatus).toContain("--workflow-revision");
-      expect(staleStatus).toContain("build --format json");
+      expect(staleStatus).not.toContain("build --format json");
 
       rmSync(join(fixture.project, "src", "package-templates", "llms"), { recursive: true, force: true });
       const missingTemplateStatus = await runCliInDir(fixture.project, ["status"]);

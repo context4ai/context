@@ -11,7 +11,7 @@ import type {
 } from "../project/workflow/workflowTypes.js";
 
 const HOST_LOCATION: ContextWorkflowHostResourceLocation = {
-  schema: "agent-graph.resource-location.v2",
+  schema: "agent-graph.resource-location.host-action.v1",
   id: "context.indexer.instructions",
   kind: "procedure",
   mediaType: "application/json",
@@ -30,7 +30,7 @@ const HOST_LOCATION: ContextWorkflowHostResourceLocation = {
 };
 
 describe("Context Agent Graph Host ABI bridge", () => {
-  test("preserves a v2 Host materialization envelope without projecting a v1 command", () => {
+  test("preserves a Host Action materialization envelope without projecting a Graph Action command", () => {
     const projected = projectWorkflowResourceLocation(
       HOST_LOCATION,
       "workflow-revision",
@@ -49,11 +49,11 @@ describe("Context Agent Graph Host ABI bridge", () => {
     expect(JSON.parse(JSON.stringify(projected))).toEqual(projected);
   });
 
-  test("keeps resource-location.v1 materialization behavior unchanged", () => {
+  test("projects a Graph Action resource as a Context materialization command", () => {
     const location: ResourceLocation = {
-      schema: "agent-graph.resource-location.v1",
+      schema: "agent-graph.resource-location.graph-action.v1",
       id: "context.source-current",
-      kind: "procedure",
+      kind: "context-view",
       mediaType: "text/markdown",
       materialize: { resourceId: "context.source-current" },
     };
@@ -70,7 +70,7 @@ describe("Context Agent Graph Host ABI bridge", () => {
     expect(projected.materialize).toBeUndefined();
   });
 
-  test("preserves Host handler and v2 schemas on projected route actions", () => {
+  test("preserves Host handler and schemas on projected route actions", () => {
     const action: ContextWorkflowRouteActionSource = {
       id: "materialize-indexer-instructions",
       runner: "host",

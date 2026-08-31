@@ -4,7 +4,7 @@ import type {
   JsonValue,
   ResourceReadReceiptSet,
   ResourceLocation,
-  ResourceLocationV2,
+  HostActionResourceLocation,
   RouteAction,
 } from "@c4a/agent-graph";
 import type {
@@ -38,7 +38,6 @@ export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
 export const CONTEXT_WORKFLOW_ENTRY = "context";
 
 export const CONTEXT_WORKFLOW_AUTHORITIES = {
-  indexerContractOverlay: "context.indexer-contract-overlay",
   indexerMaterialAnswerReview: "context.indexer-material-answer-review",
   indexerDependencyInstall: "context.indexer-dependency-install",
   indexerProgramExecution: "context.indexer-program-execution",
@@ -67,6 +66,10 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   };
   evidence: {
     maintenance_clear: boolean;
+  };
+  indexer: {
+    lifecycle_current: boolean;
+    registry_state: "missing" | "pending" | "current" | "invalid";
   };
   gates: {
     evidence_maintenance_resolved: boolean;
@@ -198,7 +201,16 @@ export interface ContextWorkflowObservation {
   draftCollections: readonly KnowledgeCollection[];
   candidateSetDigest?: string;
   approvedPages: number;
+  approvedIndexerPages?: number;
   close: ProjectCloseStatus;
+  indexerRegistry: {
+    state: "missing" | "pending" | "current" | "invalid";
+    sourceRefs: string[];
+    diagnostic?: string;
+  };
+  indexerCandidateCompile: {
+    state: "missing" | "current" | "stale" | "invalid";
+  };
   alignDocumentValidateNext?: string;
   alignDocumentStructureSummaryNext?: string;
   alignDocumentConfirmNext?: string;
@@ -234,9 +246,9 @@ export interface ContextWorkflowCommand {
   };
 }
 
-export type ContextWorkflowHostMaterialization = ResourceLocationV2["materialize"];
+export type ContextWorkflowHostMaterialization = HostActionResourceLocation["materialize"];
 
-export type ContextWorkflowHostResourceLocation = ResourceLocationV2;
+export type ContextWorkflowHostResourceLocation = HostActionResourceLocation;
 
 export type ContextWorkflowResourceLocation =
   | ResourceLocation

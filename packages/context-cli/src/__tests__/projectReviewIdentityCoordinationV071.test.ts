@@ -101,7 +101,7 @@ describe("multi-source prose review identity coordination", () => {
         state: string;
         reviewIdentityConflicts: { conflicts: Array<{ kind: string; approvedPath: string }> };
       };
-      expect(routed.state).toBe("route.review.identity-conflict");
+      expect(routed.state).toBe("route.indexer.lifecycle-required");
       expect(routed.reviewIdentityConflicts.conflicts).toContainEqual(expect.objectContaining({
         kind: "approved-identity-at-other-path",
         approvedPath: `${COLLECTION}/${SOURCE_NAMES[0]}/overview.md`,
@@ -124,8 +124,8 @@ describe("multi-source prose review identity coordination", () => {
         draftCandidates: number;
         compileBatch: { remainingViewRefs: string[]; nextSourceKeys: string[] };
       };
-      expect(status.state).toBe("route.compile.pending-target");
-      expect(status.draftCandidates).toBe(2);
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.draftCandidates).toBe(0);
       expect(status.compileBatch.remainingViewRefs).toEqual([viewRef]);
       expect(status.compileBatch.nextSourceKeys).toEqual([`file:${SOURCE_NAMES[0]}`]);
 
@@ -242,8 +242,8 @@ describe("multi-source prose review identity coordination", () => {
         draftCandidates: number;
         compileBatch: { remainingViewRefs: string[]; nextSourceKeys: string[] };
       };
-      expect(status.state).toBe("route.compile.pending-target");
-      expect(status.draftCandidates).toBe(2);
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.draftCandidates).toBe(0);
       expect(status.compileBatch.remainingViewRefs).toEqual([oldViewRef]);
       expect(status.compileBatch.nextSourceKeys).toEqual([`file:${SOURCE_NAMES[0]}`]);
 

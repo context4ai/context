@@ -109,11 +109,9 @@ export function deriveIndexerMaterialAnswerFlowStatus(input: {
   const resolvedBindings: string[] = [];
   for (const entry of ledger.entries) {
     const domainState = authorityByOwner.get(entry.owner_cell_ref);
-    if (domainState === undefined) {
-      throw new TypeError(`material-answer owner ${entry.owner_cell_ref} is not current`);
-    }
-    if (domainState === "out-of-scope") {
-      throw new TypeError("out-of-scope material gaps must not be retained");
+    if (domainState === undefined || domainState === "out-of-scope") {
+      blockingUnresolved.push(indexerMaterialGapQuestionKey(entry));
+      continue;
     }
     const questionKey = indexerMaterialGapQuestionKey(entry);
     const pending = entry.state === "unresolved" || entry.state === "answer-approved" ||

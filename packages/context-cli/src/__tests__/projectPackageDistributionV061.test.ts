@@ -277,7 +277,7 @@ describe("flat knowledge package distribution", () => {
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
       expect(await runCliInDir(fixture.project, ["status"]))
-        .toContain("state: route.build.package-stale");
+        .toContain("package sample-kb: stale");
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }

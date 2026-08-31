@@ -52,6 +52,10 @@ export async function closeProjectIndexerApprovedKnowledge(input: {
     throw new TypeError("Indexer close material gap ledger CAS is stale");
   }
   const approvedStructure = record(value.approved_structure, "approved Indexer structure");
+  const approvedInputHash = text(
+    approvedStructure.input_hash,
+    "approved Indexer structure input_hash",
+  );
   const registry = parseIndexerRegistry(await readFile(
     join(input.projectRoot, DEFAULT_INDEXER_REGISTRY_PATH),
     "utf8",
@@ -83,6 +87,7 @@ export async function closeProjectIndexerApprovedKnowledge(input: {
     expected_ledger_revision: expectedRevision,
     ledger,
     approved_structure: approvedStructure,
+    expected_workspace_input_hash: approvedInputHash,
   });
   return {
     protocol: "context.indexer.close-approved-knowledge-result/v1" as const,

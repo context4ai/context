@@ -122,20 +122,24 @@ function resolved(input: {
   profile?: string;
   schema: IndexerSubjectKeyContract;
   providerVersion?: string;
+  indexerId?: string;
+  providerLayerId?: string;
+  providerIntegrity?: string;
+  manifestDigest?: string;
 }): IndexerResolvedSubjectKeySchema {
   const profile = input.profile ?? "example/framework-application";
   const payload: Omit<IndexerResolvedSubjectKeySchema, "resolved_digest"> = {
     protocol: "context.indexer.resolved-subject-key-schema/v1",
-    indexer_id: "workspace-code",
+    indexer_id: input.indexerId ?? "workspace-code",
     profile,
     authority: {
       kind: "provider-extension",
       extends: "component-library",
-      provider_layer_id: "framework",
+      provider_layer_id: input.providerLayerId ?? "framework",
       provider_id: "example-indexer",
       provider_version: input.providerVersion ?? "1.2.0",
-      provider_integrity: DIGEST_A,
-      manifest_digest: DIGEST_B,
+      provider_integrity: input.providerIntegrity ?? DIGEST_A,
+      manifest_digest: input.manifestDigest ?? DIGEST_B,
     },
     schema: input.schema,
     schema_digest: indexerSubjectKeySchemaDigest(profile, input.schema),
@@ -287,6 +291,89 @@ describe("SubjectKey schema authority and re-identification", () => {
         manifest: extensionManifest("1.3.0"),
       }],
     })).toThrow(/unique owner authority/);
+
+    expect(() => resolveIndexerSubjectKeySchemas({
+      profile_contract: contract,
+      operator_contract: operatorContract,
+      selections: selection,
+      providers: [authority, {
+        ...authority,
+        provider_layer_id: "impostor",
+      }],
+    })).toThrow(/unique owner authority/);
+  });
+
+  test("isolates extension owner uniqueness to each selected Indexer", () => {
+    const operatorContract = operators();
+    const contract = profileContract(operatorContract);
+    const manifest = extensionManifest();
+    const set = resolveIndexerSubjectKeySchemas({
+      profile_contract: contract,
+      operator_contract: operatorContract,
+      selections: [{
+        indexer_id: "workspace-code-a",
+        profile: "example/framework-application",
+        role: "extension",
+        provider_layer_id: "framework-a",
+      }, {
+        indexer_id: "workspace-code-b",
+        profile: "example/framework-application",
+        role: "extension",
+        provider_layer_id: "framework-b",
+      }],
+      providers: [{
+        indexer_id: "workspace-code-a",
+        provider_layer_id: "framework-a",
+        provider_integrity: DIGEST_A,
+        manifest_digest: DIGEST_B,
+        manifest,
+      }, {
+        indexer_id: "workspace-code-b",
+        provider_layer_id: "framework-b",
+        provider_integrity: DIGEST_B,
+        manifest_digest: DIGEST_A,
+        manifest,
+      }],
+    });
+
+    expect(set.schemas.map((schema) => ({
+      indexer_id: schema.indexer_id,
+      provider_layer_id: schema.authority.kind === "provider-extension"
+        ? schema.authority.provider_layer_id
+        : null,
+    }))).toEqual([{
+      indexer_id: "workspace-code-a",
+      provider_layer_id: "framework-a",
+    }, {
+      indexer_id: "workspace-code-b",
+      provider_layer_id: "framework-b",
+    }]);
+  });
+
+  test("rejects extension owner takeover while allowing a versioned owner upgrade", () => {
+    const oldSchema = resolved({ schema: OLD_SCHEMA });
+    const common = {
+      old_schema: oldSchema,
+      approved_subjects: [],
+      proposed_mappings: [],
+    };
+    expect(() => analyzeIndexerSubjectKeySchemaTransition({
+      ...common,
+      new_schema: resolved({ schema: OLD_SCHEMA, providerLayerId: "replacement" }),
+    })).toThrow(/cannot change owner Provider/);
+    expect(() => analyzeIndexerSubjectKeySchemaTransition({
+      ...common,
+      new_schema: resolved({ schema: OLD_SCHEMA, providerIntegrity: DIGEST_B }),
+    })).toThrow(/cannot change owner Provider/);
+    expect(analyzeIndexerSubjectKeySchemaTransition({
+      ...common,
+      new_schema: resolved({
+        schema: OLD_SCHEMA,
+        providerVersion: "1.3.0",
+        providerIntegrity: DIGEST_B,
+        manifestDigest: DIGEST_A,
+      }),
+    }).activation_allowed).toBe(true);
   });
 
   test("treats added kinds as compatible and does not request a Gate", () => {

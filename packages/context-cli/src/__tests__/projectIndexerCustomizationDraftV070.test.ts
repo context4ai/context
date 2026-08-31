@@ -521,7 +521,7 @@ describe("project Indexer customization draft validation stage", () => {
     const authorization = authorizeProjectIndexerProgramExecution(
       buildIndexerProgramExecutionAuthorizationInput({
         report: pending.authorization_report,
-        authority_ref: "authority:indexer-program-execution",
+        authority_ref: "context.indexer-program-execution",
         authority_scope_digest: `sha256:${"9".repeat(64)}`,
       }),
     );

@@ -114,7 +114,8 @@ describe("0.6.9 review quick decision scope gate", () => {
         routing: { human_gate: { required: boolean }; command_plan: Array<{ command: string }> };
       };
       expect(ordinaryStatus.executionMode).toBeUndefined();
-      expect(ordinaryStatus.routing.human_gate.required).toBe(true);
+      expect(ordinaryStatus.routing.human_gate.required).toBe(false);
+      expect(ordinaryStatus.routing.command_plan).toEqual([]);
 
       const managedStatus = JSON.parse(await runCliInDir(projectRoot, [
         "status", "--managed", "--format", "json", "--view", "full",
@@ -147,31 +148,12 @@ describe("0.6.9 review quick decision scope gate", () => {
         };
       };
       expect(managedStatus.executionMode).toEqual({ mode: "managed", scope: "current-conversation" });
-      expect(managedStatus.routing.human_gate).toMatchObject({
-        required: false,
-        kind: "knowledge-review",
-        confirmation: "not-required",
-        persistence: "not-applicable",
-        resolution: "managed-session",
-      });
-      expect(managedStatus.routing.command_plan[0]?.command).toContain(
-        "review approve-all architecture --managed --format json",
+      expect(managedStatus.routing.human_gate.required).toBe(false);
+      expect(managedStatus.routing.command_plan).toEqual([]);
+      expect(managedStatus.pendingReview).toBeUndefined();
+      expect(managedStatus.workflow.current.resources.required).toContainEqual(
+        expect.objectContaining({ id: "skill.context-run-indexer-lifecycle" }),
       );
-      expect(managedStatus.pendingReview).toMatchObject({
-        scope: "collection",
-        collection: "architecture",
-        collections: ["architecture"],
-        count: 1,
-        decisionSource: "managed-session",
-      });
-      expect(managedStatus.pendingReview.candidateSetDigest).toMatch(
-        /^[a-f0-9]{64}$/u,
-      );
-      expect(managedStatus.workflow.current.resources.required).toEqual([]);
-      expect(managedStatus.workflow.current.gate.inspection_action).toBeUndefined();
-      expect(managedStatus.workflow.current.gate.resolution_action).toMatchObject({
-        id: "apply-managed-review",
-      });
 
       const denied = await invokeCliInDir(projectRoot, [
         "review", "approve-all", "architecture", "--format", "json",
@@ -222,15 +204,8 @@ describe("0.6.9 review quick decision scope gate", () => {
           command_plan: Array<{ command: string; availability: string }>;
         };
       };
-      expect(status.workflow.current.gate.resolution_action).toMatchObject({
-        id: "apply-forced-review",
-      });
-      expect(status.routing.command_plan).toContainEqual({
-        command: expect.stringContaining(
-          "review approve-all architecture --force --format json",
-        ),
-        availability: "after-human-confirmation",
-      });
+      expect(status.workflow.current.gate).toBeUndefined();
+      expect(status.routing.command_plan).toEqual([]);
 
       const conflict = await invokeCliInDir(projectRoot, [
         "review", "approve-all", "architecture", "--managed", "--force", "--format", "json",

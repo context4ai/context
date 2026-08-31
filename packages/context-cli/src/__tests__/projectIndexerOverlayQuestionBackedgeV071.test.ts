@@ -16,7 +16,7 @@ import {
   buildIndexerOverlayQuestionRegistryApplyProposal,
   confirmIndexerBaseQuestionAmendment,
   indexerContractOverlayDigest,
-  indexerOverlayProjectAuthorizationDigest,
+  indexerOverlayValidationReceiptDigest,
   indexerProviderBundleIntegrity,
   loadIndexerProviderManifest,
   parseIndexerRegistry,
@@ -24,7 +24,6 @@ import {
   validateIndexerContractOverlay,
   validateIndexerResolvedMaterialQuestion,
   type IndexerContractOverlay,
-  type IndexerOverlayProjectAuthorization,
   type IndexerRegistry,
   type ResolvedProviderBundle,
 } from "@c4a/context";
@@ -280,38 +279,17 @@ async function fixture() {
     baseContract: PROFILES,
     operatorContract: OPERATORS,
   });
-  const authorizationPayload: Omit<
-    IndexerOverlayProjectAuthorization,
-    "authorization_receipt_digest"
-  > = {
-    protocol: "context.indexer.overlay-project-authorization/v1",
-    project_ref: PROJECT_REF,
-    overlay_digest: overlayValidation.overlay.overlay_digest,
-    attestation_digest: null,
-    base_contract_digest: PROFILES.contract_digest,
-    provider_integrity: integrity,
-    operator_contract_digest: OPERATORS.contract_digest,
-    conformance_report_digest: overlayValidation.report.report_digest,
-    authority_ref: "authority:indexer-contract-overlay",
-    authority_scope_digest: `sha256:${"7".repeat(64)}`,
-  };
-  const projectAuthorization = {
-    ...authorizationPayload,
-    authorization_receipt_digest:
-      indexerOverlayProjectAuthorizationDigest(authorizationPayload),
-  };
-  const trustedValidationInput = buildIndexerContractOverlayValidationInput({
+  const validationInput = buildIndexerContractOverlayValidationInput({
     project_ref: PROJECT_REF,
     overlay: overlayValidation.overlay,
     base_contract: PROFILES,
     operator_contract: OPERATORS,
     provider_integrity: integrity,
-    project_authorization: projectAuthorization,
   });
-  const trustedValidationResult = validateProjectIndexerContractOverlay(
-    trustedValidationInput,
+  const validationResult = validateProjectIndexerContractOverlay(
+    validationInput,
   );
-  const trustReceipt = trustedValidationResult.trust_receipt!;
+  const validationReceipt = validationResult.validation_receipt;
   return {
     root,
     projectRoot,
@@ -323,16 +301,16 @@ async function fixture() {
     baseStatic,
     baseFinal,
     overlayValidation,
-    trustReceipt,
-    trustedValidationInput,
-    trustedValidationResult,
+    validationReceipt,
+    validationInput,
+    validationResult,
   };
 }
 
 async function prepareCoupledProposal(sample: Awaited<ReturnType<typeof fixture>>) {
   const proposalInput = buildIndexerOverlayQuestionProposalInput({
-    trusted_validation_input: sample.trustedValidationInput,
-    trusted_validation_result: sample.trustedValidationResult,
+    validation_input: sample.validationInput,
+    validation_result: sample.validationResult,
     registry: sample.baseRegistry,
     requirement_id: "workspace-knowledge",
   });
@@ -344,8 +322,8 @@ async function prepareCoupledProposal(sample: Awaited<ReturnType<typeof fixture>
     confirmed_at: NOW.toISOString(),
   });
   const rebindInput = buildIndexerOverlayQuestionRebindInput({
-    trusted_validation_input: sample.trustedValidationInput,
-    trusted_validation_result: sample.trustedValidationResult,
+    validation_input: sample.validationInput,
+    validation_result: sample.validationResult,
     base_registry: sample.baseRegistry,
     amendment,
     confirmation,
@@ -374,7 +352,7 @@ async function prepareCoupledProposal(sample: Awaited<ReturnType<typeof fixture>
   };
 }
 
-describe("verified overlay question amendment back-edge", () => {
+describe("validated overlay question amendment back-edge", () => {
   test("confirms and applies a CLI base question before resolving any Provider", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-base-question-"));
     temporaryRoots.push(root);
@@ -488,7 +466,7 @@ describe("verified overlay question amendment back-edge", () => {
     expect(target.indexers).toEqual(sample.baseRegistry.indexers);
   }, INDEXER_OVERLAY_TEST_TIMEOUT_MS);
 
-  test("rejects an unverified/forged trust receipt and any non-question drift", async () => {
+  test("rejects a forged validation receipt and any non-question drift", async () => {
     const sample = await fixture();
     expect(() => buildIndexerOverlayQuestionAmendment({
       project_ref: PROJECT_REF,
@@ -498,7 +476,7 @@ describe("verified overlay question amendment back-edge", () => {
       base_contract: PROFILES,
       operator_contract: OPERATORS,
       provider_integrity: sample.integrity,
-      trust_receipt: { ...sample.trustReceipt, receipt_digest: `sha256:${"f".repeat(64)}` },
+      validation_receipt: { ...sample.validationReceipt, receipt_digest: `sha256:${"f".repeat(64)}` },
     })).toThrow(/receipt digest/);
 
     const prepared = await prepareCoupledProposal(sample);
@@ -510,6 +488,32 @@ describe("verified overlay question amendment back-edge", () => {
       operator_contract: OPERATORS,
       profile_contract: PROFILES,
     })).rejects.toThrow(/authority proof/);
+    const { receipt_digest: _receiptDigest, ...staleReceiptPayload } =
+      sample.validationReceipt;
+    void _receiptDigest;
+    const staleProviderIntegrity = `sha256:${"f".repeat(64)}`;
+    const staleValidationReceiptPayload = {
+      ...staleReceiptPayload,
+      provider_integrity: staleProviderIntegrity,
+    };
+    await expect(validateIndexerSelectionFinal({
+      registry: prepared.amendment.target_registry,
+      static_report: prepared.rebind.target_static_report,
+      resolved: [sample.resolved],
+      customizations: [sample.customization],
+      operator_contract: OPERATORS,
+      profile_contract: PROFILES,
+      overlay_question_authorities: [{
+        project_ref: PROJECT_REF,
+        requirement_id: "workspace-knowledge",
+        provider_integrity: staleProviderIntegrity,
+        overlay_validation: sample.overlayValidation,
+        validation_receipt: {
+          ...staleValidationReceiptPayload,
+          receipt_digest: indexerOverlayValidationReceiptDigest(staleValidationReceiptPayload),
+        },
+      }],
+    })).rejects.toThrow(/current primary Provider/);
     const drifted = structuredClone(prepared.amendment);
     drifted.target_registry.requirements[0]!.reader_goals.push("unexpected-goal");
     expect(() => buildIndexerOverlayQuestionRegistryApplyProposal({
@@ -568,8 +572,8 @@ describe("verified overlay question amendment back-edge", () => {
   test("runs propose, confirm, rebind, stage, and the shared apply Action through CLI", async () => {
     const sample = await fixture();
     const proposalInput = buildIndexerOverlayQuestionProposalInput({
-      trusted_validation_input: sample.trustedValidationInput,
-      trusted_validation_result: sample.trustedValidationResult,
+      validation_input: sample.validationInput,
+      validation_result: sample.validationResult,
       registry: sample.baseRegistry,
       requirement_id: "workspace-knowledge",
     });
@@ -591,8 +595,8 @@ describe("verified overlay question amendment back-edge", () => {
       "--format", "json",
     ]));
     const rebindInput = buildIndexerOverlayQuestionRebindInput({
-      trusted_validation_input: sample.trustedValidationInput,
-      trusted_validation_result: sample.trustedValidationResult,
+      validation_input: sample.validationInput,
+      validation_result: sample.validationResult,
       base_registry: sample.baseRegistry,
       amendment,
       confirmation,

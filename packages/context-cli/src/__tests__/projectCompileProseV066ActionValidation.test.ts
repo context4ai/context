@@ -58,18 +58,12 @@ describe("0.6.6 compileProse action validation", () => {
         stagedStructure: { state: string };
         routing: { current_state: string; recommended_action: string; command_plan: Array<{ command: string }> };
       };
-      expect(draftStatus.state).toBe("route.structure.confirmation-required");
+      expect(draftStatus.state).toBe("route.indexer.lifecycle-required");
       expect(draftStatus.stagedStructure.state).toBe("draft");
-      expect(draftStatus.routing.current_state).toBe("route.structure.confirmation-required");
-      expect(draftStatus.routing.recommended_action).toContain(".tmp/context-runtime/lifecycle/structure.yaml");
+      expect(draftStatus.routing.current_state).toBe("route.indexer.lifecycle-required");
+      expect(draftStatus.routing.recommended_action).toContain("registry-and-Provider indexing lifecycle");
       const commands = draftStatus.routing.command_plan.map((item) => item.command);
-      expect(commands).toContainEqual(expect.stringContaining(
-        "run align:file:product-docs:architecture --validate --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
-      ));
-      expect(commands).toEqual(expect.arrayContaining([
-        expect.stringMatching(/^context --workflow-revision 'sha256:[a-f0-9]{64}' /u),
-      ]));
-      expect(commands.join("\n")).not.toContain("lifecycle/structure --format");
+      expect(commands).toEqual([]);
 
       const blocked = await invokeCliInDir(projectRoot, [
         "run",

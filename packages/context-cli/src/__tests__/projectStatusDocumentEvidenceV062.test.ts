@@ -37,8 +37,8 @@ describe("0.6.2 document evidence status routing", () => {
       expect(status.verifyWarnings).toBeGreaterThan(0);
       expect(status.evidenceStatus).toBe("pass-with-unverifiable-evidence");
       expect(status.evidenceWarnings).toBe("degraded");
-      expect(status.state).toBe("route.close.projection-stale");
-      expect(status.routing.reason).toBe("route.close.projection-stale");
+      expect(status.state).toBe("route.capture.configuration-required");
+      expect(status.routing.reason).toBe("route.capture.configuration-required");
       expect(status.workflow.diagnostics).toContainEqual(expect.objectContaining({
         code: "diagnostic.evidence-degraded",
         severity: "warning",

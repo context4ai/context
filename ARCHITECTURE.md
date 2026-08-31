@@ -187,7 +187,8 @@ Important identity concepts:
 | `context plugin ...` | `project/pluginInstall.ts` | Install or inspect bundled agent plugins |
 | `context status` | `project/status*.ts`, `project/workflow/*` | Observe facts, evaluate the Provider, and return the current route/resources |
 | `context source ...` | `project/sourceCommands.ts` | Declare, inspect, and manage sources |
-| `context run <phase>` | `project/run.ts` | Execute capture, extraction, align, compile phases |
+| `context indexer ...` | `project/indexerCommands.ts`, `project/indexer*.ts` | Confirm requirements, resolve Providers, run/recover worksets, reconcile, audit, and compile Candidates |
+| `context run <phase>` | `project/run.ts` | Execute capture and any explicitly declared legacy extraction/align/compile phase |
 | `context review ...` | `project/review*.ts` | Review HTML, approve/reject, re-pin, deprecate |
 | `context close` | `project/close.ts` | Derive approved structure and run final checks |
 | `context build` | `project/packageBuilder.ts` | Produce package output and inventory |
@@ -214,7 +215,29 @@ Document capture lives under `packages/context-cli/src/project`:
 Captured evidence is addressed by canonical `source_ref` strings. Later stages
 must cite these refs instead of reading raw source files directly.
 
-## Prose Align
+## Indexer Lifecycle
+
+The default Graph has one indexing route:
+
+```text
+Source/Capture → run-indexer-lifecycle → Indexer Candidate Review → Close → Package
+```
+
+`src/indexers.yaml` stores the confirmed requirement set and exact portable
+Provider registry. `packages/context/src/indexer*.ts` defines the versioned
+requirements, Provider, workset, Result, ledger, layout, audit, and Host ABI
+contracts. `packages/context-cli/src/project/indexer*.ts` owns project
+persistence, Provider resolution/staging, execution recovery, reconciliation,
+layout/audit and Candidate compile. Provider instructions and templates live in
+the bundled `context-code-indexer` and `context-markdown-indexer` Skills; the
+CLI does not hard-code their editorial or technology-specific authoring logic.
+
+The default Graph does not route through extraction, document classification,
+align, structure confirmation, or prose compile. The explicit phase factories
+and commands below remain only for existing workspace migration, diagnostics,
+and repair.
+
+## Legacy Prose Align
 
 Align converts captured document evidence into a `context.structure.v1` draft.
 It does not write approved prose.
@@ -238,7 +261,7 @@ The align gate owns collection routing, NodeRef/ViewRef/SectionRef structure,
 section kind selection, edge contracts, unresolved items, and orphan-view
 diagnostics.
 
-## Prose Compile
+## Legacy Prose Compile
 
 Compile turns confirmed structure into source-mirrored draft candidates. The
 agent supplies `context.compile-actions.v1` actions; the CLI materializes

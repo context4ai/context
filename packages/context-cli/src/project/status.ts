@@ -1,15 +1,7 @@
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
-import { KNOWLEDGE_COLLECTIONS, type PhaseDefinition } from "@c4a/context";
-import { uniqueDocumentPhaseCommand } from "./documentPhaseCommands.js";
-import { resolveDocumentPhaseSource } from "./documentRun.js";
-import {
-  inspectDeclarationGraph,
-  resolveStructureCompileRoute,
-  type DeclarationGraph,
-  type StructureLifecycleTarget,
-  type StructureCompileResolution,
-} from "./declarationGraph.js";
+import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
+import { inspectDeclarationGraph } from "./declarationGraph.js";
 import {
   collectSourceFreshness,
   countFiles,
@@ -19,14 +11,10 @@ import {
   readPackageFreshnessStatus,
   readSourceStatus,
   readStructureDraftStatus,
-  type StructureDraftStatus,
   readVerifyStatus,
 } from "./statusReaders.js";
 import { evidenceStatusForStatus, evidenceWarningState } from "./statusEvidence.js";
-import {
-  readProseCompileBatchProgress,
-  type ProseCompileBatchProgress,
-} from "./proseCompileBatch.js";
+import { readProseCompileBatchProgress } from "./proseCompileBatch.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import { structureBatchStatus } from "./statusStructureBatch.js";
 import {
@@ -37,9 +25,6 @@ import {
 } from "./statusStructures.js";
 import { inspectPackageTemplateReviews } from "./packageTemplateReview.js";
 import type {
-  ActiveStructuresStatus,
-  AlignPhaseResolution,
-  DocumentSourceStatus,
   PendingStructureTarget,
   ProjectStatus,
   UnclassifiedDocumentTarget,
@@ -67,14 +52,29 @@ import {
   approvedStructureSourceInputKey,
   readApprovedStructureSourceInputs,
 } from "./approvedStructureInputs.js";
-import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
-import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
 import { recordAgentGraphEvaluation } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 import { readExtractionPreviewState } from "./extractionPreviewCache.js";
 import { collectCodeIndexAuditStatus } from "./codeIndexAudit.js";
 import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
+import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateCompileActions.js";
+import { candidateSetHash } from "./reviewShared.js";
+import { isIndexerApprovedKnowledgeMarkdown } from "./approvedKnowledgeMetadata.js";
+import {
+  alignStatusCommand,
+  compileStatusRouting,
+  pendingDocumentCaptureCommands,
+  readIndexerWorkflowRegistryStatus,
+  resolutionErrorMessage,
+  resolveAlignPhaseRouting,
+  resourcePlaceholderRepairTargets,
+} from "./statusRouting.js";
+
+export {
+  pendingDocumentCaptureCommands,
+  resourcePlaceholderRepairTargets,
+} from "./statusRouting.js";
 
 export type {
   ActiveStructuresStatus,
@@ -90,220 +90,6 @@ export type {
   SourceFreshnessState,
   UnclassifiedDocumentTarget,
 } from "./statusTypes.js";
-
-function resolutionErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-async function resolveAlignPhaseRouting(input: {
-  projectRoot: string;
-  phases: readonly PhaseDefinition[];
-  requestedSourceKeys: readonly string[];
-  requestedCollections: readonly string[];
-  requestedTargets?: readonly { sourceKey: string; collection: string }[];
-  requestedGroups?: readonly StructureLifecycleTarget[];
-}): Promise<AlignPhaseResolution | undefined> {
-  if (input.requestedSourceKeys.length === 0 && input.requestedCollections.length === 0) return undefined;
-  const checked: AlignPhaseResolution["checked"] = [];
-  const matches: AlignPhaseResolution["matches"] = [];
-  const requestedGroups = input.requestedGroups === undefined
-    ? (input.requestedTargets === undefined
-        ? input.requestedSourceKeys.flatMap((sourceKey) =>
-            input.requestedCollections.map((collection) => ({
-              sourceKey,
-              collections: [collection],
-              phaseCollection: collection,
-            }))
-          )
-        : input.requestedTargets.map((target) => ({
-            sourceKey: target.sourceKey,
-            collections: [target.collection],
-            phaseCollection: target.collection,
-          })))
-    : [...input.requestedGroups];
-  const requestedTargets = requestedGroups.flatMap((target) =>
-    (target.phaseCollection === undefined ? target.collections : [target.phaseCollection])
-      .map((collection) => ({ sourceKey: target.sourceKey, collection }))
-  );
-  for (const phase of input.phases) {
-    if (phase.kind !== "phase.align.prose") continue;
-    const declaredSourceKey = phase.source.name;
-    try {
-      const resolved = await resolveDocumentPhaseSource({ projectRoot: input.projectRoot, phase });
-      const sourceKey = `${resolved.sourceType}:${resolved.sourceName}`;
-      const sourceMatches = input.requestedSourceKeys.length === 0 || input.requestedSourceKeys.includes(sourceKey);
-      const collectionMatches = input.requestedCollections.length === 0 || input.requestedCollections.includes(phase.collection);
-      const matched = requestedGroups.length === 0
-        ? sourceMatches && collectionMatches
-        : requestedGroups.some((target) =>
-            target.sourceKey === sourceKey &&
-            (target.phaseCollection === undefined
-              ? target.collections.includes(phase.collection)
-              : target.phaseCollection === phase.collection)
-          );
-      const command = `context run align:${resolved.sourceType}:${resolved.sourceName}:${phase.collection}`;
-      checked.push({
-        phaseId: phase.id,
-        declaredSourceKey,
-        sourceKey,
-        collection: phase.collection,
-        matched,
-        ...(!sourceMatches
-          ? { reason: `resolved source ${sourceKey} is not referenced by requested structure targets` }
-          : !collectionMatches
-            ? { reason: `collection ${phase.collection} is not present in requested structure targets` }
-            : !matched
-              ? { reason: `source and collection pair ${sourceKey}:${phase.collection} is not an active structure target` }
-            : {}),
-      });
-      if (matched) matches.push({ phaseId: phase.id, sourceKey, collection: phase.collection, command });
-    } catch (error) {
-      checked.push({
-        phaseId: phase.id,
-        declaredSourceKey,
-        collection: phase.collection,
-        matched: false,
-        reason: resolutionErrorMessage(error),
-      });
-    }
-  }
-  const matchCounts = requestedGroups.map((target) => matches.filter((match) =>
-    match.sourceKey === target.sourceKey &&
-    (target.phaseCollection === undefined
-      ? target.collections.includes(match.collection)
-      : target.phaseCollection === match.collection)
-  ).length);
-  const hasMissing = matchCounts.some((count) => count === 0);
-  const hasAmbiguous = matchCounts.some((count) => count > 1);
-  return {
-    state: hasAmbiguous
-      ? "ambiguous"
-      : hasMissing || matches.length === 0
-        ? "unresolved"
-        : matches.length === 1 ? "resolved" : "resolved-multiple",
-    requestedSourceKeys: [...input.requestedSourceKeys],
-    requestedCollections: [...input.requestedCollections],
-    requestedTargets,
-    matches,
-    checked,
-  };
-}
-
-function alignStatusCommand(input: {
-  hasCapturedSources: boolean;
-  stagedAlignCommand?: string;
-  phases: readonly PhaseDefinition[];
-  documentSources: readonly DocumentSourceStatus[];
-  suffix: string;
-}): string | undefined {
-  if (!input.hasCapturedSources) return undefined;
-  if (input.stagedAlignCommand !== undefined) return `${input.stagedAlignCommand}${input.suffix}`;
-  return uniqueDocumentPhaseCommand({
-    phases: input.phases,
-    kind: "phase.align.prose",
-    verb: "align",
-    documentSources: input.documentSources,
-    suffix: input.suffix,
-  });
-}
-
-function compileStatusRouting(input: {
-  structure: StructureDraftStatus;
-  activeStructures: ActiveStructuresStatus;
-  graph: DeclarationGraph;
-  compileBatch?: ProseCompileBatchProgress;
-  hasCapturedSources: boolean;
-}): {
-  resolution?: StructureCompileResolution;
-  command?: string;
-} {
-  const sourceKeys = input.compileBatch?.nextSourceKeys ?? input.structure.sourceKeys ?? [];
-  const collections = input.compileBatch?.nextStructureCollections ?? input.structure.collections ?? [];
-  if (sourceKeys.length === 0 || collections.length === 0) return {};
-  const phaseCollection = input.compileBatch?.nextPhaseCollection ?? input.structure.phaseCollection;
-  const activeGroups = activeStructureGroups(input.activeStructures);
-  const targets = sourceKeys.map((sourceKey) => {
-    const matchingActive = activeGroups.find((group) =>
-      group.sourceKey === sourceKey &&
-      collections.every((collection) => group.collections.includes(collection))
-    );
-    return {
-      sourceKey,
-      collections,
-      ...(phaseCollection !== undefined
-        ? { phaseCollection }
-        : matchingActive?.phaseCollection !== undefined
-          ? { phaseCollection: matchingActive.phaseCollection }
-          : {}),
-    };
-  });
-  const resolution = resolveStructureCompileRoute({
-    graph: input.graph,
-    sourceKeys,
-    collections,
-    targets,
-  });
-  if (!input.hasCapturedSources || input.compileBatch?.nextViewRef === undefined) return { resolution };
-  const match = resolution.state === "resolved" && resolution.matches.length === 1
-    ? resolution.matches[0]
-    : undefined;
-  return {
-    resolution,
-    ...(match !== undefined
-      ? {
-          command: `${match.command} --stage --format json`,
-        }
-      : {}),
-  };
-}
-
-export function resourcePlaceholderRepairTargets(
-  issues: readonly ProjectVerifyIssue[],
-): { sourceKeys: string[]; viewRefs: string[] } {
-  const relevant = issues.filter((issue) =>
-    issue.severity === "error" && issue.code === "approved-resource-placeholder-unresolved"
-  );
-  return {
-    sourceKeys: [...new Set(relevant.flatMap((issue) => issue.source_keys ?? []))].sort(),
-    viewRefs: [...new Set(relevant.flatMap((issue) => issue.view_ref === undefined ? [] : [issue.view_ref]))].sort(),
-  };
-}
-
-export function pendingDocumentCaptureCommands(input: {
-  phases: readonly PhaseDefinition[];
-  documentSources: readonly DocumentSourceStatus[];
-  recaptureSourceKeys?: readonly string[];
-}): { phaseIds: string[]; commands: string[]; missingSources: DocumentSourceStatus[] } {
-  const recaptureSourceKeys = new Set(input.recaptureSourceKeys ?? []);
-  const pendingSources = input.documentSources.filter((source) =>
-    !source.snapshotReady || (
-      recaptureSourceKeys.has(`${source.type}:${source.name}`) &&
-      source.type === "lark" &&
-      source.normalizerVersion !== LARK_DOCUMENT_NORMALIZER_VERSION
-    )
-  );
-  const phaseIds: string[] = [];
-  const missingSources: DocumentSourceStatus[] = [];
-  for (const source of pendingSources) {
-    const expectedKind = source.type === "file" ? "phase.capture.file" : "phase.capture.lark";
-    const expectedIds = new Set([
-      `capture:${source.type}:${source.name}`,
-      ...(source.id === undefined ? [] : [`capture:${source.type}:${source.id}`]),
-    ]);
-    const matchingPhase = input.phases.find((phase) => {
-      if (phase.kind !== expectedKind) return false;
-      return expectedIds.has(phase.id);
-    });
-    if (matchingPhase !== undefined) phaseIds.push(matchingPhase.id);
-    else missingSources.push(source);
-  }
-  const uniquePhaseIds = [...new Set(phaseIds)];
-  return {
-    phaseIds: uniquePhaseIds,
-    commands: uniquePhaseIds.map((phaseId) => `context run ${phaseId}`),
-    missingSources,
-  };
-}
 
 export interface ProjectStatusSnapshot {
   status: ProjectStatus;
@@ -472,6 +258,10 @@ export async function collectProjectStatusSnapshot(
     join(projectRoot, "knowledge"),
     (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
   );
+  const approvedKnowledge = await listApprovedKnowledge(projectRoot);
+  const approvedIndexerPages = approvedKnowledge.filter((file) =>
+    isIndexerApprovedKnowledgeMarkdown(file.content)
+  ).length;
   const approvedCollections = (await Promise.all(
     KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
       collection,
@@ -484,7 +274,7 @@ export async function collectProjectStatusSnapshot(
   const documentOptimization = phaseStatus.projectEntryValid
     ? await collectDocumentOptimizationStatus({
         projectRoot,
-        files: await listApprovedKnowledge(projectRoot),
+        files: approvedKnowledge,
       })
     : disabledDocumentOptimizationStatus();
   const closeStatus = await readCloseStatus(projectRoot);
@@ -593,6 +383,22 @@ export async function collectProjectStatusSnapshot(
   const compilePhaseResolution = compileRouting.resolution;
   const compileDocumentNext = compileRouting.command;
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
+  const indexerRegistry = await readIndexerWorkflowRegistryStatus(projectRoot);
+  const indexerCandidateCompile = await readProjectIndexerCandidateCompileStatus(projectRoot);
+  const indexerDrafts = indexerCandidateCompile.state === "current"
+    ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "draft")
+    : [];
+  const indexerRejected = indexerCandidateCompile.state === "current"
+    ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "rejected")
+    : [];
+  const workflowDraftStatus = {
+    count: indexerDrafts.length,
+    rejectedCount: indexerRejected.length,
+    collections: [...new Set(indexerDrafts.map((candidate) => candidate.collection))].sort(),
+    ...(indexerDrafts.length === 0
+      ? {}
+      : { candidateSetDigest: candidateSetHash(indexerDrafts) }),
+  };
   const codeIndexMigrationRequired = phaseStatus.projectEntryValid
     ? await legacyCodeIndexMigrationRequired(projectRoot)
     : false;
@@ -646,14 +452,17 @@ export async function collectProjectStatusSnapshot(
       reviewIdentityConflicts,
       unclassifiedDocumentTargets,
       pendingStructureTargets,
-      draftCandidates: draftStatus.count,
-      rejectedCandidates: draftStatus.rejectedCount,
-      draftCollections: draftStatus.collections,
-      ...(draftStatus.candidateSetDigest !== undefined
-        ? { candidateSetDigest: draftStatus.candidateSetDigest }
+      draftCandidates: workflowDraftStatus.count,
+      rejectedCandidates: workflowDraftStatus.rejectedCount,
+      draftCollections: workflowDraftStatus.collections,
+      ...(workflowDraftStatus.candidateSetDigest !== undefined
+        ? { candidateSetDigest: workflowDraftStatus.candidateSetDigest }
         : {}),
       approvedPages,
+      approvedIndexerPages,
       close: closeStatus,
+      indexerRegistry,
+      indexerCandidateCompile: { state: indexerCandidateCompile.state },
       ...(alignDocumentStructureSummaryNext !== undefined
         ? { alignDocumentStructureSummaryNext }
         : {}),
@@ -685,7 +494,7 @@ export async function collectProjectStatusSnapshot(
     projectRoot,
     sourceCount,
     readySources,
-    draftCandidates: draftStatus.count,
+    draftCandidates: workflowDraftStatus.count,
     approvedPages,
     approvedCollections,
     distFiles,
@@ -740,6 +549,10 @@ export async function collectProjectStatusSnapshot(
       ...packageFreshnessStatus.diagnostics,
       ...closeStatus.diagnostics,
       ...draftStatus.diagnostics,
+      ...(indexerCandidateCompile.state === "invalid" &&
+          indexerCandidateCompile.diagnostic !== undefined
+        ? [`Indexer Candidate compile invalid: ${indexerCandidateCompile.diagnostic}`]
+        : []),
       ...stagedStructureStatus.diagnostics,
       ...activeStructures.diagnostics,
       ...approvedStructureInputDiagnostics,

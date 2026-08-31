@@ -557,9 +557,14 @@ describe("two-stage Indexer selection validation", () => {
     });
     const authorizationInput = buildIndexerProgramExecutionAuthorizationInput({
       report,
-      authority_ref: "authority:indexer-program-execution",
+      authority_ref: "context.indexer-program-execution",
       authority_scope_digest: `sha256:${"7".repeat(64)}`,
     });
+    expect(() => buildIndexerProgramExecutionAuthorizationInput({
+      report,
+      authority_ref: "context.evidence-maintenance",
+      authority_scope_digest: `sha256:${"7".repeat(64)}`,
+    })).toThrow(/incomplete/);
     const inputPath = join(sample.workspace, "program-authorization.json");
     await writeFile(inputPath, `${JSON.stringify(authorizationInput, null, 2)}\n`, "utf8");
 
@@ -621,7 +626,7 @@ describe("two-stage Indexer selection validation", () => {
 
     expect(() => buildIndexerProgramExecutionAuthorizationInput({
       report: { ...report, sandboxed_program: true } as never,
-      authority_ref: "authority:indexer-program-execution",
+      authority_ref: "context.indexer-program-execution",
       authority_scope_digest: `sha256:${"7".repeat(64)}`,
     })).toThrow();
   });

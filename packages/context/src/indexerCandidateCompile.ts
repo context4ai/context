@@ -2,8 +2,10 @@ import { z } from "zod";
 import {
   indexerArtifactResultDigest,
   indexerArtifactResultSchema,
+  indexerEvidenceBindingSchema,
   type IndexerArtifactResult,
 } from "./indexerArtifactResult.js";
+import { indexerKnowledgeCollectionSchema } from "./indexerCollectionMapping.js";
 import { materializeIndexerStructuredContent } from "./indexerContentLayers.js";
 import {
   authorizeIndexerLayoutChange,
@@ -67,8 +69,14 @@ const compileResultBindingSchema = z.object({
 
 const candidateFilePayloadSchema = z.object({
   artifact_ref: z.string().min(1),
+  node_ref: z.string().min(1),
+  internal_view_ref: z.string().min(1),
+  collection: indexerKnowledgeCollectionSchema,
+  artifact_kind: indexerIdSchema,
   output_path: portableIndexerPathSchema,
   indexer_id: indexerIdSchema,
+  source_ref: z.string().min(1),
+  evidence_bindings: z.array(indexerEvidenceBindingSchema),
   acceptance_digest: indexerDigestSchema,
   indexer_result_digest: indexerDigestSchema,
   artifact_result_digest: indexerDigestSchema,
@@ -76,6 +84,13 @@ const candidateFilePayloadSchema = z.object({
   result_binding_digest: indexerDigestSchema,
   shared_artifact_fingerprint_digest: indexerDigestSchema,
   section_refs: z.array(z.string().min(1)).min(1),
+  sections: z.array(z.object({
+    section_ref: z.string().min(1),
+    section_key: indexerIdSchema,
+    evidence_refs: z.array(z.string().min(1)),
+    markdown: z.string().min(1),
+    markdown_digest: indexerDigestSchema,
+  }).strict()).min(1),
   markdown: z.string().min(1),
   markdown_digest: indexerDigestSchema,
 }).strict();
@@ -242,11 +257,11 @@ function assertSectionIntegrity(input: {
   }
 }
 
-function structuredArtifactMarkdown(input: {
+function structuredArtifactSections(input: {
   result: IndexerArtifactResult;
   proposal: IndexerLayoutProposal;
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>;
-}): string {
+}) {
   return input.artifact.sections.map((section) => {
     const blocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
@@ -261,15 +276,28 @@ function structuredArtifactMarkdown(input: {
       contentDigest: indexerProtocolDigest({ content_blocks: blocks }),
       evidenceRefs,
     });
-    return blocks.map((block) => block.markdown).join("\n\n");
-  }).join("\n\n");
+    const markdown = blocks.map((block) => block.markdown).join("\n\n");
+    const layoutSection = input.proposal.artifacts
+      .find((candidate) => candidate.artifact_id === input.artifact.artifact_id)!
+      .sections.find((candidate) => candidate.section_key === section.section_key)!;
+    return {
+      section_ref: layoutSection.section_ref,
+      section_key: section.section_key,
+      evidence_refs: evidenceRefs,
+      markdown,
+      markdown_digest: indexerProtocolDigest({
+        protocol: "context.indexer.physical-section-markdown/v1",
+        markdown,
+      }),
+    };
+  });
 }
 
-function templateArtifactMarkdown(input: {
+function templateArtifactSections(input: {
   proposal: IndexerLayoutProposal;
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "template" }>;
   rendered: IndexerRenderedArtifact;
-}): string {
+}) {
   const renderedBySection = new Map(input.rendered.sections.map((section) => [
     section.section_key,
     section,
@@ -297,8 +325,17 @@ function templateArtifactMarkdown(input: {
       contentDigest: section.content_digest,
       evidenceRefs: section.evidence_refs,
     });
-    return section.markdown;
-  }).join("\n\n");
+    return {
+      section_ref: layoutSection.section_ref,
+      section_key: section.section_key,
+      evidence_refs: section.evidence_refs,
+      markdown: section.markdown,
+      markdown_digest: indexerProtocolDigest({
+        protocol: "context.indexer.physical-section-markdown/v1",
+        markdown: section.markdown,
+      }),
+    };
+  });
 }
 
 function candidateFiles(input: {
@@ -319,8 +356,8 @@ function candidateFiles(input: {
     if (layout === undefined) {
       throw new TypeError(`Candidate compile Result Artifact ${artifact.artifact_id} has no layout`);
     }
-    const markdown = artifact.representation === "sections"
-      ? structuredArtifactMarkdown({
+    const sections = artifact.representation === "sections"
+      ? structuredArtifactSections({
           result: input.accepted.artifactResult,
           proposal: input.proposal,
           artifact,
@@ -332,16 +369,37 @@ function candidateFiles(input: {
               `Candidate compile template Artifact ${artifact.artifact_id} is not rendered`,
             );
           }
-          return templateArtifactMarkdown({
+          return templateArtifactSections({
             proposal: input.proposal,
             artifact,
             rendered,
           });
         })();
+    const markdown = sections.map((section) => section.markdown).join("\n\n");
+    const evidenceRefs = new Set(layout.sections.flatMap((section) =>
+      section.evidence_refs
+    ));
+    const evidenceBindings = input.accepted.artifactResult.evidence_bindings
+      .filter((binding) => evidenceRefs.has(binding.evidence_ref))
+      .sort((left, right) => compareIndexerCanonicalText(
+        left.evidence_ref,
+        right.evidence_ref,
+      ));
+    if (evidenceBindings.length !== evidenceRefs.size) {
+      throw new TypeError(
+        `Candidate compile Artifact ${artifact.artifact_id} has unresolved evidence bindings`,
+      );
+    }
     const payload = candidateFilePayloadSchema.parse({
       artifact_ref: layout.artifact_ref,
+      node_ref: layout.node_ref,
+      internal_view_ref: layout.internal_view_ref,
+      collection: layout.collection,
+      artifact_kind: layout.artifact_kind,
       output_path: layout.output_path,
       indexer_id: input.accepted.artifactResult.indexer_id,
+      source_ref: input.accepted.artifactResult.source_ref,
+      evidence_bindings: evidenceBindings,
       acceptance_digest: input.binding.acceptance_digest,
       indexer_result_digest: input.binding.indexer_result_digest,
       artifact_result_digest: input.binding.artifact_result_digest,
@@ -351,6 +409,7 @@ function candidateFiles(input: {
         input.binding.shared_artifact_fingerprint.fingerprint_digest,
       section_refs: layout.sections.map((section) => section.section_ref)
         .sort(compareIndexerCanonicalText),
+      sections,
       markdown,
       markdown_digest: indexerProtocolDigest({
         protocol: "context.indexer.physical-markdown/v1",

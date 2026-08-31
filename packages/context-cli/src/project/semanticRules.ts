@@ -37,6 +37,62 @@ function workflowRootCandidates(): string[] {
   ];
 }
 
+const MARKDOWN_PROVIDER_RULES: ReadonlyArray<{
+  id: string;
+  file: "semantic-planning.md" | "structure-and-artifacts.md";
+  appliesTo: readonly string[];
+}> = [
+  {
+    id: "structure-planning",
+    file: "semantic-planning.md",
+    appliesTo: ["phase.align.prose"],
+  },
+  {
+    id: "align-gates",
+    file: "structure-and-artifacts.md",
+    appliesTo: ["phase.align.prose"],
+  },
+  {
+    id: "density-profile",
+    file: "structure-and-artifacts.md",
+    appliesTo: ["phase.align.prose"],
+  },
+  {
+    id: "candidate-resolution",
+    file: "structure-and-artifacts.md",
+    appliesTo: ["phase.align.prose"],
+  },
+];
+
+function markdownProviderRootCandidates(): string[] {
+  const runtimeDir = dirname(fileURLToPath(import.meta.url));
+  return [
+    join(runtimeDir, "indexers", "bundles", "context-markdown-indexer"),
+    join(runtimeDir, "plugins", "skills", "context-markdown-indexer"),
+    join(runtimeDir, "..", "..", "..", "..", "plugins", "context", "skills", "context-markdown-indexer"),
+  ];
+}
+
+function providerRuleContent(rulePath: string): {
+  content: string;
+  available: boolean;
+  filePath?: string;
+} | undefined {
+  const prefix = "bundle:context-markdown-indexer/";
+  if (!rulePath.startsWith(prefix)) return undefined;
+  const relative = rulePath.slice(prefix.length);
+  for (const root of markdownProviderRootCandidates()) {
+    const absolute = join(root, relative);
+    if (!existsSync(absolute)) continue;
+    return {
+      content: readFileSync(absolute, "utf8"),
+      available: true,
+      filePath: absolute,
+    };
+  }
+  return { content: `missing:${rulePath}`, available: false };
+}
+
 function semanticRuleMetadata(
   scope: "align" | "compile",
   filePath: string,
@@ -78,6 +134,15 @@ function semanticRuleMetadata(
 export function semanticRuleDescriptors(
   scope: "align" | "compile",
 ): SemanticRuleDescriptor[] {
+  if (scope === "align") {
+    return MARKDOWN_PROVIDER_RULES.map((rule) => ({
+      id: rule.id,
+      resource_id: `context.semantic.align.${rule.id}`,
+      path: `bundle:context-markdown-indexer/references/${rule.file}`,
+      applies_to: rule.appliesTo,
+      source: "context-markdown-indexer",
+    }));
+  }
   for (const root of workflowRootCandidates()) {
     const directory = join(root, "resources", "semantic", scope);
     if (!existsSync(directory)) continue;
@@ -96,6 +161,8 @@ function ruleContent(rulePath: string): {
   available: boolean;
   filePath?: string;
 } {
+  const provider = providerRuleContent(rulePath);
+  if (provider !== undefined) return provider;
   for (const root of workflowRootCandidates()) {
     const absolute = join(root, rulePath);
     if (existsSync(absolute)) {

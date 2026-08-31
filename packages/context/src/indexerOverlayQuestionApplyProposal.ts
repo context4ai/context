@@ -38,7 +38,7 @@ export const indexerOverlayQuestionRegistryApplyProposalSchema = z.object({
   amendment: indexerOverlayQuestionAmendmentSchema,
   confirmation: indexerRequirementAmendmentConfirmationSchema,
   overlay_contract_digest: indexerDigestSchema,
-  overlay_trust_receipt_digest: indexerDigestSchema,
+  overlay_validation_receipt_digest: indexerDigestSchema,
   rebind_receipt_digest: indexerDigestSchema,
   rebound_selection_digest: indexerDigestSchema,
   subject_key_schema_set_digest: indexerDigestSchema,
@@ -175,7 +175,7 @@ export function buildIndexerOverlayQuestionRegistryApplyProposal(input: {
     amendment,
     confirmation,
     overlay_contract_digest: amendment.overlay_digest,
-    overlay_trust_receipt_digest: amendment.overlay_trust_receipt_digest,
+    overlay_validation_receipt_digest: amendment.overlay_validation_receipt_digest,
     rebind_receipt_digest: input.rebind_receipt_digest,
     rebound_selection_digest: input.rebound_selection_digest,
     subject_key_schema_set_digest: input.subject_key_schema_set_digest,
@@ -199,7 +199,7 @@ export function validateIndexerOverlayQuestionRegistryApplyProposal(
   if (
     proposal.project_ref !== amendment.project_ref ||
     proposal.overlay_contract_digest !== amendment.overlay_digest ||
-    proposal.overlay_trust_receipt_digest !== amendment.overlay_trust_receipt_digest ||
+    proposal.overlay_validation_receipt_digest !== amendment.overlay_validation_receipt_digest ||
     proposal.base_registry.requirement_set_digest !== amendment.base_requirement_set_digest ||
     proposal.target_registry.requirement_set_digest !== amendment.target_requirement_set_digest ||
     proposal.target_registry.registry_digest !== amendment.target_registry_digest

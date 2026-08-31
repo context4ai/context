@@ -8,6 +8,7 @@ state:
     workspace: { project_entry_valid: true, state_valid: true }
     verification: { blocking_clear: true }
     evidence: { maintenance_clear: true }
+    indexer: { lifecycle_current: true, registry_state: current }
     close: { current: true }
     gates:
       evidence_maintenance_resolved: true
@@ -34,7 +35,7 @@ state:
     review: { gate_clear: false, batch_resolved: false }
 expect:
   statusCode: actionable
-  primaryNode: resume-review-current-batch
+  primaryNode: review-current-batch
   primaryReasonCode: route.review.decision-required
   gateResolution: session-authority
   resolutionHandler: context.review.approve-current

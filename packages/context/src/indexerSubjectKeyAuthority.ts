@@ -237,13 +237,17 @@ export function resolveIndexerSubjectKeySchemas(input: {
     if (owner === undefined) {
       throw new TypeError(`extension profile ${selection.profile} has no exact owner Provider layer`);
     }
-    const declarations = input.providers.flatMap((provider) =>
-      (provider.manifest.composition?.extensions ?? [])
-        .filter((extension) => extension.profile === selection.profile)
-        .map((extension) => ({ provider, extension }))
-    );
+    const declarations = input.providers
+      .filter((provider) => provider.indexer_id === selection.indexer_id)
+      .flatMap((provider) =>
+        (provider.manifest.composition?.extensions ?? [])
+          .filter((extension) => extension.profile === selection.profile)
+          .map((extension) => ({ provider, extension }))
+      );
     const declarationAuthorities = new Map(declarations.map((declaration) => [
       canonicalIndexerJson({
+        indexer_id: declaration.provider.indexer_id,
+        provider_layer_id: declaration.provider.provider_layer_id,
         provider_id: declaration.provider.manifest.id,
         provider_version: declaration.provider.manifest.version,
         provider_integrity: declaration.provider.provider_integrity,
@@ -253,6 +257,8 @@ export function resolveIndexerSubjectKeySchemas(input: {
       declaration,
     ]));
     const ownerAuthorityKey = canonicalIndexerJson({
+      indexer_id: owner.indexer_id,
+      provider_layer_id: owner.provider_layer_id,
       provider_id: owner.manifest.id,
       provider_version: owner.manifest.version,
       provider_integrity: owner.provider_integrity,
@@ -457,7 +463,13 @@ export function analyzeIndexerSubjectKeySchemaTransition(input: {
   if (
     oldSchema.authority.kind === "provider-extension" &&
     (newSchema.authority.kind !== "provider-extension" ||
-      oldSchema.authority.provider_id !== newSchema.authority.provider_id)
+      oldSchema.indexer_id !== newSchema.indexer_id ||
+      oldSchema.authority.extends !== newSchema.authority.extends ||
+      oldSchema.authority.provider_layer_id !== newSchema.authority.provider_layer_id ||
+      oldSchema.authority.provider_id !== newSchema.authority.provider_id ||
+      (oldSchema.authority.provider_version === newSchema.authority.provider_version &&
+        (oldSchema.authority.provider_integrity !== newSchema.authority.provider_integrity ||
+          oldSchema.authority.manifest_digest !== newSchema.authority.manifest_digest)))
   ) {
     throw new TypeError("SubjectKey extension transition cannot change owner Provider");
   }

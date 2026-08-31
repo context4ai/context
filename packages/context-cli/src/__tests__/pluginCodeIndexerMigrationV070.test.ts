@@ -12,10 +12,6 @@ const MIGRATION_PATH = join(
   "plugins/context/migrations/0.7.0-code-indexer-resource-migration.json",
 );
 const OWNER_MAP_PATH = "plugins/context/migrations/0.7.0-semantic-source-ownership.json";
-const LEGACY_SEMANTIC_ROOT = join(
-  PACKAGE_ROOT,
-  "context-workflow/resources/semantic/code-index",
-);
 const CODE_INDEXER_ROOT = join(
   REPOSITORY_ROOT,
   "plugins/context/skills/context-code-indexer",
@@ -79,11 +75,11 @@ function cutoverDigestPayload(matrix: MigrationMatrix) {
 function validateCutoverCandidatePolicy(matrix: MigrationMatrix): void {
   if (
     matrix.cutover.schema !== "context.code-indexer-cutover-candidate-set/v1" ||
-    matrix.cutover.state !== "registered" ||
+    matrix.cutover.state !== "executed" ||
     matrix.cutover.execution_phase !== "phase-g" ||
-    matrix.cutover.deletion_authorized
+    !matrix.cutover.deletion_authorized
   ) {
-    throw new TypeError("Code Indexer cutover must remain registered and deletion-deferred to Phase G");
+    throw new TypeError("Code Indexer cutover must be executed and deletion-authorized in Phase G");
   }
   const sources = matrix.items.map((item) => item.source);
   if (
@@ -143,13 +139,6 @@ async function migrationMatrix(): Promise<MigrationMatrix> {
 describe("0.7.0 Code Indexer resource migration", () => {
   test("disposes the exact legacy semantic, procedure, audit, and view inventory", async () => {
     const matrix = await migrationMatrix();
-    const expectedSources = [
-      ...(await listFiles(LEGACY_SEMANTIC_ROOT)).map(repositoryPath),
-      "packages/context-cli/context-workflow/resources/procedures/code-extraction.md",
-      "packages/context-cli/context-workflow/resources/procedures/code-index-audit.md",
-      "packages/context-cli/context-workflow/resources/views/code-index-audit.yaml",
-    ].sort();
-
     expect(matrix).toMatchObject({
       schema: "context.code-indexer-resource-migration/v1",
       coverage: "complete",
@@ -158,12 +147,16 @@ describe("0.7.0 Code Indexer resource migration", () => {
       path: OWNER_MAP_PATH,
       digest: digest(await readFile(join(REPOSITORY_ROOT, OWNER_MAP_PATH), "utf8")),
     });
-    expect(matrix.items.map((item) => item.source).sort()).toEqual(expectedSources);
+    expect(matrix.items).toHaveLength(20);
+    expect(matrix.cutover.candidate_sources).toEqual(matrix.items.map((item) => item.source));
     expect(new Set(matrix.items.map((item) => item.source)).size).toBe(matrix.items.length);
 
     for (const item of matrix.items) {
-      const source = await readFile(join(REPOSITORY_ROOT, item.source), "utf8");
-      expect(digest(source), item.source).toBe(item.source_digest);
+      expect(item.source_digest, item.source).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(await stat(join(REPOSITORY_ROOT, item.source)).then(
+        () => true,
+        () => false,
+      ), item.source).toBe(false);
       expect(item.targets.length, item.source).toBeGreaterThan(0);
       expect(item.semantic_anchors.length, item.source).toBeGreaterThan(0);
       const targetBodies = await Promise.all(item.targets.map(async (target) => {
@@ -212,14 +205,14 @@ describe("0.7.0 Code Indexer resource migration", () => {
     }
   });
 
-  test("registers exact Phase G cutover candidates without authorizing deletion", async () => {
+  test("records the executed Phase G cutover and removed legacy sources", async () => {
     const matrix = await migrationMatrix();
     expect(() => validateCutoverCandidatePolicy(matrix)).not.toThrow();
     expect(matrix.cutover).toMatchObject({
       schema: "context.code-indexer-cutover-candidate-set/v1",
-      state: "registered",
+      state: "executed",
       execution_phase: "phase-g",
-      deletion_authorized: false,
+      deletion_authorized: true,
     });
     expect(matrix.cutover.candidate_sources).toEqual(
       matrix.items.map((item) => item.source),
@@ -230,8 +223,10 @@ describe("0.7.0 Code Indexer resource migration", () => {
     );
 
     for (const item of matrix.items) {
-      expect((await stat(join(REPOSITORY_ROOT, item.source))).isFile(), item.source)
-        .toBe(true);
+      expect(await stat(join(REPOSITORY_ROOT, item.source)).then(
+        () => true,
+        () => false,
+      ), item.source).toBe(false);
       if (item.disposition === "retire-with-reason") {
         expect(item.retirement_reason?.detail.trim().length ?? 0, item.source)
           .toBeGreaterThan(0);

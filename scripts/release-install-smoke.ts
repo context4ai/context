@@ -87,7 +87,7 @@ for (const name of ["@c4a/core", "@c4a/context", "@c4a/extract", "@c4a/extract-t
 
 const agentGraph = await import("@c4a/agent-graph");
 const location = {
-  schema: "agent-graph.resource-location.v2",
+  schema: "agent-graph.resource-location.host-action.v1",
   id: "context.release-smoke",
   kind: "procedure",
   mediaType: "application/json",

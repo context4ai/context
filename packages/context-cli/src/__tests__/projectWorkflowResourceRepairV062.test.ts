@@ -69,31 +69,10 @@ describe("Context workflow resource repair", () => {
 
     const snapshot = await evaluateContextWorkflow({ observation, authorities: [] });
     expect(snapshot.route).toMatchObject({
-      node: "extract-next",
-      reason_code: "route.extract.pending-target",
+      node: "run-indexer-lifecycle",
+      reason_code: "route.indexer.lifecycle-required",
     });
-    expect(snapshot.route?.commands[0]?.command).toContain(`run ${phaseB.id} --format json`);
-  });
-
-  test("unprojected source asset paths route to deterministic close repair", async () => {
-    const observation: ContextWorkflowObservation = {
-      ...emptyObservation(),
-      approvedPages: 1,
-      close: { state: "ready", diagnostics: [] },
-      verifyErrors: 1,
-      verifyIssues: [{
-        severity: "error",
-        code: "approved-resource-source-path-unprojected",
-        path: "guides/example.md",
-        message: "approved Markdown still references a source-snapshot asset path",
-      }],
-    };
-    const snapshot = await evaluateContextWorkflow({ observation, authorities: [] });
-    expect(snapshot.route).toMatchObject({
-      node: "close-approved-knowledge",
-      reason_code: "route.close.projection-stale",
-    });
-    expect(snapshot.route?.commands[0]?.command).toContain("close --format json");
+    expect(snapshot.route?.commands).toEqual([]);
   });
 
   test("missing registered document snapshots route to recapture before stale verification findings", async () => {
@@ -266,14 +245,15 @@ describe("Context workflow resource repair", () => {
       compileDocumentNext: "context run compile:lark:20260812/reference:sop --stage --format json",
     };
     const recompileSnapshot = await evaluateContextWorkflow({ observation: recompile, authorities: [] });
-    expect(recompileSnapshot.route?.commands[0]?.command).toContain(
-      "run compile:lark:20260812/reference:sop --stage --format json",
-    );
+    expect(recompileSnapshot.route).toMatchObject({
+      node: "run-indexer-lifecycle",
+      commands: [],
+    });
 
     const readyForReview: ContextWorkflowObservation = {
       ...base,
-      draftCandidates: 1,
-      draftCollections: ["sop"],
+      draftCandidates: 0,
+      draftCollections: [],
       compileBatch: {
         ...compileBatch,
         draftViewRefs: ["sop:action/example"],
@@ -330,8 +310,8 @@ describe("Context workflow resource repair", () => {
     expect(createContextWorkflowFacts(replacementBatch, []).verification.blocking_clear).toBe(true);
     expect((await evaluateContextWorkflow({ observation: replacementBatch, authorities: [] })).route)
       .toMatchObject({
-        node: "resume-review-current-batch",
-        reason_code: "route.review.decision-required",
+        node: "run-indexer-lifecycle",
+        reason_code: "route.indexer.lifecycle-required",
       });
   });
 
@@ -381,12 +361,10 @@ describe("Context workflow resource repair", () => {
     expect(facts.evidence.maintenance_clear).toBe(true);
     const snapshot = await evaluateContextWorkflow({ observation, authorities: [] });
     expect(snapshot.route).toMatchObject({
-      node: "align-next",
-      reason_code: "route.structure.pending-target",
+      node: "run-indexer-lifecycle",
+      reason_code: "route.indexer.lifecycle-required",
     });
-    expect(snapshot.route?.commands[0]?.command).toContain(
-      "run align:lark:20260812/reference:sop --view read-plan --format json",
-    );
+    expect(snapshot.route?.commands).toEqual([]);
 
     const activeSourceKey = "lark:20260812/already-compiled";
     const pendingAlongsideDrafts: ContextWorkflowObservation = {
@@ -406,8 +384,8 @@ describe("Context workflow resource repair", () => {
           workspaceDiagnostics: [],
         },
       ],
-      draftCandidates: 1,
-      draftCollections: ["sop"],
+      draftCandidates: 0,
+      draftCollections: [],
       activeStructures: {
         state: "ready",
         count: 1,
@@ -470,7 +448,7 @@ describe("Context workflow resource repair", () => {
     expect(pendingAlongsideDraftsFacts.evidence.maintenance_clear).toBe(true);
     expect(pendingAlongsideDraftsFacts.review.batch_resolved).toBe(true);
     expect((await evaluateContextWorkflow({ observation: pendingAlongsideDrafts, authorities: [] })).route)
-      .toMatchObject({ node: "resume-align-next", reason_code: "route.structure.pending-target" });
+      .toMatchObject({ node: "run-indexer-lifecycle", reason_code: "route.indexer.lifecycle-required" });
 
     const nextSourceKey = "lark:20260812/next-source";
     const partialCompile: ContextWorkflowObservation = {
@@ -558,7 +536,7 @@ describe("Context workflow resource repair", () => {
     expect(partialCompileFacts.verification.blocking_clear).toBe(true);
     expect(partialCompileFacts.evidence.maintenance_clear).toBe(true);
     expect((await evaluateContextWorkflow({ observation: partialCompile, authorities: [] })).route)
-      .toMatchObject({ node: "compile-next", reason_code: "route.compile.pending-target" });
+      .toMatchObject({ node: "run-indexer-lifecycle", reason_code: "route.indexer.lifecycle-required" });
 
     const unrelated = {
       ...observation,

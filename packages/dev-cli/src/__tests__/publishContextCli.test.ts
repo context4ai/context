@@ -114,6 +114,15 @@ async function setupExtractTsPkg(root: string): Promise<{ pkgDir: string; distDi
 }
 
 describe("publish package list", () => {
+  test("keeps repository-only workspace packages private", async () => {
+    for (const dir of ["dev-cli", "tui"]) {
+      const manifest = JSON.parse(
+        await readFile(resolve(import.meta.dir, "../../../", dir, "package.json"), "utf8"),
+      ) as { private?: boolean };
+      expect(manifest.private).toBe(true);
+    }
+  });
+
   test("includes context SDK and extract packages required by context-cli", () => {
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context", dir: "context" });
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/extract", dir: "extract" });
@@ -219,6 +228,8 @@ describe("publish package list", () => {
       "utf8",
     );
     expect(smoke).toContain('await import("@c4a/agent-graph")');
+    expect(smoke).toContain('schema: "agent-graph.resource-location.host-action.v1"');
+    expect(smoke).not.toContain('schema: "agent-graph.resource-location.v2"');
     expect(smoke).toContain('adapter_version: "1.0.0"');
     expect(smoke).toContain('revision: "sha256:" + createHash("sha256").update(version).digest("hex")');
     expect(smoke).not.toContain("createRequire");

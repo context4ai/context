@@ -77,10 +77,8 @@ import { authorizeProjectIndexerDependencies } from "./indexerDependencyAuthoriz
 import { observeProjectIndexerApply } from "./indexerProjectObservation.js";
 import { authorizeProjectIndexerProgramExecution } from
   "./indexerProgramExecutionAuthorization.js";
-import {
-  authorizeProjectIndexerContractOverlay,
-  validateProjectIndexerContractOverlay,
-} from "./indexerContractOverlayValidation.js";
+import { validateProjectIndexerContractOverlay } from
+  "./indexerContractOverlayValidation.js";
 import {
   confirmProjectIndexerOverlayQuestionAmendment,
   proposeProjectIndexerOverlayQuestionAmendment,
@@ -671,7 +669,7 @@ export function registerProjectIndexerCommands(program: Command): void {
   requirementCommand(
     indexer,
     "validate-indexer-contract-overlays",
-    "Recompute one data-only contract overlay and resolve its exact trust path",
+    "Recompute one data-only contract overlay and issue an exact validation receipt",
   )
     .requiredOption("--input <file>", "digest-bound overlay validation input path")
     .action(async (...args: unknown[]) => {
@@ -685,25 +683,10 @@ export function registerProjectIndexerCommands(program: Command): void {
 
   requirementCommand(
     indexer,
-    "authorize-indexer-contract-overlay",
-    "Authorize one exact current-project data-only overlay after conformance passes",
-  )
-    .requiredOption("--input <file>", "digest-bound overlay authorization input path")
-    .action(async (...args: unknown[]) => {
-      const options = commandOptions(args);
-      const inputPath = requiredStringOption(options, "input", "--input");
-      projectRoot("authorize-indexer-contract-overlay");
-      writeOutput(authorizeProjectIndexerContractOverlay(
-        await readInput(inputPath, "authorize-indexer-contract-overlay"),
-      ), outputFormat(options));
-    });
-
-  requirementCommand(
-    indexer,
     "propose-overlay-question-amendment",
-    "Propose namespaced question bindings only from one current trusted overlay",
+    "Propose namespaced question bindings from one current validated overlay",
   )
-    .requiredOption("--input <file>", "trusted overlay question proposal input path")
+    .requiredOption("--input <file>", "validated overlay question proposal input path")
     .action(async (...args: unknown[]) => {
       const options = commandOptions(args);
       const inputPath = requiredStringOption(options, "input", "--input");

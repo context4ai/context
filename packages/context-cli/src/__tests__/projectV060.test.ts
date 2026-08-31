@@ -502,9 +502,9 @@ describe("0.6.0 project init and source ensure", () => {
       expect(lstatSync(link).isSymbolicLink()).toBe(true);
 
       const status = await runCliInDir(project, ["status"]);
-      expect(status).toContain("state: route.extract.codeindex-migration-required");
-      expect(status).toContain("--workflow-revision");
-      expect(status).toContain("migrate codeindex --format json");
+      expect(status).toContain("state: route.indexer.lifecycle-required");
+      expect(status).toContain("registry-and-Provider indexing lifecycle");
+      expect(status).not.toContain("migrate codeindex --format json");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

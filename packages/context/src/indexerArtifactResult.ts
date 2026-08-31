@@ -47,7 +47,7 @@ import {
 import type { IndexerMainAuthorWorkset, IndexerTargetResolutionView } from "./indexerMainWorkset.js";
 import { canonicalIndexerNodeRef, indexerSubjectKeySchema } from "./indexerSubjectIdentity.js";
 
-const evidenceBindingSchema = z.object({
+export const indexerEvidenceBindingSchema = z.object({
   evidence_ref: indexerCanonicalRefSchema,
   kind: z.enum(INDEXER_EVIDENCE_KINDS),
   source_ref: indexerCanonicalRefSchema,
@@ -199,7 +199,7 @@ export const indexerArtifactResultSchema = z.object({
   structured_declarations: indexerStructuredDeclarationSetSchema.optional(),
   structured_claims: indexerStructuredClaimSetSchema.optional(),
   facts: z.array(indexerArtifactFactSchema),
-  evidence_bindings: z.array(evidenceBindingSchema),
+  evidence_bindings: z.array(indexerEvidenceBindingSchema),
   artifacts: z.array(artifactSchema),
   artifact_bundle: indexerArtifactBundleSchema.nullable(),
   material_question_proposals: z.array(materialQuestionProposalSchema),
@@ -215,7 +215,7 @@ export type IndexerArtifactSectionProjection = z.infer<
 >;
 
 export function indexerEvidenceBindingDigest(
-  value: Omit<z.infer<typeof evidenceBindingSchema>, "binding_digest">,
+  value: Omit<z.infer<typeof indexerEvidenceBindingSchema>, "binding_digest">,
 ): string {
   return indexerProtocolDigest(value);
 }
@@ -567,6 +567,10 @@ function validateTargetResolution(
           "index-target-resolution-invalid: create-independent must introduce a distinct SubjectKey",
         );
       }
+    } else if (entry.state !== "absent") {
+      throw new TypeError(
+        "index-target-resolution-invalid: resolved targets cannot be reported as unavailable",
+      );
     }
   }
 }

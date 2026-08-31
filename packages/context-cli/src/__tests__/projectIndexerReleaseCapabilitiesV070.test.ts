@@ -25,8 +25,12 @@ afterEach(async () => {
   ));
 });
 
-function state(version: string, capability: string): string | undefined {
-  return buildIndexerReleaseCapabilityManifest(version).capabilities.find(
+function state(
+  version: string,
+  capability: string,
+  evidence: Parameters<typeof buildIndexerReleaseCapabilityManifest>[1] = {},
+): string | undefined {
+  return buildIndexerReleaseCapabilityManifest(version, evidence).capabilities.find(
     (item) => item.id === capability,
   )?.state;
 }
@@ -38,10 +42,17 @@ describe("Indexer release capability manifest", () => {
     expect(state("0.7.0-preview.2", "code-indexer")).toBe("ready");
     expect(state("0.7.0-preview.2", "markdown-indexer")).toBe("not-ready");
     expect(state("0.7.0-preview.3", "markdown-indexer")).toBe("ready");
-    expect(state("0.7.0-rc.1", "enterprise-overlay-trust")).toBe("ready");
+    expect(state("0.7.0-rc.1", "resource-protocols")).toBe("not-ready");
     expect(state("0.7.0-rc.1", "phase-g-cutover")).toBe("not-ready");
-    expect(state("0.7.0", "phase-g-cutover")).toBe("ready");
-    expect(buildIndexerReleaseCapabilityManifest("0.7.0").dist_tag).toBe("latest");
+    expect(state("0.7.0", "phase-g-cutover")).toBe("not-ready");
+    expect(state("0.7.0", "phase-g-cutover", { phaseGCutover: true })).toBe("ready");
+    expect(state("0.7.1", "resource-protocols")).toBe("ready");
+    expect(buildIndexerReleaseCapabilityManifest("0.7.1").dist_tag).toBe("latest");
+    expect(state("0.7.1-preview.1", "resource-protocols")).toBe("ready");
+    expect(buildIndexerReleaseCapabilityManifest("0.7.1-preview.1").dist_tag).toBe(
+      "preview",
+    );
+    expect(buildIndexerReleaseCapabilityManifest("0.7.1-rc.1").dist_tag).toBe("rc");
   });
 
   test("validates content identity and emits the exact feature-not-ready diagnostic", () => {
@@ -73,6 +84,13 @@ describe("Indexer release capability manifest", () => {
       packageRoot: PACKAGE_ROOT,
       outputRoot: assetsRoot,
     });
+    expect(JSON.parse(await readFile(
+      join(assetsRoot, "capability-manifest.json"),
+      "utf8",
+    )).capabilities).toContainEqual(expect.objectContaining({
+      id: "phase-g-cutover",
+      state: "ready",
+    }));
     const previewVersion = "0.7.0-preview.1";
     await writeFile(
       join(assetsRoot, "release-manifest.json"),

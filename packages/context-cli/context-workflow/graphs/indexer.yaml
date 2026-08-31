@@ -6,7 +6,6 @@ entrypoints:
   provider-selection: configure-indexer-providers
   markdown-provider: inspect-markdown-provider-capture
   requirement-confirmation: route-index-requirement-confirmation
-  contract-overlay-authorization: authorize-indexer-contract-overlay
   contract-overlay-validation: validate-indexer-contract-overlays
   subject-key-validation: validate-subject-key-schemas
   dependency-authorization: authorize-indexer-dependencies
@@ -178,7 +177,7 @@ nodes:
     kind: action
     reasonCode: route.indexer.contract-overlay-validation
     action: actions/validate-indexer-contract-overlays.yaml
-  - id: contract-overlay-trusted
+  - id: contract-overlay-valid
     kind: terminal
     terminalOutcome: completed
   - id: validate-subject-key-schemas
@@ -205,25 +204,6 @@ nodes:
       - path: indexer_subject_reidentification.authorized
         equals: true
   - id: subject-reidentification-confirmed
-    kind: terminal
-    terminalOutcome: completed
-  - id: contract-overlay-authorization-required
-    kind: terminal
-    terminalOutcome: waiting-user
-  - id: authorize-indexer-contract-overlay
-    kind: gate
-    reasonCode: route.indexer.contract-overlay-authorization
-    inspectionAction: actions/validate-indexer-contract-overlays.yaml
-    resolutionAction: actions/authorize-indexer-contract-overlay.yaml
-    gate:
-      id: authorize-indexer-contract-overlay
-      prompt: Authorize the exact current-project data-only contract overlay after conformance validation.
-      authority: context.indexer-contract-overlay
-      delegatable: false
-    satisfiedBy:
-      - path: indexer_contract_overlay.trust_state
-        equals: project-authorized-exact-digest
-  - id: contract-overlay-authorization-done
     kind: terminal
     terminalOutcome: completed
   - id: authorize-indexer-dependencies
@@ -736,13 +716,7 @@ edges:
     to: done
     outcomes: [completed]
   - from: validate-indexer-contract-overlays
-    to: contract-overlay-trusted
-    outcomes: [completed]
-  - from: validate-indexer-contract-overlays
-    to: contract-overlay-authorization-required
-    outcomes: [waiting-user]
-  - from: authorize-indexer-contract-overlay
-    to: contract-overlay-authorization-done
+    to: contract-overlay-valid
     outcomes: [completed]
   - from: authorize-indexer-dependencies
     to: prepare-indexer-customization-project

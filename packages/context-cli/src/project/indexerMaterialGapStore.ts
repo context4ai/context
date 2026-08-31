@@ -13,6 +13,7 @@ import {
   type DurableSingleFileTransactionReceipt,
   type DurableTransactionFailureInjector,
 } from "./durableSingleFileTransaction.js";
+import { approvedKnowledgeInputHash } from "./close.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
 export const INDEXER_APPROVED_STRUCTURE_PATH = join("knowledge", "structure.yaml");
@@ -193,6 +194,7 @@ async function closeApprovedKnowledgeUnlocked(input: {
   expected_ledger_revision: string | null;
   ledger: unknown;
   approved_structure: Record<string, unknown>;
+  expected_workspace_input_hash?: string;
   inject_failure?: DurableTransactionFailureInjector;
 }): Promise<IndexerMaterialGapWriteReceipt> {
   await recoverMaterialGapTransactionsUnlocked(input.projectRoot);
@@ -213,6 +215,15 @@ async function closeApprovedKnowledgeUnlocked(input: {
     input.approved_structure.structure_state !== undefined
   ) {
     throw new TypeError("close requires a complete approved structure projection");
+  }
+  if (input.expected_workspace_input_hash !== undefined) {
+    if (input.approved_structure.input_hash !== input.expected_workspace_input_hash) {
+      throw new TypeError("close approved structure input_hash does not match its expected workspace hash");
+    }
+    const currentInputHash = await approvedKnowledgeInputHash(input.projectRoot);
+    if (currentInputHash !== input.expected_workspace_input_hash) {
+      throw new TypeError("close approved structure input_hash is stale");
+    }
   }
   const target: StructureRecord = {
     ...input.approved_structure,
@@ -248,6 +259,7 @@ export async function closeApprovedKnowledgeWithMaterialGaps(input: {
   expected_ledger_revision: string | null;
   ledger: unknown;
   approved_structure: Record<string, unknown>;
+  expected_workspace_input_hash?: string;
   inject_failure?: DurableTransactionFailureInjector;
 }): Promise<IndexerMaterialGapWriteReceipt> {
   return withProjectWriteLock(input.projectRoot, CLOSE_TRANSACTION, () =>
@@ -260,12 +272,15 @@ export async function readIndexerMaterialGapStructure(projectRoot: string): Prom
   ledger: IndexerMaterialGapLedger;
   structure: Record<string, unknown>;
 } | undefined> {
-  const current = await readStructure(projectRoot);
-  const ledger = currentLedger(current.record);
-  if (current.record === undefined || ledger === undefined) return undefined;
-  const state = current.record.structure_state ??
-    (approvedProjectionPresent(current.record)
-      ? "approved-projection-closed"
-      : "retained-state-present");
-  return { state, ledger, structure: current.record };
+  return withProjectWriteLock(projectRoot, "read-indexer-material-gap-store", async () => {
+    await recoverMaterialGapTransactionsUnlocked(projectRoot);
+    const current = await readStructure(projectRoot);
+    const ledger = currentLedger(current.record);
+    if (current.record === undefined || ledger === undefined) return undefined;
+    const state = current.record.structure_state ??
+      (approvedProjectionPresent(current.record)
+        ? "approved-projection-closed"
+        : "retained-state-present");
+    return { state, ledger, structure: current.record };
+  });
 }

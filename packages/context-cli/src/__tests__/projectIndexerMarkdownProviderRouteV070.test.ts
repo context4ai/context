@@ -377,7 +377,7 @@ describe("Markdown Provider Route", () => {
       host_requests: [{
         state: "host-action-required",
         location: {
-          schema: "agent-graph.resource-location.v2",
+          schema: "agent-graph.resource-location.host-action.v1",
           materialize: {
             handler: "context.resolve-indexer-provider/v1",
           },

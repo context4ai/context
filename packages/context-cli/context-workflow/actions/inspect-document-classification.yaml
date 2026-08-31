@@ -1,5 +1,0 @@
-schema: agent-graph.action.v1
-id: inspect-document-classification
-runner: host
-effect: read
-handler: context.document.inspect-classification

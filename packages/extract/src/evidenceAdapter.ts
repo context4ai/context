@@ -61,7 +61,9 @@ function semanticExtractionPayload(extraction: ExtractionResult): unknown {
 function relationSourceFile(
   relation: RelationInfo,
   symbols: readonly SymbolInfo[],
+  filePaths: ReadonlySet<string>,
 ): string | null {
+  if (filePaths.has(relation.from)) return relation.from;
   const candidates = symbols.filter((symbol) => symbol.name === relation.from);
   if (candidates.length === 1) return candidates[0]!.file;
   if (relation.line !== undefined) {
@@ -102,6 +104,7 @@ export function extractionResultToEvidenceAdapterResult(
 
   const coverageByPath = new Map(coverage.files.map((file) => [file.path, file]));
   const fileInfoByPath = new Map(extraction.files.map((file) => [file.path, file]));
+  const filePaths = new Set([...coverageByPath.keys(), ...fileInfoByPath.keys()]);
   for (const file of extraction.files) {
     if (!coverageByPath.has(file.path)) {
       throw new TypeError(`ExtractionResult file ${file.path} has no coverage disposition`);
@@ -121,7 +124,7 @@ export function extractionResultToEvidenceAdapterResult(
   const generatedDiagnostics: IndexerEvidenceAdapterResult["diagnostics"] = [];
   const relationsByFile = new Map<string, RelationInfo[]>();
   for (const relation of extraction.relations) {
-    const file = relationSourceFile(relation, extraction.symbols);
+    const file = relationSourceFile(relation, extraction.symbols, filePaths);
     if (file === null || coverageByPath.get(file)?.disposition !== "analyzed") {
       generatedDiagnostics.push({
         code: "relation-locator-unresolved",

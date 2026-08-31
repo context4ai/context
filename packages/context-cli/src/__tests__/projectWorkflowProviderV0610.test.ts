@@ -164,7 +164,7 @@ describe("Context workflow Provider", () => {
     });
   });
 
-  test("routes enabled document optimization before build in ordinary and managed sessions", async () => {
+  test("does not re-enter the retired document optimization route before build", async () => {
     const observation = {
       ...emptyObservation(),
       sourceCount: 1,
@@ -215,10 +215,8 @@ describe("Context workflow Provider", () => {
     };
     for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
       const snapshot = await evaluateContextWorkflow({ observation, authorities });
-      expect(snapshot.route?.node).toBe("optimize-documents");
-      expect(snapshot.route?.reason_code).toBe("route.document-optimization.pending");
-      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs plan --format json");
-      expect(snapshot.route?.action?.input_schema?.id).toBe("schema.optimize-documents.input");
+      expect(snapshot.route?.node).toBe("build-next");
+      expect(snapshot.route?.reason_code).toBe("route.build.package-stale");
     }
   });
 
@@ -349,7 +347,7 @@ describe("Context workflow Provider", () => {
     }]);
   });
 
-  test("managed extraction authority keeps the evidence inspection Gate observable", async () => {
+  test("routes repository work through the unique Indexer lifecycle", async () => {
     const observation = {
       ...emptyObservation(),
       sourceCount: 1,
@@ -370,36 +368,18 @@ describe("Context workflow Provider", () => {
     });
     expect(snapshot.evaluation.statusCode).toBe("actionable");
     expect(snapshot.route).toMatchObject({
-      node: "choose-extraction-scope",
+      node: "run-indexer-lifecycle",
       availability: "immediate",
-      gate: {
-        authority: CONTEXT_WORKFLOW_AUTHORITIES.extractionScope,
-        resolution: "session-authority",
-        inspection_action: {
-          id: "inspect-code-extraction",
-          effect: "read",
-        },
+      reason_code: "route.indexer.lifecycle-required",
+      commands: [],
+      action: {
+        id: "run-indexer-lifecycle",
+        runner: "agent",
+        skill: { id: "skill.context-run-indexer-lifecycle" },
       },
-      commands: [{
-        command: expect.stringContaining(
-          "--workflow-managed source inspect --repo-only --format json",
-        ),
-        effect: "read",
-        availability: "immediate",
-        managed_execution: "agent-required",
-      }],
     });
-    expect(snapshot.route?.resources.required.map((resource) => resource.id)).toContain(
-      "semantic.code-index.classification",
-    );
-    expect(snapshot.route?.resources.recommended.map((resource) => resource.id)).not.toEqual(
-      expect.arrayContaining([
-        "semantic.code-index.template.web-application",
-        "semantic.code-index.template.api-service",
-        "semantic.code-index.template.sdk-library",
-        "semantic.code-index.template.protocol-boundary",
-      ]),
-    );
+    expect(snapshot.route?.resources.required.map((resource) => resource.id))
+      .toEqual(["skill.context-run-indexer-lifecycle"]);
   });
 
   test("a build receipt cannot hide an unclassified captured document", () => {
@@ -520,6 +500,68 @@ describe("Context workflow Provider", () => {
       authorities,
     });
     expect(first.evaluation.revision).not.toBe(second.evaluation.revision);
+  });
+
+  test("does not let legacy draft Candidates bypass the current Indexer compile", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      repoSources: [{ id: "anonymous/repo", name: "anonymous/repo" }],
+      readyRepoSources: 1,
+      draftCandidates: 1,
+      draftCollections: ["architecture" as const],
+      candidateSetDigest: "legacy-candidate-set",
+      indexerRegistry: {
+        state: "current" as const,
+        sourceRefs: ["repo:anonymous/repo"],
+      },
+      indexerCandidateCompile: { state: "missing" as const },
+    };
+    const stale = await evaluateContextWorkflow({ observation, authorities: [] });
+    expect(stale.route).toMatchObject({
+      node: "run-indexer-lifecycle",
+      reason_code: "route.indexer.lifecycle-required",
+    });
+
+    const current = await evaluateContextWorkflow({
+      observation: {
+        ...observation,
+        indexerCandidateCompile: { state: "current" },
+      },
+      authorities: [],
+    });
+    expect(current.route).toMatchObject({
+      node: "review-current-batch",
+      reason_code: "route.review.decision-required",
+    });
+  });
+
+  test("accepts a cleaned runtime only when every approved page retains Indexer binding", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      repoSources: [{ id: "anonymous/repo", name: "anonymous/repo" }],
+      readyRepoSources: 1,
+      approvedPages: 1,
+      approvedIndexerPages: 0,
+      close: { state: "ready" as const, diagnostics: [] },
+      indexerRegistry: {
+        state: "current" as const,
+        sourceRefs: ["repo:anonymous/repo"],
+      },
+      indexerCandidateCompile: { state: "missing" as const },
+    };
+    const legacy = await evaluateContextWorkflow({ observation, authorities: [] });
+    expect(legacy.route).toMatchObject({
+      node: "run-indexer-lifecycle",
+      reason_code: "route.indexer.lifecycle-required",
+    });
+
+    const indexerBound = await evaluateContextWorkflow({
+      observation: { ...observation, approvedIndexerPages: 1 },
+      authorities: [],
+    });
+    expect(indexerBound.route?.node).not.toBe("run-indexer-lifecycle");
   });
 
   test("reports a close-repairable stale projection as lifecycle information", async () => {
@@ -645,144 +687,4 @@ describe("Context workflow Provider", () => {
     });
   });
 
-  test("package configuration exposes a compact, typed choice contract", async () => {
-    const snapshot = await evaluateContextWorkflow({
-      observation: {
-        ...emptyObservation(),
-        sourceCount: 1,
-        capturedDocumentSources: 1,
-        documentSources: [{
-          type: "file",
-          name: "manual",
-          materializedAt: "sources/file/manual",
-          manifest: "sources/file/manual/manifest.json",
-          snapshotReady: true,
-          diagnostics: [],
-          agent_hints: [],
-          workspaceDiagnostics: [],
-        }],
-        approvedPages: 1,
-        close: { state: "ready", diagnostics: [] },
-      },
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.packageOutput],
-    });
-    expect(snapshot.route).toMatchObject({
-      node: "configure-package-output",
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-        contract: {
-          target: "package-output",
-          choices: [
-            expect.objectContaining({
-              id: "agent-knowledge-base",
-              factory: "kbPackage",
-            }),
-            expect.objectContaining({ id: "llm-text", factory: "llmsPackage" }),
-            expect.objectContaining({ id: "none", factory: null }),
-          ],
-          resource_delivery: {
-            applies_to: "agent-knowledge-base",
-            recommendation:
-              "bundle referenced resources by default; Context keeps each image at or below 1 MiB and all bundled images within 40 MiB, compressing package output when needed; use git-raw only when the author explicitly configures it",
-            choices: [
-              expect.objectContaining({ id: "bundle", default: true }),
-              expect.objectContaining({ id: "git-raw", optional: ["remote", "urlPrefix"] }),
-              expect.objectContaining({ id: "omit" }),
-            ],
-          },
-          after_edit: "context status --format json",
-        },
-      },
-    });
-  });
-
-  test("ambiguous compile ownership has a typed root diagnostic and configuration recovery", async () => {
-    const snapshot = await evaluateContextWorkflow({
-      observation: {
-        ...emptyObservation(),
-        compilePhaseResolution: {
-          state: "ambiguous",
-          requestedSourceKeys: ["file:manual"],
-          requestedCollections: ["guide"],
-          requestedTargets: [{
-            sourceKey: "file:manual",
-            collections: ["guide"],
-          }],
-          matches: [
-            {
-              phaseId: "compile:file:manual:guide-a",
-              sourceKey: "file:manual",
-              collection: "guide",
-              command:
-                "context run compile:file:manual:guide-a --format json",
-            },
-            {
-              phaseId: "compile:file:manual:guide-b",
-              sourceKey: "file:manual",
-              collection: "guide",
-              command:
-                "context run compile:file:manual:guide-b --format json",
-            },
-          ],
-          missingCollections: [],
-          ambiguousCollections: ["guide"],
-        },
-      },
-      authorities: [],
-    });
-    expect(snapshot.route).toMatchObject({
-      node: "repair-workspace-state",
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-      },
-    });
-    expect(snapshot.rootDiagnostics).toContainEqual(expect.objectContaining({
-      code: "diagnostic.compile-route-ambiguous",
-      count: 1,
-      details_resource: expect.objectContaining({
-        id: "diagnostic.workspace-state",
-        kind: "diagnostic",
-      }),
-    }));
-  });
-
-  test("missing structure snapshots cannot collapse into an untyped invalid state", async () => {
-    const snapshot = await evaluateContextWorkflow({
-      observation: {
-        ...emptyObservation(),
-        compileBatch: {
-          collection: "guide",
-          structureDigest: "sha256:missing",
-          structureDigests: ["sha256:missing"],
-          missingStructureDigests: ["sha256:missing"],
-          plannedViewRefs: [],
-          draftViewRefs: [],
-          approvedViewRefs: [],
-          rejectedViewRefs: [],
-          staleViewRefs: [],
-          staleSourceKeys: [],
-          remainingViewRefs: [],
-          readyForReview: false,
-          complete: false,
-        },
-      },
-      authorities: [],
-    });
-    expect(snapshot.route).toMatchObject({
-      node: "repair-workspace-state",
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-      },
-    });
-    expect(snapshot.rootDiagnostics).toContainEqual(expect.objectContaining({
-      code: "diagnostic.structure-snapshot-missing",
-      count: 1,
-      details_resource: expect.objectContaining({
-        id: "diagnostic.workspace-state",
-      }),
-    }));
-  });
 });

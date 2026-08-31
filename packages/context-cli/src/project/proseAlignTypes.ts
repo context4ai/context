@@ -621,7 +621,7 @@ export function commonEnvelope(input: {
       investigation_mode: "collection-neutral",
       classification_state: {
         required: true,
-        reason_code: "route.document.classification-required",
+        reason_code: "route.indexer.lifecycle-required",
       },
     } : {}),
     ...(!classificationOnly ? {

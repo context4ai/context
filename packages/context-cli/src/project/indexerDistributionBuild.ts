@@ -134,7 +134,7 @@ export async function materializeBundledIndexerDistribution(input: {
     "../..",
     "plugins/context/skills",
   );
-  await assertSemanticSourceOwnership({
+  const semanticSourceOwnership = await assertSemanticSourceOwnership({
     repositoryRoot: resolve(input.packageRoot, "../.."),
   });
   const sourceEntries = (await readdir(sourceRoot, { withFileTypes: true }))
@@ -183,7 +183,11 @@ export async function materializeBundledIndexerDistribution(input: {
   );
   await writeFile(
     join(input.outputRoot, "capability-manifest.json"),
-    `${JSON.stringify(buildIndexerReleaseCapabilityManifest(packageJson.version), null, 2)}\n`,
+    `${JSON.stringify(buildIndexerReleaseCapabilityManifest(packageJson.version, {
+      phaseGCutover: semanticSourceOwnership.blocking_prerequisites.phase_g_cutover
+        && semanticSourceOwnership.summary.legacy_source_count === 0
+        && semanticSourceOwnership.summary.duplicate_taxonomy_count === 0,
+    }), null, 2)}\n`,
     "utf8",
   );
 

@@ -196,7 +196,7 @@ describe("0.6.2 project verify evidence refs", () => {
       expect(result.issues.map((issue) => issue.code)).toContain("approved-evidence-unavailable");
       expect(status.evidenceStatus).toBe("pass-with-unverifiable-evidence");
       expect(status.evidenceWarnings).toBe("degraded");
-      expect(status.state).toBe("route.close.projection-stale");
+      expect(status.state).toBe("route.capture.configuration-required");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

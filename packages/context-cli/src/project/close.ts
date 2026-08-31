@@ -170,7 +170,12 @@ function nodeTypeFromFrontmatter(frontmatter: Record<string, unknown>, id: strin
       next: "Repair approved Markdown through review apply, then rerun context close --format json.",
     });
   }
-  if (!APPROVED_NODE_TYPES.has(nodeType) || (!isCodeIndexCollection(collection) && (expected === undefined || nodeType !== expected))) {
+  const indexerNode = /^node:subject:sha256:[a-f0-9]{64}$/u.test(id);
+  if (
+    !APPROVED_NODE_TYPES.has(nodeType) ||
+    (!indexerNode && !isCodeIndexCollection(collection) &&
+      (expected === undefined || nodeType !== expected))
+  ) {
     throw new ContextError(ExitCode.WorkspaceStateError, `approved Markdown node_type does not match node_ref: ${relPath}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       path: relPath,
@@ -235,7 +240,9 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
     const location = viewLocationFromRelPath(file.relPath);
     const nodeRef = requiredFrontmatterString(frontmatter, "node_ref", file.relPath);
     const viewRef = requiredFrontmatterString(frontmatter, "view_ref", file.relPath);
-    const collection = viewRef.split(":", 1)[0] ?? location.collection;
+    const collection = viewRef.startsWith("view:artifact:")
+      ? location.collection
+      : viewRef.split(":", 1)[0] ?? location.collection;
     const sources = Array.isArray(frontmatter.sources)
       ? frontmatter.sources.filter((item): item is string => typeof item === "string")
       : [];

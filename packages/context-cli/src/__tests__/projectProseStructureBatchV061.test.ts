@@ -8,7 +8,6 @@ import {
   writeYaml,
 } from "./projectCompileProseV066Helpers.js";
 import {
-  COLLECTION,
   SOURCE_NAMES,
   createProject,
   writeDraftStructure,
@@ -25,38 +24,14 @@ describe("multi-source prose structure batch", () => {
         pendingStructureTargets: Array<{ alignPhaseId: string; payloadTarget: string }>;
         workflow: {
           current: {
-            action: { input_schema: { path: string } };
-            batch: {
-              schema: string;
-              input_schema: { path: string };
-              input: string;
-              targets: Array<{ phase_id: string; input: string }>;
-              validate: { command: string };
-              stage: { command: string };
-            };
+            action: { id: string; output_schema: { path: string } };
           };
         };
       };
-      expect(status.workflow.current.action.input_schema.path.endsWith(
-        "schemas/prose-structure-batch.schema.json",
+      expect(status.workflow.current.action).toMatchObject({ id: "run-indexer-lifecycle" });
+      expect(status.workflow.current.action.output_schema.path.endsWith(
+        "schemas/indexer-lifecycle-continuation.schema.json",
       )).toBe(true);
-      expect(status.workflow.current.batch).toMatchObject({
-        schema: "context.prose.structure-batch.v1",
-        input: ".tmp/agent-payloads/prose-structure-batch.yaml",
-      });
-      expect(status.workflow.current.batch.input_schema.path.endsWith(
-        "schemas/prose-structure-batch.schema.json",
-      )).toBe(true);
-      expect(status.workflow.current.batch.targets).toEqual(
-        status.pendingStructureTargets.map((target) => ({
-          phase_id: target.alignPhaseId,
-          input: target.payloadTarget,
-          source_key: expect.any(String),
-          collection: COLLECTION,
-        })),
-      );
-      expect(status.workflow.current.batch.validate.command).toContain("--workflow-revision");
-      expect(status.workflow.current.batch.stage.command).toContain("--stage --managed");
 
       const items = status.pendingStructureTargets.map((target, index) => ({
         phase_id: target.alignPhaseId,
@@ -101,7 +76,7 @@ describe("multi-source prose structure batch", () => {
       };
       expect(after.pendingStructureTargets).toEqual([]);
       expect(after.activeStructures.slotCount).toBe(2);
-      expect(after.state).toBe("route.compile.pending-target");
+      expect(after.state).toBe("route.indexer.lifecycle-required");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

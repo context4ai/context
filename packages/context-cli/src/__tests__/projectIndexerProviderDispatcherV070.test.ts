@@ -231,7 +231,7 @@ describe("0.7.0 two-stage Provider dispatcher", () => {
     });
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("returns a v2 Host Action for non-CLI distributions and consumes its inline result", async () => {
+  test("returns a Host-action Resource for non-CLI distributions and consumes its inline result", async () => {
     const root = project();
     const release = await fixture();
     const localSelection = selection(release.provider);
@@ -270,7 +270,7 @@ describe("0.7.0 two-stage Provider dispatcher", () => {
     expect(pending.state).toBe("host-action-required");
     if (pending.state !== "host-action-required") throw new Error("expected Host Action");
     expect(pending.location).toMatchObject({
-      schema: "agent-graph.resource-location.v2",
+      schema: "agent-graph.resource-location.host-action.v1",
       materialize: {
         handler: "context.resolve-indexer-provider/v1",
         input: { schema: "context.indexer.resolve-provider-input/v1" },

@@ -7,6 +7,7 @@ state:
     workspace: { project_entry_valid: true, state_valid: true }
     verification: { blocking_clear: true }
     evidence: { maintenance_clear: false }
+    indexer: { lifecycle_current: true, registry_state: current }
     gates: { evidence_maintenance_resolved: false }
 expect:
   statusCode: waiting-user

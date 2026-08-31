@@ -5,15 +5,15 @@
   "additionalProperties": false,
   "required": [
     "protocol",
-    "trusted_validation_input",
-    "trusted_validation_result",
+    "validation_input",
+    "validation_result",
     "registry",
     "requirement_id",
     "input_digest"
   ],
   "properties": {
     "protocol": { "const": "context.indexer.overlay-question-proposal-input/v1" },
-    "trusted_validation_input": {
+    "validation_input": {
       "type": "object",
       "required": ["protocol", "input_digest"],
       "properties": {
@@ -21,7 +21,7 @@
         "input_digest": { "$ref": "#/$defs/digest" }
       }
     },
-    "trusted_validation_result": {
+    "validation_result": {
       "type": "object",
       "required": ["protocol", "outcome", "result_digest"],
       "properties": {

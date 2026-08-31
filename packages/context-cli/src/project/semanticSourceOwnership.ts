@@ -187,6 +187,14 @@ async function pathIsFile(path: string): Promise<boolean> {
   }
 }
 
+async function pathIsDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 async function collectFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const files: string[] = [];
@@ -213,6 +221,7 @@ async function collectLegacyInventory(
       if (await pathIsFile(absolute)) result.push({ source: item.path, migration: item.migration });
       continue;
     }
+    if (!await pathIsDirectory(absolute)) continue;
     for (const file of await collectFiles(absolute)) {
       result.push({ source: repositoryPath(repositoryRoot, file), migration: item.migration });
     }
@@ -366,14 +375,18 @@ export async function buildSemanticSourceOwnershipReport(input: {
   const migrationBySource = new Map(migrationReports.map((source) => [source.source, source]));
   const undispositionedSources = inventory.filter((item) => !migrationBySource.has(item.source));
   const inventoryPaths = new Set(inventory.map((item) => item.source));
-  const missingMigrationSources = migrationReports
-    .filter((source) => !inventoryPaths.has(source.source) || source.current_digest === null)
-    .map((source) => source.source);
+  const retainedMigrationSources = migrationReports
+    .filter((source) => inventoryPaths.has(source.source) && source.current_digest !== null);
+  const missingMigrationSources = map.blocking_prerequisites.phase_g_cutover
+    ? []
+    : migrationReports
+      .filter((source) => !inventoryPaths.has(source.source) || !source.digest_matches)
+      .map((source) => source.source);
   const taxonomyRule = map.owner_rules.find((rule) =>
     rule.semantic_kind === "profile-taxonomy-template-editorial"
   );
   if (taxonomyRule === undefined) throw new TypeError("owner map has no taxonomy owner rule");
-  const duplicateTaxonomies = migrationReports
+  const duplicateTaxonomies = retainedMigrationSources
     .filter((source) => taxonomyRule.legacy_paths.some((rule) => matchesPathRule(source.source, rule)))
     .map((source) => ({
       source: source.source,
@@ -398,11 +411,11 @@ export async function buildSemanticSourceOwnershipReport(input: {
     ...(provider.aliasProfiles.length === 0 ? [] : ["profile-alias-drift"]),
     ...(provider.missingProfiles.length === 0 ? [] : ["canonical-profile-missing"]),
     ...(cliAuthority.issues.length === 0 ? [] : ["cli-authority-capability-drift"]),
-    ...(map.blocking_prerequisites.phase_g_cutover && migrationReports.length > 0
+    ...(map.blocking_prerequisites.phase_g_cutover && inventory.length > 0
       ? ["legacy-semantic-sources-retained-after-cutover"] : []),
   ];
   const summary = {
-    legacy_source_count: migrationReports.length,
+    legacy_source_count: inventory.length,
     duplicate_taxonomy_count: duplicateTaxonomies.length,
     canonical_question_payload_count: provider.canonicalQuestionPayloads.length,
     alias_profile_count: provider.aliasProfiles.length,
@@ -420,7 +433,7 @@ export async function buildSemanticSourceOwnershipReport(input: {
     blocking_eligible: blockingReasons.length === 0,
     blocking_reasons: unique(blockingReasons),
     cli_authority: cliAuthority,
-    legacy_sources: migrationReports,
+    legacy_sources: retainedMigrationSources,
     duplicate_taxonomies: duplicateTaxonomies,
     canonical_question_payloads: provider.canonicalQuestionPayloads,
     alias_profiles: provider.aliasProfiles,

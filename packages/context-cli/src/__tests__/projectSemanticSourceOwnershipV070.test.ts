@@ -12,7 +12,7 @@ import {
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
 
 describe("0.7.0 semantic source ownership report", () => {
-  test("blocks new authority drift while retaining registered legacy sources until Phase G", async () => {
+  test("blocks authority drift after Phase G removed every registered legacy source", async () => {
     const report = await assertSemanticSourceOwnership({ repositoryRoot });
 
     expect(report.schema).toBe("context.semantic-source-ownership-report/v1");
@@ -22,11 +22,11 @@ describe("0.7.0 semantic source ownership report", () => {
     expect(report.blocking_prerequisites).toEqual({
       migration_disposition: "complete",
       forward_fixtures: "complete",
-      phase_g_cutover: false,
+      phase_g_cutover: true,
     });
     expect(report.summary).toEqual({
-      legacy_source_count: 27,
-      duplicate_taxonomy_count: 24,
+      legacy_source_count: 0,
+      duplicate_taxonomy_count: 0,
       canonical_question_payload_count: 0,
       alias_profile_count: 0,
       undispositioned_source_count: 0,
@@ -37,14 +37,8 @@ describe("0.7.0 semantic source ownership report", () => {
     expect(report.cli_authority.capabilities.every((capability) => capability.current)).toBe(true);
     expect(report.cli_authority.issues).toEqual([]);
     expect(report.missing_canonical_profiles).toEqual([]);
-    expect(report.legacy_sources.every((source) => source.digest_matches)).toBe(true);
-    expect(report.legacy_sources.every((source) => source.dispositions.length > 0)).toBe(true);
-    expect(report.legacy_sources.every((source) => source.targets.length > 0)).toBe(true);
-    expect(report.legacy_sources.filter((source) => source.migration === "markdown"))
-      .toHaveLength(7);
-    expect(report.legacy_sources.find((source) => source.source.endsWith(
-      "semantic/align/structure-planning.md",
-    ))?.semantic_unit_ids).toContain("section-level-routing");
+    expect(report.legacy_sources).toEqual([]);
+    expect(report.duplicate_taxonomies).toEqual([]);
     expect(report.owner_snapshot.map((rule) => rule.semantic_kind)).toEqual([
       "profile-taxonomy-template-editorial",
       "canonical-reader-question-contract",

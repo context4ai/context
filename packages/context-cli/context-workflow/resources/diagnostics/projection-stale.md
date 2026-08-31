@@ -1,5 +1,4 @@
 ---
-schema: agent-graph.resource.v1
 id: diagnostic.projection-stale
 kind: diagnostic
 mediaType: text/markdown

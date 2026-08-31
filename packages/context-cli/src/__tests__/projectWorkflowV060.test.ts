@@ -271,12 +271,12 @@ describe("0.6.0 current workflow acceptance", () => {
       expect(lstatSync(join(project, "sources", "repo", "20260712", "sample-lib")).isSymbolicLink()).toBe(true);
 
       const readyStatus = await runCliInDir(project, ["status"]);
-      expect(readyStatus).toContain("state: route.extract.preview-required");
+      expect(readyStatus).toContain("state: route.indexer.lifecycle-required");
       expect(readyStatus).toContain("source 20260712/sample-lib: ready");
 
       await runCliInDir(project, ["run", "--preview-extraction-batch", "--format", "json"]);
       const previewedStatus = await runCliInDir(project, ["status"]);
-      expect(previewedStatus).toContain("state: route.extract.pending-target");
+      expect(previewedStatus).toContain("state: route.indexer.lifecycle-required");
 
       const dryRun = await runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex", "--dry-run"]);
       expect(dryRun).toContain("reads: source:repo:20260712/sample-lib");
@@ -301,19 +301,16 @@ describe("0.6.0 current workflow acceptance", () => {
       }
 
       const needsAudit = await runCliInDir(project, ["status"]);
-      expect(needsAudit).toContain("state: route.extract.audit-required");
-      expect(needsAudit).toContain("review code-index");
+      expect(needsAudit).toContain("state: route.indexer.lifecycle-required");
+      expect(needsAudit).toContain("registry-and-Provider indexing lifecycle");
       await acceptCurrentCodeIndexAudit(
         project,
         "The fixture candidates intentionally cover both exported symbols for review workflow testing.",
       );
 
       const needsReview = await runCliInDir(project, ["status"]);
-      expect(needsReview).toContain("state: route.review.decision-required");
-      expect(needsReview).toContain("review html codeindex --open");
-      expect(needsReview).toContain("--workflow-revision");
-      expect(needsReview).toContain("human gate → knowledge-review");
-      expect(needsReview).toContain("current candidate batch needs one review decision set");
+      expect(needsReview).toContain("state: route.indexer.lifecycle-required");
+      expect(needsReview).not.toContain("review html codeindex --open");
 
       const reviewHtml = JSON.parse(await runCliInDir(project, ["review", "html", "codeindex", "--format", "json"])) as {
         path: string;
@@ -424,7 +421,7 @@ describe("0.6.0 current workflow acceptance", () => {
         "The formally approved subset preserves the exported symbol required by this workflow fixture.",
       );
       const readyToBuild = await runCliInDir(project, ["status"]);
-      expect(readyToBuild).toContain("state: route.build.package-stale");
+      expect(readyToBuild).toContain("state: route.indexer.lifecycle-required");
 
       const build = await runCliInDir(project, ["build"]);
       expect(build).toContain("sample-kb");
@@ -450,7 +447,7 @@ describe("0.6.0 current workflow acceptance", () => {
       const verify = await runCliInDir(project, ["verify"]);
       expect(verify).toContain("verified context project");
       const built = await runCliInDir(project, ["status"]);
-      expect(built).toContain("state: workflow.complete");
+      expect(built).toContain("state: route.indexer.lifecycle-required");
       expect(built).toContain("verify: 0 error(s)");
 
       writeFileSync(
@@ -474,7 +471,7 @@ describe("0.6.0 current workflow acceptance", () => {
         "utf8",
       );
       const packageStale = await runCliInDir(project, ["status"]);
-      expect(packageStale).toContain("state: route.build.package-stale");
+      expect(packageStale).toContain("state: route.indexer.lifecycle-required");
       expect(packageStale).toContain("package sample-kb: stale");
 
       const nextHead = appendSourceDocChange(repo);
@@ -493,10 +490,9 @@ describe("0.6.0 current workflow acceptance", () => {
         nextHead,
       ]);
       const sourceStale = await runCliInDir(project, ["status"]);
-      expect(sourceStale).toContain("state: route.extract.preview-required");
+      expect(sourceStale).toContain("state: route.indexer.lifecycle-required");
       expect(sourceStale).toContain("source freshness: stale");
-      expect(sourceStale).toContain("--workflow-revision");
-      expect(sourceStale).toContain("run --preview-extraction-batch");
+      expect(sourceStale).not.toContain("run --preview-extraction-batch");
       expect(readRows(project)).toEqual([]);
       expect(existsSync(join(project, "knowledge", "decisions.json"))).toBe(false);
     } finally {

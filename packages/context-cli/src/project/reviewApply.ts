@@ -30,6 +30,8 @@ import {
 } from "./knowledgeAssets.js";
 import { renderApprovedCodegraphMarkdown } from "./reviewApplyCodegraph.js";
 import { renderApprovedProseMarkdown } from "./reviewApplyProse.js";
+import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
+import { assertProjectIndexerCandidateCurrent } from "./indexerCandidateCompileActions.js";
 import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
 import { assertProseCompileBatchReadyForReview } from "./proseCompileBatch.js";
 import { archiveActiveStructure, currentStructureSlotDigest } from "./proseStructureStore.js";
@@ -168,6 +170,12 @@ function renderApprovedMarkdown(input: {
   snapshot: CandidateSnapshot;
   timestamp: string;
 }): string {
+  if (input.record.candidate_type === "indexer-artifact") {
+    return renderApprovedIndexerMarkdown({
+      record: input.record,
+      timestamp: input.timestamp,
+    });
+  }
   if (input.record.candidate_type === "prose-align") {
     return renderApprovedProseMarkdown(input);
   }
@@ -256,6 +264,12 @@ async function prepareApprovedPage(input: {
   record: CandidateRecord;
   now: string;
 }): Promise<PreparedApprovedPage> {
+  if (input.record.candidate_type === "indexer-artifact") {
+    await assertProjectIndexerCandidateCurrent({
+      projectRoot: input.projectRoot,
+      record: input.record,
+    });
+  }
   const reservedCodegraphIndex = input.record.candidate_type === "code-symbol" &&
     isReservedKnowledgeIndexPath(input.record.path);
   if (!isSafeKnowledgeTargetPath(input.record.collection, input.record.path) || reservedCodegraphIndex) {
@@ -283,7 +297,10 @@ async function prepareApprovedPage(input: {
   assertProseCandidateVerbatimHashes(input.record);
   await assertProseCandidateExactCurrentRefs({ projectRoot: input.projectRoot, record: input.record });
   let relPath: string;
-  if (input.record.candidate_type !== "prose-align") {
+  if (
+    input.record.candidate_type !== "prose-align" &&
+    input.record.candidate_type !== "indexer-artifact"
+  ) {
     assertSafeEntityId(input.record.node_ref);
   }
   relPath = join("knowledge", input.record.path);

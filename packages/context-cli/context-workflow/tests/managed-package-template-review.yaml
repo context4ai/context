@@ -8,6 +8,7 @@ state:
     workspace: { project_entry_valid: true, state_valid: true }
     verification: { blocking_clear: true }
     evidence: { maintenance_clear: true }
+    indexer: { lifecycle_current: true, registry_state: current }
     gates:
       evidence_maintenance_resolved: true
       source_read_resolved: true

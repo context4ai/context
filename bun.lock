@@ -17,7 +17,7 @@
     },
     "packages/context": {
       "name": "@c4a/context",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "yaml": "^2.5.1",
         "zod": "^3.23.8",
@@ -25,12 +25,12 @@
     },
     "packages/context-cli": {
       "name": "@c4a/context-cli",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "bin": {
         "context": "dist/cli.js",
       },
       "dependencies": {
-        "@c4a/agent-graph": "0.2.7",
+        "@c4a/agent-graph": "0.3.0",
         "@c4a/context": "workspace:*",
         "commander": "^11.0.0",
         "fast-xml-parser": "^5.10.1",
@@ -58,7 +58,7 @@
     },
     "packages/core": {
       "name": "@c4a/core",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "picomatch": "^4.0.4",
         "yaml": "^2.4.5",
@@ -70,7 +70,7 @@
     },
     "packages/dev-cli": {
       "name": "@c4a/dev-cli",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/tui": "workspace:*",
@@ -81,7 +81,7 @@
     },
     "packages/extract": {
       "name": "@c4a/extract",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "bin": {
         "c4a-extract-code": "./dist/bin/c4a-extract-code.js",
       },
@@ -95,7 +95,7 @@
     },
     "packages/extract-contract": {
       "name": "@c4a/extract-contract",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "graphql": "^16.14.2",
@@ -104,7 +104,7 @@
     },
     "packages/extract-go": {
       "name": "@c4a/extract-go",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/extract": "workspace:*",
@@ -113,7 +113,7 @@
     },
     "packages/extract-mdx": {
       "name": "@c4a/extract-mdx",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "remark-mdx": "^3.1.1",
@@ -124,14 +124,14 @@
     },
     "packages/extract-proto": {
       "name": "@c4a/extract-proto",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
       },
     },
     "packages/extract-rush": {
       "name": "@c4a/extract-rush",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "typescript": "^5.5.4",
@@ -140,7 +140,7 @@
     },
     "packages/extract-sql": {
       "name": "@c4a/extract-sql",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "node-sql-parser": "^5.4.0",
@@ -148,7 +148,7 @@
     },
     "packages/extract-style": {
       "name": "@c4a/extract-style",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "postcss": "^8.5.26",
@@ -159,14 +159,14 @@
     },
     "packages/extract-thrift": {
       "name": "@c4a/extract-thrift",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
       },
     },
     "packages/extract-ts": {
       "name": "@c4a/extract-ts",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/extract": "workspace:*",
@@ -176,7 +176,7 @@
     },
     "packages/tui": {
       "name": "@c4a/tui",
-      "version": "0.7.0",
+      "version": "0.7.1",
       "dependencies": {
         "ink": "^5.0.0",
         "react": "^18.3.1",
@@ -189,7 +189,7 @@
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.1.3", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^4.0.0" } }, "sha512-3yWxPTq3UQ/FY9p1ErPxIyfT64elWaMvM9lIHnaqpyft63tkxodF5aUElYHrdisWve5cETkh1+KBw1yJuW0aRw=="],
 
-    "@c4a/agent-graph": ["@c4a/agent-graph@0.2.7", "", { "bin": { "agent-graph": "dist/agent-graph.mjs" } }, "sha512-mLm2uV/t8EOF3b7f4Mi6+p1T4BUGDg6xIOi0Vbf8ZTBZkdag+SWCK2t6NLOsqycUal09s1yCt6Q+57jhxoxX0w=="],
+    "@c4a/agent-graph": ["@c4a/agent-graph@0.3.0", "", { "bin": { "agent-graph": "dist/agent-graph.mjs" } }, "sha512-csz4eVktdcl+sa7XzXynM1gadFI54eDLhOHc/tdjvA2EioanUK39gDX5Ec1uEOKlUyuassDD7Py7pRYKEbgZMA=="],
 
     "@c4a/context": ["@c4a/context@workspace:packages/context"],
 

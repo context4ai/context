@@ -232,6 +232,32 @@ describe("Indexer material gap durable structure store", () => {
     }
   });
 
+  test("recovers a committed checkpoint before returning a retained read", async () => {
+    const root = makeRoot();
+    try {
+      const initial = ledger("1");
+      await checkpointIndexerMaterialGapStore({
+        projectRoot: root,
+        expected_ledger_revision: null,
+        ledger: initial,
+      });
+      const successor = ledger("2");
+      await expect(checkpointIndexerMaterialGapStore({
+        projectRoot: root,
+        expected_ledger_revision: initial.revision,
+        ledger: successor,
+        inject_failure: (point) => {
+          if (point === "after-journal-dir-fsync") {
+            throw new Error("injected committed checkpoint interruption");
+          }
+        },
+      })).rejects.toThrow("injected committed checkpoint interruption");
+      expect((await readIndexerMaterialGapStructure(root))?.ledger).toEqual(successor);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("close atomically writes approved projection and reconciled ledger", async () => {
     const root = makeRoot();
     try {

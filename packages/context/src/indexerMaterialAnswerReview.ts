@@ -86,11 +86,9 @@ export type IndexerMaterialAnswerEvidenceCompatibility = z.infer<
 export function indexerMaterialAnswerSourceInputSetDigest(
   sourceInputDigests: readonly string[],
 ): string {
-  const digests = sourceInputDigests.map((digest) => indexerDigestSchema.parse(digest))
-    .sort(compareIndexerCanonicalText);
-  if (new Set(digests).size !== digests.length) {
-    throw new TypeError("material-answer source input digests must be unique");
-  }
+  const digests = [...new Set(
+    sourceInputDigests.map((digest) => indexerDigestSchema.parse(digest)),
+  )].sort(compareIndexerCanonicalText);
   return indexerProtocolDigest({ inputs: digests });
 }
 

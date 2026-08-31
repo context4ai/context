@@ -81,12 +81,14 @@ processor, confirm the source boundary and add the processor before capture.
 If the selected page is only a runtime shell, capture the rendered-site source
 or project-specific data source explicitly; do not ask the agent to invent
 missing body text. The concrete command shape is available from
-`context source add file --help`; after registration, declare `captureFile`,
-`alignProse`, `compileProse`, and `reviewValidity`.
+`context source add file --help`; after registration, declare `captureFile`
+and `reviewValidity`, then let the Context Indexer lifecycle create the
+confirmed requirements and exact Provider registry in `src/indexers.yaml`.
 
 For a Lark / Feishu document, register a Lark source with exactly one identity
-form, then declare `captureLark`, `alignProse`, `compileProse`, and
-`reviewValidity`.
+form, then declare `captureLark` and `reviewValidity`. Do not add
+`alignProse`/`compileProse` to a new workspace; those factories remain only for
+explicit migration and repair of older declarations.
 
 File and Lark sources use the same date-batch shape as repo sources. Multiple
 documents belong under one date instead of receiving `-2` / `-A` suffixes:
@@ -140,17 +142,17 @@ of returning an unexecutable command. Read every
 semantic rules remain available as files and are loaded only for the route that
 needs them.
 
-After capture, status selects `route.document.classification-required` for
-document modules without an align declaration. Run the Gate's returned
-collection-neutral inspection commands first; only then propose a mainline
-collection and ask for confirmation. Batch read permission does not choose a
-collection.
+After capture, status selects `route.indexer.lifecycle-required`. Follow its
+`run-indexer-lifecycle` resource and the exact `context indexer ...` outcomes:
+confirm the complete requirement set, discover and resolve an exact Markdown
+Provider, execute its evidence-bound worksets, reconcile/layout/audit the
+Result, and compile the current Candidate batch. Batch read permission does
+not choose requirements, a Provider, or a collection.
 
 When the workspace also contains repo sources, Context prioritizes untouched
-code after all document captures finish: the current reason is
-`route.extract.pending-target` until the code extraction round is current,
-then routing returns to document investigation. An existing document
-structure/compile gate is never interrupted.
+code and document owner cells through that same Indexer Route. It does not
+switch to a second extraction or prose lifecycle and does not interrupt an
+accepted workset that is already durably recorded.
 
 For a single component package, use the package directory as the repo source
 boundary:
@@ -221,15 +223,14 @@ current Route rather than duplicating them in the project Skill.
 
 ### Document Source Flow
 
-For source documents, keep the project declaration small and let the CLI guide
-the evidence views, structure confirmation, deterministic compile projection,
-review, and close steps:
+For source documents, keep the project declaration small. `src/index.ts`
+declares the trusted source/capture/review/package surface; the confirmed
+requirements and exact Provider selection live separately in
+`src/indexers.yaml`:
 
 ```ts
 import {
-  alignProse,
   captureFile,
-  compileProse,
   defineProject,
   reviewValidity,
   source,
@@ -241,9 +242,7 @@ export default defineProject({
   sources: [docs],
   phases: [
     captureFile({ source: docs }),
-    alignProse({ source: docs, collection: "architecture" }),
-    compileProse({ source: docs, collection: "architecture" }),
-    reviewValidity({ collection: "architecture" }),
+    reviewValidity({ scope: "all" }),
   ],
   packages: [],
 });
@@ -254,10 +253,17 @@ Then return to the installed Context Agent entry. For maintainer inspection,
 sequence is:
 
 1. capture the source into committed snapshots;
-2. investigate evidence and confirm the CLI-managed lifecycle structure;
-3. compile every source-bound View from confirmed structure;
-4. review/apply the complete candidate batch once;
+2. confirm requirements and resolve exact Code/Markdown Providers through the
+   sole Indexer Route;
+3. execute and reconcile evidence-bound worksets, then derive layout and audit
+   the Result;
+4. compile and review/apply the complete Indexer Candidate batch once;
 5. run close once, then verify and build when packages are declared.
+
+See [Indexer Provider selection and customization](./guides/indexer-provider-and-customization.md)
+for the registry and Provider flow. Existing workspaces that still declare
+`alignProse`/`compileProse` may use their explicit diagnostic commands during
+migration, but Context does not select them as the default workflow.
 
 Do not read `sources/` or raw Markdown directly after entering the Context
 workflow; use the evidence views and `source_ref` values returned by the CLI.

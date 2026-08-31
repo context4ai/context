@@ -158,8 +158,12 @@ describe("0.6.6 prose align structure gate", () => {
       };
       expect(ruleLocation.result.rule.content_digest).toMatch(/^sha256:/u);
       expect(ruleLocation.result.rule.resource_id).toBe("context.semantic.align.structure-planning");
-      expect(ruleLocation.result.rule.resource.path).toEndWith("resources/semantic/align/structure-planning.md");
-      expect(readFileSync(ruleLocation.result.rule.resource.path, "utf8")).toContain("Structure Planning Procedure");
+      expect(ruleLocation.result.rule.resource.path).toEndWith(
+        "context-markdown-indexer/references/semantic-planning.md",
+      );
+      expect(readFileSync(ruleLocation.result.rule.resource.path, "utf8")).toContain(
+        "Evidence, subject, and claim planning",
+      );
       expect(JSON.stringify(ruleLocation.result)).not.toContain('"content":');
       expect(JSON.stringify(readPlan.result)).not.toContain([
         "context",

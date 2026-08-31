@@ -37,8 +37,14 @@ import {
   INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
   buildProjectIndexerCandidateCompileFromRecords,
   compileProjectIndexerCandidates,
+  readProjectIndexerCandidateCompileStatus,
 } from
   "../project/indexerCandidateCompileActions.js";
+import { readCandidateRecords } from "../project/candidateLedger.js";
+import { applyReviewDecisions } from "../project/reviewApply.js";
+import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
+import { verifyProjectWorkspace } from "../project/verify.js";
+import { closeProjectWorkspace } from "../project/close.js";
 import { reportProjectIndexerIncrementalImpact } from
   "../project/indexerIncrementalImpactActions.js";
 import { loadCliIndexerBaseContracts } from
@@ -631,6 +637,61 @@ describe("Indexer Candidate compile Route", () => {
         "utf8",
       ));
       expect(persisted.compile_digest).toBe(result.compile.compile_digest);
+      const candidates = await readCandidateRecords(projectRoot);
+      expect(candidates).toHaveLength(1);
+      expect(candidates[0]).toMatchObject({
+        candidate_type: "indexer-artifact",
+        status: "draft",
+        fingerprint: result.compile.files[0]!.file_digest,
+        node_ref: result.compile.files[0]!.node_ref,
+        view_ref: result.compile.files[0]!.internal_view_ref,
+      });
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
+        .toMatchObject({ state: "current", candidates: [{ status: "draft" }] });
+
+      expect(await applyReviewDecisions({
+        projectRoot,
+        payload: {
+          collection: result.compile.files[0]!.collection,
+          scope: {
+            kind: "collection",
+            collection: result.compile.files[0]!.collection,
+            count: 1,
+            ids_sha256: candidateIdsHash([candidates[0]!.candidate_id]),
+            candidates_sha256: candidateSetHash(candidates),
+          },
+          decisions: [{
+            candidate_id: candidates[0]!.candidate_id,
+            status: "approved",
+          }],
+        },
+      })).toMatchObject({ approved: 1, materialized: 1 });
+      const approved = await readFile(
+        join(projectRoot, result.compile.files[0]!.output_path),
+        "utf8",
+      );
+      expect(approved).toContain(`indexer_file_digest: ${result.compile.files[0]!.file_digest}`);
+      expect(approved).toContain(`view_ref: ${result.compile.files[0]!.internal_view_ref}`);
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
+        .toMatchObject({ state: "current", candidates: [] });
+      expect((await verifyProjectWorkspace(projectRoot)).issues.filter((issue) =>
+        issue.severity === "error"
+      )).toEqual([]);
+      expect(await closeProjectWorkspace(projectRoot)).toMatchObject({
+        action: "closed",
+        nodes: 1,
+        views: 1,
+      });
+      expect(YAML.parse(await readFile(
+        join(projectRoot, "knowledge", "structure.yaml"),
+        "utf8",
+      ))).toMatchObject({
+        nodes: [{ node_ref: result.compile.files[0]!.node_ref }],
+        views: [{
+          view_ref: result.compile.files[0]!.internal_view_ref,
+          collection: result.compile.files[0]!.collection,
+        }],
+      });
 
       const stale = structuredClone(value);
       stale.accepted_result_refs[0]!.acceptance_digest = digest("f");

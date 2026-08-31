@@ -1,4 +1,8 @@
 import { parseDocumentSourceLocator } from "@c4a/extract";
+import {
+  indexerEvidenceBindingDigest,
+  indexerEvidenceBindingSchema,
+} from "@c4a/context";
 import YAML from "yaml";
 import { okfTypeForKnowledgePath } from "./okfTypes.js";
 import {
@@ -228,7 +232,14 @@ function validateIdentityFrontmatter(input: {
     });
     return { ...(nodeRef !== undefined ? { nodeRef } : {}) };
   }
-  if (nodeRef !== undefined && viewRef !== `${input.collection}:${nodeRef}`) {
+  const indexerIdentity = nodeRef !== undefined &&
+    /^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef) &&
+    viewRef.startsWith("view:artifact:");
+  if (
+    nodeRef !== undefined &&
+    !indexerIdentity &&
+    viewRef !== `${input.collection}:${nodeRef}`
+  ) {
     input.issues.push({
       severity: "error",
       code: "approved-frontmatter-view-ref-mismatch",
@@ -254,7 +265,11 @@ function validateIdentityFrontmatter(input: {
       path: input.relPath,
       message: "approved markdown node_type must be one of entity, domain, action",
     });
-  } else if (!isCodeIndexCollection(input.collection) && (expectedNodeType === undefined || nodeType !== expectedNodeType)) {
+  } else if (
+    !indexerIdentity &&
+    !isCodeIndexCollection(input.collection) &&
+    (expectedNodeType === undefined || nodeType !== expectedNodeType)
+  ) {
     input.issues.push({
       severity: "error",
       code: "approved-frontmatter-node-type-invalid",
@@ -266,6 +281,114 @@ function validateIdentityFrontmatter(input: {
     ...(nodeRef !== undefined ? { nodeRef } : {}),
     viewRef,
   };
+}
+
+function validateIndexerApprovedMetadata(input: {
+  relPath: string;
+  frontmatter: Record<string, unknown>;
+  content: string;
+  issues: ProjectVerifyIssue[];
+}): boolean {
+  if (input.frontmatter.indexer_file_digest === undefined) return false;
+  const digest = /^sha256:[a-f0-9]{64}$/u;
+  for (const field of ["indexer_compile_digest", "indexer_file_digest"] as const) {
+    if (typeof input.frontmatter[field] !== "string" || !digest.test(input.frontmatter[field])) {
+      input.issues.push({
+        severity: "error",
+        code: "approved-indexer-binding-invalid",
+        path: input.relPath,
+        message: `approved Indexer page ${field} must be a sha256 digest`,
+      });
+    }
+  }
+  if (input.frontmatter.candidate_fingerprint !== input.frontmatter.indexer_file_digest) {
+    input.issues.push({
+      severity: "error",
+      code: "approved-indexer-binding-invalid",
+      path: input.relPath,
+      message: "approved Indexer page candidate fingerprint must equal its file digest",
+    });
+  }
+  const sectionRefs = input.frontmatter.indexer_section_refs;
+  if (
+    !Array.isArray(sectionRefs) || sectionRefs.length === 0 ||
+    sectionRefs.some((ref) => typeof ref !== "string" || ref.length === 0)
+  ) {
+    input.issues.push({
+      severity: "error",
+      code: "approved-indexer-binding-invalid",
+      path: input.relPath,
+      message: "approved Indexer page must retain non-empty indexer_section_refs",
+    });
+  }
+  const evidence = input.frontmatter.indexer_evidence;
+  const evidenceRefs = new Set<string>();
+  if (!Array.isArray(evidence)) {
+    input.issues.push({
+      severity: "error",
+      code: "approved-indexer-evidence-invalid",
+      path: input.relPath,
+      message: "approved Indexer page must retain indexer_evidence",
+    });
+  } else {
+    for (const item of evidence) {
+      if (!isRecord(item) || !isRecord(item.locator)) {
+        input.issues.push({
+          severity: "error",
+          code: "approved-indexer-evidence-invalid",
+          path: input.relPath,
+          message: "approved Indexer evidence binding is malformed",
+        });
+        continue;
+      }
+      const parsed = indexerEvidenceBindingSchema.safeParse(item);
+      if (!parsed.success) {
+        input.issues.push({
+          severity: "error",
+          code: "approved-indexer-evidence-invalid",
+          path: input.relPath,
+          message: "approved Indexer evidence binding is malformed",
+        });
+        continue;
+      }
+      const { binding_digest: bindingDigest, ...payload } = parsed.data;
+      if (indexerEvidenceBindingDigest(payload) !== bindingDigest) {
+        input.issues.push({
+          severity: "error",
+          code: "approved-indexer-evidence-invalid",
+          path: input.relPath,
+          message: "approved Indexer evidence binding digest is invalid",
+        });
+        continue;
+      }
+      evidenceRefs.add(parsed.data.evidence_ref);
+    }
+  }
+  const sections = approvedContextSectionsInMarkdown(input.content);
+  if (
+    Array.isArray(sectionRefs) &&
+    sections.length !== sectionRefs.length
+  ) {
+    input.issues.push({
+      severity: "error",
+      code: "approved-indexer-section-invalid",
+      path: input.relPath,
+      message: "approved Indexer page Section count does not match indexer_section_refs",
+    });
+  }
+  for (const section of sections) {
+    for (const ref of section.refs) {
+      if (!evidenceRefs.has(ref)) {
+        input.issues.push({
+          severity: "error",
+          code: "approved-indexer-section-invalid",
+          path: input.relPath,
+          message: `approved Indexer Section references unknown evidence: ${ref}`,
+        });
+      }
+    }
+  }
+  return true;
 }
 
 function validateApprovedSources(input: {
@@ -395,6 +518,32 @@ export async function validateApprovedMarkdown(input: {
   }
   validateOkfFrontmatter({ relPath: input.relPath, frontmatter, issues: input.issues });
   if (frontmatter.deprecated === true) return;
+  const indexerApproved = validateIndexerApprovedMetadata({
+    relPath: input.relPath,
+    frontmatter,
+    content: input.content,
+    issues: input.issues,
+  });
+  if (indexerApproved) {
+    validateProseTypeMatchesCollection({
+      relPath: input.relPath,
+      frontmatter,
+      issues: input.issues,
+    });
+    const sources = frontmatter.sources;
+    if (
+      !Array.isArray(sources) || sources.length === 0 ||
+      sources.some((source) => typeof source !== "string" || source.length === 0)
+    ) {
+      input.issues.push({
+        severity: "error",
+        code: "approved-sources-invalid",
+        path: input.relPath,
+        message: "approved Indexer page sources must be a non-empty string array",
+      });
+    }
+    return;
+  }
   if (
     frontmatter.evidence_status !== undefined &&
     frontmatter.evidence_status !== "source-orphaned"

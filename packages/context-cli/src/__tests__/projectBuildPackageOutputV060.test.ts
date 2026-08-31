@@ -73,7 +73,7 @@ describe("0.6.0 project package output", () => {
       appendRejectedCandidate(fixture.project, fixture.sourceRef);
       await runCliInDir(fixture.project, ["close", "--format", "json"]);
       const statusBefore = await runCliInDir(fixture.project, ["status"]);
-      expect(statusBefore).toContain("state: route.build.package-stale");
+      expect(statusBefore).toContain("state: route.indexer.lifecycle-required");
       expect(statusBefore).toContain("package sample-kb: missing");
 
       const build = await runCliInDir(fixture.project, ["build"]);

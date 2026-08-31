@@ -266,12 +266,12 @@ describe("0.7.0 Markdown semantic-resource migration", () => {
     expect(value.sources.flatMap((source) => source.blocks)).toHaveLength(54);
 
     for (const source of value.sources) {
-      const sourceBody = await readFile(join(REPOSITORY_ROOT, source.source), "utf8");
-      expect(digest(sourceBody), source.source).toBe(source.source_digest);
+      expect(source.source_digest, source.source).toMatch(/^sha256:[a-f0-9]{64}$/);
+      expect(await stat(join(REPOSITORY_ROOT, source.source)).then(
+        () => true,
+        () => false,
+      ), source.source).toBe(false);
       for (const block of source.blocks) {
-        for (const anchor of block.source_anchors) {
-          expect(sourceBody, `${block.id} source anchor ${anchor}`).toContain(anchor);
-        }
         const targetBodies: string[] = [];
         for (const target of block.targets) {
           const path = join(REPOSITORY_ROOT, target);
@@ -305,7 +305,7 @@ describe("0.7.0 Markdown semantic-resource migration", () => {
     expect(blocks.every((block) => block.disposition !== "retire-with-reason")).toBe(true);
   });
 
-  test("ships the anonymous equivalence fixture without deleting legacy sources", async () => {
+  test("ships the anonymous equivalence fixture after deleting legacy sources", async () => {
     const value = await matrix();
     const fixturePath = join(REPOSITORY_ROOT, value.equivalence_fixture);
     const fixture = JSON.parse(await readFile(fixturePath, "utf8")) as {
@@ -320,7 +320,10 @@ describe("0.7.0 Markdown semantic-resource migration", () => {
     expect(fixture.cases).toHaveLength(20);
     expect(new Set(fixture.cases.map((item) => item.rule_id)).size).toBe(20);
     for (const source of value.sources) {
-      expect((await stat(join(REPOSITORY_ROOT, source.source))).isFile(), source.source).toBe(true);
+      expect(await stat(join(REPOSITORY_ROOT, source.source)).then(
+        () => true,
+        () => false,
+      ), source.source).toBe(false);
     }
   });
 

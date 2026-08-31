@@ -28,24 +28,17 @@ describe("0.6.0 project build, verify, and status", () => {
         "--format",
         "json",
       ])) as {
-        workflow: { status: string };
+        workflow: { status: string; current: { node: string } };
         currentTarget?: unknown;
-        completedScope: {
-          sourceKeys: string[];
-          collections: string[];
-          packages: string[];
-        };
+        counts: { approvedPages: number; packageCount: number };
         progress: { structureBatch: { state: string } };
       };
-      expect(summary.workflow.status).toBe("complete");
-      expect(summary.currentTarget).toBeUndefined();
-      expect(summary.progress.structureBatch.state).toBe("complete");
-      expect(summary.completedScope.sourceKeys).toContain(
-        "repo:20260712/sample-a",
-      );
-      expect(summary.completedScope.collections).toContain("codeindex");
-      expect(summary.completedScope.collections).toContain("sop");
-      expect(summary.completedScope.packages).toContain("sample-kb");
+      expect(summary.workflow).toMatchObject({
+        status: "actionable",
+        current: { node: "run-indexer-lifecycle" },
+      });
+      expect(summary.progress.structureBatch.state).toBe("empty");
+      expect(summary.counts).toMatchObject({ approvedPages: 2, packageCount: 2 });
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
@@ -69,7 +62,7 @@ describe("0.6.0 project build, verify, and status", () => {
           diagnostics: Array<{ code: string; severity: string; count?: number }>;
         };
       };
-      expect(status.state).toBe("route.close.projection-stale");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.verifyErrors).toBe(0);
       expect(status.projectionRefreshIssues).toBeGreaterThan(0);
       expect(status.workflow.diagnostics).toContainEqual(expect.objectContaining({

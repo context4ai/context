@@ -4,6 +4,15 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.1 - 2026-08-31
+
+- Migrated workflow resources to the independent Agent Graph file, Graph
+  Action, and Host Action protocols and pinned Agent Graph 0.3.0.
+- Replaced the unused contract-overlay signature, trust-bundle, and project
+  authorization path with one digest-bound static validation receipt.
+- Preserved Provider integrity, monotonic overlay conformance, stale-result
+  rejection, question-authority validation, and atomic registry application.
+
 ## 0.6.19 - 2026-08-26
 
 - Made code-index quality checks precede every candidate review path, so human

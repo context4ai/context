@@ -82,7 +82,7 @@ Route 会按需选择维护这份声明所需的操作说明、Schema 和手册�
 | `source()` 和 `allSources()` | 引用已经登记的代码仓库、本地文件或飞书来源边界。 |
 | `extractTs()` | 从 TypeScript/JavaScript 与 TSX/JSX 中提取符号和关系，生成 `codeindex` 候选。 |
 | `extractCustom()` | 运行项目自有代码提取器，同时由 Context 维护候选、证据、新鲜度和审核状态。 |
-| `alignProse()` 和 `compileProse()` | 整理文档证据，并生成与来源绑定的知识候选。 |
+| `alignProse()` 和 `compileProse()` | 仅为既有工作区迁移和修复保留的显式阶段工厂；新工作区使用 `src/indexers.yaml` 与统一 Indexer 生命周期。 |
 | `reviewValidity()` | 声明单个知识类型或整个项目的审核门禁。 |
 | `customPhase()` | 在内置阶段无法覆盖时增加项目专用编排。 |
 | `kbPackage()` | 使用审核通过的知识和模板构建 Agent 知识库。 |

@@ -49,17 +49,13 @@ describe("multi-source prose review", () => {
           nextCollection: string;
         };
       };
-      expect(status.state).toBe("route.compile.pending-target");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.compileBatch).toMatchObject({
         nextViewRef: firstView,
         nextSourceKeys: [`file:${SOURCE_NAMES[0]}`],
         nextCollection: COLLECTION,
       });
-      expect(status.routing.command_plan).toHaveLength(1);
-      expect(status.routing.command_plan[0]?.command).toContain("--workflow-revision");
-      expect(status.routing.command_plan[0]?.command).toContain(
-        `run compile:file:${SOURCE_NAMES[0]}:${COLLECTION} --stage --format json`,
-      );
+      expect(status.routing.command_plan).toEqual([]);
       const compiled = JSON.parse(await runCliInDir(projectRoot, [
         "run",
         `compile:file:${SOURCE_NAMES[0]}:${COLLECTION}`,
@@ -69,96 +65,6 @@ describe("multi-source prose review", () => {
       ])) as { result: { views: number; candidates: { added: number } } };
       expect(compiled.result.views).toBe(1);
       expect(compiled.result.candidates.added).toBe(1);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("managed execution compiles every ready source in one isolated host loop", async () => {
-    const root = makeTmp();
-    try {
-      const projectRoot = await createProject(root);
-      const packagePath = join(projectRoot, "package.json");
-      const projectPackage = JSON.parse(readFileSync(packagePath, "utf8")) as {
-        context: Record<string, unknown>;
-      };
-      projectPackage.context.debug = true;
-      writeFileSync(packagePath, `${JSON.stringify(projectPackage, null, 2)}\n`, "utf8");
-      stageStructure(projectRoot, SOURCE_NAMES[0]);
-      const firstStructure = YAML.parse(readFileSync(
-        join(projectRoot, ".tmp", "context-runtime", "lifecycle", "structure.yaml"),
-        "utf8",
-      )) as AlignPayload & { lifecycle: { structure_digest: string } };
-      await writeStructureSnapshot(projectRoot, {
-        ...firstStructure,
-        structure_digest: firstStructure.lifecycle.structure_digest,
-      });
-      stageStructure(projectRoot, SOURCE_NAMES[1]);
-
-      const status = JSON.parse(await runCliInDir(projectRoot, [
-        "status",
-        "--managed",
-        "--format",
-        "json",
-        "--view",
-        "full",
-      ])) as {
-        workflow: {
-          current: {
-            resources: { required: Array<{ id: string; digest?: string }> };
-          };
-        };
-      };
-      const receiptPath = join(".tmp", "managed-compile-receipts.json");
-      writeFileSync(join(projectRoot, receiptPath), `${JSON.stringify({
-        schema: "agent-graph.resource-read-receipts.v1",
-        provider: "c4a/context",
-        receipts: status.workflow.current.resources.required.flatMap((resource) =>
-          resource.digest === undefined ? [] : [{ id: resource.id, digest: resource.digest }]
-        ),
-      })}\n`, "utf8");
-
-      const result = JSON.parse(await runCliInDir(projectRoot, [
-        "--workflow-resource-receipts",
-        `@${receiptPath}`,
-        "run",
-        "--managed",
-        "--until",
-        "blocked-or-complete",
-        "--max-steps",
-        "4",
-        "--format",
-        "json",
-      ])) as {
-        state: string;
-        steps: Array<{ receipt?: { exitCode: number } }>;
-        stop: { reasonCode: string };
-      };
-      expect(result.steps).toHaveLength(3);
-      expect(result.steps.every((step) => step.receipt?.exitCode === 0)).toBe(true);
-      expect(result).toMatchObject({
-        state: "blocked",
-        stop: { reasonCode: "workflow.until.agent-context-required" },
-      });
-
-      const after = JSON.parse(await runCliInDir(projectRoot, [
-        "status",
-        "--format",
-        "json",
-        "--view",
-        "full",
-      ])) as { draftCandidates: number; compileBatch: { remainingViewRefs: string[] } };
-      expect(after.draftCandidates).toBe(0);
-      expect(after.compileBatch.remainingViewRefs).toEqual([]);
-      const scopeEvents = readFileSync(
-        join(projectRoot, ".tmp", "context-runtime", "debug", "events.jsonl"),
-        "utf8",
-      ).trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
-        kind: string;
-        data: { executor?: string };
-      }).filter((event) => event.kind === "workflow.scope-opened");
-      expect(scopeEvents.filter((event) => event.data.executor === "in-process")).toHaveLength(3);
-      expect(scopeEvents.some((event) => event.data.executor === "subprocess")).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -178,7 +84,7 @@ describe("multi-source prose review", () => {
         };
         routing: { command_plan: Array<{ command: string }> };
       };
-      expect(initial.state).toBe("route.structure.pending-target");
+      expect(initial.state).toBe("route.indexer.lifecycle-required");
       expect(initial.structureBatch).toMatchObject({
         state: "awaiting-structure",
         sourceCount: 2,
@@ -188,11 +94,7 @@ describe("multi-source prose review", () => {
         "structure-pending",
         "structure-pending",
       ]);
-      expect(initial.routing.command_plan.map((item) => item.command)).toEqual(
-        initial.structureBatch.slots.map((slot) => expect.stringContaining(
-          slot.nextCommand.slice("context ".length),
-        )),
-      );
+      expect(initial.routing.command_plan).toEqual([]);
       const firstView = stageStructure(projectRoot, SOURCE_NAMES[0]);
       await compileView(projectRoot, SOURCE_NAMES[0], firstView);
 
@@ -202,8 +104,8 @@ describe("multi-source prose review", () => {
         pendingStructureTargets: Array<{ sourceKey: string }>;
         pendingReview?: unknown;
       };
-      expect(betweenSources.state).toBe("route.structure.pending-target");
-      expect(betweenSources.draftCandidates).toBe(1);
+      expect(betweenSources.state).toBe("route.indexer.lifecycle-required");
+      expect(betweenSources.draftCandidates).toBe(0);
       expect(betweenSources.pendingStructureTargets.map((target) => target.sourceKey))
         .toEqual([`file:${SOURCE_NAMES[1]}`]);
       expect(betweenSources.pendingReview).toBeUndefined();
@@ -214,12 +116,12 @@ describe("multi-source prose review", () => {
         state: string;
         draftCandidates: number;
         pendingStructureTargets: unknown[];
-        pendingReview: { count: number; collection: string };
+        pendingReview?: { count: number; collection: string };
       };
-      expect(batchReady.state).toBe("route.review.decision-required");
-      expect(batchReady.draftCandidates).toBe(2);
+      expect(batchReady.state).toBe("route.indexer.lifecycle-required");
+      expect(batchReady.draftCandidates).toBe(0);
       expect(batchReady.pendingStructureTargets).toEqual([]);
-      expect(batchReady.pendingReview).toMatchObject({ count: 2, collection: COLLECTION });
+      expect(batchReady.pendingReview).toBeUndefined();
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -301,8 +203,8 @@ describe("multi-source prose review", () => {
         pendingReview?: unknown;
         routing: { command_plan: Array<{ command: string }> };
       };
-      expect(status.state).toBe("route.compile.pending-target");
-      expect(status.draftCandidates).toBe(1);
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.draftCandidates).toBe(0);
       expect(status.compileBatch.readyForReview).toBe(false);
       expect(status.compileBatch.remainingViewRefs).toEqual([
         revisedViews.get(SOURCE_NAMES[1])!,
@@ -311,9 +213,7 @@ describe("multi-source prose review", () => {
         `file:${SOURCE_NAMES[1]}`,
       ]);
       expect(status.pendingReview).toBeUndefined();
-      expect(status.routing.command_plan[0]?.command).toContain(
-        `run compile:file:${SOURCE_NAMES[1]}:${COLLECTION} --stage --format json`,
-      );
+      expect(status.routing.command_plan).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -340,10 +240,8 @@ describe("multi-source prose review", () => {
         routing: { command_plan: Array<{ command: string }> };
       };
       expect(beforeCompile.close.state).toBe("stale");
-      expect(beforeCompile.state).toBe("route.compile.pending-target");
-      expect(beforeCompile.routing.command_plan[0]?.command).toContain(
-        `run compile:file:${SOURCE_NAMES[0]}:${COLLECTION} --stage --format json`,
-      );
+      expect(beforeCompile.state).toBe("route.indexer.lifecycle-required");
+      expect(beforeCompile.routing.command_plan).toEqual([]);
 
       await compileView(projectRoot, SOURCE_NAMES[0], firstView);
       const betweenSources = JSON.parse(await runCliInDir(projectRoot, [
@@ -358,7 +256,7 @@ describe("multi-source prose review", () => {
         pendingStructureTargets: Array<{ sourceKey: string }>;
       };
       expect(betweenSources.close.state).toBe("stale");
-      expect(betweenSources.state).toBe("route.structure.pending-target");
+      expect(betweenSources.state).toBe("route.indexer.lifecycle-required");
       expect(betweenSources.pendingStructureTargets).toEqual([
         expect.objectContaining({ sourceKey: `file:${SOURCE_NAMES[1]}` }),
       ]);
@@ -397,7 +295,7 @@ describe("multi-source prose review", () => {
       };
       const alignPhaseId = `align:source:${SOURCE_NAMES[1]}:${COLLECTION}`;
       const command = `context run ${alignPhaseId} --view read-plan --format json`;
-      expect(status.state).toBe("route.structure.pending-target");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.pendingStructureTargets).toEqual([{
         sourceKey: `file:${SOURCE_NAMES[1]}`,
         collection: COLLECTION,
@@ -407,9 +305,7 @@ describe("multi-source prose review", () => {
         command,
         payloadTarget: ".tmp/agent-payloads/align-source-source-b-architecture-structure.yaml",
       }]);
-      expect(status.routing.command_plan.map((item) => item.command)).toEqual([
-        expect.stringContaining(command.slice("context ".length)),
-      ]);
+      expect(status.routing.command_plan).toEqual([]);
 
       const summary = JSON.parse(await runCliInDir(projectRoot, [
         "status", "--format", "json",
@@ -421,13 +317,9 @@ describe("multi-source prose review", () => {
       expect(summary.workflow).toMatchObject({
         protocol: "context.workflow.status.v1",
         current: {
-          node: "align-next",
-          commands: [{ command: expect.stringContaining(command.slice("context ".length)) }],
+          node: "run-indexer-lifecycle",
+          commands: [],
         },
-      });
-      expect(summary.currentTarget).toMatchObject({
-        sourceKeys: [`file:${SOURCE_NAMES[1]}`],
-        collections: [COLLECTION],
       });
       expect(summary.routing).toBeUndefined();
     } finally {
@@ -446,7 +338,7 @@ describe("multi-source prose review", () => {
 
       const status = JSON.parse(await runCliInDir(projectRoot, ["status", "--format", "json", "--view", "full"])) as {
         draftCandidates: number;
-        pendingReview: { count: number; candidateSetDigest: string };
+        pendingReview?: { count: number; candidateSetDigest: string };
         stagedStructure: { sourceKeys: string[] };
         activeStructures: { count: number; sourceKeys: string[]; structureDigests: string[] };
         alignPhaseResolution: { state: string; requestedTargets: Array<{ sourceKey: string; collection: string }> };
@@ -457,13 +349,12 @@ describe("multi-source prose review", () => {
           missingStructureDigests: string[];
         };
       };
-      expect(status.draftCandidates).toBe(SOURCE_NAMES.length);
-      expect(status.pendingReview.count).toBe(SOURCE_NAMES.length);
+      expect(status.draftCandidates).toBe(0);
+      expect(status.pendingReview).toBeUndefined();
       expect(status.compileBatch.plannedViewRefs).toHaveLength(SOURCE_NAMES.length);
       expect(status.compileBatch.draftViewRefs).toHaveLength(SOURCE_NAMES.length);
       expect(status.compileBatch.structureDigests).toHaveLength(SOURCE_NAMES.length);
       expect(status.compileBatch.missingStructureDigests).toEqual([]);
-      expect(status.pendingReview.candidateSetDigest).toMatch(/^[a-f0-9]{64}$/u);
       expect(status.stagedStructure.sourceKeys).toHaveLength(1);
       expect(status.activeStructures.count).toBe(SOURCE_NAMES.length);
       expect(status.activeStructures.sourceKeys).toEqual(SOURCE_NAMES.map((name) => `file:${name}`));
@@ -478,7 +369,7 @@ describe("multi-source prose review", () => {
         "--format",
         "json",
       ])) as { candidate_set_digest: string; structure_digests: string[] };
-      expect(reviewHtml.candidate_set_digest).toBe(status.pendingReview.candidateSetDigest);
+      expect(reviewHtml.candidate_set_digest).toMatch(/^[a-f0-9]{64}$/u);
       expect(reviewHtml.structure_digests).toHaveLength(SOURCE_NAMES.length);
       const reviewList = JSON.parse(await runCliInDir(projectRoot, [
         "review",

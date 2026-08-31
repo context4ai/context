@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  EdgeType,
+  EdgeSource,
+  Grounding,
   indexerEvidenceAdapterProtocolDigest,
   PackageKind,
   SymbolKind,
@@ -121,6 +124,35 @@ describe("ExtractionResult Evidence ABI adapter", () => {
     expect(enricher.files.flatMap((file) => file.facts).every((item) => item.denominator === "none")).toBe(true);
     expect(validateIndexerEvidenceAdapterResult(lightweight)).toEqual(lightweight);
     expect(validateIndexerEvidenceAdapterResult(enricher)).toEqual(enricher);
+  });
+
+  test("keeps file-level import and top-level call relations", () => {
+    const current = extraction();
+    current.relations = [{
+      from: "src/index.ts",
+      to: "./dependency.js",
+      type: EdgeType.Imports,
+      isExternal: false,
+      grounding: Grounding.Code,
+      confidence: 1,
+      source: EdgeSource.Ast,
+      line: 1,
+    }, {
+      from: "src/index.ts",
+      to: "bootstrap",
+      type: EdgeType.Calls,
+      isExternal: false,
+      grounding: Grounding.Code,
+      confidence: 1,
+      source: EdgeSource.Ast,
+      line: 4,
+    }];
+    current.stats.relations = current.relations.length;
+    const result = extractionResultToEvidenceAdapterResult(current, invocation());
+    expect(result.files[0]!.facts.filter((item) => item.kind === "code-relation"))
+      .toHaveLength(2);
+    expect(result.diagnostics.some((item) => item.code === "relation-locator-unresolved"))
+      .toBe(false);
   });
 
   test("rejects legacy extraction output without per-file coverage", () => {

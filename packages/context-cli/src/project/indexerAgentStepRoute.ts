@@ -3,7 +3,7 @@ import {
   resolveRoute,
   type JsonValue,
   type ResourceReadReceiptSet,
-  type ResourceLocationV2,
+  type HostActionResourceLocation,
 } from "@c4a/agent-graph";
 import {
   buildIndexerAgentStepInput,
@@ -56,7 +56,7 @@ function assertInstructionRunBinding(input: {
 }
 
 function dynamicResourceReadState(input: {
-  location: ResourceLocationV2;
+  location: HostActionResourceLocation;
   receipts?: ResourceReadReceiptSet;
 }): "read-required" | "current" {
   if (input.receipts?.provider !== "c4a/context") return "read-required";
@@ -70,7 +70,7 @@ function dynamicResourceReadState(input: {
 export interface IndexerAgentStepRoute {
   route: ContextResolvedWorkflowRoute;
   step_input: IndexerAgentStepInput;
-  instruction_location: ResourceLocationV2;
+  instruction_location: HostActionResourceLocation;
   stable_fingerprint: string;
 }
 
@@ -124,7 +124,7 @@ export async function buildIndexerAgentStepRoute(input: {
   const templateLocation = resolved.resources.required.find((resource) =>
     resource.id === instructionRequest.resource_id
   );
-  if (templateLocation?.schema !== "agent-graph.resource-location.v2") {
+  if (templateLocation?.schema !== "agent-graph.resource-location.host-action.v1") {
     throw new TypeError("Context Indexer graph has no v2 resolved instructions Resource");
   }
   const dynamicLocation = indexerInstructionHostLocation(instructionRequest);

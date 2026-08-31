@@ -27,6 +27,12 @@ const COMPACT_FIELDS = new Set([
   "structure_digest",
   "relationship_mode",
   "evidence_status",
+  "indexer_compile_digest",
+  "indexer_file_digest",
+  "indexer_artifact_ref",
+  "indexer_section_refs",
+  "indexer_source_ref",
+  "indexer_evidence",
 ]);
 const STRUCTURED_FIELDS = new Set([
   "node_type",
@@ -245,10 +251,24 @@ export function hydrateApprovedKnowledgeMarkdown(input: {
   return `---\n${YAML.stringify(frontmatter).trimEnd()}\n---\n${parsed.body}`;
 }
 
+export function isIndexerApprovedKnowledgeMarkdown(content: string): boolean {
+  const parsed = parseFrontmatter(content);
+  if (parsed === undefined) return false;
+  const digest = /^sha256:[a-f0-9]{64}$/u;
+  return typeof parsed.record.indexer_compile_digest === "string" &&
+    digest.test(parsed.record.indexer_compile_digest) &&
+    typeof parsed.record.indexer_file_digest === "string" &&
+    digest.test(parsed.record.indexer_file_digest) &&
+    parsed.record.candidate_fingerprint === parsed.record.indexer_file_digest;
+}
+
 export function compactApprovedKnowledgeMarkdown(content: string): string {
   const parsed = parseFrontmatter(content);
   if (parsed === undefined) return content;
-  const compact = Object.fromEntries(Object.entries(parsed.record).filter(([field]) => COMPACT_FIELDS.has(field)));
+  const indexerPage = typeof parsed.record.indexer_file_digest === "string";
+  const compact = Object.fromEntries(Object.entries(parsed.record).filter(([field]) =>
+    COMPACT_FIELDS.has(field) || (indexerPage && field === "candidate_fingerprint")
+  ));
   return `---\n${YAML.stringify(compact).trimEnd()}\n---\n${parsed.body}`;
 }
 

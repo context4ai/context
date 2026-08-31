@@ -51,9 +51,9 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.prose.configuration-required");
-      expect(status.routing.reason).toBe("route.prose.configuration-required");
-      expect(status.next).toContain("missing a complete prose lifecycle declaration");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(status.next).toContain("sole registry-and-Provider indexing lifecycle");
       expect(status.next).not.toContain("compile:file:docs:faq");
       expect(status.routing.command_plan).toEqual([]);
       expect(status.compilePhaseResolution).toMatchObject({
@@ -149,12 +149,8 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.structure.confirmation-required");
-      expect(status.routing.command_plan.map((item) => item.command)).toContainEqual(
-        expect.stringContaining(
-          "run align:file:docs:sop --view structure-summary --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
-        ),
-      );
+      expect(status.state).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.command_plan).toEqual([]);
       expect(status.next).not.toContain("could not resolve the alignProse source");
       expect(status.alignPhaseResolution).toMatchObject({
         state: "resolved",
@@ -179,14 +175,9 @@ describe("0.6.2 document workflow status routing", () => {
         lifecycle: { state: "draft" },
       }), "utf8");
       const unresolved = await collectProjectStatus(projectRoot);
-      expect(unresolved.state).toBe("route.workspace.state-invalid");
-      expect(unresolved.routing.reason).toBe("route.workspace.state-invalid");
-      expect(unresolved.routing.command_plan).toEqual([
-        {
-          command: expect.stringContaining("verify --format json"),
-          availability: "immediate",
-        },
-      ]);
+      expect(unresolved.state).toBe("route.indexer.lifecycle-required");
+      expect(unresolved.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(unresolved.routing.command_plan).toEqual([]);
       expect(unresolved.alignPhaseResolution).toMatchObject({
         state: "unresolved",
         requestedSourceKeys: ["file:missing-docs"],
@@ -254,73 +245,29 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.document.classification-required");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       const commands = status.routing.command_plan.map((item) => item.command);
-      expect(commands).toEqual([
-        expect.stringContaining("run capture:file:docs-a --view read-plan --format json"),
-        expect.stringContaining("run capture:file:docs-c --view read-plan --format json"),
-      ]);
-      expect(status.routing.reason).toBe("route.document.classification-required");
+      expect(commands).toEqual([]);
+      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
       const sourceBodies = status.workflow.current?.resources.required.filter(
         (resource) => resource.id.startsWith("context.source-body/"),
       ) ?? [];
-      expect(sourceBodies).toHaveLength(2);
-      expect(sourceBodies).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          kind: "context-view",
-          media_type: "text/markdown",
-          path: join(projectRoot, "sources", "file", "docs-a", "a.md"),
-          read_state: "read-required",
-          digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
-        }),
-        expect.objectContaining({
-          path: join(projectRoot, "sources", "file", "docs-c", "c.md"),
-          read_state: "read-required",
-        }),
-      ]));
+      expect(sourceBodies).toEqual([]);
 
       const managedStatus = await collectProjectStatus(projectRoot, {
         managed: true,
       });
       expect(managedStatus.state).toBe(
-        "route.document.classification-required",
+        "route.indexer.lifecycle-required",
       );
       expect(managedStatus.workflow.current).toMatchObject({
-        node: "classify-document",
+        node: "run-indexer-lifecycle",
         availability: "immediate",
-        gate: {
-          authority: "context.document-classification",
-          resolution: "session-authority",
-          inspection_action: {
-            id: "inspect-document-classification",
-            effect: "read",
-          },
-        },
+        commands: [],
       });
       expect(managedStatus.workflow.current?.resources.required.filter(
         (resource) => resource.id.startsWith("context.source-body/"),
-      )).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          path: join(projectRoot, "sources", "file", "docs-a", "a.md"),
-          read_state: "read-required",
-        }),
-        expect.objectContaining({
-          path: join(projectRoot, "sources", "file", "docs-c", "c.md"),
-          read_state: "read-required",
-        }),
-      ]));
-
-      const firstBody = sourceBodies[0]!;
-      const withReceipt = await collectProjectStatus(projectRoot, {
-        resourceReceipts: {
-          schema: "agent-graph.resource-read-receipts.v1",
-          provider: "c4a/context",
-          receipts: [{ id: firstBody.id, digest: firstBody.digest! }],
-        },
-      });
-      expect(withReceipt.workflow.current?.resources.required.find(
-        (resource) => resource.id === firstBody.id,
-      )?.read_state).toBe("current");
+      )).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -365,12 +312,12 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.prose.configuration-required");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.documentSources[0]).toMatchObject({ id: "docs-alias", name: "docs" });
       const commands = status.routing.command_plan.map((item) => item.command);
       expect(commands).toEqual([]);
-      expect(status.routing.reason).toBe("route.prose.configuration-required");
-      expect(status.routing.configuration?.file).toBe("src/index.ts");
+      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.configuration).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -407,10 +354,10 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.prose.configuration-required");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.routing.command_plan).toEqual([]);
-      expect(status.routing.reason).toBe("route.prose.configuration-required");
-      expect(status.routing.configuration?.file).toBe("src/index.ts");
+      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.configuration).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -472,36 +419,19 @@ describe("0.6.2 document workflow status routing", () => {
 
       const status = await collectProjectStatus(projectRoot);
 
-      expect(status.state).toBe("route.structure.confirmation-required");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       const commands = status.routing.command_plan.map((item) => item.command);
-      expect(commands[0]).toContain("run align:file:docs-b:architecture --view structure-summary --input .tmp/context-runtime/lifecycle/structure.yaml --format json");
-      expect(commands).toContainEqual(expect.stringContaining(
-        "run align:file:docs-b:architecture --validate --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
-      ));
-      expect(status.routing.command_plan.find((item) =>
-        item.command.includes(" --confirm ")
-      )).toMatchObject({
-        availability: "after-human-confirmation",
-      });
+      expect(commands).toEqual([]);
       expect(status.routing.human_gate).toMatchObject({
-        required: true,
-        kind: "structure-confirmation",
+        required: false,
+        kind: "none",
       });
       const confirmed = await collectProjectStatus(projectRoot, {
         authorities: ["context.structure-confirmation"],
       });
-      expect(confirmed.workflow.current?.node).toBe("confirm-structure");
-      expect(confirmed.workflow.current?.gate).toMatchObject({
-        resolution: "session-authority",
-        resolution_action: { id: "apply-structure-confirmation" },
-      });
-      expect(confirmed.workflow.current?.gate?.inspection_action).toBeUndefined();
-      expect(confirmed.workflow.current?.resources.required).toEqual([]);
-      expect(confirmed.routing.command_plan).toHaveLength(1);
-      expect(confirmed.routing.command_plan[0]?.command).toContain("--workflow-revision");
-      expect(confirmed.routing.command_plan[0]?.command).toContain(
-        "run align:file:docs-b:architecture --confirm --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
-      );
+      expect(confirmed.workflow.current?.node).toBe("run-indexer-lifecycle");
+      expect(confirmed.workflow.current?.gate).toBeUndefined();
+      expect(confirmed.routing.command_plan).toEqual([]);
       expect(commands.join("\n")).not.toContain("align:file:docs-a:architecture");
       expect(commands.join("\n")).not.toContain("align:source:docs-b:architecture");
     } finally {

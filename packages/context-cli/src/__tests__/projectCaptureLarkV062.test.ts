@@ -171,7 +171,7 @@ describe("0.6.2 Lark capture phase", () => {
         investigation_mode: "collection-neutral",
         classification_state: {
           required: true,
-          reason_code: "route.document.classification-required",
+          reason_code: "route.indexer.lifecycle-required",
         },
         allowed_actions: ["view", "propose_collection"],
         source: { type: "lark", name: "20260712/guide-b" },

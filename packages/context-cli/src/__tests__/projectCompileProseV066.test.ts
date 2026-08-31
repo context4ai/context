@@ -26,17 +26,13 @@ describe("0.6.6 compileProse source-bound runner", () => {
         stagedStructure: { state: string };
         routing: { current_state: string; recommended_action: string; command_plan: Array<{ command: string }> };
       };
-      expect(structureStatus.state).toBe("route.compile.pending-target");
+      expect(structureStatus.state).toBe("route.indexer.lifecycle-required");
       expect(structureStatus.stagedStructure.state).toBe("confirmed");
-      expect(structureStatus.routing.current_state).toBe("route.compile.pending-target");
-      expect(structureStatus.routing.recommended_action).toContain("--workflow-revision");
+      expect(structureStatus.routing.current_state).toBe("route.indexer.lifecycle-required");
       expect(structureStatus.routing.recommended_action).toContain(
-        "run compile:file:product-docs:architecture --stage --format json",
+        "sole registry-and-Provider indexing lifecycle",
       );
-      expect(structureStatus.routing.command_plan).toHaveLength(1);
-      expect(structureStatus.routing.command_plan[0]?.command).toContain(
-        "run compile:file:product-docs:architecture --stage --format json",
-      );
+      expect(structureStatus.routing.command_plan).toEqual([]);
 
       const readPlan = JSON.parse(await runCliInDir(projectRoot, [
         "run",
@@ -206,10 +202,9 @@ describe("0.6.6 compileProse source-bound runner", () => {
         state: string;
         routing: { current_state: string; recommended_action: string };
       };
-      expect(reviewReadyStatus.state).toBe("route.review.decision-required");
-      expect(reviewReadyStatus.routing.current_state).toBe("route.review.decision-required");
-      expect(reviewReadyStatus.routing.recommended_action).toContain("review html architecture --open");
-      expect(reviewReadyStatus.routing.recommended_action).toContain("--workflow-revision");
+      expect(reviewReadyStatus.state).toBe("route.indexer.lifecycle-required");
+      expect(reviewReadyStatus.routing.current_state).toBe("route.indexer.lifecycle-required");
+      expect(reviewReadyStatus.routing.recommended_action).toContain("registry-and-Provider indexing lifecycle");
       const entryPath = join(projectRoot, "src", "index.ts");
       const collectionReviewEntry = readFileSync(entryPath, "utf8");
       writeFileSync(entryPath, collectionReviewEntry.replace('reviewValidity({ collection: "architecture" })', 'reviewValidity({ scope: "all" })'), "utf8");
@@ -217,12 +212,9 @@ describe("0.6.6 compileProse source-bound runner", () => {
         state: string;
         routing: { recommended_action: string; command_plan: Array<{ command: string }> };
       };
-      expect(allScopeStatus.state).toBe("route.review.decision-required");
-      expect(allScopeStatus.routing.recommended_action).toContain("review html architecture --open");
-      expect(allScopeStatus.routing.recommended_action).toContain("--workflow-revision");
-      expect(allScopeStatus.routing.command_plan.map((item) => item.command)).toContainEqual(
-        expect.stringContaining("review html architecture --open"),
-      );
+      expect(allScopeStatus.state).toBe("route.indexer.lifecycle-required");
+      expect(allScopeStatus.routing.recommended_action).toContain("registry-and-Provider indexing lifecycle");
+      expect(allScopeStatus.routing.command_plan).toEqual([]);
       writeFileSync(entryPath, collectionReviewEntry, "utf8");
       const ledger = readFileSync(join(projectRoot, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"), "utf8");
       expect(ledger).toContain('"candidate_id":"architecture/entity/install"');
@@ -411,13 +403,11 @@ describe("0.6.6 compileProse source-bound runner", () => {
         close: { state: string };
         routing: { current_state: string; recommended_action: string; command_plan: Array<{ command: string }>; do_not: string[] };
       };
-      expect(statusBeforeClose.state).toBe("route.close.projection-stale");
+      expect(statusBeforeClose.state).toBe("route.indexer.lifecycle-required");
       expect(statusBeforeClose.close.state).toBe("missing");
-      expect(statusBeforeClose.routing.current_state).toBe("route.close.projection-stale");
-      expect(statusBeforeClose.routing.recommended_action).toContain("--workflow-revision");
-      expect(statusBeforeClose.routing.recommended_action).toContain("close --format json");
-      expect(statusBeforeClose.routing.command_plan).toHaveLength(1);
-      expect(statusBeforeClose.routing.command_plan[0]?.command).toContain("close --format json");
+      expect(statusBeforeClose.routing.current_state).toBe("route.indexer.lifecycle-required");
+      expect(statusBeforeClose.routing.recommended_action).toContain("registry-and-Provider indexing lifecycle");
+      expect(statusBeforeClose.routing.command_plan).toEqual([]);
       expect(statusBeforeClose.routing.do_not).toEqual([]);
 
       const close = JSON.parse(await runCliInDir(projectRoot, ["close", "--format", "json"])) as {
@@ -466,7 +456,7 @@ describe("0.6.6 compileProse source-bound runner", () => {
 
       const statusAfterClose = JSON.parse(await runCliInDir(projectRoot, ["status", "--format", "json", "--view", "full"])) as { state: string; close: { state: string } };
       expect(statusAfterClose.close.state).toBe("ready");
-      expect(statusAfterClose.state).toBe("route.package.output-required");
+      expect(statusAfterClose.state).toBe("route.indexer.lifecycle-required");
 
       const repinByOldId = await invokeCliInDir(projectRoot, ["review", "re-pin", "entity/install", "--format", "json"]);
       expect(repinByOldId.status).not.toBe(0);
@@ -568,7 +558,7 @@ describe("0.6.6 compileProse source-bound runner", () => {
         state: string;
         pendingStructureTargets: Array<{ sourceKey: string; collection: string }>;
       };
-      expect(changedStatus.state).toBe("route.structure.pending-target");
+      expect(changedStatus.state).toBe("route.indexer.lifecycle-required");
       expect(changedStatus.pendingStructureTargets).toEqual([
         expect.objectContaining({ sourceKey: "file:product-docs", collection: "architecture" }),
       ]);

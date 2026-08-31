@@ -1,4 +1,3 @@
-import { createPublicKey, verify } from "node:crypto";
 import { z } from "zod";
 import {
   canonicalIndexerJson,
@@ -363,396 +362,84 @@ export function validateIndexerContractOverlay(input: {
   };
 }
 
-const base64Schema = z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/u);
-
-export const indexerOverlayAttestationSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-attestation/v1"),
-  overlay: z.object({
-    protocol: z.literal("context.indexer.contract-overlay/v1"),
-    id: indexerIdSchema,
-    version: indexerSemverSchema,
-    digest: indexerDigestSchema,
-  }).strict(),
-  base: z.object({
-    profile: indexerIdSchema,
-    version: indexerSemverSchema,
-    contract_digest: indexerDigestSchema,
-  }).strict(),
-  operator_contract: z.object({
-    version: indexerSemverSchema,
-    digest: indexerDigestSchema,
-  }).strict(),
-  issuer: indexerIdSchema,
-  key_id: indexerIdSchema,
-  algorithm: z.literal("ed25519"),
-  signature: base64Schema,
-  attestation_digest: indexerDigestSchema,
-}).strict();
-
-export type IndexerOverlayAttestation = z.infer<typeof indexerOverlayAttestationSchema>;
-
-export function indexerOverlayAttestationSigningPayload(
-  attestation: Omit<IndexerOverlayAttestation, "signature" | "attestation_digest">,
-): string {
-  return canonicalIndexerJson(attestation);
-}
-
-export function indexerOverlayAttestationDigest(
-  attestation: Omit<IndexerOverlayAttestation, "attestation_digest">,
-): string {
-  return indexerProtocolDigest(attestation);
-}
-
-const trustKeySchema = z.object({
-  key_id: indexerIdSchema,
-  algorithm: z.literal("ed25519"),
-  public_key: base64Schema,
-  not_before: z.string().datetime({ offset: true }),
-  not_after: z.string().datetime({ offset: true }),
-}).strict();
-
-export const indexerOverlayTrustBundleSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-trust-bundle/v1"),
-  policy_id: indexerIdSchema,
-  policy_version: indexerSemverSchema,
-  issuers: z.array(z.object({
-    id: indexerIdSchema,
-    keys: z.array(trustKeySchema).min(1),
-  }).strict()).min(1),
-  revocations: z.array(z.object({
-    issuer: indexerIdSchema,
-    key_id: indexerIdSchema,
-    revoked_at: z.string().datetime({ offset: true }),
-  }).strict()),
-  policy_digest: indexerDigestSchema,
-}).strict().superRefine((value, context) => {
-  const issuerIds = new Set<string>();
-  const trustedKeys = new Set<string>();
-  value.issuers.forEach((issuer, issuerIndex) => {
-    if (issuerIds.has(issuer.id)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `duplicate issuer ${issuer.id}`,
-        path: ["issuers", issuerIndex, "id"],
-      });
-    }
-    issuerIds.add(issuer.id);
-    const keyIds = new Set<string>();
-    issuer.keys.forEach((key, keyIndex) => {
-      if (keyIds.has(key.key_id)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `duplicate key ${issuer.id}:${key.key_id}`,
-          path: ["issuers", issuerIndex, "keys", keyIndex, "key_id"],
-        });
-      }
-      keyIds.add(key.key_id);
-      trustedKeys.add(`${issuer.id}\u0000${key.key_id}`);
-      if (Date.parse(key.not_before) >= Date.parse(key.not_after)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "key not_before must precede not_after",
-          path: ["issuers", issuerIndex, "keys", keyIndex, "not_after"],
-        });
-      }
-    });
-  });
-  const revocations = new Set<string>();
-  value.revocations.forEach((revocation, index) => {
-    const ref = `${revocation.issuer}\u0000${revocation.key_id}`;
-    if (!trustedKeys.has(ref)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "revocation references an unknown trusted key",
-        path: ["revocations", index],
-      });
-    }
-    if (revocations.has(ref)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "duplicate revocation",
-        path: ["revocations", index],
-      });
-    }
-    revocations.add(ref);
-  });
-});
-
-export type IndexerOverlayTrustBundle = z.infer<typeof indexerOverlayTrustBundleSchema>;
-
-export function indexerOverlayTrustBundleDigest(
-  bundle: Omit<IndexerOverlayTrustBundle, "policy_digest">,
-): string {
-  return indexerProtocolDigest(bundle);
-}
-
-export const indexerOverlayTrustBundleEnvelopeSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-trust-bundle-envelope/v1"),
-  adapter: indexerIdSchema,
-  adapter_version: indexerSemverSchema,
-  management_authority_digest: indexerDigestSchema,
-  bundle: indexerOverlayTrustBundleSchema,
-}).strict();
-
-export type IndexerOverlayTrustBundleEnvelope = z.infer<
-  typeof indexerOverlayTrustBundleEnvelopeSchema
->;
-
-const enterpriseTrustReceiptSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-trust-receipt/v1"),
-  trust_class: z.literal("enterprise-signed"),
-  project_ref: z.null(),
-  overlay_digest: indexerDigestSchema,
-  attestation_digest: indexerDigestSchema,
-  base_contract_digest: indexerDigestSchema,
-  provider_integrity: indexerDigestSchema,
-  operator_contract_digest: indexerDigestSchema,
-  conformance_report_digest: indexerDigestSchema,
-  trust_adapter: indexerIdSchema,
-  trust_adapter_version: indexerSemverSchema,
-  trust_management_authority_digest: indexerDigestSchema,
-  trust_policy_digest: indexerDigestSchema,
-  authorization_receipt_digest: z.null(),
-  receipt_digest: indexerDigestSchema,
-}).strict();
-
-const projectTrustReceiptSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-trust-receipt/v1"),
-  trust_class: z.literal("project-authorized-exact-digest"),
+export const indexerOverlayValidationReceiptSchema = z.object({
+  protocol: z.literal("context.indexer.overlay-validation-receipt/v1"),
   project_ref: z.string().min(1),
   overlay_digest: indexerDigestSchema,
-  attestation_digest: indexerDigestSchema.nullable(),
   base_contract_digest: indexerDigestSchema,
   provider_integrity: indexerDigestSchema,
   operator_contract_digest: indexerDigestSchema,
   conformance_report_digest: indexerDigestSchema,
-  trust_adapter: z.null(),
-  trust_adapter_version: z.null(),
-  trust_management_authority_digest: z.null(),
-  trust_policy_digest: z.null(),
-  authorization_receipt_digest: indexerDigestSchema,
   receipt_digest: indexerDigestSchema,
 }).strict();
 
-export const indexerOverlayTrustReceiptSchema = z.discriminatedUnion("trust_class", [
-  enterpriseTrustReceiptSchema,
-  projectTrustReceiptSchema,
-]);
+export type IndexerOverlayValidationReceipt = z.infer<
+  typeof indexerOverlayValidationReceiptSchema
+>;
 
-export type IndexerOverlayTrustReceipt = z.infer<typeof indexerOverlayTrustReceiptSchema>;
-
-export function indexerOverlayTrustReceiptDigest(
-  receipt: Omit<IndexerOverlayTrustReceipt, "receipt_digest">,
+export function indexerOverlayValidationReceiptDigest(
+  receipt: Omit<IndexerOverlayValidationReceipt, "receipt_digest">,
 ): string {
   return indexerProtocolDigest(receipt);
 }
 
-export function validateIndexerOverlayAttestation(
-  value: unknown,
-  overlay: IndexerContractOverlay,
-  base: IndexerProfileContract,
-  operators: IndexerOperatorContract,
-): IndexerOverlayAttestation {
-  const parsed = indexerOverlayAttestationSchema.parse(value);
-  const payload = withoutFields(parsed, ["attestation_digest"]);
-  if (indexerOverlayAttestationDigest(payload) !== parsed.attestation_digest) {
-    throw new TypeError("overlay attestation digest does not match its canonical payload");
-  }
-  if (
-    parsed.overlay.id !== overlay.id ||
-    parsed.overlay.version !== overlay.version ||
-    parsed.overlay.digest !== overlay.overlay_digest ||
-    parsed.base.profile !== overlay.extends.profile ||
-    parsed.base.version !== base.version ||
-    parsed.base.contract_digest !== base.contract_digest ||
-    parsed.operator_contract.version !== operators.version ||
-    parsed.operator_contract.digest !== operators.contract_digest
-  ) {
-    throw new TypeError("overlay attestation is bound to another contract payload");
-  }
-  return parsed;
-}
-
-export function validateIndexerOverlayTrustBundleEnvelope(
-  value: unknown,
-): IndexerOverlayTrustBundleEnvelope {
-  const envelope = indexerOverlayTrustBundleEnvelopeSchema.parse(value);
-  const payload = withoutFields(envelope.bundle, ["policy_digest"]);
-  if (indexerOverlayTrustBundleDigest(payload) !== envelope.bundle.policy_digest) {
-    throw new TypeError("overlay trust bundle digest does not match its canonical payload");
-  }
-  return envelope;
-}
-
-function revalidateOverlayResult(input: {
-  overlayValidation: ReturnType<typeof validateIndexerContractOverlay>;
-  base: IndexerProfileContract;
-  operators: IndexerOperatorContract;
-}): ReturnType<typeof validateIndexerContractOverlay> {
-  const validation = validateIndexerContractOverlay({
-    overlay: input.overlayValidation.overlay,
-    baseContract: input.base,
-    operatorContract: input.operators,
-  });
-  if (validation.report.report_digest !== input.overlayValidation.report.report_digest) {
-    throw new TypeError("overlay conformance report is not the canonical current report");
-  }
-  return validation;
-}
-
-export function verifyEnterpriseIndexerOverlayTrust(input: {
-  overlayValidation: ReturnType<typeof validateIndexerContractOverlay>;
-  baseContract: IndexerProfileContract;
-  operatorContract: IndexerOperatorContract;
-  providerIntegrity: string;
-  attestation: unknown;
-  trustBundleEnvelope: unknown;
-  now?: Date;
-}): IndexerOverlayTrustReceipt {
-  const now = input.now ?? new Date();
-  const operators = validateIndexerOperatorContract(input.operatorContract);
-  const base = validateIndexerProfileContract(input.baseContract, operators);
-  const validation = revalidateOverlayResult({
-    overlayValidation: input.overlayValidation,
-    base,
-    operators,
-  });
-  const attestation = validateIndexerOverlayAttestation(
-    input.attestation,
-    validation.overlay,
-    base,
-    operators,
-  );
-  const trustEnvelope = validateIndexerOverlayTrustBundleEnvelope(
-    input.trustBundleEnvelope,
-  );
-  const issuer = trustEnvelope.bundle.issuers.find((item) => item.id === attestation.issuer);
-  const key = issuer?.keys.find((item) => item.key_id === attestation.key_id);
-  if (key === undefined) {
-    throw new TypeError("overlay attestation issuer or key is not trusted");
-  }
-  const nowMs = now.getTime();
-  if (Date.parse(key.not_before) > nowMs || Date.parse(key.not_after) <= nowMs) {
-    throw new TypeError("overlay attestation key is outside its validity window");
-  }
-  const revoked = trustEnvelope.bundle.revocations.some((revocation) =>
-    revocation.issuer === attestation.issuer &&
-    revocation.key_id === attestation.key_id &&
-    Date.parse(revocation.revoked_at) <= nowMs
-  );
-  if (revoked) throw new TypeError("overlay attestation key has been revoked");
-  const signingPayload = withoutFields(attestation, ["signature", "attestation_digest"]);
-  const publicKey = createPublicKey({
-    key: Buffer.from(key.public_key, "base64"),
-    format: "der",
-    type: "spki",
-  });
-  const verified = verify(
-    null,
-    Buffer.from(indexerOverlayAttestationSigningPayload(signingPayload)),
-    publicKey,
-    Buffer.from(attestation.signature, "base64"),
-  );
-  if (!verified) throw new TypeError("overlay attestation signature is invalid");
-  const receiptPayload: Omit<IndexerOverlayTrustReceipt, "receipt_digest"> = {
-    protocol: "context.indexer.overlay-trust-receipt/v1",
-    trust_class: "enterprise-signed",
-    project_ref: null,
-    overlay_digest: validation.overlay.overlay_digest,
-    attestation_digest: attestation.attestation_digest,
-    base_contract_digest: base.contract_digest,
-    provider_integrity: input.providerIntegrity,
-    operator_contract_digest: operators.contract_digest,
-    conformance_report_digest: validation.report.report_digest,
-    trust_adapter: trustEnvelope.adapter,
-    trust_adapter_version: trustEnvelope.adapter_version,
-    trust_management_authority_digest: trustEnvelope.management_authority_digest,
-    trust_policy_digest: trustEnvelope.bundle.policy_digest,
-    authorization_receipt_digest: null,
-  };
-  return indexerOverlayTrustReceiptSchema.parse({
-    ...receiptPayload,
-    receipt_digest: indexerOverlayTrustReceiptDigest(receiptPayload),
-  });
-}
-
-export const indexerOverlayProjectAuthorizationSchema = z.object({
-  protocol: z.literal("context.indexer.overlay-project-authorization/v1"),
-  project_ref: z.string().min(1),
-  overlay_digest: indexerDigestSchema,
-  attestation_digest: indexerDigestSchema.nullable(),
-  base_contract_digest: indexerDigestSchema,
-  provider_integrity: indexerDigestSchema,
-  operator_contract_digest: indexerDigestSchema,
-  conformance_report_digest: indexerDigestSchema,
-  authority_ref: z.string().min(1),
-  authority_scope_digest: indexerDigestSchema,
-  authorization_receipt_digest: indexerDigestSchema,
-}).strict();
-
-export type IndexerOverlayProjectAuthorization = z.infer<
-  typeof indexerOverlayProjectAuthorizationSchema
->;
-
-export function indexerOverlayProjectAuthorizationDigest(
-  authorization: Omit<IndexerOverlayProjectAuthorization, "authorization_receipt_digest">,
-): string {
-  return indexerProtocolDigest(authorization);
-}
-
-export function authorizeProjectIndexerOverlay(input: {
+export function createIndexerOverlayValidationReceipt(input: {
   overlayValidation: ReturnType<typeof validateIndexerContractOverlay>;
   baseContract: IndexerProfileContract;
   operatorContract: IndexerOperatorContract;
   providerIntegrity: string;
   projectRef: string;
-  declaredAttestationDigest: string | null;
-  authorization: unknown;
-}): IndexerOverlayTrustReceipt {
-  const operators = validateIndexerOperatorContract(input.operatorContract);
-  const base = validateIndexerProfileContract(input.baseContract, operators);
-  const validation = revalidateOverlayResult({
-    overlayValidation: input.overlayValidation,
-    base,
-    operators,
+}): IndexerOverlayValidationReceipt {
+  const projectRef = z.string().min(1).parse(input.projectRef);
+  const providerIntegrity = indexerDigestSchema.parse(input.providerIntegrity);
+  const validation = validateIndexerContractOverlay({
+    overlay: input.overlayValidation.overlay,
+    baseContract: input.baseContract,
+    operatorContract: input.operatorContract,
   });
-  const authorization = indexerOverlayProjectAuthorizationSchema.parse(input.authorization);
-  const payload = withoutFields(authorization, ["authorization_receipt_digest"]);
-  if (indexerOverlayProjectAuthorizationDigest(payload) !== authorization.authorization_receipt_digest) {
-    throw new TypeError("overlay project authorization receipt digest is invalid");
+  if (
+    canonicalIndexerJson(validation.report) !==
+      canonicalIndexerJson(input.overlayValidation.report)
+  ) {
+    throw new TypeError("overlay conformance report is not the canonical current report");
   }
-  const expected = {
-    project_ref: input.projectRef,
+  const payload: Omit<IndexerOverlayValidationReceipt, "receipt_digest"> = {
+    protocol: "context.indexer.overlay-validation-receipt/v1",
+    project_ref: projectRef,
     overlay_digest: validation.overlay.overlay_digest,
-    attestation_digest: input.declaredAttestationDigest,
-    base_contract_digest: base.contract_digest,
-    provider_integrity: input.providerIntegrity,
-    operator_contract_digest: operators.contract_digest,
+    base_contract_digest: validation.report.base_contract_digest,
+    provider_integrity: providerIntegrity,
+    operator_contract_digest: validation.report.operator_contract_digest,
     conformance_report_digest: validation.report.report_digest,
   };
-  for (const [field, value] of Object.entries(expected)) {
-    if (authorization[field as keyof typeof authorization] !== value) {
-      throw new TypeError(`overlay project authorization does not match ${field}`);
-    }
-  }
-  const receiptPayload: Omit<IndexerOverlayTrustReceipt, "receipt_digest"> = {
-    protocol: "context.indexer.overlay-trust-receipt/v1",
-    trust_class: "project-authorized-exact-digest",
-    project_ref: input.projectRef,
-    overlay_digest: input.overlayValidation.overlay.overlay_digest,
-    attestation_digest: input.declaredAttestationDigest,
-    base_contract_digest: base.contract_digest,
-    provider_integrity: input.providerIntegrity,
-    operator_contract_digest: operators.contract_digest,
-    conformance_report_digest: input.overlayValidation.report.report_digest,
-    trust_adapter: null,
-    trust_adapter_version: null,
-    trust_management_authority_digest: null,
-    trust_policy_digest: null,
-    authorization_receipt_digest: authorization.authorization_receipt_digest,
-  };
-  return indexerOverlayTrustReceiptSchema.parse({
-    ...receiptPayload,
-    receipt_digest: indexerOverlayTrustReceiptDigest(receiptPayload),
+  return indexerOverlayValidationReceiptSchema.parse({
+    ...payload,
+    receipt_digest: indexerOverlayValidationReceiptDigest(payload),
   });
+}
+
+export function validateIndexerOverlayValidationReceipt(input: {
+  value: unknown;
+  overlayValidation: ReturnType<typeof validateIndexerContractOverlay>;
+  baseContract: IndexerProfileContract;
+  operatorContract: IndexerOperatorContract;
+  providerIntegrity: string;
+  projectRef: string;
+}): IndexerOverlayValidationReceipt {
+  const receipt = indexerOverlayValidationReceiptSchema.parse(input.value);
+  const payload = withoutFields(receipt, ["receipt_digest"]);
+  if (indexerOverlayValidationReceiptDigest(payload) !== receipt.receipt_digest) {
+    throw new TypeError("overlay validation receipt digest is invalid");
+  }
+  const expected = createIndexerOverlayValidationReceipt({
+    overlayValidation: input.overlayValidation,
+    baseContract: input.baseContract,
+    operatorContract: input.operatorContract,
+    providerIntegrity: input.providerIntegrity,
+    projectRef: input.projectRef,
+  });
+  if (canonicalIndexerJson(expected) !== canonicalIndexerJson(receipt)) {
+    throw new TypeError("overlay validation receipt is stale or bound to another validation");
+  }
+  return receipt;
 }

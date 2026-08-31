@@ -88,7 +88,7 @@ maintain this declaration from the user's requirements.
 | `source()` and `allSources()` | References registered repo, file, or Lark source boundaries. |
 | `extractTs()` | Extracts TypeScript/JavaScript and TSX/JSX symbols and relationships into `codeindex` candidates. |
 | `extractCustom()` | Runs a project-owned code extractor while Context owns candidate, evidence, freshness, and Review state. |
-| `alignProse()` and `compileProse()` | Structures document evidence and compiles source-bound knowledge candidates. |
+| `alignProse()` and `compileProse()` | Legacy explicit phase factories retained for existing workspace migration and repair. New workspaces use `src/indexers.yaml` and the Context Indexer lifecycle. |
 | `reviewValidity()` | Declares the review gate for one collection or the project. |
 | `customPhase()` | Adds project-specific orchestration when built-in phase factories are not enough. |
 | `kbPackage()` | Builds an Agent knowledge-base package from approved knowledge and templates. |

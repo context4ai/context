@@ -108,28 +108,13 @@ codeindex or reuse an unrelated parser.
 
 ## Plan Before Parsing
 
-Classify the user-visible module before selecting language tooling or reading an
-archetype template: API/service, background runtime, SDK/library, interactive
-application, adapter, CLI/tool, monorepo container, derived source,
-authoritative contract source, or unknown.
-A hybrid module may declare several `moduleTypes` and several behavior `facets`;
-keep one primary `moduleType` for concise reports. Record inspected paths in
-`moduleTypeEvidence`, record every Markdown file actually read in `documents`, then read all matching Route-recommended files below
-`resources/semantic/code-index/templates/` and combine them into one plan.
-After that, choose exactly one closed output profile: `module-map`,
-`application-map`, `protocol-index`, `service-boundary`, `runtime-map`,
-`public-api-reference`, `command-map`, `adapter-contract`, `module-registry`,
-`cross-module-flow`, or `provenance-only`. The profile selects structural probes
-and advisory checks; an invented value is rejected.
-
-Each archetype resource is a working template for an Agent with limited prior
-context. It provides a minimum evidence pass, the reader questions the index
-must answer, suggested knowledge units, Markdown chapter blueprints,
-aggregation and relationship rules, composition examples, and stop conditions.
-The blueprints are illustrative: omit unsupported sections and merge overlap
-across selected templates instead of producing empty headings or duplicate
-pages. They shape content before the batch preview; they do not prescribe or
-override projected page counts.
+The root workflow no longer owns module taxonomy or archetype templates. The
+Indexer registry selects the applicable Provider profile, and the resolved
+Provider Bundle supplies the semantic plan, evidence questions, composition
+rules, and output guidance. Context only validates the closed selection,
+digests, inventories, and resulting Candidate contracts. Do not reconstruct a
+parallel profile taxonomy in this reference or route around the Indexer
+lifecycle with an extractor-specific plan.
 
 Extractor shape defines what can be emitted. `extractTs()` creates one page per
 selected symbol and permits one owning index unit per source. Use it for an

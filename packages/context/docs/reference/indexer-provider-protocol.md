@@ -310,32 +310,20 @@ Graph outcome. Only `selection-validation-required` returns a selection
 proposal input. The Route writes no workspace or runtime state, and neither a
 visible-Skill claim nor the Route report authorizes Bundle materialization.
 
-## Contract overlay validation and trust
+## Contract overlay validation
 
 `validate-indexer-contract-overlays` recomputes the complete data-only overlay
 against the exact CLI base and operator contracts. Invalid DSL, executable
 fields, identity redefinition, threshold weakening, digest drift or a partial
-attestation/trust bundle fails before any authorization Route exists. A
-resolver's self-reported `verified` value is not an accepted input.
+Provider identity fails validation. The selected Provider Bundle integrity is
+an exact input, not a self-reported trust assertion.
 
-A valid detached Ed25519 attestation is checked locally against a matching key
-in the complete Host trust-bundle policy, including key validity and
-revocation, and directly produces the common
-`context.indexer.overlay-trust-receipt/v1`. The receipt binds the exact Host
-adapter identity/version and management-authority digest as well as the policy
-digest, so any policy-envelope drift makes the audit stale. An unsigned overlay, an attestation
-without an installed trust bundle, or an attestation whose issuer/key is absent
-from the canonical bundle returns `authorization-required`; the request binds
-the exact attestation digest (or null) together with the
-project/overlay/base/operator/Provider/conformance digest set. The
-non-delegable `authorize-indexer-contract-overlay` Gate may issue that
-project-exact authorization under the independent
-`context.indexer-contract-overlay` authority; revalidation then produces the
-same trust-receipt protocol with trust class
-`project-authorized-exact-digest`. Cross-project or stale reports cannot be
-reused. Once the bundle contains the declared issuer/key, an invalid signature,
-expired key, revoked key, or malformed policy is a hard trust failure and
-cannot downgrade to project authorization.
+Successful validation emits
+`context.indexer.overlay-validation-receipt/v1`. The receipt binds the exact
+project, overlay, base contract, operator contract, Provider Bundle integrity
+and canonical conformance report. There is no signature, KMS, trust-bundle or
+overlay-authorization protocol. Changing any bound digest requires
+revalidation; a stale receipt cannot be reused.
 
 ## Question amendment back-edge
 
@@ -347,8 +335,8 @@ and durable single-file journal. A Skill question ref is guidance only; it
 cannot provide or alter the contract payload.
 
 An overlay-backed question follows a different sequence. Context first
-recomputes overlay DSL conformance and verifies an enterprise or exact-project
-trust receipt. Only then may
+recomputes overlay DSL conformance and verifies the exact validation receipt.
+Only then may
 `context.indexer.overlay-question-amendment/v1` expand namespaced question and
 target-domain additions from that overlay. The target coverage domain must
 already be in scope and have one existing primary owner. The amendment is a
@@ -359,23 +347,24 @@ The executable sequence is
 `propose-overlay-question-amendment`,
 `confirm-overlay-question-amendment`, then
 `rebind-indexer-selection-to-requirement`. Proposal and rebind inputs carry the
-exact trusted overlay validation input and result; Context recomputes and
+exact overlay validation input and result; Context recomputes and
 compares that pair instead of accepting a detached receipt. Confirmation emits
 the exact amendment decision and performs no project write.
 
 The rebind Action then proves that Indexer/provider
 identity, operations, scopes, profile composition, requirement bindings, owner
-closure and read authority are byte-identical. It revalidates overlay trust,
+closure and read authority are byte-identical. It revalidates overlay
+conformance,
 reuses the exact staged Bundles, and reruns both static and final selection
 against the target requirement digest. Provider and SubjectKey authority must
 remain unchanged. Final selection resolves every CLI-base question back to its
-exact selected profile contract and requires one current trust/conformance proof
+exact selected profile contract and requires one current validation proof
 for every overlay question; forged bindings and duplicate, stale, or unused
 proofs fail before the final report is issued. The report binds the resulting
 question authority set digest. The resulting
 `context.indexer.overlay-question-registry-apply-proposal/v1` contains the full
 target `src/indexers.yaml` snapshot and binds the amendment, confirmation,
-overlay trust, rebound selection, SubjectKey schema set and finalized reports.
+overlay validation, rebound selection, SubjectKey schema set and finalized reports.
 The proposal goes through the same `stage-indexer-project-proposal` and
 `apply-indexer-project` Actions as ordinary registry/customization proposals.
 The latter dispatches this typed proposal to one expected-base CAS, project

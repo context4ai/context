@@ -495,7 +495,7 @@ describe("resolved-indexer-instructions materialization", () => {
       .toThrow("payload digest");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("round-trips inline and managed instruction output through the v2 Host ABI", async () => {
+  test("round-trips inline and managed instruction output through the Host-action ABI", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-indexer-instruction-host-"));
     const distribution = await setupDistribution(root);
     const resolved = await resolveAndStage({

@@ -662,6 +662,21 @@ describe("ArtifactResult ABI", () => {
       /must introduce a distinct SubjectKey/,
     );
 
+    for (const disposition of [{
+      query_ref: queryRef,
+      disposition: "request-material" as const,
+      missing_facts: ["independent-reader-value"],
+      source_hints: ["source:architecture-guide"],
+    }, {
+      query_ref: queryRef,
+      disposition: "unsupported" as const,
+      missing_capabilities: ["subject-catalog"],
+    }]) {
+      expect(() => validate(artifactResult(workset, [disposition]), workset)).toThrow(
+        /resolved targets cannot be reported as unavailable/,
+      );
+    }
+
     const unknownQuery = artifactResult(workset, [{
       query_ref: digest("e"),
       disposition: "unsupported",

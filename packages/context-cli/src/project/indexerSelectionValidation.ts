@@ -439,6 +439,27 @@ export async function validateIndexerSelectionFinal(input: {
       if (matching.length !== 1) {
         throw new TypeError("overlay question binding requires one exact current authority proof");
       }
+      const currentProof = matching[0]!.proof;
+      const overlayQuestion = currentProof.overlay_validation.overlay.additions
+        .reader_question_contracts?.find((question) => question.ref === binding.ref);
+      const owner = overlayQuestion === undefined
+        ? undefined
+        : input.registry.indexers.find((indexer) =>
+            indexer.requirement_bindings.some((ownerBinding) =>
+              ownerBinding.requirement_ref === requirement.id &&
+              ownerBinding.role === "primary" &&
+              ownerBinding.coverage_domains.includes(overlayQuestion.coverage_domain)
+            )
+          );
+      const currentPrimary = owner === undefined
+        ? undefined
+        : resolvedByKey.get(selectionKey(owner.id, owner.profile.primary.provider));
+      if (
+        currentPrimary === undefined ||
+        currentProof.provider_integrity !== currentPrimary.bundle.resolved.integrity
+      ) {
+        throw new TypeError("overlay question authority proof is stale for the current primary Provider");
+      }
       usedOverlayProofs.add(matching[0]!.index);
       return {
         requirement_id: requirement.id,

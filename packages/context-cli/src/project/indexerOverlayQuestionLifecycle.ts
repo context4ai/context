@@ -37,17 +37,16 @@ const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 
 export interface IndexerOverlayQuestionProposalInput {
   protocol: "context.indexer.overlay-question-proposal-input/v1";
-  trusted_validation_input: IndexerContractOverlayValidationInput;
-  trusted_validation_result: IndexerContractOverlayValidationResult;
+  validation_input: IndexerContractOverlayValidationInput;
+  validation_result: IndexerContractOverlayValidationResult;
   registry: IndexerRegistry;
   requirement_id: string;
   input_digest: string;
 }
-
 export interface IndexerOverlayQuestionRebindInput {
   protocol: "context.indexer.overlay-question-rebind-input/v1";
-  trusted_validation_input: IndexerContractOverlayValidationInput;
-  trusted_validation_result: IndexerContractOverlayValidationResult;
+  validation_input: IndexerContractOverlayValidationInput;
+  validation_result: IndexerContractOverlayValidationResult;
   base_registry: IndexerRegistry;
   amendment: IndexerOverlayQuestionAmendment;
   confirmation: IndexerRequirementAmendmentConfirmation;
@@ -86,7 +85,7 @@ function exactObject(value: unknown, protocol: string, keys: readonly string[]):
   return raw;
 }
 
-function trustedOverlay(input: {
+function validatedOverlay(input: {
   validation_input: unknown;
   validation_result: unknown;
 }): {
@@ -98,8 +97,8 @@ function trustedOverlay(input: {
     validation_input: validationInput,
     validation_result: input.validation_result,
   });
-  if (validationResult.outcome !== "trusted" || validationResult.trust_receipt === null) {
-    throw new TypeError("overlay question lifecycle requires a current trusted overlay receipt");
+  if (validationResult.outcome !== "valid") {
+    throw new TypeError("overlay question lifecycle requires a current overlay validation receipt");
   }
   return { validationInput, validationResult };
 }
@@ -116,23 +115,23 @@ export function validateIndexerOverlayQuestionProposalInput(
 ): IndexerOverlayQuestionProposalInput {
   const raw = exactObject(value, "context.indexer.overlay-question-proposal-input/v1", [
     "protocol",
-    "trusted_validation_input",
-    "trusted_validation_result",
+    "validation_input",
+    "validation_result",
     "registry",
     "requirement_id",
     "input_digest",
   ]);
-  const trusted = trustedOverlay({
-    validation_input: raw.trusted_validation_input,
-    validation_result: raw.trusted_validation_result,
+  const validated = validatedOverlay({
+    validation_input: raw.validation_input,
+    validation_result: raw.validation_result,
   });
   if (typeof raw.requirement_id !== "string" || raw.requirement_id.length === 0) {
     throw new TypeError("overlay question proposal requirement id is invalid");
   }
   const input: IndexerOverlayQuestionProposalInput = {
     protocol: "context.indexer.overlay-question-proposal-input/v1",
-    trusted_validation_input: trusted.validationInput,
-    trusted_validation_result: trusted.validationResult,
+    validation_input: validated.validationInput,
+    validation_result: validated.validationResult,
     registry: indexerRegistrySchema.parse(raw.registry),
     requirement_id: raw.requirement_id,
     input_digest: typeof raw.input_digest === "string" ? raw.input_digest : "",
@@ -161,9 +160,9 @@ export function proposeProjectIndexerOverlayQuestionAmendment(
   value: unknown,
 ): IndexerOverlayQuestionAmendment {
   const input = validateIndexerOverlayQuestionProposalInput(value);
-  const validation = input.trusted_validation_result;
+  const validation = input.validation_result;
   return buildIndexerOverlayQuestionAmendment({
-    project_ref: input.trusted_validation_input.project_ref,
+    project_ref: input.validation_input.project_ref,
     registry: input.registry,
     requirement_id: input.requirement_id,
     overlay_validation: {
@@ -171,10 +170,10 @@ export function proposeProjectIndexerOverlayQuestionAmendment(
       effectiveProfile: validation.effective_profile,
       report: validation.conformance_report,
     },
-    base_contract: input.trusted_validation_input.base_contract,
-    operator_contract: input.trusted_validation_input.operator_contract,
-    provider_integrity: input.trusted_validation_input.provider_integrity,
-    trust_receipt: validation.trust_receipt!,
+    base_contract: input.validation_input.base_contract,
+    operator_contract: input.validation_input.operator_contract,
+    provider_integrity: input.validation_input.provider_integrity,
+    validation_receipt: validation.validation_receipt,
   });
 }
 
@@ -197,8 +196,8 @@ export function validateIndexerOverlayQuestionRebindInput(
 ): IndexerOverlayQuestionRebindInput {
   const raw = exactObject(value, "context.indexer.overlay-question-rebind-input/v1", [
     "protocol",
-    "trusted_validation_input",
-    "trusted_validation_result",
+    "validation_input",
+    "validation_result",
     "base_registry",
     "amendment",
     "confirmation",
@@ -208,17 +207,17 @@ export function validateIndexerOverlayQuestionRebindInput(
     "customizations",
     "input_digest",
   ]);
-  const trusted = trustedOverlay({
-    validation_input: raw.trusted_validation_input,
-    validation_result: raw.trusted_validation_result,
+  const validated = validatedOverlay({
+    validation_input: raw.validation_input,
+    validation_result: raw.validation_result,
   });
   if (!Array.isArray(raw.resolved) || !Array.isArray(raw.customizations)) {
     throw new TypeError("overlay question rebind Provider inputs are invalid");
   }
   const input: IndexerOverlayQuestionRebindInput = {
     protocol: "context.indexer.overlay-question-rebind-input/v1",
-    trusted_validation_input: trusted.validationInput,
-    trusted_validation_result: trusted.validationResult,
+    validation_input: validated.validationInput,
+    validation_result: validated.validationResult,
     base_registry: indexerRegistrySchema.parse(raw.base_registry),
     amendment: validateIndexerOverlayQuestionAmendment(raw.amendment),
     confirmation: raw.confirmation as IndexerRequirementAmendmentConfirmation,
@@ -270,7 +269,7 @@ export async function rebindProjectIndexerSelectionToOverlayRequirement(input: {
     };
     return { ...payload, result_digest: indexerProtocolDigest(payload) };
   }
-  const validation = value.trusted_validation_result;
+  const validation = value.validation_result;
   const rebind = await rebindIndexerSelectionToOverlayRequirement({
     base_registry: value.base_registry,
     amendment: value.amendment,
@@ -279,19 +278,19 @@ export async function rebindProjectIndexerSelectionToOverlayRequirement(input: {
     base_final_report: value.base_final_report,
     resolved: value.resolved,
     customizations: value.customizations,
-    operator_contract: value.trusted_validation_input.operator_contract,
-    profile_contract: value.trusted_validation_input.base_contract,
-    provider_integrity: value.trusted_validation_input.provider_integrity,
+    operator_contract: value.validation_input.operator_contract,
+    profile_contract: value.validation_input.base_contract,
+    provider_integrity: value.validation_input.provider_integrity,
     overlay_validation: {
       overlay: validation.overlay,
       effectiveProfile: validation.effective_profile,
       report: validation.conformance_report,
     },
-    trust_receipt: validation.trust_receipt!,
+    validation_receipt: validation.validation_receipt,
   });
   const targetContent = YAML.stringify(value.amendment.target_registry);
   const proposal = buildIndexerOverlayQuestionRegistryApplyProposal({
-    project_ref: value.trusted_validation_input.project_ref,
+    project_ref: value.validation_input.project_ref,
     base_registry: value.base_registry,
     base_document_content: baseContent,
     target_document_content: targetContent,

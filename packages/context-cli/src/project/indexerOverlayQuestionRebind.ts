@@ -8,7 +8,7 @@ import {
   validateIndexerRequirementAmendmentConfirmation,
   type IndexerOperatorContract,
   type IndexerProfileContract,
-  type IndexerOverlayTrustReceipt,
+  type IndexerOverlayValidationReceipt,
   type IndexerRegistry,
 } from "@c4a/context";
 import type { IndexerCustomizationView } from "./indexerCustomization.js";
@@ -97,7 +97,7 @@ export async function rebindIndexerSelectionToOverlayRequirement(input: {
   profile_contract: IndexerProfileContract;
   provider_integrity: string;
   overlay_validation: Parameters<typeof buildIndexerOverlayQuestionAmendment>[0]["overlay_validation"];
-  trust_receipt: IndexerOverlayTrustReceipt;
+  validation_receipt: IndexerOverlayValidationReceipt;
 }): Promise<IndexerOverlayQuestionRebindReceipt> {
   validateFinalizedIndexerRegistry(input.base_registry);
   const amendment = validateIndexerOverlayQuestionAmendment(input.amendment);
@@ -113,10 +113,10 @@ export async function rebindIndexerSelectionToOverlayRequirement(input: {
     base_contract: input.profile_contract,
     operator_contract: input.operator_contract,
     provider_integrity: input.provider_integrity,
-    trust_receipt: input.trust_receipt,
+    validation_receipt: input.validation_receipt,
   });
   if (canonicalIndexerJson(expectedAmendment) !== canonicalIndexerJson(amendment)) {
-    throw new TypeError("overlay question amendment is stale after trust/conformance revalidation");
+    throw new TypeError("overlay question amendment is stale after conformance revalidation");
   }
   const baseDigests = indexerRegistryDigests(input.base_registry);
   if (baseDigests.requirementSetDigest !== amendment.base_requirement_set_digest) {
@@ -170,7 +170,7 @@ export async function rebindIndexerSelectionToOverlayRequirement(input: {
       requirement_id: amendment.requirement_id,
       provider_integrity: input.provider_integrity,
       overlay_validation: input.overlay_validation,
-      trust_receipt: input.trust_receipt,
+      validation_receipt: input.validation_receipt,
     }],
   });
   if (

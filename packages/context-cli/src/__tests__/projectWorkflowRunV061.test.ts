@@ -241,14 +241,13 @@ describe("managed workflow run-to-completion", () => {
       ])) as {
         state: string;
         steps: Array<{ effect: string; command: string }>;
+        stop: { reasonCode: string };
       };
       expect(planned).toMatchObject({
-        state: "planned",
-        steps: [{ effect: "write" }],
+        state: "blocked",
+        steps: [],
+        stop: { reasonCode: "workflow.until.command-plan-not-unique" },
       });
-      expect(planned.steps[0]?.command).toContain(
-        "build --format json",
-      );
 
       const completed = JSON.parse(await runCliInDir(fixture.project, [
         ...receiptOption,
@@ -267,32 +266,14 @@ describe("managed workflow run-to-completion", () => {
           receipt: { exitCode: number; stdout: { sha256: string } };
         }>;
         workflow: { status: string };
+        stop: { reasonCode: string };
       };
-      expect(completed.state).toBe("complete");
-      expect(completed.workflow.status).toBe("complete");
-      expect(completed.steps).toHaveLength(1);
-      expect(completed.steps[0]?.command).toContain(
-        "build --format json",
-      );
-      expect(completed.steps[0]?.receipt.exitCode).toBe(0);
-      expect(completed.steps[0]?.receipt.stdout.sha256).toMatch(
-        /^[a-f0-9]{64}$/u,
-      );
-      const debugEvents = readFileSync(
-        join(fixture.project, ".tmp", "context-runtime", "debug", "events.jsonl"),
-        "utf8",
-      ).trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
-        kind: string;
-        data: Record<string, unknown>;
+      expect(completed).toMatchObject({
+        state: "blocked",
+        workflow: { status: "actionable" },
+        steps: [],
+        stop: { reasonCode: "workflow.until.command-plan-not-unique" },
       });
-      expect(debugEvents).toContainEqual(expect.objectContaining({
-        kind: "workflow.scope-opened",
-        data: expect.objectContaining({ executor: "in-process" }),
-      }));
-      expect(debugEvents).toContainEqual(expect.objectContaining({
-        kind: "workflow.scope-closed",
-        data: expect.objectContaining({ executor: "in-process", release_errors: 0 }),
-      }));
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
@@ -310,7 +291,11 @@ describe("managed workflow run-to-completion", () => {
         "--format",
         "json",
       ])) as { state: string; steps: unknown[] };
-      expect(complete).toMatchObject({ state: "complete", steps: [] });
+      expect(complete).toMatchObject({
+        state: "blocked",
+        steps: [],
+        stop: { reasonCode: "workflow.until.agent-context-required" },
+      });
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }

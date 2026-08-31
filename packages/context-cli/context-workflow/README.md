@@ -162,7 +162,7 @@ The Provider is considered valid only when all of the following are true:
 26. The Markdown Provider Route starts by proving current document capture,
     then separates Agent-only visible-Skill discovery from CLI routing, static
     validation, resolution, staging, and final validation. CLI-bundled Bundles
-    may complete automatically; external Bundles return a v2 Host request and
+    may complete automatically; external Bundles return a Host-action resource request and
     project customization returns its own blocking Outcome. Host re-entry carries
     only structured Host results; the CLI owns all staged paths.
 

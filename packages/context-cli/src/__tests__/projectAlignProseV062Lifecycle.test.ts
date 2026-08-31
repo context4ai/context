@@ -127,7 +127,8 @@ describe("0.6.6 prose align structure gate", () => {
         workflow: {
           current: {
             node: string;
-            gate: {
+            action: { id: string };
+            gate?: {
               id: string;
               authority: string;
               resolution: string;
@@ -140,23 +141,14 @@ describe("0.6.6 prose align structure gate", () => {
           };
         };
       };
-      expect(confirmationStatus.workflow.current.node).toBe("confirm-structure");
-      expect(confirmationStatus.workflow.current.gate).toMatchObject({
-        id: "structure-confirmation",
-        authority: "context.structure-confirmation",
-        resolution: "user",
+      expect(confirmationStatus.workflow.current).toMatchObject({
+        node: "run-indexer-lifecycle",
+        action: { id: "run-indexer-lifecycle" },
+        commands: [],
       });
-      expect(confirmationStatus.workflow.current.commands.some((item) =>
-        item.command.includes("--view structure-summary --input .tmp/context-runtime/lifecycle/structure.yaml") &&
-        item.availability === "immediate"
-      )).toBe(true);
-      expect(confirmationStatus.workflow.current.commands.find((item) =>
-        item.command.includes(" --confirm ")
-      )).toMatchObject({
-        availability: "after-human-confirmation",
-      });
+      expect(confirmationStatus.workflow.current.gate).toBeUndefined();
       expect(confirmationStatus.workflow.current.resources.required).toContainEqual(
-        expect.objectContaining({ id: "dialogue.structure-confirmation" }),
+        expect.objectContaining({ id: "skill.context-run-indexer-lifecycle" }),
       );
       const authorizedStatus = JSON.parse(await runCliInDir(projectRoot, [
         "status",
@@ -170,7 +162,8 @@ describe("0.6.6 prose align structure gate", () => {
         workflow: {
           current: {
             node: string;
-            gate: {
+            action: { id: string };
+            gate?: {
               resolution: string;
               inspection_action?: unknown;
               resolution_action?: { id: string };
@@ -180,21 +173,15 @@ describe("0.6.6 prose align structure gate", () => {
           };
         };
       };
-      expect(authorizedStatus.workflow.current.node).toBe("confirm-structure");
-      expect(authorizedStatus.workflow.current.gate).toMatchObject({
-        resolution: "session-authority",
-        resolution_action: { id: "apply-structure-confirmation" },
+      expect(authorizedStatus.workflow.current).toMatchObject({
+        node: "run-indexer-lifecycle",
+        action: { id: "run-indexer-lifecycle" },
+        commands: [],
       });
-      expect(authorizedStatus.workflow.current.gate.inspection_action).toBeUndefined();
-      expect(authorizedStatus.workflow.current.resources.required).toEqual([]);
-      expect(authorizedStatus.workflow.current.commands.find((item) =>
-        item.command.includes(" --confirm ")
-      )).toMatchObject({
-        command: expect.stringContaining(
-          "run align:file:product-docs:architecture --confirm --input .tmp/context-runtime/lifecycle/structure.yaml --format json",
-        ),
-        availability: "immediate",
-      });
+      expect(authorizedStatus.workflow.current.gate).toBeUndefined();
+      expect(authorizedStatus.workflow.current.resources.required).toContainEqual(
+        expect.objectContaining({ id: "skill.context-run-indexer-lifecycle" }),
+      );
       const confirmed = JSON.parse(await runCliInDir(projectRoot, [
         "run",
         "align:file:product-docs:architecture",
@@ -249,24 +236,14 @@ describe("0.6.6 prose align structure gate", () => {
         };
       };
       expect(status.workflow.current).toMatchObject({
-        node: "compile-next",
-        reason_code: "route.compile.pending-target",
+        node: "run-indexer-lifecycle",
+        reason_code: "route.indexer.lifecycle-required",
       });
-      expect(status.workflow.current.commands[0]).toMatchObject({
-        command: expect.stringContaining(
-          "run compile:file:product-docs:architecture --stage",
-        ),
-        availability: "immediate",
-      });
+      expect(status.workflow.current.commands).toEqual([]);
       expect(status.workflow.current.resources.required).toContainEqual(
-        expect.objectContaining({ id: "procedure.prose-compile" }),
+        expect.objectContaining({ id: "skill.context-run-indexer-lifecycle" }),
       );
-      expect(status.workflow.current.resources.required).not.toContainEqual(
-        expect.objectContaining({ id: "context.structure-current" }),
-      );
-      expect(status.workflow.current.resources.recommended).toContainEqual(
-        expect.objectContaining({ id: "context.structure-current" }),
-      );
+      expect(status.workflow.current.resources.recommended).toEqual([]);
       const structure = YAML.parse(readFileSync(join(projectRoot, ".tmp", "context-runtime", "lifecycle", "structure.yaml"), "utf8")) as {
         lifecycle: { state: string; confirmed_by?: string; confirmed_at?: string; structure_digest?: string };
       };

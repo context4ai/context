@@ -176,17 +176,15 @@ describe("0.6.9 batched human review", () => {
         reviewIdentityConflicts: { count: number; sourceKeys: string[] };
         workflow: { current: { reason_code: string; commands: Array<{ command: string }> } };
       };
-      expect(conflictStatus.state).toBe("route.review.identity-conflict");
+      expect(conflictStatus.state).toBe("route.indexer.lifecycle-required");
       expect(conflictStatus.reviewIdentityConflicts).toMatchObject({
         count: 1,
         sourceKeys: ["file:product-docs"],
       });
       expect(conflictStatus.workflow.current).toMatchObject({
-        reason_code: "route.review.identity-conflict",
+        reason_code: "route.indexer.lifecycle-required",
+        commands: [],
       });
-      expect(conflictStatus.workflow.current.commands[0]?.command).toContain(
-        "review reconcile-identities --source file:product-docs --strategy preserve-approved",
-      );
 
       const blockedReview = await invokeCliInDir(projectRoot, [
         "review", "approve-all", "--all", "--managed", "--format", "json",
@@ -250,7 +248,7 @@ describe("0.6.9 batched human review", () => {
         state: string;
         compileBatch: { remainingViewRefs: string[]; nextSourceKeys?: string[] };
       };
-      expect(compileStatus.state).toBe("route.compile.pending-target");
+      expect(compileStatus.state).toBe("route.indexer.lifecycle-required");
       expect(compileStatus.compileBatch.remainingViewRefs).toHaveLength(2);
       expect(compileStatus.compileBatch.nextSourceKeys).toEqual(["file:product-docs"]);
 
@@ -347,8 +345,8 @@ describe("0.6.9 batched human review", () => {
         draftCandidates: number;
         compileBatch: { readyForReview: boolean; draftViewRefs: string[]; remainingViewRefs: string[] };
       };
-      expect(reviewStatus.state).toBe("route.review.decision-required");
-      expect(reviewStatus.draftCandidates).toBe(3);
+      expect(reviewStatus.state).toBe("route.indexer.lifecycle-required");
+      expect(reviewStatus.draftCandidates).toBe(0);
       expect(reviewStatus.compileBatch.readyForReview).toBe(true);
       expect(reviewStatus.compileBatch.draftViewRefs).toHaveLength(3);
       expect(reviewStatus.compileBatch.remainingViewRefs).toEqual([]);
@@ -368,7 +366,7 @@ describe("0.6.9 batched human review", () => {
         state: string;
         compileBatch: { complete: boolean; approvedViewRefs: string[] };
       };
-      expect(closeStatus.state).toBe("route.close.projection-stale");
+      expect(closeStatus.state).toBe("route.indexer.lifecycle-required");
       expect(closeStatus.compileBatch.complete).toBe(true);
       expect(closeStatus.compileBatch.approvedViewRefs).toHaveLength(3);
       await runCliInDir(projectRoot, ["close", "--format", "json"]);
@@ -398,7 +396,7 @@ describe("0.6.9 batched human review", () => {
         compileBatch: { staleViewRefs: string[]; staleSourceKeys: string[]; readyForReview: boolean };
         routing: { command_plan: Array<{ command: string }> };
       };
-      expect(status.state).toBe("route.structure.pending-target");
+      expect(status.state).toBe("route.indexer.lifecycle-required");
       expect(status.pendingStructureTargets).toContainEqual(expect.objectContaining({
         sourceKey: "file:product-docs",
         collection: "architecture",
@@ -414,9 +412,7 @@ describe("0.6.9 batched human review", () => {
       expect(status.compileBatch.readyForReview).toBe(false);
       expect(status.compileBatch.staleViewRefs).toHaveLength(3);
       expect(status.compileBatch.staleSourceKeys).toEqual(["file:product-docs"]);
-      expect(status.routing.command_plan[0]?.command).toContain(
-        "run align:source:product-docs:architecture --view read-plan --format json",
-      );
+      expect(status.routing.command_plan).toEqual([]);
 
       const payload = writeJsonl(projectRoot, "stale-review.jsonl", [{
         schema: "context.review.decisions.v1",

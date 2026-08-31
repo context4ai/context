@@ -547,15 +547,14 @@ describe("custom code extraction lifecycle", () => {
       const previewRequired = JSON.parse(await runCliInDir(initialized.projectRoot, ["status", "--format", "json"])) as {
         workflow: { current: { reason_code: string } };
       };
-      expect(previewRequired.workflow.current.reason_code).toBe("route.extract.preview-required");
+      expect(previewRequired.workflow.current.reason_code).toBe("route.indexer.lifecycle-required");
       await runCliInDir(initialized.projectRoot, ["run", "--preview-extraction-batch", "--format", "json"]);
       const before = JSON.parse(await runCliInDir(initialized.projectRoot, ["status", "--format", "json"])) as {
         progress: { pendingExtractPhases: number };
         workflow: { current: { commands: Array<{ command: string; execution?: { target: string } }> } };
       };
       expect(before.progress.pendingExtractPhases).toBe(1);
-      expect(before.workflow.current.commands[0]?.command).toContain("extract:20260811/service:protocol");
-      expect(before.workflow.current.commands[0]?.execution).toEqual({ target: "subprocess" });
+      expect(before.workflow.current.commands).toEqual([]);
 
       const extracted = JSON.parse(await runCliInDir(initialized.projectRoot, [
         "run", "extract:20260811/service:protocol", "--format", "json",

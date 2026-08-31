@@ -1,6 +1,6 @@
 {
   "name": "c4a",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
   "author": { "name": "c4a" },
   "homepage": "https://github.com/context4ai/c4a",
@@ -10,7 +10,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "C4A Context",
-    "shortDescription": "Initialize and advance a local, source-linked project knowledge workspace.\nv0.7.0",
+    "shortDescription": "Initialize and advance a local, source-linked project knowledge workspace.\nv0.7.1",
     "longDescription": "Create a Context workspace and use agent-guided next steps to register sources, run extraction, review candidates, build package outputs, and verify health without silently mutating source repositories.",
     "developerName": "c4a",
     "category": "Productivity",

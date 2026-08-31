@@ -147,13 +147,6 @@ function extractionPlansComplete(
 function workspaceStateValid(observation: ContextWorkflowObservation): boolean {
   if (observation.stateDiagnostics.length > 0) return false;
   if (observation.activeStructures.state === "invalid") return false;
-  if (observation.declarationGraph.unresolvedPhases.length > 0) return false;
-  if (
-    observation.alignPhaseResolution?.state === "ambiguous" ||
-    observation.alignPhaseResolution?.state === "unresolved"
-  ) return false;
-  if (observation.compilePhaseResolution?.state === "ambiguous") return false;
-  if ((observation.compileBatch?.missingStructureDigests.length ?? 0) > 0) return false;
   return true;
 }
 
@@ -207,6 +200,23 @@ function evidenceMaintenanceClear(
   if (pendingExtractionRepairsCodeEvidence) return true;
   return observation.evidenceWarnings !== "orphaned" &&
     observation.evidenceWarnings !== "stale";
+}
+
+function indexerRegistryCoversSources(
+  observation: ContextWorkflowObservation,
+): boolean {
+  const refs = new Set(observation.indexerRegistry.sourceRefs);
+  const repositoriesCovered = observation.repoSources.every((source) =>
+    refs.has(`repo:${source.name}`) || refs.has(`repo:${source.id}`)
+  );
+  const documentsCovered = observation.documentSources.every((source) =>
+    refs.has(`docs:${source.name}`) ||
+    refs.has(`${source.type}:${source.name}`) ||
+    (source.id !== undefined && (
+      refs.has(`docs:${source.id}`) || refs.has(`${source.type}:${source.id}`)
+    ))
+  );
+  return repositoriesCovered && documentsCovered;
 }
 
 function proseDeclarationsComplete(
@@ -307,17 +317,7 @@ function compileComplete(observation: ContextWorkflowObservation): boolean {
 function reviewGateClear(
   observation: ContextWorkflowObservation,
 ): boolean {
-  if (observation.draftCandidates === 0) return true;
-  const hasProseDrafts = observation.draftCollections.some(
-    (collection) => !isCodeIndexCollection(collection),
-  );
-  if (!hasProseDrafts) return false;
-  if (observation.unclassifiedDocumentTargets.length > 0) return true;
-  if (observation.pendingStructureTargets.length > 0) return true;
-  if (observation.compileBatch !== undefined) {
-    return !observation.compileBatch.readyForReview;
-  }
-  return false;
+  return observation.draftCandidates === 0;
 }
 
 function activeProseWorkBlocksClose(input: {
@@ -427,8 +427,6 @@ export function createContextWorkflowFacts(
     observation.stagedStructure.state !== "draft";
   const compiled = compileComplete(observation);
   const reviewGateIsClear = reviewGateClear(observation);
-  const onlyProseDrafts = observation.draftCollections.length > 0 &&
-    observation.draftCollections.every((collection) => !isCodeIndexCollection(collection));
   const hasProseDrafts = observation.draftCollections.some(
     (collection) => !isCodeIndexCollection(collection),
   );
@@ -436,10 +434,25 @@ export function createContextWorkflowFacts(
     observation.pendingStructureTargets.length > 0 &&
     observation.draftCandidates > 0 &&
     hasProseDrafts;
-  const reviewBatchResolved = observation.draftCandidates === 0 ||
-    (observation.pendingStructureTargets.length > 0 && onlyProseDrafts);
+  const reviewBatchResolved = observation.draftCandidates === 0;
   const evidenceClear = evidenceMaintenanceClear(observation);
   const hasApprovedKnowledge = observation.approvedPages > 0;
+  const hasOnlyApprovedIndexerKnowledge = hasApprovedKnowledge &&
+    observation.approvedIndexerPages === observation.approvedPages;
+  const indexerLifecycleCurrent = observation.sourceCount === 0 || (
+    observation.indexerRegistry.state === "current" &&
+    indexerRegistryCoversSources(observation) &&
+    (
+      observation.indexerCandidateCompile.state === "current" ||
+      (
+        hasOnlyApprovedIndexerKnowledge &&
+        observation.close.state === "ready" &&
+        observation.verifyErrors === 0 &&
+        observation.sourceFreshness === "ready" &&
+        observation.pendingCaptureCommands.length === 0
+      )
+    )
+  );
   const proseWorkBlocksClose = activeProseWorkBlocksClose({
     documentRoundStarted,
     pendingStructureTargets: observation.pendingStructureTargets.length,
@@ -494,6 +507,10 @@ export function createContextWorkflowFacts(
     },
     evidence: {
       maintenance_clear: evidenceClear,
+    },
+    indexer: {
+      lifecycle_current: indexerLifecycleCurrent,
+      registry_state: observation.indexerRegistry.state,
     },
     gates: {
       evidence_maintenance_resolved: evidenceClear ||
@@ -586,7 +603,7 @@ export function createContextWorkflowFacts(
       pending_count: documentOptimization.pending_fragments,
       conflict_count: documentOptimization.conflict_fragments,
       guidance_required: documentOptimization.guidance_required,
-      ...(documentOptimization.revision_requested
+      ...(documentOptimization.revision_requested && observation.draftCandidates === 0
         ? { revision_requested: true as const }
         : {}),
     },
