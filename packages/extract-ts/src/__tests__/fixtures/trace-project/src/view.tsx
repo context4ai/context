@@ -17,4 +17,4 @@ export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>((props: ChatIn
   return null;
 });
 
-export const TinyIcon = () => <svg />;
+export const TinyIcon = () => <svg aria-label="R&D">Design & Build</svg>;

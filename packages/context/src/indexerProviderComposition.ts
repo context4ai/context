@@ -33,7 +33,7 @@ import {
 } from "./indexerProtocolCommon.js";
 
 const skillOperationSchema = z.object({
-  id: z.enum(["main-index", "material-answer"]),
+  id: z.literal("main-index"),
   consumes: z.string().min(1),
   produces: z.string().min(1),
   accepts_layer_fragments: z.array(indexerIdSchema),
@@ -138,9 +138,7 @@ export function buildIndexerSkillCapability(
         operation.accepts_layer_fragments ?? [],
         "accepted layer fragments",
       ),
-      supported_evidence_kinds: operation.id === "material-answer"
-        ? uniqueSorted(operation.supported_evidence_kinds, "evidence kinds")
-        : [],
+      supported_evidence_kinds: [],
     })).sort((left, right) => compareIndexerCanonicalText(left.id, right.id)),
     layer_fragments: (manifest.provides.layer_fragments ?? []).map((item) => ({
       kind: item.kind,
@@ -273,7 +271,7 @@ const compositionPlanPayloadSchema = z.object({
     capability: indexerSkillCapabilitySchema,
   }).strict()),
   operation_authorities: z.array(z.object({
-    operation: z.enum(["main-index", "material-answer"]),
+    operation: z.literal("main-index"),
     final_authority_layer_id: indexerIdSchema,
     accepts_layer_fragments: z.array(indexerIdSchema),
   }).strict()),

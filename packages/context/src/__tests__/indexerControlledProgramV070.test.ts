@@ -4,6 +4,7 @@ import {
   buildIndexerControlledProgramRequest,
   buildIndexerFixedDependencySet,
   buildIndexerInspectorRequest,
+  buildIndexerInspectorWorksetViewSource,
   buildIndexerMainRunRequest,
   buildIndexerMainWorkset,
   buildIndexerParserFactView,
@@ -15,6 +16,7 @@ import {
   authorizeIndexerProgramExecution,
   composeIndexerLayerInput,
   indexerEvidenceAdapterFileRef,
+  indexerEvidenceAdapterFactRef,
   indexerEvidenceAdapterOutputDigest,
   indexerPartitionPlanCanonicalHash,
   indexerPartitionStrategySetDigest,
@@ -76,7 +78,7 @@ function manifest(): IndexerProviderManifest {
       profiles: ["component-library"],
       operations: [{
         id: "main-index",
-        consumes: "context.indexer.main-workset/v1",
+        consumes: "context.indexer.main-workset/v2",
         produces: "context.indexer.main-result/v1",
       }],
     },
@@ -192,7 +194,7 @@ function partitionRequest(customizationFingerprint: string | null = null) {
     profile_contract_digest: digest("6"),
     subject_key_schema_digest: digest("7"),
     source_scope_digest: digest("8"),
-    parser_contract_digest: digest("9"),
+    source_binding_digest: digest("9"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("a"),
@@ -236,7 +238,7 @@ function partitionRequest(customizationFingerprint: string | null = null) {
       final_authority: authority,
       run_environment: buildIndexerRunEnvironment({
         source_snapshot_digest: digest("1"),
-        parser_dependency_fingerprint: digest("2"),
+        source_dependency_fingerprint: workset.source_binding_digest,
         source_role: "authoritative-source",
         source_precedence_digest: digest("3"),
         metric_set_digest: digest("4"),
@@ -300,7 +302,7 @@ function activationResult(
   return { ...base, result_digest: indexerProtocolDigest(base) };
 }
 
-function parserFactView() {
+function parserFactView(factPayload?: Record<string, string>) {
   const scope = {
     source_ref: SOURCE_REF,
     module_refs: [MODULE_REF],
@@ -329,7 +331,22 @@ function parserFactView() {
       role: "primary-owner",
       coverage_tier: "ast-catalog",
       disposition: "analyzed",
-      facts: [],
+      facts: factPayload === undefined ? [] : (() => {
+        const locator = {
+          source_ref: SOURCE_REF,
+          module_ref: MODULE_REF,
+          normalized_path: "src/index.ts",
+          qualified_item_path: "src/index.ts#component-library",
+          signature_digest: digest("5"),
+        };
+        return [{
+          fact_ref: indexerEvidenceAdapterFactRef({ ...locator, kind: "config-value" }),
+          kind: "config-value",
+          locator,
+          payload_digest: indexerProtocolDigest(factPayload),
+          denominator: "none" as const,
+        }];
+      })(),
     }],
     diagnostics: [],
     toolchain: [{
@@ -346,7 +363,10 @@ function parserFactView() {
   const result = { ...base, output_digest: indexerEvidenceAdapterOutputDigest(base) };
   return buildIndexerParserFactView({
     adapter_results: [result],
-    fact_payloads: [],
+    fact_payloads: factPayload === undefined ? [] : [{
+      fact_ref: result.files[0]!.facts[0]!.fact_ref,
+      payload: factPayload,
+    }],
     inventory_digest: digest("4"),
   });
 }
@@ -404,6 +424,7 @@ function inspectorResult(
     unsupported_file_refs: [],
     diagnostic_codes: [],
     evidence,
+    fact_payloads: [],
   };
   return { ...base, result_digest: indexerProtocolDigest(base) };
 }
@@ -610,6 +631,7 @@ describe("controlled Indexer program and structured tools", () => {
     const request = buildIndexerInspectorRequest({
       ...CONTROL,
       input_view: parserFactView(),
+      active_profiles: [{ id: "component-library", variants: {} }],
     });
     const result = inspectorResult(request);
     expect(validateIndexerInspectorResult({ request, result }).evidence).toEqual(result.evidence);
@@ -623,6 +645,7 @@ describe("controlled Indexer program and structured tools", () => {
       unsupported_file_refs: owner.unsupported_file_refs,
       diagnostic_codes: owner.diagnostic_codes,
       evidence: owner.evidence,
+      fact_payloads: owner.fact_payloads,
     });
     expect(() => validateIndexerInspectorResult({ request, result: owner })).toThrow(
       /cannot own baseline inventory/,
@@ -641,6 +664,7 @@ describe("controlled Indexer program and structured tools", () => {
       unsupported_file_refs: fakeAst.unsupported_file_refs,
       diagnostic_codes: fakeAst.diagnostic_codes,
       evidence: fakeAst.evidence,
+      fact_payloads: fakeAst.fact_payloads,
     });
     expect(() => validateIndexerInspectorResult({ request, result: fakeAst })).toThrow(
       /cannot own baseline inventory/,
@@ -649,5 +673,91 @@ describe("controlled Indexer program and structured tools", () => {
     const stale = inspectorResult(request);
     stale.evidence.input_digest = digest("7");
     expect(() => validateIndexerInspectorResult({ request, result: stale })).toThrow();
+  });
+
+  test("projects validated inspector values through the shared workset View and rejects variant drift", () => {
+    const inputView = parserFactView({ framework: "sample", mode: "library" });
+    const request = buildIndexerInspectorRequest({
+      ...CONTROL,
+      input_view: inputView,
+      active_profiles: [{ id: "component-library", variants: {} }],
+    });
+    const sourceFactRef = inputView.files[0]!.facts[0]!.fact_ref;
+    const payload = {
+      profile: "component-library",
+      profile_variants: {},
+      source_fact_refs: [sourceFactRef],
+      template_variables: { mode: "library" },
+      status: "available" as const,
+    };
+    const locator = {
+      source_ref: SOURCE_REF,
+      module_ref: MODULE_REF,
+      normalized_path: "src/index.ts",
+      qualified_item_path: "src/index.ts#provider-profile:component-library",
+      signature_digest: indexerProtocolDigest(payload),
+    };
+    const enrichmentFact = {
+      fact_ref: indexerEvidenceAdapterFactRef({
+        ...locator,
+        kind: "sample-provider-profile",
+      }),
+      kind: "sample-provider-profile",
+      locator,
+      payload_digest: indexerProtocolDigest(payload),
+      denominator: "none" as const,
+    };
+    const evidence = inspectorEvidence(request);
+    evidence.files[0]!.facts = [enrichmentFact];
+    const evidencePayload = { ...evidence };
+    Reflect.deleteProperty(evidencePayload, "output_digest");
+    evidence.output_digest = indexerEvidenceAdapterOutputDigest(evidencePayload);
+    const result = inspectorResult(request, evidence);
+    result.fact_payloads = [{ fact_ref: enrichmentFact.fact_ref, payload }];
+    result.result_digest = indexerProtocolDigest({
+      protocol: result.protocol,
+      request_digest: result.request_digest,
+      capabilities: result.capabilities,
+      analyzed_file_refs: result.analyzed_file_refs,
+      unsupported_file_refs: result.unsupported_file_refs,
+      diagnostic_codes: result.diagnostic_codes,
+      evidence: result.evidence,
+      fact_payloads: result.fact_payloads,
+    });
+    const runRequest = partitionRequest().request;
+    const source = buildIndexerInspectorWorksetViewSource({
+      request: runRequest,
+      inspector_request: request,
+      inspector_result: result,
+    });
+    expect(source.projection_kind).toBe("provider-enrichment");
+    expect(source.items[0]).toMatchObject({
+      ref: enrichmentFact.fact_ref,
+      category: "provider-enrichment",
+      value: payload,
+    });
+
+    result.fact_payloads[0]!.payload.profile = "other-profile";
+    result.evidence.files[0]!.facts[0]!.payload_digest = indexerProtocolDigest(
+      result.fact_payloads[0]!.payload,
+    );
+    const driftedEvidencePayload = { ...result.evidence };
+    Reflect.deleteProperty(driftedEvidencePayload, "output_digest");
+    result.evidence.output_digest = indexerEvidenceAdapterOutputDigest(
+      driftedEvidencePayload,
+    );
+    result.result_digest = indexerProtocolDigest({
+      protocol: result.protocol,
+      request_digest: result.request_digest,
+      capabilities: result.capabilities,
+      analyzed_file_refs: result.analyzed_file_refs,
+      unsupported_file_refs: result.unsupported_file_refs,
+      diagnostic_codes: result.diagnostic_codes,
+      evidence: result.evidence,
+      fact_payloads: result.fact_payloads,
+    });
+    expect(() => validateIndexerInspectorResult({ request, result })).toThrow(
+      /inactive profile/,
+    );
   });
 });

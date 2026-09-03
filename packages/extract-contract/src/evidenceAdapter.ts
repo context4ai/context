@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseContractSources } from "./contractParser.js";
@@ -135,4 +137,13 @@ export function contractSourcesToEvidenceAdapterResult(
       output_digest: indexerEvidenceAdapterProtocolDigest(documents),
     }],
   });
+}
+
+export function contractSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: ContractEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    contractSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

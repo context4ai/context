@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/case-studies/agent-graph-workflow.md) · [Interactive replay](https://context4ai.github.io/context/case-studies/workflow/?lang=en)
 
-Context is a knowledge-management tool that turns code repositories and documents into reviewed, attributable knowledge packages. Its lifecycle is long enough to need explicit routing: sources must be scoped and captured, code and prose follow different production paths, human gates may pause the run, and approved knowledge must be closed, verified, and built.
+Context is a knowledge-management tool that turns code repositories and documents into reviewed knowledge packages. Its lifecycle is long enough to need explicit routing: sources must be scoped and captured, one Indexer lifecycle must turn every authorized input into a current Candidate batch, human gates may pause the run, and approved knowledge must be closed, verified, and built.
 
 Context uses Agent Graph as its work-contract layer. Agent Graph does not extract code, interpret documents, or approve knowledge. Context remains the host: it observes workspace facts, executes lifecycle actions, enforces authority, and produces evidence. Agent Graph evaluates those facts and selects the next legal Route.
 
@@ -25,8 +25,8 @@ This prevents every invocation from loading the entire knowledge lifecycle into 
 The complete integration is public under [`context-workflow/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow). It is a concrete example of a thin Skill backed by a larger, independently testable work contract:
 
 - [`provider.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/provider.yaml) binds the `workspace` Graph, code catalog, Actions, Resources, and entrypoint.
-- [`graphs/workspace.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/workspace.yaml) is the static lifecycle: 32 Action, Gate, and terminal nodes plus the legal transitions between them.
-- [`actions/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/actions) contains 25 executable contracts. An Action describes the host command, effect, authority boundary, and expected outcome; it does not carry the long-form manual.
+- [`graphs/workspace.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/workspace.yaml) is the static top-level lifecycle. Its `run-indexer-lifecycle` Action hands indexing to the single [`indexer` Graph](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/indexer.yaml), then returns only when the current Candidate batch exists or a real Gate blocks progress.
+- [`actions/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/actions) contains executable contracts. An Action describes the runner, host command or handler, effect, authority boundary, and expected outcome; it does not carry the long-form manual.
 - [`resources/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/resources) contains independently addressable workflow guidance. Procedures explain the current task, dialogue files explain a human decision, views materialize live workspace facts, semantic references guide judgment, diagnostics explain failures, and manuals document stable APIs.
 - [`codes.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/codes.yaml) gives Route and diagnostic codes stable meaning without putting paragraphs into routine machine output.
 - [`tests/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/tests) checks route selection from facts without running an Agent or model.
@@ -54,18 +54,18 @@ This makes interruption, retry, and a new Agent turn converge from observable st
 
 The integration keeps its Graph nodes, human and authority Gates, Action descriptors, addressable resources, and route tests in the published workflow directory. The replay's **Workspace graph** control visualizes this static contract; each replay step links its selected Action and Resources back to the source files above. Keeping the case study beside the workflow avoids copying change-prone inventory counts into a separate repository.
 
-## One graph, two knowledge paths
+## One workspace route, one Indexer lifecycle
 
-Code and prose share a workspace but do not pretend to be the same workflow:
+Code, Markdown, extension fragments, and tool snapshots share one production path:
 
 1. Source facts establish the permitted code modules and documents.
 2. Document capture loops until every declared source has an auditable snapshot.
-3. Code extraction loops by module, then pauses at a code-candidate review Gate.
-4. Prose alignment confirms evidence-backed page structures before compilation.
-5. Prose compilation loops by confirmed target, then presents one complete review batch.
-6. Deterministic close, verification, and build produce the consumer package.
+3. `run-indexer-lifecycle` follows the Indexer Graph through requirement confirmation, Provider selection, authorized worksets, partitioned authoring, reconciliation, layout, and Candidate compilation.
+4. Code and document material converge into one current Candidate batch. Optional structure preview helps a person inspect directories and outlines; it is not a second authoring protocol or a second Review.
+5. One final content Review admits that batch into approved knowledge.
+6. Deterministic close, verification, build, and final runtime-event delivery produce the consumer package and complete the current scope.
 
-Repeated sources do not require repeated graph definitions. The graph contains stable states such as “a capture target remains” or “a confirmed structure remains uncompiled.” Runtime Facts identify which source or module is current. This keeps the work graph static while allowing batches to vary by project and run.
+Repeated sources and Indexer partitions do not require repeated top-level graph definitions. The workspace Graph contains stable states such as “a capture target remains” and “the Indexer lifecycle is not current.” Runtime Facts and the nested Indexer Graph identify the current Provider workset and legal substep. This keeps the public route stable while allowing registries, Providers, and batch sizes to vary by project and run.
 
 ## Context managed mode maps to delegated Gates
 
@@ -83,7 +83,7 @@ When Context debug mode is enabled, the host records CLI invocation boundaries a
 - which reason code justified the transition;
 - how the final package outcome was reached.
 
-The [interactive case-study replay](https://context4ai.github.io/context/case-studies/workflow/?lang=en) is a sanitized projection of a real run. Route order, repeated evaluations, statuses, reason codes, and relative timing are preserved. Source content, local paths, credentials, opaque IDs, and organization-specific names are excluded.
+The [interactive case-study replay](https://context4ai.github.io/context/case-studies/workflow/?lang=en) is normalized from a sanitized Context recording to the current workspace contract. Retired extraction, alignment, and prose-compilation routes are collapsed into the sole `run-indexer-lifecycle` Route. The replay keeps the comparable route order, statuses, and relative timing while excluding source content, local paths, credentials, opaque IDs, and organization-specific names.
 
 The recording is more than a presentation layer. Route traces expose inefficient loops, repeated resource reads, incomplete recovery paths, and misleading status priorities. Those observations become deterministic route tests and graph changes, closing the Graph Engineering feedback loop.
 

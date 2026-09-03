@@ -7,7 +7,6 @@ import { registerContextWorkflowResourceCommands } from "./commands/resourceComm
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentOptimizationCommands } from "./commands/documentOptimizationCommands.js";
-import { registerCodeIndexAuditReviewCommand } from "./commands/codeIndexAuditCommands.js";
 import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
@@ -28,7 +27,6 @@ import {
   runReviewListCommand,
   runReviewMaintainCommand,
   runReviewMarkCommand,
-  runReviewReconcileIdentitiesCommand,
   runReviewRePinCommand,
 } from "./project/review.js";
 import { contextWorkflowAuthorities } from "./project/workflow/workflowFacts.js";
@@ -47,8 +45,6 @@ import {
 } from "./registerProjectLifecycleCommands.js";
 import { registerPluginCommands } from "./registerPluginCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
-import { migrateLegacyCodeIndexIfRequired } from "./project/codeIndexMigration.js";
-import { findContextProjectRoot } from "./project/workspace.js";
 
 const TOP_LEVEL_COMMANDS = new Set([
   "entry",
@@ -72,14 +68,6 @@ const TOP_LEVEL_COMMANDS = new Set([
   "logs",
   "help",
 ]);
-
-const DIRECT_CODE_INDEX_MIGRATION_COMMANDS = new Set(["review", "close", "verify", "build", "run"]);
-
-function topLevelActionName(root: Command, action: Command): string | undefined {
-  let current: Command | null = action;
-  while (current.parent !== null && current.parent !== root) current = current.parent;
-  return current.parent === root ? current.name() : undefined;
-}
 
 function inferErrorCategory(message: string): string {
   const lower = message.toLowerCase();
@@ -237,7 +225,7 @@ export function createCliProgram(): Command {
       new Option("--workflow-resource-receipts <json-or-@file>")
         .hideHelp(),
     );
-  program.hook("preAction", async (rootCommand, actionCommand) => {
+  program.hook("preAction", async (rootCommand) => {
     const options = rootCommand.opts() as Record<string, unknown>;
     if (typeof options.workflowRevision === "string") {
       const authorities = contextWorkflowAuthorities({
@@ -252,12 +240,6 @@ export function createCliProgram(): Command {
       });
       return;
     }
-    const commandName = topLevelActionName(rootCommand, actionCommand);
-    if (commandName === undefined || !DIRECT_CODE_INDEX_MIGRATION_COMMANDS.has(commandName)) return;
-    const actionOptions = actionCommand.opts() as Record<string, unknown>;
-    if (commandName === "run" && actionOptions.managed === true) return;
-    const project = findContextProjectRoot(process.cwd());
-    if (project !== null) await migrateLegacyCodeIndexIfRequired(project.projectRoot);
   });
   const baseHelpInformation = program.helpInformation.bind(program);
   program.helpInformation = () => `${headerHelpText()}${baseHelpInformation()}${quickstartHelpText()}`;
@@ -280,8 +262,6 @@ export function createCliProgram(): Command {
   const review = program
     .command("review")
     .description("Review draft project candidates and apply approval decisions");
-
-  registerCodeIndexAuditReviewCommand(review);
 
   review
     .command("html [collection]")
@@ -338,26 +318,6 @@ export function createCliProgram(): Command {
       await runReviewApplyCommand({
         cwd: process.cwd(),
         payloadInput,
-        format: options.format === "json" ? "json" : "text",
-      });
-    });
-
-  review
-    .command("reconcile-identities")
-    .description("Coordinate approved path identity conflicts before Review")
-    .requiredOption("--source <source-key>", "source-bound structure whose approved path identities must be preserved")
-    .requiredOption("--strategy <strategy>", "identity strategy: preserve-approved")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      await runReviewReconcileIdentitiesCommand({
-        cwd: process.cwd(),
-        source: String(options.source),
-        strategy: String(options.strategy),
         format: options.format === "json" ? "json" : "text",
       });
     });

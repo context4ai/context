@@ -134,10 +134,25 @@ function proposalFragment(
       proposals: [{
         composer_ref: request.composer_ref,
         target_node_ref: NODE_REF,
-        artifact_kind: "example",
-        artifact_key: "primary-example",
-        artifact_policy_variant: "standard",
-        variables: { content: variableValue },
+        artifact: {
+          artifact_id: "primary-example",
+          artifact_kind: "example",
+          artifact_policy_variant: "standard",
+          representation: "sections",
+          sections: [{
+            section_key: "example",
+            owner_indexer_id: "sample-indexer",
+            document_kind: "guide",
+            reader_goal: "use-example",
+            artifact_kind: "example",
+            blocks: [{
+              block_id: "example",
+              layer: "semantic-prose",
+              markdown: variableValue,
+              evidence_refs: ["evidence:component-source"],
+            }],
+          }],
+        },
         evidence_refs: [{
           ref: "evidence:component-source",
           kind: "code",

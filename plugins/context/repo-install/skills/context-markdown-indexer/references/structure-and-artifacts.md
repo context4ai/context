@@ -32,6 +32,12 @@ or a long table. Do not create thin Artifacts to improve counts. If material has
 an independent subject rather than merely a separate reader page, use the
 workset's target-resolution choices; never invent a Node identity from a title.
 
+Do not collapse a substantial captured document into a page that only lists its
+headings or says the source should be consulted. Preserve supported procedures,
+API tables, examples, constraints, compatibility notes, and decisions inside
+the selected reader Artifact; remove only navigation chrome, conversion noise,
+duplicates, and content with an explicit omission disposition.
+
 Within one Artifact, every Section must use that Artifact's `artifact_kind`.
 Start by grouping only Sections with the same exact
 `document_kind + reader_goal + artifact_kind` intent. Different intents may be

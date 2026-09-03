@@ -62,6 +62,11 @@ alphabetic batches. Do not create one page per heading/member or inflate page
 count to satisfy a metric. The CLI owns Artifact-policy eligibility, physical
 fan-out audit, layout actualization and the final Candidate compile.
 
+The first actual Section of each reader Artifact begins with one concise,
+source-backed level-one heading. Context uses that heading as the outline and
+Candidate Review display title. It never participates in SubjectKey derivation
+or ownership, and later Sections in the same Artifact do not repeat it.
+
 Each Section carries exact positive and negative dependency refs. Incremental
 impact is Section/Artifact-local: a source membership, question denominator,
 candidate pool, evidence span or run-envelope change invalidates only the
@@ -77,24 +82,18 @@ hard metrics. Deterministic blocks render only registered facts; semantic prose
 must cite consumed evidence. Placeholders, speculation, fabricated transitions
 and “content unavailable” pages are invalid even when the structure looks rich.
 
-## Material questions and answers
+## Missing material
 
 When current material cannot answer a required canonical question, return the
 exact material-question disposition for the supplied owner cell, question
 contract and Subject target. Do not invent a new question contract or landing.
-Context stores the retained `material_gap_ledger`, derives the
-MaterialQuestionWorkset and schedules a separate `material-answer` operation.
+Context retains the unresolved set only as local runtime recovery state.
 
-A material-answer Result contains only the question revision and source/span/
-content-digest claims allowed by the workset. It does not return reader prose,
-future Artifact/Section identity or self-authored EvidenceItem refs. Context
-canonicalizes evidence, reviews the answer binding, derives the planned answer
-and actualizes it into an approved landing. Stale source, Provider, question,
-binding or landing returns the ledger item to unresolved atomically.
-
-The ledger, answer body, answer provenance and revision scratch pages do not
-enter reader Markdown or `dist`. A blocking gap closes only through current
-evidence or an explicit non-delegable requirement change.
+Capture the missing Markdown or other source normally, then rerun `main-index`.
+The new Result updates the same knowledge Candidate and enters the same final
+content Review. There is no answer-only operation or evidence-specific Review.
+A blocking gap closes only through current source or an explicit non-delegable
+requirement change.
 
 ## Markdown author fixture checklist
 
@@ -109,7 +108,7 @@ Release fixtures should cover:
   move in both directions;
 - protected values, links, images/assets and source-span fidelity;
 - editorial positives and placeholder/speculation/unsupported negatives;
-- material-answer approval, stale/rebind/deletion recovery and no-output-leak;
+- material-gap runtime recovery, main-index retry and no-output-leak;
 - Section-local incremental invalidation, new membership/denominator/candidate
   pool changes and unaffected Section reuse.
 

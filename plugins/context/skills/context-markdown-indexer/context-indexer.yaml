@@ -1,6 +1,6 @@
 protocol: context.indexer.provider/v1
 id: context-markdown-indexer
-version: 1.0.0
+version: 1.1.0
 domains: [markdown]
 
 activation:
@@ -34,16 +34,28 @@ provides:
     - test-validation
     - release-migration-guide
     - documentation-site
+  partition_strategies:
+    - id: reader-subject
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - public-api-reference
+        - runbook
+        - faq-support
+        - standard-policy
+        - decision-record
+        - incident-review
+        - test-validation
+        - release-migration-guide
+        - documentation-site
+      priority: 100
   operations:
     - id: main-index
-      consumes: context.indexer.main-workset/v1
+      consumes: context.indexer.main-workset/v2
       produces: context.indexer.main-result/v1
       accepts_layer_fragments: [fact-enrichment, template-variables]
-    - id: material-answer
-      consumes: context.indexer.material-question-workset/v1
-      produces: context.indexer.material-answer-result/v1
-      supported_evidence_kinds: [contract, configuration, documentation, runbook, decision-record, test-result, runtime-observation, tool-snapshot]
-      accepts_layer_fragments: [fact-enrichment]
   source_roles: [authoritative-document, supporting-document, operational-document, decision-record]
   logical_units:
     - id: reader-subject

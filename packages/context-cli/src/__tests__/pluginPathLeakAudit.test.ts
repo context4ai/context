@@ -42,6 +42,7 @@ const SOURCE_PATH_FIELD_ALLOWED_FIELDS = new Set([
   "manifestFilePath", "module_path", "modulePath", "nextHeadingPath", "outputPath", "packageJsonPath", "packagePath", "patchPath", "planPath", "pluginPath", "preparePath",
   "previousHeadingPath", "rawBlocksByFile", "rawByPath", "rawFile", "rawPath", "relPath", "repo_root_path", "repoPath", "reviewPath", "root", "savePath", "scanFile", "search_path", "settingsPath",
   "node_ref_is_identity_not_path", "snapshot_dir", "snapshotFile", "snapshotPathBySourcePath", "source_manifest_path", "sourceFile", "sourceFilePath", "sourcePath", "sourcesFile", "stderrPath", "stdoutPath", "sub_path", "targetAbsPath", "target_href", "targetPath", "templatesDir",
+  "qualified_item_path",
   "tmpPath", "workspace_root", "workspaceDir", "workspaceRoot",
 ]);
 const SOURCE_AUDITED_PATH_FIELDS = PATH_FIELD_INVENTORY.map((entry) => entry.field)

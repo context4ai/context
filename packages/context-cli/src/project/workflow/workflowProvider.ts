@@ -34,7 +34,6 @@ import {
   createContextWorkflowFacts,
 } from "./workflowFacts.js";
 import { planForResolvedCommandPlan } from "./workflowHostPlans.js";
-import { currentSourceBodyResources } from "./workflowEvidenceResources.js";
 
 let providerPromise: Promise<LoadedProvider> | undefined;
 
@@ -89,15 +88,6 @@ function rootDiagnostics(
       message: observation.stateDiagnostics[0] ??
         "Context could not establish a valid workspace state.",
       count: observation.stateDiagnostics.length,
-    });
-  }
-  if (observation.activeStructures.state === "invalid") {
-    diagnostics.push({
-      code: "diagnostic.structure-snapshot-invalid",
-      severity: "error",
-      message: observation.activeStructures.diagnostics[0] ??
-        "An active structure snapshot is invalid.",
-      count: observation.activeStructures.diagnostics.length,
     });
   }
   if (observation.projectionRefreshIssues > 0) {
@@ -359,59 +349,8 @@ function projectActionResources(
   };
 }
 
-function projectStructureBatch(input: {
-  node: string;
-  revision: string;
-  authorities: readonly ContextWorkflowAuthority[];
-  observation: ContextWorkflowObservation;
-  inputSchema: ResourceLocation | undefined;
-  resourceReceiptsReference?: string;
-}): ContextResolvedWorkflowRoute["batch"] | undefined {
-  if (
-    input.node !== "align-next" ||
-    input.inputSchema === undefined ||
-    input.observation.pendingStructureTargets.length <= 1 ||
-    input.observation.pendingStructureTargets.some((target) => target.configurationGaps.length > 0)
-  ) {
-    return undefined;
-  }
-  const managedAuthorities = contextWorkflowAuthorities({ managed: true });
-  const managed = managedAuthorities.every((authority) => input.authorities.includes(authority));
-  return {
-    kind: "prose-structure",
-    schema: "context.prose.structure-batch.v1",
-    input_schema: projectWorkflowResourceLocation(
-      input.inputSchema,
-      input.revision,
-      input.authorities,
-      input.resourceReceiptsReference,
-    ),
-    input: ".tmp/agent-payloads/prose-structure-batch.yaml",
-    targets: input.observation.pendingStructureTargets.map((target) => ({
-      phase_id: target.alignPhaseId,
-      source_key: target.sourceKey,
-      collection: target.collection,
-      input: target.payloadTarget,
-    })),
-    validate: bindCommandToRevision({
-      command: "context run --batch-input .tmp/agent-payloads/prose-structure-batch.yaml --validate --format json",
-      effect: "read",
-      availability: "immediate",
-      managed_execution: "agent-required",
-    }, input.revision, input.authorities, input.resourceReceiptsReference),
-    stage: bindCommandToRevision({
-      command: `context run --batch-input .tmp/agent-payloads/prose-structure-batch.yaml --stage${managed ? " --managed" : ""} --format json`,
-      effect: "write",
-      availability: "immediate",
-      managed_execution: "agent-required",
-    }, input.revision, input.authorities, input.resourceReceiptsReference),
-  };
-}
-
 export function projectWorkflowRouteAction(input: {
   action: ContextWorkflowRouteActionSource | undefined;
-  node: string;
-  hasStructureBatch: boolean;
   revision: string;
   authorities: readonly ContextWorkflowAuthority[];
   resourceReceiptsReference?: string;
@@ -423,9 +362,6 @@ export function projectWorkflowRouteAction(input: {
     input.authorities,
     input.resourceReceiptsReference,
   );
-  if (input.node === "align-next" && !input.hasStructureBatch) {
-    delete resources.input_schema;
-  }
   return {
     id: input.action.id,
     runner: input.action.runner,
@@ -535,14 +471,6 @@ async function resolveContextRoute(
       resourceReceiptsReference,
     )
   );
-  const structureBatch = projectStructureBatch({
-    node: route.node,
-    revision: route.revision,
-    authorities,
-    observation,
-    inputSchema: route.action?.inputSchema,
-    ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
-  });
   if (
     route.node === "authorize-document-capture" &&
     route.availability === "requires-user" &&
@@ -565,17 +493,7 @@ async function resolveContextRoute(
       resourceReceiptsReference,
     )
   );
-  const sourceBodyResources = await currentSourceBodyResources({
-    node: route.node,
-    observation,
-    ...(resourceReceipts === undefined
-      ? {}
-      : { receipts: resourceReceipts }),
-  });
-  const projectedRequiredResources = [
-    ...requiredResources,
-    ...sourceBodyResources,
-  ];
+  const projectedRequiredResources = requiredResources;
   const directReadCount = projectedRequiredResources.filter((resource) =>
     resource.read_state === "read-required" &&
     resource.path !== undefined &&
@@ -583,8 +501,6 @@ async function resolveContextRoute(
   ).length;
   const projectedAction = projectWorkflowRouteAction({
     action: route.action,
-    node: route.node,
-    hasStructureBatch: structureBatch !== undefined,
     revision: route.revision,
     authorities,
     ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
@@ -601,7 +517,6 @@ async function resolveContextRoute(
     ...(projectedAction === undefined
       ? {}
       : { action: projectedAction }),
-    ...(structureBatch === undefined ? {} : { batch: structureBatch }),
     ...(hostPlan.configuration === undefined
       ? {}
       : { configuration: hostPlan.configuration }),

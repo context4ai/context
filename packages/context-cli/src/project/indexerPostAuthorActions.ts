@@ -3,10 +3,12 @@ import { join } from "node:path";
 import {
   DEFAULT_INDEXER_REGISTRY_PATH,
   indexerRegistryDigests,
+  materializeIndexerPrimaryResultViewFromArtifactResult,
   parseIndexerRegistry,
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
 } from "@c4a/context";
+import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import {
   acceptIndexerPostAuthorRunStore,
   composeIndexerPostAuthorEnvelopeStore,
@@ -64,9 +66,37 @@ export async function buildProjectIndexerPostAuthorWorksets(input: {
   const value = record(input.value, "post-author workset input");
   protocol(value, "context.indexer.post-author-workset-build-input/v1");
   await assertCurrentRequirement(input.projectRoot, value.requirement_set_digest);
-  const plan = planIndexerPostAuthorComposition(
-    value as unknown as Parameters<typeof planIndexerPostAuthorComposition>[0],
-  );
+  const acceptedRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+  const authorWorksetDigest = String(value.author_workset_digest ?? "");
+  const matches = acceptedRecords.filter((item) => {
+    const accepted = record(item.accepted_record, "accepted author record");
+    return accepted.workset_digest === authorWorksetDigest;
+  });
+  if (matches.length !== 1) {
+    throw new TypeError(
+      "post-author workset requires exactly one current accepted ArtifactResult",
+    );
+  }
+  const accepted = record(matches[0]!.accepted_record, "accepted author record");
+  const primaryView = materializeIndexerPrimaryResultViewFromArtifactResult({
+    artifact_result: matches[0]!.artifact_result,
+    primary_result_digest: String(accepted.result_digest ?? ""),
+    validator_contract_digest: String(value.validator_contract_digest ?? ""),
+  });
+  const plan = planIndexerPostAuthorComposition({
+    effective_composer_set: value.effective_composer_set as Parameters<
+      typeof planIndexerPostAuthorComposition
+    >[0]["effective_composer_set"],
+    author_workset_digest: authorWorksetDigest,
+    primary_result_digest: primaryView.primary_result_digest,
+    primary_facts: primaryView.facts,
+    primary_artifacts: primaryView.artifacts,
+    validator_contract_digest: String(value.validator_contract_digest ?? ""),
+    current_profile_binding_digest: String(value.current_profile_binding_digest ?? ""),
+    allowed_target_refs: Array.isArray(value.allowed_target_refs)
+      ? value.allowed_target_refs.map(String)
+      : [],
+  });
   const observed = await prepareIndexerPostAuthorRunStore({
     projectRoot: input.projectRoot,
     requirement_set_digest: String(value.requirement_set_digest ?? ""),

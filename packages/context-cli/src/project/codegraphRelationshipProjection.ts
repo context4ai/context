@@ -1,7 +1,7 @@
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { STRUCTURE_EDGE_TYPES } from "./proseAlignTypes.js";
+import { STRUCTURE_EDGE_TYPES } from "./structureEdgeTypes.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {

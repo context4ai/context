@@ -54,7 +54,7 @@ import {
 } from "./indexerWorksetRead.js";
 
 export const indexerMainRunRequestSchema = z.object({
-  protocol: z.literal("context.indexer.run-request/v1"),
+  protocol: z.literal("context.indexer.run-request/v2"),
   operation: z.literal("main-index"),
   workset: indexerMainWorksetSchema,
   composition_input: indexerLayerCompositionInputSchema,
@@ -107,7 +107,7 @@ export function buildIndexerMainRunRequest(input: {
     throw new TypeError("author main run cannot carry a partition strategy attempt");
   }
   const payload: Omit<IndexerMainRunRequest, "execution_request_digest"> = {
-    protocol: "context.indexer.run-request/v1",
+    protocol: "context.indexer.run-request/v2",
     operation: "main-index",
     workset,
     composition_input: compositionInput,
@@ -182,6 +182,10 @@ interface AuthorValidationContext {
   expected_subject_key: unknown;
   artifact_policy_eligibility: unknown;
   allowed_source_roles: readonly string[];
+  authorized_evidence_targets?: readonly {
+    source_ref: string;
+    module_refs: readonly string[];
+  }[];
   source_identity_inventory?: unknown;
   authorized_declaration_carriers?: {
     catalog_refs?: readonly string[];
@@ -303,6 +307,12 @@ export function validateIndexerMainRunResult(input: {
       expected_subject_key: input.validation.expected_subject_key,
       artifact_policy_eligibility: input.validation.artifact_policy_eligibility,
       allowed_source_roles: input.validation.allowed_source_roles,
+      ...(input.validation.authorized_evidence_targets === undefined
+        ? {}
+        : {
+            authorized_evidence_targets:
+              input.validation.authorized_evidence_targets,
+          }),
       ...(input.validation.source_identity_inventory === undefined
         ? {}
         : { source_identity_inventory: input.validation.source_identity_inventory }),
@@ -323,6 +333,12 @@ export function validateIndexerMainRunResult(input: {
       workset: request.workset as IndexerMainAuthorWorkset,
       run_envelope: runEnvelope,
       dependency_view: input.validation.dependency_view,
+      ...(input.validation.authorized_evidence_targets === undefined
+        ? {}
+        : {
+            authorized_evidence_targets:
+              input.validation.authorized_evidence_targets,
+          }),
     });
   } else {
     throw new TypeError("main run Result stage union is inconsistent");

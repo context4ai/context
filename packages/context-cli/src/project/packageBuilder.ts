@@ -70,7 +70,6 @@ import {
 } from "./packageTemplateReview.js";
 import { projectDocumentOptimizedKnowledge } from "./documentOptimization.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
-import { packageCodeIndexAudit } from "./codeIndexAuditPackage.js";
 import {
   hydrateApprovedKnowledgeMarkdown,
   readApprovedKnowledgeMetadataIndex,
@@ -104,36 +103,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v18-local-code-index-audit";
-
-function packageAuditInventoryReference(report: Record<string, unknown> | undefined): {
-  reportDigest: string;
-  decision: string;
-  codePages: number;
-  signals: number;
-} | undefined {
-  if (report === undefined) return undefined;
-  const decision = report.decision;
-  const selection = report.package_selection;
-  return {
-    reportDigest: typeof report.report_digest === "string" ? report.report_digest : "unknown",
-    decision: decision !== null && typeof decision === "object" && !Array.isArray(decision) &&
-      typeof (decision as Record<string, unknown>).decision === "string"
-      ? (decision as Record<string, unknown>).decision as string
-      : "unknown",
-    codePages: selection !== null && typeof selection === "object" && !Array.isArray(selection) &&
-      typeof (selection as Record<string, unknown>).code_pages === "number"
-      ? (selection as Record<string, unknown>).code_pages as number
-      : 0,
-    signals: Array.isArray(report.signals) ? report.signals.length : 0,
-  };
-}
-
-function packageSelectsCodeIndex(selected: readonly ApprovedKnowledgeFile[]): boolean {
-  return selected.some((file) =>
-    file.relPath.startsWith("codeindex/") || file.relPath.startsWith("codegraph/")
-  );
-}
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v19-current-indexer";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -220,7 +190,6 @@ async function packageInputFingerprint(input: {
   selected: readonly ApprovedKnowledgeFile[];
   structure: KnowledgeStructureInfo;
   templateFiles: readonly TemplateFile[];
-  codeIndexAudit?: Record<string, unknown>;
 }): Promise<string> {
   const projectedAssets = await Promise.all(input.selected.map((file) =>
     projectPackageKnowledgeAssets({
@@ -263,7 +232,6 @@ async function packageInputFingerprint(input: {
     })),
     assets: [...assets].sort(([left], [right]) => left.localeCompare(right)),
     assetDelivery,
-    codeIndexAudit: input.codeIndexAudit ?? null,
     template: input.templateFiles.map((file) => ({
       path: file.relPath,
       content: file.content,
@@ -378,19 +346,12 @@ export async function collectPackageFreshness(
       selected,
       structure: await readKnowledgeStructure(projectRoot),
     });
-    const codeIndexAudit = await packageCodeIndexAudit({
-      projectRoot,
-      packageName: pkg.name,
-      selectedApprovedPaths: selected.map((file) => file.relPath),
-    });
-    const codeIndexAuditReference = packageAuditInventoryReference(codeIndexAudit);
     const buildInventory = packageBuildInventory({
       pkg,
       selected,
       structure,
       verifyEvidenceStatus: null,
       documentOptimization: optimized.status,
-      ...(codeIndexAuditReference === undefined ? {} : { codeIndexAudit: codeIndexAuditReference }),
     });
     validatePackageRenderPlan({
       pkg,
@@ -406,11 +367,8 @@ export async function collectPackageFreshness(
         knowledgeStructure: structure.parsed,
       }),
     });
-    const output = await packageOutputFingerprint(projectRoot, pkg);
-    if (output.files > 0) {
-      await validatePackageIndexLinks({ projectRoot, pkg });
-    }
     const builtManifest = await readPackageManifest(projectRoot, pkg);
+    const output = await packageOutputFingerprint(projectRoot, pkg);
     if (builtManifest === null && output.files === 0) {
       return { name: pkg.name, kind: packageKind(pkg), state: "missing", inputFiles: selected.length, outputFiles: 0 };
     }
@@ -420,11 +378,14 @@ export async function collectPackageFreshness(
       selected,
       structure,
       templateFiles,
-      ...(codeIndexAuditReference === undefined ? {} : { codeIndexAudit: codeIndexAuditReference }),
     });
-    const ready = optimized.status.current && builtManifest !== null &&
+    const inputIsCurrent = optimized.status.current && builtManifest !== null &&
       builtManifest.builderProtocol === PACKAGE_BUILDER_PROTOCOL_VERSION &&
-      builtManifest.fingerprint === currentFingerprint &&
+      builtManifest.fingerprint === currentFingerprint;
+    if (inputIsCurrent && output.files > 0) {
+      await validatePackageIndexLinks({ projectRoot, pkg });
+    }
+    const ready = inputIsCurrent && builtManifest !== null &&
       builtManifest.outputFingerprint === output.fingerprint &&
       builtManifest.outputFiles === output.files;
     return {
@@ -525,19 +486,12 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       selected,
       structure: await readKnowledgeStructure(projectRoot),
     });
-    const codeIndexAudit = await packageCodeIndexAudit({
-      projectRoot,
-      packageName: pkg.name,
-      selectedApprovedPaths: selected.map((file) => file.relPath),
-    });
-    const codeIndexAuditReference = packageAuditInventoryReference(codeIndexAudit);
     const buildInventory = packageBuildInventory({
       pkg,
       selected,
       structure,
       verifyEvidenceStatus,
       documentOptimization: optimized.status,
-      ...(codeIndexAuditReference === undefined ? {} : { codeIndexAudit: codeIndexAuditReference }),
     });
     const fingerprint = await packageInputFingerprint({
       projectRoot,
@@ -545,7 +499,6 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       selected,
       structure,
       templateFiles,
-      ...(codeIndexAuditReference === undefined ? {} : { codeIndexAudit: codeIndexAuditReference }),
     });
     const previousManifest = await readPackageManifest(projectRoot, pkg);
     const knowledgeGroups = knowledgeOutputGroups(pkg, selected);
@@ -565,14 +518,6 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       knowledgeStructure: structure.parsed,
     });
     validatePackageRenderPlan({ pkg, files: templateFiles, selected, vars });
-    if (packageSelectsCodeIndex(selected) && codeIndexAudit === undefined) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "package build requires an accepted current code-index Agent audit", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        reason_code: "package/code-index-audit-required",
-        package: pkg.name,
-        next: "Run context status --format json and follow route.extract.audit-required.",
-      });
-    }
     const assetProcessor = await resolvePackageImageProcessor(
       projectRoot,
       pkg.kind === "package.kb" ? pkg.assets : undefined,

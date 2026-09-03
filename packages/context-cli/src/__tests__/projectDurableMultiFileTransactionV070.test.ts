@@ -74,10 +74,6 @@ describe("durable multi-file transaction", () => {
       `after-target-fsync:${CUSTOM_PATH}`,
       `after-target-rename:${CUSTOM_PATH}`,
       `after-target-dir-fsync:${CUSTOM_PATH}`,
-      "after-progress-journal-write",
-      "after-progress-journal-fsync",
-      "after-progress-journal-rename",
-      "after-progress-journal-dir-fsync",
       "after-transaction-remove",
       "after-transaction-remove-dir-fsync",
     ];

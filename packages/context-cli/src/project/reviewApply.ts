@@ -1,53 +1,48 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
-  DOCUMENT_COMPILE_ACTION_SCHEMA_VERSION,
-  type CompileProsePhaseDefinition,
-  type DocumentSourceType,
+  indexerProtocolDigest,
+  type IndexerProjectFileTarget,
 } from "@c4a/context";
-import { parseSpanSourceRef } from "@c4a/extract";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { resolveProseSourceRef } from "./documentEvidenceIndex.js";
 import {
-  isReservedKnowledgeIndexPath,
   isSafeKnowledgeTargetPath,
   readCandidateRecords,
-  writeCandidateRecords,
+  candidateRecordsContent,
+  CANDIDATE_LEDGER_FILE,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { currentCompileStructureDigest } from "./proseCompileStructure.js";
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
-import { verbatimBodyMatchesSpanHash } from "./verifySourceRefs.js";
 import { withProjectWriteLock } from "./writeLock.js";
-import { isCodeIndexCollection } from "./codeIndexCollection.js";
-import {
-  projectKnowledgeAssets,
-  removeOrphanKnowledgeAssets,
-  type PreparedKnowledgeAsset,
-} from "./knowledgeAssets.js";
-import { renderApprovedCodegraphMarkdown } from "./reviewApplyCodegraph.js";
-import { renderApprovedProseMarkdown } from "./reviewApplyProse.js";
 import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
-import { assertProjectIndexerCandidateCurrent } from "./indexerCandidateCompileActions.js";
-import { readRejectedDecisions, writeRejectedDecisions } from "./reviewDecisions.js";
-import { assertProseCompileBatchReadyForReview } from "./proseCompileBatch.js";
-import { archiveActiveStructure, currentStructureSlotDigest } from "./proseStructureStore.js";
-export { cleanApprovedBody } from "./reviewApplyCodegraph.js";
+import {
+  assertProjectIndexerCandidateInCompileIndex,
+  loadProjectIndexerCandidateCompileIndex,
+  type ProjectIndexerCandidateCompileIndex,
+} from "./indexerCandidateCompileActions.js";
+import {
+  readRejectedDecisions,
+  rejectedDecisionsContent,
+  REVIEW_DECISIONS_FILE,
+} from "./reviewDecisions.js";
+import {
+  type DurableMultiFileFailureInjector,
+  recoverDurableMultiFileTransactions,
+  runDurableMultiFileTransaction,
+} from "./durableMultiFileTransaction.js";
+import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import {
   assertSafeEntityId,
+  buildApprovedPageViewRefIndex,
   candidateIdsHash,
   candidateSetHash,
   findApprovedPageForViewRef,
-  currentProseCandidateEvidence,
-  parseCanonicalProseRef,
   readReviewCandidateSnapshot,
-  removeCandidateSnapshot,
   type ApplyReviewDecisionsResult,
-  type CandidateSnapshot,
-  type ParsedCanonicalProseRef,
+  type ApprovedPageViewRefIndex,
   type ReviewDecision,
   type ReviewPayload,
   type ReviewStatus,
@@ -56,10 +51,9 @@ import {
 interface PreparedApprovedPage {
   id: string;
   relPath: string;
-  absPath: string;
+  existing?: string;
   content: string;
   changed: boolean;
-  assets: PreparedKnowledgeAsset[];
 }
 
 function existingTimestamp(markdown: string | undefined): string | undefined {
@@ -68,243 +62,39 @@ function existingTimestamp(markdown: string | undefined): string | undefined {
   return match?.[1];
 }
 
-function rerunCompileProseCommand(record: CandidateRecord): string {
-  const { sourceType, sourceName } = proseSourceInfo(record);
-  return `context run compile:${sourceType}:${sourceName}:${record.collection}`;
-}
-
-function isProseCandidate(record: CandidateRecord): boolean {
-  return record.candidate_type === "prose-align";
-}
-
-function proseSourceInfo(record: CandidateRecord): {
-  sourceType: DocumentSourceType;
-  sourceName: string;
-} {
-  const parsedProseRef = record.source_refs
-    .map((ref) => parseCanonicalProseRef(ref))
-    .find((parsed): parsed is ParsedCanonicalProseRef => parsed !== null);
-  return {
-    sourceType: record.source?.type ?? parsedProseRef?.sourceType ?? "file",
-    sourceName: record.source?.name ?? parsedProseRef?.sourceName ?? record.module,
-  };
-}
-
-function compilePhaseForCandidate(record: CandidateRecord): CompileProsePhaseDefinition {
-  const source = proseSourceInfo(record);
-  return {
-    kind: "phase.compile.prose",
-    id: `compile:${source.sourceType}:${source.sourceName}:${record.collection}`,
-    reads: [],
-    writes: [],
-    source: {
-      kind: "source.ref",
-      type: source.sourceType,
-      name: source.sourceName,
-      materializedAt: `sources/${source.sourceType}/${source.sourceName}`,
-    },
-    sourceType: source.sourceType,
-    collection: record.collection as CompileProsePhaseDefinition["collection"],
-    schemaVersion: DOCUMENT_COMPILE_ACTION_SCHEMA_VERSION,
-  };
-}
-
-async function assertProseCandidateCurrentStructure(input: {
-  projectRoot: string;
-  record: CandidateRecord;
-}): Promise<void> {
-  if (!isProseCandidate(input.record)) return;
-  if (input.record.structure_digest === undefined) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `prose-align candidate is not bound to a confirmed structure: ${input.record.candidate_id}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      candidate_id: input.record.candidate_id,
-      next: `Rerun ${rerunCompileProseCommand(input.record)} against the current confirmed structure before approving.`,
-    });
-  }
-  const source = proseSourceInfo(input.record);
-  const sourceKey = `${source.sourceType}:${source.sourceName}`;
-  let slotDigest = await currentStructureSlotDigest(input.projectRoot, sourceKey, input.record.collection);
-  if (slotDigest === undefined) {
-    await archiveActiveStructure(input.projectRoot);
-    slotDigest = await currentStructureSlotDigest(input.projectRoot, sourceKey, input.record.collection);
-  }
-  if (slotDigest === undefined) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `prose-align candidate structure snapshot is missing: ${input.record.candidate_id}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      candidate_id: input.record.candidate_id,
-      source: sourceKey,
-      collection: input.record.collection,
-      structure_digest: input.record.structure_digest,
-      next: `Rerun context run align:${source.sourceType}:${source.sourceName}:${input.record.collection}, confirm the structure, and retry Review. Reuse existing decisions only if the regenerated structure digest and candidate fingerprints are unchanged.`,
-    });
-  }
-  if (slotDigest !== input.record.structure_digest) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `prose-align candidate structure slot is stale: ${input.record.candidate_id}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      candidate_id: input.record.candidate_id,
-      source: sourceKey,
-      collection: input.record.collection,
-      expected_structure_digest: slotDigest,
-      actual_structure_digest: input.record.structure_digest,
-      next: `Rerun ${rerunCompileProseCommand(input.record)} against the current confirmed structure before approving.`,
-    });
-  }
-  const currentDigest = await currentCompileStructureDigest({
-    projectRoot: input.projectRoot,
-    phase: compilePhaseForCandidate(input.record),
-    structureDigest: input.record.structure_digest,
-  });
-  if (currentDigest !== input.record.structure_digest) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `prose-align candidate structure is stale: ${input.record.candidate_id}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      candidate_id: input.record.candidate_id,
-      expected_structure_digest: currentDigest,
-      actual_structure_digest: input.record.structure_digest,
-      next: `Rerun ${rerunCompileProseCommand(input.record)} against the current confirmed structure before approving.`,
-    });
-  }
-}
-
-function renderApprovedMarkdown(input: {
-  record: CandidateRecord;
-  snapshot: CandidateSnapshot;
-  timestamp: string;
-}): string {
-  if (input.record.candidate_type === "indexer-artifact") {
-    return renderApprovedIndexerMarkdown({
-      record: input.record,
-      timestamp: input.timestamp,
-    });
-  }
-  if (input.record.candidate_type === "prose-align") {
-    return renderApprovedProseMarkdown(input);
-  }
-  return renderApprovedCodegraphMarkdown(input);
-}
-
-function assertProseCandidateVerbatimHashes(record: CandidateRecord): void {
-  if (record.candidate_type !== "prose-align") return;
-  for (const section of record.sections ?? []) {
-    const mode = section.content_mode ?? "verbatim";
-    if (mode !== "verbatim") continue;
-    if (section.body === undefined) continue;
-    const parsed = parseSpanSourceRef(section.source_ref);
-    if (parsed === null || !verbatimBodyMatchesSpanHash(section.body, parsed.span_hash)) {
-      throw new ContextError(ExitCode.WorkspaceStateError, `verbatim candidate body does not match source_ref hash: ${record.candidate_id}#${section.id}`, {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        candidate_id: record.candidate_id,
-        section_id: section.id,
-        source_ref: section.source_ref,
-        next: `Rerun ${rerunCompileProseCommand(record)} so the CLI rematerializes verbatim section bodies from source evidence.`,
-      });
-    }
-  }
-}
-
-async function assertProseCandidateExactCurrentRefs(input: {
-  projectRoot: string;
-  record: CandidateRecord;
-}): Promise<void> {
-  if (input.record.candidate_type !== "prose-align") return;
-  const evidence = await currentProseCandidateEvidence(input.projectRoot, input.record);
-  if (evidence === undefined) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `candidate snapshot is missing or stale: ${input.record.candidate_id}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      candidate_id: input.record.candidate_id,
-      next: `Rerun ${rerunCompileProseCommand(input.record)} against the current snapshot.`,
-    });
-  }
-  const refsBySection = input.record.sections === undefined || input.record.sections.length === 0
-    ? [["candidate", input.record.source_refs] as const]
-    : input.record.sections.map((section) => [
-        section.id,
-        [...new Set([section.source_ref, ...(section.source_refs ?? [])])],
-      ] as const);
-  for (const [sectionId, refs] of refsBySection) {
-    if (refs.length === 0) {
-      throw new ContextError(ExitCode.WorkspaceStateError, `prose candidate section has no source_ref: ${input.record.candidate_id}#${sectionId}`, {
-        category: ErrorCategory.SchemaInvalid,
-        candidate_id: input.record.candidate_id,
-        section_id: sectionId,
-        next: `Rerun ${rerunCompileProseCommand(input.record)} so every section is bound to current source evidence.`,
-      });
-    }
-    for (const sourceRef of refs) {
-      if (parseCanonicalProseRef(sourceRef) === null) {
-        throw new ContextError(ExitCode.WorkspaceStateError, `unsupported prose candidate source_ref: ${sourceRef}`, {
-          category: ErrorCategory.SchemaInvalid,
-          candidate_id: input.record.candidate_id,
-          section_id: sectionId,
-          source_ref: sourceRef,
-          next: `Rerun ${rerunCompileProseCommand(input.record)} so the CLI rematerializes candidate evidence.`,
-        });
-      }
-      const resolved = await resolveProseSourceRef({
-        projectRoot: input.projectRoot,
-        index: evidence.indexResult.index,
-        sourceRef,
-        snapshotMarkdownCache: evidence.indexResult.snapshotMarkdownCache,
-      });
-      if (resolved === null || resolved.status !== "exact") {
-        throw new ContextError(ExitCode.WorkspaceStateError, `prose candidate source_ref is not exact against current snapshot: ${input.record.candidate_id}#${sectionId}`, {
-          category: ErrorCategory.WorkspaceStateInvalid,
-          candidate_id: input.record.candidate_id,
-          section_id: sectionId,
-          source_ref: sourceRef,
-          status: resolved?.status ?? "unresolved",
-          next: `Rerun ${rerunCompileProseCommand(input.record)} so the candidate is regenerated from current exact source evidence.`,
-        });
-      }
-    }
-  }
-}
-
 async function prepareApprovedPage(input: {
   projectRoot: string;
   record: CandidateRecord;
   now: string;
+  approvedPageIndex: ApprovedPageViewRefIndex;
+  indexerCompileIndex: ProjectIndexerCandidateCompileIndex;
 }): Promise<PreparedApprovedPage> {
-  if (input.record.candidate_type === "indexer-artifact") {
-    await assertProjectIndexerCandidateCurrent({
-      projectRoot: input.projectRoot,
-      record: input.record,
-    });
-  }
-  const reservedCodegraphIndex = input.record.candidate_type === "code-symbol" &&
-    isReservedKnowledgeIndexPath(input.record.path);
-  if (!isSafeKnowledgeTargetPath(input.record.collection, input.record.path) || reservedCodegraphIndex) {
+  assertProjectIndexerCandidateInCompileIndex({
+    index: input.indexerCompileIndex,
+    record: input.record,
+  });
+  if (!isSafeKnowledgeTargetPath(input.record.collection, input.record.path)) {
     throw new ContextError(ExitCode.WorkspaceStateError, `candidate path is not valid: ${input.record.path}`, {
       category: ErrorCategory.SchemaInvalid,
       candidate_id: input.record.candidate_id,
       path: input.record.path,
-      ...(reservedCodegraphIndex ? { reason_code: "candidate/reserved-index-path" } : {}),
-      next: isProseCandidate(input.record)
-        ? "Rerun compileProse from the confirmed structure."
-        : "Rerun the extract phase before applying approve.",
+      next: "Rerun the current Indexer Candidate compile before approval.",
     });
   }
-  const snapshot = await readReviewCandidateSnapshot(input.projectRoot, input.record);
-  if (snapshot === undefined) {
+  if (await readReviewCandidateSnapshot(input.projectRoot, input.record) === undefined) {
     throw new ContextError(ExitCode.WorkspaceStateError, `candidate snapshot is missing or stale: ${input.record.candidate_id}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       candidate_id: input.record.candidate_id,
-      next: isProseCandidate(input.record)
-        ? `Restore the staged committed document snapshot or rerun ${rerunCompileProseCommand(input.record)} against the current snapshot.`
-        : "Rerun the extract phase before applying approve.",
+      next: "Rerun the current Indexer Candidate compile before approval.",
     });
   }
-  await assertProseCandidateCurrentStructure({ projectRoot: input.projectRoot, record: input.record });
-  assertProseCandidateVerbatimHashes(input.record);
-  await assertProseCandidateExactCurrentRefs({ projectRoot: input.projectRoot, record: input.record });
-  let relPath: string;
-  if (
-    input.record.candidate_type !== "prose-align" &&
-    input.record.candidate_type !== "indexer-artifact"
-  ) {
-    assertSafeEntityId(input.record.node_ref);
-  }
-  relPath = join("knowledge", input.record.path);
-  const existingView = findApprovedPageForViewRef(input.projectRoot, input.record.view_ref);
+  assertSafeEntityId(input.record.node_ref);
+  assertSafeEntityId(input.record.view_ref);
+  const relPath = join("knowledge", input.record.path);
+  const existingView = findApprovedPageForViewRef(
+    input.record.view_ref,
+    input.approvedPageIndex,
+  );
   if (existingView !== undefined && existingView.relPath !== relPath) {
     throw new ContextError(ExitCode.WorkspaceStateError, `approved page already exists for view_ref at a different path: ${input.record.view_ref}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
@@ -318,7 +108,8 @@ async function prepareApprovedPage(input: {
   const absPath = join(input.projectRoot, relPath);
   const existing = existsSync(absPath) ? await readFile(absPath, "utf8") : undefined;
   if (existing !== undefined) {
-    const frontmatter = parseFrontmatterLoose(existing);
+    const frontmatter = input.approvedPageIndex.byRelPath.get(relPath)?.frontmatter ??
+      parseFrontmatterLoose(existing);
     const existingViewRef = typeof frontmatter.view_ref === "string" ? frontmatter.view_ref : undefined;
     const existingNodeRef = typeof frontmatter.node_ref === "string" ? frontmatter.node_ref : undefined;
     if (existingViewRef !== input.record.view_ref || existingNodeRef !== input.record.node_ref) {
@@ -334,67 +125,69 @@ async function prepareApprovedPage(input: {
       });
     }
   }
-  const stableTimestamp = existingTimestamp(existing) ?? input.now;
-  const stableContent = renderApprovedMarkdown({
+  const stableContent = renderApprovedIndexerMarkdown({
     record: input.record,
-    snapshot,
-    timestamp: stableTimestamp,
+    timestamp: existingTimestamp(existing) ?? input.now,
   });
-  const projectResources = async (content: string): Promise<{ content: string; assets: PreparedKnowledgeAsset[] }> => {
-    if (input.record.candidate_type !== "prose-align") return { content, assets: [] };
-    const evidence = await currentProseCandidateEvidence(input.projectRoot, input.record);
-    if (evidence === undefined) {
-      throw new ContextError(ExitCode.WorkspaceStateError, `candidate resource evidence is missing or stale: ${input.record.candidate_id}`, {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        candidate_id: input.record.candidate_id,
-        next: `Rerun ${rerunCompileProseCommand(input.record)} against the current source snapshot.`,
-      });
-    }
-    return projectKnowledgeAssets({
-      projectRoot: input.projectRoot,
-      pageRelPath: relPath,
-      content,
-      sourceMaterializedAt: evidence.indexResult.index.materialized_at,
-      documentPath: evidence.parsed.documentPath,
-      manifest: evidence.indexResult.manifest,
-    });
-  };
-  const stableProjection = await projectResources(stableContent);
-  if (existing === stableProjection.content) {
+  if (existing === stableContent) {
     return {
       id: input.record.candidate_id,
       relPath,
-      absPath,
-      content: stableProjection.content,
+      ...(existing === undefined ? {} : { existing }),
+      content: stableContent,
       changed: false,
-      assets: stableProjection.assets,
     };
   }
-  const nextContent = renderApprovedMarkdown({
-    record: input.record,
-    snapshot,
-    timestamp: input.now,
-  });
-  const nextProjection = await projectResources(nextContent);
   return {
     id: input.record.candidate_id,
     relPath,
-    absPath,
-    content: nextProjection.content,
+    ...(existing === undefined ? {} : { existing }),
+    content: renderApprovedIndexerMarkdown({
+      record: input.record,
+      timestamp: input.now,
+    }),
     changed: true,
-    assets: nextProjection.assets,
   };
 }
 
-async function writePreparedApprovedPage(page: PreparedApprovedPage): Promise<void> {
-  for (const asset of page.assets) {
-    await mkdir(dirname(asset.absPath), { recursive: true });
-    await writeFile(asset.absPath, asset.bytes);
+async function readProjectFileMaybe(
+  projectRoot: string,
+  relPath: string,
+): Promise<string | undefined> {
+  try {
+    return await readFile(join(projectRoot, relPath), "utf8");
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
   }
-  if (page.changed) {
-    await mkdir(dirname(page.absPath), { recursive: true });
-    await writeFile(page.absPath, page.content, "utf8");
+}
+
+function reviewFileTarget(input: {
+  path: string;
+  baseContent?: string | undefined;
+  targetContent?: string | undefined;
+}): IndexerProjectFileTarget | undefined {
+  if (input.baseContent === input.targetContent) return undefined;
+  if (input.targetContent === undefined) {
+    if (input.baseContent === undefined) return undefined;
+    return {
+      path: input.path,
+      operation: "delete",
+      base_digest: durableContentDigest(input.baseContent),
+      target_digest: null,
+    };
   }
+  return {
+    path: input.path,
+    operation: "write",
+    base_digest: input.baseContent === undefined
+      ? null
+      : durableContentDigest(input.baseContent),
+    target_digest: durableContentDigest(input.targetContent),
+    content: input.targetContent,
+  };
 }
 
 function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRecord[]): ReviewDecision[] {
@@ -493,35 +286,45 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
 export async function applyReviewDecisions(input: {
   projectRoot: string;
   payload: ReviewPayload;
+  inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<ApplyReviewDecisionsResult> {
   const now = new Date().toISOString();
   return withProjectWriteLock(input.projectRoot, "extract-candidates", async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const candidateLedgerBase = await readProjectFileMaybe(
+      input.projectRoot,
+      CANDIDATE_LEDGER_FILE,
+    );
+    const rejectedDecisionsBase = await readProjectFileMaybe(
+      input.projectRoot,
+      REVIEW_DECISIONS_FILE,
+    );
     const rows = await readCandidateRecords(input.projectRoot);
     const rejectedDecisions = await readRejectedDecisions(input.projectRoot);
-    const proseCollections = [...new Set(rows
-      .filter((row) =>
-        row.status === "draft" &&
-        row.candidate_type === "prose-align" &&
-        (input.payload.collection === undefined || row.collection === input.payload.collection)
-      )
-      .map((row) => row.collection))];
     const nextRows = [...rows];
     const decisions = expandReviewPayload(input.payload, rows);
-    await assertProseCompileBatchReadyForReview({
-      projectRoot: input.projectRoot,
-      collections: proseCollections,
-    });
+    const approvesAnyCandidate = decisions.some((decision) =>
+      decision.status === "approved"
+    );
+    const indexerCompileIndex = approvesAnyCandidate
+      ? await loadProjectIndexerCandidateCompileIndex(input.projectRoot)
+      : undefined;
+    const approvedPageIndex: ApprovedPageViewRefIndex = approvesAnyCandidate
+      ? await buildApprovedPageViewRefIndex(input.projectRoot)
+      : {
+          byViewRef: new Map(),
+          byRelPath: new Map(),
+          assetReferencesByRelPath: new Map(),
+        };
     const seenDecisionIds = new Set<string>();
     const seenApprovedIds = new Map<string, string>();
+    const seenApprovedPaths = new Map<string, string>();
     const pagesToWrite: PreparedApprovedPage[] = [];
-    const pagesToRemove: string[] = [];
-    const snapshotsToRemove = new Set<string>();
     const pages: string[] = [];
     let approved = 0;
     let rejected = 0;
     let unchanged = 0;
     let materialized = 0;
-    let removed = 0;
     let candidateFileUpdated = false;
     let decisionsUpdated = false;
 
@@ -553,6 +356,11 @@ export async function applyReviewDecisions(input: {
             next: "The durable rejection remains until the candidate fingerprint changes. Review the changed draft before approving it.",
           });
         }
+        if (indexerCompileIndex === undefined) throw new TypeError("Indexer Candidate compile index is missing");
+        assertProjectIndexerCandidateInCompileIndex({
+          index: indexerCompileIndex,
+          record: row,
+        });
         const approvedRef = row.view_ref;
         assertSafeEntityId(approvedRef);
         const previousCandidate = seenApprovedIds.get(approvedRef);
@@ -565,32 +373,30 @@ export async function applyReviewDecisions(input: {
           });
         }
         seenApprovedIds.set(approvedRef, row.candidate_id);
-        if (rejectedDecisions.delete(row.candidate_id)) decisionsUpdated = true;
-        if (isCodeIndexCollection(row.collection) && row.change === "remove") {
-          const existingPage = findApprovedPageForViewRef(input.projectRoot, row.view_ref);
-          if (existingPage === undefined) {
-            throw new ContextError(ExitCode.WorkspaceStateError, `approved code-index page is missing for removal: ${row.view_ref}`, {
-              category: ErrorCategory.WorkspaceStateInvalid,
-              candidate_id: row.candidate_id,
-              next: "Rerun the code-index extraction to refresh the deletion delta.",
-            });
-          }
-          pagesToRemove.push(existingPage.path);
-          pages.push(existingPage.relPath);
-          nextRows.splice(index, 1);
-          snapshotsToRemove.add(row.candidate_id);
-          candidateFileUpdated = true;
-          approved++;
-          removed++;
-          continue;
+        const approvedPath = join("knowledge", row.path);
+        const previousPathCandidate = seenApprovedPaths.get(approvedPath);
+        if (previousPathCandidate !== undefined) {
+          throw new ContextError(ExitCode.UserError, `multiple approved review decisions target the same knowledge path: ${approvedPath}`, {
+            category: ErrorCategory.UserInputInvalid,
+            path: approvedPath,
+            candidate_ids: [previousPathCandidate, row.candidate_id],
+            next: "Approve only one current candidate per knowledge path.",
+          });
         }
-        const page = await prepareApprovedPage({ projectRoot: input.projectRoot, record: row, now });
+        seenApprovedPaths.set(approvedPath, row.candidate_id);
+        if (rejectedDecisions.delete(row.candidate_id)) decisionsUpdated = true;
+        const page = await prepareApprovedPage({
+          projectRoot: input.projectRoot,
+          record: row,
+          now,
+          approvedPageIndex,
+          indexerCompileIndex,
+        });
         pagesToWrite.push(page);
         pages.push(page.relPath);
         if (page.changed) materialized++;
         else unchanged++;
         nextRows.splice(index, 1);
-        snapshotsToRemove.add(row.candidate_id);
         candidateFileUpdated = true;
         approved++;
         continue;
@@ -606,7 +412,6 @@ export async function applyReviewDecisions(input: {
         unchanged++;
       } else {
         nextRows[index] = { ...row, status: "rejected", updated: now };
-        snapshotsToRemove.add(row.candidate_id);
         candidateFileUpdated = true;
         rejected++;
       }
@@ -616,25 +421,56 @@ export async function applyReviewDecisions(input: {
       }
     }
 
-    for (const page of pagesToWrite) {
-      await writePreparedApprovedPage(page);
+    const targets = [
+      ...pagesToWrite
+        .filter((page) => page.changed)
+        .map((page) => reviewFileTarget({
+          path: page.relPath,
+          baseContent: page.existing,
+          targetContent: page.content,
+        })),
+      ...(candidateFileUpdated
+        ? [reviewFileTarget({
+            path: CANDIDATE_LEDGER_FILE,
+            baseContent: candidateLedgerBase,
+            targetContent: candidateRecordsContent(nextRows),
+          })]
+        : []),
+      ...(decisionsUpdated
+        ? [reviewFileTarget({
+            path: REVIEW_DECISIONS_FILE,
+            baseContent: rejectedDecisionsBase,
+            targetContent: rejectedDecisionsContent(rejectedDecisions),
+          })]
+        : []),
+    ].filter((target): target is IndexerProjectFileTarget => target !== undefined)
+      .sort((left, right) => left.path.localeCompare(right.path));
+    if (targets.length > 0) {
+      await runDurableMultiFileTransaction({
+        projectRoot: input.projectRoot,
+        kind: "apply-indexer-review",
+        proposal_digest: indexerProtocolDigest({
+          decisions: [...decisions]
+            .sort((left, right) => left.candidate_id.localeCompare(right.candidate_id)),
+          targets: targets.map((target) => ({
+            path: target.path,
+            operation: target.operation,
+            target_digest: target.target_digest,
+          })),
+        }),
+        targets,
+        ...(input.inject_failure === undefined
+          ? {}
+          : { inject_failure: input.inject_failure }),
+      });
     }
-    await Promise.all(pagesToRemove.map((path) => rm(path, { force: true })));
-    if (candidateFileUpdated) {
-      await writeCandidateRecords(input.projectRoot, nextRows);
-    }
-    if (decisionsUpdated) {
-      await writeRejectedDecisions(input.projectRoot, rejectedDecisions);
-    }
-    await Promise.all([...snapshotsToRemove].map((id) => removeCandidateSnapshot(input.projectRoot, id)));
-    await removeOrphanKnowledgeAssets(input.projectRoot);
     return {
       applied: decisions.length,
       approved,
       rejected,
       unchanged,
       materialized,
-      removed,
+      removed: 0,
       candidateFileUpdated,
       pages,
     };

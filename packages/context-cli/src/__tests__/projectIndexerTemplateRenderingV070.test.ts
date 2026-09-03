@@ -133,7 +133,7 @@ function manifestSource(): string {
     "  profiles: [component-library]",
     "  operations:",
     "    - id: main-index",
-    "      consumes: context.indexer.main-workset/v1",
+    "      consumes: context.indexer.main-workset/v2",
     "      produces: context.indexer.main-result/v1",
     "provider:",
     "  templates:",
@@ -419,7 +419,6 @@ function artifactResult(input: {
       requirement_ref: "requirement:workspace-knowledge",
       question_ref: "question:component-summary",
       question_target_key: "question-target:button-summary",
-      answer_landing_hint: { artifact_id: "button-guide", section_key: "summary" },
       source_hints: [evidence.source_ref],
     }] : [],
     question_target_dispositions: gap ? [{

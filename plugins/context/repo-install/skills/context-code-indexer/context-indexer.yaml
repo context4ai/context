@@ -1,6 +1,6 @@
 protocol: context.indexer.provider/v1
 id: context-code-indexer
-version: 1.0.0
+version: 1.1.1
 domains: [code]
 
 activation:
@@ -62,14 +62,9 @@ provides:
       priority: 200
   operations:
     - id: main-index
-      consumes: context.indexer.main-workset/v1
+      consumes: context.indexer.main-workset/v2
       produces: context.indexer.main-result/v1
       accepts_layer_fragments: [fact-enrichment, template-variables]
-    - id: material-answer
-      consumes: context.indexer.material-question-workset/v1
-      produces: context.indexer.material-answer-result/v1
-      supported_evidence_kinds: [code, contract, configuration, documentation, runbook, test-result, runtime-observation]
-      accepts_layer_fragments: [fact-enrichment]
   layer_fragments:
     - kind: derived-artifact-proposal
       phase: post-author
@@ -209,7 +204,7 @@ provider:
     - { id: contract-source, profile: contract-source, path: templates/contract-source.md }
     - { id: derived-generated-source, profile: derived-generated-source, path: templates/derived-generated-source.md }
   forbidden_fallbacks: [one-page-per-symbol, ordinal-batch-pages, inferred-runtime-chain]
-  completion_checks: [inventory-disposition-closure, subject-owner-closure, evidence-binding]
+  completion_checks: [inventory-disposition-closure, subject-owner-closure, source-coverage]
 
 customization:
   supports: [config, instructions-append, template-override, program-extend]

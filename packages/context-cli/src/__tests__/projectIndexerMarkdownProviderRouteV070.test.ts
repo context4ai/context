@@ -16,8 +16,6 @@ import {
 } from "../project/indexerMarkdownProviderRoute.js";
 import { routeProjectIndexerProviderSelection } from
   "../project/indexerProviderRouting.js";
-import { buildIndexerReleaseCapabilityManifest } from
-  "../project/indexerReleaseCapabilities.js";
 import { validateProjectIndexerSelectionProposal } from
   "../project/indexerSelectionProposal.js";
 import { initContextProject } from "../project/workspace.js";
@@ -171,10 +169,10 @@ describe("Markdown Provider Route", () => {
           "packages/context/src/indexerArtifactDependencies.ts",
         ), "utf8"),
       ]);
-    expect(manifest).toContain("consumes: context.indexer.main-workset/v1");
+    expect(manifest).toContain("consumes: context.indexer.main-workset/v2");
     expect(manifest).toContain("produces: context.indexer.main-result/v1");
     expect(instructions).toContain(
-      "Never create a legacy `MarkdownCollectionSlice` or invoke the independent `alignProse` phase.",
+      "Return all knowledge through the current Indexer result; do not create an independent authoring pipeline.",
     );
     expect(manifest).toContain("path: references/classification.md");
     expect(manifest).toContain("path: references/structure-and-artifacts.md");
@@ -260,12 +258,6 @@ describe("Markdown Provider Route", () => {
       }],
       community_fallback_attempted: true,
     });
-    const packageManifest = JSON.parse(
-      await readFile(join(PACKAGE_ROOT, "package.json"), "utf8"),
-    ) as { version: string };
-    const markdownCapability = buildIndexerReleaseCapabilityManifest(
-      packageManifest.version,
-    ).capabilities.find((capability) => capability.id === "markdown-indexer")!;
     const route = await routeProjectIndexerProviderSelection({
       projectRoot: fixture.projectRoot,
       value: routeInput,
@@ -274,25 +266,6 @@ describe("Markdown Provider Route", () => {
       projectRoot: fixture.projectRoot,
       value: route.selection_proposal_input,
     });
-    if (markdownCapability.state !== "ready") {
-      await expect(validateProjectMarkdownProviderSelection({
-        projectRoot: fixture.projectRoot,
-        assetsRoot: fixture.assetsRoot,
-        value: {
-          protocol: "context.indexer.markdown-provider-validation-input/v1",
-          capture_report: capture,
-          provider_route_input: routeInput,
-          provider_route_report: route,
-          static_validation: staticValidation,
-        },
-      })).rejects.toMatchObject({
-        code: "indexer-feature-not-ready",
-        feature: "markdown-indexer",
-        releaseVersion: packageManifest.version,
-        requiredMilestone: markdownCapability.required_milestone,
-      });
-      return;
-    }
     const result = await validateProjectMarkdownProviderSelection({
       projectRoot: fixture.projectRoot,
       assetsRoot: fixture.assetsRoot,

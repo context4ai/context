@@ -14,6 +14,36 @@ const scriptKind = (filePath: string): ts.ScriptKind => {
 export const createEcmaScriptSourceFile = (source: string, filePath: string): ts.SourceFile =>
   ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, scriptKind(filePath));
 
+/**
+ * TypeScript accepts raw ampersands in JSX display text and quoted JSX
+ * attributes, while tree-sitter's TSX grammar treats them as malformed XML
+ * entities. Replace only those presentation characters with an equal-width
+ * placeholder for the tree-sitter pass. The original source remains the
+ * authority for TypeScript diagnostics, LOC, calls, and persisted evidence.
+ */
+export const treeSitterCompatibleJsxSource = (
+  sourceFile: ts.SourceFile,
+  source: string,
+): string => {
+  const characters = source.split("");
+  let changed = false;
+  const visit = (node: ts.Node): void => {
+    const jsxPresentationLiteral = ts.isJsxText(node) ||
+      (ts.isStringLiteral(node) && ts.isJsxAttribute(node.parent));
+    if (jsxPresentationLiteral) {
+      for (let index = node.getStart(sourceFile); index < node.getEnd(); index += 1) {
+        if (characters[index] === "&") {
+          characters[index] = " ";
+          changed = true;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return changed ? characters.join("") : source;
+};
+
 type SourceFileWithParseDiagnostics = ts.SourceFile & {
   parseDiagnostics?: readonly ts.DiagnosticWithLocation[];
 };

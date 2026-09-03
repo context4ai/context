@@ -89,8 +89,6 @@ describe("Context Agent Graph Host ABI bridge", () => {
 
     const projected = projectWorkflowRouteAction({
       action,
-      node: "materialize-indexer-instructions",
-      hasStructureBatch: false,
       revision: "workflow-revision",
       authorities: [],
     });

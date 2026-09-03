@@ -1,5 +1,6 @@
 import YAML from "yaml";
 import type { CandidateRecord } from "./candidateLedger.js";
+import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 import { okfTypeForCollection } from "./okfTypes.js";
 
 function escapeHtmlAttribute(value: string): string {
@@ -13,8 +14,9 @@ function escapeHtmlAttribute(value: string): string {
 function sectionMarkdown(input: {
   section: NonNullable<CandidateRecord["indexer_candidate"]>["sections"][number];
   artifactKind: string;
+  sourceRefs: readonly string[];
 }): string {
-  const refs = input.section.evidence_refs;
+  const refs = input.sourceRefs;
   const primaryRef = refs[0] ?? input.section.section_ref;
   return [
     `<!-- context:section id="${escapeHtmlAttribute(input.section.section_key)}" kind="${escapeHtmlAttribute(input.artifactKind)}" source_ref="${escapeHtmlAttribute(primaryRef)}" -->`,
@@ -43,6 +45,10 @@ export function renderApprovedIndexerMarkdown(input: {
   }
   const sources = [...new Set(binding.evidence_bindings.map((item) => item.source_ref))];
   if (sources.length === 0) sources.push(binding.source_ref);
+  const sourceByEvidenceRef = new Map(binding.evidence_bindings.map((item) => [
+    item.evidence_ref,
+    item.source_ref,
+  ]));
   const title = input.record.review.title;
   const frontmatter = YAML.stringify({
     title,
@@ -56,23 +62,24 @@ export function renderApprovedIndexerMarkdown(input: {
     resource: `knowledge:${input.record.path.replace(/\.md$/u, "")}`,
     sources,
     visibility: input.record.visibility,
-    candidate_fingerprint: input.record.fingerprint,
-    indexer_compile_digest: binding.compile_digest,
-    indexer_file_digest: binding.file_digest,
-    indexer_artifact_ref: binding.artifact_ref,
-    indexer_section_refs: binding.section_refs,
-    indexer_source_ref: binding.source_ref,
-    indexer_evidence: binding.evidence_bindings,
   }).trimEnd();
+  const body = binding.sections.flatMap((section, index) => [
+    ...(index === 0 ? [] : [""]),
+    sectionMarkdown({
+      section,
+      artifactKind: input.record.kind,
+      sourceRefs: [...new Set(section.evidence_refs.flatMap((ref) => {
+        const sourceRef = sourceByEvidenceRef.get(ref);
+        return sourceRef === undefined ? [] : [sourceRef];
+      }))].sort(),
+    }),
+  ]).join("\n");
   return [
     "---",
     frontmatter,
     "---",
     "",
-    ...binding.sections.flatMap((section, index) => [
-      ...(index === 0 ? [] : [""]),
-      sectionMarkdown({ section, artifactKind: input.record.kind }),
-    ]),
+    ensureMarkdownPageTitle(body, title),
     "",
   ].join("\n");
 }

@@ -5,7 +5,6 @@ import {
 } from "@c4a/context";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
-import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import type { LarkRunner } from "../lib/feishu.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
@@ -15,48 +14,15 @@ import {
   runCaptureLarkPhase,
 } from "./documentCaptureLark.js";
 import {
-  runCaptureProseInvestigation,
-  runAlignProsePhase,
-  type ProseAlignRunOptions,
-} from "./proseAlign.js";
-import {
-  runCompileProsePhase,
-} from "./proseCompile.js";
-import {
   findPhaseForRun,
-  isDocumentPhase,
-  isDocumentPhasePreview,
   normalizeRunPhasesForList,
   previewDocumentPhase,
   type DocumentPhasePreview,
   type ProjectPhaseListEntry,
 } from "./documentRun.js";
-import {
-  previewExtractTsPhase,
-  runExtractTsPhase,
-} from "./extractCandidates.js";
-import {
-  previewExtractCustomPhase,
-  runExtractCustomPhase,
-} from "./customExtractCandidates.js";
-import {
-  previewExtractionBatch,
-  readExtractionBatchPreviewByDigest,
-  readReusableExtractionPreparation,
-} from "./extractionPreviewCache.js";
-import {
-  buildExtractionPreviewOutput,
-  type ExtractionPreviewOutputOptions,
-} from "./extractionPreviewView.js";
-import type {
-  ExtractionBatchPreview,
-  ExtractionPhasePreview,
-} from "./extractCandidateTypes.js";
 import { ensureRepoSources } from "./repoSources.js";
-import { writeReviewHtml } from "./reviewHtml.js";
 import { errorView, resultSummary, writeRunSuccess, type ProjectRunFormat } from "./runOutput.js";
 import { createPhaseRunId, writePhaseRunLog } from "./runLog.js";
-import { validateProjectRunOptions } from "./runOptionValidation.js";
 import { findContextProjectRoot, loadContextProjectModule } from "./workspace.js";
 import { bindWorkflowExecutionContext } from "./workflow/workflowExecutionContext.js";
 import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
@@ -86,8 +52,6 @@ export interface ProjectPhaseResourcePlan {
   packageKind?: string;
 }
 
-type PhaseRunPreview = ExtractionPhasePreview | DocumentPhasePreview;
-
 function resourceLabel(resource: PhaseResourceReference): string {
   switch (resource.kind) {
     case "source":
@@ -101,10 +65,6 @@ function resourceLabel(resource: PhaseResourceReference): string {
       return `source:lark:${resource.source.name}`;
     case "source.snapshot":
       return `source-snapshot:${resource.sourceType}:${resource.source.name}`;
-    case "lifecycle.candidates":
-      return `lifecycle:candidates:${resource.collection ?? "*"}:${resource.status ?? "*"}`;
-    case "lifecycle.structure":
-      return `lifecycle:structure:*:${resource.status ?? "*"}`;
     case "knowledge.collection":
       return `knowledge:${resource.collection}:approved`;
     case "knowledge.approved":
@@ -151,22 +111,6 @@ function phaseResourcePlan(resource: PhaseResourceReference): ProjectPhaseResour
         path: resource.path,
         sourceType: resource.sourceType,
         sourceName: resource.source.name,
-      };
-    case "lifecycle.candidates":
-      return {
-        kind: resource.kind,
-        label,
-        path: resource.path,
-        ...(resource.collection !== undefined ? { collection: resource.collection } : {}),
-        ...(resource.status !== undefined ? { status: resource.status } : {}),
-      };
-    case "lifecycle.structure":
-      return {
-        kind: resource.kind,
-        label,
-        path: resource.path,
-        ...(resource.profileCollection !== undefined ? { profileCollection: resource.profileCollection } : {}),
-        ...(resource.status !== undefined ? { status: resource.status } : {}),
       };
     case "knowledge.collection":
       return {
@@ -249,106 +193,22 @@ function writePhaseList(projectRoot: string, entries: readonly ProjectPhaseListE
   }));
 }
 
-function previewBody(preview: PhaseRunPreview): string[] {
-  if (isDocumentPhasePreview(preview)) {
-    const lines: string[] = [
-      `source: ${preview.source.type}:${preview.source.name}`,
-      `planned output: ${preview.candidateTree.map((entry) => entry.path).join(", ") || "none"}`,
-      `source refs: ${preview.sourceRefExamples.join(", ") || "none"}`,
-      `next action: ${preview.next_action.command}`,
-    ];
-    if (preview.snapshot !== undefined) {
-      lines.push(`snapshot: ${preview.snapshot.manifest} (${preview.snapshot.exists ? "present" : "missing"})`);
-    }
-    for (const example of preview.knowledgePathExamples.slice(0, 5)) {
-      lines.push(`knowledge path example: ${example.path} (${example.source_ref})`);
-    }
-    return lines;
-  }
-
-  if (preview.phaseKind === "phase.extract.custom") {
-    return [
-      `preview: ${preview.totals.sources} source(s), ${preview.totals.candidates} candidate(s), ${preview.totals.evidence} evidence reference(s), ${preview.totals.relations} relation(s)`,
-      ...preview.indexUnits.map((unit) =>
-        `index unit ${unit.id}: ${unit.projectedPageCount} page(s), scale ${unit.scale}, profile ${unit.outputProfile}, owner ${unit.outputOwner}`
-      ),
-    ];
-  }
-
+function previewBody(preview: DocumentPhasePreview): string[] {
   const lines: string[] = [
-    `include: ${preview.include.length > 0 ? preview.include.join(", ") : "none"}`,
-    `entry mode: ${preview.mode}`,
-    ...(preview.entries !== undefined ? [`entries: ${preview.entries.join(", ")}`] : []),
-    `exported-only: ${preview.exportedOnly ? "yes" : "no"}`,
-    `preview: ${preview.totals.sources} source(s), ${preview.totals.modules} module(s), discovered ${preview.totals.discoveredFiles} file(s), AST analyzed ${preview.totals.analyzedFiles} file(s), skipped ${preview.totals.skippedFiles} file(s), ${preview.totals.symbols} symbol(s), ${preview.totals.relations} relation(s), candidate estimate ${preview.totals.candidateEstimate}`,
+    `source: ${preview.source.type}:${preview.source.name}`,
+    `source refs: ${preview.sourceRefExamples.join(", ") || "none"}`,
+    `next action: ${preview.next_action.command}`,
   ];
-  for (const source of preview.sources) {
-    const head = source.head === undefined ? "" : ` head:${source.head.slice(0, 12)}`;
-    lines.push(`source ${source.name}:${head} ref:${source.ref.slice(0, 12)} materialized:${source.materializedAt}`);
-    for (const module of source.modules) {
-      const version = module.version === undefined ? "" : `@${module.version}`;
-      const kinds = Object.entries(module.candidateKinds)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([kind, count]) => `${kind}:${count}`)
-        .join(", ");
-      lines.push(`  module ${module.path} (${module.name}${version}): discovered ${module.discoveredFiles}, AST analyzed ${module.analyzedFiles}, skipped ${module.skippedFiles}, symbols ${module.symbols} (${module.exportedSymbols} exported, ${module.internalSymbols} internal), relations ${module.relations}, candidates ${module.candidateEstimate}`);
-      lines.push(`    entries: ${module.entryFiles.join(", ") || "none"}`);
-      lines.push(`    candidate kinds: ${kinds || "none"}`);
-      for (const reason of module.skippedReasons) lines.push(`    skipped reason: ${reason}`);
-    }
-    for (const moduleError of source.moduleErrors) {
-      lines.push(`  module error ${moduleError.module_path}: ${moduleError.error}`);
-    }
-  }
-  if (preview.knowledgeTree.length > 0) {
-    lines.push("approved knowledge tree preview:");
-    for (const line of preview.knowledgeTree) {
-      lines.push(`  ${line}`);
-    }
-  }
-  if (preview.knowledgePathExamples.length > 0) {
-    lines.push("approved path examples:");
-    for (const example of preview.knowledgePathExamples.slice(0, 5)) {
-      lines.push(`  ${example.path} (${example.title}, ${example.kind}, source:${example.source})`);
-    }
-  }
-  for (const hint of preview.agent_hints) {
-    lines.push(`hint ${hint.code}: ${hint.message}${hint.command ? `; ${hint.command}` : ""}`);
+  if (preview.snapshot !== undefined) {
+    lines.push(`snapshot: ${preview.snapshot.manifest} (${preview.snapshot.exists ? "present" : "missing"})`);
   }
   return lines;
-}
-
-function writeExtractionBatchPreview(
-  preview: ExtractionBatchPreview,
-  format: ProjectRunFormat,
-  options: ExtractionPreviewOutputOptions,
-): void {
-  if (format === "json") {
-    process.stdout.write(`${JSON.stringify(buildExtractionPreviewOutput(preview, options), null, 2)}\n`);
-    return;
-  }
-  if (options.view !== undefined && options.view !== "summary") {
-    throw new ContextError(ExitCode.UserError, "extraction preview item views require --format json", {
-      category: ErrorCategory.UserInputInvalid,
-      view: options.view,
-      next: "Rerun the returned preview item command with --format json.",
-    });
-  }
-  process.stdout.write(formatFeedback({
-    symbol: preview.scaleClear && preview.capabilityClear && preview.ownershipClear ? "✓" : "⚠",
-    action: "previewed",
-    subject: "code extraction batch",
-    headline: `${preview.totals.indexUnits} index unit(s), ${preview.totals.projectedPages} projected page(s)`,
-    body: preview.phases.flatMap((phase) => phase.indexUnits.map((unit) =>
-      `${unit.id}: ${unit.projectedPageCount} page(s), ${unit.scale}, ${unit.outputProfile}`
-    )),
-  }));
 }
 
 function writeRunPlan(
   plan: ProjectPhaseRunPlan,
   format: ProjectRunFormat,
-  preview?: PhaseRunPreview,
+  preview?: DocumentPhasePreview,
   previewError?: { message: string; detail?: unknown },
 ): void {
   if (format === "json") {
@@ -379,7 +239,6 @@ function writeRunPlan(
 
 function customPhaseContext(input: {
   projectRoot: string;
-  runId: string;
 }): ContextPhaseContext {
   return {
     ensureSources: async (options) => {
@@ -392,23 +251,6 @@ function customPhaseContext(input: {
         await ensureRepoSources({ projectRoot: input.projectRoot, name: source.name });
       }
     },
-    extract: {
-      ts: async (options) => {
-        await runExtractTsPhase({
-          projectRoot: input.projectRoot,
-          phase: options,
-          runId: input.runId,
-        });
-      },
-    },
-    review: {
-      html: async (options) => {
-        await writeReviewHtml({
-          projectRoot: input.projectRoot,
-          ...(options.collection !== undefined ? { collection: options.collection } : { all: true }),
-        });
-      },
-    },
   };
 }
 
@@ -416,19 +258,13 @@ export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
   list?: boolean;
-  previewExtractionBatch?: boolean;
-  previewPhaseIds?: readonly string[];
-  previewDigest?: string;
-  previewOutput?: ExtractionPreviewOutputOptions;
   dryRun?: boolean;
-  autoPromote?: boolean;
   managed?: boolean;
   workflowRevision?: string;
   resourceReceiptsReference?: string;
   authorities?: readonly ContextWorkflowAuthority[];
   verbose?: boolean;
   format?: ProjectRunFormat;
-  align?: ProseAlignRunOptions;
   larkRunner?: LarkRunner;
 }): Promise<void> {
   const found = findContextProjectRoot(input.cwd);
@@ -440,33 +276,6 @@ export async function runProjectPhaseCommand(input: {
 
   const loaded = await loadContextProjectModule(found.projectRoot);
   const format = input.format ?? "text";
-  if (input.previewExtractionBatch === true) {
-    if (input.previewDigest !== undefined && (input.previewPhaseIds?.length ?? 0) > 0) {
-      throw new ContextError(ExitCode.UserError, "--preview-digest cannot be combined with --preview-phase", {
-        category: ErrorCategory.UserInputInvalid,
-      });
-    }
-    const preview = input.previewDigest === undefined
-      ? await previewExtractionBatch({
-          projectRoot: found.projectRoot,
-          phases: loaded.project.phases,
-          ...(input.previewPhaseIds === undefined ? {} : { phaseIds: input.previewPhaseIds }),
-        })
-      : await readExtractionBatchPreviewByDigest(found.projectRoot, input.previewDigest);
-    if (preview === undefined) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "the requested extraction preview digest is unavailable", {
-        category: ErrorCategory.WorkflowRevisionStale,
-        preview_digest: input.previewDigest,
-        next_action: {
-          kind: "refresh_extraction_preview",
-          command: "context run --preview-extraction-batch --format json",
-        },
-        next: "context run --preview-extraction-batch --format json",
-      });
-    }
-    writeExtractionBatchPreview(preview, format, input.previewOutput ?? {});
-    return;
-  }
   if (input.list === true || input.phaseId === undefined) {
     const phaseEntries = await normalizeRunPhasesForList({
       projectRoot: found.projectRoot,
@@ -498,57 +307,10 @@ export async function runProjectPhaseCommand(input: {
   }
 
   const plan = phasePlan(found.projectRoot, phase, input.dryRun === true);
-  validateProjectRunOptions({ phase, options: input.align ?? {} });
-  if (input.autoPromote === true && (
-    phase.kind !== "phase.extract.ts" ||
-    !isCodeIndexCollection(phase.collection) ||
-    input.dryRun === true
-  )) {
-    throw new ContextError(ExitCode.UserError, "--auto-promote is only valid when executing a phase.extract.ts code-index phase", {
-      category: ErrorCategory.UserInputInvalid,
-      phaseId: phase.id,
-      phaseKind: phase.kind,
-      next: `Run context run ${phase.id}${phase.kind === "phase.extract.ts" ? " --auto-promote" : ""} without --dry-run.`,
-    });
-  }
   if (input.dryRun === true) {
-    let preview: PhaseRunPreview | undefined;
+    let preview: DocumentPhasePreview | undefined;
     let previewError: { message: string; detail?: unknown } | undefined;
-    if (phase.kind === "phase.extract.ts") {
-      try {
-        preview = await previewExtractTsPhase({
-          projectRoot: found.projectRoot,
-          phase,
-        });
-      } catch (error) {
-        if (error instanceof ContextError) {
-          previewError = {
-            message: error.message,
-            detail: error.detail,
-          };
-        } else {
-          const view = errorView(error);
-          previewError = {
-            message: view.message,
-            ...(view.code !== undefined ? { detail: { code: view.code } } : {}),
-          };
-        }
-      }
-    } else if (phase.kind === "phase.extract.custom") {
-      try {
-        preview = await previewExtractCustomPhase({
-          projectRoot: found.projectRoot,
-          phase,
-          runId: `preview_${Date.now()}`,
-        });
-      } catch (error) {
-        if (error instanceof ContextError) {
-          previewError = { message: error.message, detail: error.detail };
-        } else {
-          previewError = { message: errorView(error).message };
-        }
-      }
-    } else if (isDocumentPhase(phase)) {
+    if (phase.kind === "phase.capture.file" || phase.kind === "phase.capture.lark") {
       try {
         preview = await previewDocumentPhase({
           projectRoot: found.projectRoot,
@@ -574,87 +336,21 @@ export async function runProjectPhaseCommand(input: {
   const started = Date.now();
   try {
     let result: unknown;
-    if (phase.kind === "phase.extract.ts") {
-      const cached = await readReusableExtractionPreparation({
-        projectRoot: found.projectRoot,
-        phase,
-      });
-      result = await runExtractTsPhase({
-        projectRoot: found.projectRoot,
-        phase,
-        runId,
-        ...(cached?.kind === "context.extract-ts-prepared.v1" ? { prepared: cached } : {}),
-        ...(input.autoPromote === true ? { autoPromote: true } : {}),
-      });
-    } else if (phase.kind === "phase.extract.custom") {
-      const cached = await readReusableExtractionPreparation({
-        projectRoot: found.projectRoot,
-        phase,
-      });
-      result = await runExtractCustomPhase({
-        projectRoot: found.projectRoot,
-        phase,
-        runId,
-        ...(cached?.kind === "context.extract-custom-prepared.v1" ? { prepared: cached } : {}),
-      });
-    } else if (phase.kind === "phase.custom") {
+    if (phase.kind === "phase.custom") {
       result = await phase.run(customPhaseContext({
         projectRoot: found.projectRoot,
-        runId,
       }));
     } else if (phase.kind === "phase.capture.file") {
-      if (input.align?.view !== undefined || input.align?.schema === true) {
-        result = await runCaptureProseInvestigation({
-          projectRoot: found.projectRoot,
-          phase,
-          options: input.align,
-        });
-      } else {
-        result = await runCaptureFilePhase({
-          projectRoot: found.projectRoot,
-          phase,
-        });
-      }
+      result = await runCaptureFilePhase({
+        projectRoot: found.projectRoot,
+        phase,
+      });
     } else if (phase.kind === "phase.capture.lark") {
-      if (input.align?.view !== undefined || input.align?.schema === true) {
-        result = await runCaptureProseInvestigation({
-          projectRoot: found.projectRoot,
-          phase,
-          options: input.align,
-        });
-      } else {
-        result = await runCaptureLarkPhase({
-          projectRoot: found.projectRoot,
-          phase,
-          ...(input.larkRunner !== undefined ? { larkRunner: input.larkRunner } : {}),
-        });
-      }
-    } else if (phase.kind === "phase.align.prose") {
-      result = await runAlignProsePhase({
+      result = await runCaptureLarkPhase({
         projectRoot: found.projectRoot,
         phase,
-        options: {
-          ...(input.align ?? {}),
-          ...(input.managed === true ? { managed: true } : {}),
-        },
+        ...(input.larkRunner !== undefined ? { larkRunner: input.larkRunner } : {}),
       });
-    } else if (phase.kind === "phase.compile.prose") {
-      result = await runCompileProsePhase({
-        projectRoot: found.projectRoot,
-        phase,
-        options: input.align ?? {},
-      });
-    } else {
-      throw new ContextError(
-        ExitCode.UserError,
-        `unsupported phase kind: ${phase.kind}; inspect the phase with --dry-run`,
-        {
-          category: ErrorCategory.UserInputInvalid,
-          phaseId: phase.id,
-          phaseKind: phase.kind,
-          next: `context run ${phase.id} --dry-run`,
-        },
-      );
     }
 
     result = bindWorkflowExecutionContext(result, {

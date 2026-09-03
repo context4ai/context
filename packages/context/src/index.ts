@@ -159,6 +159,7 @@ export type {
   IndexerLayerFragmentPayload,
   IndexerMaterializedLayerFragment,
 } from "./indexerLayerComposition.js";
+export * from "./indexerArtifact.js";
 export {
   canonicalIndexerNodeRef,
   indexerSubjectKeySchema,
@@ -180,7 +181,9 @@ export {
   indexerPostAuthorWorksetSetSchema,
   indexerPrimaryResultViewDigest,
   indexerPrimaryResultViewSchema,
+  materializeIndexerEffectiveArtifactSet,
   materializeIndexerPrimaryResultView,
+  materializeIndexerPrimaryResultViewFromArtifactResult,
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
   validateIndexerPostAuthorFragmentResult,
@@ -193,6 +196,7 @@ export type {
   IndexerComposerInvocationReceipt,
   IndexerEffectiveComposer,
   IndexerEffectiveComposerSet,
+  IndexerEffectiveArtifactSet,
   IndexerLayerFragmentRunResult,
   IndexerPostAuthorFragmentRequest,
   IndexerPostAuthorPlan,
@@ -242,6 +246,7 @@ export type {
   IndexerPartitionPlan,
   IndexerPartitionStrategy,
 } from "./indexerPartitionPlan.js";
+export * from "./indexerPartitionInventory.js";
 export * from "./indexerPartitionConvergence.js";
 export * from "./indexerArtifactDependencies.js";
 export * from "./indexerDependencyView.js";
@@ -251,7 +256,6 @@ export * from "./indexerIncrementalImpact.js";
 export * from "./indexerMainRunProtocol.js";
 export * from "./indexerMainLifecycle.js";
 export * from "./indexerSubjectCatalog.js";
-export * from "./indexerMaterialAnswerRunProtocol.js";
 export * from "./indexerProgramRunProtocol.js";
 export * from "./indexerAgentStepProtocol.js";
 export * from "./indexerLifecycle.js";
@@ -298,65 +302,19 @@ export type {
   DocumentSectionContentMode,
 } from "./documentEvidence.js";
 export {
-  alignProse,
   captureFile,
   captureLark,
-  compileProse,
-  CODE_INDEX_CAPABILITIES,
-  CODE_INDEX_COVERAGE_KINDS,
-  CODE_INDEX_LIFECYCLES,
-  CODE_INDEX_MODULE_FACETS,
-  CODE_INDEX_MODULE_TYPES,
-  CODE_INDEX_OUTPUT_PROFILES,
   customPhase,
-  extractCustom,
-  extractTs,
-  ExtractTsConfigurationError,
-  NO_ENTRY_DETECTED,
-  requiredCodeIndexCoverage,
   mdxJsonDocs,
-  reviewValidity,
 } from "./phases.js";
 export type {
-  AlignProsePhaseDefinition,
   CaptureFilePhaseDefinition,
   CaptureLarkPhaseDefinition,
-  CompileProsePhaseDefinition,
   ContextPhase,
   ContextPhaseContext,
   CustomPhaseDefinition,
-  CustomCodeCandidateDraft,
-  CustomCodeCandidateEdge,
-  CustomCodeCandidateSection,
-  CustomCodeCandidateReview,
-  CustomCodeEvidence,
-  CustomCodeExtractionContext,
-  CustomCodeExtractionResult,
-  CustomCodeExtractor,
-  CodeIndexCapability,
-  CodeIndexCapabilityGap,
-  CodeIndexCoverageKind,
-  CodeIndexInspectionAdapter,
-  CodeIndexInspectionContext,
-  CodeIndexInspectionFinding,
-  CodeIndexInspectionFindingKind,
-  CodeIndexInspectionInventory,
-  CodeIndexInspectionResult,
-  CodeIndexIdentityGroup,
-  CodeIndexChainCandidate,
-  CodeIndexChainCandidateDecision,
-  CodeIndexChainCandidateFamily,
-  CodeIndexLifecycle,
-  CodeIndexModuleFacet,
-  CodeIndexModuleType,
-  CodeIndexOutputProfile,
-  CodeIndexUnitPlan,
-  ExtractCustomPhaseDefinition,
-  ExtractTsPhaseDefinition,
   PhaseDefinition,
   PhaseResourceReference,
-  ReviewValidityPhaseDefinition,
-  ReviewValidityScope,
 } from "./phases.js";
 export {
   allSources,

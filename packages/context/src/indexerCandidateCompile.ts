@@ -16,6 +16,12 @@ import {
   type IndexerLayoutProposal,
 } from "./indexerLayoutResolver.js";
 import {
+  materializeIndexerEffectiveArtifactSet,
+  type IndexerComposedResultEnvelope,
+} from "./indexerPostAuthorComposition.js";
+import type { IndexerArtifact } from "./indexerArtifact.js";
+import type { IndexerArtifactBundle } from "./indexerArtifactPolicy.js";
+import {
   validateIndexerLayoutProposalSet,
 } from "./indexerLayoutProposalSet.js";
 import {
@@ -55,6 +61,7 @@ const compileResultBindingSchema = z.object({
   run_result_digest: indexerDigestSchema,
   indexer_result_digest: indexerDigestSchema,
   artifact_result_digest: indexerDigestSchema,
+  post_author_composition_fingerprint: indexerDigestSchema.nullable(),
   layout_proposal_digest: indexerDigestSchema,
   run_envelope_digest: indexerDigestSchema,
   shared_artifact_fingerprint: indexerSharedArtifactFingerprintSchema,
@@ -120,6 +127,7 @@ export interface IndexerAcceptedAuthorResultInput {
   run_result: unknown;
   accepted_record: unknown;
   run_envelope: unknown;
+  post_author_envelope?: unknown | null;
   rendered_artifacts?: readonly unknown[];
 }
 
@@ -128,6 +136,9 @@ interface ValidatedAcceptedAuthorResult {
   acceptedRecord: z.infer<typeof indexerMainAcceptedRecordSchema>;
   runEnvelope: IndexerRunEnvelope;
   artifactResult: IndexerArtifactResult;
+  effectiveArtifacts: IndexerArtifact[];
+  effectiveArtifactBundle: IndexerArtifactBundle | null;
+  postAuthorEnvelope: IndexerComposedResultEnvelope | null;
   renderedArtifacts: IndexerRenderedArtifact[];
 }
 
@@ -201,7 +212,24 @@ function validateAcceptedAuthorResult(
   ) {
     throw new TypeError("Candidate compile rendered Artifacts do not bind one explicit Result");
   }
-  return { runResult, acceptedRecord, runEnvelope, artifactResult, renderedArtifacts };
+  const effective = materializeIndexerEffectiveArtifactSet({
+    artifact_result: artifactResult,
+    post_author_envelope: value.post_author_envelope,
+  });
+  const postAuthorEnvelope = value.post_author_envelope === undefined ||
+      value.post_author_envelope === null
+    ? null
+    : value.post_author_envelope as IndexerComposedResultEnvelope;
+  return {
+    runResult,
+    acceptedRecord,
+    runEnvelope,
+    artifactResult,
+    effectiveArtifacts: effective.artifacts,
+    effectiveArtifactBundle: effective.artifact_bundle,
+    postAuthorEnvelope,
+    renderedArtifacts,
+  };
 }
 
 function resultBinding(input: {
@@ -216,6 +244,8 @@ function resultBinding(input: {
     run_result_digest: indexerProtocolDigest(runResult),
     indexer_result_digest: acceptedRecord.result_digest,
     artifact_result_digest: artifactResult.output_digest,
+    post_author_composition_fingerprint:
+      input.accepted.postAuthorEnvelope?.composition_fingerprint ?? null,
     layout_proposal_digest: input.proposal.proposal_digest,
     run_envelope_digest: runEnvelope.envelope_digest,
     shared_artifact_fingerprint: runEnvelope.shared_artifact_fingerprint,
@@ -351,7 +381,7 @@ function candidateFiles(input: {
     artifact.artifact_id,
     artifact,
   ]));
-  return input.accepted.artifactResult.artifacts.map((artifact) => {
+  return input.accepted.effectiveArtifacts.map((artifact) => {
     const layout = layoutById.get(artifact.artifact_id);
     if (layout === undefined) {
       throw new TypeError(`Candidate compile Result Artifact ${artifact.artifact_id} has no layout`);
@@ -407,8 +437,7 @@ function candidateFiles(input: {
       result_binding_digest: input.binding.binding_digest,
       shared_artifact_fingerprint_digest:
         input.binding.shared_artifact_fingerprint.fingerprint_digest,
-      section_refs: layout.sections.map((section) => section.section_ref)
-        .sort(compareIndexerCanonicalText),
+      section_refs: layout.sections.map((section) => section.section_ref),
       sections,
       markdown,
       markdown_digest: indexerProtocolDigest({
@@ -520,6 +549,7 @@ export function buildIndexerCandidateCompile(input: {
     validateIndexerLayoutProposal({
       proposal,
       artifact_result: item.artifactResult,
+      post_author_envelope: item.postAuthorEnvelope,
       profile_contract: input.profile_contract,
       operator_contract: input.operator_contract,
       subject_key_schema_set: input.subject_key_schema_set,
@@ -543,7 +573,7 @@ export function buildIndexerCandidateCompile(input: {
   }
   const physical = auditIndexerPhysicalArtifacts({
     layout_proposal_set: layoutSet,
-    artifact_bundles: entries.map((entry) => entry.accepted.artifactResult.artifact_bundle),
+    artifact_bundles: entries.map((entry) => entry.accepted.effectiveArtifactBundle),
     files: files.map((file) => ({
       output_path: file.output_path,
       markdown: file.markdown,

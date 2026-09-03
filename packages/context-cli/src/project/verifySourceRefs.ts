@@ -17,10 +17,10 @@ import {
   type ResolvedProseSourceRef,
 } from "./documentEvidenceIndex.js";
 import {
-  readExtractSourceFingerprints,
-  readExtractSourceSymbolIndex,
-  type ExtractSourceSymbolIndexEntry,
-} from "./extractCandidates.js";
+  readLegacyExtractSourceFingerprints,
+  readLegacyExtractSourceSymbolIndex,
+  type LegacyExtractSourceSymbolIndexEntry,
+} from "./legacyCodeIndexRead.js";
 import {
   approvedContextSectionsInMarkdown,
   type ApprovedContextSectionEvidence,
@@ -37,7 +37,7 @@ const CODE_SYMBOL_REF = /^[^|]+(?:\|[^|]+){2,3}$/u;
 const execFileAsync = promisify(execFile);
 
 export interface SymbolIndexLookup {
-  bySource: ReadonlyMap<string, readonly ExtractSourceSymbolIndexEntry[]> | null;
+  bySource: ReadonlyMap<string, readonly LegacyExtractSourceSymbolIndexEntry[]> | null;
   unavailableCode?:
     | "extract-symbol-index-missing"
     | "extract-symbol-index-untrusted"
@@ -283,9 +283,8 @@ export function proseStaleMessage(sourceRef: string, status: ResolvedProseSource
 
 export async function loadVerifiedSymbolIndex(
   projectRoot: string,
-  options: { expectedPhaseIds?: readonly string[] } = {},
 ): Promise<SymbolIndexLookup> {
-  const symbolIndex = await readExtractSourceSymbolIndex(projectRoot);
+  const symbolIndex = await readLegacyExtractSourceSymbolIndex(projectRoot);
   if (symbolIndex === null) {
     return {
       bySource: null,
@@ -293,7 +292,7 @@ export async function loadVerifiedSymbolIndex(
       unavailableMessage: "extract symbol index is missing; source_ref reverse lookup was skipped",
     };
   }
-  const sourceFingerprints = await readExtractSourceFingerprints(projectRoot);
+  const sourceFingerprints = await readLegacyExtractSourceFingerprints(projectRoot);
   const phaseEntries = Object.entries(symbolIndex.phaseFingerprints);
   if (phaseEntries.length === 0) {
     return {
@@ -312,18 +311,7 @@ export async function loadVerifiedSymbolIndex(
       unavailableMessage: `extract symbol index does not match source fingerprint cache for phase ${stalePhase[0]}; source_ref reverse lookup was skipped`,
     };
   }
-  const expectedPhaseIds = [...new Set(options.expectedPhaseIds ?? [])].sort();
-  const missingPhaseIds = expectedPhaseIds.filter((phaseId) =>
-    symbolIndex.phaseFingerprints[phaseId] === undefined
-  );
-  if (missingPhaseIds.length > 0) {
-    return {
-      bySource: null,
-      unavailableCode: "extract-symbol-index-incomplete",
-      unavailableMessage: `extract symbol index covers ${expectedPhaseIds.length - missingPhaseIds.length}/${expectedPhaseIds.length} declared extraction phases; source_ref reverse lookup was deferred until extraction completes`,
-    };
-  }
-  const symbolIndexBySource = new Map<string, ExtractSourceSymbolIndexEntry[]>();
+  const symbolIndexBySource = new Map<string, LegacyExtractSourceSymbolIndexEntry[]>();
   for (const symbol of symbolIndex.symbols) {
     const bucket = symbolIndexBySource.get(symbol.source) ?? [];
     bucket.push(symbol);

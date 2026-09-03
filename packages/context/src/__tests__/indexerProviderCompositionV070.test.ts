@@ -55,7 +55,7 @@ function manifest(input: {
       profiles: [input.profile],
       operations: [{
         id: "main-index",
-        consumes: "context.indexer.main-workset/v1",
+        consumes: "context.indexer.main-workset/v2",
         produces: "context.indexer.main-result/v1",
         accepts_layer_fragments: ["fact-enrichment"],
       }],

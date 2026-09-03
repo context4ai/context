@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildIndexerQuestionTargetInventory,
-  buildIndexerMaterialGapLedger,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
   canonicalOwnerCellRef,
@@ -52,6 +51,10 @@ function question(): IndexerResolvedMaterialQuestion {
       accepted_kinds: ["code", "runbook"],
       minimum_items: 1,
       minimum_distinct_sources: 1,
+      provenance_constraints: {
+        protocol: "context.indexer.selector/v1",
+        expression: { op: "equals", fact: "evidence.current", value: true },
+      },
     },
   };
   return {
@@ -302,9 +305,9 @@ function reconcile(input: {
     resolved_questions: [{ requirement_ref: REQUIREMENT_REF, question: question() }],
     target_facts: Object.fromEntries(questionTargetInventory.items.map((item) => [
       item.target_ref,
-      { target: { visibility: "public" } },
+      { target: { visibility: "public" }, evidence: { current: true } },
     ])),
-    allowed_selector_fact_paths: new Set(["target.visibility"]),
+    allowed_selector_fact_paths: new Set(["evidence.current", "target.visibility"]),
     author_results: input.withResult === false
       ? []
       : [authorResult],
@@ -435,14 +438,9 @@ describe("Indexer result reconciliation and domain completion", () => {
     ));
   });
 
-  test("treats a retained ledger from an older complete inventory as stale input", () => {
+  test("binds unresolved gaps to the current complete inventory", () => {
     const registryValue = registry();
     const first = authority(registryValue);
-    const initialReport = reconcile({ disposition: "omitted" });
-    const retained = buildIndexerMaterialGapLedger({
-      question_target_inventory_digest: first.inventory.inventory_digest,
-      entries: [initialReport.material_gaps[0]!.entry],
-    });
     const rotatedInventory = buildIndexerQuestionTargetInventory({
       requirement_set_digest: indexerRegistryDigests(registryValue).requirementSetDigest,
       profile_contract_digests: [digest("c")],
@@ -464,13 +462,12 @@ describe("Indexer result reconciliation and domain completion", () => {
       target_facts: {
         [rotatedInventory.items[0]!.target_ref]: { target: { visibility: "public" } },
       },
-      allowed_selector_fact_paths: new Set(["target.visibility"]),
+      allowed_selector_fact_paths: new Set(["evidence.current", "target.visibility"]),
       author_results: [result({
         questionKey: first.questionKey,
         disposition: "omitted",
       })],
       registered_material_sources: [],
-      retained_material_gap_ledger: retained,
     });
     expect(report.question_target_inventory_digest).toBe(rotatedInventory.inventory_digest);
     expect(report.material_gaps[0]?.entry.state).toBe("unresolved");

@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseMdxSources } from "./mdxParser.js";
@@ -113,4 +115,13 @@ export function mdxSourcesToEvidenceAdapterResult(files: Readonly<Record<string,
       output_digest: indexerEvidenceAdapterProtocolDigest(documents),
     }],
   });
+}
+
+export function mdxSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: MdxEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    mdxSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

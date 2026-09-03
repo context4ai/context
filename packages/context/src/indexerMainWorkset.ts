@@ -100,7 +100,7 @@ export function validateIndexerTargetResolutionView(
 }
 
 const mainWorksetBaseFields = {
-  protocol: z.literal("context.indexer.main-workset/v1"),
+  protocol: z.literal("context.indexer.main-workset/v2"),
   workset_digest: indexerDigestSchema,
   operation: z.literal("main-index"),
   indexer_id: indexerIdSchema,
@@ -114,7 +114,7 @@ const mainWorksetBaseFields = {
   profile_contract_digest: indexerDigestSchema,
   subject_key_schema_digest: indexerDigestSchema,
   source_scope_digest: indexerDigestSchema,
-  parser_contract_digest: indexerDigestSchema,
+  source_binding_digest: indexerDigestSchema,
   primary_resource_binding_digest: indexerDigestSchema,
   question_target_inventory_digest: indexerDigestSchema,
 };
@@ -199,7 +199,7 @@ function sortedUnique(values: readonly string[], field: string): string[] {
 export function buildIndexerMainWorkset(input: MainWorksetInput): IndexerMainWorkset {
   const common = {
     ...input,
-    protocol: "context.indexer.main-workset/v1" as const,
+    protocol: "context.indexer.main-workset/v2" as const,
     operation: "main-index" as const,
     owner_cell_refs: sortedUnique(input.owner_cell_refs, "owner_cell_refs"),
   };
@@ -274,7 +274,7 @@ export function indexerOwnerCohortRef(input: {
 }
 
 export const indexerMainWorksetSetSchema = z.object({
-  protocol: z.literal("context.indexer.main-workset-set/v1"),
+  protocol: z.literal("context.indexer.main-workset-set/v2"),
   workset_set_digest: indexerDigestSchema,
   items: z.array(z.object({
     workset_digest: indexerDigestSchema,
@@ -320,7 +320,7 @@ export function buildIndexerMainWorksetSet(
     throw new TypeError("main workset set contains more than one author workset for a group");
   }
   const payload: Omit<IndexerMainWorksetSet, "workset_set_digest"> = {
-    protocol: "context.indexer.main-workset-set/v1",
+    protocol: "context.indexer.main-workset-set/v2",
     items,
   };
   return indexerMainWorksetSetSchema.parse({
@@ -361,7 +361,7 @@ export function validateIndexerMainWorksetSet(
 }
 
 export const indexerMainTransportBatchSchema = z.object({
-  protocol: z.literal("context.indexer.main-transport-batch/v1"),
+  protocol: z.literal("context.indexer.main-transport-batch/v2"),
   worksets: z.array(indexerMainWorksetSchema).min(1),
 }).strict();
 
@@ -375,7 +375,7 @@ export function buildIndexerMainTransportBatch(
   const worksets = values.map(validateIndexerMainWorkset);
   buildIndexerMainWorksetSet(worksets);
   return indexerMainTransportBatchSchema.parse({
-    protocol: "context.indexer.main-transport-batch/v1",
+    protocol: "context.indexer.main-transport-batch/v2",
     worksets,
   });
 }

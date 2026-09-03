@@ -228,16 +228,21 @@ async function walkFiles(root: string): Promise<string[]> {
   return files;
 }
 
-export async function removeOrphanKnowledgeAssets(projectRoot: string): Promise<string[]> {
+export async function removeOrphanKnowledgeAssets(
+  projectRoot: string,
+  currentReferences?: ReadonlySet<string>,
+): Promise<string[]> {
   const knowledgeRoot = join(projectRoot, "knowledge");
   const assetRoot = join(knowledgeRoot, "assets");
   if (!existsSync(assetRoot)) return [];
-  const referenced = new Set<string>();
-  for (const path of await walkFiles(knowledgeRoot)) {
-    if (!isApprovedKnowledgeMarkdownPath(relative(knowledgeRoot, path)) || path.startsWith(`${assetRoot}${sep}`)) continue;
-    const relPath = posixPath(relative(projectRoot, path));
-    const content = await readFile(path, "utf8");
-    for (const ref of knowledgeAssetReferences({ pageRelPath: relPath, content })) referenced.add(ref);
+  const referenced = new Set(currentReferences ?? []);
+  if (currentReferences === undefined) {
+    for (const path of await walkFiles(knowledgeRoot)) {
+      if (!isApprovedKnowledgeMarkdownPath(relative(knowledgeRoot, path)) || path.startsWith(`${assetRoot}${sep}`)) continue;
+      const relPath = posixPath(relative(projectRoot, path));
+      const content = await readFile(path, "utf8");
+      for (const ref of knowledgeAssetReferences({ pageRelPath: relPath, content })) referenced.add(ref);
+    }
   }
   const removed: string[] = [];
   for (const path of await walkFiles(assetRoot)) {

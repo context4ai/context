@@ -1,79 +1,37 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
-  DEFAULT_INDEXER_REGISTRY_PATH,
-  buildIndexerMainAuthorWorksets,
   buildIndexerMainPartitionWorksets,
-  buildIndexerQuestionTargetInventory,
   buildIndexerSubjectCatalog,
   buildIndexerTargetResolutionViews,
   evaluateIndexerCandidateMaterialization,
-  indexerRegistryDigests,
+  indexerInventoryMembersDigest,
+  indexerPartitionStrategySetDigest,
+  indexerProtocolDigest,
+  indexerSubjectKeySchemaDigest,
   observeIndexerMainWorksetState,
   ownerCells,
-  parseIndexerRegistry,
   projectIndexerPartitionSubjects,
-  validateAndRecordIndexerMainRun,
-  validateIndexerTargetResolutionView,
-  type IndexerAuthorGroupContext,
-  type IndexerPartitionValidationInput,
+  validateIndexerQuestionTargetInventory,
   type IndexerRegistry,
+  type IndexerPartitionValidationInput,
 } from "@c4a/context";
-
-function record(value: unknown, label: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${label} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function array(value: unknown, label: string): unknown[] {
-  if (!Array.isArray(value)) throw new TypeError(`${label} must be an array`);
-  return value;
-}
-
-function protocol(
-  value: Record<string, unknown>,
-  expected: string,
-  label: string,
-): void {
-  if (value.protocol !== expected) {
-    throw new TypeError(`${label}.protocol must be ${expected}`);
-  }
-}
-
-async function currentRegistry(projectRoot: string): Promise<IndexerRegistry> {
-  return parseIndexerRegistry(await readFile(
-    join(projectRoot, DEFAULT_INDEXER_REGISTRY_PATH),
-    "utf8",
-  ));
-}
-
-async function assertCurrentRequirement(
-  projectRoot: string,
-  digest: unknown,
-): Promise<IndexerRegistry> {
-  const registry = await currentRegistry(projectRoot);
-  if (
-    typeof digest !== "string" ||
-    digest !== indexerRegistryDigests(registry).requirementSetDigest
-  ) {
-    throw new TypeError("main Indexer lifecycle input targets a stale requirement set");
-  }
-  return registry;
-}
-
-function assertRequirementRefs(
-  registry: IndexerRegistry,
-  refs: readonly unknown[],
-): void {
-  const allowed = new Set(registry.requirements.map((item) => `requirement:${item.id}`));
-  for (const ref of refs) {
-    if (typeof ref !== "string" || !allowed.has(ref)) {
-      throw new TypeError(`main Indexer lifecycle references unknown requirement ${String(ref)}`);
-    }
-  }
-}
+import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
+import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import { resolveCurrentProjectIndexerPrimaryAuthority } from
+  "./indexerCurrentPrimaryAuthority.js";
+import { buildCurrentProjectIndexerPartitionRunSpec } from
+  "./indexerCurrentMainRunSpec.js";
+import {
+  array,
+  assertCurrentRequirement,
+  assertRequirementRefs,
+  protocol,
+  record,
+} from "./indexerMainLifecycleSupport.js";
+import { buildProjectIndexerQuestionTargetInventory } from
+  "./indexerQuestionTargetInventoryActions.js";
+export { buildProjectIndexerQuestionTargetInventory };
+export { buildProjectIndexerMainAuthorWorksets } from "./indexerMainAuthorActions.js";
+export { validateProjectIndexerMainRun } from "./indexerMainRunValidationActions.js";
 
 function assertClosedOwnerCohorts(
   registry: IndexerRegistry,
@@ -99,29 +57,73 @@ function assertClosedOwnerCohorts(
   }
 }
 
-export async function buildProjectIndexerQuestionTargetInventory(input: {
-  projectRoot: string;
-  value: unknown;
+function referenceIdentity(value: string): string {
+  const separator = value.indexOf(":");
+  const body = separator < 0 ? value : value.slice(separator + 1);
+  const parts = body.split("/").filter(Boolean);
+  return parts.at(-1) ?? body;
+}
+
+function normalizedSubjectValue(value: string, rules: readonly string[]): string {
+  let normalized = rules.includes("trim") ? value.trim() : value;
+  if (rules.includes("unicode-nfc")) normalized = normalized.normalize("NFC");
+  if (rules.includes("lowercase")) normalized = normalized.toLocaleLowerCase("en-US");
+  return normalized;
+}
+
+function questionTargetSubjectKey(input: {
+  profile_contract: IndexerProfileContract;
+  profile_id: string;
+  subject_kind: string;
+  source_ref: string;
+  module_ref: string | null;
+  normalized_path: string | null;
 }) {
-  const value = record(input.value, "question target inventory input");
-  protocol(
-    value,
-    "context.indexer.question-target-inventory-input/v1",
-    "question target inventory input",
+  const schema = input.profile_contract.subject_key_schemas.find((candidate) =>
+    candidate.profile === input.profile_id
   );
-  const registry = await assertCurrentRequirement(
-    input.projectRoot,
-    value.requirement_set_digest,
-  );
-  assertRequirementRefs(
-    registry,
-    array(value.items, "question target inventory input.items").map((item) =>
-      record(item, "question target inventory item").requirement_ref
-    ),
-  );
-  return buildIndexerQuestionTargetInventory(
-    value as Parameters<typeof buildIndexerQuestionTargetInventory>[0],
-  );
+  const kind = schema?.kinds.find((candidate) => candidate.id === input.subject_kind);
+  if (schema === undefined || kind === undefined) {
+    throw new TypeError(`question target SubjectKey schema is missing for ${input.profile_id}`);
+  }
+  const sourceIdentity = referenceIdentity(input.source_ref);
+  const moduleIdentity = input.module_ref === null
+    ? sourceIdentity
+    : referenceIdentity(input.module_ref);
+  const namespace = (() => {
+    switch (schema.namespace.operator) {
+      case "canonical-source-module-namespace":
+      case "canonical-service-namespace":
+        return moduleIdentity;
+      default:
+        throw new TypeError(
+          `unsupported question target namespace operator ${schema.namespace.operator}`,
+        );
+    }
+  })();
+  const localIdentity = (() => {
+    switch (kind.local_key.operator) {
+      case "canonical-module-identity":
+        return input.normalized_path === null
+          ? moduleIdentity
+          : input.normalized_path.replace(/\.[^./]+$/u, "");
+      case "canonical-export-family":
+        return input.normalized_path === null
+          ? moduleIdentity
+          : input.normalized_path.replace(/\.[^./]+$/u, "");
+      default:
+        throw new TypeError(
+          `unsupported question target local-key operator ${kind.local_key.operator}`,
+        );
+    }
+  })();
+  const rules = schema.normalization ?? [];
+  return {
+    protocol: "context.subject-key/v1" as const,
+    namespace: normalizedSubjectValue(namespace, rules),
+    kind: normalizedSubjectValue(input.subject_kind, rules),
+    local_key: normalizedSubjectValue(localIdentity, rules),
+  };
 }
 
 export async function buildProjectIndexerMainPartitionWorksets(input: {
@@ -134,74 +136,175 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     "context.indexer.main-partition-workset-build-input/v1",
     "partition workset input",
   );
-  const worksets = array(value.worksets, "partition workset input.worksets");
-  const requirementDigests = new Set(worksets.map((candidate) =>
-    record(candidate, "partition workset").requirement_set_digest
-  ));
-  if (requirementDigests.size !== 1) {
-    throw new TypeError("partition worksets must target one requirement set");
+  const suppliedQuestionTargets = validateIndexerQuestionTargetInventory(
+    value.question_target_inventory,
+  );
+  const questionTargets = await buildProjectIndexerQuestionTargetInventory({
+    projectRoot: input.projectRoot,
+    value: {
+      protocol: "context.indexer.question-target-inventory-input/v1",
+      requirement_set_digest: suppliedQuestionTargets.requirement_set_digest,
+    },
+  });
+  if (questionTargets.inventory_digest !== suppliedQuestionTargets.inventory_digest) {
+    throw new TypeError("partition workset input targets a stale question inventory");
   }
   const registry = await assertCurrentRequirement(
     input.projectRoot,
-    [...requirementDigests][0],
+    questionTargets.requirement_set_digest,
   );
-  assertRequirementRefs(
-    registry,
-    worksets.map((candidate) => record(candidate, "partition workset").requirement_ref),
+  const currentOwners = ownerCells(registry).filter((owner) =>
+    !(owner.owner_indexer_ids.length === 0 && owner.obligation === "optional")
   );
+  for (const owner of currentOwners) {
+    if (owner.owner_indexer_ids.length !== 1) {
+      throw new TypeError(
+        `partition owner ${owner.owner_cell_ref} requires exactly one primary Indexer`,
+      );
+    }
+  }
+  const ownerGroups = new Map<string, typeof currentOwners>();
+  for (const owner of currentOwners) {
+    const key = [
+      owner.owner_indexer_ids[0],
+      owner.requirement_ref,
+      owner.source_ref,
+      owner.module_ref ?? "",
+    ].join("\u0000");
+    const group = ownerGroups.get(key) ?? [];
+    group.push(owner);
+    ownerGroups.set(key, group);
+  }
+  const indexerIds = [...new Set(currentOwners.map((owner) => owner.owner_indexer_ids[0]!))];
+  const authorities = new Map<string, Awaited<ReturnType<
+    typeof resolveCurrentProjectIndexerPrimaryAuthority
+  >>>();
+  await Promise.all(indexerIds.map(async (indexerId) => {
+    authorities.set(indexerId, await resolveCurrentProjectIndexerPrimaryAuthority({
+      registry,
+      indexer_id: indexerId,
+    }));
+  }));
+  const currentBindings = new Map<string, Awaited<ReturnType<
+    typeof resolveProjectIndexerMainSourceBinding
+  >>>();
+  const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
+    await Promise.all([...ownerGroups.values()].map(async (owners) => {
+    const first = owners[0]!;
+    const indexerId = first.owner_indexer_ids[0]!;
+    const authority = authorities.get(indexerId);
+    if (authority === undefined) throw new TypeError(`missing primary authority ${indexerId}`);
+    const binding = await resolveProjectIndexerMainSourceBinding({
+      projectRoot: input.projectRoot,
+      indexer_id: indexerId,
+      source_ref: first.source_ref,
+      module_ref: first.module_ref,
+      profile_contract_digest: authority.profile_contract.contract_digest,
+    });
+    const bindingKey = [indexerId, first.source_ref, first.module_ref ?? ""].join("\u0000");
+    currentBindings.set(bindingKey, binding);
+    const ownerCellRefs = owners.map((owner) => owner.owner_cell_ref).sort();
+    const ownerCellSet = new Set(ownerCellRefs);
+    const cohortTargets = questionTargets.items.filter((target) =>
+      ownerCellSet.has(target.owner_cell_ref)
+    );
+    const allowedTargets = cohortTargets.map((target) => target.target_ref).sort();
+    const ownerCoverageDomains = new Set(owners.map((owner) => owner.coverage_domain));
+    const targetDomainRefs = new Set(cohortTargets.map((target) => target.target_domain_ref));
+    const requirement = registry.requirements.find((candidate) =>
+      `requirement:${candidate.id}` === first.requirement_ref
+    );
+    if (requirement === undefined) {
+      throw new TypeError(`missing current requirement ${first.requirement_ref}`);
+    }
+    const authorizedQuestionRefs = new Set(
+      (requirement.questions ?? []).map((question) => question.ref),
+    );
+    const subjectSchema = authority.profile_contract.subject_key_schemas.find((candidate) =>
+      candidate.profile === authority.profile.id
+    );
+    const targetDomain = authority.profile.question_target_domains[0];
+    if (subjectSchema === undefined || targetDomain === undefined) {
+      throw new TypeError(`missing partition identity contract for ${authority.profile.id}`);
+    }
+    const strategies = authority.partition_strategies.strategies.map((entry) => ({
+      strategy_ref: entry.strategy_ref,
+      strategy_digest: entry.strategy_digest,
+    }));
+    const { profile: _subjectProfile, ...subjectKeyContract } = subjectSchema;
+    void _subjectProfile;
+    return {
+      stage: "partition" as const,
+      indexer_id: indexerId,
+      requirement_ref: first.requirement_ref,
+      owner_cell_refs: ownerCellRefs,
+      source_ref: first.source_ref,
+      module_ref: first.module_ref,
+      primary_registry_projection_digest: authority.primary_registry.projection_digest,
+      requirement_set_digest: questionTargets.requirement_set_digest,
+      primary_execution_fingerprint:
+        authority.primary_execution.primary_execution_fingerprint,
+      profile_contract_digest: authority.profile_contract.contract_digest,
+      subject_key_schema_digest: indexerSubjectKeySchemaDigest(
+        authority.profile.id,
+        subjectKeyContract,
+      ),
+      source_scope_digest: indexerProtocolDigest({
+        indexer_id: indexerId,
+        read_targets: projectIndexerReadTargets({ registry, indexer_id: indexerId }),
+      }),
+      source_binding_digest: binding.source_binding_digest,
+      primary_resource_binding_digest:
+        authority.primary_execution.primary_resource_binding_digest,
+      question_target_inventory_digest: questionTargets.inventory_digest,
+      partition_subject_key: questionTargetSubjectKey({
+        profile_contract: authority.profile_contract,
+        profile_id: authority.profile.id,
+        subject_kind: targetDomain.subject_key_kind,
+        source_ref: first.source_ref,
+        module_ref: first.module_ref,
+        normalized_path: null,
+      }),
+      strategy_set_digest: indexerPartitionStrategySetDigest(strategies),
+      reader_question_refs: authority.profile.reader_question_contracts
+        .filter((question) =>
+          authorizedQuestionRefs.has(question.ref) &&
+          ownerCoverageDomains.has(question.coverage_domain) &&
+          targetDomainRefs.has(question.target_domain_ref)
+        )
+        .map((question) => question.ref).sort(),
+      partition_input_digests: binding.partition_input_digests,
+      partition_inventory_digest: indexerInventoryMembersDigest(binding.partition_inventory),
+      allowed_question_target_refs: allowedTargets,
+    };
+  }));
   const built = buildIndexerMainPartitionWorksets(
-    worksets as Parameters<typeof buildIndexerMainPartitionWorksets>[0],
+    worksets,
   );
   assertClosedOwnerCohorts(registry, built.worksets);
+  const runSpecs = built.worksets.map((workset) => {
+    const authority = authorities.get(workset.indexer_id);
+    const binding = currentBindings.get([
+      workset.indexer_id,
+      workset.source_ref,
+      workset.module_ref ?? "",
+    ].join("\u0000"));
+    if (authority === undefined || binding === undefined) {
+      throw new TypeError("partition run preparation lost its current authority binding");
+    }
+    return buildCurrentProjectIndexerPartitionRunSpec({
+      workset,
+      binding,
+      authority,
+    });
+  });
   return {
     protocol: "context.indexer.main-partition-workset-build/v1" as const,
+    requirement_set_digest: questionTargets.requirement_set_digest,
     ...built,
+    run_specs: runSpecs,
+    graph_outcome: "completed" as const,
   };
-}
-
-export async function validateProjectIndexerMainRun(input: {
-  projectRoot: string;
-  value: unknown;
-}) {
-  const value = record(input.value, "main Indexer run validation input");
-  protocol(
-    value,
-    "context.indexer.main-run-validation-input/v1",
-    "main Indexer run validation input",
-  );
-  const request = record(value.request, "main Indexer run request");
-  const workset = record(request.workset, "main Indexer run workset");
-  const registry = await assertCurrentRequirement(
-    input.projectRoot,
-    workset.requirement_set_digest,
-  );
-  assertRequirementRefs(registry, [workset.requirement_ref]);
-  try {
-    return {
-      protocol: "context.indexer.main-run-validation/v1" as const,
-      ...validateAndRecordIndexerMainRun(
-        value as Parameters<typeof validateAndRecordIndexerMainRun>[0],
-      ),
-      graph_outcome: "completed" as const,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const outcome = message.includes("index-target-resolution-ambiguous")
-      ? "index-target-resolution-ambiguous" as const
-      : message.includes("index-target-resolution-invalid")
-      ? "index-target-resolution-invalid" as const
-      : undefined;
-    if (outcome === undefined) throw error;
-    return {
-      protocol: "context.indexer.target-resolution-outcome/v1" as const,
-      outcome,
-      conflicts: [],
-      message,
-      graph_outcome: outcome === "index-target-resolution-ambiguous"
-        ? "blocked" as const
-        : "failed" as const,
-    };
-  }
 }
 
 export async function buildProjectIndexerSubjectCatalog(input: {
@@ -272,68 +375,6 @@ export async function buildProjectIndexerTargetResolutionViews(input: {
       : "index-target-resolution-ambiguous" as const,
     conflicts,
     graph_outcome: conflicts.length === 0 ? "completed" as const : "blocked" as const,
-  };
-}
-
-export async function buildProjectIndexerMainAuthorWorksets(input: {
-  projectRoot: string;
-  value: unknown;
-}) {
-  const value = record(input.value, "author workset input");
-  protocol(
-    value,
-    "context.indexer.main-author-workset-build-input/v1",
-    "author workset input",
-  );
-  const partitions = array(
-    value.partitions,
-    "author workset input.partitions",
-  ) as unknown as IndexerPartitionValidationInput[];
-  const requirementDigests = new Set(partitions.map((partition) =>
-    partition.workset.requirement_set_digest
-  ));
-  if (requirementDigests.size !== 1) {
-    throw new TypeError("author workset partitions must target one requirement set");
-  }
-  const registry = await assertCurrentRequirement(
-    input.projectRoot,
-    [...requirementDigests][0],
-  );
-  assertRequirementRefs(
-    registry,
-    partitions.map((partition) => partition.workset.requirement_ref),
-  );
-  const groupContexts = array(
-    value.group_contexts,
-    "author workset input.group_contexts",
-  ) as unknown as IndexerAuthorGroupContext[];
-  const conflicts = groupContexts.flatMap((context) => {
-    if (context.target_resolution_view === undefined) return [];
-    const view = validateIndexerTargetResolutionView(context.target_resolution_view);
-    return view.entries.flatMap((entry) => entry.state === "ambiguous" ? [{
-      partition_workset_digest: context.partition_workset_digest,
-      group_key: context.group_key,
-      query_ref: entry.query_ref,
-      conflicting_node_refs: entry.conflicting_node_refs,
-    }] : []);
-  });
-  if (conflicts.length > 0) {
-    return {
-      protocol: "context.indexer.target-resolution-outcome/v1" as const,
-      outcome: "index-target-resolution-ambiguous" as const,
-      conflicts,
-      message: "an exact SubjectKey query resolves to multiple current Nodes",
-      graph_outcome: "blocked" as const,
-    };
-  }
-  const built = buildIndexerMainAuthorWorksets({
-    partitions,
-    group_contexts: groupContexts,
-  });
-  return {
-    protocol: "context.indexer.main-author-workset-build/v1" as const,
-    ...built,
-    graph_outcome: "completed" as const,
   };
 }
 

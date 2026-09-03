@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
+  readFile,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -13,13 +15,23 @@ import {
 } from "@c4a/agent-graph";
 import {
   buildIndexerMainRunRequest,
+  buildIndexerMainRunWorksetViewSources,
   buildIndexerMainWorkset,
+  buildIndexerParserWorksetViewSource,
+  buildIndexerParserFactView,
+  buildIndexerPartitionInventoryFromParserFactView,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
   buildIndexerCustomizationPlan,
   composeIndexerLayerInput,
+  indexerEvidenceAdapterFactRef,
+  indexerEvidenceAdapterFileRef,
+  indexerEvidenceAdapterOutputDigest,
+  indexerInventoryMembersDigest,
+  indexerProtocolDigest,
   indexerPartitionStrategySetDigest,
   loadIndexerProviderManifest,
+  type IndexerEvidenceAdapterResult,
   type ExpectedProviderResolution,
   type IndexerRegistryEntry,
 } from "@c4a/context";
@@ -35,7 +47,14 @@ import {
   validateMaterializedIndexerInstructions,
 } from "../project/indexerInstructionMaterialization.js";
 import { stageIndexerProviderBundle } from "../project/indexerProviderStage.js";
-import { buildIndexerAgentStepRoute } from "../project/indexerAgentStepRoute.js";
+import {
+  buildIndexerAgentStepRoute,
+} from "../project/indexerAgentStepRoute.js";
+import {
+  consumeIndexerWorksetViewHostResult,
+  materializeIndexerWorksetViewHostAction,
+  prepareIndexerWorksetViewMaterialization,
+} from "../project/indexerWorksetViewMaterialization.js";
 
 const REQUIREMENT_DIGEST = `sha256:${"a".repeat(64)}`;
 const WORKSET_DIGEST = `sha256:${"b".repeat(64)}`;
@@ -226,7 +245,7 @@ function mainRunRequest(providerIntegrity: string) {
     profile_contract_digest: digest("5"),
     subject_key_schema_digest: digest("6"),
     source_scope_digest: digest("7"),
-    parser_contract_digest: digest("8"),
+    source_binding_digest: digest("8"),
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("0"),
@@ -240,7 +259,9 @@ function mainRunRequest(providerIntegrity: string) {
     strategy_set_digest: indexerPartitionStrategySetDigest([strategy]),
     reader_question_refs: [],
     partition_input_digests: [digest("a")],
-    partition_inventory_digest: digest("b"),
+    partition_inventory_digest: indexerInventoryMembersDigest(
+      buildIndexerPartitionInventoryFromParserFactView(parserFactView()),
+    ),
     allowed_question_target_refs: [],
   });
   return buildIndexerMainRunRequest({
@@ -265,13 +286,92 @@ function mainRunRequest(providerIntegrity: string) {
     },
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("1"),
-      parser_dependency_fingerprint: digest("2"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("3"),
       metric_set_digest: digest("4"),
       dependency_view_digest: null,
       primary_execution_projection: primaryExecutionProjection,
     }),
+  });
+}
+
+function parserFactView() {
+  const sourceRef = "repo:sample@revision";
+  const moduleRef = "module:packages/sample";
+  const normalizedPath = "src/index.ts";
+  const locator = {
+    source_ref: sourceRef,
+    module_ref: moduleRef,
+    normalized_path: normalizedPath,
+    qualified_item_path: "sample",
+    signature_digest: indexerProtocolDigest({ symbol: "sample" }),
+  };
+  const factRef = indexerEvidenceAdapterFactRef({
+    ...locator,
+    kind: "exported-symbol",
+  });
+  const payload = { name: "sample", export_kind: "named" };
+  const scope = {
+    source_ref: sourceRef,
+    module_refs: [moduleRef],
+    scope_digest: indexerProtocolDigest({
+      source_ref: sourceRef,
+      module_refs: [moduleRef],
+    }),
+  };
+  const resultPayload: Omit<IndexerEvidenceAdapterResult, "output_digest"> = {
+    protocol: "context.indexer.evidence-adapter-result/v1",
+    adapter: {
+      id: "sample-parser",
+      package: "@example/sample-parser",
+      export: "materializeEvidence",
+      version: "1.0.0",
+      digest: digest("1"),
+    },
+    authorized_scope: scope,
+    input_digest: digest("2"),
+    precedence: 10,
+    files: [{
+      file_ref: indexerEvidenceAdapterFileRef({
+        source_ref: sourceRef,
+        module_ref: moduleRef,
+        normalized_path: normalizedPath,
+      }),
+      source_ref: sourceRef,
+      module_ref: moduleRef,
+      normalized_path: normalizedPath,
+      role: "primary-owner",
+      coverage_tier: "ast-catalog",
+      disposition: "analyzed",
+      facts: [{
+        fact_ref: factRef,
+        kind: "exported-symbol",
+        locator,
+        payload_digest: indexerProtocolDigest(payload),
+        denominator: "symbol",
+      }],
+    }],
+    diagnostics: [],
+    toolchain: [{
+      step: "parse-typescript",
+      package: "@example/sample-parser",
+      export: "materializeEvidence",
+      version: "1.0.0",
+      digest: digest("1"),
+      capabilities: ["parser.typescript"],
+      input_digest: digest("2"),
+      output_digest: digest("3"),
+    }],
+  };
+  const result = {
+    ...resultPayload,
+    output_digest: indexerEvidenceAdapterOutputDigest(resultPayload),
+  };
+  return buildIndexerParserFactView({
+    adapter_results: [result],
+    fact_payloads: [{ fact_ref: factRef, payload }],
+    inventory_digest: digest("4"),
   });
 }
 
@@ -302,9 +402,13 @@ describe("resolved-indexer-instructions materialization", () => {
 
     expect(request.handler).toBe("context.materialize-indexer-instructions/v1");
     expect(request.resource_id).toBe("resolved-indexer-instructions");
-    expect(result.resources).toHaveLength(1);
-    expect(result.resources[0]?.kind).toBe("provider");
+    expect(result.resources).toHaveLength(2);
+    expect(result.resources.map((resource) => resource.kind)).toEqual([
+      "provider",
+      "template",
+    ]);
     expect(result.resources[0]?.content).toContain("For partition work");
+    expect(result.resources[1]?.content).toContain("Component library template");
     expect(JSON.stringify(result)).not.toContain(staged.stage_path);
     expect(JSON.stringify(result)).not.toContain(bundle.transport.path);
     validateMaterializedIndexerInstructions(result, request);
@@ -335,10 +439,11 @@ describe("resolved-indexer-instructions materialization", () => {
     expect(input.request.composer_id).toBe("public-contract");
     expect(result.resources.map((resource) => resource.kind)).toEqual([
       "provider",
+      "template",
       "composer",
     ]);
-    expect(result.resources[1]?.content).toContain("Public contract composer");
-    expect(result.resources[1]?.content).toContain("fragments: []");
+    expect(result.resources[2]?.content).toContain("Public contract composer");
+    expect(result.resources[2]?.content).toContain("fragments: []");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("keeps semantic request/payload stable across transports while receipts remain delivery-specific", async () => {
@@ -396,7 +501,7 @@ describe("resolved-indexer-instructions materialization", () => {
     const localRoot = join(root, "src", "indexer", distribution.expected.indexerId);
     await mkdir(localRoot, { recursive: true });
     await writeFile(join(localRoot, "instructions.md"), [
-      "<!-- @context-indexer-origin context-code-indexer@1.0.0 profile=component-library -->",
+      "<!-- @context-indexer-origin context-code-indexer@1.1.1 profile=component-library -->",
       "Require public examples to use stable source refs.",
       "",
     ].join("\n"));
@@ -417,9 +522,10 @@ describe("resolved-indexer-instructions materialization", () => {
     expect(after.request.instruction_set_digest).not.toBe(before.request.instruction_set_digest);
     expect(result.resources.map((resource) => resource.kind)).toEqual([
       "provider",
+      "template",
       "customization-append",
     ]);
-    expect(result.resources[1]?.content).toContain("stable source refs");
+    expect(result.resources[2]?.content).toContain("stable source refs");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects stale request, changed stage bytes, and forged output payload", async () => {
@@ -576,9 +682,44 @@ describe("resolved-indexer-instructions materialization", () => {
       adapter: "context-cli",
       adapterVersion: "0.7.0",
     });
+    const worksetView = prepareIndexerWorksetViewMaterialization({
+      run_request: runRequest,
+      projection_sources: buildIndexerMainRunWorksetViewSources({
+        request: runRequest,
+        source_projection_sources: buildIndexerParserWorksetViewSource({
+          request: runRequest,
+          parser_fact_view: parserFactView(),
+        }),
+        canonical_inventory_members:
+          buildIndexerPartitionInventoryFromParserFactView(parserFactView()),
+      }),
+    });
+    const worksetViewHost = await materializeIndexerWorksetViewHostAction({
+      request: worksetView.request,
+      run_request: runRequest,
+      projection: worksetView.projection,
+      workspaceRoot: root,
+      adapter: "context-cli",
+      adapterVersion: "0.7.4",
+    });
+    expect(JSON.parse(await readFile(
+      worksetViewHost.managed_output.file_path,
+      "utf8",
+    ))).toEqual(worksetView.projection.view);
+    expect(`sha256:${createHash("sha256").update(await readFile(
+      worksetViewHost.managed_output.file_path,
+    )).digest("hex")}`).toBe(worksetViewHost.managed_output.digest);
+    expect((await consumeIndexerWorksetViewHostResult({
+      request: worksetView.request,
+      run_request: runRequest,
+      result: worksetViewHost.result,
+      read_receipt: worksetViewHost.workset_read_receipt,
+      managed_output: worksetViewHost.managed_output,
+    })).projection).toEqual(worksetView.projection);
     const initial = await buildIndexerAgentStepRoute({
       run_request: runRequest,
       instruction_request: input.request,
+      workset_view_request: worksetView.request,
       workspaceRoot: root,
     });
     expect(initial.route.action).toMatchObject({
@@ -603,23 +744,42 @@ describe("resolved-indexer-instructions materialization", () => {
     expect(JSON.stringify(initial.route)).not.toContain("__runtime__");
     expect(JSON.stringify(initial.route)).not.toContain(resolved.staged.stage_path);
 
+    expect(initial.route.resources.required.find((resource) =>
+      resource.id === "authorized-indexer-workset-view"
+    )).toMatchObject({
+      read_state: "read-required",
+      materialize: {
+        handler: "context.materialize-indexer-workset-view/v1",
+        input: { value: worksetView.request },
+        output_schema: "context.indexer.authorized-workset-view/v1",
+      },
+    });
+
     const receipt = await hostActionResourceReadReceipt(
       initial.instruction_location,
       host.result,
     );
+    const worksetViewReceipt = await hostActionResourceReadReceipt(
+      initial.workset_view_location,
+      worksetViewHost.result,
+    );
     const resumed = await buildIndexerAgentStepRoute({
       run_request: runRequest,
       instruction_request: input.request,
+      workset_view_request: worksetView.request,
       workspaceRoot: root,
       resource_receipts: {
         schema: "agent-graph.resource-read-receipts.v1",
         provider: "c4a/context",
-        receipts: [receipt],
+        receipts: [receipt, worksetViewReceipt],
       },
     });
     expect(resumed.stable_fingerprint).toBe(initial.stable_fingerprint);
     expect(resumed.route.resources.required.find((resource) =>
       resource.id === "resolved-indexer-instructions"
+    )?.read_state).toBe("current");
+    expect(resumed.route.resources.required.find((resource) =>
+      resource.id === "authorized-indexer-workset-view"
     )?.read_state).toBe("current");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

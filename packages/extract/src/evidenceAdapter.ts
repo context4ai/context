@@ -4,6 +4,7 @@ import {
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
   materializeIndexerEvidenceAdapterResult,
+  redactIndexerOutput,
   type IndexerEvidenceAdapterFact,
   type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
@@ -29,6 +30,10 @@ function fact(input: {
   payload: unknown;
   denominator: IndexerEvidenceAdapterFact["denominator"];
 }): IndexerEvidenceAdapterFact {
+  const payload = redactIndexerOutput({
+    channel: "success-payload",
+    value: input.payload,
+  }).value;
   return createIndexerEvidenceAdapterFact({
     source_ref: input.sourceRef,
     module_ref: input.moduleRef,
@@ -36,9 +41,25 @@ function fact(input: {
     qualified_item_path: input.qualifiedItemPath,
     kind: input.kind,
     signature: input.signature,
-    payload: input.payload,
+    payload,
     denominator: input.denominator,
   });
+}
+
+function uniqueFacts(facts: readonly IndexerEvidenceAdapterFact[]): IndexerEvidenceAdapterFact[] {
+  const byRef = new Map<string, IndexerEvidenceAdapterFact>();
+  for (const value of facts) {
+    const previous = byRef.get(value.fact_ref);
+    if (
+      previous !== undefined &&
+      indexerEvidenceAdapterProtocolDigest(previous) !==
+        indexerEvidenceAdapterProtocolDigest(value)
+    ) {
+      throw new TypeError(`ExtractionResult emits conflicting facts for ${value.fact_ref}`);
+    }
+    byRef.set(value.fact_ref, previous ?? value);
+  }
+  return [...byRef.values()];
 }
 
 function semanticExtractionPayload(extraction: ExtractionResult): unknown {
@@ -73,6 +94,14 @@ function relationSourceFile(
     if (containing.length === 1) return containing[0]!.file;
   }
   return null;
+}
+
+function relationQualifiedItemPath(relation: RelationInfo): string {
+  const identityDigest = indexerEvidenceAdapterProtocolDigest({
+    from: relation.from,
+    to: relation.to,
+  });
+  return `relation:${relation.type}@${relation.line ?? 0}#${identityDigest}`;
 }
 
 function diagnosticPayload(diagnostic: ExtractionDiagnostic): unknown {
@@ -195,7 +224,10 @@ export function extractionResultToEvidenceAdapterResult(
           sourceRef: invocation.authorized_scope.source_ref,
           moduleRef: invocation.module_ref,
           normalizedPath,
-          qualifiedItemPath: `relation:${relation.type}:${relation.from}->${relation.to}@${relation.line ?? 0}`,
+          // A relation endpoint may be a whole top-level call expression. Keep
+          // source text in the process-local, redacted payload rather than in
+          // the durable locator carried by Result/Fact refs.
+          qualifiedItemPath: relationQualifiedItemPath(relation),
           kind: "code-relation",
           signature: relation,
           payload: relation,
@@ -211,7 +243,7 @@ export function extractionResultToEvidenceAdapterResult(
       role,
       coverage_tier: coverage.tier,
       disposition: coverageFile.disposition,
-      facts,
+      facts: uniqueFacts(facts),
     };
   });
 

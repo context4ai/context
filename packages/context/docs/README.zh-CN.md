@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-这些手册说明知识项目如何声明来源、处理过程、审核和知识包产物。它们是 Agent
+这些手册说明知识项目如何声明来源、采集、Indexer 选择、审核和知识包产物。它们是 Agent
 驱动工作流中的参考资料，不是另一套生命周期指令。
 
 进行知识生产时，应先从已安装的 Context Agent 入口开始。Agent 优先消费
@@ -15,7 +15,7 @@
 |---|---|
 | 理解完整知识项目的形态 | [Getting Started](./getting-started.md) |
 | 判断 Agent 可以决定或修改什么 | [Agent Guide](./guides/agent-guide.md) 和 [Agent Dialogue](./guides/agent-dialogue.md) |
-| 配置来源、阶段、审核或产物 | [Project API](./reference/project-api.md) |
+| 配置来源、采集、Indexer 或产物 | [Project API](./reference/project-api.md) |
 | 选择或定制 Indexer Provider | [Provider Selection and Customization](./guides/indexer-provider-and-customization.md) |
 | 编写 Code/Markdown Indexer Skill | [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md) 和 [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md) |
 | 选择代码提取方式 | [Code Extractor Selection](./reference/code-extractors.md) |
@@ -30,7 +30,7 @@
 - [Agent Dialogue](./guides/agent-dialogue.md)：稳定的对话原则和 Route-selected Gate 资源发现方式。
 - [Package Outputs](./guides/package-outputs.md)：如何选择 Agent 知识包、LLM 文本或不构建产物。
 - [Lark Resource Materialization](./guides/lark-resources.md)：内嵌资源如何从来源证据进入正式知识和知识包。
-- [Project API](./reference/project-api.md)：`defineProject`、来源、阶段、审核和知识包声明。
+- [Project API](./reference/project-api.md)：`defineProject`、来源、采集、Indexer 和知识包声明。
 - [Provider Selection and Customization](./guides/indexer-provider-and-customization.md)：registry-only 选择、六级最小定制阶梯、升级冲突、调试与退出条件。
 - [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md)：Code Provider Skill 的 23 项作者/发布契约。
 - [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md)：capture/semantic 边界、Section 投影、material answer、编辑策略与局部增量。
@@ -38,10 +38,9 @@
 - [Package Templates](./reference/package-templates.md)：`kbPackage`、`llmsPackage`、模板变量和示例。
 - [Template Variables](./reference/template-variables.md)：Handlebars 变量、循环、注释和默认知识清单。
 
-正式 Markdown 使用完整的 Context production profile。知识包内的知识页只保留
-面向读者的元数据和正文；Node 身份、来源、Section 证据、审核指纹、符号清单、
-生成子项和关系继续留在生产工作区或 `context-build-inventory.json` 中。构建清单
-将每个分发路径映射回正式知识路径。知识包根目录可以包含 Agent 文件；可交换知识
+正式 Markdown 保留面向读者的内容和后续更新、重建所需的最少元数据。知识包内的
+知识页使用更小的读者投影；内部证据 ID、执行回执和临时审核状态只留在本地运行态。
+构建清单将每个分发路径映射回正式知识路径。知识包根目录可以包含 Agent 文件；可交换知识
 位于所选的 `wikis/`、`guides/`、`rules/` 和 `feats/` 子树。
 
 ## 已安装模板

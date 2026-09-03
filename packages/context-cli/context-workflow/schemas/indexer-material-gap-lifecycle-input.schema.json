@@ -4,12 +4,11 @@
   "oneOf": [
     {
       "type": "object",
-      "required": ["protocol", "phase", "reconciliation_input", "current_layout_digest"],
+      "required": ["protocol", "phase", "reconciliation_input"],
       "properties": {
         "protocol": { "const": "context.indexer.audit-material-gap-state-input/v1" },
         "phase": { "enum": ["before-main-review", "after-main-review"] },
-        "reconciliation_input": { "type": "object" },
-        "current_layout_digest": { "$ref": "#/$defs/digest" }
+        "reconciliation_input": { "type": "object" }
       },
       "additionalProperties": false
     },
@@ -25,57 +24,11 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "resolution_result"],
-      "properties": {
-        "protocol": { "const": "context.indexer.checkpoint-material-answer-review-input/v1" },
-        "resolution_result": { "type": "object" }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": ["protocol", "stage", "expected_ledger_revision", "current_layout_digest"],
-      "properties": {
-        "protocol": { "const": "context.indexer.evaluate-material-gaps-input/v1" },
-        "stage": { "enum": ["pre-layout", "post-actualization"] },
-        "expected_ledger_revision": { "$ref": "#/$defs/digest" },
-        "current_layout_digest": { "$ref": "#/$defs/digest" }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
       "required": ["protocol", "expected_ledger_revision", "approved_structure"],
       "properties": {
         "protocol": { "const": "context.indexer.close-approved-knowledge-input/v1" },
         "expected_ledger_revision": { "$ref": "#/$defs/digest" },
         "approved_structure": { "type": "object" }
-      },
-      "additionalProperties": false
-    },
-    {
-      "type": "object",
-      "required": [
-        "protocol",
-        "expected_ledger_revision",
-        "layout_proposal_set",
-        "answer_landings",
-        "resolved_questions",
-        "allowed_selector_fact_paths",
-        "registered_sources",
-        "reader_authority_digest",
-        "evidence_read_receipts"
-      ],
-      "properties": {
-        "protocol": { "const": "context.indexer.actualize-material-answer-bindings-input/v1" },
-        "expected_ledger_revision": { "$ref": "#/$defs/digest" },
-        "layout_proposal_set": { "type": "object" },
-        "answer_landings": { "type": "array", "items": { "type": "object" } },
-        "resolved_questions": { "type": "array", "items": { "type": "object" } },
-        "allowed_selector_fact_paths": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-        "registered_sources": { "type": "array", "items": { "type": "object" } },
-        "reader_authority_digest": { "$ref": "#/$defs/digest" },
-        "evidence_read_receipts": { "type": "array", "items": { "type": "object" } }
       },
       "additionalProperties": false
     }

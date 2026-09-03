@@ -37,8 +37,6 @@ function programGateAction(input: {
       ...input.source,
       input: input.gateInput as unknown as JsonValue,
     },
-    node: "authorize-indexer-program-execution",
-    hasStructureBatch: false,
     revision: input.revision,
     authorities: [],
   });

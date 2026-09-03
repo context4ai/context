@@ -84,6 +84,29 @@ describe("TypeScriptPlugin", () => {
     expect(visibilityByName.get("Runnable")).toBe(Visibility.Internal);
   });
 
+  test("analyzes authorized non-entry files without promoting their exports", async () => {
+    const fs = getFixtureFs("entries-lib");
+    const plugin = new TypeScriptPlugin();
+    const manifest: ManifestInfo = {
+      type: "package.json",
+      path: "package.json",
+      content: await fs.readJson("package.json"),
+    };
+
+    const entryResult = await plugin.detectEntries(manifest, fs);
+    const result = await plugin.extractSymbolsInScope(
+      entryResult.entries,
+      [...entryResult.entries.map((entry) => entry.path), "src/internal.ts"],
+      fs,
+    );
+
+    expect(result.files.map((file) => file.path)).toContain("src/internal.ts");
+    expect(result.symbols.find((symbol) => symbol.name === "localExport")?.visibility)
+      .toBe(Visibility.Internal);
+    expect(result.symbols.find((symbol) => symbol.name === "mainEntry")?.visibility)
+      .toBe(Visibility.Exported);
+  });
+
   test("sets relation metadata to grounding=code source=ast confidence=1.0", async () => {
     const fs = getFixtureFs("trace-project");
     const plugin = new TypeScriptPlugin();
@@ -132,7 +155,14 @@ describe("TypeScriptPlugin", () => {
     expect(byName.get("createWidget")?.signature).toBe("createWidget(input: PublicType)");
     expect(byName.get("ChatInput")?.propsType).toBe("ChatInputProps");
     expect(byName.get("ChatInput")?.typeAnnotation).toBe("forwardRef<ChatInputRef, ChatInputProps>");
+    expect(result.relations.filter((relation) =>
+      relation.type === EdgeType.OfType &&
+      relation.from === "ChatInput" &&
+      relation.to === "ChatInputProps"
+    )).toHaveLength(1);
     expect(byName.get("TinyIcon")?.returnType).toBe("JSX.Element");
+    expect(result.coverage?.files.find((file) => file.path === "src/view.tsx")?.disposition)
+      .toBe("analyzed");
     expect(byName.get("Service")?.members?.some((member) => member.name === "constructor")).toBe(true);
   });
 

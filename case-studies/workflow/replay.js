@@ -55,8 +55,8 @@ const copy = {
     single: "一次推进",
     loop: "循环",
     checkpoint: "检查点",
-    fields: ["来源事实", "代码知识", "文档知识", "知识包结果"],
-    provenance: "这是对真实 Context 调试记录的脱敏投影：保留路由顺序、循环、状态与相对时间，不包含来源正文、私有路径和不透明标识。"
+    fields: ["来源范围与采集", "统一 Indexer 与审核", "知识包构建", "当前结果"],
+    provenance: "本回放由脱敏 Context 记录按当前工作区契约归一化：退役阶段折叠为唯一 Indexer 路由，不包含来源正文、私有路径和不透明标识。"
   },
   en: {
     title: "Context Work Graph Replay",
@@ -99,8 +99,8 @@ const copy = {
     single: "Single pass",
     loop: "Loop",
     checkpoint: "Checkpoint",
-    fields: ["SOURCE FACTS", "CODE KNOWLEDGE", "PROSE KNOWLEDGE", "PACKAGE OUTCOME"],
-    provenance: "This is a sanitized projection of a real Context debug recording. It preserves route order, loops, status, and relative timing without source text, private paths, or opaque identifiers."
+    fields: ["SOURCE SCOPE & CAPTURE", "SOLE INDEXER & REVIEW", "PACKAGE BUILD", "CURRENT OUTCOME"],
+    provenance: "This replay is normalized from a sanitized Context recording to the current workspace contract. Retired phases collapse into the sole Indexer route; source text, private paths, and opaque identifiers are excluded."
   }
 };
 
@@ -125,45 +125,20 @@ const nodes = {
     zh: ["采集来源快照", "仍有文档来源缺少可审计快照。", "采集下一份来源并记录证据摘要。", "该来源的快照与资源清单已落盘。"],
     en: ["Capture source snapshot", "At least one document source still lacks an auditable snapshot.", "Capture the next source and record its evidence digest.", "The source snapshot and resource inventory are persisted."]
   },
-  "configure-code-extraction": {
-    phase: "CODE",
-    zh: ["配置代码提取", "代码模块已经登记，但尚未声明提取范围。", "为模块声明代码知识提取阶段。", "每个模块都有明确的提取目标。"],
-    en: ["Configure code extraction", "Code modules are registered, but their extraction scope is not declared.", "Declare code-knowledge extraction phases for the modules.", "Every module has an explicit extraction target."]
-  },
-  "extract-next": {
-    phase: "CODE",
-    zh: ["提取代码知识", "仍有模块缺少与当前源码一致的代码知识候选。", "从下一模块提取符号与关系候选。", "候选与源码摘要形成可验证绑定。"],
-    en: ["Extract code knowledge", "At least one module still lacks code candidates matching its current source.", "Extract symbols and relations from the next module.", "Candidates are bound to verifiable source digests."]
+  "run-indexer-lifecycle": {
+    phase: "INDEXER",
+    zh: ["生成统一候选", "当前登记表尚未生成与已授权来源一致的完整候选批次。", "按 Indexer Graph 继续 Provider 选择、分区、生成、合并、布局与候选编译。", "代码、Markdown 与扩展材料共同收敛为一批当前 Candidate。"],
+    en: ["Produce the candidate batch", "The current registry has not produced a complete candidate batch for the authorized sources.", "Follow the Indexer Graph through Provider selection, partitioning, authoring, reconciliation, layout, and candidate compilation.", "Code, Markdown, and extension materials converge into one current Candidate batch."]
   },
   "apply-managed-review": {
     phase: "GATE",
-    zh: ["审核代码候选", "代码批次提取完成，候选尚未进入批准知识。", "依据本次托管授权原子应用审核决策。", "候选以明确决定写入批准知识。"],
-    en: ["Review code candidates", "The code batch is extracted, but its candidates are not approved knowledge yet.", "Atomically apply review decisions under the current managed authority.", "Candidates enter approved knowledge with explicit decisions."]
+    zh: ["审核最终候选", "完整 Indexer 批次已经生成，但还没有进入批准知识。", "依据本次托管授权原子应用整批审核决定。", "唯一 Candidate 批次一次性写入批准知识。"],
+    en: ["Review final candidates", "The complete Indexer batch exists but has not entered approved knowledge.", "Atomically apply the batch decision under the current managed authority.", "The sole Candidate batch enters approved knowledge in one transaction."]
   },
   "close-approved-knowledge": {
     phase: "CHECKPOINT",
     zh: ["固化知识投影", "批准页面已变化，结构投影仍对应旧事实。", "从已批准页面确定性重建知识投影。", "页面、节点和关系投影彼此一致。"],
     en: ["Close knowledge projection", "Approved pages changed while the structure projection still reflects older facts.", "Deterministically rebuild the projection from approved pages.", "Pages, nodes, and relation projections agree."]
-  },
-  "configure-prose-lifecycle": {
-    phase: "PROSE",
-    zh: ["配置文档知识流程", "文档快照已存在，但尚未声明结构与编译目标。", "为文档声明结构规划、编译和审核阶段。", "文档来源拥有完整的知识生产路径。"],
-    en: ["Configure prose workflow", "Document snapshots exist, but structure and compile targets are not declared.", "Declare structure, compile, and review phases for documents.", "Document sources have a complete knowledge-production path."]
-  },
-  "align-next": {
-    phase: "PROSE",
-    zh: ["设计知识结构", "仍有文档来源没有经过确认的页面结构。", "读取当前所需证据并确认页面与章节边界。", "结构快照绑定来源摘要并通过校验。"],
-    en: ["Design knowledge structure", "At least one document source lacks a confirmed page structure.", "Read the required evidence and confirm page and section boundaries.", "The structure snapshot is validated and bound to source digests."]
-  },
-  "compile-next": {
-    phase: "PROSE",
-    zh: ["编译知识页面", "仍有确认结构尚未编译成候选页面。", "按已确认结构编译下一批知识页面。", "页面候选保留逐节来源绑定。"],
-    en: ["Compile knowledge pages", "At least one confirmed structure has not been compiled into candidate pages.", "Compile the next batch of pages from the confirmed structure.", "Page candidates retain section-level source bindings."]
-  },
-  "apply-resumed-review": {
-    phase: "GATE",
-    zh: ["审核文档候选", "完整文档批次已编译，候选等待统一决策。", "原子应用完整批次的审核决定。", "候选集合一次性进入批准知识。"],
-    en: ["Review prose candidates", "The complete document batch is compiled and awaits one review decision set.", "Atomically apply review decisions to the complete batch.", "The candidate set enters approved knowledge as one transaction."]
   },
   "configure-package-output": {
     phase: "PACKAGE",
@@ -180,10 +155,15 @@ const nodes = {
     zh: ["构建可消费知识包", "批准知识或输出配置比当前产物更新。", "构建知识包并执行确定性验证。", "产物清单与知识摘要一致。"],
     en: ["Build consumable package", "Approved knowledge or output configuration is newer than the current artifact.", "Build the package and run deterministic verification.", "The artifact inventory matches the knowledge digest."]
   },
-  complete: {
+  "flush-logs-after-build": {
+    phase: "DELIVERY",
+    zh: ["投递最终运行事件", "知识包已经完成，但仍有本次构建的运行事件等待投递。", "投递待处理事件；失败时保留本地 outbox 供后续重试。", "最终事件已投递，或已安全留在可恢复 outbox。"],
+    en: ["Deliver final runtime events", "The package is complete, but runtime events from this build still await delivery.", "Flush pending events, retaining the local outbox for a later retry if delivery fails.", "Final events are delivered or remain safely recoverable from the outbox."]
+  },
+  "current-scope-complete": {
     phase: "OUTCOME",
-    zh: ["目标完成", "所有声明目标均已满足，没有待处理门禁或陈旧产物。", "停止执行并保留可恢复记录。", "最终状态由外部事实与构建证据证明。"],
-    en: ["Goal complete", "Every declared target is satisfied with no pending gate or stale artifact.", "Stop execution and preserve the recoverable record.", "External facts and build evidence prove the final state."]
+    zh: ["当前范围完成", "所有已声明目标均已满足，没有待处理门禁或陈旧产物。", "停止执行；后续只在来源或目标变化时重新进入工作流。", "当前知识、结构和构建产物彼此一致。"],
+    en: ["Current scope complete", "Every declared target is satisfied with no pending gate or stale artifact.", "Stop; re-enter the workflow only when sources or goals change.", "Current knowledge, structure, and build artifacts agree."]
   }
 };
 
@@ -192,18 +172,14 @@ const commands = {
   "configure-document-capture": "context status --managed --format json",
   "authorize-document-capture": "context run --managed --authority context.source-read --until blocked-or-complete --format json",
   "capture-next": "context --workflow-managed --workflow-authority context.source-read run capture:document-source --format json",
-  "configure-code-extraction": "context status --managed --format json",
-  "extract-next": "context --workflow-managed run extract:module-source:codegraph --format json",
-  "apply-managed-review": "context --workflow-managed review approve-all codegraph --managed --format json",
-  "close-approved-knowledge": "context --workflow-managed close --format json",
-  "configure-prose-lifecycle": "context status --managed --format json",
-  "align-next": "context --workflow-managed run align:document-source:collection --view read-plan --format json",
-  "compile-next": "context --workflow-managed run compile:document-source:collection --stage --format json",
-  "apply-resumed-review": "context --workflow-managed review approve-all --all --managed --format json",
+  "run-indexer-lifecycle": "context run --managed --until blocked-or-complete --format json",
+  "apply-managed-review": "context review approve-all --all --managed --format json",
+  "close-approved-knowledge": "context close --format json",
   "configure-package-output": "context status --managed --format json",
   "review-package-template": "context package template accept --all --format json",
   "build-next": "context build --format json",
-  complete: "context status --managed --format json"
+  "flush-logs-after-build": "context logs flush --format json",
+  "current-scope-complete": "context status --managed --format json"
 };
 
 const workflowRoot = "https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow";
@@ -224,13 +200,9 @@ const workflowArtifacts = {
     action: "actions/capture-next.yaml",
     resources: ["resources/procedures/document-capture.md", "resources/views/source-boundary.yaml", "resources/procedures/source-capture-detailed.md", "resources/manuals/guides/lark-resources.md"]
   },
-  "configure-code-extraction": {
-    action: "actions/configure-code-extraction.yaml",
-    resources: ["resources/procedures/project-configuration.md", "resources/procedures/code-extraction.md", "resources/views/source-current.yaml"]
-  },
-  "extract-next": {
-    action: "actions/extract-next.yaml",
-    resources: ["resources/procedures/code-extraction.md", "resources/views/source-current.yaml"]
+  "run-indexer-lifecycle": {
+    action: "actions/run-indexer-lifecycle.yaml",
+    resources: []
   },
   "apply-managed-review": {
     action: "actions/apply-managed-review.yaml",
@@ -238,37 +210,25 @@ const workflowArtifacts = {
   },
   "close-approved-knowledge": {
     action: "actions/close-approved-knowledge.yaml",
-    resources: ["resources/procedures/close-and-build.md", "resources/views/workspace-current.yaml"]
-  },
-  "configure-prose-lifecycle": {
-    action: "actions/configure-prose-lifecycle.yaml",
-    resources: ["resources/procedures/project-configuration.md", "resources/procedures/document-classification.md", "resources/manuals/reference/project-api.md"]
-  },
-  "align-next": {
-    action: "actions/align-next.yaml",
-    resources: ["resources/procedures/prose-align.md", "resources/views/structure-current.yaml", "resources/semantic/align/structure-planning.md", "resources/semantic/align/gates.md"]
-  },
-  "compile-next": {
-    action: "actions/compile-next.yaml",
-    resources: ["resources/procedures/prose-compile.md", "resources/views/structure-current.yaml", "resources/semantic/compile/index.md"]
-  },
-  "apply-resumed-review": {
-    action: "actions/apply-managed-review.yaml",
-    resources: ["resources/procedures/knowledge-review.md", "resources/views/review-current.yaml"]
+    resources: ["resources/procedures/close-and-build.md", "resources/views/verification-current.yaml", "resources/diagnostics/projection-stale.md"]
   },
   "configure-package-output": {
     action: "actions/configure-package-output.yaml",
-    resources: ["resources/procedures/package-output.md", "resources/manuals/guides/package-outputs.md", "resources/manuals/reference/project-api.md"]
+    resources: ["resources/procedures/project-configuration.md", "resources/procedures/package-output.md", "resources/views/package-current.yaml", "resources/manuals/guides/package-outputs.md", "resources/manuals/reference/project-api.md", "resources/manuals/reference/package-templates.md", "resources/manuals/reference/template-variables.md"]
   },
   "review-package-template": {
     action: "actions/accept-package-templates.yaml",
-    resources: ["resources/procedures/package-output.md", "resources/dialogue/human-gates.md", "resources/dialogue/package-output.md", "resources/manuals/reference/package-templates.md"]
+    resources: ["resources/procedures/package-output.md", "resources/dialogue/human-gates.md", "resources/views/package-current.yaml", "resources/manuals/reference/package-templates.md"]
   },
   "build-next": {
     action: "actions/build-next.yaml",
     resources: ["resources/procedures/close-and-build.md", "resources/views/package-current.yaml"]
   },
-  complete: { resources: [] }
+  "flush-logs-after-build": {
+    action: "actions/flush-runtime-events.yaml",
+    resources: ["resources/procedures/runtime-event-delivery.md"]
+  },
+  "current-scope-complete": { resources: [] }
 };
 
 const workspaceGroups = [
@@ -282,34 +242,22 @@ const workspaceGroups = [
     ]
   },
   {
-    en: "Resume interrupted work", zh: "恢复未完成工作", nodes: [
-      ["Resume prose configuration", "恢复文档流程配置", "action"],
-      ["Confirm structure", "确认知识结构", "gate"],
-      ["Refresh structure", "刷新知识结构", "action"],
-      ["Apply structure confirmation", "应用结构确认", "action"],
-      ["Compile pending views", "编译待处理页面", "action"],
-      ["Resolve review identities", "协调审核身份", "action"],
-      ["Review resumed batch", "审核恢复批次", "gate"],
-      ["Apply resumed review", "应用恢复审核", "action"]
+    en: "Document maintenance", zh: "文档维护", nodes: [
+      ["Revise requested document", "修订已请求文档", "action"]
     ]
   },
   {
-    en: "Sources and code", zh: "来源与代码", nodes: [
+    en: "Sources and capture", zh: "来源与采集", nodes: [
       ["Choose source boundary", "选择来源边界", "gate"],
       ["Restore repositories", "恢复代码仓库", "gate"],
       ["Configure capture", "配置文档采集", "action"],
       ["Authorize source reads", "授权读取来源", "gate"],
-      ["Capture next source", "采集下一来源", "action"],
-      ["Choose extraction scope", "选择提取范围", "gate"],
-      ["Configure extraction", "配置代码提取", "action"],
-      ["Extract next module", "提取下一模块", "action"]
+      ["Capture next source", "采集下一来源", "action"]
     ]
   },
   {
-    en: "Documents and review", zh: "文档与审核", nodes: [
-      ["Classify document", "确定文档类型", "gate"],
-      ["Configure prose lifecycle", "配置文档知识流程", "action"],
-      ["Align next structure", "设计下一结构", "action"],
+    en: "Indexer and review", zh: "Indexer 与审核", nodes: [
+      ["Run Indexer lifecycle", "执行 Indexer 生命周期", "action"],
       ["Review current batch", "审核当前批次", "gate"],
       ["Apply managed review", "应用托管审核", "action"],
       ["Close approved knowledge", "固化批准知识", "action"]
@@ -321,6 +269,7 @@ const workspaceGroups = [
       ["Configure package", "配置知识包", "action"],
       ["Review templates", "审核消费模板", "gate"],
       ["Build package", "构建知识包", "action"],
+      ["Flush runtime events", "投递运行事件", "action"],
       ["Scope complete", "当前目标完成", "terminal"]
     ]
   }
@@ -328,9 +277,8 @@ const workspaceGroups = [
 
 const positions = [
   [58, 72], [270, 52], [490, 92], [714, 54], [886, 160],
-  [742, 238], [520, 212], [292, 268], [74, 354], [286, 404],
-  [518, 350], [748, 416], [914, 326], [812, 520], [580, 494],
-  [348, 548], [92, 510]
+  [650, 226], [414, 226], [92, 370], [310, 402], [530, 370],
+  [750, 402], [886, 510]
 ];
 
 const instances = [];
@@ -389,14 +337,14 @@ fields.forEach((field, index) => {
 });
 
 const overrides = new Map([
-  ["capture-next>configure-code-extraction", ["right", "top"]],
-  ["configure-code-extraction>extract-next", ["bottom", "right"]],
-  ["close-approved-knowledge>configure-prose-lifecycle", ["left", "top"]],
-  ["configure-prose-lifecycle>align-next", ["bottom", "left"]],
-  ["align-next>compile-next", ["right", "left"]],
-  ["compile-next>apply-resumed-review", ["right", "left"]],
-  ["apply-resumed-review>close-approved-knowledge", ["right", "bottom"]],
-  ["close-approved-knowledge>configure-package-output", ["bottom", "right"]]
+  ["capture-next>run-indexer-lifecycle", ["right", "top"]],
+  ["run-indexer-lifecycle>apply-managed-review", ["left", "right"]],
+  ["apply-managed-review>close-approved-knowledge", ["left", "right"]],
+  ["close-approved-knowledge>configure-package-output", ["bottom", "top"]],
+  ["configure-package-output>review-package-template", ["right", "left"]],
+  ["review-package-template>build-next", ["right", "left"]],
+  ["build-next>flush-logs-after-build", ["right", "left"]],
+  ["flush-logs-after-build>current-scope-complete", ["bottom", "left"]]
 ]);
 const edges = [];
 for (let index = 0; index < instances.length - 1; index += 1) {
@@ -502,7 +450,7 @@ function renderGraph() {
       : state.hoveredIndex <= state.index
         ? " hover-executed"
         : " hover-future";
-    group.setAttribute("class", `node ${index > currentInstance ? "future" : "visited"}${index === currentInstance ? " current" : ""}${instance.node === "complete" && currentStep.node === "complete" ? " complete" : ""}${hoverClass}`);
+    group.setAttribute("class", `node ${index > currentInstance ? "future" : "visited"}${index === currentInstance ? " current" : ""}${instance.node === "current-scope-complete" && currentStep.node === "current-scope-complete" ? " complete" : ""}${hoverClass}`);
   });
   edges.forEach((edge, index) => {
     const className = index === currentInstance - 1 ? "edge current" : index < currentInstance - 1 ? "edge visited" : "edge";
@@ -534,7 +482,7 @@ function renderWorkflowLinks(nodeId) {
     container.append(artifactLink(artifacts.action, copy[language].actionFile));
   } else {
     const note = document.createElement("p");
-    note.textContent = nodeId === "complete" ? copy[language].terminalNode : copy[language].gateContract;
+    note.textContent = nodeId === "current-scope-complete" ? copy[language].terminalNode : copy[language].gateContract;
     container.append(note);
   }
   for (const resource of artifacts.resources) {

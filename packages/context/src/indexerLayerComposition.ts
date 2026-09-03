@@ -5,10 +5,14 @@ import {
   addDuplicateIssues,
   compareIndexerCanonicalText,
   formatIndexerSchemaIssues,
+  indexerCanonicalRefSchema,
+  indexerComposerRefSchema,
   indexerDigestSchema,
   indexerIdSchema,
   indexerProtocolDigest,
+  indexerProviderLayerRefSchema,
 } from "./indexerProtocolCommon.js";
+import { indexerArtifactSchema } from "./indexerArtifact.js";
 import type { IndexerJson } from "./indexerRegistry.js";
 
 const canonicalJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
@@ -22,19 +26,11 @@ const canonicalJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
   ])
 );
 
-export const indexerCanonicalRefSchema = z.string().regex(
-  /^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#@+-]*$/u,
-);
-
-export const indexerProviderLayerRefSchema = indexerCanonicalRefSchema.refine(
-  (value) => !value.includes("#composer:"),
-  "Provider layer ref cannot contain a composer suffix",
-);
-
-export const indexerComposerRefSchema = indexerCanonicalRefSchema.refine(
-  (value) => /#composer:[a-z0-9][a-z0-9._/-]*$/u.test(value),
-  "composer ref must end with #composer:<id>",
-);
+export {
+  indexerCanonicalRefSchema,
+  indexerComposerRefSchema,
+  indexerProviderLayerRefSchema,
+} from "./indexerProtocolCommon.js";
 
 export const indexerEvidenceRefSchema = z.object({
   ref: indexerCanonicalRefSchema,
@@ -45,6 +41,11 @@ export const indexerEvidenceRefSchema = z.object({
 const evidenceRefsSchema = z.array(indexerEvidenceRefSchema).superRefine((value, context) => {
   addDuplicateIssues(value.map((item) => item.ref), context, "evidence_refs");
 });
+
+const nonEmptyEvidenceRefsSchema = z.array(indexerEvidenceRefSchema).min(1)
+  .superRefine((value, context) => {
+    addDuplicateIssues(value.map((item) => item.ref), context, "evidence_refs");
+  });
 
 const factEnrichmentSchema = z.object({
   target_ref: indexerCanonicalRefSchema,
@@ -64,11 +65,8 @@ const templateVariableBindingSchema = z.object({
 const derivedArtifactProposalSchema = z.object({
   composer_ref: indexerComposerRefSchema,
   target_node_ref: indexerCanonicalRefSchema,
-  artifact_kind: indexerIdSchema,
-  artifact_key: indexerIdSchema,
-  artifact_policy_variant: indexerIdSchema,
-  variables: z.record(canonicalJsonSchema),
-  evidence_refs: evidenceRefsSchema,
+  artifact: indexerArtifactSchema,
+  evidence_refs: nonEmptyEvidenceRefsSchema,
 }).strict();
 
 const factPayloadSchema = z.object({
@@ -248,7 +246,7 @@ function fragmentItemIdentity(
     return `${item.target_ref}\u0000${item.template_id}\u0000${item.variable_id}`;
   }
   const item = payload.proposals[index]!;
-  return `${item.composer_ref}\u0000${item.target_node_ref}\u0000${item.artifact_kind}\u0000${item.artifact_key}`;
+  return `${item.composer_ref}\u0000${item.target_node_ref}\u0000${item.artifact.artifact_kind}\u0000${item.artifact.artifact_id}`;
 }
 
 function validateFragmentPayload(
@@ -399,7 +397,7 @@ function materializedFragmentConflictKeys(
     );
   }
   return fragment.payload.proposals.map((item) =>
-    `artifact:${item.target_node_ref}:${item.artifact_kind}:${item.artifact_key}`
+    `artifact:${item.target_node_ref}:${item.artifact.artifact_kind}:${item.artifact.artifact_id}`
   );
 }
 

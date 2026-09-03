@@ -97,7 +97,7 @@ async function resolveCurrentProseRef(input: {
       {
         category: ErrorCategory.SchemaInvalid,
         next:
-          "Create a replacement candidate through prose align or fix the approved source_ref.",
+          "Create a replacement Candidate through the current Indexer lifecycle or fix the approved source_ref.",
       },
     );
   }
@@ -203,7 +203,7 @@ async function prepareRePin(input: {
         `source_ref cannot be re-pinned to a unique source span: ${ref.full}`,
         {
           category: ErrorCategory.WorkspaceStateInvalid,
-          next: "Create a replacement candidate through prose align.",
+          next: "Create a replacement Candidate through the current Indexer lifecycle.",
         },
       );
     }
@@ -216,7 +216,7 @@ async function prepareRePin(input: {
           candidate_id: input.decision.view_ref,
           status: resolved.status,
           next:
-            "Create a replacement candidate through prose compile/review, or deprecate the approved page.",
+            "Create a replacement Candidate through the current Indexer lifecycle, or deprecate the approved page.",
         },
       );
     }
@@ -268,7 +268,7 @@ async function prepareDecision(input: {
   projectRoot: string;
   decision: EvidenceMaintenanceDecision;
 }): Promise<PreparedMaintenance> {
-  const page = approvedPageForViewRef(
+  const page = await approvedPageForViewRef(
     input.projectRoot,
     input.decision.view_ref,
   );

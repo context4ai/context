@@ -310,12 +310,6 @@ export function packageBuildInventory(input: {
   structure: KnowledgeStructureInfo;
   verifyEvidenceStatus: ProjectVerifyResult["evidenceStatus"] | null;
   documentOptimization?: DocumentOptimizationStatus;
-  codeIndexAudit?: {
-    reportDigest: string;
-    decision: string;
-    codePages: number;
-    signals: number;
-  };
 }): Record<string, unknown> {
   const inventory = knowledgeInventory(
     input.selected,
@@ -451,16 +445,6 @@ export function packageBuildInventory(input: {
       })),
       collections: collectionSummaries,
     },
-    ...(input.codeIndexAudit === undefined
-      ? {}
-      : {
-          code_index_audit: {
-            report_digest: input.codeIndexAudit.reportDigest,
-            decision: input.codeIndexAudit.decision,
-            code_pages: input.codeIndexAudit.codePages,
-            signals: input.codeIndexAudit.signals,
-          },
-        }),
     structure: {
       path: input.structure.path,
       scope: "selected-package",

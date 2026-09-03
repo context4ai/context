@@ -15,39 +15,24 @@ import type {
 import type { PackageFreshness } from "../packageBuilder.js";
 import type { PackageTemplateReviewStatus } from "../packageTemplateReview.js";
 import type { ProjectCloseStatus } from "../close.js";
-import type { DeclarationGraph, StructureCompileResolution } from "../declarationGraph.js";
-import type { ProseCompileBatchProgress } from "../proseCompileBatch.js";
 import type {
-  ActiveStructuresStatus,
-  AlignPhaseResolution,
   DocumentSourceStatus,
   EvidenceWarningState,
-  PendingStructureTarget,
-  SourceFreshnessState,
-  UnclassifiedDocumentTarget,
 } from "../statusTypes.js";
-import type { StructureDraftStatus } from "../statusReaders.js";
 import type { ProjectVerifyIssue } from "../verify.js";
-import type { ReviewPathIdentityConflictStatus } from "../reviewIdentityConflicts.js";
-import type { ExtractionPreviewState } from "../extractionPreviewCache.js";
 import type { DocumentOptimizationStatus } from "../documentOptimization.js";
-import type { CodeIndexAuditStatus } from "../codeIndexAudit.js";
 
 export const CONTEXT_WORKFLOW_PROVIDER_ID = "c4a/context";
 export const CONTEXT_WORKFLOW_GRAPH_ID = "workspace";
 export const CONTEXT_WORKFLOW_ENTRY = "context";
 
 export const CONTEXT_WORKFLOW_AUTHORITIES = {
-  indexerMaterialAnswerReview: "context.indexer-material-answer-review",
   indexerDependencyInstall: "context.indexer-dependency-install",
   indexerProgramExecution: "context.indexer-program-execution",
   indexerProjectConfirmation: "context.indexer-project-confirmation",
   evidenceMaintenance: "context.evidence-maintenance",
   repositoryRestore: "context.repository-restore",
   sourceRead: "context.source-read",
-  extractionScope: "context.extraction-scope",
-  documentClassification: "context.document-classification",
-  structureConfirmation: "context.structure-confirmation",
   knowledgeReview: "context.knowledge-review",
   packageOutput: "context.package-output",
   packageTemplateReview: "context.package-template-review",
@@ -74,20 +59,8 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   gates: {
     evidence_maintenance_resolved: boolean;
     source_read_resolved: boolean;
-    extraction_scope_resolved: boolean;
-    document_classification_resolved: boolean;
-    structure_confirmation_resolved: boolean;
     knowledge_review_resolved: boolean;
     package_output_resolved: boolean;
-  };
-  resume: {
-    prose_declarations_complete: boolean;
-    structure_refresh_required?: boolean;
-    structure_confirmation_resolved: boolean;
-    structure_confirmed: boolean;
-    compile_complete: boolean;
-    knowledge_review_resolved: boolean;
-    review_gate_clear: boolean;
   };
   sources: {
     registered: boolean;
@@ -97,41 +70,9 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
     declarations_complete: boolean;
     complete: boolean;
   };
-  extract: {
-    declarations_complete: boolean;
-    plans_complete: boolean;
-    capability_clear: boolean;
-    preview_current: boolean;
-    ownership_clear: boolean;
-    scale_clear: boolean;
-    batch_digest: string | null;
-    complete: boolean;
-    audit_applicable: boolean;
-    audit_resolved: boolean;
-    audit_revision_required: boolean;
-    audit_input_required: boolean;
-    audit_guidance_required: boolean;
-    migration_required: boolean;
-  };
-  documents: {
-    classified: boolean;
-  };
-  prose: {
-    declarations_complete: boolean;
-  };
-  align: {
-    prepared: boolean;
-  };
-  structure: {
-    confirmed: boolean;
-  };
-  compile: {
-    complete: boolean;
-  };
   review: {
     gate_clear: boolean;
     batch_resolved: boolean;
-    identity_conflicts_present?: true;
     candidate_set_digest: string | null;
   };
   close: {
@@ -175,33 +116,17 @@ export interface ContextWorkflowObservation {
     pending_count: number;
     pending_kinds: string[];
   };
-  sourceFreshness: SourceFreshnessState;
-  staleSourcePhases: readonly string[];
-  pendingExtractPhases: readonly string[];
-  extractionPreview?: ExtractionPreviewState;
-  codeIndexAudit?: CodeIndexAuditStatus;
-  codeIndexMigrationRequired?: boolean;
   pendingCaptureCommands: readonly string[];
   missingCaptureSources: readonly DocumentSourceStatus[];
   evidenceWarnings: EvidenceWarningState;
   verifyErrors: number;
   projectionRefreshIssues: number;
   verifyIssues: readonly ProjectVerifyIssue[];
-  stagedStructure: StructureDraftStatus;
-  activeStructures: ActiveStructuresStatus;
-  declarationGraph: DeclarationGraph;
-  alignPhaseResolution?: AlignPhaseResolution;
-  compilePhaseResolution?: StructureCompileResolution;
-  compileBatch?: ProseCompileBatchProgress;
-  reviewIdentityConflicts: ReviewPathIdentityConflictStatus;
-  unclassifiedDocumentTargets: readonly UnclassifiedDocumentTarget[];
-  pendingStructureTargets: readonly PendingStructureTarget[];
   draftCandidates: number;
   rejectedCandidates: number;
   draftCollections: readonly KnowledgeCollection[];
   candidateSetDigest?: string;
   approvedPages: number;
-  approvedIndexerPages?: number;
   close: ProjectCloseStatus;
   indexerRegistry: {
     state: "missing" | "pending" | "current" | "invalid";
@@ -211,10 +136,6 @@ export interface ContextWorkflowObservation {
   indexerCandidateCompile: {
     state: "missing" | "current" | "stale" | "invalid";
   };
-  alignDocumentValidateNext?: string;
-  alignDocumentStructureSummaryNext?: string;
-  alignDocumentConfirmNext?: string;
-  compileDocumentNext?: string;
 }
 
 export interface ContextWorkflowSnapshot {
@@ -307,20 +228,6 @@ export interface ContextResolvedWorkflowRoute {
     input_schema?: ContextWorkflowResource;
     output_schema?: ContextWorkflowResource;
     input?: JsonValue;
-  };
-  batch?: {
-    kind: "prose-structure";
-    schema: "context.prose.structure-batch.v1";
-    input_schema: ContextWorkflowResource;
-    input: string;
-    targets: Array<{
-      phase_id: string;
-      source_key: string;
-      collection: string;
-      input: string;
-    }>;
-    validate: ContextWorkflowCommand;
-    stage: ContextWorkflowCommand;
   };
   configuration?: {
     file: "src/index.ts";

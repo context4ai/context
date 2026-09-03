@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
@@ -16,7 +16,7 @@ async function collectTextFiles(directory: string): Promise<string[]> {
 }
 
 describe("Context case study replay", () => {
-  test("keeps the sanitized recording complete and ordered", async () => {
+  test("keeps the normalized contract replay complete and ordered", async () => {
     const raw = await readFile(resolve(caseStudyRoot, "data/context-run.json"), "utf8");
     const replay = JSON.parse(raw) as {
       schema: string;
@@ -25,13 +25,24 @@ describe("Context case study replay", () => {
     };
 
     expect(replay.schema).toBe("agent-graph.case-study.replay.v1");
-    expect(replay.source.kind).toBe("sanitized-recording");
+    expect(replay.source.kind).toBe("sanitized-contract-replay");
     expect(replay.source.entry).toBe("context");
     expect(replay.steps).toHaveLength(replay.source.recordedSteps);
     expect(replay.steps[0]?.node).toBe("choose-source-boundary");
-    expect(replay.steps.at(-1)).toMatchObject({ node: "complete", status: "complete" });
+    expect(replay.steps.at(-1)).toMatchObject({
+      node: "current-scope-complete",
+      status: "complete",
+    });
     expect(replay.steps.every((step, index) => index === 0 || step.elapsed >= replay.steps[index - 1]!.elapsed)).toBe(true);
     expect(replay.steps.every((step) => step.reasonCode.length > 0)).toBe(true);
+
+    const workspaceGraph = await readFile(resolve(
+      repositoryRoot,
+      "packages/context-cli/context-workflow/graphs/workspace.yaml",
+    ), "utf8");
+    for (const node of new Set(replay.steps.map((step) => step.node))) {
+      expect(workspaceGraph).toContain(`- id: ${node}`);
+    }
   });
 
   test("does not publish private recording data", async () => {
@@ -69,7 +80,7 @@ describe("Context case study replay", () => {
     expect(html).toContain('<details open><summary id="workflow-summary">Action and resources</summary>');
     expect(html).toContain('<details open><summary id="technical-summary">Protocol fields</summary>');
     expect(html).toContain('href="./styles.css?v=6"');
-    expect(html).toContain('src="./replay.js?v=6"');
+    expect(html).toContain('src="./replay.js?v=7"');
     expect(script).toContain('const commands = {');
     expect(script).toContain('const workflowArtifacts = {');
     expect(script).toContain('"capture-next": "context --workflow-managed');
@@ -101,10 +112,36 @@ describe("Context case study replay", () => {
     expect(html).toContain('id="graph-dialog"');
     expect(html).toContain('context-workflow/graphs/workspace.yaml');
     expect(script).toContain('const workspaceGroups = [');
-    expect(script).toContain('resources/procedures/prose-compile.md');
-    expect(script).toContain('actions/compile-next.yaml');
+    expect(script).toContain('actions/run-indexer-lifecycle.yaml');
+    expect(script).toContain('actions/flush-runtime-events.yaml');
+    expect(script).not.toMatch(/actions\/(?:extract|align|compile)-next\.yaml/u);
+    expect(script).not.toContain('resources/views/structure-current.yaml');
     expect(english).toContain("[`context-workflow/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow)");
     expect(chinese).toContain("[`context-workflow/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow)");
+
+    const publishedPaths = [...script.matchAll(
+      /"((?:actions|resources)\/[^"\n]+)"/gu,
+    )].map((match) => match[1]!);
+    for (const path of new Set(publishedPaths)) {
+      await access(resolve(repositoryRoot, "packages/context-cli/context-workflow", path));
+    }
+  });
+
+  test("uses the sole current Indexer lifecycle", async () => {
+    const files = [
+      resolve(caseStudyRoot, "README.md"),
+      resolve(caseStudyRoot, "README.zh-CN.md"),
+      resolve(caseStudyRoot, "replay.js"),
+      resolve(caseStudyRoot, "data/context-run.json"),
+      resolve(repositoryRoot, "docs/en/case-studies/agent-graph-workflow.md"),
+      resolve(repositoryRoot, "docs/zh-CN/case-studies/agent-graph-workflow.md"),
+    ];
+    const text = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+
+    expect(text).toContain("run-indexer-lifecycle");
+    expect(text).toContain("route.indexer.lifecycle-required");
+    expect(text).not.toMatch(/\b(?:extract-next|align-next|compile-next)\b/u);
+    expect(text).not.toMatch(/route\.(?:extract|structure|compile)\./u);
   });
 
   test("documents the single current Context entry without retired links", async () => {

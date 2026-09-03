@@ -64,6 +64,31 @@ export type IndexerGeneratedAuthoringAudit = z.infer<
   typeof indexerGeneratedAuthoringAuditSchema
 >;
 
+function markdownProseOnly(markdown: string): string {
+  const prose: string[] = [];
+  let fence: { marker: "`" | "~"; length: number } | undefined;
+  for (const line of markdown.split("\n")) {
+    const opening = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (fence === undefined && opening !== undefined) {
+      fence = { marker: opening[0] as "`" | "~", length: opening.length };
+      continue;
+    }
+    if (fence !== undefined) {
+      const closing = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/u)?.[1];
+      if (
+        closing !== undefined &&
+        closing[0] === fence.marker &&
+        closing.length >= fence.length
+      ) {
+        fence = undefined;
+      }
+      continue;
+    }
+    prose.push(line.replace(/(`+)[^`]*?\1/gu, ""));
+  }
+  return prose.join("\n");
+}
+
 function assertCanonicalUnique(values: readonly string[], label: string): void {
   const expected = [...new Set(values)].sort(compareIndexerCanonicalText);
   if (
@@ -162,16 +187,17 @@ export function validateIndexerStructuredClaimSet(input: {
 export function containsIndexerControlledAuthoringPlaceholder(
   markdown: string,
 ): boolean {
-  if (/\{\{|\}\}|<!--/u.test(markdown)) return true;
+  const prose = markdownProseOnly(markdown);
+  if (/\{\{|\}\}|<!--/u.test(prose)) return true;
   if (
     /\[(?:TODO|TBD|待补充|待生成|placeholder(?:[^\]]*)?|example|your\s+[^\]]+)\]/iu
-      .test(markdown) ||
+      .test(prose) ||
     /<(?:TODO|TBD|待补充|待生成|placeholder(?:[^>]*)?|example|your[-_ ][^>]+)>/iu
-      .test(markdown)
+      .test(prose)
   ) {
     return true;
   }
-  return markdown.split("\n").some((line) => {
+  return prose.split("\n").some((line) => {
     const marker = line.trim()
       .replace(/^#{1,6}\s+/u, "")
       .replace(/^[-*+]\s+/u, "")

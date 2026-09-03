@@ -168,7 +168,7 @@ function acceptedAuthorFixture(input: {
     profile_contract_digest: eligibility.profile_contract_digest,
     subject_key_schema_digest: digest("6"),
     source_scope_digest: digest("7"),
-    parser_contract_digest: digest("8"),
+    source_binding_digest: digest("8"),
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("a"),
@@ -204,7 +204,7 @@ function acceptedAuthorFixture(input: {
     final_authority: authority,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("2"),
-      parser_dependency_fingerprint: digest("3"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("4"),
       metric_set_digest: digest("5"),
@@ -591,7 +591,6 @@ describe("Indexer Candidate compile Route", () => {
       const layoutTransition = buildIndexerLayoutTransition({
         layout_proposal_set: layoutProposalSet,
         base_projections: [],
-        planned_output: { state: "not-required" },
       });
       const value = {
         protocol: "context.indexer.candidate-compile-input/v1",
@@ -645,7 +644,11 @@ describe("Indexer Candidate compile Route", () => {
         fingerprint: result.compile.files[0]!.file_digest,
         node_ref: result.compile.files[0]!.node_ref,
         view_ref: result.compile.files[0]!.internal_view_ref,
+        source_refs: [SOURCE_REF],
       });
+      expect(candidates[0]!.source_refs).not.toContain(
+        fixture.artifact.evidence_bindings[0]!.evidence_ref,
+      );
       expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
         .toMatchObject({ state: "current", candidates: [{ status: "draft" }] });
 
@@ -670,8 +673,20 @@ describe("Indexer Candidate compile Route", () => {
         join(projectRoot, result.compile.files[0]!.output_path),
         "utf8",
       );
-      expect(approved).toContain(`indexer_file_digest: ${result.compile.files[0]!.file_digest}`);
       expect(approved).toContain(`view_ref: ${result.compile.files[0]!.internal_view_ref}`);
+      expect(approved).toContain(`source_ref="${SOURCE_REF}"`);
+      expect(approved).not.toContain("indexer_evidence:");
+      expect(approved).not.toContain(fixture.artifact.evidence_bindings[0]!.evidence_ref);
+      for (const field of [
+        "candidate_fingerprint",
+        "indexer_compile_digest",
+        "indexer_file_digest",
+        "indexer_artifact_ref",
+        "indexer_section_refs",
+        "indexer_source_ref",
+      ]) {
+        expect(approved).not.toMatch(new RegExp(`^${field}:`, "mu"));
+      }
       expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
         .toMatchObject({ state: "current", candidates: [] });
       expect((await verifyProjectWorkspace(projectRoot)).issues.filter((issue) =>
@@ -682,6 +697,25 @@ describe("Indexer Candidate compile Route", () => {
         nodes: 1,
         views: 1,
       });
+      const compactApproved = await readFile(
+        join(projectRoot, result.compile.files[0]!.output_path),
+        "utf8",
+      );
+      for (const field of [
+        "node_ref",
+        "view_ref",
+        "node_type",
+        "sources",
+        "candidate_fingerprint",
+        "indexer_compile_digest",
+        "indexer_file_digest",
+        "indexer_artifact_ref",
+        "indexer_section_refs",
+        "indexer_source_ref",
+      ]) {
+        expect(compactApproved).not.toMatch(new RegExp(`^${field}:`, "mu"));
+      }
+      expect(compactApproved).not.toMatch(/^tags:/mu);
       expect(YAML.parse(await readFile(
         join(projectRoot, "knowledge", "structure.yaml"),
         "utf8",
@@ -690,8 +724,38 @@ describe("Indexer Candidate compile Route", () => {
         views: [{
           view_ref: result.compile.files[0]!.internal_view_ref,
           collection: result.compile.files[0]!.collection,
+          sources: [SOURCE_REF],
         }],
       });
+      const closedStructure = YAML.parse(await readFile(
+        join(projectRoot, "knowledge", "structure.yaml"),
+        "utf8",
+      )) as {
+        source_inputs?: unknown;
+        views?: Array<{ machine?: Record<string, unknown> }>;
+      };
+      expect(closedStructure.source_inputs).toBeUndefined();
+      expect(closedStructure.views?.[0]?.machine?.candidate_fingerprint).toBeUndefined();
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
+        .toMatchObject({ state: "current", candidates: [] });
+
+      await writeFile(
+        join(projectRoot, "src", "indexers.yaml"),
+        "protocol: context.indexer.registry/v1\nrequirements: []\nindexers: []\n",
+        "utf8",
+      );
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot)).toMatchObject({
+        state: "stale",
+        candidates: [],
+        diagnostic: "Accepted author Results do not bind the current requirement set.",
+      });
+      await rm(join(projectRoot, "src", "indexers.yaml"));
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
+        .toMatchObject({ state: "current", candidates: [] });
+
+      await rm(join(projectRoot, result.compile.files[0]!.output_path));
+      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
+        .toMatchObject({ state: "stale", candidates: [] });
 
       const stale = structuredClone(value);
       stale.accepted_result_refs[0]!.acceptance_digest = digest("f");

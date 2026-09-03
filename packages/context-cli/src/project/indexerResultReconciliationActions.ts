@@ -6,8 +6,8 @@ import {
   parseIndexerRegistry,
   reconcileIndexerResults,
 } from "@c4a/context";
-import { readIndexerMaterialGapStructure } from "./indexerMaterialGapStore.js";
-import { readAcceptedIndexerMainAuthorResults } from "./indexerMainRunStore.js";
+import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
+import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -45,7 +45,17 @@ export async function reconcileProjectIndexerResults(input: {
   if (new Set(selectorPaths).size !== selectorPaths.length) {
     throw new TypeError("Indexer reconciliation selector fact paths must be unique");
   }
-  const retained = await readIndexerMaterialGapStructure(input.projectRoot);
+  const acceptedRecords = await readAcceptedIndexerMainAuthorResultRecords(
+    input.projectRoot,
+  );
+  for (const item of acceptedRecords) {
+    const accepted = record(item.accepted_record, "accepted author record");
+    await readCurrentIndexerPostAuthorEnvelopeForResult({
+      projectRoot: input.projectRoot,
+      author_workset_digest: String(accepted.workset_digest ?? ""),
+      primary_result_digest: String(accepted.result_digest ?? ""),
+    });
+  }
   return reconcileIndexerResults({
     registry,
     question_target_inventory: value.question_target_inventory,
@@ -56,13 +66,10 @@ export async function reconcileProjectIndexerResults(input: {
     target_facts: record(value.target_facts, "Indexer reconciliation target_facts") as
       Parameters<typeof reconcileIndexerResults>[0]["target_facts"],
     allowed_selector_fact_paths: new Set(selectorPaths),
-    author_results: await readAcceptedIndexerMainAuthorResults(input.projectRoot),
+    author_results: acceptedRecords.map((item) => item.artifact_result),
     registered_material_sources: array(
       value.registered_material_sources,
       "Indexer reconciliation registered_material_sources",
     ),
-    ...(retained === undefined ? {} : {
-      retained_material_gap_ledger: retained.ledger,
-    }),
   });
 }

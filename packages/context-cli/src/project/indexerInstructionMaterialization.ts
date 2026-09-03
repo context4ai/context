@@ -58,7 +58,7 @@ export interface MaterializedIndexerInstructions {
   request_digest: string;
   provider_fingerprint: string;
   resources: Array<{
-    kind: "provider" | "composer" | "customization-append";
+    kind: "provider" | "template" | "composer" | "customization-append";
     resource_ref: string;
     digest: string;
     content: string;
@@ -73,7 +73,8 @@ export interface MaterializedIndexerInstructions {
 }
 
 interface InstructionDescriptor {
-  kind: "provider" | "composer" | "customization-append";
+  kind: "provider" | "template" | "composer" | "customization-append";
+  location: "staged" | "workspace";
   path: string;
   digest: string;
   resource_ref: string;
@@ -222,6 +223,7 @@ async function instructionDescriptors(input: {
       }
       return {
         kind: "provider" as const,
+        location: "staged" as const,
         path: instruction.path,
         digest: file.digest,
         resource_ref: `provider-instruction:${indexerProtocolDigest({
@@ -232,6 +234,44 @@ async function instructionDescriptors(input: {
       };
     })
     .sort((left, right) => left.resource_ref < right.resource_ref ? -1 : 1);
+  const templates = (manifest.provider.templates ?? [])
+    .filter((template) => template.profile === input.profile)
+    .map((template) => {
+      const overridePath = `templates/${template.id}.md`;
+      const override = input.customization.files.find((candidate) =>
+        candidate.path === overridePath
+      );
+      const providerFile = input.staged.files.find((candidate) =>
+        candidate.path === template.path
+      );
+      if (override === undefined && providerFile === undefined) {
+        throw new TypeError(`staged Provider has no declared template ${template.path}`);
+      }
+      return override === undefined
+        ? {
+            kind: "template" as const,
+            location: "staged" as const,
+            path: template.path,
+            digest: providerFile!.digest,
+            resource_ref: `provider-template:${indexerProtocolDigest({
+              provider: manifest.id,
+              version: manifest.version,
+              profile: template.profile,
+              template: template.id,
+              path: template.path,
+            })}`,
+          }
+        : {
+            kind: "template" as const,
+            location: "workspace" as const,
+            path: override.path,
+            digest: override.digest,
+            resource_ref:
+              `customization-template:${input.customization.indexer_id}#${template.profile}/${template.id}`,
+          };
+    })
+    .sort((left, right) => left.resource_ref < right.resource_ref ? -1 : 1);
+  descriptors.push(...templates);
   if (input.composerId !== null) {
     const composer = manifest.provides.composers?.find((candidate) =>
       candidate.id === input.composerId
@@ -254,6 +294,7 @@ async function instructionDescriptors(input: {
     }
     descriptors.push({
       kind: "composer",
+      location: "staged",
       path: composer.contract.instruction,
       digest: file.digest,
       resource_ref: `provider-composer-instruction:${indexerProtocolDigest({
@@ -268,6 +309,7 @@ async function instructionDescriptors(input: {
   if (local !== undefined) {
     descriptors.push({
       kind: "customization-append",
+      location: "workspace",
       path: local.path,
       digest: local.digest,
       resource_ref: `customization-instruction:${input.customization.indexer_id}#${local.digest}`,
@@ -295,7 +337,7 @@ async function readInstructionResources(input: {
   const resources: MaterializedIndexerInstructions["resources"] = [];
   let totalBytes = 0;
   for (const descriptor of input.descriptors) {
-    const absolute = descriptor.kind !== "customization-append"
+    const absolute = descriptor.location === "staged"
       ? join(input.staged.stage_path, descriptor.path)
       : join(input.workspaceRoot, "src", "indexer", input.customization.indexer_id, descriptor.path);
     const bytes = await readFile(absolute);

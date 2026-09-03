@@ -6,6 +6,10 @@ import { traceCommonJsExports } from "./commonJsExportTrace.js";
 import { isJsxLikePath } from "./ecmaScriptLanguage.js";
 import { resolveImportSourcePath } from "./pathUtils.js";
 import type { TsConfigPathResolver } from "./tsconfigPaths.js";
+import {
+  createEcmaScriptSourceFile,
+  treeSitterCompatibleJsxSource,
+} from "./typescriptAst.js";
 
 type SyntaxNode = Parser.SyntaxNode;
 
@@ -183,7 +187,14 @@ const traceFile = async (
     const source = await fs.readFile(filePath);
     const commonJs = analyzeCommonJsModule(source, filePath);
     if (commonJs.diagnostics.length > 0) return [];
-    const tree = await parseFile(source, isJsxLikePath(filePath));
+    const jsxLike = isJsxLikePath(filePath);
+    const parserSource = jsxLike
+      ? treeSitterCompatibleJsxSource(
+          createEcmaScriptSourceFile(source, filePath),
+          source,
+        )
+      : source;
+    const tree = await parseFile(parserSource, jsxLike);
     if (!tree) return [];
 
     const root = tree.rootNode;

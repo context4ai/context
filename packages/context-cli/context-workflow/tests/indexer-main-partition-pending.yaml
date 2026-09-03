@@ -16,3 +16,4 @@ expect:
   requiredResources:
     - skill.context-run-indexer-agent-step
     - resolved-indexer-instructions
+    - authorized-indexer-workset-view

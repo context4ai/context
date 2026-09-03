@@ -60,6 +60,16 @@ async function setupContextCliPkg(root: string): Promise<{ pkgDir: string; distD
         bin: { context: "dist/cli.js" },
         dependencies: {
           "@c4a/context": "workspace:*",
+          "@c4a/extract": "workspace:*",
+          "@c4a/extract-contract": "workspace:*",
+          "@c4a/extract-go": "workspace:*",
+          "@c4a/extract-mdx": "workspace:*",
+          "@c4a/extract-proto": "workspace:*",
+          "@c4a/extract-rush": "workspace:*",
+          "@c4a/extract-sql": "workspace:*",
+          "@c4a/extract-style": "workspace:*",
+          "@c4a/extract-thrift": "workspace:*",
+          "@c4a/extract-ts": "workspace:*",
           jiti: "^2.7.0",
           "web-tree-sitter": "^0.20.8",
           yaml: "^2.5.1",
@@ -138,6 +148,20 @@ describe("publish package list", () => {
     expect(PUBLISH_PACKAGES).toContainEqual({ name: "@c4a/context-cli", dir: "context-cli" });
   });
 
+  test("keeps every parser release package as a context-cli runtime dependency", async () => {
+    const manifest = JSON.parse(
+      await readFile(resolve(import.meta.dir, "../../../context-cli/package.json"), "utf8"),
+    ) as { dependencies?: Record<string, string> };
+    const parserDependencies = Object.keys(manifest.dependencies ?? {})
+      .filter((name) => PARSER_RELEASE_PACKAGES.some((pkg) => pkg.name === name))
+      .sort();
+
+    expect(parserDependencies).toEqual(PARSER_RELEASE_PACKAGES.map((pkg) => pkg.name).sort());
+    for (const packageName of parserDependencies) {
+      expect(manifest.dependencies?.[packageName]).toBe("workspace:*");
+    }
+  });
+
   test("renders package directories and release notes from the same manifest", () => {
     expect(releasePackageDirectories()).toEqual(
       PUBLISH_PACKAGES.map((pkg) => `packages/${pkg.dir}/dist`),
@@ -148,10 +172,11 @@ describe("publish package list", () => {
     );
   });
 
-  test("generates every new parser coordinate and expected Trusted Publisher tuple", () => {
+  test("generates the complete parser coordinate catalog and publisher tuple", () => {
     const metadata = parserReleaseMetadata("0.7.0-preview.2");
 
-    expect(metadata.coordinates).toHaveLength(6);
+    expect(metadata.coordinates).toHaveLength(10);
+    expect(metadata.coordinates.flatMap((coordinate) => coordinate.capabilities)).toHaveLength(15);
     expect(metadata.abi).toBe(PARSER_EVIDENCE_ABI);
     expect(metadata.abi_digest).toBe(PARSER_EVIDENCE_ABI_DIGEST);
     expect(metadata.abi_digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
@@ -328,9 +353,12 @@ describe("prepareDistPackageJson — context-cli publish packaging", () => {
     expect(distPkg.keywords).toEqual(["context", "knowledge"]);
     expect(distPkg.bin?.context).toBe("cli.js");
     expect(distPkg.scripts?.postinstall).toBe("node scripts/postinstall.mjs");
-    // SDK package identity and static templates are required at runtime, so
+    // SDK identity and dynamically loaded parsers are runtime packages, so
     // workspace:* must become the matching published version.
     expect(distPkg.dependencies?.["@c4a/context"]).toBe("1.2.3");
+    for (const parserPackage of PARSER_RELEASE_PACKAGES) {
+      expect(distPkg.dependencies?.[parserPackage.name]).toBe("1.2.3");
+    }
     // external deps must survive.
     expect(distPkg.dependencies?.jiti).toBe("^2.7.0");
     expect(distPkg.dependencies?.["web-tree-sitter"]).toBe("^0.20.8");

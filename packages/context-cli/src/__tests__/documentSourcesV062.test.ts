@@ -303,23 +303,20 @@ describe("0.6.2 document source registry helpers", () => {
     }
   });
 
-  test("source add file returns declared align next_action without guessing a default collection", async () => {
+  test("source add file returns the lifecycle reevaluation next action", async () => {
     const root = await mkdtemp(join(tmpdir(), "ctx-doc-sources-v062-add-next-"));
     try {
       const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
       const docsDir = join(result.projectRoot, "..", "docs");
       await mkdir(docsDir, { recursive: true });
       await writeFile(join(result.projectRoot, "src", "index.ts"), [
-        'import { alignProse, captureFile, defineProject, source } from "@c4a/context";',
+        'import { captureFile, defineProject, source } from "@c4a/context";',
         "",
         'const docs = source("product-docs");',
         "",
         "export default defineProject({",
         "  sources: [docs],",
-        "  phases: [",
-        "    captureFile({ source: docs }),",
-        '    alignProse({ source: docs, collection: "architecture" }),',
-        "  ],",
+        "  phases: [captureFile({ source: docs })],",
         "  packages: [],",
         "});",
         "",

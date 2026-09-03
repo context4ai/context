@@ -16,15 +16,12 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "requirement_set_digest", "effective_composer_set", "author_workset_digest", "primary_result_digest", "primary_facts", "primary_artifacts", "validator_contract_digest", "current_profile_binding_digest", "allowed_target_refs", "accepted_input_view_digest"],
+      "required": ["protocol", "requirement_set_digest", "effective_composer_set", "author_workset_digest", "validator_contract_digest", "current_profile_binding_digest", "allowed_target_refs", "accepted_input_view_digest"],
       "properties": {
         "protocol": { "const": "context.indexer.post-author-workset-build-input/v1" },
         "requirement_set_digest": { "$ref": "#/$defs/digest" },
         "effective_composer_set": { "type": "object" },
         "author_workset_digest": { "$ref": "#/$defs/digest" },
-        "primary_result_digest": { "$ref": "#/$defs/digest" },
-        "primary_facts": { "type": "array" },
-        "primary_artifacts": { "type": "array" },
         "validator_contract_digest": { "$ref": "#/$defs/digest" },
         "current_profile_binding_digest": { "$ref": "#/$defs/digest" },
         "allowed_target_refs": { "type": "array", "items": { "type": "string" } },

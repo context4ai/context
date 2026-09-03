@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -32,13 +33,13 @@ import {
   type IndexerSubjectKey,
 } from "@c4a/context";
 import {
-  INDEXER_MAIN_RUN_STORE_ROOT,
   acceptIndexerMainRunStore,
   prepareIndexerMainRunStore,
   startIndexerMainRunStore,
 } from "../project/indexerMainRunStore.js";
+import { approvedKnowledgeInputHash } from "../project/close.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
-import { readIndexerMaterialGapStructure } from
+import { readIndexerMaterialGapState } from
   "../project/indexerMaterialGapStore.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -179,7 +180,7 @@ function authorWorkset(requirementSetDigest: string): IndexerMainAuthorWorkset {
     profile_contract_digest: digest("b"),
     subject_key_schema_digest: digest("f"),
     source_scope_digest: digest("0"),
-    parser_contract_digest: digest("1"),
+    source_binding_digest: digest("1"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("3"),
@@ -216,7 +217,7 @@ function runFixture(requirementSetDigest: string) {
     final_authority: provider,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("c"),
-      parser_dependency_fingerprint: digest("d"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("e"),
       metric_set_digest: digest("f"),
@@ -355,7 +356,7 @@ async function project() {
 }
 
 describe("project Indexer result reconciliation", () => {
-  test("uses only accepted author-store Results and refuses a false complete after cache loss", async () => {
+  test("keeps gap recovery out of knowledge and clears it after close", async () => {
     const current = await project();
     const run = runFixture(current.requirementSetDigest);
     await prepareIndexerMainRunStore({
@@ -408,11 +409,12 @@ describe("project Indexer result reconciliation", () => {
       state: "completed",
     });
     const auditPath = join(current.root, "audit.json");
+    const structurePath = join(current.root, "knowledge", "structure.yaml");
+    expect(existsSync(structurePath)).toBe(false);
     await writeFile(auditPath, `${JSON.stringify({
       protocol: "context.indexer.audit-material-gap-state-input/v1",
       phase: "before-main-review",
       reconciliation_input: reconciliationInput,
-      current_layout_digest: digest("9"),
     }, null, 2)}\n`, "utf8");
     const preCheckpointAudit = JSON.parse(await runCliInDir(current.root, [
       "indexer",
@@ -424,12 +426,11 @@ describe("project Indexer result reconciliation", () => {
     ]));
     expect(preCheckpointAudit).toMatchObject({
       phase: "before-main-review",
-      current_structure_state: "missing",
       drift_detected: true,
       next_action: "checkpoint-material-gaps",
       graph_outcome: "partial",
     });
-    expect(await readIndexerMaterialGapStructure(current.root)).toBeUndefined();
+    expect(await readIndexerMaterialGapState(current.root)).toBeUndefined();
     const checkpointPath = join(current.root, "checkpoint.json");
     await writeFile(checkpointPath, `${JSON.stringify({
       protocol: "context.indexer.checkpoint-material-gaps-input/v1",
@@ -445,19 +446,16 @@ describe("project Indexer result reconciliation", () => {
       "json",
     ]));
     expect(checkpoint).toMatchObject({
-      stage: "reconciliation",
       graph_outcome: "completed",
       checkpoint: { predecessor_ledger_revision: null },
     });
-    expect((await readIndexerMaterialGapStructure(current.root))?.state)
-      .toBe("retained-state-present");
-    const structurePath = join(current.root, "knowledge", "structure.yaml");
-    const beforeAudit = await readFile(structurePath, "utf8");
+    expect((await readIndexerMaterialGapState(current.root))?.ledger.revision)
+      .toBe(checkpoint.ledger.revision);
+    expect(existsSync(structurePath)).toBe(false);
     await writeFile(auditPath, `${JSON.stringify({
       protocol: "context.indexer.audit-material-gap-state-input/v1",
       phase: "after-main-review",
       reconciliation_input: reconciliationInput,
-      current_layout_digest: digest("9"),
     }, null, 2)}\n`, "utf8");
     const preCloseAudit = JSON.parse(await runCliInDir(current.root, [
       "indexer",
@@ -469,24 +467,42 @@ describe("project Indexer result reconciliation", () => {
     ]));
     expect(preCloseAudit).toMatchObject({
       phase: "after-main-review",
-      current_structure_state: "retained-state-present",
       drift_detected: false,
       next_action: "close-indexer-approved-knowledge",
       graph_outcome: "unverified",
     });
-    expect(await readFile(structurePath, "utf8")).toBe(beforeAudit);
-
-    await rm(join(current.root, INDEXER_MAIN_RUN_STORE_ROOT, "accepted"), {
-      recursive: true,
-      force: true,
-    });
-    await expect(runCliInDir(current.root, [
+    expect(existsSync(structurePath)).toBe(false);
+    const closePath = join(current.root, "close.json");
+    await writeFile(closePath, `${JSON.stringify({
+      protocol: "context.indexer.close-approved-knowledge-input/v1",
+      expected_ledger_revision: checkpoint.ledger.revision,
+      approved_structure: {
+        schema_version: "context.approved-structure.v1",
+        input_hash: await approvedKnowledgeInputHash(current.root),
+        nodes: [],
+        views: [],
+        edges: [],
+      },
+    }, null, 2)}\n`, "utf8");
+    const closed = JSON.parse(await runCliInDir(current.root, [
       "indexer",
-      "reconcile-indexer-results",
+      "close-indexer-approved-knowledge",
       "--input",
-      inputPath,
+      closePath,
       "--format",
       "json",
-    ])).rejects.toThrow(/accepted main author result cache is missing/);
+    ]));
+    expect(closed).toMatchObject({
+      structure_path: "knowledge/structure.yaml",
+      graph_outcome: "completed",
+    });
+    expect(YAML.parse(await readFile(structurePath, "utf8"))).toEqual({
+      schema_version: "context.approved-structure.v1",
+      input_hash: await approvedKnowledgeInputHash(current.root),
+      nodes: [],
+      views: [],
+      edges: [],
+    });
+    expect(await readIndexerMaterialGapState(current.root)).toBeUndefined();
   });
 });

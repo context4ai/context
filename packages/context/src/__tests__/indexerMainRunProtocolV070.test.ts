@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildIndexerAgentStepInput,
   buildIndexerAgentStepResult,
+  bindIndexerProgramRunResultReadReceipts,
   buildIndexerAuthorDependencyView,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
@@ -100,7 +101,7 @@ const common = {
   profile_contract_digest: digest("4"),
   subject_key_schema_digest: digest("5"),
   source_scope_digest: digest("6"),
-  parser_contract_digest: digest("7"),
+  source_binding_digest: digest("7"),
   primary_resource_binding_digest:
     PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
   question_target_inventory_digest: digest("9"),
@@ -185,7 +186,7 @@ function request(workset: IndexerMainPartitionWorkset | IndexerMainAuthorWorkset
     final_authority: PROVIDER,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("a"),
-      parser_dependency_fingerprint: digest("b"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("c"),
       metric_set_digest: digest("d"),
@@ -613,6 +614,16 @@ describe("main Indexer run protocol", () => {
         result: partitionPlan(workset),
       },
     };
+    const {
+      workset_read_receipt_digests: _agentMustNotSupplyReceipts,
+      ...agentRunResult
+    } = runResult;
+    void _agentMustNotSupplyReceipts;
+    expect(bindIndexerProgramRunResultReadReceipts({
+      run_request: currentRequest,
+      run_result: agentRunResult,
+      workset_read_receipts: [receipt],
+    })).toEqual(runResult);
     const stepInput = buildIndexerAgentStepInput({
       run_request: currentRequest,
       instruction_request_digest: digest("e"),
@@ -620,7 +631,8 @@ describe("main Indexer run protocol", () => {
     const first = buildIndexerAgentStepResult({
       step_input: stepInput,
       instruction_payload_digest: digest("f"),
-      run_result: runResult,
+      run_result: agentRunResult,
+      workset_read_receipts: [receipt],
       adapter: "codex",
       adapter_version: "1.2.3",
       model: "example-model",
@@ -629,7 +641,8 @@ describe("main Indexer run protocol", () => {
     const resumed = buildIndexerAgentStepResult({
       step_input: stepInput,
       instruction_payload_digest: digest("f"),
-      run_result: runResult,
+      run_result: agentRunResult,
+      workset_read_receipts: [receipt],
       adapter: "codex",
       adapter_version: "1.2.3",
       model: "example-model",

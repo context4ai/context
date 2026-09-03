@@ -1,6 +1,9 @@
 export { parseSqlSources } from "./sqlParser.js";
 export { splitSqlStatements } from "./sqlStatements.js";
-export { sqlSourcesToEvidenceAdapterResult } from "./evidenceAdapter.js";
+export {
+  sqlSourcesToEvidenceAdapterMaterialization,
+  sqlSourcesToEvidenceAdapterResult,
+} from "./evidenceAdapter.js";
 export type { SqlEvidenceAdapterInvocation } from "./evidenceAdapter.js";
 export type {
   SqlDialect,
@@ -13,4 +16,5 @@ export type {
   SqlStatement,
 } from "./sqlTypes.js";
 
-export const SQL_EVIDENCE_ADAPTER_EXPORT = "sqlSourcesToEvidenceAdapterResult";
+export const SQL_EVIDENCE_ADAPTER_EXPORT =
+  "sqlSourcesToEvidenceAdapterMaterialization";

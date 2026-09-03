@@ -59,6 +59,26 @@ describe("schema-neutral JSON, YAML, and TOML evidence", () => {
     expect(JSON.stringify(document.values)).not.toContain("also-private");
   });
 
+  test("accepts comments and trailing commas used by JSON configuration files", () => {
+    const document = parseConfigSources({
+      "tsconfig.json": `{
+        // TypeScript configuration remains JSON-shaped even when it contains comments.
+        "compilerOptions": {
+          "target": "ES2022",
+        },
+      }`,
+    })[0]!;
+
+    expect(document).toMatchObject({ format: "json", disposition: "analyzed" });
+    expect(document.values).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key_path: ["compilerOptions", "target"],
+        value_type: "string",
+        locator: expect.objectContaining({ line: 4 }),
+      }),
+    ]));
+  });
+
   test("only exposes scalars selected by an exact non-sensitive enum allowlist", () => {
     const document = parseConfigSources(
       { "config/app.json": files["config/app.json"] },
@@ -107,7 +127,8 @@ describe("schema-neutral JSON, YAML, and TOML evidence", () => {
 
   test("marks malformed and unstable-key inputs unsupported instead of emitting partial facts", () => {
     const documents = parseConfigSources({
-      "bad.json": "{\"a\": 1,}",
+      "bad.json": "{\"a\": }",
+      "duplicate.json": "{\"a\": 1, \"a\": 2}",
       "complex.yaml": "? [one, two]\n: value\n",
       "future.toml": "value = 0x\n",
     });

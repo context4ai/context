@@ -16,12 +16,7 @@ entrypoints:
   main-index: build-question-target-inventory
   main-run-validation: validate-main-index-author-result
   post-author-composer-step: run-indexer-post-author-composer
-  material-answer: build-material-question-workset
-  material-answer-step: run-material-answer-indexers
-  material-answer-review: review-material-answer-candidates
   material-gap-audit: audit-material-gap-state
-  material-gap-evaluation: evaluate-material-gaps
-  material-answer-actualization: actualize-material-answer-bindings
   approved-knowledge-close: close-indexer-approved-knowledge
   candidate-review: inspect-index-candidate-review-readiness
   candidate-compile: compile-indexer-candidates
@@ -161,6 +156,7 @@ nodes:
     resources:
       required:
         - resources/views/resolved-indexer-instructions.yaml
+        - resources/views/authorized-indexer-workset-view.yaml
   - id: propose-overlay-question-amendment
     kind: action
     reasonCode: route.indexer.overlay-question-proposal
@@ -285,6 +281,7 @@ nodes:
     resources:
       required:
         - resources/views/resolved-indexer-instructions.yaml
+        - resources/views/authorized-indexer-workset-view.yaml
   - id: converge-main-index-partition-run
     kind: action
     reasonCode: route.indexer.partition-convergence
@@ -351,6 +348,7 @@ nodes:
     resources:
       required:
         - resources/views/resolved-indexer-instructions.yaml
+        - resources/views/authorized-indexer-workset-view.yaml
   - id: accept-main-index-author-run
     kind: action
     reasonCode: route.indexer.main-run-acceptance
@@ -379,6 +377,9 @@ nodes:
     kind: action
     reasonCode: route.indexer.post-author-agent-step
     action: actions/run-indexer-post-author-composer.yaml
+    resources:
+      required:
+        - resources/views/resolved-indexer-instructions.yaml
   - id: accept-post-author-composer-run
     kind: action
     reasonCode: route.indexer.post-author-run-acceptance
@@ -422,23 +423,6 @@ nodes:
     kind: terminal
     join: any
     terminalOutcome: blocked
-  - id: build-material-question-workset
-    kind: action
-    reasonCode: route.indexer.material-question-workset
-    action: actions/build-material-question-workset.yaml
-  - id: evaluate-material-gaps
-    kind: action
-    join: any
-    reasonCode: route.indexer.material-gap-evaluation
-    action: actions/evaluate-material-gaps.yaml
-  - id: indexer-layout-ready
-    kind: terminal
-    join: any
-    terminalOutcome: completed
-  - id: actualize-material-answer-bindings
-    kind: action
-    reasonCode: route.indexer.material-answer-actualization
-    action: actions/actualize-material-answer-bindings.yaml
   - id: close-indexer-approved-knowledge
     kind: action
     reasonCode: route.indexer.approved-knowledge-close
@@ -446,58 +430,6 @@ nodes:
   - id: indexer-approved-knowledge-closed
     kind: terminal
     terminalOutcome: completed
-  - id: prepare-material-answer-runs
-    kind: action
-    reasonCode: route.indexer.material-answer-run-preparation
-    action: actions/prepare-material-answer-runs.yaml
-  - id: observe-material-answer-runs
-    kind: action
-    reasonCode: route.indexer.material-answer-observation
-    action: actions/observe-material-answer-runs.yaml
-  - id: start-material-answer-run
-    kind: action
-    reasonCode: route.indexer.material-answer-run-start
-    action: actions/start-material-answer-run.yaml
-  - id: run-material-answer-indexers
-    kind: action
-    reasonCode: route.indexer.material-answer-agent-step
-    action: actions/run-material-answer-indexers.yaml
-    resources:
-      required:
-        - resources/views/resolved-indexer-instructions.yaml
-  - id: accept-material-answer-run
-    kind: action
-    reasonCode: route.indexer.material-answer-run-acceptance
-    action: actions/accept-material-answer-run.yaml
-  - id: fail-material-answer-run
-    kind: action
-    reasonCode: route.indexer.material-answer-run-failure
-    action: actions/fail-material-answer-run.yaml
-  - id: material-answer-blocked
-    kind: terminal
-    join: any
-    terminalOutcome: blocked
-  - id: material-answer-failed
-    kind: terminal
-    join: any
-    terminalOutcome: failed
-  - id: review-material-answer-candidates
-    kind: gate
-    reasonCode: route.indexer.material-answer-review
-    inspectionAction: actions/inspect-material-answer-review.yaml
-    resolutionAction: actions/review-material-answer-candidate.yaml
-    gate:
-      id: review-material-answer-candidates
-      prompt: Review only the exact question-target and source-span evidence binding for this material answer.
-      authority: context.indexer-material-answer-review
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_material_answer_review.state
-        equals: approved
-  - id: checkpoint-material-answer-review
-    kind: action
-    reasonCode: route.indexer.material-answer-review-checkpoint
-    action: actions/checkpoint-material-answer-review.yaml
   - id: post-author-blocked
     kind: terminal
     join: any
@@ -930,7 +862,7 @@ edges:
     to: close-indexer-approved-knowledge
     outcomes: [unverified]
   - from: audit-material-gap-state
-    to: material-answer-blocked
+    to: index-material-required
     outcomes: [blocked]
   - from: audit-material-gap-state
     to: material-gap-audit-current
@@ -939,69 +871,10 @@ edges:
     to: indexer-reconciliation-ready
     outcomes: [completed]
   - from: checkpoint-material-gaps
-    to: build-material-question-workset
+    to: index-material-required
     outcomes: [partial]
   - from: checkpoint-material-gaps
     to: indexer-capability-gap
-    outcomes: [blocked]
-  - from: build-material-question-workset
-    to: prepare-material-answer-runs
-    outcomes: [completed]
-  - from: prepare-material-answer-runs
-    to: observe-material-answer-runs
-    outcomes: [completed]
-  - from: observe-material-answer-runs
-    to: start-material-answer-run
-    outcomes: [partial]
-  - from: observe-material-answer-runs
-    to: review-material-answer-candidates
-    outcomes: [unverified]
-  - from: observe-material-answer-runs
-    to: evaluate-material-gaps
-    outcomes: [completed]
-  - from: observe-material-answer-runs
-    to: material-answer-blocked
-    outcomes: [blocked]
-  - from: observe-material-answer-runs
-    to: material-answer-failed
-    outcomes: [failed]
-  - from: start-material-answer-run
-    to: run-material-answer-indexers
-    outcomes: [completed]
-  - from: run-material-answer-indexers
-    to: accept-material-answer-run
-    outcomes: [completed]
-  - from: run-material-answer-indexers
-    to: fail-material-answer-run
-    outcomes: [failed]
-  - from: accept-material-answer-run
-    to: observe-material-answer-runs
-    kind: repeat
-    outcomes: [completed]
-  - from: fail-material-answer-run
-    to: observe-material-answer-runs
-    kind: repeat
-    outcomes: [completed]
-  - from: review-material-answer-candidates
-    to: checkpoint-material-answer-review
-    outcomes: [completed]
-  - from: checkpoint-material-answer-review
-    to: evaluate-material-gaps
-    outcomes: [completed]
-  - from: evaluate-material-gaps
-    to: indexer-reconciliation-ready
-    outcomes: [completed]
-  - from: evaluate-material-gaps
-    to: indexer-layout-ready
-    outcomes: [partial]
-  - from: evaluate-material-gaps
-    to: material-answer-blocked
-    outcomes: [blocked]
-  - from: actualize-material-answer-bindings
-    to: indexer-reconciliation-ready
-    outcomes: [completed]
-  - from: actualize-material-answer-bindings
-    to: material-answer-blocked
     outcomes: [blocked]
   - from: close-indexer-approved-knowledge
     to: indexer-approved-knowledge-closed

@@ -530,6 +530,10 @@ export async function loadContextProjectModule(root: string): Promise<ContextPro
     alias: {
       "@c4a/context": resolveContextSdkImportAlias(entryPath),
     },
+    // Bun's native resolver applies an ancestor workspace's tsconfig paths
+    // before Jiti aliases. A nested Context project must use its own installed
+    // SDK, not an unrelated parent monorepo package with the same name.
+    tryNative: false,
     fsCache: false,
     interopDefault: true,
     moduleCache: false,

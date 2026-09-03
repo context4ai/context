@@ -6,14 +6,13 @@ mediaType: text/markdown
 
 # Close and build
 
-Close deterministically reconciles approved Markdown, existing durable machine
-metadata, and confirmed structure snapshots into `knowledge/structure.yaml`.
-It then compacts repeated machine fields out of each Markdown page and validates
-the hydrated result. When an approved page still points at a captured source asset,
-close may mechanically replace that target with its content-addressed
-`knowledge/assets` path; it does not rewrite reader-visible prose. Before
-removing the transient snapshots, it retains only each closed prose target's
-source, collection, and consumed snapshot hash under `source_inputs`.
+Close deterministically reconciles approved Markdown and current relationship
+inputs into `knowledge/structure.yaml`. It compacts repeated machine fields out
+of each Markdown page and validates the hydrated result. When an approved page
+still points at a captured source asset, close may mechanically replace that
+target with its content-addressed `knowledge/assets` path; it does not rewrite
+reader-visible prose. Candidate fingerprints, Section mappings, old prose
+`source_inputs`, and Review receipts remain outside long-lived knowledge.
 
 Do not hand-edit, duplicate, or move fields between Markdown and
 `structure.yaml`. The CLI owns compaction and hydration. A compact Markdown page
@@ -40,12 +39,3 @@ review decision in this conversation, together with its reviewed scope. Omit
 the section when no report was user-reviewed. Do not reconstruct it by scanning
 `.tmp`, invent a shareable URL, or classify fully managed or force approval as
 user review.
-# Code-index audit record
-
-When a package selects approved `codeindex` pages, build requires the current
-batch-level Agent audit to be accepted. The complete report and decision state
-are runtime data below `.tmp/context-runtime/code-index-audit/`; deleting
-`.tmp/` causes Context to recompute and re-audit them. They are not copied into
-`dist/`, uploaded with the package, or committed as knowledge. The package
-inventory stores only the report digest, decision, and compact summary needed
-to identify the audited build.

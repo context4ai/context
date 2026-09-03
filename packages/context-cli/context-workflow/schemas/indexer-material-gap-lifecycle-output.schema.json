@@ -8,8 +8,6 @@
       "enum": [
         "context.indexer.material-gap-checkpoint-result/v1",
         "context.indexer.material-gap-audit-result/v1",
-        "context.indexer.material-gap-evaluation-result/v1",
-        "context.indexer.material-answer-actualization-result/v1",
         "context.indexer.close-approved-knowledge-result/v1"
       ]
     },

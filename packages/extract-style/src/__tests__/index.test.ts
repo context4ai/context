@@ -116,10 +116,28 @@ describe("CSS and SCSS lightweight evidence", () => {
     expect(JSON.stringify(result)).not.toContain("token=private");
   });
 
-  test("rejects invalid syntax and dynamic selector/import sources without partial facts", () => {
+  test("keeps dynamic selector interpolation opaque without inventing expanded identities", () => {
+    const input = {
+      "styles/dynamic.scss": ".item-#{$kind} { color: red; } .static:hover { color: blue; }",
+    };
+    const document = parseStyleSources(input)[0]!;
+    const serialized = JSON.stringify(document);
+
+    expect(document.disposition).toBe("analyzed");
+    expect(document.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "style-selector-dynamic-identity-omitted", severity: "warning" }),
+    ]));
+    expect(document.selectors.flatMap((selector) => selector.class_names)).toEqual(["static"]);
+    expect(document.variants_and_states).toEqual(expect.arrayContaining([
+      expect.objectContaining({ evidence_kind: "pseudo-class", name: "hover" }),
+    ]));
+    expect(serialized).not.toContain("$kind");
+    expect(serialized).not.toContain("item-c4a_dynamic");
+  });
+
+  test("rejects invalid syntax and dynamic import sources without partial facts", () => {
     for (const [path, source, code] of [
       ["styles/broken.css", ".a { color: red", "style-source-unsupported"],
-      ["styles/dynamic.scss", ".item-#{$kind} { color: red; }", "style-selector-unsupported"],
       ["styles/import.scss", "@use \"theme-#{$name}\";", "style-import-dynamic-unsupported"],
     ] as const) {
       const input = { [path]: source };

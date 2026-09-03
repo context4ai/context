@@ -2,23 +2,55 @@ import { z } from "zod";
 import {
   indexerCanonicalRefSchema,
   indexerComposerRefSchema,
-  indexerEvidenceRefSchema,
-  indexerMaterializedLayerFragmentSchema,
   indexerProviderLayerRefSchema,
   validateAndMaterializeIndexerLayerFragment,
   validateIndexerMaterializedLayerFragment,
   type IndexerMaterializedLayerFragment,
 } from "./indexerLayerComposition.js";
 import {
-  addDuplicateIssues,
   compareIndexerCanonicalText,
   indexerDigestSchema,
   indexerIdSchema,
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
-import type { IndexerJson } from "./indexerRegistry.js";
 import { indexerComposerContractSchema } from "./indexerProvider.js";
-import { indexerSubjectKeySchema } from "./indexerSubjectIdentity.js";
+import {
+  indexerComposedResultEnvelopeSchema,
+  indexerComposerInvocationReceiptSchema,
+  materializeIndexerEffectiveArtifactSet,
+  type IndexerComposedResultEnvelope,
+  type IndexerComposerInvocationReceipt,
+  type IndexerEffectiveArtifactSet,
+} from "./indexerEffectiveArtifact.js";
+import {
+  indexerPrimaryResultViewDigest,
+  indexerPrimaryResultViewSchema,
+  materializeIndexerPrimaryResultView,
+  materializeIndexerPrimaryResultViewFromArtifactResult,
+  validateIndexerPrimaryResultView,
+  type IndexerPrimaryArtifactView,
+  type IndexerPrimaryFactView,
+  type IndexerPrimaryResultView,
+} from "./indexerPrimaryResultView.js";
+
+export {
+  indexerComposedResultEnvelopeSchema,
+  indexerComposerInvocationReceiptSchema,
+  indexerPrimaryResultViewDigest,
+  indexerPrimaryResultViewSchema,
+  materializeIndexerEffectiveArtifactSet,
+  materializeIndexerPrimaryResultView,
+  materializeIndexerPrimaryResultViewFromArtifactResult,
+  validateIndexerPrimaryResultView,
+};
+export type {
+  IndexerComposedResultEnvelope,
+  IndexerComposerInvocationReceipt,
+  IndexerEffectiveArtifactSet,
+  IndexerPrimaryArtifactView,
+  IndexerPrimaryFactView,
+  IndexerPrimaryResultView,
+};
 
 function withoutField<T extends object, K extends keyof T>(
   value: T,
@@ -27,167 +59,6 @@ function withoutField<T extends object, K extends keyof T>(
   return Object.fromEntries(
     Object.entries(value).filter(([key]) => key !== field),
   ) as Omit<T, K>;
-}
-
-const canonicalJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(canonicalJsonSchema),
-    z.record(canonicalJsonSchema),
-  ])
-);
-
-const evidenceRefsSchema = z.array(indexerEvidenceRefSchema).superRefine(
-  (value, context) => addDuplicateIssues(
-    value.map((item) => item.ref),
-    context,
-    "evidence_refs",
-  ),
-);
-
-const primaryFactSchema = z.object({
-  fact_ref: indexerCanonicalRefSchema,
-  subject_key: indexerSubjectKeySchema,
-  fact_kind: indexerIdSchema,
-  value: canonicalJsonSchema,
-  evidence_refs: evidenceRefsSchema,
-}).strict();
-
-const primaryArtifactSchema = z.object({
-  artifact_ref: indexerCanonicalRefSchema,
-  subject_key: indexerSubjectKeySchema,
-  artifact_kind: indexerIdSchema,
-  artifact_policy_variant: indexerIdSchema,
-  variables: z.record(canonicalJsonSchema),
-  evidence_refs: evidenceRefsSchema,
-}).strict();
-
-const primaryResultViewReceiptSchema = z.object({
-  protocol: z.literal(
-    "context.indexer.primary-result-view-materialization-receipt/v1",
-  ),
-  workset_digest: indexerDigestSchema,
-  primary_result_digest: indexerDigestSchema,
-  view_digest: indexerDigestSchema,
-  validator_contract_digest: indexerDigestSchema,
-}).strict();
-
-export const indexerPrimaryResultViewSchema = z.object({
-  protocol: z.literal("context.indexer.primary-result-view/v1"),
-  workset_digest: indexerDigestSchema,
-  primary_result_digest: indexerDigestSchema,
-  primary_result_protocol: z.literal("context.indexer.main-result/v1"),
-  facts: z.array(primaryFactSchema),
-  artifacts: z.array(primaryArtifactSchema),
-  view_digest: indexerDigestSchema,
-  materialization_receipt: primaryResultViewReceiptSchema,
-}).strict();
-
-export type IndexerPrimaryFactView = z.infer<typeof primaryFactSchema>;
-export type IndexerPrimaryArtifactView = z.infer<typeof primaryArtifactSchema>;
-export type IndexerPrimaryResultView = z.infer<typeof indexerPrimaryResultViewSchema>;
-
-type PrimaryResultViewContent = Omit<
-  IndexerPrimaryResultView,
-  "view_digest" | "materialization_receipt"
->;
-
-export function indexerPrimaryResultViewDigest(
-  view: PrimaryResultViewContent,
-): string {
-  return indexerProtocolDigest(view);
-}
-
-function assertCanonicalEvidenceOrder(
-  items: readonly { evidence_refs: Array<{ ref: string }> }[],
-): void {
-  for (const item of items) {
-    const refs = item.evidence_refs.map((evidence) => evidence.ref);
-    if (refs.some((value, index) => [...refs].sort()[index] !== value)) {
-      throw new TypeError("PrimaryResultView evidence refs must use canonical ordering");
-    }
-  }
-}
-
-export function materializeIndexerPrimaryResultView(input: {
-  workset_digest: string;
-  primary_result_digest: string;
-  facts: readonly IndexerPrimaryFactView[];
-  artifacts: readonly IndexerPrimaryArtifactView[];
-  validator_contract_digest: string;
-}): IndexerPrimaryResultView {
-  const facts = input.facts.map((item) => primaryFactSchema.parse(item))
-    .sort((left, right) => compareIndexerCanonicalText(left.fact_ref, right.fact_ref));
-  const artifacts = input.artifacts.map((item) => primaryArtifactSchema.parse(item))
-    .sort((left, right) =>
-      compareIndexerCanonicalText(left.artifact_ref, right.artifact_ref)
-    );
-  if (new Set(facts.map((item) => item.fact_ref)).size !== facts.length) {
-    throw new TypeError("PrimaryResultView fact_ref values must be unique");
-  }
-  if (new Set(artifacts.map((item) => item.artifact_ref)).size !== artifacts.length) {
-    throw new TypeError("PrimaryResultView artifact_ref values must be unique");
-  }
-  assertCanonicalEvidenceOrder([...facts, ...artifacts]);
-  const content: PrimaryResultViewContent = {
-    protocol: "context.indexer.primary-result-view/v1",
-    workset_digest: input.workset_digest,
-    primary_result_digest: input.primary_result_digest,
-    primary_result_protocol: "context.indexer.main-result/v1",
-    facts,
-    artifacts,
-  };
-  const viewDigest = indexerPrimaryResultViewDigest(content);
-  return indexerPrimaryResultViewSchema.parse({
-    ...content,
-    view_digest: viewDigest,
-    materialization_receipt: {
-      protocol: "context.indexer.primary-result-view-materialization-receipt/v1",
-      workset_digest: input.workset_digest,
-      primary_result_digest: input.primary_result_digest,
-      view_digest: viewDigest,
-      validator_contract_digest: input.validator_contract_digest,
-    },
-  });
-}
-
-export function validateIndexerPrimaryResultView(
-  value: unknown,
-): IndexerPrimaryResultView {
-  const view = indexerPrimaryResultViewSchema.parse(value);
-  const content: PrimaryResultViewContent = {
-    protocol: view.protocol,
-    workset_digest: view.workset_digest,
-    primary_result_digest: view.primary_result_digest,
-    primary_result_protocol: view.primary_result_protocol,
-    facts: view.facts,
-    artifacts: view.artifacts,
-  };
-  if (indexerPrimaryResultViewDigest(content) !== view.view_digest) {
-    throw new TypeError("PrimaryResultView digest is invalid");
-  }
-  const receipt = view.materialization_receipt;
-  if (
-    receipt.workset_digest !== view.workset_digest ||
-    receipt.primary_result_digest !== view.primary_result_digest ||
-    receipt.view_digest !== view.view_digest
-  ) {
-    throw new TypeError("PrimaryResultView materialization receipt is invalid");
-  }
-  const rebuilt = materializeIndexerPrimaryResultView({
-    workset_digest: view.workset_digest,
-    primary_result_digest: view.primary_result_digest,
-    facts: view.facts,
-    artifacts: view.artifacts,
-    validator_contract_digest: receipt.validator_contract_digest,
-  });
-  if (rebuilt.view_digest !== view.view_digest) {
-    throw new TypeError("PrimaryResultView payload does not use canonical ordering");
-  }
-  return view;
 }
 
 const composerSelectionSchema = z.object({
@@ -335,6 +206,8 @@ export function indexerPostAuthorWorksetDigest(
 export const indexerPostAuthorWorksetSetSchema = z.object({
   protocol: z.literal("context.indexer.post-author-workset-set/v1"),
   workset_set_digest: indexerDigestSchema,
+  author_workset_digest: indexerDigestSchema,
+  primary_result_digest: indexerDigestSchema,
   effective_composer_set_digest: indexerDigestSchema,
   primary_result_view_digest: indexerDigestSchema.optional(),
   items: z.array(z.object({
@@ -382,6 +255,8 @@ export function planIndexerPostAuthorComposition(input: {
   if (effective.entries.length === 0) {
     const payload: Omit<IndexerPostAuthorWorksetSet, "workset_set_digest"> = {
       protocol: "context.indexer.post-author-workset-set/v1",
+      author_workset_digest: input.author_workset_digest,
+      primary_result_digest: input.primary_result_digest,
       effective_composer_set_digest: effective.effective_composer_set_digest,
       items: [],
     };
@@ -436,6 +311,8 @@ export function planIndexerPostAuthorComposition(input: {
   });
   const setPayload: Omit<IndexerPostAuthorWorksetSet, "workset_set_digest"> = {
     protocol: "context.indexer.post-author-workset-set/v1",
+    author_workset_digest: input.author_workset_digest,
+    primary_result_digest: input.primary_result_digest,
     effective_composer_set_digest: effective.effective_composer_set_digest,
     primary_result_view_digest: primaryResultView.view_digest,
     items: worksets.map((workset) => ({
@@ -555,23 +432,6 @@ export type IndexerLayerFragmentRunResult = z.infer<
   typeof indexerLayerFragmentRunResultSchema
 >;
 
-export const indexerComposerInvocationReceiptSchema = z.object({
-  protocol: z.literal("context.indexer.composer-invocation-receipt/v1"),
-  composer_ref: indexerComposerRefSchema,
-  composer_selection_entry_digest: indexerDigestSchema,
-  layer_ref: indexerProviderLayerRefSchema,
-  layer_integrity: indexerDigestSchema,
-  request_digest: indexerDigestSchema,
-  primary_result_view_digest: indexerDigestSchema,
-  consumed_primary_result_view_digest: indexerDigestSchema,
-  result_digest: indexerDigestSchema,
-  fragment_digests: z.array(indexerDigestSchema),
-}).strict();
-
-export type IndexerComposerInvocationReceipt = z.infer<
-  typeof indexerComposerInvocationReceiptSchema
->;
-
 export function validateIndexerPostAuthorFragmentResult(input: {
   request: IndexerPostAuthorFragmentRequest;
   result: unknown;
@@ -628,22 +488,6 @@ export function validateIndexerPostAuthorFragmentResult(input: {
   });
   return { result, fragments, receipt };
 }
-
-export const indexerComposedResultEnvelopeSchema = z.object({
-  protocol: z.literal("context.indexer.composed-result-envelope/v1"),
-  workset_digest: indexerDigestSchema,
-  primary_result_digest: indexerDigestSchema,
-  primary_result_view_digest: indexerDigestSchema,
-  accepted_input_view_digest: indexerDigestSchema,
-  effective_composer_set_digest: indexerDigestSchema,
-  accepted_post_author_fragments: z.array(indexerMaterializedLayerFragmentSchema),
-  composer_invocation_receipts: z.array(indexerComposerInvocationReceiptSchema),
-  composition_fingerprint: indexerDigestSchema,
-}).strict();
-
-export type IndexerComposedResultEnvelope = z.infer<
-  typeof indexerComposedResultEnvelopeSchema
->;
 
 export function composeIndexerPostAuthorEnvelope(input: {
   workset_digest: string;

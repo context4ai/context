@@ -6,8 +6,6 @@ import {
   buildIndexerInventoryDispositionSet,
   buildIndexerApprovedLayoutProjection,
   buildIndexerLayoutProposalSet,
-  buildIndexerMaterialAnswerLayoutProposalFromLayout,
-  buildIndexerMaterialAnswerLayoutProposalFromLayoutSet,
   buildIndexerLayoutChangeConfirmation,
   buildIndexerSharedArtifactFingerprint,
   canonicalIndexerNodeRef,
@@ -275,8 +273,8 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       collection: "codeindex",
       sections: [{ section_key: "summary", state: "structured" }],
     });
-    expect(proposal.artifacts[0]!.output_path).toMatch(
-      /^knowledge\/codeindex\/[a-f0-9]{64}\/button-overview\.md$/u,
+    expect(proposal.artifacts[0]!.output_path).toBe(
+      "knowledge/codeindex/components/button-overview.md",
     );
     expect(proposal.artifacts[0]!.internal_view_ref).toStartWith("view:artifact:");
     expect(validateIndexerLayoutProposal({
@@ -286,21 +284,33 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       operator_contract: operators,
       subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
     })).toEqual(proposal);
-    expect(buildIndexerMaterialAnswerLayoutProposalFromLayout({
-      layout: proposal,
-      landings: [{
-        answer_landing_ref: "question-target:anonymous-summary",
-        artifact_id: "button-overview",
-        section_key: "summary",
-      }],
-    })).toMatchObject({
-      layout_digest: proposal.proposal_digest,
-      landing_mappings: [{
-        answer_landing_ref: "question-target:anonymous-summary",
-        actualized_target_ref: proposal.artifacts[0]!.sections[0]!.section_ref,
-      }],
-    });
     expect(proposal).not.toHaveProperty("align");
+  });
+
+  test("keeps catalog-only accepted results in the layout set without creating a knowledge file", () => {
+    const { operators, profiles } = artifactPolicyContractsFixture();
+    const result = artifactResult();
+    result.artifacts = [];
+    result.artifact_bundle = null;
+    const { output_digest: _digest, ...payload } = result;
+    void _digest;
+    result.output_digest = indexerArtifactResultDigest(payload);
+
+    const proposal = resolveIndexerLayout({
+      artifact_result: result,
+      profile: "component-library",
+      profile_contract: profiles,
+      operator_contract: operators,
+      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+    });
+    expect(proposal.artifacts).toEqual([]);
+    expect(validateIndexerLayoutProposal({
+      proposal,
+      artifact_result: result,
+      profile_contract: profiles,
+      operator_contract: operators,
+      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+    })).toEqual(proposal);
   });
 
   test("rejects missing mappings, cross-collection Artifacts, and forged paths", () => {
@@ -434,22 +444,6 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
     });
     const proposalSet = buildIndexerLayoutProposalSet([proposal]);
     expect(validateIndexerLayoutProposalSet(proposalSet)).toEqual(proposalSet);
-    const landing = buildIndexerMaterialAnswerLayoutProposalFromLayoutSet({
-      layout_proposal_set: proposalSet,
-      landings: [{
-        answer_landing_ref: "planned-answer:button-overview",
-        indexer_id: proposal.indexer_id,
-        artifact_id: proposal.artifacts[0]!.artifact_id,
-        section_key: proposal.artifacts[0]!.sections[0]!.section_key,
-      }],
-    });
-    expect(landing).toMatchObject({
-      layout_digest: proposalSet.set_digest,
-      landing_mappings: [{
-        answer_landing_ref: "planned-answer:button-overview",
-        actualized_target_ref: proposal.artifacts[0]!.sections[0]!.section_ref,
-      }],
-    });
 
     const conflictingResult = structuredClone(result);
     conflictingResult.indexer_id = "another-indexer";

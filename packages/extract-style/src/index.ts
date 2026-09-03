@@ -1,5 +1,8 @@
 export { parseStyleSources } from "./styleParser.js";
-export { styleSourcesToEvidenceAdapterResult } from "./evidenceAdapter.js";
+export {
+  styleSourcesToEvidenceAdapterMaterialization,
+  styleSourcesToEvidenceAdapterResult,
+} from "./evidenceAdapter.js";
 export type { StyleEvidenceAdapterInvocation } from "./evidenceAdapter.js";
 export type {
   StyleComponentCandidate,
@@ -13,4 +16,5 @@ export type {
   StyleVariantState,
 } from "./styleTypes.js";
 
-export const STYLE_EVIDENCE_ADAPTER_EXPORT = "styleSourcesToEvidenceAdapterResult";
+export const STYLE_EVIDENCE_ADAPTER_EXPORT =
+  "styleSourcesToEvidenceAdapterMaterialization";

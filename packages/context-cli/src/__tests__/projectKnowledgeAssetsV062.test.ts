@@ -14,9 +14,11 @@ import {
   removeOrphanKnowledgeAssets,
   unprojectedSourceAssetLinks,
 } from "../project/knowledgeAssets.js";
-import { repairApprovedKnowledgeAssetProjections } from "../project/knowledgeAssetRepair.js";
+import {
+  canonicalizeApprovedKnowledgeAssetPair,
+  repairApprovedKnowledgeAssetProjections,
+} from "../project/knowledgeAssetRepair.js";
 import { projectPackageKnowledgeAssets } from "../project/packageAssets.js";
-import { reviewResourcePreviewsFor } from "../project/reviewHtml.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
 
 describe("0.6.2 knowledge resource projection", () => {
@@ -145,8 +147,8 @@ describe("0.6.2 knowledge resource projection", () => {
           description: "Example resource projection.",
           tags: ["docs"],
           timestamp: "2026-08-13T00:00:00.000Z",
-          resource: "lark:20260813/example/example.md",
-          sources: ["lark:20260813/example/example.md"],
+          resource: "lark:20260813/example",
+          sources: ["lark:20260813/example"],
         }).trimEnd(),
         "---",
         "",
@@ -166,6 +168,15 @@ describe("0.6.2 knowledge resource projection", () => {
       const content = await readFile(approvedPath, "utf8");
       expect(content).toMatch(/!\[One \\\[nested\\\]\]\(\.\.\/assets\/image\/[a-f0-9]{64}\.png\)/u);
       expect(unprojectedSourceAssetLinks(content)).toEqual([]);
+      const canonical = await canonicalizeApprovedKnowledgeAssetPair({
+        projectRoot,
+        pageRelPath: "knowledge/guides/example.md",
+        expectedContent: "![One \\[nested\\]](assets/example/materialized/image/example.png)",
+        approvedContent: content,
+        sourceLocators: ["lark:20260813/example"],
+      });
+      expect(canonical.expectedContent).toContain("context-asset:sha256:");
+      expect(canonical.approvedContent).toContain("context-asset:sha256:");
       expect((await verifyProjectWorkspace(projectRoot)).issues.map((issue) => issue.code))
         .not.toContain("approved-resource-source-path-unprojected");
     } finally {
@@ -207,63 +218,4 @@ describe("0.6.2 knowledge resource projection", () => {
     }
   });
 
-  test("Review exposes materialized and reference-only resource status without interpreting content", () => {
-    const imageBytes = Buffer.from("image", "utf8");
-    const manifest = createDocumentSnapshotManifest({
-      sourceType: "lark",
-      sourceName: "20260813/review-resources",
-      capturedAt: "2026-08-13T00:00:00.000Z",
-      files: [{ path: "index.md", bytes: "# Review\n", title: "Review" }],
-      assets: [{
-        path: "assets/materialized/image/example.png",
-        content_hash: computeDocumentContentHash(imageBytes),
-        media_type: "image/png",
-        role: "presentation",
-        source: { kind: "image", locator: "lark:image:example", title: "Diagram" },
-      }],
-      metadata: {
-        capture: {
-          resourceMaterialization: {
-            status: "complete",
-            discovered: { cite: 1, image: 1 },
-            materialized: { image: 1 },
-            reference_only: { cite: 1 },
-            failed: {},
-            items: [
-              {
-                kind: "image",
-                locator: "lark:image:example",
-                status: "materialized",
-                required: true,
-                asset_paths: ["materialized/image/example.png"],
-              },
-              {
-                kind: "cite",
-                locator: "lark:cite:reference",
-                status: "reference-only",
-                required: false,
-                asset_paths: [],
-                reason: "external navigation reference",
-              },
-            ],
-          },
-        },
-      },
-    });
-    const previews = reviewResourcePreviewsFor({
-      projectRoot: "/tmp/example-project",
-      materializedAt: "sources/lark/20260813/review-resources",
-      documentPath: "index.md",
-      markdown: [
-        "![Diagram](assets/materialized/image/example.png) <!-- lark:image:example -->",
-        "[Reference](https://example.test) <!-- lark:cite:reference -->",
-      ].join("\n\n"),
-      manifest,
-    });
-
-    expect(previews).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "image", status: "materialized", image: true }),
-      expect.objectContaining({ kind: "cite", status: "reference-only", reason: "external navigation reference" }),
-    ]));
-  });
 });

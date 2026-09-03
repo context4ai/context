@@ -2,7 +2,7 @@
 
 [English](../../en/case-studies/agent-graph-workflow.md) · [交互式回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)
 
-Context 是一套知识管理工具：把代码仓库和文档转成经过审核、可以归因的知识包。它的生命周期足够长，也足够真实——来源要先界定和采集，代码与文档走不同的生产路径，人工门禁可能暂停流程，批准知识还要经过关闭、验证和构建。
+Context 是一套知识管理工具：把代码仓库和文档转成经过审核的知识包。它的生命周期足够长，也足够真实——来源要先界定和采集，唯一 Indexer 生命周期要把全部已授权输入收敛为当前 Candidate 批次，人工门禁可能暂停流程，批准知识还要经过关闭、验证和构建。
 
 Context 使用 Agent Graph 承载工作契约。Agent Graph 不提取代码、不理解文档语义，也不批准知识；Context 始终是宿主，负责观察工作区事实、执行生命周期动作、约束权限并产出证据。Agent Graph 根据这些事实求值，选出下一条合法 Route。
 
@@ -25,8 +25,8 @@ Context 插件对外只有一个 Agent 入口：
 完整接入公开在 [`context-workflow/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow)。它展示了一个薄 Skill 如何连接一套更大、又能独立测试的工作契约：
 
 - [`provider.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/provider.yaml) 绑定 `workspace` Graph、原因码目录、Action、Resource 和入口。
-- [`graphs/workspace.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/workspace.yaml) 是静态生命周期：32 个 Action、Gate、Terminal 节点，以及它们之间允许发生的流转。
-- [`actions/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/actions) 包含 25 份可执行契约。Action 描述宿主命令、副作用、权限边界和预期结果，不承载长篇手册。
+- [`graphs/workspace.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/workspace.yaml) 是静态顶层生命周期。它通过 `run-indexer-lifecycle` Action 把索引工作交给唯一的 [`indexer` Graph](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/indexer.yaml)，直到当前 Candidate 批次已经生成，或真正的 Gate 阻塞流程时才返回。
+- [`actions/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/actions) 包含可执行契约。Action 描述 runner、宿主命令或 handler、副作用、权限边界和预期结果，不承载长篇手册。
 - [`resources/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/resources) 包含可独立寻址的工作流说明：Procedure 说明当前任务，Dialogue 解释人工决定，View 物化实时工作区事实，Semantic Reference 指导判断，Diagnostic 解释错误，Manual 记录稳定 API。
 - [`codes.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/codes.yaml) 用稳定状态码解释 Route 与诊断，避免把长段文字塞进日常机器输出。
 - [`tests/`](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow/tests) 直接用 Facts 验证路由，不需要启动 Agent 或模型。
@@ -54,18 +54,18 @@ Context 插件对外只有一个 Agent 入口：
 
 这套接入的 Graph 节点、人工与权限 Gate、Action 描述、可寻址资源和路由测试都保存在公开工作流目录中。回放页面的“工作图”按钮会把这份静态契约可视化；每一步右侧还会把当前 Action 和 Resources 链回上述真实源码。案例与工作流放在同一仓库后，不再需要在另一个仓库重复维护容易变化的数量清单。
 
-## 一张工作图，两条知识路径
+## 一条工作区路线，一套 Indexer 生命周期
 
-代码与文档共享一个工作区，但不会被假装成同一种流程：
+代码、Markdown、extension fragment 和 tool snapshot 共用一条生产路径：
 
 1. 来源事实先确定本轮允许使用的代码模块与文档。
 2. 文档采集按来源循环，直到每份来源都有可审计快照。
-3. 代码提取按模块循环，完成整个批次后进入代码候选审核 Gate。
-4. 文档结构规划先确认页面和章节都有连续证据。
-5. 文档编译按已确认目标循环，全部完成后统一审核。
-6. 最后通过确定性的 close、verify 和 build 产出消费包。
+3. `run-indexer-lifecycle` 按 Indexer Graph 依次完成需求确认、Provider 选择、Authorized Workset、分区生成、结果合并、Layout 和 Candidate 编译。
+4. 代码与文档材料收敛为唯一一批当前 Candidate。可选结构预览只帮助人查看目录和大纲，不构成第二套生成协议或第二次 Review。
+5. 用户只对最终内容做一次 Review，通过后整批进入批准知识。
+6. 最后通过确定性的 close、verify、build 和运行事件投递产出消费包，并完成当前范围。
 
-多个来源不需要复制多套 Graph。Graph 只描述“仍有来源待采集”“仍有确认结构未编译”这类稳定状态；具体是哪个来源或模块，由运行时 Facts 给出。工作图保持静态，项目和批次仍可自由变化。
+多个来源和 Indexer 分区不需要复制多套顶层 Graph。工作区 Graph 只描述“仍有来源待采集”“Indexer 生命周期尚未 current”这类稳定状态；具体 Provider workset 和合法子步骤由运行时 Facts 与嵌套的 Indexer Graph 决定。公开路线保持稳定，项目仍可使用不同的 registry、Provider 与批次规模。
 
 ## Context 全托管映射为 Gate 委托执行
 
@@ -83,7 +83,7 @@ Context 开启 debug 后，宿主会记录 CLI 调用边界和 Agent Graph 求�
 - 哪个 reason code 解释了这次流转；
 - 最终如何到达知识包完成状态。
 
-[交互式实践回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)来自一次真实运行的脱敏投影。它保留路由顺序、重复求值、状态、reason code 和相对时间，但不包含来源正文、本机路径、凭证、不透明 ID 或组织相关名称。
+[交互式实践回放](https://context4ai.github.io/context/case-studies/workflow/?lang=zh)由一份脱敏 Context 记录按当前工作区契约归一化。已经退役的提取、对齐和文档编译路由被折叠为唯一的 `run-indexer-lifecycle` Route；回放保留仍可对应的路由顺序、状态和相对时间，但不包含来源正文、本机路径、凭证、不透明 ID 或组织相关名称。
 
 这不只是一个展示页面。路由记录能暴露无效循环、重复资源读取、不完整的恢复路径，以及错误的状态优先级；这些观察再进入确定性路由测试和 Graph 修改，形成 Graph Engineering 的反馈闭环。
 

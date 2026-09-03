@@ -13,10 +13,7 @@ import {
   compareProjectIndexerRequirements,
   inspectProjectIndexerRequirements,
 } from "./indexerRequirementProject.js";
-import {
-  listCliBundledIndexers,
-  loadCliReleaseCapabilityManifest,
-} from "./indexerCliBundledProvider.js";
+import { listCliBundledIndexers } from "./indexerCliBundledProvider.js";
 import { validateProjectIndexerSelectionProposal } from "./indexerSelectionProposal.js";
 import { routeProjectIndexerProviderSelection } from "./indexerProviderRouting.js";
 import { validateAndStageProjectIndexerCustomizationDraft } from
@@ -53,7 +50,7 @@ import {
   startProjectIndexerPostAuthorRun,
 } from "./indexerPostAuthorActions.js";
 import { reconcileProjectIndexerResults } from "./indexerResultReconciliationActions.js";
-import { registerIndexerMaterialAnswerCommands } from "./indexerMaterialAnswerCommands.js";
+import { registerIndexerMaterialGapCommands } from "./indexerMaterialGapCommands.js";
 import { registerIndexerRequirementGateCommands } from "./indexerRequirementGateCommands.js";
 import { registerIndexerSubjectIdentityCommands } from "./indexerSubjectIdentityCommands.js";
 import { registerIndexerMarkdownProviderCommands } from "./indexerMarkdownProviderCommands.js";
@@ -156,16 +153,7 @@ export function registerProjectIndexerCommands(program: Command): void {
   const indexer = program.command("indexer")
     .description("Inspect, confirm, and apply Indexer requirements and Providers");
 
-  requirementCommand(
-    indexer,
-    "capabilities",
-    "Read the machine capability manifest shipped by this exact CLI release",
-  ).action(async (...args: unknown[]) => {
-    const options = commandOptions(args);
-    writeOutput(await loadCliReleaseCapabilityManifest(), outputFormat(options));
-  });
-
-  registerIndexerMaterialAnswerCommands(indexer);
+  registerIndexerMaterialGapCommands(indexer);
   registerIndexerRequirementGateCommands(indexer);
   registerIndexerSubjectIdentityCommands(indexer);
   registerIndexerMarkdownProviderCommands(indexer);

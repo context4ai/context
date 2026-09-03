@@ -3,7 +3,6 @@ import {
   buildIndexerApprovedLayoutProjection,
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutTransition,
-  buildIndexerMaterialAnswerLayoutProposalFromLayoutSet,
   compareIndexerLayout,
   indexerProtocolDigest,
   validateIndexerLayoutChangeReport,
@@ -120,75 +119,14 @@ describe("layout resolver evolution fixtures", () => {
     );
   });
 
-  test("actualizes planned output before exposing a conditional layout Gate", () => {
-    const splitSet = layoutSet(fixture.split);
-    const splitArtifact = fixture.split.artifacts.find((artifact) =>
-      artifact.artifact_id === "guide-continuation"
-    )!;
-    const actualization = buildIndexerMaterialAnswerLayoutProposalFromLayoutSet({
-      layout_proposal_set: splitSet,
-      landings: [{
-        answer_landing_ref: "planned-answer:details",
-        indexer_id: fixture.split.indexer_id,
-        artifact_id: splitArtifact.artifact_id,
-        section_key: "details",
-      }],
-    });
-    const transition = buildIndexerLayoutTransition({
-      layout_proposal_set: splitSet,
-      base_projections: [buildIndexerApprovedLayoutProjection(fixture.baseline)],
-      planned_output: { state: "actualized", proposal: actualization },
-    });
-    expect(validateIndexerLayoutTransition(transition)).toEqual(transition);
-    expect(transition).toMatchObject({
-      planned_output: { state: "actualized", landing_mapping_count: 1 },
-      requires_confirmation: true,
-      gate: { id: "confirm-layout-change", authority: "human" },
-    });
-
-    const staleActualization = buildIndexerMaterialAnswerLayoutProposalFromLayoutSet({
-      layout_proposal_set: layoutSet(fixture.baseline),
-      landings: [{
-        answer_landing_ref: "planned-answer:details",
-        indexer_id: fixture.baseline.indexer_id,
-        artifact_id: "guide",
-        section_key: "details",
-      }],
-    });
-    expect(() => buildIndexerLayoutTransition({
-      layout_proposal_set: splitSet,
-      base_projections: [buildIndexerApprovedLayoutProjection(fixture.baseline)],
-      planned_output: { state: "actualized", proposal: staleActualization },
-    })).toThrow(/stale for the current layout proposal set/);
-
-    const forgedTarget = structuredClone(actualization);
-    forgedTarget.landing_mappings[0]!.actualized_target_ref =
-      "section:subject:missing-current-layout-target";
-    forgedTarget.landing_mappings[0]!.section_ref =
-      "section:subject:missing-current-layout-target";
-    const { proposal_digest: _digest, ...forgedPayload } = forgedTarget;
-    void _digest;
-    forgedTarget.proposal_digest = indexerProtocolDigest(forgedPayload);
-    expect(() => buildIndexerLayoutTransition({
-      layout_proposal_set: splitSet,
-      base_projections: [buildIndexerApprovedLayoutProjection(fixture.baseline)],
-      planned_output: { state: "actualized", proposal: forgedTarget },
-    })).toThrow(/targets are absent from the current layout/);
-  });
-
-  test("validates canonical proposal sets and explicit no-answer transitions", () => {
+  test("validates canonical proposal sets and layout transitions", () => {
     const set = layoutSet(fixture.incremental);
     expect(validateIndexerLayoutProposalSet(set)).toEqual(set);
     const transition = buildIndexerLayoutTransition({
       layout_proposal_set: set,
       base_projections: [buildIndexerApprovedLayoutProjection(fixture.baseline)],
-      planned_output: { state: "not-required" },
     });
-    expect(transition.planned_output).toEqual({
-      state: "not-required",
-      actualization_digest: null,
-      landing_mapping_count: 0,
-    });
+    expect(validateIndexerLayoutTransition(transition)).toEqual(transition);
     expect(transition.requires_confirmation).toBe(false);
   });
 });

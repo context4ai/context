@@ -62,6 +62,7 @@ export interface StyleDiagnostic {
   code:
     | "style-import-dynamic-unsupported"
     | "style-import-unresolved"
+    | "style-selector-dynamic-identity-omitted"
     | "style-selector-unsupported"
     | "style-source-unsupported";
   severity: "warning" | "error";

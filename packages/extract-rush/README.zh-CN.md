@@ -6,9 +6,9 @@
 subspace、发布意图、入口信号、直接依赖/消费者边、构建 phase/command、发布单元、解耦依赖和
 最近的 `OWNERS` 边界。
 
-这些索引是 Context 知识项目的证据，不是产品分类。项目决定哪些事实对目标读者有
-价值，并通过 `extractCustom()` 映射为候选；来源身份、候选新鲜度、审核、正式知识
-和知识包产出继续由 Context 负责。
+这些索引是 Code Indexer Provider 的结构证据，不是产品分类。Provider 决定哪些
+事实对目标读者有价值并返回当前 Indexer Result；来源身份、Candidate 新鲜度、
+审核、正式知识和知识包产出继续由 Context 负责。
 
 ## 在知识生产链中的位置
 
@@ -17,7 +17,7 @@ subspace、发布意图、入口信号、直接依赖/消费者边、构建 phas
            ↓
 rush.json + package.json + Rush 配置 + OWNERS 事实
            ↓
-项目自有候选映射
+选中的 Code Indexer Provider
            ↓
 经过审核的架构 / 归属 / package 知识
 ```

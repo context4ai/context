@@ -2,13 +2,13 @@
   "schema": "agent-graph.case-study.replay.v1",
   "caseStudy": "context-knowledge-workflow",
   "source": {
-    "kind": "sanitized-recording",
+    "kind": "sanitized-contract-replay",
     "graph": "workspace",
     "entry": "context",
-    "recordedSteps": 26,
+    "recordedSteps": 13,
     "note": {
-      "en": "Route changes and relative timing are preserved from a real Context run; private source data and opaque identifiers are excluded.",
-      "zh-CN": "路由变化和相对时间来自一次真实 Context 运行；私有来源数据和不透明标识已经排除。"
+      "en": "This replay is normalized from a sanitized Context recording to the current workspace contract; retired phase routes, private source data, and opaque identifiers are excluded.",
+      "zh-CN": "本回放由脱敏 Context 记录按当前工作区契约归一化；已移除退役阶段路由、私有来源数据和不透明标识。"
     }
   },
   "steps": [
@@ -17,26 +17,13 @@
     { "elapsed": 258, "node": "authorize-document-capture", "status": "waiting-user", "reasonCode": "route.capture.permission-required" },
     { "elapsed": 295, "node": "capture-next", "status": "actionable", "reasonCode": "route.capture.pending-target", "iteration": 1, "iterations": 2 },
     { "elapsed": 329, "node": "capture-next", "status": "actionable", "reasonCode": "route.capture.pending-target", "iteration": 2, "iterations": 2 },
-    { "elapsed": 461, "node": "configure-code-extraction", "status": "actionable", "reasonCode": "route.extract.configuration-required" },
-    { "elapsed": 497, "node": "extract-next", "status": "actionable", "reasonCode": "route.extract.pending-target", "iteration": 1, "iterations": 2 },
-    { "elapsed": 530, "node": "extract-next", "status": "actionable", "reasonCode": "route.extract.pending-target", "iteration": 2, "iterations": 2 },
-    { "elapsed": 543, "node": "apply-managed-review", "status": "actionable", "reasonCode": "route.review.apply-managed" },
-    { "elapsed": 579, "node": "close-approved-knowledge", "status": "actionable", "reasonCode": "route.close.projection-stale", "checkpoint": 1, "checkpoints": 2 },
-    { "elapsed": 620, "node": "configure-prose-lifecycle", "status": "actionable", "reasonCode": "route.prose.configuration-required" },
-    { "elapsed": 757, "node": "align-next", "status": "actionable", "reasonCode": "route.structure.pending-target" },
-    { "elapsed": 1354, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 1, "iterations": 8 },
-    { "elapsed": 1405, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 2, "iterations": 8 },
-    { "elapsed": 1428, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 3, "iterations": 8 },
-    { "elapsed": 1437, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 4, "iterations": 8 },
-    { "elapsed": 1446, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 5, "iterations": 8 },
-    { "elapsed": 1454, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 6, "iterations": 8 },
-    { "elapsed": 1463, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 7, "iterations": 8 },
-    { "elapsed": 1472, "node": "compile-next", "status": "actionable", "reasonCode": "route.compile.pending-target", "iteration": 8, "iterations": 8 },
-    { "elapsed": 1481, "node": "apply-resumed-review", "status": "actionable", "reasonCode": "route.review.apply-managed" },
-    { "elapsed": 1575, "node": "close-approved-knowledge", "status": "actionable", "reasonCode": "route.close.projection-stale", "checkpoint": 2, "checkpoints": 2 },
+    { "elapsed": 461, "node": "run-indexer-lifecycle", "status": "actionable", "reasonCode": "route.indexer.lifecycle-required" },
+    { "elapsed": 1481, "node": "apply-managed-review", "status": "actionable", "reasonCode": "route.review.apply-managed" },
+    { "elapsed": 1575, "node": "close-approved-knowledge", "status": "actionable", "reasonCode": "route.close.projection-stale", "checkpoint": 1, "checkpoints": 1 },
     { "elapsed": 1624, "node": "configure-package-output", "status": "actionable", "reasonCode": "route.package.configuration-required" },
     { "elapsed": 1679, "node": "review-package-template", "status": "waiting-user", "reasonCode": "route.package.template-review-required" },
     { "elapsed": 1731, "node": "build-next", "status": "actionable", "reasonCode": "route.build.package-stale" },
-    { "elapsed": 1779, "node": "complete", "status": "complete", "reasonCode": "workflow.complete" }
+    { "elapsed": 1760, "node": "flush-logs-after-build", "status": "actionable", "reasonCode": "route.logs.delivery-pending" },
+    { "elapsed": 1779, "node": "current-scope-complete", "status": "complete", "reasonCode": "route.current-scope-complete" }
   ]
 }

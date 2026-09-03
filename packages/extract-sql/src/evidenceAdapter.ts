@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseSqlSources } from "./sqlParser.js";
@@ -100,4 +102,13 @@ export function sqlSourcesToEvidenceAdapterResult(
       output_digest: indexerEvidenceAdapterProtocolDigest(documents),
     }],
   });
+}
+
+export function sqlSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: SqlEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    sqlSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

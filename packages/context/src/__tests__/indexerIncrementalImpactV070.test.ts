@@ -7,6 +7,7 @@ import {
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvelope,
   buildIndexerRunEnvironment,
+  indexerEvidenceBindingDigest,
   validateIndexerIncrementalImpactReport,
   type IndexerAuthorDependencyView,
   type IndexerMainAuthorWorkset,
@@ -77,8 +78,7 @@ function runEnvelopeWithProjection(input: {
     final_authority: PROVIDER,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: baselineEnvironment.source_snapshot_digest,
-      parser_dependency_fingerprint:
-        baselineEnvironment.parser_dependency_fingerprint,
+      source_dependency_fingerprint: input.workset.source_binding_digest,
       source_role: baselineEnvironment.source_role,
       source_precedence_digest: baselineEnvironment.source_precedence_digest,
       metric_set_digest: baselineEnvironment.metric_set_digest,
@@ -218,6 +218,79 @@ function baseline() {
   return { workset, view, result, envelope, dependencySet };
 }
 
+function splitSourceBaseline() {
+  const usageEvidencePayload = {
+    evidence_ref: "evidence:button-usage-source",
+    kind: "code" as const,
+    source_ref: "repo:sample@revision",
+    module_ref: "module:packages/sample",
+    locator: {
+      path: "src/button-usage.ts",
+      start_line: 1,
+      end_line: 12,
+    },
+    content_digest: digest("6"),
+    coverage_tier: "ast-catalog" as const,
+  };
+  const usageEvidence = {
+    ...usageEvidencePayload,
+    binding_digest: indexerEvidenceBindingDigest(usageEvidencePayload),
+  };
+  const view = rebuildView(authorDependencyView(), ({ positive_nodes }) => {
+    positive_nodes.push({
+      kind: "source-span",
+      evidence_ref: usageEvidence.evidence_ref,
+      source_ref: usageEvidence.source_ref,
+      module_ref: usageEvidence.module_ref,
+      locator: usageEvidence.locator,
+      content_digest: usageEvidence.content_digest,
+      targets: [],
+    });
+  });
+  const workset = worksetForView(authorWorkset(), view);
+  const result = artifactResult(workset);
+  result.evidence_bindings.push(usageEvidence);
+  const artifact = result.artifacts[0]!;
+  if (artifact.representation !== "sections") throw new Error("expected sections");
+  artifact.sections.push({
+    section_key: "usage",
+    owner_indexer_id: workset.indexer_id,
+    document_kind: "reference",
+    reader_goal: "use-capability",
+    artifact_kind: "overview",
+    blocks: [{
+      block_id: "usage-block",
+      layer: "semantic-prose",
+      markdown: "Use the public control.",
+      evidence_refs: [usageEvidence.evidence_ref],
+    }],
+  });
+  const disposition = result.inventory_dispositions.dispositions[0]!;
+  if (!("section_evidence" in disposition)) {
+    throw new Error("expected detailed inventory disposition");
+  }
+  disposition.section_evidence.push({
+    artifact_id: "button-overview",
+    section_key: "usage",
+    evidence_refs: [usageEvidence.evidence_ref],
+  });
+  if (result.artifact_bundle === null) throw new Error("expected Artifact Bundle");
+  result.artifact_bundle.artifacts[0]!.evidence_refs.push(usageEvidence.evidence_ref);
+  rehashArtifactResult(result);
+  const envelope = runEnvelope(workset, INPUT_DIGEST);
+  return {
+    workset,
+    view,
+    envelope,
+    dependencySet: buildIndexerArtifactDependencySet({
+      result,
+      workset,
+      run_envelope: envelope,
+      dependency_view: view,
+    }),
+  };
+}
+
 function reportForView(input: {
   currentView: IndexerAuthorDependencyView;
   currentEnvelope?: ReturnType<typeof buildIndexerRunEnvelope>;
@@ -316,6 +389,51 @@ describe("Indexer run envelope and fine-grained Merkle impact", () => {
         affected_sections: [{ artifact_id: "button-overview", section_key: "usage" }],
       }),
     );
+  });
+
+  test("keeps Sections current when a different source-backed Section changes", () => {
+    const previous = splitSourceBaseline();
+    const currentView = rebuildView(previous.view, ({ positive_nodes }) => {
+      const usageSource = positive_nodes.find((node) =>
+        node.kind === "source-span" &&
+        node.evidence_ref === "evidence:button-usage-source"
+      )!;
+      usageSource.content_digest = digest("9");
+    });
+    const currentWorkset = worksetForView(previous.workset, currentView);
+    const report = buildIndexerIncrementalImpactReport({
+      previous_run_envelope: previous.envelope,
+      previous_dependency_view: previous.view,
+      previous_dependency_set: previous.dependencySet,
+      current_run_envelope: runEnvelope(currentWorkset, digest("f")),
+      current_dependency_view: currentView,
+    });
+
+    expect(report.dependency_changes).toEqual([expect.objectContaining({
+      polarity: "positive",
+      kind: "source-span",
+      change: "changed",
+      affected_artifact_ids: ["button-overview"],
+      affected_sections: [{
+        artifact_id: "button-overview",
+        section_key: "usage",
+      }],
+    })]);
+    expect(report.artifacts).toEqual([expect.objectContaining({
+      artifact_id: "button-overview",
+      state: "stale",
+      sections: [
+        { section_key: "summary", state: "current", changed_node_refs: [] },
+        { section_key: "usage", state: "stale", changed_node_refs: expect.any(Array) },
+      ],
+    })]);
+    expect(report).toMatchObject({
+      current_artifact_count: 0,
+      stale_artifact_count: 1,
+      current_section_count: 1,
+      stale_section_count: 1,
+      recompute_scope: "artifact-sections",
+    });
   });
 
   test("invalidates the complete logical unit when its group-input denominator changes", () => {

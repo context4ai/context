@@ -8,3 +8,4 @@ expect:
   primaryReasonCode: route.indexer.post-author-agent-step
   requiredResources:
     - skill.context-run-indexer-post-author-composer
+    - resolved-indexer-instructions

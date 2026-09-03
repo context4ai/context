@@ -248,6 +248,11 @@ export async function validateBundledIndexerMarkdownRoutingFixtures(input: {
   if (new Set(cases.map((fixture) => fixture.id)).size !== cases.length) {
     throw new TypeError("Markdown routing case ids must be unique");
   }
+  assertExactCoverage(
+    new Set(cases.map((fixture) => fixture.profile)),
+    input.expectedProfiles,
+    "Markdown routing profile fixtures",
+  );
   assertExactCoverage(new Set(cases.map((fixture) => fixture.density_mode)), DENSITY_MODES, "density fixtures");
   assertExactCoverage(
     new Set(cases.map((fixture) => fixture.candidate_resolution)),

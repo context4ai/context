@@ -40,7 +40,7 @@ function authorWorkset(view: IndexerTargetResolutionView) {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("a"),
     source_scope_digest: digest("5"),
-    parser_contract_digest: digest("6"),
+    source_binding_digest: digest("6"),
     primary_resource_binding_digest: digest("7"),
     question_target_inventory_digest: digest("8"),
     partition_plan_binding_digest: digest("9"),

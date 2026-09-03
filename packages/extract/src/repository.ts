@@ -117,7 +117,7 @@ function selectedEntryFiles(input: {
         : safeSourceRelativePath(`${input.module.path}/${entry.path}`);
       if (!includedSourceFiles.has(sourcePath)) {
         throw new Error(
-          `Auto-detected entry is outside extractTs include: ${sourcePath}. Update include or configure entries in the Context project.`,
+          `Auto-detected entry is outside the parser include: ${sourcePath}. Update the Provider include or configured entries.`,
         );
       }
     }
@@ -140,7 +140,7 @@ function selectedEntryFiles(input: {
   return sourceEntries.map((sourcePath, index) => {
     if (!includedSourceFiles.has(sourcePath)) {
       throw new Error(
-        `Configured extraction entry is missing or outside extractTs include: ${sourcePath}. Update entries or include in the Context project.`,
+        `Configured extraction entry is missing or outside the parser include: ${sourcePath}. Update the Provider entries or include.`,
       );
     }
     const modulePath = moduleRelativeEntryPath(input.module.path, sourcePath);

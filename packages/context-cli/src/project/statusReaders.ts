@@ -2,15 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type {
-  ExtractCustomPhaseDefinition,
-  ExtractTsPhaseDefinition,
   FileSourceRegistryEntry,
   LarkSourceRegistryEntry,
   KnowledgeCollection,
   PackageDefinition,
   PhaseDefinition,
 } from "@c4a/context";
-import YAML from "yaml";
 import { ContextError } from "../lib/errors.js";
 import { fileSourceIncludeMismatchDiagnostic } from "./documentCapture.js";
 import { documentSnapshotFidelityState, readDocumentSnapshotCaptureReport } from "./documentSnapshotFidelity.js";
@@ -21,16 +18,13 @@ import {
   projectUsesMdxJsonDocsForSource,
 } from "./documentSiteDetection.js";
 import { readDocumentSourcesRegistry } from "./documentSources.js";
-import { extractPhaseSourceFingerprint, readExtractSourceFingerprints } from "./extractCandidates.js";
 import { larkSnapshotIdentityDiagnostic } from "./larkSourceIdentity.js";
 import { collectPackageFreshness, type PackageFreshness } from "./packageBuilder.js";
-import { STRUCTURE_FILE } from "./proseCompileConstants.js";
 import { findDocumentSnapshotForSource } from "./documentBatchManifest.js";
 import { diagnoseRepoSources, listRepoSources, type RepoSourceRecord, type RepoSourceStatus } from "./repoSources.js";
 import { readProjectCloseStatus, type ProjectCloseStatus } from "./close.js";
 import type {
   DocumentSourceStatus,
-  SourceFreshnessState,
 } from "./statusTypes.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { candidateSetHash } from "./reviewShared.js";
@@ -73,7 +67,9 @@ export async function readDraftCandidateStatus(projectRoot: string): Promise<{
 }> {
   try {
     await readRejectedDecisions(projectRoot);
-    const rows = await readCandidateRecords(projectRoot);
+    const rows = (await readCandidateRecords(projectRoot)).filter((row) =>
+      row.candidate_type === "indexer-artifact"
+    );
     const drafts = rows.filter((row) => row.status === "draft");
     const rejected = rows.filter((row) => row.status === "rejected");
     return {
@@ -93,118 +89,6 @@ export async function readDraftCandidateStatus(projectRoot: string): Promise<{
       };
     }
     throw error;
-  }
-}
-
-export interface StructureDraftStatus {
-  state: "missing" | "draft" | "confirmed" | "frozen" | "invalid";
-  lifecycleState?: string;
-  phaseCollection?: string;
-  sourceKeys?: string[];
-  collections?: string[];
-  structureDigest?: string;
-  evidenceSnapshotHash?: string;
-  nodeCount?: number;
-  viewCount?: number;
-  sectionCount?: number;
-  sourceRefCount?: number;
-  edgeCount?: number;
-  unresolvedCount?: number;
-  diagnostics: string[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function stagedStructureCounts(parsed: Record<string, unknown>): {
-  nodeCount: number;
-  viewCount: number;
-  sectionCount: number;
-  sourceRefCount: number;
-  edgeCount: number;
-  unresolvedCount: number;
-} {
-  const views = Array.isArray(parsed.views) ? parsed.views : [];
-  const sections = views.flatMap((view) =>
-    isRecord(view) && Array.isArray(view.sections) ? view.sections : []
-  );
-  const sourceRefs = new Set(sections.flatMap((section) => {
-    if (!isRecord(section)) return [];
-    return [
-      ...(typeof section.source_ref === "string" ? [section.source_ref] : []),
-      ...(Array.isArray(section.source_refs)
-        ? section.source_refs.filter((item): item is string => typeof item === "string")
-        : []),
-    ];
-  }));
-  return {
-    nodeCount: Array.isArray(parsed.nodes) ? parsed.nodes.length : 0,
-    viewCount: views.length,
-    sectionCount: sections.length,
-    sourceRefCount: sourceRefs.size,
-    edgeCount: Array.isArray(parsed.edges) ? parsed.edges.length : 0,
-    unresolvedCount: Array.isArray(parsed.unresolved) ? parsed.unresolved.length : 0,
-  };
-}
-
-export function readStructureDraftStatus(projectRoot: string): StructureDraftStatus {
-  const structurePath = join(projectRoot, STRUCTURE_FILE);
-  if (!existsSync(structurePath)) return { state: "missing", sourceKeys: [], collections: [], diagnostics: [] };
-  try {
-    const parsed = YAML.parse(readFileSync(structurePath, "utf8")) as unknown;
-    if (!isRecord(parsed)) {
-      return {
-        state: "invalid",
-        sourceKeys: [],
-        collections: [],
-        diagnostics: [`${STRUCTURE_FILE} must be a YAML object`],
-      };
-    }
-    const lifecycle = isRecord(parsed.lifecycle) ? parsed.lifecycle : {};
-    const lifecycleState = lifecycle.state;
-    if (lifecycleState === "draft" || lifecycleState === "confirmed" || lifecycleState === "frozen") {
-      const structureDigest = typeof parsed.structure_digest === "string"
-        ? parsed.structure_digest
-        : typeof lifecycle.structure_digest === "string"
-          ? lifecycle.structure_digest
-          : undefined;
-      const evidenceSnapshotHash = typeof parsed.evidence_snapshot_hash === "string"
-        ? parsed.evidence_snapshot_hash
-        : undefined;
-      return {
-        state: lifecycleState,
-        lifecycleState,
-        ...(typeof lifecycle.phase_collection === "string"
-          ? { phaseCollection: lifecycle.phase_collection }
-          : {}),
-        sourceKeys: Array.isArray(parsed.sources)
-          ? parsed.sources.filter((item): item is string => typeof item === "string")
-          : [],
-        collections: Array.isArray(parsed.views)
-          ? [...new Set(parsed.views.flatMap((view) =>
-              isRecord(view) && typeof view.collection === "string" ? [view.collection] : []
-            ))].sort()
-          : [],
-        ...(structureDigest === undefined ? {} : { structureDigest }),
-        ...(evidenceSnapshotHash === undefined ? {} : { evidenceSnapshotHash }),
-        ...stagedStructureCounts(parsed),
-        diagnostics: [],
-      };
-    }
-    return {
-      state: "invalid",
-      sourceKeys: [],
-      collections: [],
-      diagnostics: [`${STRUCTURE_FILE} lifecycle.state must be draft, confirmed, or frozen`],
-    };
-  } catch (error) {
-    return {
-      state: "invalid",
-      sourceKeys: [],
-      collections: [],
-      diagnostics: [`${STRUCTURE_FILE} is invalid YAML: ${errorMessage(error)}`],
-    };
   }
 }
 
@@ -268,13 +152,10 @@ export async function readSourceStatus(projectRoot: string): Promise<{
 
 export async function readVerifyStatus(
   projectRoot: string,
-  expectedExtractPhaseIds?: readonly string[],
 ): Promise<{ issues: ProjectVerifyIssue[]; diagnostics: string[] }> {
   try {
     return {
-      issues: (await verifyProjectWorkspace(projectRoot, {
-        ...(expectedExtractPhaseIds === undefined ? {} : { expectedExtractPhaseIds }),
-      })).issues,
+      issues: (await verifyProjectWorkspace(projectRoot)).issues,
       diagnostics: [],
     };
   } catch (error) {
@@ -311,16 +192,6 @@ export async function readCloseStatus(projectRoot: string): Promise<ProjectClose
       diagnostics: [errorMessage(error)],
     };
   }
-}
-
-type CodeExtractionPhaseDefinition = ExtractTsPhaseDefinition | ExtractCustomPhaseDefinition;
-
-function isCodeExtractionPhase(phase: PhaseDefinition): phase is CodeExtractionPhaseDefinition {
-  return phase.kind === "phase.extract.ts" || phase.kind === "phase.extract.custom";
-}
-
-function defaultMaterializedAt(source: RepoSourceRecord): string {
-  return source.materializedAt ?? `sources/repo/${source.name}`;
 }
 
 function defaultDocumentMaterializedAt(type: "file" | "lark", name: string): string {
@@ -537,108 +408,4 @@ function documentSnapshotReadiness(input: {
       workspaceDiagnostics: [`snapshot manifest is invalid: ${input.manifest}: ${message}`],
     };
   }
-}
-
-function selectedSourcesForExtractPhase(input: {
-  phase: CodeExtractionPhaseDefinition;
-  sources: readonly RepoSourceRecord[];
-  sourceStatuses: readonly RepoSourceStatus[];
-}): Array<{
-  record: RepoSourceRecord;
-  status: Pick<RepoSourceStatus, "head" | "scopeHash" | "materializedAt">;
-}> {
-  const statusByName = new Map(input.sourceStatuses.map((source) => [source.name, source]));
-  const toSelection = (source: RepoSourceRecord) => {
-    const sourceStatus = statusByName.get(source.name);
-    return {
-      record: source,
-      status: {
-        ...(sourceStatus?.head !== undefined ? { head: sourceStatus.head } : {}),
-        ...(sourceStatus?.scopeHash !== undefined ? { scopeHash: sourceStatus.scopeHash } : {}),
-        materializedAt: sourceStatus?.materializedAt ?? defaultMaterializedAt(source),
-      },
-    };
-  };
-
-  const definitions = input.phase.kind === "phase.extract.ts"
-    ? [input.phase.source]
-    : input.phase.sources;
-  const selected = definitions.flatMap((definition) => {
-    if (definition.kind === "source.repo") return [toSelection(definition)];
-    if (definition.kind === "source.collection") return input.sources.map(toSelection);
-    return input.sources
-      .filter((source) => source.name === definition.name || source.id === definition.name)
-      .map(toSelection);
-  });
-  return [...new Map(selected.map((source) => [source.record.name, source])).values()]
-    .sort((left, right) => left.record.name.localeCompare(right.record.name));
-}
-
-export async function collectSourceFreshness(input: {
-  projectRoot: string;
-  phases: readonly PhaseDefinition[];
-  sources: readonly RepoSourceRecord[];
-  sourceStatuses: readonly RepoSourceStatus[];
-}): Promise<{
-  state: SourceFreshnessState;
-  stalePhases: string[];
-  pendingPhases: string[];
-  phaseFingerprints: Record<string, string>;
-  diagnostics: string[];
-  errorDiagnostics: string[];
-}> {
-  const extractPhases = input.phases.filter(isCodeExtractionPhase);
-  if (extractPhases.length === 0) {
-    return { state: "ready", stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
-  }
-  if (input.sources.length === 0) {
-    return { state: "ready", stalePhases: [], pendingPhases: [], phaseFingerprints: {}, diagnostics: [], errorDiagnostics: [] };
-  }
-
-  const cached = await readExtractSourceFingerprints(input.projectRoot);
-  const stalePhases: string[] = [];
-  const diagnostics: string[] = [];
-  const errorDiagnostics: string[] = [];
-  const unknownPhases: string[] = [];
-  const phaseFingerprints: Record<string, string> = {};
-  for (const phase of extractPhases) {
-    const selectedSources = selectedSourcesForExtractPhase({
-      phase,
-      sources: input.sources,
-      sourceStatuses: input.sourceStatuses,
-    });
-    if (selectedSources.length === 0) {
-      errorDiagnostics.push(`extract phase ${phase.id} has no matching repo source`);
-      continue;
-    }
-    const current = extractPhaseSourceFingerprint({
-      phase,
-      sources: selectedSources,
-    });
-    phaseFingerprints[phase.id] = current.fingerprint;
-    const previous = cached.phases[phase.id];
-    if (previous === undefined) {
-      unknownPhases.push(phase.id);
-      continue;
-    }
-    if (previous.fingerprint !== current.fingerprint) {
-      stalePhases.push(phase.id);
-    }
-  }
-
-  return {
-    state: stalePhases.length > 0 ? "stale" : unknownPhases.length > 0 ? "unknown" : "ready",
-    stalePhases,
-    pendingPhases: extractPhases
-      .map((phase) => phase.id)
-      .filter((phaseId) => stalePhases.includes(phaseId) || unknownPhases.includes(phaseId)),
-    phaseFingerprints,
-    diagnostics: [
-      ...diagnostics,
-      ...unknownPhases.map((phaseId) =>
-        `extract baseline is missing for ${phaseId}; rerun extraction if the source changed since the last committed knowledge update`
-      ),
-    ],
-    errorDiagnostics,
-  };
 }

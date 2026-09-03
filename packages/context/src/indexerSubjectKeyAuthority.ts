@@ -325,11 +325,20 @@ export function validateIndexerSubjectKeyForSchema(
   resolvedValue: unknown,
 ): IndexerSubjectKey {
   const resolved = parseResolvedSchema(resolvedValue);
+  return validateIndexerSubjectKeyForContract(value, resolved.schema, resolved.profile);
+}
+
+export function validateIndexerSubjectKeyForContract(
+  value: unknown,
+  contractValue: unknown,
+  profile = "current contract",
+): IndexerSubjectKey {
+  const contract = indexerSubjectKeyContractSchema.parse(contractValue);
   const subject = indexerSubjectKeySchema.parse(value);
-  if (!resolved.schema.kinds.some((kind) => kind.id === subject.kind)) {
-    throw new TypeError(`SubjectKey kind ${subject.kind} is absent from profile ${resolved.profile}`);
+  if (!contract.kinds.some((kind) => kind.id === subject.kind)) {
+    throw new TypeError(`SubjectKey kind ${subject.kind} is absent from profile ${profile}`);
   }
-  const rules = resolved.schema.normalization ?? [];
+  const rules = contract.normalization ?? [];
   assertNormalization(subject.namespace, rules, "namespace");
   assertNormalization(subject.kind, rules, "kind");
   assertNormalization(subject.local_key, rules, "local_key");

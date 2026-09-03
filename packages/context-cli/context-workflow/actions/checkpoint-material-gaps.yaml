@@ -1,6 +1,6 @@
 schema: agent-graph.action.v1
 id: checkpoint-material-gaps
-description: Recompute current reconciliation and durably checkpoint retained material gaps before any blocking outcome.
+description: Recompute reconciliation and checkpoint current material gaps in local runtime state.
 runner: command
 effect: write
 command: context indexer checkpoint-material-gaps --input .tmp/agent-payloads/indexer-material-gap-checkpoint.json --format json

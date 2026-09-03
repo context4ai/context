@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseThriftSources, type ThriftDocument, type ThriftLocator } from "./thriftParser.js";
@@ -11,7 +13,7 @@ import { parseThriftSources, type ThriftDocument, type ThriftLocator } from "./t
 export * from "./thriftLexer.js";
 export * from "./thriftParser.js";
 
-export const THRIFT_EVIDENCE_ADAPTER_EXPORT = "thriftSourcesToEvidenceAdapterResult";
+export const THRIFT_EVIDENCE_ADAPTER_EXPORT = "thriftSourcesToEvidenceAdapterMaterialization";
 
 export interface ThriftEvidenceAdapterInvocation {
   adapter: IndexerEvidenceAdapterResult["adapter"];
@@ -144,4 +146,13 @@ export function thriftSourcesToEvidenceAdapterResult(
       output_digest: parserOutputDigest,
     }],
   });
+}
+
+export function thriftSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: ThriftEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    thriftSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

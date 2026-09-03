@@ -8,6 +8,7 @@ import {
   canonicalIndexerNodeRef,
   indexerProtocolDigest,
   indexerRegistryDigests,
+  planIndexerPostAuthorComposition,
   type IndexerRegistry,
   type IndexerEffectiveComposerSet,
   type IndexerPostAuthorPlan,
@@ -15,10 +16,13 @@ import {
 } from "@c4a/context";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 import {
-  INDEXER_POST_AUTHOR_CURRENT_PATH,
-  INDEXER_POST_AUTHOR_ENVELOPE_PATH,
   composeIndexerPostAuthorEnvelopeStore,
+  postAuthorCurrentEnvelopePath,
+  postAuthorCurrentStatePath,
+  prepareIndexerPostAuthorRunStore,
 } from "../project/indexerPostAuthorRunStore.js";
+import { readPostAuthorCurrentState } from
+  "../project/indexerPostAuthorStorePersistence.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 const SUBJECT: IndexerSubjectKey = {
@@ -74,13 +78,15 @@ async function runInput(
   ]));
 }
 
-function buildInput(requirementDigest: string, effectiveComposerSet: unknown) {
-  return {
-    protocol: "context.indexer.post-author-workset-build-input/v1",
-    requirement_set_digest: requirementDigest,
-    effective_composer_set: effectiveComposerSet,
-    author_workset_digest: digest("1"),
-    primary_result_digest: digest("2"),
+function buildPlan(
+  effectiveComposerSet: unknown,
+  authorWorksetDigest = digest("1"),
+  primaryResultDigest = digest("2"),
+) {
+  return planIndexerPostAuthorComposition({
+    effective_composer_set: effectiveComposerSet as IndexerEffectiveComposerSet,
+    author_workset_digest: authorWorksetDigest,
+    primary_result_digest: primaryResultDigest,
     primary_facts: [{
       fact_ref: "fact:component-summary",
       subject_key: SUBJECT,
@@ -96,7 +102,31 @@ function buildInput(requirementDigest: string, effectiveComposerSet: unknown) {
     validator_contract_digest: digest("3"),
     current_profile_binding_digest: digest("4"),
     allowed_target_refs: [canonicalIndexerNodeRef(SUBJECT)],
-    accepted_input_view_digest: digest("5"),
+  });
+}
+
+async function prepare(input: {
+  root: string;
+  requirementDigest: string;
+  effectiveComposerSet: unknown;
+  authorWorksetDigest?: string;
+  primaryResultDigest?: string;
+}) {
+  const plan = buildPlan(
+    input.effectiveComposerSet,
+    input.authorWorksetDigest,
+    input.primaryResultDigest,
+  );
+  return {
+    plan,
+    ...await prepareIndexerPostAuthorRunStore({
+      projectRoot: input.root,
+      requirement_set_digest: input.requirementDigest,
+      plan,
+      effective_composer_set: input.effectiveComposerSet as IndexerEffectiveComposerSet,
+      validator_contract_digest: digest("3"),
+      accepted_input_view_digest: digest("5"),
+    }),
   };
 }
 
@@ -120,16 +150,17 @@ describe("project post-author composer lifecycle", () => {
       }],
       current_profiles: ["component-library"],
     });
-    const built = await runInput(
+    const built = await prepare({
       root,
-      "build-post-author-composer-worksets",
-      buildInput(requirementDigest, effective),
-    );
+      requirementDigest,
+      effectiveComposerSet: effective,
+    });
     expect((built.status as Record<string, unknown>).outcome).toBe(
       "index-post-author-workset-pending",
     );
-    const plan = built.plan as Record<string, unknown>;
-    const composerRef = ((plan.worksets as Array<Record<string, unknown>>)[0]!).composer_ref;
+    const plan = built.plan;
+    if (plan.state !== "pending") throw new Error("expected a pending plan");
+    const composerRef = plan.worksets[0]!.composer_ref;
     const started = await runInput(root, "start-post-author-composer-run", {
       protocol: "context.indexer.post-author-run-start-input/v1",
       requirement_set_digest: requirementDigest,
@@ -200,13 +231,13 @@ describe("project post-author composer lifecycle", () => {
       can_reconcile: true,
     });
 
-    await rm(join(root, INDEXER_POST_AUTHOR_CURRENT_PATH), { force: true });
-    await rm(join(root, INDEXER_POST_AUTHOR_ENVELOPE_PATH), { force: true });
-    const rebuilt = await runInput(
+    await rm(join(root, postAuthorCurrentStatePath(digest("1"))), { force: true });
+    await rm(join(root, postAuthorCurrentEnvelopePath(digest("1"))), { force: true });
+    const rebuilt = await prepare({
       root,
-      "build-post-author-composer-worksets",
-      buildInput(requirementDigest, effective),
-    );
+      requirementDigest,
+      effectiveComposerSet: effective,
+    });
     expect(rebuilt.status).toMatchObject({
       accepted_count: 1,
       pending_count: 0,
@@ -252,11 +283,11 @@ describe("project post-author composer lifecycle", () => {
       manifest_layers: [],
       current_profiles: ["component-library"],
     });
-    const built = await runInput(
+    const built = await prepare({
       root,
-      "build-post-author-composer-worksets",
-      buildInput(requirementDigest, effective),
-    );
+      requirementDigest,
+      effectiveComposerSet: effective,
+    });
     expect(built.plan).toMatchObject({ state: "not-required", worksets: [] });
     expect(built.status).toMatchObject({
       total_count: 0,
@@ -265,7 +296,7 @@ describe("project post-author composer lifecycle", () => {
       outcome: "complete",
       can_reconcile: true,
     });
-    expect(existsSync(join(root, INDEXER_POST_AUTHOR_ENVELOPE_PATH))).toBe(false);
+    expect(existsSync(join(root, postAuthorCurrentEnvelopePath(digest("1"))))).toBe(false);
   });
 
   test("returns an interrupted running composer to pending on preparation", async () => {
@@ -287,10 +318,14 @@ describe("project post-author composer lifecycle", () => {
       }],
       current_profiles: ["component-library"],
     });
-    const input = buildInput(requirementDigest, effective);
-    const built = await runInput(root, "build-post-author-composer-worksets", input);
-    const plan = built.plan as Record<string, unknown>;
-    const composerRef = ((plan.worksets as Array<Record<string, unknown>>)[0]!).composer_ref;
+    const built = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+    });
+    const plan = built.plan;
+    if (plan.state !== "pending") throw new Error("expected a pending plan");
+    const composerRef = plan.worksets[0]!.composer_ref;
     await runInput(root, "start-post-author-composer-run", {
       protocol: "context.indexer.post-author-run-start-input/v1",
       requirement_set_digest: requirementDigest,
@@ -298,10 +333,48 @@ describe("project post-author composer lifecycle", () => {
       ledger: built.ledger,
       composer_ref: composerRef,
     });
-    const recovered = await runInput(root, "build-post-author-composer-worksets", input);
+    const recovered = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+    });
     expect(recovered.status).toMatchObject({ pending_count: 1, accepted_count: 0 });
     expect((recovered.ledger as Record<string, unknown>).entries).toEqual([
       expect.objectContaining({ state: "pending", composer_ref: composerRef }),
     ]);
+  });
+
+  test("keeps current post-author state independently for multiple author worksets", async () => {
+    const { root, requirementDigest } = await project();
+    const effective = await runInput(root, "resolve-effective-composers", {
+      protocol: "context.indexer.effective-composer-resolution-input/v1",
+      requirement_set_digest: requirementDigest,
+      selections: [],
+      manifest_layers: [],
+      current_profiles: ["component-library"],
+    });
+    const first = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+      authorWorksetDigest: digest("1"),
+      primaryResultDigest: digest("2"),
+    });
+    const second = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+      authorWorksetDigest: digest("6"),
+      primaryResultDigest: digest("7"),
+    });
+    expect(postAuthorCurrentStatePath(digest("1"))).not.toBe(
+      postAuthorCurrentStatePath(digest("6")),
+    );
+    expect((await readPostAuthorCurrentState(root, digest("1")))?.state_digest).toBe(
+      first.receipt.state_digest,
+    );
+    expect((await readPostAuthorCurrentState(root, digest("6")))?.state_digest).toBe(
+      second.receipt.state_digest,
+    );
   });
 });

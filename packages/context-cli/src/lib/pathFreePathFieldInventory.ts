@@ -8,6 +8,8 @@ const DEFAULT_INTERNAL_FIELDS = [
   "href",
   "relativePath",
   "relative_path",
+  "normalized_path",
+  "file_path",
   "raw_path",
   "source_path",
   "bucket_path",
@@ -93,6 +95,8 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "target_dir" ||
     field === "config_path" ||
     field === "compile_config_path" ||
+    field === "normalized_path" ||
+    field === "file_path" ||
     field === "repo_root" ||
     field === "ctxDir" ||
     field === "runner_config_path" ||

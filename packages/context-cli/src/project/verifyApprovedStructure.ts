@@ -2,13 +2,12 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { readConfirmedStructureEdgeProjection } from "./approvedStructureEdges.js";
 import {
   approvedStructureInputHash,
   sha256Text,
   type ApprovedStructureInputFile,
 } from "./approvedStructureInputHash.js";
-import { PARENT_INDEX_GENERATED_KIND, type ParentIndexChild } from "./parentIndexView.js";
+import { PARENT_INDEX_GENERATED_KIND, type ParentIndexChild } from "./approvedParentIndex.js";
 import { validateApprovedStructureEdgeRecords } from "./verifyApprovedStructureEdges.js";
 import {
   isDeprecatedApprovedMarkdown,
@@ -25,13 +24,12 @@ import {
   codegraphEdgesFromFrontmatter,
   currentCodegraphEdges,
 } from "./codegraphRelationshipProjection.js";
-import { STRUCTURE_FILE as LIFECYCLE_STRUCTURE_PATH } from "./proseCompileConstants.js";
-import { parseApprovedStructureSourceInputs } from "./approvedStructureInputs.js";
 import {
   approvedKnowledgeMetadataIndex,
   compactApprovedKnowledgeMarkdown,
   hydrateApprovedKnowledgeMarkdown,
 } from "./approvedKnowledgeMetadata.js";
+import { packageKnowledgeDescription } from "./packageKnowledgeProjection.js";
 
 const APPROVED_STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const APPROVED_STRUCTURE_SCHEMA_VERSION = "context.approved-structure.v1";
@@ -351,12 +349,14 @@ async function approvedStructureProjection(
     const title = typeof frontmatter.title === "string" && frontmatter.title.trim().length > 0
       ? frontmatter.title.trim()
       : nodeRef;
-    const summary = typeof frontmatter.description === "string" && frontmatter.description.trim().length > 0
-      ? frontmatter.description.trim()
+    const projectedSummary = packageKnowledgeDescription(frontmatter.description);
+    const summary = typeof projectedSummary === "string" && projectedSummary.trim().length > 0
+      ? projectedSummary.trim()
       : undefined;
-    const tags = Array.isArray(frontmatter.tags)
+    const rawTags = Array.isArray(frontmatter.tags)
       ? frontmatter.tags.filter((item): item is string => typeof item === "string")
       : undefined;
+    const tags = rawTags?.includes("indexer") ? undefined : rawTags;
     const nodeTags = Array.isArray(frontmatter.node_tags)
       ? frontmatter.node_tags.filter((item): item is string => typeof item === "string")
       : undefined;
@@ -705,59 +705,33 @@ export async function validateApprovedStructureEdges(input: {
   const approvedProjection = await approvedStructureProjection(input.projectRoot, parsed);
   const endpointRefs = approvedStructureEndpointRefs(approvedProjection);
   const endpointContexts = approvedStructureEndpointContexts(approvedProjection);
-  let confirmedEdges: Array<Record<string, unknown>> | null = null;
-  try {
-    confirmedEdges = await readConfirmedStructureEdgeProjection(input.projectRoot, endpointRefs, {
-      tolerateInvalidYaml: true,
-      tolerateMissingEndpoints: true,
-    });
-  } catch (error) {
-    input.issues.push({
-      severity: "error",
-      code: "approved-structure-edge-invalid",
-      path: LIFECYCLE_STRUCTURE_PATH,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
   const expectedEdges = currentCodegraphEdges({
-    baseEdges: confirmedEdges ?? (Array.isArray(parsed.edges) ? parsed.edges.filter(isRecord) : []),
+    baseEdges: Array.isArray(parsed.edges) ? parsed.edges.filter(isRecord) : [],
     markdownEdges: approvedProjection.codeEdges,
     endpointRefs,
   });
-  let sourceInputs;
-  try {
-    sourceInputs = parseApprovedStructureSourceInputs(parsed);
-  } catch (error) {
-    input.issues.push({
-      severity: "error",
-      code: "approved-structure-source-inputs-invalid",
-      path: APPROVED_STRUCTURE_PATH,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-  const expectedInputHash = sourceInputs === undefined
-    ? undefined
-    : approvedStructureInputHash({
-        schemaVersion: APPROVED_STRUCTURE_SCHEMA_VERSION,
-        files: approvedProjection.inputFiles,
-        edges: expectedEdges,
-        sourceInputs,
-        metadata: Array.isArray(parsed.views)
-          ? parsed.views.filter(isRecord).map((view) => ({
-              view_ref: view.view_ref,
-              node_type: view.node_type,
-              ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
-              ...(view.generated === undefined ? {} : { generated: view.generated }),
-              ...(view.children === undefined ? {} : { children: view.children }),
-              ...(view.relationship_mode === undefined ? {} : { relationship_mode: view.relationship_mode }),
-              ...(view.source_orphaned === undefined ? {} : { source_orphaned: view.source_orphaned }),
-              ...(view.machine === undefined ? {} : { machine: view.machine }),
-            }))
-          : [],
-      });
+  const expectedInputHash = approvedStructureInputHash({
+    schemaVersion: APPROVED_STRUCTURE_SCHEMA_VERSION,
+    files: approvedProjection.inputFiles,
+    edges: expectedEdges,
+    metadata: Array.isArray(parsed.views)
+      ? parsed.views.filter(isRecord).map((view) => ({
+          view_ref: view.view_ref,
+          node_ref: view.node_ref,
+          sources: view.sources,
+          node_type: view.node_type,
+          ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
+          ...(view.generated === undefined ? {} : { generated: view.generated }),
+          ...(view.children === undefined ? {} : { children: view.children }),
+          ...(view.relationship_mode === undefined ? {} : { relationship_mode: view.relationship_mode }),
+          ...(view.source_orphaned === undefined ? {} : { source_orphaned: view.source_orphaned }),
+          ...(view.machine === undefined ? {} : { machine: view.machine }),
+        }))
+      : [],
+  });
   validateApprovedStructureShape({
     parsed,
-    ...(expectedInputHash === undefined ? {} : { expectedInputHash }),
+    expectedInputHash,
     issues: input.issues,
   });
   const viewRefs = new Set<string>(approvedProjection.views.map((view) => view.viewRef));

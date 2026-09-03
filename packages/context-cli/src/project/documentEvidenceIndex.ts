@@ -25,6 +25,7 @@ export const RUNTIME_EVIDENCE_INDEX_SCHEMA_VERSION = "document.runtime-evidence-
 
 export interface RuntimeEvidenceDocument {
   path: string;
+  source_path?: string;
   content_hash: string;
   line_count: number;
   title?: string;
@@ -333,6 +334,7 @@ export async function buildCommittedEvidenceIndex(input: {
     const routeHint = routeHints.get(file.path);
     documents.push({
       path: file.path,
+      ...(file.source_path === undefined ? {} : { source_path: file.source_path }),
       content_hash: file.content_hash,
       line_count: file.line_count,
       ...(file.title !== undefined ? { title: file.title } : {}),

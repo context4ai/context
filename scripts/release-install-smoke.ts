@@ -169,42 +169,16 @@ try {
   ], { cwd: installRoot, maxBuffer: 64 * 1024 * 1024 });
 
   const cliPath = resolve(installRoot, "node_modules", ".bin", "context");
-  const capabilitiesRun = await execFileAsync(cliPath, ["indexer", "capabilities", "--format", "json"], {
-    cwd: installRoot,
-    maxBuffer: 32 * 1024 * 1024,
-  });
   const catalogRun = await execFileAsync(cliPath, ["indexer", "catalog", "--format", "json"], {
     cwd: installRoot,
     maxBuffer: 32 * 1024 * 1024,
   });
-  const capabilities = JSON.parse(capabilitiesRun.stdout) as {
-    protocol?: string;
-    version?: string;
-    dist_tag?: string;
-    manifest_digest?: string;
-    capabilities?: Array<{ id?: string; state?: string }>;
-  };
   const catalog = JSON.parse(catalogRun.stdout) as {
     protocol?: string;
     version?: string;
     bundles?: Array<{ skill?: string }>;
   };
-  if (
-    capabilities.protocol !== "context.indexer.release-capability-manifest/v1" ||
-    capabilities.version !== version ||
-    capabilities.dist_tag !== plan.channel ||
-    typeof capabilities.manifest_digest !== "string"
-  ) {
-    throw new TypeError("installed Context CLI returned an invalid release capability manifest");
-  }
-  const expectedSkills = new Set(
-    (capabilities.capabilities ?? []).flatMap((capability) => {
-      if (capability.state !== "ready") return [];
-      if (capability.id === "code-indexer") return ["context-code-indexer"];
-      if (capability.id === "markdown-indexer") return ["context-markdown-indexer"];
-      return [];
-    }),
-  );
+  const expectedSkills = new Set(["context-code-indexer", "context-markdown-indexer"]);
   const actualSkills = new Set((catalog.bundles ?? []).map((bundle) => bundle.skill));
   if (
     catalog.protocol !== "context.indexer.cli-bundled-catalog/v1" ||
@@ -212,7 +186,7 @@ try {
     expectedSkills.size !== actualSkills.size ||
     [...expectedSkills].some((skill) => !actualSkills.has(skill))
   ) {
-    throw new TypeError("installed Context CLI catalog does not match its capability manifest");
+    throw new TypeError("installed Context CLI catalog does not match its release manifest");
   }
 
   await writeFile(resolve(installRoot, "smoke.mjs"), runnerSource);
@@ -228,7 +202,6 @@ try {
     version,
     channel: plan.channel,
     packages: plan.packages.map((pkg) => pkg.exact_spec),
-    capability_manifest_digest: capabilities.manifest_digest,
     catalog_skills: [...actualSkills].sort(),
     forward,
   };

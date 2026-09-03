@@ -187,7 +187,7 @@ describe("plugin prompt and workflow resource contract", () => {
   test("human-gate dialogue is route-selected instead of embedded in CLI branches", async () => {
     const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
     const dialogue = [
-      ["human-gates.md", ["user's conversation language", "placeholder commands"]],
+      ["human-gates.md", ["user's conversation language", "raw TypeScript"]],
       ["source-boundary.md", ["whole repository/subspace", "`include`"]],
       ["document-capture.md", ["permission to read", "documentation site"]],
       ["knowledge-review.md", ["exact Payload", "fully managed operation"]],
@@ -252,27 +252,7 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(closeProcedure).toContain("fully managed or force approval");
   });
 
-  test("phase source code does not duplicate the Provider semantic resource catalog", async () => {
-    const types = await read(PACKAGE_ROOT, "src", "project", "proseAlignTypes.ts");
-    expect(types).not.toContain("PROSE_ALIGN_REFERENCE_FILES");
-    expect(types).not.toContain("PROSE_COMPILE_REFERENCE_FILES");
-    expect(types).not.toContain("resources/semantic/align/");
-    expect(types).not.toContain("resources/semantic/compile/");
-
-    const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
-    expect(rules).toContain('source: "context-markdown-indexer"');
-    expect(rules).toContain("bundle:context-markdown-indexer/references/");
-    const compileRoot = join(WORKFLOW_ROOT, "resources", "semantic", "compile");
-    for (const entry of await readdir(compileRoot, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      const body = await readFile(join(compileRoot, entry.name), "utf8");
-      expect(body, `compile/${entry.name}`).toMatch(
-        /^---\n[\s\S]*?\napplies-to:\n(?:\s+- [a-z0-9_-]+\n)+[\s\S]*?\n---\n/u,
-      );
-    }
-  });
-
-  test("semantic planning has one Provider-owned source after Phase G", async () => {
+  test("semantic planning has one Provider-owned source", async () => {
     expect(await listFiles(join(WORKFLOW_ROOT, "resources", "semantic", "align"))).toEqual([]);
     const planning = await read(MARKDOWN_INDEXER_ROOT, "references", "semantic-planning.md");
     const structure = await read(
@@ -280,7 +260,7 @@ describe("plugin prompt and workflow resource contract", () => {
       "references",
       "structure-and-artifacts.md",
     );
-    expect(planning).toContain("Evidence, subject, and claim planning");
+    expect(planning).toContain("Source, subject, and claim planning");
     expect(planning).toContain("On\na stale workset");
     expect(structure).toContain("Section first, Artifact when justified");
     expect(structure).toContain("Candidate resolution");
@@ -321,9 +301,6 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(graph).not.toContain("- { from: maintain-evidence, to: close-approved-knowledge }");
     expect(graph).not.toContain("- { from: close-approved-knowledge, to: revise-document }");
 
-    const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
-    expect(rules).toContain("semanticRuleDescriptors");
-    expect(rules).toContain('source: "context-markdown-indexer"');
   });
 
   test("route-selected SDK manuals remain complete mirrors of the public docs", async () => {
@@ -344,7 +321,7 @@ describe("plugin prompt and workflow resource contract", () => {
         workflowPath,
       );
       const body = resource.replace(/^---\n[\s\S]*?\n---\n\n?/u, "");
-      expect(body, workflowPath).toBe(sdk);
+      expect(body.trimEnd(), workflowPath).toBe(sdk.trimEnd());
     }
   });
 

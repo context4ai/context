@@ -3,7 +3,11 @@ import {
   type ExtractionEvidenceAdapterInvocation,
   type ExtractionResult,
 } from "@c4a/extract";
-import type { IndexerEvidenceAdapterResult } from "@c4a/core";
+import {
+  materializeIndexerEvidenceAdapterResult,
+  type IndexerEvidenceAdapterMaterialization,
+  type IndexerEvidenceAdapterResult,
+} from "@c4a/core";
 
 /** Converts Go ExtractionResult v2 into the common Context Evidence ABI. */
 export function goExtractionToEvidenceAdapterResult(
@@ -14,4 +18,13 @@ export function goExtractionToEvidenceAdapterResult(
     throw new TypeError("Go evidence adapter requires c4a-extract-go output");
   }
   return extractionResultToEvidenceAdapterResult(extraction, invocation);
+}
+
+export function goExtractionToEvidenceAdapterMaterialization(
+  extraction: ExtractionResult,
+  invocation: ExtractionEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    goExtractionToEvidenceAdapterResult(extraction, invocation),
+  );
 }

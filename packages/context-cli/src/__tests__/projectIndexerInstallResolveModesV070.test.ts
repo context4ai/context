@@ -189,7 +189,7 @@ describe("Indexer install and resolver modes", () => {
       receipt: {
         resolver: "codex/host-bundled-v1",
         resolved_at: NOW.toISOString(),
-        authority_ref: "plugin-install:c4a/context-code-indexer@1.0.0",
+        authority_ref: `plugin-install:c4a/context-code-indexer@${installed.manifest.version}`,
         receipt_digest: installed.integrity,
       },
     };
@@ -284,7 +284,7 @@ describe("Indexer install and resolver modes", () => {
       join(staged.staged.stage_path, "context-indexer.yaml"),
       "utf8",
     );
-    expect(stagedManifest).toContain("version: 1.0.0");
+    expect(stagedManifest).toContain("version: 1.1.1");
     expect(stagedManifest).not.toContain("decoy-host-skill");
     expect(staged.staged.files).toEqual(bundled.files);
     for (const pluginManifest of [

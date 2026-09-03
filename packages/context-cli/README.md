@@ -207,16 +207,10 @@ for maintainers, automation, and diagnostics:
   fail before that Gate. Exact target matches that resolve to multiple Nodes
   return `index-target-resolution-ambiguous`, and invalid reuse returns
   `index-target-resolution-invalid`;
-- `context indexer build-material-question-workset` derives second-phase answer
-  eligibility from current registry, Provider, scope, source, and evidence-kind
-  authority. `prepare|observe|start|accept|fail-material-answer-*` use an
-  independent durable ledger; complete empty Results are cache hits, while
-  candidate evidence requires exact current source-span read receipts;
-- material-answer candidates use a separate limited Review Route. Its baseline
-  and decision bind one exact question target and canonical source-span evidence
-  set. Approval returns an `answer-approved` successor-ledger fact for the later
-  checkpoint writer; it does not approve an Artifact, reader page, or final
-  knowledge candidate;
+- unresolved material questions are checkpointed only as local runtime recovery
+  state. Newly captured Markdown or other authorized material reruns the normal
+  main Indexer path and updates the same Candidate; there is no answer-only
+  operation or second Review Route;
 - main Candidate Review has one Graph predecessor:
   `inspect-index-candidate-review-readiness`. The CLI accepts only digests of
   content-addressed precompile/postcompile audit records and verifies their
@@ -231,13 +225,10 @@ for maintainers, automation, and diagnostics:
   `override-index-profile-audit` Gate is non-delegable. Its receipt binds the
   report, audit, candidate revision, failed metrics, user, and timestamp.
   Baseline failures cannot issue or consume that receipt;
-- `checkpoint-material-gaps` is the mandatory retained writer before any
-  reconciliation stop. Approved answers inline their accepted workset;
-  `actualize-material-answer-bindings` maps them against one current layout
-  proposal set and reopens stale sources, while `close-indexer-approved-knowledge`
-  accepts provenance only from the approved structure it closes atomically.
-  `audit-material-gap-state` is read-only: it recomputes the expected ledger and
-  routes pre-Review drift to checkpoint or approved post-Review state to close;
+- `checkpoint-material-gaps` writes the current unresolved set under `.tmp` for
+  recovery and stale-write rejection. `audit-material-gap-state` is read-only;
+  required gaps block close, and `close-indexer-approved-knowledge` writes only
+  the approved structure before clearing completed runtime lifecycle state;
 - `context clean-cache --dry-run` previews cleanup of Context-owned stale
   plugin caches.
 

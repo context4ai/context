@@ -1,6 +1,6 @@
 schema: agent-graph.action.v1
 id: close-indexer-approved-knowledge
-description: Atomically close an approved Indexer structure and reconcile exact resolved material-answer provenance.
+description: Atomically close an approved Indexer structure after required material gaps are resolved.
 runner: command
 effect: write
 command: context indexer close-indexer-approved-knowledge --input .tmp/agent-payloads/indexer-approved-knowledge-close.json --format json

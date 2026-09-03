@@ -87,6 +87,13 @@ describe("resolveEntrySourcePath", () => {
       const fs = mockFs(["src/deprecated/index.ts"]);
       expect(await resolveEntrySourcePath("", "dist/deprecated/index.esm.js", fs)).toBe("src/deprecated/index.ts");
     });
+
+    test("preserves exported authored subtrees outside src", async () => {
+      const fs = mockFs(["deprecated/index.ts"]);
+      expect(await resolveEntrySourcePath("", "dist/deprecated/index.d.ts", fs, {
+        allowIndexFallback: false,
+      })).toBe("deprecated/index.ts");
+    });
   });
 
   describe("src/index fallback", () => {

@@ -7,8 +7,8 @@
 Tree-sitter 解析工具。
 
 它不判断代码对产品或读者意味着什么，也不写入正式知识。语言插件只输出结构事实；
-Context 运行时将这些事实绑定到来源身份、暂存审核候选，并通过标准生命周期应用
-审核通过的知识。
+Code Indexer Provider 将这些事实组织成当前 Indexer Result；Context 负责来源身份、
+Candidate 状态和审核通过的知识。
 
 ## 在知识生产链中的职责
 
@@ -19,19 +19,19 @@ Context 运行时将这些事实绑定到来源身份、暂存审核候选，并
        ↓
 版本化原始代码快照
        ↓
-Context 候选 → 审核 → 正式知识
+Indexer 事实 → 面向读者的 Candidate → 正式知识
 ```
 
 - 语言 package 实现 `ExtractionPlugin` 并返回 `ExtractionResult` v2。
 - Runner 加载一个或多个插件，扫描仓库模块，输出 progress、module-error 和
   summary 事件，并可生成底层代码快照。
-- Context runtime 在知识项目声明提取阶段后调用 Runner。
-- 草稿候选和运行快照留在 `.tmp/context-runtime/`；只有 review apply 会写入正式
+- 选中的 Code Indexer Provider 通过受控 workset 调用 Runner。
+- Candidate 和运行快照留在 `.tmp/context-runtime/`；只有 Review apply/close 会写入正式
   Markdown。
 
-知识工作区用户通常通过已安装的 Agent 入口和声明好的提取阶段使用本包，不需要
-手工构造 Runner 输入。下面的协议主要面向提取器作者、Context 维护者和项目自有
-Adapter。
+知识工作区用户通常通过已安装的 Agent 入口和选中的 Code Indexer Provider 使用
+本包，不需要手工构造 Runner 输入。下面的协议主要面向解析器作者、Provider 作者
+和 Context 维护者。
 
 **依赖：** `@c4a/core`、`web-tree-sitter`、`zod`
 
@@ -99,8 +99,8 @@ denominator。
 
 ### 3. Repository Runner
 
-包暴露底层 NDJSON Runner `c4a-extract-code`。正常知识工作区由当前 Route 和已声明
-阶段调用它；Agent 不应手工生成 stdin Payload。
+包暴露底层 NDJSON Runner `c4a-extract-code`。Code Indexer Provider 可以把它作为
+实现细节调用；Agent 不应手工生成 stdin Payload。
 
 Runner 输出一行一个 JSON 对象：
 
@@ -148,20 +148,20 @@ Agent 将完整 `source_ref` 当作不透明 token 复制，不自行解析或�
 5. 输出稳定的符号名、kind、visibility、文件和行范围；
 6. 输出导入、调用、类型、继承或使用关系；
 7. 插件内部保持 module-relative 路径，由 Runner 加上 repo-relative 前缀；
-8. 在项目提取阶段的 Runner 配置中注册插件。
+8. 在 Code Indexer Provider 的 Runner 配置中注册插件。
 
-## 与 Context 项目提取的关系
+## 与 Code Indexer 的关系
 
-`@c4a/extract` 位于项目提取阶段上游，不渲染正式知识。典型流程是：
+`@c4a/extract` 位于 Code Indexer Provider 上游，不渲染正式知识。典型流程是：
 
 1. 用户确认代码来源边界；
-2. `src/index.ts` 声明相应提取阶段；
-3. 当前 Route 先运行 dry-run，展示解析出的模块、候选数量和知识路径；
-4. 正式提取生成待审候选和来源指纹；
+2. `src/indexers.yaml` 将来源范围和读者需求绑定到 Code Indexer Provider；
+3. 当前 Route 准备受控 workset，Provider 返回当前 Indexer Result；
+4. Context 生成待审 Candidate 和可恢复运行态；
 5. review apply 将批准内容写入正式知识；
 6. close、verify 和 build 完成本轮并生成知识包。
 
-因此，更好的符号和关系会产生更可靠的候选、证据引用和知识包，但业务分类继续由
+因此，更好的符号和关系会产生更可靠的 Candidate、来源引用和知识包，但业务分类继续由
 Agent 与用户依据证据决定。
 
 ## 开发

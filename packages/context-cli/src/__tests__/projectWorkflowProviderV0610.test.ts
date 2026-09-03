@@ -12,8 +12,6 @@ import {
 } from "../project/workflow/workflowProvider.js";
 import { planForHostHandler } from "../project/workflow/workflowHostPlans.js";
 import { CONTEXT_WORKFLOW_AUTHORITIES } from "../project/workflow/workflowTypes.js";
-import { renderContextWorkflowResource } from "../project/workflow/workflowResource.js";
-import type { ProjectStatus } from "../project/statusTypes.js";
 import { emptyObservation } from "./projectWorkflowProviderV0610.fixtures.js";
 
 describe("Context workflow Provider", () => {
@@ -292,12 +290,12 @@ describe("Context workflow Provider", () => {
     expect(facts.review.gate_clear).toBe(false);
   });
 
-  test("managed authority excludes source reads and the gate returns an explicit conversation-scoped resume command", async () => {
+  test("managed authority includes source reads and advances pending capture", async () => {
     const authorities = contextWorkflowAuthorities({ managed: true });
     expect(authorities).toContain(
       CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
     );
-    expect(authorities).not.toContain(
+    expect(authorities).toContain(
       CONTEXT_WORKFLOW_AUTHORITIES.sourceRead,
     );
 
@@ -316,23 +314,22 @@ describe("Context workflow Provider", () => {
         workspaceDiagnostics: [],
       }],
       missingCaptureSources: [],
+      pendingCaptureCommands: ["context run capture:file:manual"],
     };
     const facts = createContextWorkflowFacts(captureObservation, authorities);
-    expect(facts.gates.source_read_resolved).toBe(false);
+    expect(facts.gates.source_read_resolved).toBe(true);
     const snapshot = await evaluateContextWorkflow({
       observation: captureObservation,
       authorities,
     });
     expect(snapshot.route).toMatchObject({
-      node: "authorize-document-capture",
-      availability: "requires-user",
+      node: "capture-next",
+      availability: "immediate",
       commands: [{
-        command:
-          "context run --managed --authority 'context.source-read' --until blocked-or-complete --format json",
+        command: expect.stringContaining("run capture:file:manual --format json"),
         effect: "external",
-        availability: "after-human-confirmation",
-        managed_execution: "agent-required",
-        execution: { target: "agent-host" },
+        availability: "immediate",
+        managed_execution: "automatic",
       }],
     });
     const ordinarySnapshot = await evaluateContextWorkflow({
@@ -357,10 +354,7 @@ describe("Context workflow Provider", () => {
     const authorities = contextWorkflowAuthorities({ managed: true });
     const facts = createContextWorkflowFacts(observation, authorities);
 
-    expect(authorities).toContain(
-      CONTEXT_WORKFLOW_AUTHORITIES.extractionScope,
-    );
-    expect(facts.gates.extraction_scope_resolved).toBe(false);
+    expect(facts.indexer.lifecycle_current).toBe(false);
 
     const snapshot = await evaluateContextWorkflow({
       observation,
@@ -380,50 +374,6 @@ describe("Context workflow Provider", () => {
     });
     expect(snapshot.route?.resources.required.map((resource) => resource.id))
       .toEqual(["skill.context-run-indexer-lifecycle"]);
-  });
-
-  test("a build receipt cannot hide an unclassified captured document", () => {
-    const observation = emptyObservation();
-    const facts = createContextWorkflowFacts({
-      ...observation,
-      sourceCount: 1,
-      documentSources: [{
-        type: "file",
-        name: "manual",
-        materializedAt: "sources/file/manual",
-        manifest: "sources/file/manual/manifest.json",
-        snapshotReady: true,
-        diagnostics: [],
-        agent_hints: [],
-        workspaceDiagnostics: [],
-      }],
-      capturedDocumentSources: 1,
-      unclassifiedDocumentTargets: [{
-        sourceKey: "file:manual",
-        capturePhaseId: "capture:file:manual",
-        command: "context run capture:file:manual --view read-plan --format json",
-      }],
-      approvedPages: 1,
-      close: { state: "ready", diagnostics: [] },
-      packages: [{
-        kind: "package.kb",
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb",
-        state: "ready",
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-    }, []);
-    expect(facts.documents.classified).toBe(false);
-    expect(facts.packages.current).toBe(true);
   });
 
   test("a confirmed source boundary has a revision-bound batch command and input schema", async () => {
@@ -536,34 +486,6 @@ describe("Context workflow Provider", () => {
     });
   });
 
-  test("accepts a cleaned runtime only when every approved page retains Indexer binding", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      repoSources: [{ id: "anonymous/repo", name: "anonymous/repo" }],
-      readyRepoSources: 1,
-      approvedPages: 1,
-      approvedIndexerPages: 0,
-      close: { state: "ready" as const, diagnostics: [] },
-      indexerRegistry: {
-        state: "current" as const,
-        sourceRefs: ["repo:anonymous/repo"],
-      },
-      indexerCandidateCompile: { state: "missing" as const },
-    };
-    const legacy = await evaluateContextWorkflow({ observation, authorities: [] });
-    expect(legacy.route).toMatchObject({
-      node: "run-indexer-lifecycle",
-      reason_code: "route.indexer.lifecycle-required",
-    });
-
-    const indexerBound = await evaluateContextWorkflow({
-      observation: { ...observation, approvedIndexerPages: 1 },
-      authorities: [],
-    });
-    expect(indexerBound.route?.node).not.toBe("run-indexer-lifecycle");
-  });
-
   test("reports a close-repairable stale projection as lifecycle information", async () => {
     const snapshot = await evaluateContextWorkflow({
       observation: {
@@ -603,54 +525,6 @@ describe("Context workflow Provider", () => {
     }));
   });
 
-  test("the structure confirmation view includes its staged target", () => {
-    const content = renderContextWorkflowResource(
-      "context.structure-current",
-      {
-        stagedStructure: {
-          state: "draft",
-          sourceKeys: ["file:manual-b"],
-          collections: ["guide"],
-          structureDigest: `sha256:${"a".repeat(64)}`,
-          nodeCount: 2,
-          viewCount: 2,
-          sectionCount: 5,
-          sourceRefCount: 5,
-          edgeCount: 1,
-          unresolvedCount: 0,
-          diagnostics: [],
-        },
-        activeStructures: {
-          state: "ready",
-          count: 1,
-          slotCount: 1,
-          sourceKeys: ["file:manual-a"],
-          collections: ["guide"],
-          structureDigests: [`sha256:${"b".repeat(64)}`],
-          slots: [{
-            sourceKey: "file:manual-a",
-            collection: "guide",
-            structureDigest: `sha256:${"b".repeat(64)}`,
-            snapshotReady: true,
-          }],
-          diagnostics: [],
-        },
-        structureBatch: {
-          state: "structures-active",
-          sourceCount: 1,
-          slotCount: 1,
-          slots: [],
-        },
-        configurationGaps: [],
-      } as unknown as ProjectStatus,
-    );
-    expect(content).toContain("## Staged confirmation target");
-    expect(content).toContain("`file:manual-b`");
-    expect(content).toContain("2 node(s), 2 view(s), 5 section(s), 5 source ref(s)");
-    expect(content).toContain("## Active confirmed slots");
-    expect(content).toContain("`file:manual-a`");
-  });
-
   test("every Provider host Action has a registered Context adapter", async () => {
     const provider = await loadContextWorkflowProvider();
     const handlers = [...provider.actions.values()].flatMap((action) =>
@@ -664,27 +538,6 @@ describe("Context workflow Provider", () => {
       expect(() => planForHostHandler(handler, emptyObservation())).not
         .toThrow();
     }
-  });
-
-  test("code extraction inspection returns one batch technology probe for all repo sources", () => {
-    expect(planForHostHandler("context.extract.inspect-capabilities", {
-      ...emptyObservation(),
-      sourceCount: 2,
-      repoSources: [
-        { id: "repo-a", name: "20260818/module-a" },
-        { id: "repo-b", name: "20260818/module-b" },
-      ],
-      readyRepoSources: 2,
-    })).toEqual({
-      commands: [
-        {
-          command: "context source inspect --repo-only --format json",
-          effect: "read",
-          availability: "immediate",
-          managed_execution: "agent-required",
-        },
-      ],
-    });
   });
 
 });

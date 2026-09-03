@@ -1,24 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import type { KnowledgeCollection } from "@c4a/context";
-import type {
-  DocumentResourceMaterializationItem,
-  DocumentSnapshotAssetEntry,
-  DocumentSnapshotManifest,
-} from "@c4a/extract";
-import { captureReportMaterialization } from "../lib/larkCaptureReport.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import { readDocumentSnapshotCaptureReport } from "./documentSnapshotFidelity.js";
 import {
   candidateIdsHash,
   candidateSetHash,
-  currentProseCandidateEvidence,
   readReviewCandidateSnapshot,
   REVIEW_PAYLOAD_SCHEMA,
   type ReviewCandidateView,
 } from "./reviewShared.js";
-import { collectReviewSourceExcerpts, type ReviewSourceExcerptMap } from "./reviewSourceExcerpts.js";
 import {
   candidateGroupKey,
   candidateGroupLabel,
@@ -32,136 +22,8 @@ import {
   type EdgePreview,
 } from "./reviewHtmlPresentation.js";
 import { REVIEW_HTML_STYLES } from "./reviewHtmlStyles.js";
-import { markdownInlineLinks } from "./markdownLinks.js";
 
 const REVIEW_HTML_ROOT = join(".tmp", "context-runtime", "review");
-
-export interface ReviewResourcePreview {
-  label: string;
-  kind: string;
-  status: "materialized" | "reference-only" | "failed";
-  url?: string;
-  media_type: string;
-  image: boolean;
-  reason?: string;
-}
-
-function decodedLinkTarget(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function linkedResourcePreviews(input: {
-  projectRoot: string;
-  materializedAt: string;
-  documentPath: string;
-  markdown: string;
-  assetsByPath: ReadonlyMap<string, DocumentSnapshotAssetEntry>;
-}): Map<string, ReviewResourcePreview> {
-  const previews = new Map<string, ReviewResourcePreview>();
-  for (const link of markdownInlineLinks(input.markdown)) {
-    const target = link.target;
-    if (/^[a-z][a-z0-9+.-]*:/iu.test(target) || target.startsWith("/")) continue;
-    const assetPath = join(dirname(input.documentPath), decodedLinkTarget(target)).split("\\").join("/");
-    const asset = input.assetsByPath.get(assetPath);
-    if (asset?.content_hash === undefined || asset.role === "audit") continue;
-    previews.set(asset.path, {
-      label: link.label || "Resource",
-      kind: asset.source?.kind ?? "resource",
-      status: "materialized",
-      url: pathToFileURL(join(input.projectRoot, input.materializedAt, asset.path)).href,
-      media_type: asset.media_type ?? "application/octet-stream",
-      image: asset.media_type?.startsWith("image/") === true,
-    });
-  }
-  return previews;
-}
-
-function materializationPreview(input: {
-  projectRoot: string;
-  materializedAt: string;
-  item: DocumentResourceMaterializationItem;
-  assetsByPath: ReadonlyMap<string, DocumentSnapshotAssetEntry>;
-  existing?: ReviewResourcePreview;
-}): { key: string; preview: ReviewResourcePreview } {
-  const linkedAsset = input.item.asset_paths
-    .flatMap((path) => [path, path.startsWith("assets/") ? path : `assets/${path}`])
-    .map((path) => input.assetsByPath.get(path))
-    .find((asset) => asset !== undefined && asset.role !== "audit");
-  const url = input.existing?.url ?? (linkedAsset?.content_hash === undefined
-    ? undefined
-    : pathToFileURL(join(input.projectRoot, input.materializedAt, linkedAsset.path)).href);
-  return {
-    key: linkedAsset?.path ?? input.item.locator,
-    preview: {
-      label: input.existing?.label ?? linkedAsset?.source?.title ?? input.item.kind,
-      kind: input.item.kind,
-      status: input.item.status,
-      ...(url === undefined ? {} : { url }),
-      media_type: input.existing?.media_type ?? linkedAsset?.media_type ?? "application/octet-stream",
-      image: input.existing?.image ?? linkedAsset?.media_type?.startsWith("image/") === true,
-      ...(input.item.reason === undefined ? {} : { reason: input.item.reason }),
-    },
-  };
-}
-
-export function reviewResourcePreviewsFor(input: {
-  projectRoot: string;
-  materializedAt: string;
-  documentPath: string;
-  markdown: string;
-  manifest: DocumentSnapshotManifest;
-}): ReviewResourcePreview[] {
-  const byPath = new Map((input.manifest.assets ?? []).map((asset) => [asset.path, asset]));
-  const previews = linkedResourcePreviews({ ...input, assetsByPath: byPath });
-  const captureReport = readDocumentSnapshotCaptureReport({
-    projectRoot: input.projectRoot,
-    materializedAt: input.materializedAt,
-    manifest: input.manifest,
-  });
-  const resourceMaterialization = captureReport === undefined
-    ? input.manifest.metadata?.capture?.resourceMaterialization
-    : captureReportMaterialization(captureReport);
-  for (const item of resourceMaterialization?.items ?? []) {
-    if (!input.markdown.includes(item.locator)) continue;
-    const existing = [...previews.entries()]
-      .find(([key]) => item.asset_paths.some((path) => key === path || key === `assets/${path}`))?.[1];
-    const result = materializationPreview({
-      projectRoot: input.projectRoot,
-      materializedAt: input.materializedAt,
-      item,
-      assetsByPath: byPath,
-      ...(existing === undefined ? {} : { existing }),
-    });
-    previews.set(result.key, result.preview);
-  }
-  return [...previews.values()];
-}
-
-async function collectReviewResourcePreviews(
-  projectRoot: string,
-  candidates: readonly ReviewCandidateView[],
-): Promise<Map<string, ReviewResourcePreview[]>> {
-  const result = new Map<string, ReviewResourcePreview[]>();
-  for (const candidate of candidates) {
-    if (candidate.record.candidate_type !== "prose-align") continue;
-    const evidence = await currentProseCandidateEvidence(projectRoot, candidate.record);
-    if (evidence === undefined) continue;
-    const markdown = (candidate.record.sections ?? []).map((section) => section.body ?? "").join("\n\n");
-    const previews = reviewResourcePreviewsFor({
-      projectRoot,
-      materializedAt: evidence.indexResult.index.materialized_at,
-      documentPath: evidence.parsed.documentPath,
-      markdown,
-      manifest: evidence.indexResult.manifest,
-    });
-    if (previews.length > 0) result.set(candidate.record.candidate_id, previews);
-  }
-  return result;
-}
 
 export async function collectReviewCandidates(projectRoot: string, collection: KnowledgeCollection): Promise<ReviewCandidateView[]> {
   const rows = await readCandidateRecords(projectRoot);
@@ -202,8 +64,6 @@ function renderReviewHtml(
   candidates: readonly ReviewCandidateView[],
   reviewScope: KnowledgeCollection | "all",
   edgePreview: readonly EdgePreview[],
-  sourceExcerpts: ReviewSourceExcerptMap,
-  resourcePreviews: ReadonlyMap<string, ReviewResourcePreview[]>,
 ): string {
   const labels = endpointLabels(candidates);
   const candidateIds = candidates.map(({ record }) => record.candidate_id);
@@ -217,7 +77,10 @@ function renderReviewHtml(
     ...(reviewScope === "all" ? { visible_candidate_ids: visibleCandidateIds } : {}),
   };
   const candidateData = candidates.map(({ record, snapshot }) => {
-    const excerptsByRef = sourceExcerpts.get(record.candidate_id);
+    const sourceByEvidenceRef = new Map(record.indexer_candidate.evidence_bindings.map((binding) => [
+      binding.evidence_ref,
+      binding.source_ref,
+    ]));
     return {
     candidate_id: record.candidate_id,
     collection: record.collection,
@@ -227,21 +90,27 @@ function renderReviewHtml(
     status: record.status,
     kind: record.kind,
     entity_type: record.source_refs.some((ref) => ref.includes("#symbol:")) || record.node_ref.includes("/symbol/") ? "symbol" : "entity",
-    symbol_kind: snapshot?.symbol?.kind ?? record.kind,
+    symbol_kind: record.kind,
     visibility: record.visibility,
     source_refs: record.source_refs,
-    shared_source_refs: record.shared_source_refs ?? [],
+    source_paths: record.indexer_candidate === undefined
+      ? []
+      : [...new Set(record.indexer_candidate.evidence_bindings.map((binding) =>
+          binding.locator.path
+        ))].sort(),
+    shared_source_refs: [],
     related_edges: filterEdgePreviewForCandidate(record, edgePreview).map((edge) => edgeForReview(edge, labels)),
-    sections: (record.sections ?? []).map((section) => ({
-      id: section.id,
-      kind: section.kind,
-      summary: section.summary,
-      body: section.body,
-      source_refs: section.source_refs ?? [section.source_ref],
-      source_excerpts: (section.source_refs ?? [section.source_ref])
-        .map((sourceRef) => excerptsByRef?.get(sourceRef))
-        .filter((excerpt) => excerpt !== undefined),
-      content_mode: section.content_mode ?? "verbatim",
+    sections: record.indexer_candidate.sections.map((section) => ({
+      id: section.section_key,
+      kind: record.kind,
+      summary: section.section_key,
+      body: section.markdown,
+      source_refs: [...new Set(section.evidence_refs.flatMap((evidenceRef) => {
+        const sourceRef = sourceByEvidenceRef.get(evidenceRef);
+        return sourceRef === undefined ? [] : [sourceRef];
+      }))].sort(),
+      source_excerpts: [],
+      content_mode: "authored",
     })),
     group_key: reviewScope === "all"
       ? `${record.collection} / ${candidateGroupKey({ record, snapshot })}`
@@ -252,7 +121,7 @@ function renderReviewHtml(
     review: record.review,
     display_summary: record.review.behavior_summary ?? record.review.summary,
     preview: candidatePreview({ record, snapshot }),
-    resource_previews: resourcePreviews.get(record.candidate_id) ?? [],
+    resource_previews: [],
     snapshot_ready: snapshot !== undefined,
     };
   });
@@ -588,11 +457,12 @@ function renderReviewHtml(
         '<code>node_ref=' + html(item.node_ref) + '</code>' +
         '<code>view_ref=' + html(item.view_ref) + '</code>' +
       '</div>';
+      const displayedSources = item.source_paths.length > 0 ? item.source_paths : item.source_refs;
       const technicalDetailsBlock = '<details class="technical-details">' +
-        '<summary>Technical details（ID 与 ' + item.source_refs.length + ' 个来源引用）</summary>' +
+        '<summary>Technical details（ID 与 ' + displayedSources.length + ' 个来源位置）</summary>' +
         '<div class="technical-content">' +
           identityBlock +
-          '<div class="section-source-refs">' + item.source_refs.map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>' +
+          '<div class="section-source-refs">' + displayedSources.map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>' +
           (sharedRefs.size === 0 ? "" : '<div class="section-source-refs"><span>Shared source refs</span>' + Array.from(sharedRefs).map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>') +
         '</div>' +
       '</details>';
@@ -695,11 +565,9 @@ export async function writeReviewHtml(input: {
     ? await collectAllReviewCandidates(input.projectRoot)
     : await collectReviewCandidates(input.projectRoot, reviewScope);
   const edgePreview = filterEdgePreviewForCandidates(candidates, await readEdgePreview(input.projectRoot));
-  const sourceExcerpts = await collectReviewSourceExcerpts(input.projectRoot, candidates);
-  const resourcePreviews = await collectReviewResourcePreviews(input.projectRoot, candidates);
   const outPath = resolveOutputPath(input.projectRoot, input.out, reviewScope);
   await mkdir(dirname(outPath), { recursive: true });
-  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, edgePreview, sourceExcerpts, resourcePreviews), "utf8");
+  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, edgePreview), "utf8");
   return {
     path: outPath,
     candidates: candidates.length,

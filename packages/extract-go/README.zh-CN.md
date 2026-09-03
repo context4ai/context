@@ -5,9 +5,9 @@
 `@c4a/extract-go` 为 Context 知识项目提供确定性的 Go 结构事实。它提取声明、签名、
 源码文档、导入、调用关系和常见 HTTP 路由注册，但不赋予产品专属含义。
 
-这是可选结构包。Context 运行时不会内置它，也不会自动增加 Go 生命周期阶段。知识
-项目通过自己的 `extractCustom()` Adapter 显式使用，把结构事实映射成项目候选；
-审核、证据、新鲜度、close 和构建继续由标准 Context 工作流负责。
+这是 Code Indexer Provider 按需使用的可选结构包。Provider 把结构事实映射到
+当前 Indexer Result；Candidate 状态、审核、新鲜度、close 和构建继续由 Context
+负责。
 
 ## 在知识生产链中的位置
 
@@ -16,7 +16,7 @@
           ↓
 Go 结构索引
           ↓
-项目自有 extractCustom() 映射
+选中的 Code Indexer Provider
           ↓
 Context 候选 → 审核 → 正式知识
 ```
@@ -45,9 +45,8 @@ import {
 
 ## 适用场景
 
-当 Context 工作区需要 Go 符号或关系，并且项目能够说明这些结构应该如何转化为知识
-时使用本包。不要仅为了省去项目映射就添加通用 Go phase：语言解析器无法知道目标
-读者、产品边界或有价值的知识形态。
+当 Code Indexer Provider 需要 Go 符号或关系时使用本包。语言解析器无法决定目标
+读者、产品边界或有价值的知识形态，这些仍由 Provider 负责。
 
 ## 开发
 

@@ -1,7 +1,12 @@
 import { z } from "zod";
-import type { IndexerArtifactResult } from "./indexerArtifactResult.js";
+import {
+  indexerEvidenceTargetAllows,
+  type IndexerArtifactResult,
+  type IndexerAuthorizedEvidenceTarget,
+} from "./indexerArtifactResult.js";
 import {
   indexerAuthorDependencyViewSchema,
+  indexerDependencyNodeRef,
   indexerDependencyTargetMatches,
   indexerDependencyVersionRef,
   indexerLogicalUnitDependencyNodeSchema,
@@ -204,6 +209,7 @@ export function buildIndexerArtifactDependencySet(input: {
   workset: IndexerMainAuthorWorkset;
   run_envelope: unknown;
   dependency_view: unknown;
+  authorized_evidence_targets?: readonly IndexerAuthorizedEvidenceTarget[];
 }): IndexerArtifactDependencySet {
   const runEnvelope = validateIndexerRunEnvelope(input.run_envelope);
   const dependencyView = validateIndexerAuthorDependencyView(input.dependency_view);
@@ -219,7 +225,32 @@ export function buildIndexerArtifactDependencySet(input: {
   );
   const sourceByEvidence = new Map(sourceNodes.map((node) => [node.evidence_ref, node]));
   const evidenceByRef = new Map(input.result.evidence_bindings.map((evidence) => {
-    const node = sourceByEvidence.get(evidence.evidence_ref);
+    let node = sourceByEvidence.get(evidence.evidence_ref);
+    const belongsToPrimary = evidence.source_ref === input.workset.source_ref &&
+      evidence.module_ref === input.workset.module_ref;
+    if (
+      node === undefined &&
+      !belongsToPrimary &&
+      indexerEvidenceTargetAllows({
+        targets: input.authorized_evidence_targets ?? [],
+        source_ref: evidence.source_ref,
+        module_ref: evidence.module_ref,
+      })
+    ) {
+      const supplemental = {
+        kind: "source-span" as const,
+        evidence_ref: evidence.evidence_ref,
+        source_ref: evidence.source_ref,
+        module_ref: evidence.module_ref,
+        locator: evidence.locator,
+        content_digest: evidence.content_digest,
+        targets: [{ level: "logical-unit" as const }],
+      };
+      node = indexerSourceSpanDependencyNodeSchema.parse({
+        ...supplemental,
+        node_ref: indexerDependencyNodeRef({ polarity: "positive", node: supplemental }),
+      });
+    }
     if (
       node === undefined ||
       canonicalIndexerJson({
@@ -368,6 +399,7 @@ export function validateIndexerArtifactDependencySet(input: {
   workset: IndexerMainAuthorWorkset;
   run_envelope: unknown;
   dependency_view: unknown;
+  authorized_evidence_targets?: readonly IndexerAuthorizedEvidenceTarget[];
 }): IndexerArtifactDependencySet {
   const value = indexerArtifactDependencySetSchema.parse(input.value);
   if (
@@ -381,6 +413,9 @@ export function validateIndexerArtifactDependencySet(input: {
     workset: input.workset,
     run_envelope: input.run_envelope,
     dependency_view: input.dependency_view,
+    ...(input.authorized_evidence_targets === undefined
+      ? {}
+      : { authorized_evidence_targets: input.authorized_evidence_targets }),
   });
   if (canonicalIndexerJson(expected) !== canonicalIndexerJson(value)) {
     throw new TypeError(

@@ -136,7 +136,7 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
     profile_contract_digest: digest("9"),
     subject_key_schema_digest: digest("b"),
     source_scope_digest: digest("c"),
-    parser_contract_digest: digest("d"),
+    source_binding_digest: digest("d"),
     primary_resource_binding_digest:
       projections.executionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("e"),
@@ -199,7 +199,7 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
     final_authority: authority,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("8"),
-      parser_dependency_fingerprint: digest("9"),
+      source_dependency_fingerprint: partition.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("a"),
       metric_set_digest: digest("b"),
@@ -217,7 +217,7 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
     final_authority: authority,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("8"),
-      parser_dependency_fingerprint: digest("9"),
+      source_dependency_fingerprint: author.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("a"),
       metric_set_digest: digest("b"),

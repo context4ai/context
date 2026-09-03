@@ -41,7 +41,7 @@ const common = {
   profile_contract_digest: DIGESTS[4]!,
   subject_key_schema_digest: DIGESTS[5]!,
   source_scope_digest: DIGESTS[6]!,
-  parser_contract_digest: DIGESTS[7]!,
+  source_binding_digest: DIGESTS[7]!,
   primary_resource_binding_digest: DIGESTS[8]!,
   question_target_inventory_digest: DIGESTS[9]!,
 };

@@ -611,9 +611,7 @@ export function renderIndexerTemplateArtifact(input: {
       const question = questionBindings.get(section.section_key)!;
       const proposal = result.material_question_proposals.find((candidate) =>
         candidate.question_ref === question.question_ref &&
-        candidate.question_target_key === question.question_target_key &&
-        candidate.answer_landing_hint?.artifact_id === artifact.artifact_id &&
-        candidate.answer_landing_hint.section_key === section.section_key
+        candidate.question_target_key === question.question_target_key
       );
       const disposition = result.question_target_dispositions.find((candidate) =>
         candidate.question_target_key === question.question_target_key

@@ -11,6 +11,8 @@ import {
 } from "../index.js";
 import {
   candidateCompileFixture,
+  candidateCompileMultiSectionFixture,
+  candidateCompilePostAuthorFixture,
   candidateCompileTemplateFixture,
 } from "./indexerCandidateCompileV070.fixture.js";
 
@@ -90,6 +92,49 @@ describe("explicit IndexerResult Candidate compile", () => {
     })).toThrow(/must be rendered before layout/);
   });
 
+  test("compiles a current post-author derived Artifact without creating a second Result", () => {
+    const fixture = candidateCompilePostAuthorFixture();
+    const result = compile(fixture);
+    expect(result.result_bindings).toHaveLength(1);
+    expect(result.result_bindings[0]).toMatchObject({
+      artifact_result_digest: fixture.result.output_digest,
+      post_author_composition_fingerprint: fixture.envelope.composition_fingerprint,
+    });
+    expect(result.files.map((file) => ({
+      artifact_kind: file.artifact_kind,
+      output_path: file.output_path,
+    }))).toEqual([{
+      artifact_kind: "examples",
+      output_path: "knowledge/codeindex/components/toggle-examples.md",
+    }, {
+      artifact_kind: "overview",
+      output_path: "knowledge/codeindex/components/toggle-overview.md",
+    }]);
+    expect(result.files[0]!.markdown).toContain("Use the public Toggle capability.");
+
+    const withoutEnvelope = { ...fixture.accepted, post_author_envelope: null };
+    expect(() => buildIndexerCandidateCompile({
+      layout_proposal_set: fixture.layoutSet,
+      layout_transition: fixture.transition,
+      accepted_results: [withoutEnvelope],
+      profile_contract: fixture.profiles,
+      operator_contract: fixture.operators,
+      subject_key_schema_set: fixture.subjectKeySchemaSet,
+    })).toThrow(/stale|forged/);
+  });
+
+  test("keeps Section refs in the same reader order as compiled Sections", () => {
+    const fixture = candidateCompileMultiSectionFixture();
+    const result = compile(fixture);
+    expect(result.files[0]!.section_refs).toEqual(
+      result.files[0]!.sections.map((section) => section.section_ref),
+    );
+    expect(result.files[0]!.markdown).toBe(
+      "# Toggle\n\nAnonymous capability evidence.\n\n" +
+        "## Dependency handoff\n\nAnonymous dependency evidence.",
+    );
+  });
+
   test("rejects missing, forged, stale, or layout-unbound Results", () => {
     const fixture = candidateCompileFixture();
     const input = {
@@ -158,7 +203,6 @@ describe("explicit IndexerResult Candidate compile", () => {
     const staleFingerprintTransition = buildIndexerLayoutTransition({
       layout_proposal_set: staleFingerprintSet,
       base_projections: [],
-      planned_output: { state: "not-required" },
     });
     expect(() => buildIndexerCandidateCompile({
       ...input,
@@ -186,7 +230,6 @@ describe("explicit IndexerResult Candidate compile", () => {
     const transition = buildIndexerLayoutTransition({
       layout_proposal_set: target.layoutSet,
       base_projections: [previous],
-      planned_output: { state: "not-required" },
     });
     expect(transition.requires_confirmation).toBe(true);
     expect(() => buildIndexerCandidateCompile({

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { indexerCanonicalRefSchema } from "./indexerLayerComposition.js";
 import {
   canonicalIndexerJson,
   compareIndexerCanonicalText,
+  indexerCanonicalRefSchema,
   indexerDigestSchema,
   indexerIdSchema,
   indexerProtocolDigest,

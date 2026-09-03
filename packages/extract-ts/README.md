@@ -4,14 +4,13 @@
 
 `@c4a/extract-ts` turns TypeScript, JavaScript, TSX, and JSX structure into deterministic code
 evidence for Context knowledge production. It implements the
-`ExtractionPlugin` protocol from `@c4a/extract` and is the default plugin used
-by the SDK `extractTs({ source, collection: "codegraph" })` phase for npm-style
-packages.
+`ExtractionPlugin` protocol from `@c4a/extract` and is the community Code
+Indexer Provider's ECMAScript parser for npm-style packages.
 
 It extracts code facts; it does not decide product meaning, write approved
 Markdown, or choose the user's source boundary. Knowledge-workspace users reach
-it through the Context Agent entry and a confirmed extraction phase. The direct
-APIs below are for reusable structural analysis and project-owned adapters.
+it through the selected Code Indexer Provider. The direct APIs below are for
+Provider authors and reusable structural analysis.
 
 ## Package Role
 
@@ -24,12 +23,12 @@ confirmed TypeScript/JavaScript boundary
           ↓
 entry detection + export tracing + AST facts
           ↓
-raw code snapshot → review candidates → approved knowledge
+Indexer facts → reader-oriented Candidates → approved knowledge
 ```
 
 ## React Router structural facts
 
-Projects that use `extractCustom()` can reuse `extractReactRouterRoutes()` to
+Indexer Providers can reuse `extractReactRouterRoutes()` to
 index JSX `<Route>` declarations and route-object arrays. It reports paths,
 components, redirects, conditions, import sources, notes, and source locations
 without classifying product meaning:
@@ -83,10 +82,9 @@ const moduleFacts = extractEcmaScriptModuleExports(source, "src/index.cjs");
 - package version propagation into `ExtractionResult.package.version`
 - authored `.js`, `.jsx`, `.mjs`, and `.cjs` entry files without remapping them to TypeScript
 
-The Context project may override auto-detection with source-relative
-`extractTs.entries`, or use `mode: "scan"` to make every `include`-matched file
-an extraction root. These settings live in the Context workspace; consumers do
-not need to modify the analyzed package solely to declare extraction entries.
+The Code Indexer Provider may override auto-detection with source-relative
+entries, or use scan mode to make every include-matched file an extraction
+root. Consumers do not modify the analyzed package solely to configure parsing.
 
 Entry files are returned as module-relative paths. The repository runner later prefixes them to repo-relative paths in raw snapshots.
 
@@ -160,9 +158,8 @@ identities, per-file owner/disposition, explicit denominators, diagnostics, and
 the ordered parser receipt through `context.indexer.evidence-adapter-result/v1`.
 `ExtractionResult` remains available for the existing raw snapshot runner.
 
-The Context CLI consumes those rows during `context run extract:<source>:codegraph`
-to build review candidates for package/category/symbol knowledge Nodes. The
-important projection inputs are:
+The Code Indexer Provider consumes those facts while producing the current
+Indexer result. Important authoring inputs include:
 
 - stable package names and versions
 - stable exported symbol names
@@ -187,33 +184,16 @@ const registry = new ExtractionPluginRegistry();
 registry.register(new TypeScriptPlugin());
 ```
 
-Workspace usage normally goes through a declared project phase:
-
-```ts
-import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";
-
-const componentLib = source("component-lib");
-
-export default defineProject({
-  sources: [componentLib],
-  phases: [
-    extractTs({ source: componentLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
-  ],
-  packages: [],
-});
-```
-
-The source boundary is registered first, then the phase is previewed or run:
+Workspace usage registers the source boundary, then selects the Code Indexer
+Provider through `src/indexers.yaml`:
 
 ```bash
 context source add repo component-lib --local ../packages/component-lib
-context run extract:component-lib:codegraph --dry-run
-context run extract:component-lib:codegraph
+context status --format json
 ```
 
-Agents should not hand-build runner input or raw snapshots for normal Context
-workspace operation.
+Agents should not hand-build parser input, raw snapshots, or Candidate files
+for normal Context workspace operation.
 
 ## Development
 

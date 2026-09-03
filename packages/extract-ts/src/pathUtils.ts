@@ -97,6 +97,13 @@ const buildToSourcePaths = (withoutExtension: string): string[] => {
   const fullRest = rest.join("/");
   results.push(`src/${fullRest}`);
 
+  // Some packages keep authored subtrees beside src/ while publishing them
+  // from dist/ (for example dist/deprecated/index.js <- deprecated/index.ts).
+  // Preserve the exported subtree as an explicit candidate instead of
+  // falling back to the package root entry, which would silently truncate the
+  // authoritative public surface.
+  results.push(fullRest);
+
   return unique(results);
 };
 

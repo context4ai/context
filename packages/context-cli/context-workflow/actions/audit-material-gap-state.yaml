@@ -1,6 +1,6 @@
 schema: agent-graph.action.v1
 id: audit-material-gap-state
-description: Read-only recompute the expected retained material-gap ledger and route lifecycle drift.
+description: Read-only recompute the local material-gap state and route lifecycle drift.
 runner: command
 effect: read
 command: context indexer audit-material-gap-state --input .tmp/agent-payloads/indexer-material-gap-audit.json --format json

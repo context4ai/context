@@ -120,6 +120,37 @@ export function validateIndexerSourceIdentityInventory(
   return parsed;
 }
 
+export function projectIndexerSourceIdentityInventory(input: {
+  inventory: unknown;
+  fact_refs: readonly string[];
+}): IndexerSourceIdentityInventory {
+  const inventory = validateIndexerSourceIdentityInventory(input.inventory);
+  const factRefs = canonicalUnique(input.fact_refs, "source identity projection facts");
+  if (factRefs.length === 0) {
+    throw new TypeError("source identity projection requires at least one fact");
+  }
+  const selected = new Set(factRefs);
+  const files = inventory.files.flatMap((file) => {
+    const facts = file.facts.filter((fact) => selected.has(fact.fact_ref));
+    return facts.length === 0 ? [] : [{ ...file, facts }];
+  });
+  const found = new Set(files.flatMap((file) =>
+    file.facts.map((fact) => fact.fact_ref)
+  ));
+  const missing = factRefs.filter((factRef) => !found.has(factRef));
+  if (missing.length > 0) {
+    throw new TypeError(
+      `source identity projection contains unknown facts: ${missing.join(", ")}`,
+    );
+  }
+  return buildIndexerSourceIdentityInventory({
+    source_ref: inventory.source_ref,
+    module_ref: inventory.module_ref,
+    source_input_digest: inventory.source_input_digest,
+    files,
+  });
+}
+
 interface AdapterSourceFileAccumulator {
   content_digest: string;
   primary_owner_count: number;

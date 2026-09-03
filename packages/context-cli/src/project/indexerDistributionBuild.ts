@@ -47,12 +47,8 @@ import { validateBundledIndexerMetricGuidance } from
   "./indexerDistributionMetricGuidanceValidation.js";
 import { validateBundledIndexerHardRuleConformance } from
   "./indexerHardRuleConformance.js";
-import { buildIndexerReleaseCapabilityManifest } from
-  "./indexerReleaseCapabilities.js";
-import {
-  assertSemanticSourceOwnership,
-  inspectCanonicalQuestionPayloadsInBundle,
-} from "./semanticSourceOwnership.js";
+import { inspectCanonicalQuestionPayloadsInBundle } from
+  "./canonicalQuestionOwnership.js";
 
 const EXPECTED_BUNDLES = [
   {
@@ -134,9 +130,6 @@ export async function materializeBundledIndexerDistribution(input: {
     "../..",
     "plugins/context/skills",
   );
-  const semanticSourceOwnership = await assertSemanticSourceOwnership({
-    repositoryRoot: resolve(input.packageRoot, "../.."),
-  });
   const sourceEntries = (await readdir(sourceRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
@@ -181,16 +174,6 @@ export async function materializeBundledIndexerDistribution(input: {
     `${JSON.stringify(hardRuleConformance, null, 2)}\n`,
     "utf8",
   );
-  await writeFile(
-    join(input.outputRoot, "capability-manifest.json"),
-    `${JSON.stringify(buildIndexerReleaseCapabilityManifest(packageJson.version, {
-      phaseGCutover: semanticSourceOwnership.blocking_prerequisites.phase_g_cutover
-        && semanticSourceOwnership.summary.legacy_source_count === 0
-        && semanticSourceOwnership.summary.duplicate_taxonomy_count === 0,
-    }), null, 2)}\n`,
-    "utf8",
-  );
-
   for (const expected of EXPECTED_BUNDLES) {
     const source = join(sourceRoot, expected.id);
     const copiedQuestionContracts = await inspectCanonicalQuestionPayloadsInBundle({

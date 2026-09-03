@@ -261,7 +261,7 @@ const artifactBundleBaseEntrySchema = z.object({
   artifact_id: indexerIdSchema,
   artifact_kind: indexerIdSchema,
   purpose: z.enum(["required", "discretionary"]),
-  reader_question_refs: z.array(indexerCanonicalRefSchema).min(1),
+  reader_question_refs: z.array(indexerCanonicalRefSchema),
   evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
 }).strict();
 
@@ -269,7 +269,7 @@ const artifactBundleSplitEntrySchema = z.object({
   artifact_id: indexerIdSchema,
   artifact_kind: indexerIdSchema,
   purpose: z.literal("semantic-split"),
-  reader_question_refs: z.array(indexerCanonicalRefSchema).min(1),
+  reader_question_refs: z.array(indexerCanonicalRefSchema),
   evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
   split_of: indexerIdSchema,
   boundary: z.object({

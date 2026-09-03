@@ -24,6 +24,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@c4a/context": "workspace:*",
     "@c4a/core": "workspace:*",
     "@c4a/tui": "workspace:*",
     "ink": "^5.0.0",

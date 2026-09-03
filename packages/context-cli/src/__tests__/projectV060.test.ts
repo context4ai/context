@@ -349,6 +349,62 @@ describe("0.6.0 project init and source ensure", () => {
     }
   });
 
+  test("project module loader ignores conflicting ancestor tsconfig package aliases", async () => {
+    const root = makeTmp();
+    const project = join(root, "nested", "project");
+    try {
+      await mkdir(join(root, "packages", "context", "src"), { recursive: true });
+      await mkdir(join(project, "src"), { recursive: true });
+      await mkdir(join(project, "node_modules", "@c4a", "context"), { recursive: true });
+      await writeFile(join(root, "tsconfig.json"), JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "@c4a/*": ["packages/*/src"] },
+        },
+      }));
+      await writeFile(join(root, "packages", "context", "src", "index.ts"), [
+        "export function source(name: string) {",
+        "  return { kind: 'source.ref', name, materializedAt: `sources/${name}` };",
+        "}",
+      ].join("\n"));
+      await writeFile(join(project, "node_modules", "@c4a", "context", "package.json"), JSON.stringify({
+        name: "@c4a/context",
+        type: "module",
+        exports: { ".": "./index.js", "./package.json": "./package.json" },
+      }));
+      await writeFile(join(project, "node_modules", "@c4a", "context", "index.js"), [
+        "export function defineProject(project) { return { kind: 'context.project', project }; }",
+        "export function source(namespace, module, options) {",
+        "  return {",
+        "    kind: 'source.ref',",
+        "    type: options.type,",
+        "    name: `${namespace}/${module}`,",
+        "    materializedAt: `sources/${options.type}/${namespace}`,",
+        "  };",
+        "}",
+      ].join("\n"));
+      await writeFile(join(project, "package.json"), JSON.stringify({
+        type: "module",
+        context: { project: true, entry: "src/index.ts" },
+      }));
+      await writeFile(join(project, "src", "index.ts"), [
+        "import { defineProject, source } from '@c4a/context';",
+        "const docs = source('20260903', 'docs', { type: 'file' });",
+        "export default defineProject({ sources: [docs], phases: [], packages: [] });",
+      ].join("\n"));
+
+      const loaded = await loadContextProjectModule(project);
+      expect(loaded.project.sources).toEqual([{
+        kind: "source.ref",
+        type: "file",
+        name: "20260903/docs",
+        materializedAt: "sources/file/20260903",
+      }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("project run lists and dry-runs declared init phases", async () => {
     const project = makeTmp();
     try {

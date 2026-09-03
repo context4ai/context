@@ -232,57 +232,10 @@ layout/audit and Candidate compile. Provider instructions and templates live in
 the bundled `context-code-indexer` and `context-markdown-indexer` Skills; the
 CLI does not hard-code their editorial or technology-specific authoring logic.
 
-The default Graph does not route through extraction, document classification,
-align, structure confirmation, or prose compile. The explicit phase factories
-and commands below remain only for existing workspace migration, diagnostics,
-and repair.
-
-## Legacy Prose Align
-
-Align converts captured document evidence into a `context.structure.v1` draft.
-It does not write approved prose.
-
-Key modules:
-
-| Module | Role |
-|---|---|
-| `proseAlign.ts` | Align command orchestration |
-| `proseAlignEvidenceViews.ts` | CLI evidence views and routing |
-| `proseAlignSourceIndex.ts` | Compact source/span index |
-| `proseAlignFullText.ts` / `proseAlignSpanText.ts` | Budgeted evidence reads |
-| `proseAlignPayloadParse.ts` | Structure payload parser |
-| `proseAlignPayloadValidation.ts` | Node/tag/section/edge quality gates |
-| `proseAlignPayload.ts` | Full validation entrypoint |
-| `proseAlignPayloadStage.ts` | Stage/confirm writes |
-| `proseAlignStructureSummary*.ts` | Reviewable structure summary and HTML |
-| `proseAlignExistingApprovedStructure.ts` | Existing approved endpoint/reuse checks |
-
-The align gate owns collection routing, NodeRef/ViewRef/SectionRef structure,
-section kind selection, edge contracts, unresolved items, and orphan-view
-diagnostics.
-
-## Legacy Prose Compile
-
-Compile turns confirmed structure into source-mirrored draft candidates. The
-agent supplies `context.compile-actions.v1` actions; the CLI materializes
-reader-visible body text from cited source spans.
-
-Key modules:
-
-| Module | Role |
-|---|---|
-| `proseCompile.ts` | Compile command orchestration and ledger writes |
-| `proseCompileStructure.ts` | Confirmed/approved structure loading |
-| `proseCompileViews.ts` | Read-plan, node-context, and schema views |
-| `proseCompileActionPayload.ts` | Compile action parser and diagnostics |
-| `proseCompileSourceRefs.ts` | Source-ref continuity and freshness checks |
-| `proseCompileMaterialize.ts` | Source span mirroring |
-| `proseCandidateMarkdown.ts` | Candidate Markdown rendering |
-| `candidateLedger.ts` | Active candidate ledger |
-
-Compile actions do not carry reader-visible rewritten content. If a planned
-section cannot be mirrored from cited spans, the structure must be split or
-repaired in align.
+The default Graph does not route through the retired extraction, prose-align,
+or prose-compile authoring chains. `src/index.ts` retains capture and custom
+non-knowledge orchestration only; all knowledge authoring starts from the
+Indexer registry and reaches the single current Candidate path.
 
 ## Review, Approval, And Maintenance
 
@@ -292,7 +245,7 @@ current-conversation managed mode uses one revision-bound atomic approval.
 
 | Module | Role |
 |---|---|
-| `review.ts` | Command routing for list/html/apply/mark/re-pin/deprecate |
+| `review.ts` | Command routing for current Candidate review and approved-page maintenance |
 | `reviewHtml.ts` | Browser review page generation |
 | `reviewApply.ts` | Apply approved/rejected decisions |
 | `reviewShared.ts` | Candidate snapshots, scope hashes, identity helpers |
@@ -306,12 +259,10 @@ knowledge identity.
 
 ## Close, Verify, And Structure Projection
 
-Close rebuilds `knowledge/structure.yaml` from approved pages and confirmed
-structure edges. It also retains one minimal `source_inputs` receipt per closed
-prose source/collection target: source, collection, and consumed snapshot hash.
-Those values are not derivable after disposable structure snapshots are
-removed. Verify checks that approved pages, source refs, source-input receipts,
-and derived structure remain consistent.
+Close rebuilds `knowledge/structure.yaml` from approved pages and their current
+Indexer edges. Verify checks that approved pages, source refs, assets, and the
+derived structure remain consistent. Runtime Candidate and Review state is
+cleaned after successful close and is not copied into Git-tracked knowledge.
 
 Key modules:
 
@@ -319,7 +270,6 @@ Key modules:
 |---|---|
 | `close.ts` | Close orchestration and receipt |
 | `approvedStructureInputHash.ts` | Hash of close inputs |
-| `approvedStructureInputs.ts` | Minimal durable prose source-input receipts |
 | `approvedStructureEdges.ts` | Edge projection and validation support |
 | `structureEdgeContract.ts` | Edge closed-set contract |
 | `verify.ts` | Top-level verify orchestration |
@@ -366,9 +316,10 @@ includes selected knowledge items, collection summaries, selected edge records,
 the flat OKF root paths, and build contract metadata. Its legacy namespace field
 is `null` for the current package layout.
 
-## Code Extraction
+## Code Indexing
 
-Codegraph pages are produced by extraction, not prose align.
+Code knowledge is produced by the selected Indexer Provider. Parser packages
+materialize structured source facts; they do not write approved knowledge.
 
 | Package/module | Role |
 |---|---|
@@ -378,16 +329,17 @@ Codegraph pages are produced by extraction, not prose align.
 | `packages/extract/src/codeSnapshot.ts` | Source snapshot and symbol records |
 | `packages/extract-ts/src/plugin.ts` | TypeScript extraction plugin |
 | `packages/extract-ts/src/symbolExtractor*.ts` | AST symbol extraction |
-| `packages/context-cli/src/project/extractCandidates*.ts` | Candidate rendering and review records |
+| `packages/context-cli/src/project/indexerParser*.ts` | Parser planning, execution, and result import |
+| `packages/context-cli/src/project/indexerCandidateCompileActions.ts` | Current Candidate materialization |
 
-The TypeScript plugin uses tree-sitter to extract symbols, source spans,
-imports/exports, and code snippets. Review/apply then writes approved codegraph
-knowledge pages through the same candidate workflow as prose.
+The TypeScript plugin extracts symbols, source spans, imports/exports, and code
+snippets. The Provider turns authorized parser facts into current Indexer
+Artifacts; Review/apply then writes readable approved knowledge pages.
 
 ## Agent Entries And Workflow Provider
 
-The CLI ships an agent plugin marketplace under `packages/context-cli/plugin`.
-The source contains one public `context` entry command plus manifests/assets.
+The CLI plugin source lives under `plugins/context` at the repository root.
+It contains one public `context` entry Skill plus manifests/assets.
 It delegates workspace bootstrap to `context entry` and lifecycle routing to
 Agent Graph. Build derives host-specific entries under
 `packages/context-cli/dist/plugins`.
@@ -402,8 +354,8 @@ Important areas:
 
 | Path | Role |
 |---|---|
-| `plugin/commands` | Single thin public Context entry |
-| `plugin/assets` | Plugin brand assets |
+| `plugins/context/skills/context` | Single thin public Context entry |
+| `plugins/context/assets` | Plugin brand assets |
 | `context-workflow/graphs` | Stable task and gate graph |
 | `context-workflow/actions` | Host-resolved action contracts |
 | `context-workflow/resources` | Route-selected procedures, dialogue, diagnostics, manuals, and views |

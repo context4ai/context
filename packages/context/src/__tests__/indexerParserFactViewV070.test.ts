@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildIndexerParserFactView,
   buildIndexerParserFactViewFromMaterializations,
+  buildIndexerMergedParserFactView,
   indexerEvidenceAdapterFactRef,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterOutputDigest,
@@ -135,5 +136,44 @@ describe("ephemeral parser fact view", () => {
     const forged = structuredClone(view);
     forged.files[0]!.facts[0]!.payload = { ...PAYLOAD, normalized_value: "forged" };
     expect(() => validateIndexerParserFactView(forged)).toThrow(/payload digest/);
+  });
+
+  test("materializes only the authority-merge winner without leaking shadowed payloads", () => {
+    const winner = adapterResult();
+    const shadowPayload = { ...PAYLOAD, normalized_value: "shadowed" };
+    const shadowBase = adapterResult();
+    shadowBase.adapter.id = "shadow-config-parser";
+    shadowBase.precedence = 5;
+    shadowBase.files[0]!.facts[0]!.payload_digest = indexerProtocolDigest(shadowPayload);
+    const { output_digest: _shadowDigest, ...shadowPayloadBase } = shadowBase;
+    void _shadowDigest;
+    shadowBase.output_digest = indexerEvidenceAdapterOutputDigest(shadowPayloadBase);
+
+    const view = buildIndexerMergedParserFactView({
+      materializations: [{
+        result: winner,
+        fact_payloads: [{ fact_ref: FACT_REF, payload: PAYLOAD }],
+      }, {
+        result: shadowBase,
+        fact_payloads: [{ fact_ref: FACT_REF, payload: shadowPayload }],
+      }],
+      merged_facts: [{
+        ...winner.files[0]!.facts[0]!,
+        adapter_id: winner.adapter.id,
+        precedence: winner.precedence,
+      }],
+      primary_owners: [{
+        source_ref: SOURCE_REF,
+        module_ref: MODULE_REF,
+        normalized_path: PATH,
+        disposition: "analyzed",
+      }],
+      inventory_digest: digest("4"),
+    });
+
+    expect(view.files[0]!.facts).toEqual([
+      expect.objectContaining({ fact_ref: FACT_REF, payload: PAYLOAD }),
+    ]);
+    expect(JSON.stringify(view)).not.toContain("shadowed");
   });
 });

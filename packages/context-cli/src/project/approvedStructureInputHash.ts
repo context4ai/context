@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import type { ApprovedStructureSourceInput } from "./approvedStructureInputs.js";
 
 export interface ApprovedStructureInputFile {
   path: string;
@@ -38,7 +37,6 @@ export function approvedStructureInputHash(input: {
   schemaVersion: string;
   files: readonly ApprovedStructureInputFile[];
   edges: readonly Record<string, unknown>[];
-  sourceInputs: readonly ApprovedStructureSourceInput[];
   metadata?: readonly Record<string, unknown>[];
 }): string {
   const edgeByKey = new Map<string, Record<string, unknown>>();
@@ -52,15 +50,6 @@ export function approvedStructureInputHash(input: {
       .sort((left, right) => left.path.localeCompare(right.path)),
     edges: [...edgeByKey.values()]
       .sort((left, right) => edgeHashKey(left).localeCompare(edgeHashKey(right))),
-    source_inputs: [...input.sourceInputs]
-      .map((sourceInput) => ({
-        source: sourceInput.source,
-        collection: sourceInput.collection,
-        snapshot_hash: sourceInput.snapshot_hash,
-      }))
-      .sort((left, right) =>
-        left.source.localeCompare(right.source) || left.collection.localeCompare(right.collection)
-      ),
     metadata: [...(input.metadata ?? [])]
       .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
   });

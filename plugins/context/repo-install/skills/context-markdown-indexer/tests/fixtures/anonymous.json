@@ -18,7 +18,7 @@
       "artifact_kind": "content",
       "purpose": "required",
       "reader_question_refs": [
-        "question:source-authority"
+        "question:reader-structure"
       ],
       "evidence_refs": [
         "evidence:anonymous-guide-source"

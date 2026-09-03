@@ -1,5 +1,5 @@
 schema: agent-graph.test.v1
-name: a required material gap is checkpointed before second-phase work is built
+name: a required material gap is checkpointed and blocks the current run
 graph: indexer
 entry: main-index
 state:
@@ -19,6 +19,4 @@ state:
     indexer/reconcile-indexer-results: partial
     indexer/checkpoint-material-gaps: partial
 expect:
-  statusCode: actionable
-  primaryNode: build-material-question-workset
-  primaryReasonCode: route.indexer.material-question-workset
+  statusCode: complete

@@ -7,10 +7,10 @@ workspace. It reports project identity, tags, subspaces, publish intent, entry
 signals, direct dependency/consumer edges, build phases and commands, release
 units, decoupled dependencies, and nearest `OWNERS` boundaries.
 
-The index is evidence for a Context knowledge project; it is not a product
-taxonomy. A project decides which facts matter to its audience and maps them to
-candidates through `extractCustom()`. Context continues to own source identity,
-candidate freshness, review, approved knowledge, and package output.
+The index is evidence for a Code Indexer Provider; it is not a product taxonomy.
+The Provider decides which facts matter to its audience and returns the current
+Indexer result. Context owns source identity, Candidate freshness, Review,
+approved knowledge, and package output.
 
 ## Place in the knowledge workflow
 
@@ -19,7 +19,7 @@ confirmed Rush repository boundary
               ↓
 rush.json + package.json + Rush config + OWNERS facts
               ↓
-project-owned candidate mapping
+selected Code Indexer Provider
               ↓
 reviewed architecture / ownership / package knowledge
 ```
@@ -62,7 +62,7 @@ index and Evidence ABI never copy raw shell commands or package scripts into
 facts.
 
 This optional package does not add a public Agent entry or Context lifecycle
-phase. It remains a reusable structural library for project adapters.
+phase. It remains a reusable structural library for Indexer Providers.
 The Evidence ABI conversion assigns one primary owner to each `rush.json`,
 selected `package.json`, and `OWNERS` input, binds project files to authorized
 module refs, and publishes workspace/project/dependency/owner facts as catalog

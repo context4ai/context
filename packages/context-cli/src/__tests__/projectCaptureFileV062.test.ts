@@ -149,6 +149,43 @@ describe("0.6.2 capture:file runtime", () => {
     }
   });
 
+  test("does not treat ordinary relative source links as capture assets", async () => {
+    const root = makeTmp();
+    try {
+      const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+      const projectRoot = result.projectRoot;
+      const sourceDir = join(projectRoot, "..", "source-with-links");
+      await mkdir(join(sourceDir, "docs", "agent"), { recursive: true });
+      writeFileSync(join(sourceDir, "marketing-b.eslint.cjs"), "export default {};\n", "utf8");
+      writeFileSync(
+        join(sourceDir, "docs", "agent", "README.md"),
+        "# Agent guide\n\nSee [the ESLint config](../../marketing-b.eslint.cjs).\n",
+        "utf8",
+      );
+      await runCliInDir(projectRoot, [
+        "source", "add", "file", "source-docs",
+        "--local", sourceDir,
+        "--include", "docs/**/*.md",
+        "--format", "json",
+      ]);
+      writeCaptureProjectEntry(projectRoot, "source-docs");
+
+      const output = JSON.parse(await runCliInDir(projectRoot, [
+        "run", "capture:file:source-docs", "--format", "json",
+      ])) as CaptureRunJson;
+
+      expect(output.result.snapshot.changed).toBe(true);
+      const manifest = parseDocumentSnapshotForSource(JSON.parse(readFileSync(
+        join(projectRoot, "sources", "file", "source-docs", "manifest.json"),
+        "utf8",
+      )) as unknown, "source-docs");
+      expect(manifest.files).toHaveLength(1);
+      expect(manifest.assets).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("capture:file writes normalized snapshot, manifest, summary, status and idempotent captured_at", async () => {
     const root = makeTmp();
     try {
@@ -418,6 +455,67 @@ describe("0.6.2 capture:file runtime", () => {
           metadataPath: "_meta.json",
         },
       ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("capture:file keeps raw MDX when optional component evidence cannot parse one document", async () => {
+    const root = makeTmp();
+    try {
+      const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+      const projectRoot = result.projectRoot;
+      const docsDir = join(projectRoot, "..", "mixed-mdx-docs");
+      await mkdir(docsDir, { recursive: true });
+      writeFileSync(join(docsDir, "component.mdx"), [
+        "# Component",
+        "",
+        '<Card title="Static component evidence" />',
+        "",
+      ].join("\n"), "utf8");
+      writeFileSync(join(docsDir, "types.mdx"), [
+        "# Types",
+        "",
+        "| Prop | Type |",
+        "| --- | --- |",
+        "| exposure | { exposureId: string; exposureScene: string } |",
+        "",
+      ].join("\n"), "utf8");
+
+      await runCliInDir(projectRoot, [
+        "source",
+        "add",
+        "file",
+        "mixed-docs",
+        "--local",
+        docsDir,
+        "--include",
+        "**/*.mdx",
+        "--format",
+        "json",
+      ]);
+      writeMdxCaptureProjectEntry(projectRoot, "mixed-docs");
+
+      const output = JSON.parse(await runCliInDir(projectRoot, [
+        "run",
+        "capture:file:mixed-docs",
+        "--format",
+        "json",
+      ])) as CaptureRunJson;
+
+      expect(output.result.documents.map((document) => document.path)).toEqual([
+        "component.mdx",
+        "types.mdx",
+        "__context_mdx_component_text.md",
+      ]);
+      expect(readFileSync(join(projectRoot, "sources", "file", "mixed-docs", "types.mdx"), "utf8"))
+        .toContain("{ exposureId: string; exposureScene: string }");
+      const componentEvidence = readFileSync(
+        join(projectRoot, "sources", "file", "mixed-docs", "__context_mdx_component_text.md"),
+        "utf8",
+      );
+      expect(componentEvidence).toContain("component Card title: Static component evidence");
+      expect(componentEvidence).not.toContain("types.mdx");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

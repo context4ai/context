@@ -257,15 +257,6 @@ async function commitJournal(input: {
         ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
       });
     }
-    if (!input.journal.completed_targets.includes(target.path)) {
-      input.journal.completed_targets.push(target.path);
-      await persistJournal({
-        directory: input.directory,
-        journal: input.journal,
-        phase: "progress",
-        ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
-      });
-    }
   }
   await rm(input.directory, { recursive: true, force: true });
   await input.inject_failure?.("after-transaction-remove");

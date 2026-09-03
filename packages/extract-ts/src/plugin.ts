@@ -29,12 +29,36 @@ export class TypeScriptPlugin implements ExtractionPlugin {
       throw new Error("TypeScriptPlugin.extractSymbols requires detectEntries to run first");
     }
 
-    const result = await extractSymbols(entries, fs, {
-      packageInfo,
-      pluginId: this.id,
-    });
+    try {
+      return await extractSymbols(entries, fs, {
+        packageInfo,
+        pluginId: this.id,
+      });
+    } finally {
+      this.#lastDetection = null;
+    }
+  }
 
-    this.#lastDetection = null;
-    return result;
+  async extractSymbolsInScope(
+    entries: EntryFile[],
+    analysisPaths: readonly string[],
+    fs: FileSystem,
+  ): Promise<ExtractionResult> {
+    const packageInfo = this.#lastDetection?.package;
+    if (!packageInfo) {
+      throw new Error(
+        "TypeScriptPlugin.extractSymbolsInScope requires detectEntries to run first",
+      );
+    }
+
+    try {
+      return await extractSymbols(entries, fs, {
+        packageInfo,
+        pluginId: this.id,
+        analysisPaths,
+      });
+    } finally {
+      this.#lastDetection = null;
+    }
   }
 }

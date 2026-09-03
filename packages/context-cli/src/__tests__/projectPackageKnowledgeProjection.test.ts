@@ -132,4 +132,53 @@ describe("package knowledge consumer projection", () => {
     expect(frontmatter(projected)).not.toHaveProperty("description");
     expect(projected).toContain("# Access rules");
   });
+
+  test("keeps Indexer recovery bindings out of reader packages", () => {
+    const input = [
+      "---",
+      "title: Toggle",
+      "type: Wiki",
+      "description: content Artifact from tux-code-indexer.",
+      "tags:",
+      "  - indexer",
+      "  - content",
+      "  - tux-code-indexer",
+      "timestamp: 2026-09-02T00:00:00.000Z",
+      "candidate_fingerprint: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "indexer_compile_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "indexer_file_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "indexer_artifact_ref: artifact:subject:sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "indexer_section_refs:",
+      "  - section:subject:sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "indexer_source_ref: repo:sample",
+      "---",
+      "",
+      "# Toggle",
+      "",
+      "Reader content.",
+      "",
+    ].join("\n");
+
+    const output = frontmatter(projectPackageKnowledgeMarkdown(input));
+    expect(output).toEqual({
+      title: "Toggle",
+      type: "Wiki",
+      timestamp: "2026-09-02T00:00:00.000Z",
+    });
+  });
+
+  test("adds a visible title when an approved page only declares it in frontmatter", () => {
+    const projected = projectPackageKnowledgeMarkdown([
+      "---",
+      "title: Reader-visible title",
+      "type: Wiki",
+      "---",
+      "",
+      "Reader content.",
+      "",
+    ].join("\n"));
+
+    expect(projected).toContain("\n---\n\n# Reader-visible title\n\nReader content.");
+    expect(projected.match(/^# Reader-visible title$/gmu)).toHaveLength(1);
+  });
 });

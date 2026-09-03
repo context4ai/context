@@ -34,7 +34,6 @@ import {
   type IndexerProgramRunRequest,
 } from "./indexerProgramRunProtocol.js";
 import { validateIndexerMainRunRequest } from "./indexerMainRunProtocol.js";
-import { validateIndexerMaterialAnswerRunRequest } from "./indexerMaterialAnswerRunProtocol.js";
 import {
   addDuplicateIssues,
   compareIndexerCanonicalText,
@@ -42,6 +41,7 @@ import {
   indexerIdSchema,
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
+import type { IndexerJson } from "./indexerRegistry.js";
 
 const signalContractSchema = z.object({
   id: indexerIdSchema,
@@ -102,11 +102,82 @@ export const indexerInspectorRequestSchema = z.object({
   protocol: z.literal("context.indexer.inspector-request/v1"),
   invocation: indexerControlledInvocationSchema,
   input_view: indexerParserFactViewSchema,
+  active_profiles: z.array(z.object({
+    id: indexerIdSchema,
+    variants: z.record(indexerIdSchema, indexerIdSchema),
+  }).strict()).min(1),
   output: z.literal("provider-enrichment-facts"),
   request_digest: indexerDigestSchema,
-}).strict();
+}).strict().superRefine((value, context) => {
+  addDuplicateIssues(value.active_profiles.map((profile) => profile.id), context, "active_profiles");
+});
 
 export type IndexerInspectorRequest = z.infer<typeof indexerInspectorRequestSchema>;
+
+const inspectorJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.boolean(),
+    z.number().finite(),
+    z.string(),
+    z.array(inspectorJsonSchema),
+    z.record(inspectorJsonSchema),
+  ])
+);
+
+export const indexerInspectorFactPayloadSchema = z.object({
+  profile: indexerIdSchema,
+  profile_variants: z.record(indexerIdSchema, indexerIdSchema),
+  source_fact_refs: z.array(indexerCanonicalRefSchema),
+  template_variables: z.record(inspectorJsonSchema),
+  status: z.enum([
+    "available",
+    "unsupported",
+    "request-material",
+    "enrichment-unavailable",
+  ]),
+  reason_code: indexerIdSchema.optional(),
+}).strict().superRefine((value, context) => {
+  addDuplicateIssues(value.source_fact_refs, context, "source_fact_refs");
+  if (value.status === "available") {
+    if (value.source_fact_refs.length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "available inspector projection requires source facts",
+        path: ["source_fact_refs"],
+      });
+    }
+    if (Object.keys(value.template_variables).length === 0) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "available inspector projection requires template variables",
+        path: ["template_variables"],
+      });
+    }
+    if (value.reason_code !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "available inspector projection cannot carry an unavailable reason",
+        path: ["reason_code"],
+      });
+    }
+  } else if (value.reason_code === undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "unavailable inspector projection requires a reason code",
+      path: ["reason_code"],
+    });
+  }
+});
+
+const inspectorFactMaterializationSchema = z.object({
+  fact_ref: indexerCanonicalRefSchema,
+  payload: indexerInspectorFactPayloadSchema,
+}).strict();
+
+export type IndexerInspectorFactPayload = z.infer<
+  typeof indexerInspectorFactPayloadSchema
+>;
 
 export const indexerInspectorResultSchema = z.object({
   protocol: z.literal("context.indexer.inspector-result/v1"),
@@ -116,8 +187,11 @@ export const indexerInspectorResultSchema = z.object({
   unsupported_file_refs: z.array(indexerCanonicalRefSchema),
   diagnostic_codes: z.array(indexerIdSchema),
   evidence: indexerEvidenceAdapterResultSchema,
+  fact_payloads: z.array(inspectorFactMaterializationSchema),
   result_digest: indexerDigestSchema,
-}).strict();
+}).strict().superRefine((value, context) => {
+  addDuplicateIssues(value.fact_payloads.map((item) => item.fact_ref), context, "fact_payloads");
+});
 
 export type IndexerInspectorResult = z.infer<typeof indexerInspectorResultSchema>;
 
@@ -144,10 +218,7 @@ export type IndexerControlledProgramResult = z.infer<
 >;
 
 function validateProgramInput(value: unknown): IndexerProgramRunRequest {
-  const input = indexerProgramRunRequestSchema.parse(value);
-  return input.operation === "main-index"
-    ? validateIndexerMainRunRequest(input)
-    : validateIndexerMaterialAnswerRunRequest(input);
+  return validateIndexerMainRunRequest(indexerProgramRunRequestSchema.parse(value));
 }
 
 interface ControlledInput {
@@ -434,6 +505,10 @@ export function validateIndexerActivationResult(input: {
 
 export function buildIndexerInspectorRequest(input: ControlledInput & {
   input_view: IndexerParserFactView;
+  active_profiles: readonly {
+    id: string;
+    variants: Readonly<Record<string, string>>;
+  }[];
 }): IndexerInspectorRequest {
   const manifest = indexerProviderManifestSchema.parse(input.manifest);
   const inspector = manifest.authoring_inspector;
@@ -446,10 +521,42 @@ export function buildIndexerInspectorRequest(input: ControlledInput & {
   });
   const inputView = validateIndexerParserFactView(input.input_view);
   assertInputViewScope(invocation, inputView);
+  const activeProfiles = input.active_profiles.map((profile) => ({
+    id: profile.id,
+    variants: Object.fromEntries(
+      Object.entries(profile.variants).sort(([left], [right]) =>
+        compareIndexerCanonicalText(left, right)
+      ),
+    ),
+  })).sort((left, right) => compareIndexerCanonicalText(left.id, right.id));
+  const providedProfiles = new Set(manifest.provides.profiles);
+  for (const profile of activeProfiles) {
+    if (!providedProfiles.has(profile.id)) {
+      throw new TypeError(`inspector profile ${profile.id} is not provided by this layer`);
+    }
+    const extension = manifest.composition?.extensions.find((candidate) =>
+      candidate.profile === profile.id
+    );
+    const axes = extension?.variant_schema?.axes ?? [];
+    const axisById = new Map(axes.map((axis) => [axis.id, axis]));
+    for (const [axisId, value] of Object.entries(profile.variants)) {
+      const axis = axisById.get(axisId);
+      if (axis === undefined || !axis.values.includes(value)) {
+        throw new TypeError(`inspector profile ${profile.id} has an unsupported variant`);
+      }
+    }
+    const missing = axes.find((axis) =>
+      axis.required && profile.variants[axis.id] === undefined
+    );
+    if (missing !== undefined) {
+      throw new TypeError(`inspector profile ${profile.id} is missing variant ${missing.id}`);
+    }
+  }
   const base = {
     protocol: "context.indexer.inspector-request/v1" as const,
     invocation,
     input_view: inputView,
+    active_profiles: activeProfiles,
     output: inspector.output,
   };
   return indexerInspectorRequestSchema.parse({
@@ -467,6 +574,7 @@ export function validateIndexerInspectorRequest(value: unknown): IndexerInspecto
     protocol: request.protocol,
     invocation: request.invocation,
     input_view: request.input_view,
+    active_profiles: request.active_profiles,
     output: request.output,
   };
   if (
@@ -474,6 +582,13 @@ export function validateIndexerInspectorRequest(value: unknown): IndexerInspecto
     request.request_digest !== indexerProtocolDigest(base)
   ) {
     throw new TypeError("inspector request contract is invalid");
+  }
+  assertIndexerCanonicalOrder(
+    request.active_profiles.map((profile) => profile.id),
+    "active_profiles",
+  );
+  for (const profile of request.active_profiles) {
+    assertIndexerCanonicalOrder(Object.keys(profile.variants), `${profile.id}.variants`);
   }
   return request;
 }
@@ -492,7 +607,11 @@ function exactDerivedRefs(
 export function validateIndexerInspectorResult(input: {
   request: unknown;
   result: unknown;
-}): { result: IndexerInspectorResult; evidence: IndexerEvidenceAdapterResult } {
+}): {
+  result: IndexerInspectorResult;
+  evidence: IndexerEvidenceAdapterResult;
+  fact_payloads: IndexerInspectorResult["fact_payloads"];
+} {
   const request = validateIndexerInspectorRequest(input.request);
   const inputFileRefs = request.input_view.files.map((file) => file.file_ref);
   const result = indexerInspectorResultSchema.parse(input.result);
@@ -538,6 +657,45 @@ export function validateIndexerInspectorResult(input: {
   exactDerivedRefs(result.analyzed_file_refs, analyzed, "analyzed_file_refs");
   exactDerivedRefs(result.unsupported_file_refs, unsupported, "unsupported_file_refs");
   exactDerivedRefs(result.diagnostic_codes, diagnostics, "diagnostic_codes");
+  assertIndexerCanonicalOrder(
+    result.fact_payloads.map((item) => item.fact_ref),
+    "fact_payloads",
+  );
+  const evidenceFacts = new Map(
+    evidence.files.flatMap((file) => file.facts.map((fact) => [fact.fact_ref, fact] as const)),
+  );
+  if (evidenceFacts.size !== result.fact_payloads.length) {
+    throw new TypeError("inspector fact payloads must close every enrichment fact");
+  }
+  const inputFactRefs = new Set(
+    request.input_view.files.flatMap((file) => file.facts.map((fact) => fact.fact_ref)),
+  );
+  const activeProfiles = new Map(
+    request.active_profiles.map((profile) => [profile.id, profile.variants] as const),
+  );
+  for (const item of result.fact_payloads) {
+    const fact = evidenceFacts.get(item.fact_ref);
+    if (
+      fact === undefined ||
+      fact.payload_digest !== indexerProtocolDigest(item.payload)
+    ) {
+      throw new TypeError(`inspector fact payload does not match ${item.fact_ref}`);
+    }
+    const expectedVariants = activeProfiles.get(item.payload.profile);
+    if (expectedVariants === undefined) {
+      throw new TypeError("inspector projection targets an inactive profile");
+    }
+    for (const [axisId, value] of Object.entries(expectedVariants)) {
+      if (item.payload.profile_variants[axisId] !== value) {
+        throw new TypeError("inspector projection variant drifted from the active Registry profile");
+      }
+    }
+    for (const sourceFactRef of item.payload.source_fact_refs) {
+      if (!inputFactRefs.has(sourceFactRef)) {
+        throw new TypeError("inspector projection references a fact outside its input View");
+      }
+    }
+  }
   const expectedDigest = indexerProtocolDigest({
     protocol: result.protocol,
     request_digest: result.request_digest,
@@ -546,9 +704,10 @@ export function validateIndexerInspectorResult(input: {
     unsupported_file_refs: result.unsupported_file_refs,
     diagnostic_codes: result.diagnostic_codes,
     evidence: result.evidence,
+    fact_payloads: result.fact_payloads,
   });
   if (result.result_digest !== expectedDigest) {
     throw new TypeError("inspector Result digest is invalid");
   }
-  return { result, evidence };
+  return { result, evidence, fact_payloads: result.fact_payloads };
 }

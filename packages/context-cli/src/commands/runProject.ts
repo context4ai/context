@@ -3,17 +3,12 @@ import { Command, Option } from "commander";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { runProjectPhaseCommand } from "../project/run.js";
-import {
-  formatProseStructureBatchResult,
-  runProseStructureBatch,
-} from "../project/proseStructureBatch.js";
 import { collectProjectStatus } from "../project/status.js";
 import { findContextProjectRoot } from "../project/workspace.js";
 import {
   collectWorkflowAuthorityOption,
   mergedWorkflowAuthorities,
 } from "../project/workflow/workflowCommandOptions.js";
-import { bindWorkflowExecutionContext } from "../project/workflow/workflowExecutionContext.js";
 import {
   formatWorkflowRunResult,
   runWorkflowUntilBlockedOrComplete,
@@ -71,33 +66,7 @@ function assertUntilOptions(
   }
   const incompatible = [
     "list",
-    "previewExtractionBatch",
-    "previewDigest",
-    "indexUnit",
-    "itemKind",
-    "autoPromote",
-    "view",
-    "schema",
-    "validate",
-    "stage",
-    "confirm",
-    "input",
-    "tokenBudget",
-    "byteBudget",
-    "compact",
-    "pageSize",
-    "pageToken",
-    "readCursor",
-    "rule",
-    "source",
-    "query",
-    "collection",
-    "nodeType",
-    "chunk",
-    "span",
-    "range",
     "verbose",
-    "batchInput",
   ].filter((key) =>
     options[key] !== undefined && options[key] !== false
   );
@@ -108,102 +77,6 @@ function assertUntilOptions(
       { category: ErrorCategory.UserInputInvalid },
     );
   }
-}
-
-function assertBatchOptions(
-  phaseId: string | undefined,
-  options: Record<string, unknown>,
-): "validate" | "stage" {
-  if (phaseId !== undefined) {
-    throw new ContextError(ExitCode.UserError, "--batch-input cannot be combined with a phase id", {
-      category: ErrorCategory.UserInputInvalid,
-    });
-  }
-  const validate = options.validate === true;
-  const stage = options.stage === true;
-  if (validate === stage) {
-    throw new ContextError(ExitCode.UserError, "--batch-input requires exactly one of --validate or --stage", {
-      category: ErrorCategory.UserInputInvalid,
-    });
-  }
-  const incompatible = [
-    "list",
-    "previewExtractionBatch",
-    "previewDigest",
-    "indexUnit",
-    "itemKind",
-    "dryRun",
-    "autoPromote",
-    "until",
-    "view",
-    "schema",
-    "confirm",
-    "input",
-    "tokenBudget",
-    "byteBudget",
-    "compact",
-    "pageSize",
-    "pageToken",
-    "readCursor",
-    "rule",
-    "source",
-    "query",
-    "collection",
-    "nodeType",
-    "chunk",
-    "span",
-    "range",
-    "verbose",
-  ].filter((key) => options[key] !== undefined && options[key] !== false);
-  if (incompatible.length > 0) {
-    throw new ContextError(ExitCode.UserError, `--batch-input cannot be combined with: ${incompatible.join(", ")}`, {
-      category: ErrorCategory.UserInputInvalid,
-    });
-  }
-  return stage ? "stage" : "validate";
-}
-
-function alignRunOptions(
-  options: Record<string, unknown>,
-  managed: boolean,
-): NonNullable<ProjectRunInput["align"]> {
-  return {
-    ...(typeof options.view === "string" ? { view: options.view } : {}),
-    ...(options.schema === true ? { schema: true } : {}),
-    ...(options.validate === true ? { validate: true } : {}),
-    ...(options.stage === true ? { stage: true } : {}),
-    ...(options.confirm === true ? { confirm: true } : {}),
-    ...(managed ? { managed: true } : {}),
-    ...(typeof options.input === "string" ? { input: options.input } : {}),
-    ...(typeof options.tokenBudget === "string"
-      ? { tokenBudget: options.tokenBudget }
-      : {}),
-    ...(typeof options.byteBudget === "string"
-      ? { byteBudget: options.byteBudget }
-      : {}),
-    ...(options.compact === true ? { compact: true } : {}),
-    ...(typeof options.pageSize === "string"
-      ? { pageSize: options.pageSize }
-      : {}),
-    ...(typeof options.pageToken === "string"
-      ? { pageToken: options.pageToken }
-      : {}),
-    ...(typeof options.readCursor === "string"
-      ? { readCursor: options.readCursor }
-      : {}),
-    ...(typeof options.rule === "string" ? { rule: options.rule } : {}),
-    ...(typeof options.source === "string" ? { source: options.source } : {}),
-    ...(typeof options.query === "string" ? { query: options.query } : {}),
-    ...(typeof options.collection === "string"
-      ? { collection: options.collection }
-      : {}),
-    ...(typeof options.nodeType === "string"
-      ? { nodeType: options.nodeType }
-      : {}),
-    ...(typeof options.chunk === "string" ? { chunk: options.chunk } : {}),
-    ...(typeof options.span === "string" ? { span: options.span } : {}),
-    ...(typeof options.range === "string" ? { range: options.range } : {}),
-  };
 }
 
 function projectPhaseRunInput(input: {
@@ -221,27 +94,6 @@ function projectPhaseRunInput(input: {
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
-    ...(input.options.previewExtractionBatch === true ? { previewExtractionBatch: true } : {}),
-    ...(Array.isArray(input.options.previewPhase)
-      ? { previewPhaseIds: input.options.previewPhase.filter((value): value is string => typeof value === "string") }
-      : {}),
-    ...(typeof input.options.previewDigest === "string"
-      ? { previewDigest: input.options.previewDigest }
-      : {}),
-    ...(input.options.previewExtractionBatch === true
-      ? {
-          previewOutput: {
-            ...(typeof input.options.view === "string" ? { view: input.options.view } : {}),
-            ...(typeof input.options.tokenBudget === "string" ? { tokenBudget: input.options.tokenBudget } : {}),
-            ...(typeof input.options.byteBudget === "string" ? { byteBudget: input.options.byteBudget } : {}),
-            ...(typeof input.options.pageSize === "string" ? { pageSize: input.options.pageSize } : {}),
-            ...(typeof input.options.pageToken === "string" ? { pageToken: input.options.pageToken } : {}),
-            ...(typeof input.options.indexUnit === "string" ? { indexUnit: input.options.indexUnit } : {}),
-            ...(typeof input.options.itemKind === "string" ? { itemKind: input.options.itemKind } : {}),
-          },
-        }
-      : {}),
-    ...(input.options.autoPromote === true ? { autoPromote: true } : {}),
     ...(input.managed ? { managed: true } : {}),
     ...(input.workflowRevision === undefined
       ? {}
@@ -253,7 +105,6 @@ function projectPhaseRunInput(input: {
       ? { authorities: input.authorities }
       : {}),
     ...(input.options.verbose === true ? { verbose: true } : {}),
-    align: alignRunOptions(input.options, input.managed),
     format: input.format,
   };
 }
@@ -349,17 +200,6 @@ export function registerProjectRunCommand(
     .description("Inspect or run a declared project phase")
     .option("--list", "list declared phases")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
-    .addOption(new Option("--preview-extraction-batch").hideHelp())
-    .addOption(
-      new Option("--preview-phase <phase-id>")
-        .hideHelp()
-        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
-        .default([]),
-    )
-    .addOption(new Option("--preview-digest <digest>").hideHelp())
-    .addOption(new Option("--index-unit <id>").hideHelp())
-    .addOption(new Option("--item-kind <kind>").hideHelp())
-    .option("--auto-promote", "with a code-index extract phase, apply deterministic deltas, refresh close, and verify without review")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
       new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
@@ -368,27 +208,6 @@ export function registerProjectRunCommand(
     )
     .option("--until <condition>", "with --managed and no phase id, execute deterministic routes until blocked-or-complete")
     .option("--max-steps <n>", "maximum deterministic routes for --until", "25")
-    .option("--view <view>", "with align/compile phases, return evidence or context view")
-    .option("--schema", "with align phases, return the context.structure.v1 schema")
-    .option("--validate", "validate an align structure or deterministic compile projection")
-    .option("--stage", "stage an align structure or deterministically materialize a confirmed compile slot")
-    .option("--confirm", "with align phases, confirm and stage a draft structure after explicit user approval")
-    .option("--input <file>", "read payload YAML/JSON for one validate, stage, confirm, or input-consuming view operation")
-    .option("--batch-input <file>", "validate or stage multiple align structure payloads from one batch manifest")
-    .option("--token-budget <n>", "with align evidence views, limit approximate output tokens")
-    .option("--byte-budget <n>", "with align evidence views, limit evidence output bytes")
-    .option("--compact", "with align source-index, return a refs-only compact index")
-    .option("--page-size <n>", "with paged evidence, diagnostics, or semantic-rules views, limit page output")
-    .option("--page-token <token>", "with paged item or diagnostics views, continue pagination")
-    .option("--read-cursor <cursor>", "with paged text or semantic-rules views, continue line pagination")
-    .option("--rule <id>", "with semantic-rules view, read one required rule by id")
-    .option("--source <locator>", "with align evidence views, narrow to one document path or locator")
-    .option("--query <text>", "with align existing-knowledge view, match an approved title or stable ref")
-    .option("--collection <name>", "with align existing-knowledge view, filter by collection")
-    .option("--node-type <type>", "with align existing-knowledge view, filter by node type")
-    .option("--chunk <id>", "with align span-text/source-bundle, narrow to a reading chunk")
-    .option("--span <source-ref>", "with align span-text, read a canonical source span")
-    .option("--range <range>", "with align span-text and --source, read a line range")
     .option("--verbose", "include phase contracts and repeated source metadata in JSON output")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (
@@ -407,40 +226,6 @@ export function registerProjectRunCommand(
         ? rootOptions.workflowResourceReceipts
         : undefined;
       const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
-      if (options.previewExtractionBatch === true && phaseId !== undefined) {
-        throw new ContextError(ExitCode.UserError, "--preview-extraction-batch cannot be combined with a phase id", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (options.previewExtractionBatch !== true && (
-        options.previewDigest !== undefined ||
-        options.indexUnit !== undefined ||
-        options.itemKind !== undefined ||
-        (Array.isArray(options.previewPhase) && options.previewPhase.length > 0)
-      )) {
-        throw new ContextError(ExitCode.UserError, "--preview-phase, --preview-digest, --index-unit, and --item-kind require --preview-extraction-batch", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      if (typeof options.batchInput === "string") {
-        const operation = assertBatchOptions(phaseId, options);
-        const result = await runProseStructureBatch({
-          cwd,
-          batchInput: options.batchInput,
-          operation,
-          managed,
-        });
-        const bound = bindWorkflowExecutionContext(result, {
-          managed,
-          authorities,
-          ...(typeof rootOptions.workflowRevision === "string"
-            ? { revision: rootOptions.workflowRevision }
-            : {}),
-          ...(resourceReceiptsReference === undefined ? {} : { resourceReceiptsReference }),
-        });
-        process.stdout.write(formatProseStructureBatchResult(bound, format));
-        return;
-      }
       if (options.until !== undefined) {
         await runManagedUntil({
           cwd,

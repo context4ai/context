@@ -6,17 +6,6 @@ import {
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
 
-const indexerReadJsonSchema: z.ZodType<IndexerReadJson> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(indexerReadJsonSchema),
-    z.record(indexerReadJsonSchema),
-  ])
-);
-
 export type IndexerReadJson =
   | null
   | boolean
@@ -24,6 +13,41 @@ export type IndexerReadJson =
   | string
   | IndexerReadJson[]
   | { [key: string]: IndexerReadJson };
+
+function isIndexerReadJson(
+  value: unknown,
+  ancestors = new WeakSet<object>(),
+): value is IndexerReadJson {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object" || ancestors.has(value)) return false;
+  ancestors.add(value);
+  try {
+    if (Array.isArray(value)) {
+      for (let index = 0; index < value.length; index += 1) {
+        if (!(index in value) || !isIndexerReadJson(value[index], ancestors)) return false;
+      }
+      return true;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    return Object.values(value as Record<string, unknown>).every((item) =>
+      isIndexerReadJson(item, ancestors)
+    );
+  } finally {
+    ancestors.delete(value);
+  }
+}
+
+const indexerReadJsonSchema = z.custom<IndexerReadJson>(isIndexerReadJson, {
+  message: "must be finite JSON data",
+});
 
 const opaqueCursorSchema = z.string().min(1).max(4096);
 
@@ -340,6 +364,64 @@ export function indexerWorksetReadReceiptDigest(
   value: ReadReceiptPayload,
 ): string {
   return indexerProtocolDigest(readReceiptPayload(value));
+}
+
+export function buildIndexerCompleteWorksetReadReceipt(input: {
+  workset_digest: string;
+  read_kind: IndexerWorksetReadRequest["read_kind"];
+  items: readonly ReadItemPayload[];
+  page_size: number;
+}): IndexerWorksetReadReceipt {
+  const sortedItems = [...input.items]
+    .sort((left, right) => compareIndexerCanonicalText(left.ref, right.ref));
+  const refs = sortedUnique(
+    sortedItems.map((item) => item.ref),
+    "complete workset read items",
+  );
+  if (refs.length === 0) {
+    throw new TypeError("complete workset read receipt requires at least one item");
+  }
+  const request = buildIndexerWorksetReadRequest({
+    workset_digest: input.workset_digest,
+    read_kind: input.read_kind,
+    requested_refs: refs,
+    allowed_refs: refs,
+    page_size: input.page_size,
+  });
+  const readSet: z.infer<typeof readSetEntrySchema>[] = [];
+  const pagePayloadDigests: string[] = [];
+  for (let offset = 0; offset < sortedItems.length; offset += input.page_size) {
+    const items = sortedItems.slice(offset, offset + input.page_size).map((item) => {
+      const payload = readItemPayloadSchema.parse(item);
+      const projected = {
+        ...payload,
+        item_digest: indexerWorksetReadItemDigest(payload),
+      };
+      readSet.push({ ref: projected.ref, item_digest: projected.item_digest });
+      return projected;
+    });
+    const page: ReadPagePayload = {
+      protocol: "context.indexer.workset-read-response/v1",
+      request_digest: request.request_digest,
+      workset_digest: request.workset_digest,
+      read_kind: request.read_kind,
+      items,
+    };
+    pagePayloadDigests.push(indexerWorksetReadPagePayloadDigest(page));
+  }
+  const payload: ReadReceiptPayload = {
+    protocol: "context.indexer.workset-read-receipt/v1",
+    workset_digest: request.workset_digest,
+    request_digest: request.request_digest,
+    read_kind: request.read_kind,
+    read_set: readSet,
+    read_set_digest: indexerWorksetReadSetDigest(readSet),
+    page_payload_digests: pagePayloadDigests,
+  };
+  return indexerWorksetReadReceiptSchema.parse({
+    ...payload,
+    receipt_digest: indexerWorksetReadReceiptDigest(payload),
+  });
 }
 
 export function buildIndexerWorksetReadReceipt(input: {

@@ -392,9 +392,8 @@ verified or exact project-authorized program may use the `trusted-program` path,
 which is not an isolation claim. An untrusted program without a real sandbox is
 not executable.
 
-The program input remains the operation-discriminated
-`context.indexer.run-request/v1` (`main-index` or `material-answer`). Its output
-is `context.indexer.run-result/v1`, wrapped by
+The program input is `context.indexer.run-request/v2` with the single
+`main-index` operation. Its output is `context.indexer.run-result/v1`, wrapped by
 `context.indexer.controlled-program-result/v1` to bind the exact invocation and
 payload digest. Context still validates the operation-specific Result and
 recomputes mechanical gates independently.
@@ -412,9 +411,9 @@ program, instructions, templates, config, CLI/profile contracts and only
 `primary_resource_binding_digest`; a post-author resource cannot satisfy that
 schema.
 
-`context.indexer.main-workset/v1` digests its complete canonical payload. A
+`context.indexer.main-workset/v2` digests its complete canonical payload. A
 workset set permits only one author workset for an Indexer, owner cohort and
-group key. `context.indexer.main-transport-batch/v1` may carry several complete
+group key. `context.indexer.main-transport-batch/v2` may carry several complete
 worksets but intentionally has no batch identity, digest, page number or
 reader-facing name. Regrouping worksets for Host transport therefore cannot
 change an individual workset or Result identity.
@@ -429,17 +428,20 @@ same workset with the next authorized strategy. This path has no user Gate and
 does not consume profile-revision attempts; an exhausted strategy set routes
 to the CLI catalog fallback.
 
-Source and evidence are read through
-`context.indexer.workset-read-request/v1`. The stable request identity binds the
-current workset, read kind and exact authorized ref set. Cursor and page size
-are transport fields and do not enter that identity. Every response carries a
-digest of its canonical page payload; cursor fields are again excluded. The
-CLI closes a complete, acyclic cursor chain into
-`context.indexer.workset-read-receipt/v1`, requiring exact coverage of the
-requested refs. A main Result contains the canonically sorted receipt digest
-set, and operation validation compares it with the actual CLI-issued receipts.
-Changing a cursor, page size, call grouping or Host batch cannot manufacture a
-new logical unit such as `batch-1` or alter an Artifact identity.
+Context projects every source-specific fact, dependency and verified Provider
+fragment authorized for one main workset into the single
+`context.indexer.authorized-workset-view/v1` resource. The Agent reads that
+managed resource and does not construct source-specific reads, cursors or
+receipt fields. Internally, Context uses
+`context.indexer.workset-read-request/v1`: the stable request identity binds the
+current workset, read kind and exact authorized ref set, while cursor and page
+size remain transport-only. Every page carries a canonical payload digest, and
+the CLI closes the complete acyclic chain into
+`context.indexer.workset-read-receipt/v1` with exact coverage. The Host binds
+that CLI-issued receipt set to the main Result before operation validation;
+Provider-authored receipt values are ignored. Changing a cursor, page size,
+call grouping or Host batch cannot manufacture a new logical unit such as
+`batch-1` or alter an Artifact identity.
 
 Post-author composition uses its own
 `context.indexer.post-author-run-ledger/v1`; it never reuses primary main-run
@@ -515,7 +517,7 @@ derived under `knowledge/<collection>/` and never accepted from a Provider.
 
 Template Artifacts enter layout only after validated rendering. Only rendered
 Sections exist; an omitted optional projection does not create an empty
-Section, while a retained material gap remains a planned landing without
+Section, while a retained material gap remains unresolved without
 reader-visible placeholder content. Artifact Bundle purpose and `split_of`
 lineage are retained in the proposal. A proposal set rejects duplicate Node
 owners, Artifact identities, logical Section identities, Section placements
@@ -545,12 +547,10 @@ fan-out to an already approved Node, removing or renaming an Artifact,
 splitting/merging its declared lineage, moving a logical Section, or changing
 an approved collection/path is represented by a digest-bound layout change
 report and requires the human, non-delegable `confirm-layout-change` Gate.
-`context.indexer.layout-transition/v1` first validates an explicit
-no-planned-output state or a material-answer actualization whose digest and
-actual ArtifactRef/SectionRef all belong to the current proposal set; only
-then does it expose the conditional Gate. Replacing the proposal set makes the
-prior actualization stale. The legacy align Route remains available only until
-the workflow cutover; it is not an authority for the new Indexer protocol.
+`context.indexer.layout-transition/v1` binds the current proposal set and base
+projections before exposing the conditional Gate. The legacy align Route remains
+available only until the workflow cutover; it is not an authority for the new
+Indexer protocol.
 
 ## Explicit Result-bound Candidate compile
 
@@ -582,62 +582,24 @@ customization may be proposed only after the explicit
 `indexer-customization-required` outcome and its capability-gap proof; compile
 itself never invents one.
 
-## Material-answer dispatch, baseline, Review, and layout actualization
+## Material-gap recovery and the single authoring path
 
-`context.indexer.material-question-workset/v1` is built only by the CLI after a
-material-gap checkpoint. It binds the current requirement and registry digests,
-question contract and target inventory, source-input digests, exact question
-revision, predecessor ledger revision, authorized sources, and eligible answer
-Indexers. Eligibility is derived from the registry-enabled `material-answer`
-operation, an enricher binding, the primary Provider manifest, read scope, and
-the evidence-kind intersection; callers cannot add an eligible Indexer.
+Reconciliation emits unresolved material gaps when current authorized sources
+cannot satisfy a required question. `checkpoint-material-gaps` stores only the
+current unresolved set in Context runtime state under `.tmp`, with a revision
+for crash recovery and stale-write rejection. It does not persist answer text,
+source spans, approval receipts, or audit history into knowledge files.
 
-The CLI creates one `context.indexer.run-request/v1` per eligible answer Indexer.
-Its Provider composition fingerprint is recomputed from the answer Indexer,
-exact final Provider authority, and layer-composition view digest. The separate
-material-answer run ledger uses CAS transitions and content-addressed accepted
-records. A complete accepted empty Result is recovered without another dispatch;
-an interrupted running entry without its accepted record returns to pending.
-Before acceptance, every evidence claim must resolve through an exact current
-source-span read receipt, and unused or stale receipts are rejected.
+Newly captured Markdown, tool snapshots, or other authorized material re-enter
+the normal `main-index` operation. The next main Result either answers the
+question from current source or leaves the gap unresolved. There is no separate
+answer workset, answer-only Result, evidence Review, planned landing, or layout
+actualization. Users review the resulting knowledge Candidate once.
 
-A `material-answer` Result cannot move a retained gap directly to an approved
-state. Context first validates the exact workset, question revision, eligible
-Indexer, Provider fingerprint, source authority, canonical spans, evidence
-content digests, provenance selector and minimum item/origin counts. Only a
-passing candidate can produce
-`context.indexer.material-answer-baseline-report/v1`. Its fixed Review scope is
-`question-target-source-span-evidence-binding`; the strict schema has no field
-for approving a reader page, Artifact content or final knowledge candidate.
-
-`context.indexer.material-answer-review-decision/v1` binds that report, the
-candidate set, workset, question revision and binding digest. Applying an
-`approved` decision uses the workset's predecessor ledger revision as a CAS
-base, consumes that workset and records the decision digest in the canonical
-answer binding. A successor ledger revision does not make the consumed workset
-self-stale. A rejected, insufficient, forged or differently scoped decision
-cannot create `answer-approved` state.
-
-Layout uses an unapplied
-`context.indexer.material-answer-layout-proposal/v1`. Each planned or existing
-answer landing must map uniquely to an actual `node:`, `artifact:` or
-`section:` ref. Before creating a resolved actualization, Context recomputes
-`context.indexer.material-answer-evidence-compatibility/v1` from the retained
-canonical evidence and current question/source authority. A changed source set,
-origin, snapshot, kind, span, content digest, provenance rule or minimum count
-reopens the gap to `unresolved`. A missing or colliding landing remains
-`answer-approved`; rejecting or replacing a layout proposal invalidates its
-resolved mappings back to `answer-approved`.
-
-`context.indexer.material-answer-flow-status/v1` is the admission fact for the
-next stages. An unresolved blocking gap stops layout. An `answer-approved`
-blocking gap may enter layout but cannot consume a conditional layout Gate or
-enter the main Candidate Review. Those two admissions become true only when
-every blocking answer has a current actualization for the exact layout digest.
-Optional gaps remain reported but do not become blocking. Final close removes
-a resolved ledger entry only when the approved structure projection carries
-the same question, binding, actualized target and complete canonical evidence
-ref set.
+`audit-material-gap-state` recomputes the expected unresolved set without a
+write. Required gaps block close; optional gaps remain runtime diagnostics.
+Successful close writes only approved knowledge structure and clears completed
+runtime lifecycle state.
 
 ## Detector and inspector
 
@@ -660,12 +622,19 @@ payloads fail closed.
 `present`, `absent` or `unknown`; a present signal requires evidence. Context,
 not the detector, derives `matched`, `not-matched` or `indeterminate`.
 
-An authoring inspector consumes `context.indexer.inspector-request/v1` and
-returns `context.indexer.inspector-result/v1`. Its evidence payload is the
-shared `context.indexer.evidence-adapter-result/v1`. Inspector files are always
+An authoring inspector consumes `context.indexer.inspector-request/v1`, including
+the exact active Provider profiles and Registry variants, and returns
+`context.indexer.inspector-result/v1`. Its evidence payload is the shared
+`context.indexer.evidence-adapter-result/v1`; its `fact_payloads` carry only
+validated profile variants, source Fact refs, bounded template variables and a
+structured availability status. Context requires one payload for every
+enrichment fact, verifies each payload digest and source ref, rejects Registry
+variant drift, then adapts the values into the same internal Authorized Workset
+View projection source used by other inputs. Inspector files are always
 `enricher` plus `lightweight-evidence`; they cannot own baseline inventory or
 contribute a denominator. The Result must close the requested inventory and
-authorized source/module scope. Detector and inspector entries run only from
+authorized source/module scope. No Inspector protocol or technical identifier
+is exposed as a separate Agent input. Detector and inspector entries run only from
 the reverified content-addressed stage through the same empty-environment,
 no-shell, bounded JSON subprocess runner. Timeout, stdin/stdout/stderr overflow,
 invalid UTF-8/JSON, undeclared evidence and scope expansion are typed failures;

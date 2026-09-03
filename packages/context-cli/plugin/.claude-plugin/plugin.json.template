@@ -1,4 +1,0 @@
-{
-  "cutover_candidate": true,
-  "source": "plugins/context/.claude-plugin/plugin.json.template"
-}

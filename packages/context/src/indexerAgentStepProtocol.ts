@@ -7,6 +7,10 @@ import {
   type IndexerProgramRunResult,
 } from "./indexerProgramRunProtocol.js";
 import { indexerDigestSchema, indexerProtocolDigest } from "./indexerProtocolCommon.js";
+import {
+  validateIndexerWorksetReadReceipt,
+  type IndexerWorksetReadReceipt,
+} from "./indexerWorksetRead.js";
 
 export const indexerAgentStepInputSchema = z.object({
   protocol: z.literal("context.indexer.agent-step-input/v1"),
@@ -115,6 +119,7 @@ export function buildIndexerAgentStepResult(input: {
   step_input: unknown;
   instruction_payload_digest: string;
   run_result: unknown;
+  workset_read_receipts?: readonly unknown[];
   adapter: string;
   adapter_version: string;
   model?: string;
@@ -122,7 +127,13 @@ export function buildIndexerAgentStepResult(input: {
 }): IndexerAgentStepResult {
   const stepInput = validateIndexerAgentStepInput(input.step_input);
   const instructionPayloadDigest = indexerDigestSchema.parse(input.instruction_payload_digest);
-  const runResult = indexerProgramRunResultSchema.parse(input.run_result);
+  const runResult = input.workset_read_receipts === undefined
+    ? indexerProgramRunResultSchema.parse(input.run_result)
+    : bindIndexerProgramRunResultReadReceipts({
+        run_request: stepInput.run_request,
+        run_result: input.run_result,
+        workset_read_receipts: input.workset_read_receipts,
+      });
   assertRunResultCorrelation(stepInput.run_request, runResult);
   const receiptInput = {
     input_digest: stepInput.input_digest,
@@ -150,6 +161,40 @@ export function buildIndexerAgentStepResult(input: {
       instruction_payload_digest: instructionPayloadDigest,
       run_result: runResult,
     }),
+  });
+}
+
+export function bindIndexerProgramRunResultReadReceipts(input: {
+  run_request: unknown;
+  run_result: unknown;
+  workset_read_receipts: readonly unknown[];
+}): IndexerProgramRunResult {
+  const request = validateIndexerProgramRunRequest(input.run_request);
+  const receipts: IndexerWorksetReadReceipt[] = input.workset_read_receipts.map(
+    validateIndexerWorksetReadReceipt,
+  );
+  if (receipts.length === 0) {
+    throw new TypeError("main-index Agent Result requires a CLI-issued workset read receipt");
+  }
+  const receiptDigests = receipts.map((receipt) => {
+    if (receipt.workset_digest !== request.workset.workset_digest) {
+      throw new TypeError("main-index workset read receipt belongs to another workset");
+    }
+    return receipt.receipt_digest;
+  }).sort();
+  if (new Set(receiptDigests).size !== receiptDigests.length) {
+    throw new TypeError("main-index workset read receipts must be unique");
+  }
+  if (
+    input.run_result === null ||
+    typeof input.run_result !== "object" ||
+    Array.isArray(input.run_result)
+  ) {
+    throw new TypeError("Indexer Agent run Result must be an object");
+  }
+  return indexerProgramRunResultSchema.parse({
+    ...input.run_result,
+    workset_read_receipt_digests: receiptDigests,
   });
 }
 

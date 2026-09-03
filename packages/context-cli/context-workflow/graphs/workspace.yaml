@@ -202,18 +202,6 @@ nodes:
       - path: indexer.lifecycle_current
         equals: true
 
-  - id: resolve-review-identities
-    kind: action
-    reasonCode: route.review.identity-conflict
-    action: actions/reconcile-review-identities.yaml
-    satisfiedBy:
-      - path: review.identity_conflicts_present
-        exists: false
-    resources:
-      required:
-        - resources/procedures/knowledge-review.md
-        - resources/views/review-current.yaml
-
   - id: review-current-batch
     kind: gate
     reasonCode: route.review.decision-required
@@ -354,8 +342,7 @@ edges:
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
   - { from: capture-next, to: run-indexer-lifecycle }
-  - { from: run-indexer-lifecycle, to: resolve-review-identities }
-  - { from: resolve-review-identities, to: review-current-batch }
+  - { from: run-indexer-lifecycle, to: review-current-batch }
   - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
   - { from: apply-managed-review, to: close-approved-knowledge }
   - { from: close-approved-knowledge, to: choose-package-output }

@@ -37,7 +37,6 @@
   "scripts": {
     "build": "rm -rf dist && bun run ../build.ts src/cli.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && cp ../../LICENSE dist/LICENSE",
     "build:indexers": "bun run scripts/build-indexers.ts",
-    "report:semantic-source-ownership": "bun run scripts/report-semantic-source-ownership.ts",
     "build:workflow": "bun run scripts/build-workflow.ts",
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",
@@ -50,6 +49,16 @@
   "dependencies": {
     "@c4a/agent-graph": "0.3.0",
     "@c4a/context": "workspace:*",
+    "@c4a/extract": "workspace:*",
+    "@c4a/extract-contract": "workspace:*",
+    "@c4a/extract-go": "workspace:*",
+    "@c4a/extract-mdx": "workspace:*",
+    "@c4a/extract-proto": "workspace:*",
+    "@c4a/extract-rush": "workspace:*",
+    "@c4a/extract-sql": "workspace:*",
+    "@c4a/extract-style": "workspace:*",
+    "@c4a/extract-thrift": "workspace:*",
+    "@c4a/extract-ts": "workspace:*",
     "commander": "^11.0.0",
     "fast-xml-parser": "^5.10.1",
     "handlebars": "^4.7.8",
@@ -69,8 +78,6 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@c4a/core": "workspace:*",
-    "@c4a/extract": "workspace:*",
-    "@c4a/extract-ts": "workspace:*"
+    "@c4a/core": "workspace:*"
   }
 }

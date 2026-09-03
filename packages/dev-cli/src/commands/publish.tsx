@@ -25,10 +25,22 @@ export type PublishContext = {
 // Workspace packages whose runtime files must remain independently installed.
 // Most workspace dependencies are bundled into their consumer's JavaScript and
 // can be omitted from published metadata. context-cli is different: it loads
-// the @c4a/context package identity at runtime and copies SDK-owned docs and
-// package templates that cannot be embedded in cli.js.
+// the @c4a/context package identity and exact parser packages at runtime, and
+// copies SDK-owned docs and package templates that cannot be embedded in cli.js.
 const PUBLISHED_WORKSPACE_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
-  "context-cli": new Set(["@c4a/context"]),
+  "context-cli": new Set([
+    "@c4a/context",
+    "@c4a/extract",
+    "@c4a/extract-contract",
+    "@c4a/extract-go",
+    "@c4a/extract-mdx",
+    "@c4a/extract-proto",
+    "@c4a/extract-rush",
+    "@c4a/extract-sql",
+    "@c4a/extract-style",
+    "@c4a/extract-thrift",
+    "@c4a/extract-ts",
+  ]),
 };
 const LIBRARY_PACKAGE_DIRS = new Set([
   "core",

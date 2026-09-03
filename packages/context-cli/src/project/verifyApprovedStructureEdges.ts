@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { STRUCTURE_EDGE_CONFIDENCES, STRUCTURE_EDGE_TYPES } from "./proseAlignTypes.js";
+import { STRUCTURE_EDGE_CONFIDENCES, STRUCTURE_EDGE_TYPES } from "./structureEdgeTypes.js";
 import { validateCanonicalEvidenceSourceRef } from "./verifyCanonicalSourceRefs.js";
 import { isRecord } from "./verifyFrontmatter.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";

@@ -6,7 +6,6 @@ export const DEFAULT_INDEXER_REGISTRY_PATH = "src/indexers.yaml";
 
 export const INDEXER_SEMANTIC_OPERATIONS = [
   "main-index",
-  "material-answer",
 ] as const;
 
 export type IndexerSemanticOperation = typeof INDEXER_SEMANTIC_OPERATIONS[number];
@@ -87,6 +86,20 @@ export const indexerSemverSchema = z.string().regex(
 );
 export const indexerProtocolIdSchema = z.string().regex(
   /^[a-z][a-z0-9.-]*(?:\.[a-z][a-z0-9.-]*)*\/v[1-9]\d*$/u,
+);
+
+export const indexerCanonicalRefSchema = z.string().regex(
+  /^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#@+-]*$/u,
+);
+
+export const indexerProviderLayerRefSchema = indexerCanonicalRefSchema.refine(
+  (value) => !value.includes("#composer:"),
+  "Provider layer ref cannot contain a composer suffix",
+);
+
+export const indexerComposerRefSchema = indexerCanonicalRefSchema.refine(
+  (value) => /#composer:[a-z0-9][a-z0-9._/-]*$/u.test(value),
+  "composer ref must end with #composer:<id>",
 );
 
 export function isPortableIndexerPath(value: string): boolean {

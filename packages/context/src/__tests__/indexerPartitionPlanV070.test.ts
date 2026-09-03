@@ -69,7 +69,7 @@ function workset(): IndexerMainPartitionWorkset {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_subject_key: {
@@ -168,6 +168,25 @@ describe("PartitionPlan authority and closure", () => {
     expect(indexerPartitionGroupProjectionDigest(plan, "component:button")).toMatch(
       /^sha256:/,
     );
+  });
+
+  test("allows a complete semantic partition when the requirement has no questions", () => {
+    const currentWorkset = workset();
+    currentWorkset.reader_question_refs = [];
+    currentWorkset.allowed_question_target_refs = [];
+    const plan = completePlan(currentWorkset);
+    plan.reader_question_refs = [];
+    plan.groups[0]!.reader_question_refs = [];
+    plan.groups[0]!.question_target_bindings = [];
+    rehash(plan);
+    expect(validateIndexerPartitionPlan({
+      plan,
+      workset: currentWorkset,
+      canonical_inventory_members: INVENTORY,
+      authorized_source_refs: [currentWorkset.source_ref],
+      authorized_strategies: AUTHORIZED_STRATEGIES,
+      required_question_target_refs: [],
+    })).toEqual(plan);
   });
 
   test("rejects incomplete disposition closure and inconsistent group projection", () => {

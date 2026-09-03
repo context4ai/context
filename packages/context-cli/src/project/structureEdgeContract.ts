@@ -1,4 +1,4 @@
-import { STRUCTURE_EDGE_CONFIDENCES, STRUCTURE_EDGE_TYPES } from "./proseAlignTypes.js";
+import { STRUCTURE_EDGE_CONFIDENCES, STRUCTURE_EDGE_TYPES } from "./structureEdgeTypes.js";
 
 export interface StructureEdgeContractResult {
   validationScope: "structure";

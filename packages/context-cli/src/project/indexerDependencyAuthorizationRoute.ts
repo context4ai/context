@@ -57,8 +57,6 @@ function dependencyGateAction(input: {
       ...input.source,
       input: input.gateInput as unknown as JsonValue,
     },
-    node: "authorize-indexer-dependencies",
-    hasStructureBatch: false,
     revision: input.revision,
     authorities: [],
   });

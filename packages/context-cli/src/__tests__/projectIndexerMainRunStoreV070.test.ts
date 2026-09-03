@@ -94,7 +94,7 @@ function workset(requirementSetDigest = digest("2")): IndexerMainPartitionWorkse
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("9"),
@@ -189,7 +189,7 @@ function fixture(requirementSetDigest = digest("2")) {
     },
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("1"),
-      parser_dependency_fingerprint: digest("2"),
+      source_dependency_fingerprint: current.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("3"),
       metric_set_digest: digest("4"),
@@ -280,8 +280,10 @@ describe("project main Indexer runtime store", () => {
       workset_digest: current.current.workset_digest,
     })).rejects.toThrow(/pending or stale/);
     expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_CURRENT_PATH))).toBe(true);
-    expect(await readdir(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "results"))).toHaveLength(1);
-    expect(await readdir(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "receipts"))).toHaveLength(1);
+    expect(await readdir(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "accepted"))).toHaveLength(1);
+    expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "ledgers"))).toBe(false);
+    expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "results"))).toBe(false);
+    expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "receipts"))).toBe(false);
   });
 
   test("does not report completion after the local accepted cache is removed", async () => {

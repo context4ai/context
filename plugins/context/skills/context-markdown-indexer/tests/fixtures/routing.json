@@ -146,6 +146,128 @@
           ]
         }
       ]
+    },
+    {
+      "id": "anonymous-product-intent",
+      "profile": "product-requirements",
+      "source_role": "authoritative-document",
+      "density_mode": "meso",
+      "candidate_signal": "coherent-product-outcome",
+      "candidate_resolution": "dismiss-with-rationale",
+      "artifacts": [{
+        "artifact_id": "product-intent",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "outcome", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "product-requirements", "reader_goal": "understand-product-intent", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-public-api-contract",
+      "profile": "public-api-reference",
+      "source_role": "authoritative-document",
+      "density_mode": "meso",
+      "candidate_signal": "contract-and-policy-boundaries",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [
+        { "artifact_id": "api-reference", "artifact_kind": "content", "boundary_decision": "promote-reader-artifact", "sections": [{ "section_key": "operations", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "public-api-reference", "reader_goal": "look-up-public-contract", "artifact_kind": "content" }] },
+        { "artifact_id": "contract-policy", "artifact_kind": "content", "boundary_decision": "promote-reader-artifact", "sections": [{ "section_key": "compatibility", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "public-contract-policy", "reader_goal": "follow-public-contract-policy", "artifact_kind": "content" }] }
+      ]
+    },
+    {
+      "id": "anonymous-operational-runbook",
+      "profile": "runbook",
+      "source_role": "operational-document",
+      "density_mode": "micro",
+      "candidate_signal": "ordered-recovery-task",
+      "candidate_resolution": "keep-unresolved",
+      "artifacts": [{
+        "artifact_id": "recovery-procedure",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "recover", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "runbook", "reader_goal": "operate-or-recover-system", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-support-answers",
+      "profile": "faq-support",
+      "source_role": "supporting-document",
+      "density_mode": "micro",
+      "candidate_signal": "independent-reader-question",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [{
+        "artifact_id": "support-answer",
+        "artifact_kind": "content",
+        "boundary_decision": "promote-reader-artifact",
+        "sections": [{ "section_key": "answer", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "faq-support", "reader_goal": "resolve-reader-question", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-standard-policy",
+      "profile": "standard-policy",
+      "source_role": "authoritative-document",
+      "density_mode": "single-pass",
+      "candidate_signal": "single-normative-scope",
+      "candidate_resolution": "dismiss-with-rationale",
+      "artifacts": [{
+        "artifact_id": "policy",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "requirements", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "standard-policy", "reader_goal": "follow-standard-or-policy", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-architecture-decision",
+      "profile": "decision-record",
+      "source_role": "decision-record",
+      "density_mode": "single-pass",
+      "candidate_signal": "decision-with-tradeoffs",
+      "candidate_resolution": "dismiss-with-rationale",
+      "artifacts": [{
+        "artifact_id": "decision",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "tradeoffs", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "decision-record", "reader_goal": "understand-decision-and-tradeoffs", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-incident-learning",
+      "profile": "incident-review",
+      "source_role": "operational-document",
+      "density_mode": "macro",
+      "candidate_signal": "timeline-and-remediation",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [{
+        "artifact_id": "incident-review",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "learning", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "incident-review", "reader_goal": "learn-from-incident", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-validation-record",
+      "profile": "test-validation",
+      "source_role": "supporting-document",
+      "density_mode": "meso",
+      "candidate_signal": "acceptance-result",
+      "candidate_resolution": "keep-unresolved",
+      "artifacts": [{
+        "artifact_id": "validation",
+        "artifact_kind": "content",
+        "boundary_decision": "retain-section-group",
+        "sections": [{ "section_key": "result", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "test-validation", "reader_goal": "verify-behavior-or-acceptance", "artifact_kind": "content" }]
+      }]
+    },
+    {
+      "id": "anonymous-release-migration",
+      "profile": "release-migration-guide",
+      "source_role": "authoritative-document",
+      "density_mode": "macro",
+      "candidate_signal": "release-and-migration-tasks",
+      "candidate_resolution": "accept-correction",
+      "artifacts": [
+        { "artifact_id": "release-change", "artifact_kind": "content", "boundary_decision": "promote-reader-artifact", "sections": [{ "section_key": "change", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "release-guide", "reader_goal": "understand-release-change", "artifact_kind": "content" }] },
+        { "artifact_id": "migration-task", "artifact_kind": "content", "boundary_decision": "promote-reader-artifact", "sections": [{ "section_key": "steps", "owner_indexer_id": "anonymous-markdown-indexer", "document_kind": "migration-guide", "reader_goal": "complete-migration", "artifact_kind": "content" }] }
+      ]
     }
   ]
 }

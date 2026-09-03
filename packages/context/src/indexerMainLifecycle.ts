@@ -15,8 +15,9 @@ import {
   type IndexerMainRunResult,
 } from "./indexerMainRunProtocol.js";
 import {
+  indexerPartitionGroupBindingDigest,
   indexerPartitionGroupProjectionDigest,
-  indexerPartitionPlanBindingDigest,
+  indexerPartitionGroupQuestionTargetInventoryDigest,
   validateIndexerPartitionPlan,
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
@@ -167,10 +168,14 @@ export function buildIndexerMainAuthorWorksets(input: {
         profile_contract_digest: workset.profile_contract_digest,
         subject_key_schema_digest: workset.subject_key_schema_digest,
         source_scope_digest: workset.source_scope_digest,
-        parser_contract_digest: workset.parser_contract_digest,
+        source_binding_digest: context.group_dependency_view_digest,
         primary_resource_binding_digest: workset.primary_resource_binding_digest,
-        question_target_inventory_digest: workset.question_target_inventory_digest,
-        partition_plan_binding_digest: indexerPartitionPlanBindingDigest(plan),
+        question_target_inventory_digest:
+          indexerPartitionGroupQuestionTargetInventoryDigest(plan, group.group_key),
+        partition_plan_binding_digest: indexerPartitionGroupBindingDigest(
+          plan,
+          group.group_key,
+        ),
         group_key: group.group_key,
         logical_unit_ref: group.logical_unit_ref,
         member_ids_digest: indexerProtocolDigest({ member_ids: group.member_ids }),

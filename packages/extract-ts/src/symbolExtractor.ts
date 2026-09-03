@@ -10,10 +10,35 @@ import {
 } from "./ecmaScriptLanguage.js";
 import { loadTsConfigPathResolver } from "./tsconfigPaths.js";
 
+const relationIdentity = (relation: RelationInfo): string => JSON.stringify([
+  relation.type,
+  relation.from,
+  relation.to,
+  relation.isExternal,
+  relation.grounding,
+  relation.confidence,
+  relation.source,
+  relation.line ?? null,
+]);
+
+const uniqueRelations = (relations: readonly RelationInfo[]): RelationInfo[] => {
+  const seen = new Set<string>();
+  return relations.filter((relation) => {
+    const identity = relationIdentity(relation);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+};
+
 export const extractSymbols = async (
   entries: EntryFile[],
   fs: FileSystem,
-  options: { packageInfo: PackageInfo; pluginId: string },
+  options: {
+    packageInfo: PackageInfo;
+    pluginId: string;
+    analysisPaths?: readonly string[];
+  },
 ): Promise<ExtractionResult> => {
   const resolver = await loadTsConfigPathResolver(fs);
   const exportedSymbols = [];
@@ -22,18 +47,23 @@ export const extractSymbols = async (
   const filePaths = new Set<string>();
   const exportedDeclarationKeys = new Set<string>();
   const analyses = new Map<string, FileAnalysis>();
+  const analysisScope = options.analysisPaths === undefined
+    ? null
+    : new Set(options.analysisPaths);
+  const isInScope = (path: string) => analysisScope === null || analysisScope.has(path);
 
   for (const entry of entries) {
     const traced = await traceExports(entry.path, fs, resolver);
-    traced.files.forEach((filePath) => filePaths.add(filePath));
+    traced.files.filter(isInScope).forEach((filePath) => filePaths.add(filePath));
 
-    for (const filePath of traced.files) {
+    for (const filePath of traced.files.filter(isInScope)) {
       if (!analyses.has(filePath)) {
         analyses.set(filePath, await analyzeFile(filePath, fs, resolver));
       }
     }
 
     for (const tracedExport of traced.exports) {
+      if (!isInScope(tracedExport.declarationFile)) continue;
       const analysis = analyses.get(tracedExport.declarationFile);
       const declaration = analysis?.declarations.get(tracedExport.localName);
       if (!declaration) continue;
@@ -47,6 +77,13 @@ export const extractSymbols = async (
         name: tracedExport.exportedName,
         visibility: Visibility.Exported,
       });
+    }
+  }
+
+  for (const filePath of [...(analysisScope ?? [])].sort()) {
+    filePaths.add(filePath);
+    if (!analyses.has(filePath)) {
+      analyses.set(filePath, await analyzeFile(filePath, fs, resolver));
     }
   }
 
@@ -92,6 +129,7 @@ export const extractSymbols = async (
       relations.push(createRelation(EdgeType.OfType, sym.name, propsTypeName, false, sym.line));
     }
   }
+  const deduplicatedRelations = uniqueRelations(relations);
 
   const files = [...filePaths]
     .sort()
@@ -127,7 +165,7 @@ export const extractSymbols = async (
     package: options.packageInfo,
     files,
     symbols,
-    relations,
+    relations: deduplicatedRelations,
     coverage: {
       tier: EXTRACT_TS_COVERAGE_TIER,
       capabilities: [...EXTRACT_TS_CAPABILITIES],
@@ -139,7 +177,7 @@ export const extractSymbols = async (
       lines: files.reduce((sum, file) => sum + file.lines, 0),
       exportedSymbols: exportedSymbols.length,
       internalSymbols: internalSymbols.length,
-      relations: relations.length,
+      relations: deduplicatedRelations.length,
     },
   };
 };

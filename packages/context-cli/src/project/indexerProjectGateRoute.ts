@@ -94,8 +94,6 @@ function projectGateAction(input: {
       ...input.source,
       input: input.gateInput as unknown as JsonValue,
     },
-    node: "confirm-indexer-project",
-    hasStructureBatch: false,
     revision: input.revision,
     authorities: [],
   });

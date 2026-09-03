@@ -56,7 +56,13 @@ export type {
 } from "./indexerToolSnapshot.js";
 export * from "./indexerControlledInvocation.js";
 export * from "./indexerControlledProgram.js";
+export * from "./indexerInspectorWorksetProjection.js";
+export * from "./indexerEvidenceAdapterAuthorityMerge.js";
+export * from "./indexerParserCapabilityCatalog.js";
+export * from "./indexerParserDependencyIntent.js";
+export * from "./indexerParserExecutionPlan.js";
 export * from "./indexerParserFactView.js";
+export * from "./indexerAuthorizedWorksetView.js";
 export * from "./indexerCustomizationDraft.js";
 export * from "./indexerProjectProposal.js";
 export * from "./indexerProgramExecutionAuthorization.js";

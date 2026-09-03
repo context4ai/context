@@ -11,24 +11,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import YAML from "yaml";
 import { invokeCliInDir, runCliInDir } from "./projectBuildVerifyV060Helpers.js";
-import { buildIndexerReleaseCapabilityManifest } from
-  "../project/indexerReleaseCapabilities.js";
 
 const INTEGRITY = `sha256:${"a".repeat(64)}`;
 const REPOSITORY_ROOT = resolve(import.meta.dir, "../../../..");
 
 function currentReleaseBundledSkills(): string[] {
-  const packageManifest = JSON.parse(readFileSync(
-    join(REPOSITORY_ROOT, "packages/context-cli/package.json"),
-    "utf8",
-  )) as { version: string };
-  const capabilities = buildIndexerReleaseCapabilityManifest(packageManifest.version);
-  return [
-    ["context-code-indexer", "code-indexer"],
-    ["context-markdown-indexer", "markdown-indexer"],
-  ].filter(([, capability]) =>
-    capabilities.capabilities.find((entry) => entry.id === capability)?.state === "ready"
-  ).map(([skill]) => skill!);
+  return ["context-code-indexer", "context-markdown-indexer"];
 }
 
 function requirement(readerGoals = ["understand"]) {
