@@ -1,7 +1,0 @@
-schema: agent-graph.action.v1
-id: override-index-profile-audit
-runner: command
-effect: write
-command: context indexer override-index-profile-audit --input .tmp/agent-payloads/indexer-profile-override-decision.json --format json
-inputSchema: schemas/indexer-profile-override-decision.schema.json
-outputSchema: schemas/indexer-profile-override-result.schema.json

@@ -42,11 +42,8 @@ managed work, or no further review already resolves this choice.
 Use the user's explicit language choice when present; otherwise pass `zh-CN`
 for a Chinese conversation and `en` for an English conversation. Pass
 `project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
-requested that initialization choice. New workspaces enable conservative
-document compilation optimization by default. Pass `--no-optimize-docs` only
-when the user explicitly asks to disable it during initialization. Pass
-`--managed` only after the user explicitly authorizes fully managed operation
-in this conversation.
+requested that initialization choice. Pass `--managed` only after the user
+explicitly authorizes fully managed operation in this conversation.
 
 If the `context` process itself cannot start because the command is missing
 (`ENOENT`, or shell exit 127 explicitly identifying `context` as the missing
@@ -75,23 +72,18 @@ Execute only `next_action.command` returned by `context entry`:
   init`, enter the project root, read the generated `AGENTS.md`, and run this
   entry again.
 
-If the user explicitly asks to correct or revise an existing approved or built
-knowledge page, first let `context entry` relocate into the existing workspace
-and evaluate its current Route once. Resolve a blocking workspace diagnostic,
-evidence-maintenance action, or already-pending Review batch first; these may
-change the approved baseline. Before continuing unrelated capture, extraction,
-package configuration, or build work, start the correction with:
+If the user asks to correct a current Candidate before approval, first let
+`context entry` relocate into the workspace and evaluate its current Route.
+Start the correction with:
 
 ```bash
-context revise "<the user's page title, approved path, ViewRef, or wording>" --format json
+context revise "<candidate title, path, or id>" --instruction "<requested correction>" --format json
 ```
 
-When the target is unique, run the returned status command and follow
-`route.document-revision.requested`. When candidates are returned, select one
-only if the conversation identifies it uniquely; otherwise ask which page the
-user means. Never edit the approved base page or `dist/` for this operation.
-After the Route validates the revision, continue normally: Context will offer
-the package build when the correction makes its output stale.
+When the target is unique, Context invalidates only its derived outputs and
+reopens the owning Author workset. Run the returned status command and follow
+the current Route. If the target is ambiguous, ask which Candidate the user
+means. Never edit `knowledge/`, `dist/`, or create a side-channel revision page.
 
 ### Conversation modes
 
@@ -102,24 +94,6 @@ before initialization. For an existing workspace, run `context debug enable`
 before workflow evaluation. Debugging records traces below
 `.tmp/context-runtime/debug/` but does not grant workflow authority or provide
 source evidence.
-
-Document optimization is enabled by default for newly initialized workspaces.
-It performs source-constrained editorial revision: the CLI identifies
-readability and knowledge-value signals, and the Agent may keep, repair,
-reshape, or safely omit content only inside its existing source Section. It
-must preserve facts, link targets, images, code, numbers, identifiers, and
-source evidence. Approved pages remain source-faithful; only changed full-page
-revisions are stored beside them as `knowledge/**/*__revision.md`. Default
-knowledge discovery excludes those reserved sidecars, and internal editorial
-audit state is not included in package output.
-
-For an existing workspace, respect its current `package.json` setting. Run
-`context optimize-docs enable` or `context optimize-docs disable` only when the
-user explicitly changes that preference. If initialization is required and the
-user opts out, pass `--no-optimize-docs` through `context entry`; otherwise let
-the default initialization command enable it.
-Follow the resulting Route instead of editing approved knowledge or package
-output by hand.
 
 For explicitly authorized fully managed operation, use:
 
@@ -140,11 +114,11 @@ that returned Route; never reconstruct a command from an earlier step.
 
 Code knowledge is published under `codeindex`. Context mechanically audits each
 module's input analysis, stable boundaries, facts, explanation, evidence scope,
-and page shape without producing a total score. In fully managed operation,
-follow returned repair actions automatically; after three failed revisions of
-the same module problem, stop at the one aggregated human-guidance Gate. If a
-legacy workspace returns `route.extract.codeindex-migration-required`, execute
-only its migration command; do not rename `codegraph` paths manually.
+and page shape without producing a total score. Blocking mechanical failures
+reopen the owning Author or Composer workset; advisory metrics remain warnings
+and do not create a retry ledger or override Gate. If a legacy workspace returns
+`route.extract.codeindex-migration-required`, execute only its migration
+command; do not rename `codegraph` paths manually.
 
 ### Discover Indexer Providers before selection
 
@@ -157,15 +131,11 @@ default, six-level customization ladder, upgrade conflict handling, debugging
 commands, and the exit condition for each level. Do not replace it with a
 remembered or host-specific workflow.
 
-When the current Route starts a new Code or Markdown indexing task, run this
-read-only command once before creating or changing any Provider registry entry:
-
-```bash
-context indexer catalog --format json
-```
-
-Report the returned CLI-bundled entry Skills together with every other Indexer
-Skill already visible through the current host. The conversational report must
+When the current Route starts a new Code or Markdown indexing task, its
+`configure-indexer-providers` Action input already contains the exact applied
+requirements and CLI-bundled Provider catalog. Report those bundled entries
+together with every other Indexer Skill already visible through the current
+host. The conversational report must
 include each Skill name, readable exact version when available, and source type
 (CLI-bundled community, workspace, installed plugin, or authorized marketplace
 result). When the host already exposes an exact Skill root or `SKILL.md` path,
@@ -179,9 +149,7 @@ unavailable rather than guessing it.
 Group observations with the same Skill name and exact version into one
 conversational item and list all observed source types on that item. An
 installed projection of an identical CLI-bundled identity is not a second
-Provider. Keep different versions separate. The route input still preserves
-each distinct source observation as its own `visible_skills` entry because
-`source_type` is singular; never use source count or discovery order as
+Provider. Keep different versions separate; never use source count or discovery order as
 selection precedence. Do not search arbitrary directories, infer host cache
 paths, install a plugin, or query a marketplace unless the user separately
 authorizes it. Keep this discovery report only in the conversation: do not
@@ -190,36 +158,23 @@ write it to `src/`, `package.json`, lifecycle state, receipts, audit output, or
 new indexing task, a changed host-visible Skill set, or an explicit diagnostic
 request.
 
-After the requirements are applied, author one
-`context.indexer.provider-route-input/v1` payload whose `registry` preserves
-the applied `requirements` block exactly and whose `visible_skills` contains
-only the just-reported path-free identities. Route it before any Host resolves
-or reads an external Provider:
+Return only `stage: provider-selection`, the non-CLI
+`host_visible_skills`, and the selected semantic `indexers` through the exact
+`context action complete-current` command returned by the Route. The CLI owns
+construction of the full registry payload, fallback/conflict checks, static
+validation, Provider resolution and staging, final validation, and atomic
+application of `src/indexers.yaml`. Do not call their low-level commands as a
+second production workflow.
 
-```bash
-context indexer route-indexer-provider-selection --input <payload.yaml-or-json> --format json
-```
-
-On `community-fallback-required`, retry with the applicable CLI-bundled profile
-and set `community_fallback_attempted: true`. Read-scope overlap is allowed, but
-an exact primary owner-cell conflict must be resolved explicitly; do not use
-array or discovery order as precedence. If fallback leaves a required owner
-cell uncovered, preserve the returned `capability_gap_proof`. Only the Route's
-following `propose-indexer-customization` Agent Action may turn that exact proof
-into a dependency-free minimal `extend` draft; do not weaken the requirement,
-write source, add dependencies, or claim the draft is applied.
-
-Only `selection-validation-required` returns a
-`selection_proposal_input`. Pass that exact object to:
-
-```bash
-context indexer validate-indexer-selection-proposal --input <payload.yaml-or-json> --format json
-```
-
-Use only the returned `next_provider_requests` for resolution. A successful
-static report does not authorize materialization, installation, execution, or
-writing the proposal into `src/indexers.yaml`; continue through the Route's
-resolver, staging, final validation, confirmation, and apply Actions.
+If a selected external Provider needs Host resolution, the next current Route
+contains one `context.resolve-indexer-provider/v1` Host Action and its exact
+request. Invoke that Host Action once, then submit
+`stage: provider-resolution` with the returned Host result through the Route's
+`complete-current` command. If the Bundle carries a non-allowlisted program,
+the following current Route presents the existing program-execution Gate; wait
+for its user/session-authority decision and submit that decision through
+`complete-current`. A recovered `provider-finalization` Route consumes
+only its fixed Action input; it must not resolve or install the Provider again.
 
 ### Follow the current Route
 
@@ -227,8 +182,12 @@ Treat `workflow.current` as the current-step authority:
 
 1. Read every `resources.required` item whose `read_state` is `read-required`.
    Read a returned `path` completely, or execute a returned resource `command`
-   and read its complete output file. Materializing a resource is not reading
-   it. Keep the merged receipts only in this conversation and submit them with
+   and read its complete output file. For a current Indexer Partition, Author,
+   Composer or structure-review Route, read the materialized files and then use
+   the Route's immediate completion command; do not create or submit a read
+   receipt. Other workflow resources may still require the returned receipt
+   command. Materializing a resource is not reading it. Keep those receipts only
+   in this conversation and submit them with
    the exact returned `context status --resource-receipts @<file>` command. Use
    `after_read_receipts` only after the full resource has been read. The exact
    `resources.after_read.command` already returns the re-evaluated

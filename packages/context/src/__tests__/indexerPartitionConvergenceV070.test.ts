@@ -186,7 +186,6 @@ describe("partition strategy convergence", () => {
       decision: "retry-required",
       outcome: "partial",
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
       next_strategy_attempt: {
         strategy_order: 1,
         strategy_ref: SECOND_STRATEGY,

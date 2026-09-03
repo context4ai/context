@@ -26,7 +26,6 @@ import {
 } from
   "../project/indexerWorksetEvidenceProjection.js";
 import {
-  consumeIndexerWorksetViewHostResult,
   materializeIndexerWorksetViewHostAction,
   prepareProjectIndexerWorksetViewMaterialization,
 } from "../project/indexerWorksetViewMaterialization.js";
@@ -303,26 +302,39 @@ describe("0.7.4 Indexer workset evidence projection", () => {
       adapter: "context-cli",
       adapterVersion: "0.7.4",
     });
-    const consumed = await consumeIndexerWorksetViewHostResult({
-      request: worksetView.request,
-      run_request: runRequest,
-      result: host.result,
-      read_receipt: host.workset_read_receipt,
-      managed_output: host.managed_output,
-    });
-
-    expect(consumed.projection.view.items.filter((item) =>
+    expect(worksetView.projection.view.items.filter((item) =>
       item.category === "document"
     )).toHaveLength(2);
-    expect(consumed.projection.view.items.find((item) =>
+    expect(worksetView.projection.view.items.find((item) =>
       item.category === "index-requirement"
     )?.value).toMatchObject({
       id: "documentation",
       reader_goals: ["understand-system"],
     });
-    expect(JSON.stringify(consumed.projection.view)).toContain("guide/overview.md");
-    expect(JSON.stringify(consumed.projection.view)).toContain("Authorized evidence.");
-    expect(JSON.stringify(consumed.projection.view)).toContain("Not selected.");
+    const projectedDocuments = worksetView.projection.view.items.filter((item) =>
+      item.category === "document"
+    );
+    expect(JSON.stringify(projectedDocuments)).toContain("guide/overview.md");
+    expect(projectedDocuments.map((item) => item.value)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "guide.md",
+          content_path: join(evidence.index.materialized_at, "guide.md"),
+          outline: ["Guide"],
+        }),
+        expect.objectContaining({
+          path: "private(deprecated).md",
+          content_path: join(evidence.index.materialized_at, "private(deprecated).md"),
+          outline: ["Private"],
+        }),
+      ]),
+    );
+    expect(projectedDocuments.every((item) =>
+      !Object.prototype.hasOwnProperty.call(item.value, "markdown")
+    )).toBe(true);
+    expect(host.result.output).toMatchObject({
+      resource: { digest: host.managed_output.digest },
+    });
     await expect(buildCapturedDocumentWorksetViewSource({
       projectRoot: root,
       request: runRequest,
@@ -385,8 +397,11 @@ describe("0.7.4 Indexer workset evidence projection", () => {
     expect(projected.items[0]!.value).toMatchObject({
       source_ref: "file:docs",
       path: "guide.md",
-      markdown: "# Public contract\n\nDocumented API and usage.\n",
+      content_path: join(binding.evidence.index.materialized_at, "guide.md"),
+      content_hash: binding.evidence.index.documents[0]!.content_hash,
+      outline: ["Public contract"],
     });
+    expect(projected.items[0]!.value).not.toHaveProperty("markdown");
 
     await expect(buildCapturedDocumentEnrichmentWorksetViewSource({
       projectRoot: root,

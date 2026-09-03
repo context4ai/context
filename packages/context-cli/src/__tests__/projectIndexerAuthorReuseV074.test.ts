@@ -7,30 +7,25 @@ import {
   buildIndexerArtifactBundle,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
-  buildIndexerWorksetReadReceipt,
-  buildIndexerWorksetReadRequest,
-  buildIndexerWorksetReadResponse,
   canonicalIndexerNodeRef,
   indexerArtifactResultDigest,
   indexerEvidenceBindingDigest,
-  indexerInventoryMembersDigest,
   indexerPartitionPlanCanonicalHash,
   indexerRegistryDigests,
   type IndexerArtifactResult,
+  type IndexerInventoryMember,
   type IndexerMainAuthorWorkset,
   type IndexerPartitionPlan,
   type IndexerRegistry,
+  type IndexerSubjectKey,
 } from "@c4a/context";
 import { createDocumentSnapshotManifest } from "@c4a/extract";
-import { bundledIndexerProfileContract } from "../project/indexerBaseContracts.js";
 import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
 import {
   buildProjectIndexerMainAuthorWorksets,
   buildProjectIndexerMainPartitionWorksets,
   buildProjectIndexerQuestionTargetInventory,
 } from "../project/indexerMainLifecycleActions.js";
-import { resolveProjectIndexerMainSourceBinding } from
-  "../project/indexerMainSourceAdapter.js";
 import { capturedDocumentIndexerRef } from
   "../project/indexerWorksetEvidenceProjection.js";
 import {
@@ -234,7 +229,7 @@ function authorResultFixture(spec: MainRunSpec) {
     source_role: spec.request.run_environment.source_role,
     logical_unit: {
       group_key: workset.group_key,
-      subject_key: validation.expected_subject_key,
+      subject_key: validation.expected_subject_key as IndexerSubjectKey,
       logical_unit_ref: workset.logical_unit_ref,
       target_resolution_dispositions: [],
     },
@@ -288,26 +283,12 @@ function authorResultFixture(spec: MainRunSpec) {
     input_digest: spec.request.execution_request_digest,
   };
   const artifact = { ...artifactPayload, output_digest: indexerArtifactResultDigest(artifactPayload) };
-  const readRequest = buildIndexerWorksetReadRequest({
-    workset_digest: workset.workset_digest,
-    read_kind: "source",
-    requested_refs: [workset.source_ref],
-    allowed_refs: [workset.source_ref],
-    page_size: 10,
-  });
-  const readResponse = buildIndexerWorksetReadResponse({
-    request: readRequest,
-    items: [{ ref: workset.source_ref, value: { group_key: workset.group_key } }],
-  });
-  const receipt = buildIndexerWorksetReadReceipt({ request: readRequest, responses: [readResponse] });
   return {
     artifact,
-    receipt,
     result: {
       protocol: "context.indexer.run-result/v1" as const,
       operation: "main-index" as const,
       consumed_input_view_digest: spec.request.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1" as const,
         stage: "author" as const,
@@ -343,17 +324,10 @@ describe("project Author result reuse", () => {
       const workset = partition.worksets[0]!;
       const partitionRunSpec = partition.run_specs[0]!;
       if (partitionRunSpec.validation.stage !== "partition") throw new Error("expected a partition validation spec");
-      const binding = await resolveProjectIndexerMainSourceBinding({
-        projectRoot: root,
-        indexer_id: workset.indexer_id,
-        source_ref: workset.source_ref,
-        module_ref: workset.module_ref,
-        profile_contract_digest: workset.profile_contract_digest,
-      });
       const memberA = capturedDocumentIndexerRef({ source_ref: workset.source_ref, path: "guide-a.md" });
       const memberB = capturedDocumentIndexerRef({ source_ref: workset.source_ref, path: "guide-b.md" });
       const partitionValidation = partitionRunSpec.validation as typeof partitionRunSpec.validation & {
-        canonical_inventory_members: typeof binding.partition_inventory;
+        canonical_inventory_members: readonly IndexerInventoryMember[];
         authorized_source_refs: string[];
         authorized_strategies: Array<{ strategy_ref: Extract<IndexerPartitionPlan, { status: "complete" }>['strategy_ref']; strategy_digest: string }>;
         required_question_target_refs: string[];
@@ -420,7 +394,7 @@ describe("project Author result reuse", () => {
     for (const spec of initial.run_specs) {
       const fixture = authorResultFixture(spec);
       await startIndexerMainRunStore({ projectRoot: root, workset_digest: spec.request.workset.workset_digest });
-      await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: spec.request.workset.workset_digest, result: fixture.result, workset_read_receipts: [fixture.receipt] });
+      await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: spec.request.workset.workset_digest, result: fixture.result });
     }
     const initialRecords = await readAcceptedIndexerMainAuthorResultRecords(root);
     const previousB = initialRecords.find((record) => (record.artifact_result as IndexerArtifactResult).logical_unit.group_key === "reader-subject:guide-b");

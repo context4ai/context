@@ -1,7 +1,6 @@
 import {
   buildIndexerSourceIdentityInventory,
   buildIndexerQuestionTargetInventory,
-  indexerInventoryMembersDigest,
   ownerCells,
   type IndexerProfileContract,
 } from "@c4a/context";

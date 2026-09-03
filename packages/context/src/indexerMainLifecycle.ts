@@ -172,6 +172,9 @@ export function buildIndexerMainAuthorWorksets(input: {
         primary_resource_binding_digest: workset.primary_resource_binding_digest,
         question_target_inventory_digest:
           indexerPartitionGroupQuestionTargetInventoryDigest(plan, group.group_key),
+        ...(workset.repair_intent === undefined
+          ? {}
+          : { repair_intent: workset.repair_intent }),
         partition_plan_binding_digest: indexerPartitionGroupBindingDigest(
           plan,
           group.group_key,
@@ -256,8 +259,9 @@ export function buildIndexerMainAcceptedRecord(input: {
     execution_request_digest: input.request.execution_request_digest,
     result_digest: indexerProtocolDigest(input.result.result.result),
     receipt_digest: indexerProtocolDigest({
+      protocol: "context.indexer.main-result-binding/v1",
       consumed_input_view_digest: input.result.consumed_input_view_digest,
-      workset_read_receipt_digests: input.result.workset_read_receipt_digests,
+      execution_request_digest: input.request.execution_request_digest,
     }),
     run_envelope_digest: input.run_envelope.envelope_digest,
     artifact_dependency_set_digest:
@@ -313,6 +317,8 @@ const mainNextRefSchema = z.object({
   stage: z.enum(["partition", "author"]),
   indexer_id: indexerIdSchema,
   owner_cohort_ref: indexerDigestSchema,
+  partition_key: indexerDigestSchema.optional(),
+  partition_binding_digest: indexerDigestSchema.optional(),
   group_key: z.string().min(1).optional(),
   state: z.enum(["pending", "failed", "stale"]),
 }).strict();

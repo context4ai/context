@@ -19,6 +19,10 @@ import { routeProjectIndexerProviderSelection } from
 import { validateProjectIndexerSelectionProposal } from
   "../project/indexerSelectionProposal.js";
 import { initContextProject } from "../project/workspace.js";
+import { persistCurrentIndexerProviderSetup } from
+  "../project/indexerCurrentProviderState.js";
+import { buildCurrentIndexerProviderContinuationRoute } from
+  "../project/indexerCurrentProviderContinuation.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -330,7 +334,7 @@ describe("Markdown Provider Route", () => {
         projectRoot: fixture.projectRoot,
         value: route.selection_proposal_input,
       });
-      return validateProjectMarkdownProviderSelection({
+      const result = await validateProjectMarkdownProviderSelection({
         projectRoot: fixture.projectRoot,
         value: {
           protocol: "context.indexer.markdown-provider-validation-input/v1",
@@ -341,6 +345,14 @@ describe("Markdown Provider Route", () => {
           ...(hostResults === undefined ? {} : { host_results: hostResults }),
         },
       });
+      if (customization === undefined && hostResults === undefined) {
+        await persistCurrentIndexerProviderSetup({
+          projectRoot: fixture.projectRoot,
+          proposal: staticValidation.proposal,
+          resolved: [],
+        });
+      }
+      return result;
     };
 
     const host = await validate();
@@ -357,6 +369,26 @@ describe("Markdown Provider Route", () => {
         },
       }],
     });
+    const currentRoute = await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: fixture.projectRoot,
+      authorities: [],
+      managed: false,
+    });
+    expect(currentRoute).toMatchObject({
+      node: "resolve-indexer-provider",
+      action: {
+        runner: "host",
+        handler: "context.resolve-indexer-provider/v1",
+      },
+      resources: {
+        required: [{
+          materialize: {
+            handler: "context.resolve-indexer-provider/v1",
+          },
+        }],
+      },
+    });
+    expect(currentRoute?.commands[0]?.command).toContain("action complete-current");
     const customization = await validate("extend");
     expect(customization).toMatchObject({
       outcome: "indexer-customization-required",

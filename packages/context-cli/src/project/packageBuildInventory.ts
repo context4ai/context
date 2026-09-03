@@ -14,7 +14,6 @@ import { packageKind } from "./packageTemplateUtils.js";
 import { validateStructureEdgeContract, type StructureEdgeContractResult } from "./structureEdgeContract.js";
 import type { ProjectVerifyResult } from "./verifyTypes.js";
 import { codegraphRelationshipCoverage } from "./codegraphRelationshipProjection.js";
-import type { DocumentOptimizationStatus } from "./documentOptimization.js";
 
 export const PACKAGE_BUILD_INVENTORY_PATH = "context-build-inventory.json";
 
@@ -309,7 +308,6 @@ export function packageBuildInventory(input: {
   selected: readonly SelectedApprovedKnowledgeFile[];
   structure: KnowledgeStructureInfo;
   verifyEvidenceStatus: ProjectVerifyResult["evidenceStatus"] | null;
-  documentOptimization?: DocumentOptimizationStatus;
 }): Record<string, unknown> {
   const inventory = knowledgeInventory(
     input.selected,

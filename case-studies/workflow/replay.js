@@ -130,7 +130,7 @@ const nodes = {
     zh: ["生成统一候选", "当前登记表尚未生成与已授权来源一致的完整候选批次。", "按 Indexer Graph 继续 Provider 选择、分区、生成、合并、布局与候选编译。", "代码、Markdown 与扩展材料共同收敛为一批当前 Candidate。"],
     en: ["Produce the candidate batch", "The current registry has not produced a complete candidate batch for the authorized sources.", "Follow the Indexer Graph through Provider selection, partitioning, authoring, reconciliation, layout, and candidate compilation.", "Code, Markdown, and extension materials converge into one current Candidate batch."]
   },
-  "apply-managed-review": {
+  "review-current-batch": {
     phase: "GATE",
     zh: ["审核最终候选", "完整 Indexer 批次已经生成，但还没有进入批准知识。", "依据本次托管授权原子应用整批审核决定。", "唯一 Candidate 批次一次性写入批准知识。"],
     en: ["Review final candidates", "The complete Indexer batch exists but has not entered approved knowledge.", "Atomically apply the batch decision under the current managed authority.", "The sole Candidate batch enters approved knowledge in one transaction."]
@@ -173,7 +173,7 @@ const commands = {
   "authorize-document-capture": "context run --managed --authority context.source-read --until blocked-or-complete --format json",
   "capture-next": "context --workflow-managed --workflow-authority context.source-read run capture:document-source --format json",
   "run-indexer-lifecycle": "context run --managed --until blocked-or-complete --format json",
-  "apply-managed-review": "context review approve-all --all --managed --format json",
+  "review-current-batch": "context review approve-all --all --managed --format json",
   "close-approved-knowledge": "context close --format json",
   "configure-package-output": "context status --managed --format json",
   "review-package-template": "context package template accept --all --format json",
@@ -204,7 +204,7 @@ const workflowArtifacts = {
     action: "actions/run-indexer-lifecycle.yaml",
     resources: []
   },
-  "apply-managed-review": {
+  "review-current-batch": {
     action: "actions/apply-managed-review.yaml",
     resources: ["resources/procedures/knowledge-review.md", "resources/views/review-current.yaml"]
   },
@@ -338,8 +338,8 @@ fields.forEach((field, index) => {
 
 const overrides = new Map([
   ["capture-next>run-indexer-lifecycle", ["right", "top"]],
-  ["run-indexer-lifecycle>apply-managed-review", ["left", "right"]],
-  ["apply-managed-review>close-approved-knowledge", ["left", "right"]],
+  ["run-indexer-lifecycle>review-current-batch", ["left", "right"]],
+  ["review-current-batch>close-approved-knowledge", ["left", "right"]],
   ["close-approved-knowledge>configure-package-output", ["bottom", "top"]],
   ["configure-package-output>review-package-template", ["right", "left"]],
   ["review-package-template>build-next", ["right", "left"]],

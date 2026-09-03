@@ -33,6 +33,20 @@ import {
   CONTEXT_WORKFLOW_PROVIDER_ID,
   type ContextWorkflowAuthority,
 } from "./workflowTypes.js";
+import { readPackageVersion } from "../../lib/packageVersion.js";
+import { resolveCurrentIndexerAgentContext } from "../indexerCurrentWorkflowRoute.js";
+import { materializeCurrentIndexerInstructions } from
+  "../indexerCurrentInstructionMaterialization.js";
+import { materializeIndexerWorksetViewHostAction } from "../indexerWorksetViewMaterialization.js";
+import { materializeCurrentIndexerStructurePreview } from "../indexerStructureReview.js";
+import { readCurrentIndexerComposerContext } from "../indexerCurrentComposer.js";
+import { loadIndexerCustomization } from "../indexerCustomization.js";
+import {
+  canonicalIndexerJson,
+  validateIndexerPostAuthorFragmentRequest,
+} from "@c4a/context";
+import { atomicWriteFile } from "../../lib/atomicWrite.js";
+import { collectAllReviewCandidates } from "../reviewHtml.js";
 
 export {
   CONTEXT_WORKFLOW_RESOURCE_IDS,
@@ -42,7 +56,7 @@ export {
 
 export interface ContextWorkflowResourceResult {
   protocol: "context.workflow.resource.v1";
-  id: ContextWorkflowResourceId;
+  id: string;
   revision: string;
   digest: string;
   media_type: string;
@@ -160,6 +174,207 @@ function workflowResourceId(value: string): ContextWorkflowResourceId {
   );
 }
 
+async function materializeCurrentIndexerResource(input: {
+  projectRoot: string;
+  resourceId: string;
+  currentResource: NonNullable<ProjectStatus["workflow"]["current"]>["resources"]["required"][number];
+  nextCommand: string;
+}): Promise<ContextWorkflowResourceResult | undefined> {
+  const materialize = input.currentResource.materialize;
+  if (materialize === undefined) return undefined;
+  if (materialize.handler === "context.materialize-indexer-structure-preview/v1") {
+    const projected = await materializeCurrentIndexerStructurePreview({
+      projectRoot: input.projectRoot,
+      expectedRevision: input.currentResource.revision ?? "",
+    });
+    return {
+      protocol: "context.workflow.resource.v1",
+      id: input.resourceId,
+      revision: input.currentResource.revision ?? "",
+      digest: projected.digest,
+      media_type: "application/json",
+      path: projected.path,
+      next_action: {
+        kind: "read_resource_file",
+        path: projected.path,
+        message: "Read the complete semantic structure preview, then approve it or request an adjustment.",
+        command: input.nextCommand,
+      },
+    };
+  }
+  if (materialize.handler === "context.materialize-indexer-instructions/v1") {
+    const request = materialize.input.value as { composer_id?: unknown };
+    const composer = request.composer_id === null || request.composer_id === undefined
+      ? undefined
+      : await readCurrentIndexerComposerContext(input.projectRoot);
+    const current = composer === undefined
+      ? await resolveCurrentIndexerAgentContext(input.projectRoot)
+      : undefined;
+    if (composer === undefined && current === undefined) {
+      throw new TypeError("current Indexer Agent workset is no longer available");
+    }
+    const authority = composer?.authority ?? current!.authority;
+    const customization = composer === undefined
+      ? current!.customization
+      : await loadIndexerCustomization({
+          workspaceRoot: input.projectRoot,
+          projectRef: input.projectRoot,
+          indexer: authority.indexer,
+          manifest: authority.manifest,
+          providerIntegrity: authority.provider.integrity,
+        });
+    const value = await materializeCurrentIndexerInstructions({
+      request: materialize.input.value,
+      authority,
+      customization,
+      workspaceRoot: input.projectRoot,
+    });
+    const path = join(
+      input.projectRoot,
+      ".tmp",
+      "context-runtime",
+      "indexer",
+      "instructions",
+      `${value.payload_digest.slice("sha256:".length)}.json`,
+    );
+    await writeJsonAtomic(path, value);
+    return {
+      protocol: "context.workflow.resource.v1",
+      id: input.resourceId,
+      revision: input.currentResource.revision ?? value.request_digest,
+      digest: value.payload_digest,
+      media_type: "application/json",
+      path,
+      next_action: {
+        kind: "read_resource_file",
+        path,
+        message: "Read the complete instructions file, then complete the current Agent action.",
+        command: input.nextCommand,
+      },
+    };
+  }
+  if (materialize.handler === "context.materialize-indexer-workset-view/v1") {
+    if (
+      typeof materialize.input.value === "object" &&
+      materialize.input.value !== null &&
+      "protocol" in materialize.input.value &&
+      materialize.input.value.protocol === "context.indexer.layer-fragment-request/v1"
+    ) {
+      const request = validateIndexerPostAuthorFragmentRequest(materialize.input.value);
+      const current = await readCurrentIndexerComposerContext(input.projectRoot);
+      if (
+        current === undefined ||
+        current.request.request_digest !== request.request_digest ||
+        current.request.primary_result_view.view_digest !==
+          request.primary_result_view.view_digest
+      ) {
+        throw new TypeError("current Composer PrimaryResultView is stale");
+      }
+      const path = join(
+        input.projectRoot,
+        ".tmp",
+        "context-runtime",
+        "indexer",
+        "views",
+        `${request.primary_result_view.view_digest.slice("sha256:".length)}.json`,
+      );
+      await atomicWriteFile(path, `${canonicalIndexerJson(request.primary_result_view)}\n`);
+      return {
+        protocol: "context.workflow.resource.v1",
+        id: input.resourceId,
+        revision: input.currentResource.revision ?? request.primary_result_view.view_digest,
+        digest: request.primary_result_view.view_digest,
+        media_type: "application/json",
+        path,
+        next_action: {
+          kind: "read_resource_file",
+          path,
+          message: "Read the complete authorized PrimaryResult View, then complete the current Composer action.",
+          command: input.nextCommand,
+        },
+      };
+    }
+    const current = await resolveCurrentIndexerAgentContext(input.projectRoot);
+    if (current === undefined) {
+      throw new TypeError("current Indexer Agent workset is no longer available");
+    }
+    const projected = await materializeIndexerWorksetViewHostAction({
+      request: materialize.input.value,
+      run_request: current.spec.request,
+      projection: current.worksetView.projection,
+      workspaceRoot: input.projectRoot,
+      adapter: "context-cli",
+      adapterVersion: readPackageVersion(),
+    });
+    return {
+      protocol: "context.workflow.resource.v1",
+      id: input.resourceId,
+      revision: input.currentResource.revision ?? current.worksetView.request.request_digest,
+      digest: projected.managed_output.digest,
+      media_type: "application/json",
+      path: projected.managed_output.file_path,
+      next_action: {
+        kind: "read_resource_file",
+        path: projected.managed_output.file_path,
+        message: "Read the complete authorized workset View, then complete the current Agent action.",
+        command: input.nextCommand,
+      },
+    };
+  }
+  throw new TypeError(`unsupported Context Host resource handler: ${materialize.handler}`);
+}
+
+async function materializeCurrentReview(input: {
+  projectRoot: string;
+  revision: string;
+  nextCommand: string;
+}): Promise<ContextWorkflowResourceResult> {
+  const candidates = await collectAllReviewCandidates(input.projectRoot);
+  const sections = candidates.flatMap(({ record }, index) => [
+    `## ${index + 1}. ${record.review.title}`,
+    "",
+    record.review.behavior_summary ?? record.review.summary,
+    "",
+    ...record.indexer_candidate.sections.flatMap((section) => [
+      `### ${section.section_key}`,
+      "",
+      section.markdown,
+      "",
+    ]),
+  ]);
+  const content = [
+    "# Current knowledge candidates",
+    "",
+    "Read every candidate below as reader-facing knowledge before approving this batch.",
+    "Internal evidence identifiers and hashes are intentionally omitted.",
+    "",
+    ...sections,
+  ].join("\n");
+  const digest = digestText(content);
+  const path = join(
+    input.projectRoot,
+    ".tmp",
+    "context-runtime",
+    "review",
+    `current-${digest.slice("sha256:".length)}.md`,
+  );
+  await atomicWriteFile(path, `${content}\n`);
+  return {
+    protocol: "context.workflow.resource.v1",
+    id: "context.review-current",
+    revision: input.revision,
+    digest,
+    media_type: "text/markdown",
+    path,
+    next_action: {
+      kind: "read_resource_file",
+      path,
+      message: "Read the complete reader-facing Candidate batch before resolving the final Review gate.",
+      command: input.nextCommand,
+    },
+  };
+}
+
 export async function materializeContextWorkflowResource(input: {
   cwd: string;
   resourceId: string;
@@ -197,18 +412,17 @@ export async function materializeContextWorkflowResource(input: {
     authorities,
   });
   const status = snapshot.status;
-  const resourceId = workflowResourceId(input.resourceId);
   const currentResources = [
     ...(status.workflow.current?.resources.required ?? []),
     ...(status.workflow.current?.resources.recommended ?? []),
   ];
   const currentResource = currentResources.find((resource) =>
-    resource.id === resourceId
+    resource.id === input.resourceId
   );
   if (currentResource === undefined) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
-      `resource ${resourceId} is not selected by the current Context route`,
+      `resource ${input.resourceId} is not selected by the current Context route`,
       {
         category: ErrorCategory.WorkflowRevisionStale,
         current_state: status.workflow.current?.reason_code ??
@@ -217,6 +431,24 @@ export async function materializeContextWorkflowResource(input: {
       },
     );
   }
+  if (input.resourceId === "context.review-current") {
+    return materializeCurrentReview({
+      projectRoot: found.projectRoot,
+      revision: input.revision,
+      nextCommand: status.workflow.current?.commands.find((command) =>
+        command.effect === "write"
+      )?.command ?? "context status --format json",
+    });
+  }
+  const dynamic = await materializeCurrentIndexerResource({
+    projectRoot: found.projectRoot,
+    resourceId: input.resourceId,
+    currentResource,
+    nextCommand: status.workflow.current?.commands[0]?.command ??
+      "context status --format json",
+  });
+  if (dynamic !== undefined) return dynamic;
+  const resourceId = workflowResourceId(input.resourceId);
   const content = renderContextWorkflowResource(resourceId, status);
   const location = await materializeResource(
     await loadContextWorkflowProvider(),

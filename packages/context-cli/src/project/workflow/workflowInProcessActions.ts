@@ -135,14 +135,14 @@ async function executePhase(
   invocation: ParsedWorkflowInvocation,
 ): Promise<void> {
   const options = parseOptions(invocation.command.slice(1), RUN_VALUE_OPTIONS, RUN_FLAG_OPTIONS);
-  if (options === undefined || options.positionals.length !== 1) {
+  if (options === undefined || options.positionals.length > 1) {
     throw new Error("managed in-process phase command has an unsupported shape");
   }
-  const phaseId = options.positionals[0]!;
+  const phaseId = options.positionals[0];
   const managed = invocation.managed || options.flags.has("--managed");
   await runProjectPhaseCommand({
     cwd,
-    phaseId,
+    ...(phaseId === undefined ? {} : { phaseId }),
     ...(options.flags.has("--dry-run") ? { dryRun: true } : {}),
     ...(managed ? { managed: true } : {}),
     workflowRevision: invocation.revision,
@@ -159,7 +159,7 @@ function supportsCommand(command: readonly string[]): boolean {
   const [topLevel, subcommand] = command;
   if (topLevel === "run") {
     const options = parseOptions(command.slice(1), RUN_VALUE_OPTIONS, RUN_FLAG_OPTIONS);
-    return options !== undefined && options.positionals.length === 1 &&
+    return options !== undefined && options.positionals.length <= 1 &&
       outputFormat(options) !== undefined;
   }
   if (topLevel === "close" || topLevel === "build") {

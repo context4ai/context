@@ -170,19 +170,18 @@ for maintainers, automation, and diagnostics:
 - `context plugin status` checks installed Agent projections;
 - `context debug enable` records optional traces below
   `.tmp/context-runtime/debug/`;
-- new workspaces enable source-constrained editorial revisions by default;
-  `context optimize-docs enable|disable` changes that workspace preference
-  without modifying approved `knowledge/`;
-- `context revise "<title or approved path>"` starts one conversational
-  correction and routes its validation before the next package build;
-- code extraction writes `knowledge/codeindex/**` and independently audits
+- `context revise "<current Candidate title, path, or id>" --instruction
+  "<requested correction>"` reopens exactly the owning Author workset before
+  approval; it does not create a second revision page or mutate approved
+  `knowledge/` directly;
+- code extraction stages reader-facing `codeindex` Candidates and independently audits
   source analysis, stable-boundary coverage, content density, evidence scope,
   and page size before Review; legacy `codegraph` workspaces migrate through
   the returned Route action;
 - the `context indexer` lifecycle builds contract-derived question targets,
   digest-bound partition and author worksets, exact SubjectKey resolution
   views, and independent post-author composer worksets. Main runs use a local
-  content-addressed ledger whose accepted Result/receipt transition is atomic;
+  content-addressed ledger whose accepted Result transition is atomic;
   ordinal/fixed-count partitions advance through the authorized strategy order,
   and exhausted strategies use a persisted-predecessor CLI catalog fallback that
   creates one parent unit without an Agent or user Gate;
@@ -207,28 +206,18 @@ for maintainers, automation, and diagnostics:
   fail before that Gate. Exact target matches that resolve to multiple Nodes
   return `index-target-resolution-ambiguous`, and invalid reuse returns
   `index-target-resolution-invalid`;
-- unresolved material questions are checkpointed only as local runtime recovery
-  state. Newly captured Markdown or other authorized material reruns the normal
-  main Indexer path and updates the same Candidate; there is no answer-only
-  operation or second Review Route;
-- main Candidate Review has one Graph predecessor:
-  `inspect-index-candidate-review-readiness`. The CLI accepts only digests of
-  content-addressed precompile/postcompile audit records and verifies their
-  requirement, registry, inventory, layout, candidate-set, and effective
-  revision bindings. Missing, stale, baseline-failed, or profile-blocked audits
-  cannot resolve the Review Gate. A profile failure enters
-  `revise-index-output`; `record-index-profile-revision` retains a stable
-  problem lineage and at most three distinct result fingerprints. After the
-  third failure, `report-index-profile-failure` persists the full metrics,
-  examples, history, missing inputs, and capability-loss report.
-  `inspect-index-profile-failure` is read-only, and the following
-  `override-index-profile-audit` Gate is non-delegable. Its receipt binds the
-  report, audit, candidate revision, failed metrics, user, and timestamp.
-  Baseline failures cannot issue or consume that receipt;
-- `checkpoint-material-gaps` writes the current unresolved set under `.tmp` for
-  recovery and stale-write rejection. `audit-material-gap-state` is read-only;
-  required gaps block close, and `close-indexer-approved-knowledge` writes only
-  the approved structure before clearing completed runtime lifecycle state;
+- unresolved material questions remain in the current reconciliation report.
+  Newly captured Markdown or other authorized material reruns the normal main
+  Indexer path and updates the same Candidate; there is no second checkpoint,
+  answer-only operation, or Review Route;
+- main Candidate Review requires current precompile/postcompile audit records.
+  The CLI verifies requirement, registry, inventory, layout and candidate-set
+  bindings. A blocking mechanical failure reopens the affected Author or
+  Composer workset before recompilation; advisory profile metrics are warnings
+  and do not create a retry ledger or override Gate;
+- required material gaps block the ordinary lifecycle until new captured input
+  reruns the affected workset. The ordinary `context close` writes approved
+  structure and clears completed runtime lifecycle state;
 - `context clean-cache --dry-run` previews cleanup of Context-owned stale
   plugin caches.
 
@@ -236,7 +225,6 @@ Revision-bound commands should be copied from `workflow.current`; examples in
 documentation are orientation, not a substitute for the current Route. See the
 [installed quickstart](./docs/quickstart.md) and
 [debug tracing guide](./docs/debug-tracing.md).
-See also [source-constrained editorial revisions](./docs/document-optimization.md).
 
 ## Documentation and development
 

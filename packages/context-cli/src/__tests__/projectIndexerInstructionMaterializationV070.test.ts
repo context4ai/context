@@ -10,7 +10,6 @@ import { join, resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 import {
   hostActionInputDigest,
-  hostActionResourceReadReceipt,
   type HostActionResult,
 } from "@c4a/agent-graph";
 import {
@@ -40,18 +39,19 @@ import { resolveCliBundledIndexerProvider } from "../project/indexerCliBundledPr
 import { materializeBundledIndexerDistribution } from "../project/indexerDistributionBuild.js";
 import {
   buildIndexerInstructionMaterializationRequest,
-  consumeIndexerInstructionHostResult,
-  indexerInstructionHostLocation,
-  materializeIndexerInstructionHostAction,
   materializeIndexerInstructions,
   validateMaterializedIndexerInstructions,
 } from "../project/indexerInstructionMaterialization.js";
+import {
+  consumeIndexerInstructionHostResult,
+  indexerInstructionHostLocation,
+  materializeIndexerInstructionHostAction,
+} from "../project/indexerInstructionHost.js";
 import { stageIndexerProviderBundle } from "../project/indexerProviderStage.js";
 import {
   buildIndexerAgentStepRoute,
 } from "../project/indexerAgentStepRoute.js";
 import {
-  consumeIndexerWorksetViewHostResult,
   materializeIndexerWorksetViewHostAction,
   prepareIndexerWorksetViewMaterialization,
 } from "../project/indexerWorksetViewMaterialization.js";
@@ -673,7 +673,7 @@ describe("resolved-indexer-instructions materialization", () => {
       requirementSetDigest: runRequest.workset.requirement_set_digest,
       worksetDigest: runRequest.workset.workset_digest,
     });
-    const host = await materializeIndexerInstructionHostAction({
+    await materializeIndexerInstructionHostAction({
       request: input.request,
       currentAuthority: materializationAuthority(input.request),
       ...resolved,
@@ -709,13 +709,12 @@ describe("resolved-indexer-instructions materialization", () => {
     expect(`sha256:${createHash("sha256").update(await readFile(
       worksetViewHost.managed_output.file_path,
     )).digest("hex")}`).toBe(worksetViewHost.managed_output.digest);
-    expect((await consumeIndexerWorksetViewHostResult({
-      request: worksetView.request,
-      run_request: runRequest,
-      result: worksetViewHost.result,
-      read_receipt: worksetViewHost.workset_read_receipt,
-      managed_output: worksetViewHost.managed_output,
-    })).projection).toEqual(worksetView.projection);
+    expect(worksetViewHost.result.output).toMatchObject({
+      resource: {
+        ref: worksetViewHost.managed_output.ref,
+        digest: worksetViewHost.managed_output.digest,
+      },
+    });
     const initial = await buildIndexerAgentStepRoute({
       run_request: runRequest,
       instruction_request: input.request,
@@ -755,31 +754,5 @@ describe("resolved-indexer-instructions materialization", () => {
       },
     });
 
-    const receipt = await hostActionResourceReadReceipt(
-      initial.instruction_location,
-      host.result,
-    );
-    const worksetViewReceipt = await hostActionResourceReadReceipt(
-      initial.workset_view_location,
-      worksetViewHost.result,
-    );
-    const resumed = await buildIndexerAgentStepRoute({
-      run_request: runRequest,
-      instruction_request: input.request,
-      workset_view_request: worksetView.request,
-      workspaceRoot: root,
-      resource_receipts: {
-        schema: "agent-graph.resource-read-receipts.v1",
-        provider: "c4a/context",
-        receipts: [receipt, worksetViewReceipt],
-      },
-    });
-    expect(resumed.stable_fingerprint).toBe(initial.stable_fingerprint);
-    expect(resumed.route.resources.required.find((resource) =>
-      resource.id === "resolved-indexer-instructions"
-    )?.read_state).toBe("current");
-    expect(resumed.route.resources.required.find((resource) =>
-      resource.id === "authorized-indexer-workset-view"
-    )?.read_state).toBe("current");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

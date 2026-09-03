@@ -36,55 +36,17 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 describe("plugin prompt and workflow resource contract", () => {
-  test("document revision stays one sibling-page contract across CLI, Route, and Agent guidance", async () => {
-    const [
-      command,
-      graph,
-      action,
-      procedure,
-      registration,
-      classification,
-      storage,
-      optimization,
-      hostPlans,
-    ] = await Promise.all([
+  test("candidate revision has one Author-repair entry and no side-channel page", async () => {
+    const [command, registration, revision] = await Promise.all([
       read(PLUGIN_ROOT, ...ENTRY_PATH),
-      read(WORKFLOW_ROOT, "graphs", "workspace.yaml"),
-      read(WORKFLOW_ROOT, "actions", "revise-document.yaml"),
-      read(WORKFLOW_ROOT, "resources", "procedures", "document-revision.md"),
-      read(PACKAGE_ROOT, "src", "commands", "documentOptimizationCommands.ts"),
-      read(PACKAGE_ROOT, "src", "project", "knowledgeFileClassification.ts"),
-      read(PACKAGE_ROOT, "src", "project", "documentOptimizationStorage.ts"),
-      read(PACKAGE_ROOT, "src", "project", "documentOptimization.ts"),
-      read(PACKAGE_ROOT, "src", "project", "workflow", "workflowHostPlans.ts"),
+      read(PACKAGE_ROOT, "src", "commands", "documentRevisionCommands.ts"),
+      read(PACKAGE_ROOT, "src", "project", "documentRevision.ts"),
     ]);
 
-    expect(command).toContain('context revise "<the user\'s page title, approved path, ViewRef, or wording>"');
-    expect(command).toContain("knowledge/**/*__revision.md");
-    expect(command).toContain("route.document-revision.requested");
-    expect(graph).toContain("id: revise-document");
-    expect(graph).toContain("reasonCode: route.document-revision.requested");
-    expect(action).toContain("handler: context.document-revision.next");
-    expect(hostPlans).toContain('command("context optimize-docs revise-current --format json"');
-    expect(procedure).toContain("sibling `__revision.md` page");
+    expect(command).toContain('context revise "<candidate title, path, or id>"');
+    expect(command).not.toContain("__revision.md");
     expect(registration).toContain('program.command("revise <target>")');
-    expect(classification).toContain('DOCUMENT_REVISION_SUFFIX = "__revision.md"');
-    expect(storage).toContain('join(projectRoot, "knowledge", documentRevisionPathForApprovedPath(approvedPath))');
-
-    for (const source of [
-      command,
-      graph,
-      action,
-      procedure,
-      registration,
-      classification,
-      storage,
-      optimization,
-      hostPlans,
-    ]) {
-      expect(source).not.toContain("overlays/");
-      expect(source).not.toContain("migrateLegacyDocumentOptimization");
-    }
+    expect(revision).toContain("Reopen the exact Author workset");
   });
 
   test("plugin README exposes only current public entrypoints", async () => {
@@ -296,7 +258,7 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(graph).not.toContain("resources/semantic/align/");
     expect(graph).not.toContain("resources/semantic/code-index/");
     expect(graph).toContain("resources/procedures/source-capture-detailed.md");
-    expect(graph).toContain("- { from: apply-managed-review, to: close-approved-knowledge }");
+    expect(graph).toContain("- { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }");
     expect(graph).toContain("- { from: close-approved-knowledge, to: choose-package-output }");
     expect(graph).not.toContain("- { from: maintain-evidence, to: close-approved-knowledge }");
     expect(graph).not.toContain("- { from: close-approved-knowledge, to: revise-document }");

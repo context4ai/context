@@ -27,6 +27,8 @@ const mainRunLedgerEntryBase = {
   stage: z.enum(["partition", "author"]),
   indexer_id: indexerIdSchema,
   owner_cohort_ref: indexerDigestSchema,
+  partition_key: indexerDigestSchema.optional(),
+  partition_binding_digest: indexerDigestSchema.optional(),
   group_key: z.string().min(1).optional(),
 };
 
@@ -111,6 +113,10 @@ function itemRef(item: IndexerMainWorksetSet["items"][number]): string {
     stage: item.stage,
     indexer_id: item.indexer_id,
     owner_cohort_ref: item.owner_cohort_ref,
+    ...(item.partition_key === undefined ? {} : { partition_key: item.partition_key }),
+    ...(item.partition_binding_digest === undefined
+      ? {}
+      : { partition_binding_digest: item.partition_binding_digest }),
     ...(item.group_key === undefined ? {} : { group_key: item.group_key }),
   });
 }
@@ -130,6 +136,12 @@ function entryBase(input: {
     stage: input.item.stage,
     indexer_id: input.item.indexer_id,
     owner_cohort_ref: input.item.owner_cohort_ref,
+    ...(input.item.partition_key === undefined
+      ? {}
+      : { partition_key: input.item.partition_key }),
+    ...(input.item.partition_binding_digest === undefined
+      ? {}
+      : { partition_binding_digest: input.item.partition_binding_digest }),
     ...(input.item.group_key === undefined ? {} : { group_key: input.item.group_key }),
   };
 }
@@ -437,6 +449,26 @@ export function failIndexerMainRun(input: {
         dependency_digests: canonicalDependencies(input.dependency_digests),
       };
     },
+  });
+}
+
+export function retryFailedIndexerMainRuns(value: unknown): IndexerMainRunLedger {
+  const ledger = validateIndexerMainRunLedger(value);
+  return buildLedger({
+    workset_set: ledger.workset_set,
+    entries: ledger.entries.map((entry) => {
+      if (entry.state !== "failed") return entry;
+      const item = ledger.workset_set.items.find((candidate) =>
+        candidate.workset_digest === entry.workset_digest
+      );
+      if (item === undefined) {
+        throw new TypeError("failed main run has no current workset");
+      }
+      return {
+        ...entryBase({ item, execution_request_digest: entry.execution_request_digest }),
+        state: "pending" as const,
+      };
+    }),
   });
 }
 

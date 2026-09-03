@@ -88,18 +88,6 @@ nodes:
       recommended:
         - resources/diagnostics/projection-stale.md
 
-  - id: revise-document
-    kind: action
-    reasonCode: route.document-revision.requested
-    action: actions/revise-document.yaml
-    satisfiedBy:
-      - path: document_optimization.revision_requested
-        exists: false
-    resources:
-      required:
-        - resources/procedures/document-revision.md
-        - resources/views/document-optimization-current.yaml
-
   - id: choose-source-boundary
     kind: gate
     reasonCode: route.source.boundary-required
@@ -208,10 +196,10 @@ nodes:
     inspectionAction: actions/inspect-review.yaml
     resolutionAction: actions/apply-forced-review.yaml
     delegated:
-      inspection: skip
       resolutionAction: actions/apply-managed-review.yaml
       resources:
-        required: []
+        required:
+          - resources/views/review-current.yaml
         recommended: []
     gate:
       id: knowledge-review
@@ -226,18 +214,6 @@ nodes:
         - resources/procedures/knowledge-review.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/knowledge-review.md
-        - resources/views/review-current.yaml
-
-  - id: apply-managed-review
-    kind: action
-    reasonCode: route.review.apply-managed
-    action: actions/apply-managed-review.yaml
-    satisfiedBy:
-      - path: review.gate_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/knowledge-review.md
         - resources/views/review-current.yaml
 
   - id: choose-package-output
@@ -335,16 +311,14 @@ edges:
   - { from: repair-workspace-state, to: repair-verification }
   - { from: repair-verification, to: choose-evidence-maintenance }
   - { from: choose-evidence-maintenance, to: maintain-evidence, kind: gatedBy }
-  - { from: maintain-evidence, to: revise-document }
-  - { from: revise-document, to: choose-source-boundary }
+  - { from: maintain-evidence, to: choose-source-boundary }
   - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
   - { from: capture-next, to: run-indexer-lifecycle }
   - { from: run-indexer-lifecycle, to: review-current-batch }
-  - { from: review-current-batch, to: apply-managed-review, kind: gatedBy }
-  - { from: apply-managed-review, to: close-approved-knowledge }
+  - { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }
   - { from: close-approved-knowledge, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }

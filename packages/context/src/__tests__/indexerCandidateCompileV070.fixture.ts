@@ -146,7 +146,6 @@ function acceptedResult(result: IndexerArtifactResult) {
     protocol: "context.indexer.run-result/v1" as const,
     operation: "main-index" as const,
     consumed_input_view_digest: candidateCompileDigest("9"),
-    workset_read_receipt_digests: [candidateCompileDigest("b")],
     result: {
       protocol: "context.indexer.main-result/v1" as const,
       stage: "author" as const,

@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.1",
+  "version": "0.7.4",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -42,7 +42,6 @@
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
     "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --max-concurrency=1 --timeout=120000",
-    "test:e2e": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun test src/__e2e__/*.e2e.test.ts",
     "lint": "eslint src",
     "clean-cache": "bun run src/cli.ts clean-cache"
   },

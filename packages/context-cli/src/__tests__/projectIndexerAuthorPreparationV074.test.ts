@@ -8,9 +8,6 @@ import {
   buildIndexerCapabilityGroupEvidence,
   buildIndexerAuthorDependencyView,
   buildIndexerInventoryDispositionSet,
-  buildIndexerWorksetReadReceipt,
-  buildIndexerWorksetReadRequest,
-  buildIndexerWorksetReadResponse,
   canonicalIndexerNodeRef,
   indexerArtifactResultDigest,
   indexerEvidenceBindingDigest,
@@ -37,19 +34,7 @@ import { projectIndexerPrimaryCarrierQuestionTargetRefs } from
   "../project/indexerCurrentAuthorPreparation.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from
   "../project/indexerWorksetViewMaterialization.js";
-import { capturedDocumentIndexerRef } from
-  "../project/indexerWorksetEvidenceProjection.js";
 import {
-  acceptIndexerMainRunStore,
-  prepareIndexerMainRunStore,
-  readAcceptedIndexerMainAuthorResultRecords,
-  startIndexerMainRunStore,
-} from "../project/indexerMainRunStore.js";
-import {
-  acceptedCachePath,
-  currentSpec,
-  readJsonMaybe,
-  validateAcceptedCache,
   type MainRunSpec,
 } from "../project/indexerMainRunStoreRecords.js";
 
@@ -322,29 +307,12 @@ function authorResultFixture(spec: MainRunSpec) {
     ...artifactPayload,
     output_digest: indexerArtifactResultDigest(artifactPayload),
   };
-  const readRequest = buildIndexerWorksetReadRequest({
-    workset_digest: workset.workset_digest,
-    read_kind: "source",
-    requested_refs: [workset.source_ref],
-    allowed_refs: [workset.source_ref],
-    page_size: 10,
-  });
-  const readResponse = buildIndexerWorksetReadResponse({
-    request: readRequest,
-    items: [{ ref: workset.source_ref, value: { group_key: workset.group_key } }],
-  });
-  const receipt = buildIndexerWorksetReadReceipt({
-    request: readRequest,
-    responses: [readResponse],
-  });
   return {
     artifact,
-    receipt,
     result: {
       protocol: "context.indexer.run-result/v1" as const,
       operation: "main-index" as const,
       consumed_input_view_digest: spec.request.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1" as const,
         stage: "author" as const,
@@ -549,7 +517,6 @@ describe("project current Author preparation", () => {
       request: author.run_specs[0]!.request,
       validation: author.run_specs[0]!.validation,
       result: fixture.result,
-      workset_read_receipts: [fixture.receipt],
     };
     const validated = await validateProjectIndexerMainRun({
       projectRoot: root,

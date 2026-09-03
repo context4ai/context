@@ -18,6 +18,7 @@ Ask the user only when the answer changes a durable boundary:
 - which readers and questions matter;
 - whether two subjects are the same knowledge owner;
 - whether a Provider customization or executable extension is acceptable;
+- whether the proposed semantic outline organizes the requested knowledge;
 - whether the displayed Candidate content is approved.
 
 The Agent may decide mechanical details from evidence: parser selection within
@@ -33,6 +34,17 @@ separate.
 Code and Markdown Providers receive controlled worksets and return typed
 results. They do not write Candidate, Review, `knowledge/`, or `dist/` files.
 Context validates and persists their result before the next action consumes it.
+Initial Provider selection follows the same rule: use the requirements and
+CLI-bundled catalog in the current Action input, return only non-CLI visible
+Skill identities and semantic Indexer entries, and let the CLI perform routing,
+resolution, staging, validation, and atomic registry apply. External resolver
+results and non-allowlisted program decisions resume through subsequent
+`complete-current` Routes; do not invoke the low-level Provider commands.
+For Partition, Author, and Composer steps, read the Route-selected instructions
+and Authorized Workset View, return only the compact semantic value requested
+by the current schema, and submit it with the Route's single
+`context action complete-current` command. Do not create a helper script or
+construct internal Result, digest, receipt, Fact, or evidence-binding objects.
 
 Parser packages are Provider internals. Do not expose parser choice as an
 extra user workflow unless it changes coverage or requires executable code the
@@ -50,6 +62,12 @@ Review is about the proposed knowledge, not the storage mechanism. Show:
 Do not show evidence hashes, content-addressed IDs, execution receipts, or
 other machine fields by default. Keep those in runtime state only when they are
 needed for validation, stale detection, or recovery.
+
+A compatible production round has two semantic judgments. The first checks the
+outline after all Partition shards converge; the second checks the final
+reader-facing Candidate set. Ordinary mode presents both to the user. Fully
+managed mode lets the Agent resolve both with current-conversation authority.
+A destructive or ambiguous layout change is separate and always human-only.
 
 ## Quality bar
 
@@ -76,4 +94,3 @@ discard transient Review details.
 
 Context completion does not authorize Git operations. Stage, commit, push,
 publish, and deploy only when the user explicitly requests them.
-

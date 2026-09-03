@@ -33,7 +33,6 @@ export * from "./indexerMainRunProtocol.js";
 export * from "./indexerMainRunLedger.js";
 export * from "./indexerPrimaryProjection.js";
 export * from "./indexerPostAuthorRunLedger.js";
-export * from "./indexerWorksetRead.js";
 export * from "./indexerRestrictedSelector.js";
 export * from "./indexerQuestionAuthority.js";
 export * from "./indexerRunProtocolCommon.js";

@@ -7,7 +7,6 @@ export const CONTEXT_WORKFLOW_RESOURCE_IDS = [
   "context.source-current",
   "context.review-current",
   "context.package-current",
-  "context.document-optimization-current",
 ] as const;
 
 export type ContextWorkflowResourceId =
@@ -212,47 +211,6 @@ ${bullets(templates)}
 `;
 }
 
-function renderDocumentOptimization(status: ProjectStatus): string {
-  const current = status.documentOptimization;
-  return `# Current document revisions
-
-- Enabled: ${inline(current.enabled)}
-- Policy: ${inline(current.policy)}
-- Current: ${inline(current.current)}
-- Eligible views: ${current.eligible_views}
-- Eligible fragments: ${current.eligible_fragments}
-- Revision pages: ${current.revision_pages}
-- Revised fragments: ${current.revised_fragments}
-- Kept fragments: ${current.kept_fragments}
-- Pending fragments: ${current.pending_fragments}
-- Conflicts: ${current.conflict_fragments}
-- Retry attempts for the current problem: ${current.retry_attempts}
-- Human guidance required: ${inline(current.guidance_required)}
-- Mechanical signals: ${current.signal_count}
-- Repair candidates: ${current.action_candidates.repair}
-- Reshape candidates: ${current.action_candidates.reshape}
-- Omission candidates: ${current.action_candidates.omit}
-- Input-required candidates: ${current.action_candidates.request_input}
-- Conversational correction requested: ${inline(current.revision_requested)}${current.requested_approved_path === undefined
-    ? ""
-    : `\n- Requested approved page: ${inline(current.requested_approved_path)}`}
-
-## Three-round guidance report
-
-${bullets(current.guidance_problems.map((problem) =>
-    `attempts=${problem.attempts}; problem=${inline(problem.message)}; fragments=${problem.fragment_ids.map(inline).join(", ") || "current batch"}; signals=${problem.signal_codes.map(inline).join(", ") || "see current plan"}`
-  ))}
-
-Revision pages use the reserved \`__revision.md\` suffix beside their approved
-page under \`knowledge/\`. Default knowledge discovery excludes them; document
-optimization validation and package compilation apply them only while their
-recorded source baseline remains current. Each pending fragment is one source
-Section. The plan enumerates readability signals and the allowed keep, repair,
-reshape, or omit actions; ambiguous or sensitive signals require one batched
-user decision instead of an automatic omission.
-`;
-}
-
 export function renderContextWorkflowResource(
   id: ContextWorkflowResourceId,
   status: ProjectStatus,
@@ -264,7 +222,6 @@ export function renderContextWorkflowResource(
     case "context.source-current": return renderSources(status);
     case "context.review-current": return renderReview(status);
     case "context.package-current": return renderPackages(status);
-    case "context.document-optimization-current": return renderDocumentOptimization(status);
   }
 }
 

@@ -32,14 +32,6 @@ import {
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
 import type { IndexerJson } from "./indexerRegistry.js";
-import {
-  buildIndexerCompleteWorksetReadReceipt,
-  indexerWorksetReadItemDigest,
-  validateIndexerWorksetReadReceipt,
-  type IndexerWorksetReadReceipt,
-} from "./indexerWorksetRead.js";
-
-const INTERNAL_PAGE_SIZE = 256;
 
 function isIndexerJson(
   value: unknown,
@@ -155,7 +147,6 @@ export type IndexerAuthorizedWorksetView = z.infer<
 
 export interface IndexerAuthorizedWorksetViewProjection {
   view: IndexerAuthorizedWorksetView;
-  read_receipt: IndexerWorksetReadReceipt;
 }
 
 type ViewPayload = Omit<IndexerAuthorizedWorksetView, "view_digest">;
@@ -176,7 +167,7 @@ function canonicalItem(value: ItemPayload): IndexerAuthorizedWorksetViewItem {
   const payload = itemPayloadSchema.parse(value);
   return indexerAuthorizedWorksetViewItemSchema.parse({
     ...payload,
-    item_digest: indexerWorksetReadItemDigest({
+    item_digest: indexerProtocolDigest({
       ref: payload.ref,
       value: readItemPayloadValue(payload),
     }),
@@ -212,14 +203,6 @@ function readItemPayloadValue(input: {
         : { container_ref: input.provenance.container_ref }),
     },
     value: input.value,
-  });
-}
-
-function readItemValue(item: IndexerAuthorizedWorksetViewItem): IndexerJson {
-  return readItemPayloadValue({
-    category: item.category,
-    provenance: item.provenance,
-    value: item.value,
   });
 }
 
@@ -315,8 +298,28 @@ function compositionItems(
   request: IndexerMainRunRequest,
 ): IndexerAuthorizedWorksetViewItem[] {
   const composition = validateIndexerLayerCompositionInput(request.composition_input);
-  return composition.accepted_fragments.map((fragment) =>
-    canonicalItem({
+  return composition.accepted_fragments.flatMap((fragment) => {
+    if (fragment.payload.protocol === "context.indexer.fragment.fact-enrichment/v1") {
+      return fragment.payload.facts.map((fact) => {
+        const ref = `layer-fact:${fragment.fragment_digest}/${fact.fact_id}`;
+        return canonicalItem({
+          ref,
+          category: "fact",
+          provenance: {
+            protocol: composition.protocol,
+            digest: composition.view_digest,
+            container_ref: fragment.layer_ref,
+          },
+          value: canonicalJsonSchema.parse({
+            fact_ref: ref,
+            kind: fact.fact_id,
+            payload: fact.value,
+            source_fact_refs: fact.evidence_refs.map((item) => item.ref),
+          }),
+        });
+      });
+    }
+    return [canonicalItem({
       ref: `layer-fragment:${fragment.fragment_digest}`,
       category: "provider-fragment",
       provenance: {
@@ -325,8 +328,8 @@ function compositionItems(
         container_ref: fragment.layer_ref,
       },
       value: canonicalJsonSchema.parse(fragment),
-    })
-  );
+    })];
+  });
 }
 
 function canonicalItems(
@@ -556,21 +559,6 @@ export function buildIndexerMainRunWorksetViewSources(input: {
   ];
 }
 
-function buildReadReceipt(input: {
-  workset_digest: string;
-  items: readonly IndexerAuthorizedWorksetViewItem[];
-}): IndexerWorksetReadReceipt {
-  return buildIndexerCompleteWorksetReadReceipt({
-    workset_digest: input.workset_digest,
-    read_kind: "evidence",
-    items: input.items.map((item) => ({
-      ref: item.ref,
-      value: readItemValue(item),
-    })),
-    page_size: INTERNAL_PAGE_SIZE,
-  });
-}
-
 export function indexerAuthorizedWorksetViewDigest(value: ViewPayload): string {
   return indexerProtocolDigest(value);
 }
@@ -628,13 +616,7 @@ export function buildIndexerAuthorizedWorksetView(input: {
     ...payload,
     view_digest: indexerAuthorizedWorksetViewDigest(payload),
   });
-  return {
-    view,
-    read_receipt: buildReadReceipt({
-      workset_digest: view.workset_digest,
-      items: view.items,
-    }),
-  };
+  return { view };
 }
 
 export function validateIndexerAuthorizedWorksetView(
@@ -686,30 +668,17 @@ export function validateIndexerAuthorizedWorksetView(
 export function validateIndexerAuthorizedWorksetProjection(input: {
   request: unknown;
   view: unknown;
-  read_receipt: unknown;
 }): IndexerAuthorizedWorksetViewProjection {
   const request = validateIndexerMainRunRequest(input.request);
   const view = validateIndexerAuthorizedWorksetView(input.view);
-  const receipt = validateIndexerWorksetReadReceipt(input.read_receipt);
   if (
     view.workset_digest !== request.workset.workset_digest ||
     view.execution_request_digest !== request.execution_request_digest ||
     view.stage !== request.workset.stage ||
     view.source_ref !== request.workset.source_ref ||
-    view.module_ref !== request.workset.module_ref ||
-    receipt.workset_digest !== view.workset_digest ||
-    receipt.read_kind !== "evidence"
+    view.module_ref !== request.workset.module_ref
   ) {
     throw new TypeError("authorized workset projection does not bind the current run request");
   }
-  if (
-    receipt.read_set.length !== view.items.length ||
-    receipt.read_set.some((entry, index) =>
-      entry.ref !== view.items[index]?.ref ||
-      entry.item_digest !== view.items[index]?.item_digest
-    )
-  ) {
-    throw new TypeError("authorized workset receipt does not cover the exact View item set");
-  }
-  return { view, read_receipt: receipt };
+  return { view };
 }

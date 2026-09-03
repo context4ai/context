@@ -11,15 +11,18 @@ import {
   ownerCells,
   projectIndexerPartitionSubjects,
   validateIndexerQuestionTargetInventory,
+  type IndexerProfileContract,
   type IndexerRegistry,
   type IndexerPartitionValidationInput,
 } from "@c4a/context";
+import { posix } from "node:path";
 import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { buildCurrentProjectIndexerPartitionRunSpec } from
   "./indexerCurrentMainRunSpec.js";
+import { materializeCurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
 import {
   array,
   assertCurrentRequirement,
@@ -55,6 +58,66 @@ function assertClosedOwnerCohorts(
       );
     }
   }
+}
+
+function codePartitionShardKey(
+  binding: Extract<Awaited<ReturnType<typeof resolveProjectIndexerMainSourceBinding>>, {
+    adapter: "parser-facts";
+  }>,
+  member: { member_id: string; member_kind: string },
+): string {
+  const directFact = binding.parser_fact_index.get(member.member_id);
+  const file = directFact === undefined
+    ? binding.parser_fact_view.files.find((candidate) =>
+        candidate.file_ref === member.member_id
+      )
+    : binding.parser_fact_view.files.find((candidate) =>
+        candidate.file_ref === directFact.file_ref
+      );
+  const directory = file === undefined
+    ? "."
+    : posix.dirname(file.normalized_path);
+  return directory;
+}
+
+function partitionInventoryShards(
+  binding: Awaited<ReturnType<typeof resolveProjectIndexerMainSourceBinding>>,
+) {
+  if (binding.adapter === "captured-documents") {
+    return [{
+      inventory: binding.partition_inventory,
+      question_carrier_score: binding.partition_inventory.length,
+    }];
+  }
+  const shards = new Map<string, typeof binding.partition_inventory>();
+  for (const member of binding.partition_inventory) {
+    const key = codePartitionShardKey(binding, member);
+    const values = shards.get(key) ?? [];
+    values.push(member);
+    shards.set(key, values);
+  }
+  return [...shards.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, members]) => ({
+      inventory: members,
+      question_carrier_score: members.filter((member) =>
+        binding.parser_fact_index.has(member.member_id)
+      ).length,
+    }));
+}
+
+function questionCarrierShardIndex(
+  shards: ReturnType<typeof partitionInventoryShards>,
+): number {
+  let selectedIndex = 0;
+  let selectedScore = -1;
+  for (const [index, shard] of shards.entries()) {
+    if (shard.question_carrier_score > selectedScore) {
+      selectedIndex = index;
+      selectedScore = shard.question_carrier_score;
+    }
+  }
+  return selectedIndex;
 }
 
 function referenceIdentity(value: string): string {
@@ -181,15 +244,12 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
   >>>();
   await Promise.all(indexerIds.map(async (indexerId) => {
     authorities.set(indexerId, await resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot,
       registry,
       indexer_id: indexerId,
     }));
   }));
-  const currentBindings = new Map<string, Awaited<ReturnType<
-    typeof resolveProjectIndexerMainSourceBinding
-  >>>();
-  const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
-    await Promise.all([...ownerGroups.values()].map(async (owners) => {
+  const prepared = (await Promise.all([...ownerGroups.values()].map(async (owners) => {
     const first = owners[0]!;
     const indexerId = first.owner_indexer_ids[0]!;
     const authority = authorities.get(indexerId);
@@ -201,8 +261,6 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       module_ref: first.module_ref,
       profile_contract_digest: authority.profile_contract.contract_digest,
     });
-    const bindingKey = [indexerId, first.source_ref, first.module_ref ?? ""].join("\u0000");
-    currentBindings.set(bindingKey, binding);
     const ownerCellRefs = owners.map((owner) => owner.owner_cell_ref).sort();
     const ownerCellSet = new Set(ownerCellRefs);
     const cohortTargets = questionTargets.items.filter((target) =>
@@ -233,7 +291,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     }));
     const { profile: _subjectProfile, ...subjectKeyContract } = subjectSchema;
     void _subjectProfile;
-    return {
+    const base = {
       stage: "partition" as const,
       indexer_id: indexerId,
       requirement_ref: first.requirement_ref,
@@ -274,30 +332,52 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
         )
         .map((question) => question.ref).sort(),
       partition_input_digests: binding.partition_input_digests,
-      partition_inventory_digest: indexerInventoryMembersDigest(binding.partition_inventory),
       allowed_question_target_refs: allowedTargets,
     };
-  }));
+    const shards = partitionInventoryShards(binding);
+    const carrierShardIndex = questionCarrierShardIndex(shards);
+    return shards.map(({ inventory }, shardIndex) => ({
+      input: {
+        ...base,
+        partition_inventory_digest: indexerInventoryMembersDigest(inventory),
+        allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
+      },
+      inventory,
+      authority,
+      binding,
+    }));
+  }))).flat();
+  const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
+    prepared.map((item) => item.input);
   const built = buildIndexerMainPartitionWorksets(
     worksets,
   );
   assertClosedOwnerCohorts(registry, built.worksets);
-  const runSpecs = built.worksets.map((workset) => {
-    const authority = authorities.get(workset.indexer_id);
-    const binding = currentBindings.get([
-      workset.indexer_id,
-      workset.source_ref,
-      workset.module_ref ?? "",
-    ].join("\u0000"));
-    if (authority === undefined || binding === undefined) {
+  const preparedByDigest = new Map(prepared.map((item, index) => [
+    built.worksets[index]!.workset_digest,
+    item,
+  ]));
+  const runSpecs = await Promise.all(built.worksets.map(async (workset) => {
+    const item = preparedByDigest.get(workset.workset_digest);
+    if (item === undefined) {
       throw new TypeError("partition run preparation lost its current authority binding");
     }
+    const enrichment = item.binding.adapter === "parser-facts"
+      ? await materializeCurrentIndexerExtensionFacts({
+          projectRoot: input.projectRoot,
+          authority: item.authority,
+          workset_digest: workset.workset_digest,
+          parser_fact_view: item.binding.parser_fact_view,
+        })
+      : undefined;
     return buildCurrentProjectIndexerPartitionRunSpec({
       workset,
-      binding,
-      authority,
+      binding: item.binding,
+      authority: item.authority,
+      canonical_inventory_members: item.inventory,
+      ...(enrichment === undefined ? {} : { enrichment }),
     });
-  });
+  }));
   return {
     protocol: "context.indexer.main-partition-workset-build/v1" as const,
     requirement_set_digest: questionTargets.requirement_set_digest,

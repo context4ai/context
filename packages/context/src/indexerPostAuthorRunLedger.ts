@@ -503,6 +503,26 @@ export function failIndexerPostAuthorRun(input: {
   });
 }
 
+export function retryFailedIndexerPostAuthorRuns(input: {
+  plan: IndexerPostAuthorPlan;
+  ledger: unknown;
+}): IndexerPostAuthorRunLedger {
+  const plan = requirePendingPlan(input.plan);
+  const ledger = validateIndexerPostAuthorRunLedger(input.ledger);
+  return buildLedger({
+    workset_set_digest: ledger.workset_set_digest,
+    entries: ledger.entries.map((entry) => {
+      if (entry.state !== "failed") return entry;
+      const workset = worksetFor(plan, entry.composer_ref);
+      return {
+        composer_ref: entry.composer_ref,
+        workset_digest: workset.workset_digest,
+        state: "pending" as const,
+      };
+    }),
+  });
+}
+
 const nextRefSchema = z.object({
   composer_ref: composerRefSchema,
   workset_digest: indexerDigestSchema,

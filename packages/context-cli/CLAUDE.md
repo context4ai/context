@@ -121,18 +121,17 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 `node_modules/@c4a/context/docs/guides/agent-dialogue.md` 只介绍稳定原则和发现方式。
 修改门禁语义时必须更新 Graph 资源引用、可达性测试和必要的 SDK 概览。
 
-### Prose compile 覆盖进度
+### Indexer Author 覆盖进度
 
-- Prose compile 按 confirmed structure 的 Node/section 逐项收敛：先读
-  `read-plan` / `node-context` / schema，再提交
-  `context.compile-actions.v1`。不要 shell 循环或并发 stage/review/apply；
-  失败、coverage warning、schema error、unsupported evidence 都在当前 Node
+- Author 按 current Partition group 逐项收敛：读取 Route 返回的 instructions、
+  Authorized Workset View 和输入 schema，再通过唯一
+  `context action complete-current` 提交语义结果。不要 shell 循环或并发写入；
+  失败、coverage warning、schema error 和 unsupported material 都在当前 group
   内收敛。
-- 低覆盖 warning 表示 draft 只覆盖部分 citation-eligible source refs；
-  `covered/total`、remaining count、planned section id 是进度信号，必须查。
-  “第一条 action supported” 不代表 Node 完成。
-- 不要求抽满所有 source refs。重复、导航、placeholder、同一事实延续、无
-  citation 价值的片段可以 skip，但 skip 必须来自内容判断，不是为了提速。
+- 当前 group 的 member/question disposition 是完成信号。“写出第一节正文”
+  不代表 group 已关闭。
+- 不要求把所有来源片段写进正文。重复、导航、placeholder、同一事实延续、
+  无读者价值的材料可以排除，但排除必须来自内容判断，不是为了提速。
 
 ### 命名边界（必须遵守）
 
@@ -234,9 +233,9 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 **Phase operational rules**：
 
-- Prose document work is status-driven: capture writes source snapshots, align
-  writes confirmed `context.structure.v1`, compile writes review candidates from
-  confirmed structure, review/apply writes approved Markdown, close derives
+- Document work is status-driven: capture writes source snapshots, the current
+  Indexer route produces semantic structure and reader-ready Candidates,
+  review/apply writes approved Markdown, close derives
   `knowledge/structure.yaml`, and build writes packages.
 - `context status --format json` `workflow.current` is the only workspace Route
   authority. A phase `next_action` can continue that operation but cannot

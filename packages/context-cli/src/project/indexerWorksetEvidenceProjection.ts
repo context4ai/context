@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
   buildIndexerAuthorizedWorksetViewSource,
   indexerProtocolDigest,
@@ -58,6 +59,10 @@ async function capturedDocumentProjection(input: {
       path,
       cache: input.evidence.snapshotMarkdownCache,
     });
+    const outline = markdown.split(/\r?\n/u).flatMap((line) => {
+      const match = /^(#{1,6})\s+(.+?)\s*$/u.exec(line);
+      return match === null ? [] : [match[2]!];
+    });
     return {
       ref: capturedDocumentIndexerRef({ source_ref: sourceRef, path: document.path }),
       category: "document",
@@ -71,11 +76,12 @@ async function capturedDocumentProjection(input: {
         path: document.path,
         ...(document.source_path === undefined ? {} : { source_path: document.source_path }),
         content_hash: document.content_hash,
-        line_count: document.line_count,
+        ...(document.line_count === undefined ? {} : { line_count: document.line_count }),
         ...(document.title === undefined ? {} : { title: document.title }),
         ...(document.locator === undefined ? {} : { locator: document.locator }),
         ...(document.route === undefined ? {} : { route: document.route }),
-        markdown,
+        content_path: join(input.evidence.index.materialized_at, document.path),
+        outline,
       },
     };
   }));

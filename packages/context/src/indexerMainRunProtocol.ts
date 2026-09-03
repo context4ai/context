@@ -48,10 +48,6 @@ import {
 } from "./indexerRunEnvelope.js";
 import { indexerRunFinalAuthoritySchema } from "./indexerRunProtocolCommon.js";
 import type { IndexerInventoryMember } from "./indexerInventoryDisposition.js";
-import {
-  validateIndexerWorksetReadReceipt,
-  type IndexerWorksetReadReceipt,
-} from "./indexerWorksetRead.js";
 
 export const indexerMainRunRequestSchema = z.object({
   protocol: z.literal("context.indexer.run-request/v2"),
@@ -159,7 +155,6 @@ export const indexerMainRunResultSchema = z.object({
   protocol: z.literal("context.indexer.run-result/v1"),
   operation: z.literal("main-index"),
   consumed_input_view_digest: indexerDigestSchema,
-  workset_read_receipt_digests: z.array(indexerDigestSchema).min(1),
   result: z.union([partitionMainResultSchema, authorMainResultSchema]),
 }).strict();
 
@@ -200,7 +195,6 @@ interface AuthorValidationContext {
 export function validateIndexerMainRunResult(input: {
   request: unknown;
   result: unknown;
-  workset_read_receipts: readonly unknown[];
   validation: PartitionValidationContext | AuthorValidationContext;
 }): {
   request: IndexerMainRunRequest;
@@ -212,40 +206,6 @@ export function validateIndexerMainRunResult(input: {
 } {
   const request = validateIndexerMainRunRequest(input.request);
   const result = indexerMainRunResultSchema.parse(input.result);
-  if (
-    new Set(result.workset_read_receipt_digests).size !==
-      result.workset_read_receipt_digests.length
-  ) {
-    throw new TypeError("workset read receipt digests must not contain duplicates");
-  }
-  const canonicalResultReceiptDigests = [
-    ...result.workset_read_receipt_digests,
-  ].sort();
-  if (
-    canonicalResultReceiptDigests.some(
-      (digest, index) => digest !== result.workset_read_receipt_digests[index],
-    )
-  ) {
-    throw new TypeError("workset read receipt digests must use canonical ordering");
-  }
-  const worksetReadReceipts: IndexerWorksetReadReceipt[] =
-    input.workset_read_receipts.map(validateIndexerWorksetReadReceipt);
-  const receiptDigests = worksetReadReceipts
-    .map((receipt) => {
-      if (receipt.workset_digest !== request.workset.workset_digest) {
-        throw new TypeError("main run read receipt does not bind the current workset");
-      }
-      return receipt.receipt_digest;
-    })
-    .sort();
-  if (
-    receiptDigests.length !== result.workset_read_receipt_digests.length ||
-    receiptDigests.some(
-      (digest, index) => digest !== result.workset_read_receipt_digests[index],
-    )
-  ) {
-    throw new TypeError("main run Result does not bind the CLI-issued read receipt set");
-  }
   if (
     result.consumed_input_view_digest !== request.composition_input.view_digest ||
     result.result.workset_digest !== request.workset.workset_digest ||

@@ -7,16 +7,8 @@ import {
 function current(): LocalDogfoodEvaluationInput {
   return {
     force_approved: false,
-    main_run: { present: true, states: ["accepted"] },
-    post_author: { present: true, states: ["accepted"], envelope_current: true },
-    candidate_compile: {
-      state: "current",
-      file_count: 2,
-      approved_binding_count: 2,
-      draft_count: 0,
-    },
+    approved_knowledge: { count: 2 },
     close: { state: "ready" },
-    material_gaps: { blocking_count: 0 },
     verify: { evidence_status: "pass" },
     packages: [{ state: "ready" }],
     completed_runtime_paths_present: [],
@@ -31,24 +23,6 @@ describe("local dogfood report evaluation", () => {
     });
   });
 
-  test("classifies an interrupted Result without caller-authored approval", () => {
-    const input = current();
-    input.main_run.states = ["running"];
-    expect(evaluateLocalDogfoodSummary(input)).toEqual({
-      outcome: "nonconformant",
-      reason_codes: ["main-run-incomplete"],
-    });
-  });
-
-  test("classifies a stale Result without caller-authored approval", () => {
-    const input = current();
-    input.main_run.states = ["stale"];
-    expect(evaluateLocalDogfoodSummary(input)).toEqual({
-      outcome: "nonconformant",
-      reason_codes: ["main-result-stale"],
-    });
-  });
-
   test("marks force-approved output as nonconformant", () => {
     const input = current();
     input.force_approved = true;
@@ -58,13 +32,13 @@ describe("local dogfood report evaluation", () => {
     });
   });
 
-  test("rejects Candidate/approved binding and build manifest mismatches", () => {
+  test("rejects empty approved output and stale build manifest", () => {
     const input = current();
-    input.candidate_compile.approved_binding_count = 1;
+    input.approved_knowledge.count = 0;
     input.packages = [{ state: "stale" }];
     expect(evaluateLocalDogfoodSummary(input).reason_codes).toEqual([
+      "approved-knowledge-empty",
       "build-manifest-stale",
-      "candidate-approved-binding-mismatch",
     ]);
   });
 
@@ -76,14 +50,6 @@ describe("local dogfood report evaluation", () => {
     ];
     expect(evaluateLocalDogfoodSummary(input).reason_codes).toEqual([
       "close-temporary-state-not-cleaned",
-    ]);
-  });
-
-  test("rejects unresolved required material gaps", () => {
-    const input = current();
-    input.material_gaps.blocking_count = 1;
-    expect(evaluateLocalDogfoodSummary(input).reason_codes).toEqual([
-      "required-material-gap",
     ]);
   });
 });

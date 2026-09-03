@@ -334,6 +334,7 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
   binding: ProjectIndexerMainSourceBinding;
   dependency_view?: unknown;
   author_inventory_members?: readonly IndexerInventoryMember[];
+  partition_inventory_members?: readonly IndexerInventoryMember[];
 }): Promise<IndexerAuthorizedWorksetViewSource[]> {
   if (input.binding.adapter === "parser-facts") {
     const binding = input.binding;
@@ -360,8 +361,18 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
         throw new TypeError("author dependency view does not match the current workset");
       }
     }
+    const partitionMemberIds = new Set(
+      input.partition_inventory_members === undefined
+        ? []
+        : canonicalIndexerInventoryMembers(input.partition_inventory_members)
+          .map((member) => member.member_id),
+    );
     const selectedFactRefs = dependencyView === null
-      ? [...binding.parser_fact_index.keys()]
+      ? input.partition_inventory_members === undefined
+        ? [...binding.parser_fact_index.keys()]
+        : [...binding.parser_fact_index.keys()].filter((factRef) =>
+            partitionMemberIds.has(factRef)
+          )
       : dependencyView.positive_nodes.flatMap((node) =>
         node.kind === "selected-fact" ? [node.fact_ref] : []
       );
@@ -379,9 +390,10 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
           .map((member) => member.member_id),
     );
     const selectedFileDescriptors = binding.parser_fact_view.files.filter((file) =>
-      file.facts.length === 0 && (
-        request.workset.stage === "partition" || authorMemberIds.has(file.file_ref)
-      )
+      request.workset.stage === "partition"
+        ? input.partition_inventory_members === undefined ||
+          partitionMemberIds.has(file.file_ref)
+        : file.facts.length === 0 && authorMemberIds.has(file.file_ref)
     );
     const sources = [buildIndexerAuthorizedWorksetViewSource({
       request,
@@ -426,9 +438,11 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
     }),
     document.path,
   ]));
-  const authorizedDocumentPaths = input.author_inventory_members === undefined
+  const scopedDocumentMembers = input.author_inventory_members ??
+    input.partition_inventory_members;
+  const authorizedDocumentPaths = scopedDocumentMembers === undefined
     ? input.binding.authorized_document_paths
-    : canonicalIndexerInventoryMembers(input.author_inventory_members).map((member) => {
+    : canonicalIndexerInventoryMembers(scopedDocumentMembers).map((member) => {
         if (member.member_kind !== "document") {
           throw new TypeError("captured document author inventory contains a non-document member");
         }

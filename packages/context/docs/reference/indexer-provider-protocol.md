@@ -184,8 +184,8 @@ Bundles, expanded variants, semantic split parts and the single CLI
 `catalog-fallback` parent do not. Counts up to 100 continue, 101 through 300
 continue with a warning, and counts above 300 return the non-Gate
 `indexer-plan-revision-required` outcome before any author workset runs. That
-partial outcome consumes neither a user Gate nor the three-attempt profile
-revision ledger.
+partial outcome reopens the owning semantic step; it does not create a profile
+revision ledger or an override route.
 
 Artifact content has three mechanically separate layers. `facts[]` contains
 canonical, source-bound values and never reader prose. A structured
@@ -431,17 +431,11 @@ to the CLI catalog fallback.
 Context projects every source-specific fact, dependency and verified Provider
 fragment authorized for one main workset into the single
 `context.indexer.authorized-workset-view/v1` resource. The Agent reads that
-managed resource and does not construct source-specific reads, cursors or
-receipt fields. Internally, Context uses
-`context.indexer.workset-read-request/v1`: the stable request identity binds the
-current workset, read kind and exact authorized ref set, while cursor and page
-size remain transport-only. Every page carries a canonical payload digest, and
-the CLI closes the complete acyclic chain into
-`context.indexer.workset-read-receipt/v1` with exact coverage. The Host binds
-that CLI-issued receipt set to the main Result before operation validation;
-Provider-authored receipt values are ignored. Changing a cursor, page size,
-call grouping or Host batch cannot manufacture a new logical unit such as
-`batch-1` or alter an Artifact identity.
+managed resource and uses its file locators directly. It does not construct
+source-specific reads, semantic windows, cursors or receipt fields. Workset,
+View and execution-request identity bind the accepted Result; Host call grouping
+cannot manufacture a new logical unit such as `batch-1` or alter an Artifact
+identity.
 
 Post-author composition uses its own
 `context.indexer.post-author-run-ledger/v1`; it never reuses primary main-run
@@ -548,9 +542,8 @@ splitting/merging its declared lineage, moving a logical Section, or changing
 an approved collection/path is represented by a digest-bound layout change
 report and requires the human, non-delegable `confirm-layout-change` Gate.
 `context.indexer.layout-transition/v1` binds the current proposal set and base
-projections before exposing the conditional Gate. The legacy align Route remains
-available only until the workflow cutover; it is not an authority for the new
-Indexer protocol.
+projections before exposing the conditional Gate. No parallel align Route can
+approve or rewrite that transition.
 
 ## Explicit Result-bound Candidate compile
 
@@ -559,7 +552,7 @@ author Results from the durable main-run store. Its input repeats only the
 exact workset, execution-request, acceptance and Artifact Result digests; the
 CLI rejects a missing, extra, forged or stale Result reference before
 materialization. Callers cannot provide an alternate Result body, Provider
-contract, default plan or prose-compile payload.
+contract or a second document-authoring payload.
 
 The compiler validates every accepted run envelope and acceptance record,
 then binds each Candidate to the same Indexer Result, source identity,
@@ -582,24 +575,19 @@ customization may be proposed only after the explicit
 `indexer-customization-required` outcome and its capability-gap proof; compile
 itself never invents one.
 
-## Material-gap recovery and the single authoring path
+## Material gaps and the single authoring path
 
-Reconciliation emits unresolved material gaps when current authorized sources
-cannot satisfy a required question. `checkpoint-material-gaps` stores only the
-current unresolved set in Context runtime state under `.tmp`, with a revision
-for crash recovery and stale-write rejection. It does not persist answer text,
-source spans, approval receipts, or audit history into knowledge files.
+Reconciliation reports unresolved material gaps from the current accepted
+Results. Required gaps keep the current lifecycle blocked; optional gaps remain
+diagnostics in that report. Context does not create a second checkpoint, audit
+ledger, answer workset, or special close route for them.
 
 Newly captured Markdown, tool snapshots, or other authorized material re-enter
-the normal `main-index` operation. The next main Result either answers the
-question from current source or leaves the gap unresolved. There is no separate
-answer workset, answer-only Result, evidence Review, planned landing, or layout
-actualization. Users review the resulting knowledge Candidate once.
-
-`audit-material-gap-state` recomputes the expected unresolved set without a
-write. Required gaps block close; optional gaps remain runtime diagnostics.
-Successful close writes only approved knowledge structure and clears completed
-runtime lifecycle state.
+the normal `main-index` operation. The affected Partition and Author worksets
+run again, reconciliation is recomputed, and the user reviews the resulting
+knowledge Candidate once. Successful close writes only approved knowledge and
+the recovery metadata in `knowledge/structure.yaml`, then clears transient
+Indexer runtime state.
 
 ## Detector and inspector
 
@@ -751,27 +739,3 @@ structured claim passed owner-local evidence coverage, and lists every
 semantic-prose block or direct authored template variable as
 `semantic-prose-agent-review-required`. It does not scan free prose to claim
 that unsupported natural-language assertions were mechanically detected.
-
-## Material-question target exclusion
-
-A target exclusion is not a Provider Result and does not change the confirmed
-requirement. Context first emits
-`context.indexer.material-question-exclusion-report/v1` for one current
-unresolved `QuestionTargetKey`. The report binds the project, predecessor
-ledger revision, question-target inventory, question contract and revision,
-target ref/item digest, exact allowlisted reason, derived severity and the
-reader-visible impact.
-
-`confirm-material-question-exclusion` accepts only that report and always emits
-`context.indexer.material-question-exclusion-confirmation/v1` with human,
-non-delegable authority. Managed mode, Provider omission, wildcard targets and
-non-allowlisted reasons cannot create the decision. Apply revalidates the
-report against the current resolved question and ledger before retaining only
-the reason code and decision digest in the entry.
-
-The successor ledger is checkpointed with the predecessor revision through the
-same durable structure journal. A question contract, owner, target item,
-question revision or other pair dependency change replaces the retained
-exclusion with an unresolved entry in one checkpoint. The Material Gap ledger
-is intentionally absent from the main-workset identity, so this target-level
-decision does not invalidate unrelated main indexing worksets.

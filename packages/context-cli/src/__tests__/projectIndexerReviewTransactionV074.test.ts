@@ -15,6 +15,10 @@ import { renderApprovedIndexerMarkdown } from "../project/reviewApplyIndexer.js"
 import { readRejectedDecisions, REVIEW_DECISIONS_FILE } from
   "../project/reviewDecisions.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
+import {
+  compactApprovedKnowledgeMarkdown,
+  ensureApprovedKnowledgePresentation,
+} from "../project/approvedKnowledgeMetadata.js";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const CANDIDATE_ID = `indexer/${"a".repeat(64)}`;
@@ -77,6 +81,27 @@ describe("Indexer Review durable transaction", () => {
       timestamp: "2026-09-03T00:00:00.000Z",
     });
     expect(alreadyTitled.match(/^# Sample$/gmu)).toHaveLength(1);
+  });
+
+  test("replaces generated Artifact descriptions with reader-facing body text", () => {
+    const row = candidate();
+    row.review.summary = "content Artifact from sample-indexer.";
+    const rendered = renderApprovedIndexerMarkdown({
+      record: row,
+      timestamp: "2026-09-03T00:00:00.000Z",
+    });
+    expect(rendered).toContain("description: Current knowledge.");
+
+    const legacy = rendered.replace(
+      "description: Current knowledge.",
+      "description: content Artifact from sample-indexer.",
+    );
+    expect(compactApprovedKnowledgeMarkdown(legacy))
+      .toContain("description: Current knowledge.");
+
+    const untitled = legacy.replace(/^# Sample\n\n/mu, "");
+    expect(ensureApprovedKnowledgePresentation(untitled).match(/^# Sample$/gmu))
+      .toHaveLength(1);
   });
 
   test("recovers rejection ledger and durable decision together after interruption", async () => {

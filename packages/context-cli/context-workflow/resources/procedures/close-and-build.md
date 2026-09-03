@@ -17,16 +17,11 @@ reader-visible prose. Candidate fingerprints, Section mappings, old prose
 Do not hand-edit, duplicate, or move fields between Markdown and
 `structure.yaml`. The CLI owns compaction and hydration. A compact Markdown page
 remains readable and keeps enough identity for projection diagnostics; complete
-code and optimization metadata is intentionally not duplicated.
+code lifecycle metadata is intentionally not duplicated.
 
 Build runs only after close and verification are current. It writes declared
 packages under `dist/` and records an inventory receipt with added, updated,
 removed, and index changes.
-
-When document optimization is enabled, its current revision batch must also be
-resolved before build. Build compiles each approved page through its optional
-`__revision.md` sidecar and records the policy and decision counts in the
-package inventory. Revision sidecars are never emitted as separate knowledge.
 
 Run only the current route command, then evaluate again. A successful build
 means the currently declared scope is current; newly captured or newly declared

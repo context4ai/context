@@ -51,7 +51,6 @@ export const indexerCatalogFallbackRecordSchema = z.object({
   catalog_block: catalogBlockSchema,
   continuation_policy: continuationPolicySchema,
   user_gate_required: z.literal(false),
-  profile_revision_ledger_consumed: z.literal(false),
   fallback_digest: indexerDigestSchema,
 }).strict();
 
@@ -261,7 +260,6 @@ export function buildIndexerCatalogFallback(input: {
       review_identity: logicalUnitRef,
     },
     user_gate_required: false,
-    profile_revision_ledger_consumed: false,
   };
   return validateIndexerCatalogFallbackRecord({
     ...payload,
@@ -292,7 +290,6 @@ export const indexerCatalogContinuationPlanSchema = z.object({
   readability_advisory: z.boolean(),
   blocking: z.literal(false),
   user_gate_required: z.literal(false),
-  profile_revision_ledger_consumed: z.literal(false),
   fragments: z.array(continuationFragmentSchema).min(2),
   continuation_digest: indexerDigestSchema,
 }).strict();
@@ -431,7 +428,6 @@ export function buildIndexerCatalogContinuationPlan(input: {
       input.estimated_line_count > fallback.continuation_policy.advisory_line_threshold,
     blocking: false,
     user_gate_required: false,
-    profile_revision_ledger_consumed: false,
     fragments: projected,
   };
   return validateIndexerCatalogContinuationPlan({

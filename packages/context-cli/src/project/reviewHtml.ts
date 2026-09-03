@@ -139,13 +139,13 @@ function renderReviewHtml(
     <header class="header">
       <div class="titleline">
         <h1>Context Review</h1>
-        <div class="subtle" id="count-state">${candidates.length} draft candidate(s) in ${escapeHtml(reviewScope)} · ${candidates.length} pending 0 approved 0 rejected</div>
+        <div class="subtle" id="count-state">${candidates.length} draft candidate(s) in ${escapeHtml(reviewScope)} · ${candidates.length} pending 0 approved 0 omitted</div>
       </div>
       <div class="toolbar">
         <span class="subtle payload-hint">After review, open Payload and paste it into agent chat -></span>
         <span class="bulk-actions">
           <button class="btn" id="all-approved">All approved</button>
-          <button class="btn" id="all-rejected">All rejected</button>
+          <button class="btn" id="all-rejected">Omit all</button>
         </span>
         <button class="btn brand" id="payload-open">Payload</button>
         <span class="subtle" id="copy-state"></span>
@@ -159,7 +159,7 @@ function renderReviewHtml(
           <span>Candidates</span>
           <div class="filters" aria-label="candidate filters">
             <label class="filter"><input id="filter-approved" type="checkbox" checked> approved</label>
-            <label class="filter"><input id="filter-rejected" type="checkbox" checked> rejected</label>
+            <label class="filter"><input id="filter-rejected" type="checkbox" checked> omitted</label>
             <label class="filter"><input id="filter-pending" type="checkbox" checked> pending</label>
           </div>
         </div>
@@ -223,7 +223,7 @@ function renderReviewHtml(
     function updateCountState() {
       const counts = decisionCounts();
       countState.textContent = candidates.length + " draft candidate(s) in " + payloadScopeLabel +
-        " · " + counts.pending + " pending " + counts.approved + " approved " + counts.rejected + " rejected";
+        " · " + counts.pending + " pending " + counts.approved + " approved " + counts.rejected + " omitted";
     }
     function visibleCandidates() {
       const showApproved = filterApproved.checked;
@@ -252,7 +252,8 @@ function renderReviewHtml(
       return groups;
     }
     function statusBadge(status) {
-      return '<span class="badge ' + html(status) + '">' + html(status) + '</span>';
+      const label = status === "rejected" ? "omitted" : status;
+      return '<span class="badge ' + html(status) + '">' + html(label) + '</span>';
     }
     function typeBadge(item) {
       return item.entity_type === "symbol"
@@ -267,7 +268,8 @@ function renderReviewHtml(
     function setGroupDecision(groupKey, status) {
       const items = candidates.filter((item) => (item.group_key || item.module || "ungrouped") === groupKey);
       if (items.length === 0) return;
-      if (!window.confirm("Set all " + items.length + " candidate(s) in " + groupKey + " to " + status + "?")) return;
+      const label = status === "rejected" ? "omitted" : status;
+      if (!window.confirm("Set all " + items.length + " candidate(s) in " + groupKey + " to " + label + "?")) return;
       for (const item of items) {
         if (status === "approved" && !item.snapshot_ready) continue;
         decisions.set(item.candidate_id, status);
@@ -277,7 +279,8 @@ function renderReviewHtml(
     }
     function setAllDecision(status) {
       if (candidates.length === 0) return;
-      if (!window.confirm("Set all " + candidates.length + " candidate(s) to " + status + "?")) return;
+      const label = status === "rejected" ? "omitted" : status;
+      if (!window.confirm("Set all " + candidates.length + " candidate(s) to " + label + "?")) return;
       for (const item of candidates) {
         if (status === "approved" && !item.snapshot_ready) continue;
         decisions.set(item.candidate_id, status);
@@ -291,7 +294,7 @@ function renderReviewHtml(
         return [
           "# Review payload is not ready",
           "# " + counts.pending + " pending candidate(s) remain.",
-          "# Approve or reject every candidate before copying.",
+          "# Approve or omit every candidate before copying.",
         ].join("\\n");
       }
       const defaultStatus = counts.rejected > counts.approved ? "rejected" : "approved";
@@ -382,7 +385,7 @@ function renderReviewHtml(
             '<span class="group-label"><span>' + (collapsed ? "▸" : "▾") + '</span><span class="group-key">' + html(group.label) + '</span><span class="group-count">' + group.items.length + ' items</span></span>' +
             '<span class="group-actions">' +
               '<button class="group-btn" data-group-status="approved" data-group="' + html(group.key) + '">All approved</button>' +
-              '<button class="group-btn" data-group-status="rejected" data-group="' + html(group.key) + '">All rejected</button>' +
+              '<button class="group-btn" data-group-status="rejected" data-group="' + html(group.key) + '">Omit all</button>' +
             '</span>' +
           '</div>' +
           (collapsed ? "" : group.items.map((item) => {
@@ -403,7 +406,7 @@ function renderReviewHtml(
       selected = item.candidate_id;
       const status = decisions.get(item.candidate_id);
       const evidenceWarning = item.snapshot_ready ? "" :
-        '<div class="notice warning">Evidence unavailable. Restore the committed snapshot before approving this candidate, or reject it.</div>';
+        '<div class="notice warning">Source snapshot unavailable. Restore it before approving this candidate, or omit the page.</div>';
       const sharedRefs = new Set(item.shared_source_refs || []);
       const sharedSourceBlock = sharedRefs.size === 0 ? "" :
         '<div class="notice">' + sharedRefs.size + ' 个证据片段也被其他候选使用，请结合上下文确认内容边界。</div>';
@@ -415,7 +418,7 @@ function renderReviewHtml(
           const body = section.body || "(section body unavailable)";
           const evidenceBlock = refs.length === 0 ? "" :
             '<details class="evidence-details">' +
-              '<summary>Evidence（' + refs.length + ' 个来源片段）</summary>' +
+              '<summary>Sources（' + refs.length + ' 个来源片段）</summary>' +
               '<div class="section-excerpts">' + excerpts.map((excerpt, index) =>
                 '<details class="source-excerpt ' + html(excerpt.status || "unavailable") + '">' +
                   '<summary>来源片段 ' + (index + 1) + (excerpt.line_range ? ' · ' + html(excerpt.line_range) : '') + '</summary>' +
@@ -451,21 +454,14 @@ function renderReviewHtml(
               (resource.reason ? '<div class="resource-preview-reason">' + html(resource.reason) + '</div>' : '') +
             '</section>'
           ).join('') + '</div></details>';
-      const identityBlock = '<div class="meta identity-meta">' +
-        '<span class="badge">' + html(item.collection || "unknown") + '</span>' +
-        '<code>candidate_id=' + html(item.candidate_id) + '</code>' +
-        '<code>node_ref=' + html(item.node_ref) + '</code>' +
-        '<code>view_ref=' + html(item.view_ref) + '</code>' +
-      '</div>';
       const displayedSources = item.source_paths.length > 0 ? item.source_paths : item.source_refs;
-      const technicalDetailsBlock = '<details class="technical-details">' +
-        '<summary>Technical details（ID 与 ' + displayedSources.length + ' 个来源位置）</summary>' +
-        '<div class="technical-content">' +
-          identityBlock +
-          '<div class="section-source-refs">' + displayedSources.map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>' +
-          (sharedRefs.size === 0 ? "" : '<div class="section-source-refs"><span>Shared source refs</span>' + Array.from(sharedRefs).map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>') +
-        '</div>' +
-      '</details>';
+      const sourceLocationsBlock = displayedSources.length === 0 ? "" :
+        '<details class="technical-details">' +
+          '<summary>Source locations（' + displayedSources.length + '）</summary>' +
+          '<div class="technical-content"><div class="section-source-refs">' +
+            displayedSources.map((ref) => '<code>' + html(ref) + '</code>').join('') +
+          '</div></div>' +
+        '</details>';
       const relatedEdges = item.related_edges || [];
       const relatedEdgesBlock = relatedEdges.length === 0 ? "" :
         '<details class="edge-preview candidate-related-edges" aria-label="candidate related edges">' +
@@ -490,7 +486,7 @@ function renderReviewHtml(
           '<div><div class="detail-heading"><h2>' + html(item.review.title) + '</h2>' + typeBadge(item) + '</div><div class="subtle">' + html(item.display_summary || item.review.summary) + '</div></div>' +
           '<div class="actions">' +
             '<button class="btn approve ' + (status === "approved" ? "active" : "") + '" data-action="approved" ' + (!item.snapshot_ready ? "disabled" : "") + '>Approve</button>' +
-            '<button class="btn reject ' + (status === "rejected" ? "active" : "") + '" data-action="rejected">Reject</button>' +
+            '<button class="btn reject ' + (status === "rejected" ? "active" : "") + '" data-action="rejected">Omit</button>' +
           '</div>' +
         '</div>' +
         evidenceWarning +
@@ -499,7 +495,8 @@ function renderReviewHtml(
         resourcePreviewBlock +
         sectionDetails +
         previewBlock +
-        technicalDetailsBlock;
+        '<div class="notice">Need changes? Do not approve or omit this batch. Return to the agent and request a repair for this page.</div>' +
+        sourceLocationsBlock;
       document.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => { selected = button.dataset.id; render(); }));
       document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => setDecision(item.candidate_id, button.dataset.action)));
       document.querySelectorAll("[data-group-toggle]").forEach((header) => header.addEventListener("click", () => toggleGroup(header.dataset.groupToggle)));

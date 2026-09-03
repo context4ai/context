@@ -43,6 +43,12 @@ describe("bundled Indexer base contracts", () => {
       schema.profile === "web-application"
     )!;
     const component = contract.profiles.find((profile) => profile.id === "component-library")!;
+    const domainSubjects = contract.subject_key_schemas.find((schema) =>
+      schema.profile === "domain-service"
+    )!;
+    const runtimeSubjects = contract.subject_key_schemas.find((schema) =>
+      schema.profile === "background-runtime"
+    )!;
     const markdown = contract.profiles.find((profile) => profile.id === "technical-guide")!;
     expect(application.reader_question_contracts.map((question) => question.ref)).toEqual([
       "question:behavior-and-purpose",
@@ -63,6 +69,18 @@ describe("bundled Indexer base contracts", () => {
     expect(component.reader_question_contracts.map((question) => question.ref)).toContain(
       "question:examples-and-usage",
     );
+    expect(domainSubjects.kinds.map((kind) => kind.id)).toEqual([
+      "domain-capability",
+      "operation-entrypoint",
+      "operation-flow",
+      "runtime-context-family",
+    ]);
+    expect(runtimeSubjects.kinds.map((kind) => kind.id)).toEqual([
+      "runtime",
+      "scheduled-operation",
+      "dispatch-contract",
+      "dependency-boundary",
+    ]);
     expect(markdown.reader_question_contracts.map((question) => [
       question.ref,
       question.coverage_domain,

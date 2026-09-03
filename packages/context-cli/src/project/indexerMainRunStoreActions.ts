@@ -102,16 +102,12 @@ export async function acceptProjectIndexerMainRunStore(input: {
   const value = record(input.value, "main run store acceptance input");
   protocol(value, "context.indexer.main-run-store-accept-input/v1");
   await assertCurrentIndexerRequirement(input.projectRoot, value.requirement_set_digest);
-  if (!Array.isArray(value.workset_read_receipts)) {
-    throw new TypeError("main run store acceptance requires workset_read_receipts");
-  }
   return {
     protocol: "context.indexer.main-run-store-acceptance/v1" as const,
     ...await acceptIndexerMainRunStore({
       projectRoot: input.projectRoot,
       workset_digest: String(value.workset_digest ?? ""),
       result: value.result,
-      workset_read_receipts: value.workset_read_receipts,
     }),
   };
 }
@@ -123,14 +119,10 @@ export async function convergeProjectIndexerMainPartitionRunStore(input: {
   const value = record(input.value, "main partition convergence input");
   protocol(value, "context.indexer.main-run-partition-convergence-input/v1");
   await assertCurrentIndexerRequirement(input.projectRoot, value.requirement_set_digest);
-  if (!Array.isArray(value.workset_read_receipts)) {
-    throw new TypeError("main partition convergence requires workset_read_receipts");
-  }
   const result = await convergeIndexerMainPartitionRunStore({
     projectRoot: input.projectRoot,
     workset_digest: String(value.workset_digest ?? ""),
     result: value.result,
-    workset_read_receipts: value.workset_read_receipts,
   });
   return {
     protocol: "context.indexer.main-run-partition-convergence/v1" as const,

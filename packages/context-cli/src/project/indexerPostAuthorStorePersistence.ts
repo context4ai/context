@@ -69,7 +69,7 @@ export interface PostAuthorEnvelopeRecord {
 
 export interface IndexerPostAuthorStoreReceipt {
   protocol: "context.indexer.post-author-store-receipt/v1";
-  operation: "prepare" | "start" | "accept" | "fail" | "compose";
+  operation: "prepare" | "start" | "accept" | "fail" | "retry" | "compose";
   state_digest: string;
   transaction: DurableMultiFileTransactionReceipt | null;
 }

@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { join } from "node:path";
 import YAML from "yaml";
+import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
+import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 
 const STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
@@ -40,6 +42,7 @@ const CLOSE_TRANSIENT_FIELDS = new Set([
   "indexer_artifact_ref",
   "indexer_section_refs",
   "indexer_source_ref",
+  "context_optimization",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -70,9 +73,6 @@ function machineMetadata(frontmatter: Record<string, unknown>): Record<string, u
     !STRUCTURED_FIELDS.has(field) &&
     !CLOSE_TRANSIENT_FIELDS.has(field)
   ));
-  if (metadata.context_optimization !== undefined) {
-    metadata.context_optimization = compactOptimizationState(metadata.context_optimization);
-  }
   const symbols = stringList(metadata.code_symbols);
   if (symbols.length > 0) {
     const parts = symbols.map((symbol) => symbol.split("|"));
@@ -88,49 +88,8 @@ function machineMetadata(frontmatter: Record<string, unknown>): Record<string, u
   return metadata;
 }
 
-function compactOptimizationState(value: unknown): unknown {
-  if (!isRecord(value) || !isRecord(value.sections)) return value;
-  const policies = Object.values(value.sections).flatMap((section) =>
-    isRecord(section) && typeof section.policy_digest === "string" ? [section.policy_digest] : []
-  );
-  if (policies.length < 2) return value;
-  const counts = new Map<string, number>();
-  for (const policy of policies) counts.set(policy, (counts.get(policy) ?? 0) + 1);
-  const defaultPolicy = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0];
-  if (defaultPolicy === undefined) return value;
-  return {
-    ...value,
-    policy_digest: defaultPolicy,
-    sections: Object.fromEntries(Object.entries(value.sections).map(([id, section]) => {
-      if (!isRecord(section) || section.policy_digest !== defaultPolicy) return [id, section];
-      const { policy_digest: omitted, ...rest } = section;
-      void omitted;
-      return [id, rest];
-    })),
-  };
-}
-
-function expandOptimizationState(value: unknown): unknown {
-  if (!isRecord(value) || !isRecord(value.sections) || typeof value.policy_digest !== "string") return value;
-  const { policy_digest: defaultPolicy, ...rest } = value;
-  return {
-    ...rest,
-    sections: Object.fromEntries(Object.entries(value.sections).map(([id, section]) => [
-      id,
-      isRecord(section) && section.policy_digest === undefined
-        ? { ...section, policy_digest: defaultPolicy }
-        : section,
-    ])),
-  };
-}
-
 function expandedMachineMetadata(machine: Record<string, unknown>): Record<string, unknown> {
-  const expanded: Record<string, unknown> = {
-    ...machine,
-    ...(machine.context_optimization === undefined
-      ? {}
-      : { context_optimization: expandOptimizationState(machine.context_optimization) }),
-  };
+  const expanded: Record<string, unknown> = { ...machine };
   const symbolTable = machine.code_symbol_table;
   if (isRecord(symbolTable) && typeof symbolTable.module === "string") {
     const entries = stringList(symbolTable.entries);
@@ -276,7 +235,26 @@ export function compactApprovedKnowledgeMarkdown(content: string): string {
   const compact = Object.fromEntries(Object.entries(parsed.record).filter(([field]) =>
     COMPACT_FIELDS.has(field) && !(indexerPage && field === "tags")
   ));
+  compact.description = readerKnowledgeDescription({
+    description: compact.description,
+    markdown: parsed.body,
+    ...(typeof compact.title === "string" ? { title: compact.title } : {}),
+  });
   return `---\n${YAML.stringify(compact).trimEnd()}\n---\n${parsed.body}`;
+}
+
+export function ensureApprovedKnowledgePresentation(content: string): string {
+  const parsed = parseFrontmatter(content);
+  if (parsed === undefined) return content;
+  const title = typeof parsed.record.title === "string" ? parsed.record.title : undefined;
+  const body = title === undefined ? parsed.body : ensureMarkdownPageTitle(parsed.body, title);
+  const description = readerKnowledgeDescription({
+    description: parsed.record.description,
+    markdown: body,
+    ...(title === undefined ? {} : { title }),
+  });
+  if (parsed.record.description === description && parsed.body === body) return content;
+  return `---\n${YAML.stringify({ ...parsed.record, description }).trimEnd()}\n---\n${body}`;
 }
 
 export function approvedViewMachineMetadata(frontmatter: Record<string, unknown>): Record<string, unknown> | undefined {

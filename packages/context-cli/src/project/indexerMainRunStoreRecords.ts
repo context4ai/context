@@ -40,14 +40,13 @@ export interface MainRunSpec {
 interface MainAcceptedCacheRecord {
   protocol: "context.indexer.main-accepted-cache-record/v1";
   result: unknown;
-  workset_read_receipts: unknown[];
   accepted_record: IndexerMainAcceptedRecord;
   cache_digest: string;
 }
 
 export interface IndexerMainRunStoreReceipt {
   protocol: "context.indexer.main-run-store-receipt/v1";
-  operation: "prepare" | "start" | "accept" | "fail" | "converge-partition";
+  operation: "prepare" | "start" | "accept" | "fail" | "retry" | "converge-partition";
   ledger_digest: string;
   transaction: DurableMultiFileTransactionReceipt | null;
 }
@@ -136,14 +135,10 @@ export function validateAcceptedCacheEnvelope(input: {
   if (!isRecord(input.cache) || input.cache.protocol !== "context.indexer.main-accepted-cache-record/v1") {
     throw new TypeError("main accepted cache record has an invalid protocol");
   }
-  if (!Array.isArray(input.cache.workset_read_receipts)) {
-    throw new TypeError("main accepted cache record is missing read receipts");
-  }
   const acceptedRecord = validateIndexerMainAcceptedRecord(input.cache.accepted_record);
   const payload = {
     protocol: "context.indexer.main-accepted-cache-record/v1" as const,
     result: input.cache.result,
-    workset_read_receipts: input.cache.workset_read_receipts,
     accepted_record: acceptedRecord,
   };
   const cacheDigest = indexerProtocolDigest(payload);
@@ -179,7 +174,6 @@ export function validateAcceptedCache(input: {
   const validated = validateAndRecordIndexerMainRun({
     request: input.spec.request,
     result: cached.result,
-    workset_read_receipts: cached.workset_read_receipts,
     validation: input.spec.validation as unknown as Parameters<
       typeof validateAndRecordIndexerMainRun
     >[0]["validation"],
@@ -287,12 +281,10 @@ export async function persistLedger(input: {
 
 export function acceptedCacheRecord(input: {
   validated: ReturnType<typeof validateAndRecordIndexerMainRun>;
-  workset_read_receipts: readonly unknown[];
 }): MainAcceptedCacheRecord {
   const payload = {
     protocol: "context.indexer.main-accepted-cache-record/v1" as const,
     result: input.validated.result,
-    workset_read_receipts: [...input.workset_read_receipts],
     accepted_record: input.validated.accepted_record,
   };
   return { ...payload, cache_digest: indexerProtocolDigest(payload) };

@@ -21,7 +21,7 @@ import { bundledMarkdownReaderQuestionContracts } from
   "./indexerBaseMarkdownAuthoringCatalog.js";
 
 const BASE_CONTRACT_VERSION = "1.1.0";
-export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.1";
+export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.4";
 const BUNDLED_PARSER_REQUIREMENTS = buildIndexerParserCapabilityRequirements(
   BUNDLED_INDEXER_PARSER_PACKAGE_VERSION,
 );
@@ -170,7 +170,10 @@ function profileLayoutMappings(
   }));
 }
 
-function commonMetrics(catalogHeavy: boolean): IndexerMetricContract[] {
+// Profile metrics describe authoring quality goals. They do not decide Result
+// readiness: blocking belongs to deterministic protocol validation and final
+// Review, not to Agent-supplied measurements.
+function commonMetrics(): IndexerMetricContract[] {
   return [{
     id: "inventory-disposition-coverage",
     unit: "ratio",
@@ -193,8 +196,11 @@ function commonMetrics(catalogHeavy: boolean): IndexerMetricContract[] {
     operator: "narrative-enumeration-ratio",
     threshold_policy: "explicit",
     direction: "maximum",
-    recommended_max: catalogHeavy ? 0.6 : 0.35,
-    hard_max: catalogHeavy ? 0.75 : 0.53,
+    // Declared catalog Artifacts sit outside the measured scope, so a
+    // catalog-heavy profile is measured on its prose like any other and one
+    // allowance serves them all.
+    recommended_max: 0.35,
+    hard_max: 0.53,
   }, {
     id: "normalized-template-repetition-ratio",
     unit: "ratio",
@@ -333,7 +339,7 @@ function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEn
     }],
     required_dispositions: ["owned", "excluded", "unsupported"],
     metrics: [
-      ...commonMetrics(spec.catalogHeavy ?? false),
+      ...commonMetrics(),
       ...(spec.domain === "code" ? codeExampleMetrics() : []),
     ],
     artifact_policy_variants: artifactPolicyVariants(spec),

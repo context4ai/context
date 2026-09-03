@@ -121,9 +121,19 @@ describe("CLI bundled Indexer release", () => {
       ]);
     expect(profiles.profiles.find((profile) => profile.id === "documentation-site")
       ?.parser_requirements).toEqual([]);
-    expect(profiles.profiles.find((profile) => profile.id === "public-api-reference")
-      ?.metrics.find((metric) => metric.id === "narrative-enumeration-ratio"))
-      .toMatchObject({ recommended_max: 0.6, hard_max: 0.75 });
+    // Declared catalog Artifacts sit outside the measured scope, so a
+    // catalog-heavy profile carries the same enumeration allowance as a
+    // narrative one.
+    const enumerationAllowance = (id: string) =>
+      profiles.profiles.find((profile) => profile.id === id)
+        ?.metrics.find((metric) => metric.id === "narrative-enumeration-ratio");
+    expect(enumerationAllowance("public-api-reference")).toMatchObject({
+      recommended_max: 0.35,
+      hard_max: 0.53,
+    });
+    expect(enumerationAllowance("public-api-reference")).toEqual(
+      enumerationAllowance("documentation-site"),
+    );
 
     for (const bundle of fixture.manifest.bundles) {
       const provider = await loadIndexerProviderManifest(

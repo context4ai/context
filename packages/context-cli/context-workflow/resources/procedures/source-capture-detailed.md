@@ -164,9 +164,9 @@ capture result:
   nested Skill or Schema. These conditional resources are intentionally absent
   from the Route's ordinary `resources.required`.
 
-Never suggest prose compile or hand-built document knowledge for a code-only
-source. Code sources become active knowledge only through the declared
-extraction/review route returned by `context status`.
+Never hand-build document knowledge for a code-only source. Code sources become
+active knowledge only through the current Indexer route returned by
+`context status`.
 
 If capture is rejected because another phase or write gate is active, do not
 discard it automatically. Explain the active state from `context status`, follow
@@ -192,11 +192,9 @@ Stable structure:
    summarize each as a single line naming the work and which sources are
    affected. Omit the section entirely when there is no pending follow-up.
 4. Next step. Single command suggestion driven by status: the returned
-   `context run align:<type>:<source>:<collection> ...` command when structure work is
-   pending, the returned `context run compile:<type>:<source>:<collection> ...`
-   command when prose compile work is pending, or the CLI-owned code projection
-   command when code projection is pending. If nothing is pending, say so
-   explicitly.
+   current Indexer command when semantic structure or authoring work is pending,
+   or the CLI-owned capture command when another confirmed source remains. If
+   nothing is pending, say so explicitly.
 
 Do not include raw CLI diagnostics, agent_hints content, schema names, or phase
 payload identifiers in the report. Those belong in earlier troubleshooting

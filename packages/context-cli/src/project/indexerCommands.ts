@@ -50,12 +50,9 @@ import {
   startProjectIndexerPostAuthorRun,
 } from "./indexerPostAuthorActions.js";
 import { reconcileProjectIndexerResults } from "./indexerResultReconciliationActions.js";
-import { registerIndexerMaterialGapCommands } from "./indexerMaterialGapCommands.js";
 import { registerIndexerRequirementGateCommands } from "./indexerRequirementGateCommands.js";
 import { registerIndexerSubjectIdentityCommands } from "./indexerSubjectIdentityCommands.js";
 import { registerIndexerMarkdownProviderCommands } from "./indexerMarkdownProviderCommands.js";
-import { registerIndexerAuditCommands } from "./indexerAuditCommands.js";
-import { registerIndexerProfileAuditCommands } from "./indexerProfileAuditCommands.js";
 import { compileProjectIndexerCandidates } from "./indexerCandidateCompileActions.js";
 import { reportProjectIndexerIncrementalImpact } from
   "./indexerIncrementalImpactActions.js";
@@ -153,12 +150,9 @@ export function registerProjectIndexerCommands(program: Command): void {
   const indexer = program.command("indexer")
     .description("Inspect, confirm, and apply Indexer requirements and Providers");
 
-  registerIndexerMaterialGapCommands(indexer);
   registerIndexerRequirementGateCommands(indexer);
   registerIndexerSubjectIdentityCommands(indexer);
   registerIndexerMarkdownProviderCommands(indexer);
-  registerIndexerAuditCommands(indexer);
-  registerIndexerProfileAuditCommands(indexer);
 
   requirementCommand(
     indexer,

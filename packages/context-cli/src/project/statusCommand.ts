@@ -56,13 +56,6 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
       indexerRegistry: status.indexerRegistry.state,
       indexerCandidateCompile: status.indexerCandidateCompile.state,
       legacyCodeIndexMigrationRequired: status.codeIndexMigrationRequired,
-      documentOptimization: {
-        enabled: status.documentOptimization.enabled,
-        current: status.documentOptimization.current,
-        revisionPages: status.documentOptimization.revision_pages,
-        pendingFragments: status.documentOptimization.pending_fragments,
-        conflicts: status.documentOptimization.conflict_fragments,
-      },
     },
     counts: {
       sources: status.sourceSummary,

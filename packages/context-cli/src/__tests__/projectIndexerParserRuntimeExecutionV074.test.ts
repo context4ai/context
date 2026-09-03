@@ -49,6 +49,69 @@ function lockedDependencies(input: {
 }
 
 describe("0.7.4 parser runtime execution", () => {
+  test("keeps unsupported parser-owned files in the source identity inventory", async () => {
+    const operators = bundledIndexerOperatorContract();
+    const profiles = bundledIndexerProfileContract(operators);
+    const requirement = profiles.profiles.find((profile) =>
+      profile.id === "api-service"
+    )!.parser_requirements.find((candidate) => candidate.capability === "parser.thrift")!;
+    const mapping = buildIndexerParserCoordinateMapping({
+      requirement,
+      resolution: "direct",
+      registry: "npm",
+      actual_coordinate: requirement.community_coordinate,
+      abi_digest: requirement.abi_digest,
+    });
+    const lock = buildIndexerParserResolutionLock({
+      requirement,
+      mapping,
+      lock_integrity: "sha512-dW5zdXBwb3J0ZWQtdGhyaWZ0",
+      resolved_content_digest: digest("extract-thrift-package"),
+    });
+    const content = 'include "missing.thrift"\nservice Example {}\n';
+    const plan = buildProjectIndexerParserExecutionPlan({
+      profile_contract: profiles,
+      profile_id: "api-service",
+      source_registry_digest: digest("source-registry"),
+      authorized_files: [{
+        source_ref: "source:fixture-repository",
+        module_ref: null,
+        normalized_path: "api/example.thrift",
+        content_digest: contentDigest(content),
+      }],
+      parser_locks: [lock],
+    });
+    const entry = plan.entries[0]!;
+    const receipt = await executeProjectIndexerParserPlan({
+      projectRoot: process.cwd(),
+      profile_contract: profiles,
+      profile_id: "api-service",
+      execution_plan: plan,
+      dependencies: lockedDependencies({ requirement, mapping, lock }),
+      mappings: [mapping],
+      locks: [lock],
+      entry_inputs: [{
+        entry_digest: indexerParserExecutionEntryDigest(entry),
+        files: { "api/example.thrift": content },
+      }],
+    });
+
+    expect(receipt.merge.primary_owners).toEqual([expect.objectContaining({
+      normalized_path: "api/example.thrift",
+      disposition: "unsupported",
+    })]);
+    expect(receipt.source_bindings[0]!.source_identity_inventory.files).toEqual([{
+      normalized_path: "api/example.thrift",
+      content_digest: contentDigest(content),
+      facts: [],
+    }]);
+    expect(receipt.fact_views[0]!.files).toEqual([expect.objectContaining({
+      normalized_path: "api/example.thrift",
+      disposition: "unsupported",
+      facts: [],
+    })]);
+  });
+
   test("loads, executes, validates, and authority-merges the CLI-owned config adapter", async () => {
     const operators = bundledIndexerOperatorContract();
     const profiles = bundledIndexerProfileContract(operators);

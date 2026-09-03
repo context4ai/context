@@ -13,10 +13,6 @@ import {
   writeStarterTemplateReviewMarker,
 } from "./packageTemplateReview.js";
 import { enableContextDebug } from "./debugTrace.js";
-import {
-  disableDocumentOptimization,
-  enableDocumentOptimization,
-} from "./documentOptimizationConfig.js";
 import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuidanceTemplates.js";
 import { assertTrustedContextProjectConfigBoundary } from "./projectModulePolicy.js";
 
@@ -38,7 +34,6 @@ export interface ProjectInitInput {
   language?: ProjectLanguage;
   dev?: boolean;
   debug?: boolean;
-  optimizeDocs?: boolean;
   allowNonempty?: boolean;
 }
 
@@ -395,7 +390,6 @@ function renderPackageJson(
   dev: boolean | undefined,
   language: ProjectLanguage,
   debug: boolean | undefined,
-  optimizeDocs: boolean | undefined,
 ): string {
   return `${JSON.stringify({
     name,
@@ -406,7 +400,6 @@ function renderPackageJson(
       entry: DEFAULT_PROJECT_ENTRY,
       language,
       ...(debug === true ? { debug: true } : {}),
-      ...(optimizeDocs === true ? { documentOptimization: true } : {}),
     },
     scripts: {
       check: "context status",
@@ -496,7 +489,6 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
       input.dev,
       language,
       input.debug,
-      input.optimizeDocs,
     ),
     result,
   );
@@ -510,8 +502,6 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
   await writeIfMissing(join(projectRoot, "AGENTS.md"), renderAgents(projectName, language), result);
 
   if (input.debug === true) await enableContextDebug(projectRoot, "init");
-  if (input.optimizeDocs === true) await enableDocumentOptimization(projectRoot);
-  if (input.optimizeDocs === false) await disableDocumentOptimization(projectRoot);
 
   return result;
 }

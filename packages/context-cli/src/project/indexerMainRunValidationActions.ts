@@ -58,6 +58,7 @@ export async function validateProjectIndexerMainRun(input: {
   assertRequirementRefs(registry, [workset.requirement_ref]);
   if (workset.stage === "partition") {
     const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot,
       registry,
       indexer_id: String(workset.indexer_id),
     });
@@ -85,17 +86,26 @@ export async function validateProjectIndexerMainRun(input: {
         authority.profile.id,
       );
     }
-    const canonicalInventory = binding.partition_inventory;
-    const provided = validation.canonical_inventory_members;
+    const canonicalInventory = canonicalIndexerInventoryMembers(
+      array(
+        validation.canonical_inventory_members,
+        "canonical_inventory_members",
+      ) as Parameters<typeof canonicalIndexerInventoryMembers>[0],
+    );
     if (
-      provided !== undefined &&
-      indexerInventoryMembersDigest(
-        array(provided, "canonical_inventory_members") as Parameters<
-          typeof indexerInventoryMembersDigest
-        >[0],
-      ) !== indexerInventoryMembersDigest(canonicalInventory)
+      indexerInventoryMembersDigest(canonicalInventory) !==
+        workset.partition_inventory_digest
     ) {
-      throw new TypeError("partition validation uses a stale source adapter inventory");
+      throw new TypeError("partition validation uses stale workset inventory members");
+    }
+    const bindingMembers = new Map(binding.partition_inventory.map((member) => [
+      member.member_id,
+      indexerInventoryMembersDigest([member]),
+    ]));
+    if (canonicalInventory.some((member) =>
+      bindingMembers.get(member.member_id) !== indexerInventoryMembersDigest([member])
+    )) {
+      throw new TypeError("partition validation contains inventory outside its source binding");
     }
     validation.canonical_inventory_members = canonicalInventory;
   } else {
@@ -123,6 +133,12 @@ export async function validateProjectIndexerMainRun(input: {
           fact_refs: selectedFactRefs,
         })
       : binding.source_identity_inventory;
+    if (typeof scopedInventory.source_ref !== "string") {
+      throw new TypeError("author source identity inventory has no source_ref");
+    }
+    if (typeof workset.source_binding_digest !== "string") {
+      throw new TypeError("author workset has no source binding digest");
+    }
     const expectedSourceIdentityInventory = buildIndexerSourceIdentityInventory({
       source_ref: scopedInventory.source_ref,
       module_ref: scopedInventory.module_ref,

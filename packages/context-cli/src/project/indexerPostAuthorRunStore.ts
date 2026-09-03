@@ -2,6 +2,7 @@ import {
   acceptIndexerPostAuthorRun,
   buildIndexerPostAuthorFragmentRequest,
   failIndexerPostAuthorRun,
+  retryFailedIndexerPostAuthorRuns,
   indexerProtocolDigest,
   observeIndexerPostAuthorState,
   recoverIndexerPostAuthorRunLedger,
@@ -355,6 +356,32 @@ export async function failIndexerPostAuthorRunStore(input: {
       transaction_kind: FAIL_TRANSACTION,
       state,
       ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
+    });
+    return { ledger, receipt };
+  });
+}
+
+export async function retryFailedIndexerPostAuthorRunStore(input: {
+  projectRoot: string;
+  plan: IndexerPostAuthorPlan;
+}) {
+  return withProjectWriteLock(input.projectRoot, "retry-post-author-run", async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const current = await readPostAuthorCurrentState(
+      input.projectRoot,
+      authorWorksetDigest(input.plan),
+    );
+    if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
+    const ledger = retryFailedIndexerPostAuthorRuns({
+      plan: current.spec.plan,
+      ledger: current.ledger,
+    });
+    const state = buildPostAuthorRuntimeState({ spec: current.spec, ledger });
+    const receipt = await persistPostAuthorState({
+      projectRoot: input.projectRoot,
+      operation: "retry",
+      transaction_kind: "retry-post-author-run",
+      state,
     });
     return { ledger, receipt };
   });

@@ -87,7 +87,8 @@ and “content unavailable” pages are invalid even when the structure looks ri
 When current material cannot answer a required canonical question, return the
 exact material-question disposition for the supplied owner cell, question
 contract and Subject target. Do not invent a new question contract or landing.
-Context retains the unresolved set only as local runtime recovery state.
+Context reports the unresolved set in current reconciliation state; it does not
+create a second checkpoint ledger or published gap artifact.
 
 Capture the missing Markdown or other source normally, then rerun `main-index`.
 The new Result updates the same knowledge Candidate and enters the same final

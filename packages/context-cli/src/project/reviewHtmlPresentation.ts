@@ -99,7 +99,8 @@ export function filterEdgePreviewForCandidate(
   return edges.filter((edge) => endpoints.has(edge.from) || endpoints.has(edge.to));
 }
 
-export async function readEdgePreview(_projectRoot: string): Promise<EdgePreview[]> {
+export async function readEdgePreview(projectRoot: string): Promise<EdgePreview[]> {
+  void projectRoot;
   return [];
 }
 

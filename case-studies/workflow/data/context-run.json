@@ -18,7 +18,7 @@
     { "elapsed": 295, "node": "capture-next", "status": "actionable", "reasonCode": "route.capture.pending-target", "iteration": 1, "iterations": 2 },
     { "elapsed": 329, "node": "capture-next", "status": "actionable", "reasonCode": "route.capture.pending-target", "iteration": 2, "iterations": 2 },
     { "elapsed": 461, "node": "run-indexer-lifecycle", "status": "actionable", "reasonCode": "route.indexer.lifecycle-required" },
-    { "elapsed": 1481, "node": "apply-managed-review", "status": "actionable", "reasonCode": "route.review.apply-managed" },
+    { "elapsed": 1481, "node": "review-current-batch", "status": "actionable", "reasonCode": "route.review.decision-required" },
     { "elapsed": 1575, "node": "close-approved-knowledge", "status": "actionable", "reasonCode": "route.close.projection-stale", "checkpoint": 1, "checkpoints": 1 },
     { "elapsed": 1624, "node": "configure-package-output", "status": "actionable", "reasonCode": "route.package.configuration-required" },
     { "elapsed": 1679, "node": "review-package-template", "status": "waiting-user", "reasonCode": "route.package.template-review-required" },

@@ -455,7 +455,7 @@ describe("path-free plugin source audit", () => {
     expect(scanProductionDoc("fixture.md", "Do not run `ls .context/raw/` in production flow.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Treat `source_ref` as an opaque citation token.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Write scratch payload JSON and pass it with `--input`.")).toEqual([]);
-    expect(scanProductionDoc("fixture.md", "Use `context run compile:file:docs:architecture --view node-context --source entity/api --format json`.")).toEqual([]);
+    expect(scanProductionDoc("fixture.md", "Use the current Route's `context action complete-current --input <file> --format json` command.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Register local `.md` inputs with `context source add file docs --local . --include docs/**/*.md`.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Do not ask users to inspect or repair a code `.evidence` manifest.")).toEqual([]);
     expect(scanProductionDoc(

@@ -112,7 +112,7 @@ describe("0.6.2 document source and capture status routing", () => {
     }
   });
 
-  test("suggests read-plan after captured Lark source", async () => {
+  test("routes a captured Lark source into the Indexer lifecycle", async () => {
     const root = await makeProject();
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });

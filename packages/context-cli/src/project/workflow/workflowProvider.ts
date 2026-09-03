@@ -278,6 +278,12 @@ export function projectWorkflowResourceLocation(
   if (location.schema === "agent-graph.resource-location.host-action.v1") {
     return {
       ...projected,
+      command: resourceMaterializeCommand(
+        location.id,
+        revision,
+        authorities,
+        resourceReceiptsReference,
+      ),
       materialize: {
         handler: location.materialize.handler,
         input: {
@@ -451,13 +457,20 @@ async function resolveContextRoute(
     );
   }
   const resolutionPlan = optionalActionPlan(resolutionAction, observation);
+  const inspectionCommands = route.gate?.id === "knowledge-review" &&
+      route.gate.resolution === "session-authority"
+    ? inspectionPlan.commands.map((item) => ({
+        ...item,
+        command: item.command.replace(/ --open(?:\s|$)/u, " --format json ").trim(),
+      }))
+    : inspectionPlan.commands;
   const resolutionAvailability: ContextWorkflowCommand["availability"] =
     route.availability === "requires-user"
       ? "after-human-confirmation"
       : "immediate";
   const routeCommands = [
     ...hostPlan.commands,
-    ...inspectionPlan.commands,
+    ...inspectionCommands,
     ...resolutionPlan.commands.map((item) => ({
       ...item,
       availability: resolutionAvailability,

@@ -226,6 +226,19 @@ describe("MainIndexWorkset", () => {
     );
   });
 
+  test("allows the same local group key in different partition plans", () => {
+    const first = authorWorkset();
+    const second = buildIndexerMainWorkset({
+      ...first,
+      workset_digest: undefined,
+      protocol: undefined,
+      operation: undefined,
+      partition_plan_binding_digest: DIGESTS[15]!,
+    } as unknown as Parameters<typeof buildIndexerMainWorkset>[0]);
+    expect(second.stage).toBe("author");
+    expect(buildIndexerMainWorksetSet([first, second]).items).toHaveLength(2);
+  });
+
   test("keeps Host batching transport-only and preserves each workset identity", () => {
     const partition = partitionWorkset();
     const author = authorWorkset();

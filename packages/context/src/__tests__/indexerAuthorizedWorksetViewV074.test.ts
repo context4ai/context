@@ -386,7 +386,6 @@ describe("authorized Indexer workset View", () => {
     expect(validateIndexerAuthorizedWorksetProjection({
       request: runRequest,
       view: projection.view,
-      read_receipt: projection.read_receipt,
     })).toEqual(projection);
     expect(projection.view.items.filter((item) => item.category === "fact")
       .map((item) => item.ref)).toEqual(
@@ -427,7 +426,7 @@ describe("authorized Indexer workset View", () => {
       dependencyView.positive_nodes.find((node) => node.kind === "selected-fact")!.fact_ref,
     ]);
     expect(projection.view.items.some((item) => item.category === "dependency")).toBe(true);
-    expect(projection.read_receipt.read_set).toHaveLength(projection.view.items.length);
+    expect(projection.view.items.length).toBeGreaterThan(0);
   });
 
   test("accepts a new evidence adapter through the same projection source boundary", () => {
@@ -478,7 +477,7 @@ describe("authorized Indexer workset View", () => {
     expect(JSON.stringify(toolItem?.value)).not.toContain('"payload"');
   });
 
-  test("rejects stale source scope, View payload, and read receipt", () => {
+  test("rejects stale source scope and forged View payload", () => {
     const factView = parserFactView();
     const runRequest = request(partitionWorkset());
     const wrongScope = structuredClone(factView);
@@ -509,12 +508,9 @@ describe("authorized Indexer workset View", () => {
     forgedView.items[0]!.category = "forged";
     expect(() => validateIndexerAuthorizedWorksetView(forgedView)).toThrow(/item digest/);
 
-    const forgedReceipt = structuredClone(projection.read_receipt);
-    forgedReceipt.read_set[0]!.item_digest = digest("f");
-    expect(() => validateIndexerAuthorizedWorksetProjection({
+    expect(validateIndexerAuthorizedWorksetProjection({
       request: runRequest,
       view: projection.view,
-      read_receipt: forgedReceipt,
-    })).toThrow();
+    })).toEqual(projection);
   });
 });

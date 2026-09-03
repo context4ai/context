@@ -96,7 +96,6 @@ export function contextWorkflowAuthorities(
 ): ContextWorkflowAuthority[] {
   const authorities = new Set(options.authorities ?? []);
   if (options.managed === true) {
-    authorities.add(CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance);
     authorities.add(CONTEXT_WORKFLOW_AUTHORITIES.sourceRead);
     authorities.add(CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview);
     authorities.add(CONTEXT_WORKFLOW_AUTHORITIES.packageOutput);
@@ -117,7 +116,10 @@ export function createContextWorkflowFacts(
   const indexerLifecycleCurrent = observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
-    observation.indexerCandidateCompile.state === "current"
+    (
+      observation.indexerCandidateCompile.state === "current" ||
+      observation.close.state === "ready"
+    )
   );
   const evidenceClear = evidenceMaintenanceClear(observation);
   const packagesDeclared = !hasApprovedKnowledge || observation.packages.length > 0;
@@ -133,14 +135,6 @@ export function createContextWorkflowFacts(
   };
   const buildLogPending = runtimeEvents.configured &&
     runtimeEvents.pending_kinds.includes("package.build.completed");
-  const documentOptimization = observation.documentOptimization ?? {
-    enabled: false,
-    current: true,
-    pending_fragments: 0,
-    conflict_fragments: 0,
-    guidance_required: false,
-    revision_requested: false,
-  };
 
   return {
     workspace: {
@@ -195,16 +189,6 @@ export function createContextWorkflowFacts(
       declared: packagesDeclared,
       templates_reviewed: packageTemplatesReviewed(observation),
       current: packagesCurrent,
-    },
-    document_optimization: {
-      enabled: documentOptimization.enabled,
-      current: documentOptimization.current,
-      pending_count: documentOptimization.pending_fragments,
-      conflict_count: documentOptimization.conflict_fragments,
-      guidance_required: documentOptimization.guidance_required,
-      ...(documentOptimization.revision_requested && observation.draftCandidates === 0
-        ? { revision_requested: true as const }
-        : {}),
     },
     logs: {
       configured: runtimeEvents.configured,

@@ -190,7 +190,11 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.review.approve-current": (observation) => {
     const next = reviewApproveCommand(observation);
     return {
-      commands: next === undefined ? [] : [command(next, "write")],
+      // Managed approval is a semantic decision. Keep it visible to the Agent
+      // after the complete Candidate report has been generated and read.
+      commands: next === undefined
+        ? []
+        : [command(next, "write", "agent-required")],
     };
   },
   "context.review.force-approve-current": (observation) => {
@@ -250,21 +254,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         after_edit: "context status --format json",
       },
     },
-  }),
-  "context.document-optimization.next": (observation) => ({
-    commands: observation.documentOptimization?.enabled === true && !observation.documentOptimization.current
-      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
-      : [],
-  }),
-  "context.document-optimization.guidance": (observation) => ({
-    commands: observation.documentOptimization?.guidance_required === true
-      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
-      : [],
-  }),
-  "context.document-revision.next": (observation) => ({
-    commands: observation.documentOptimization?.revision_requested === true
-      ? [command("context optimize-docs revise-current --format json", "read", "agent-required")]
-      : [],
   }),
   "context.logs.flush": () => ({
     commands: [command(

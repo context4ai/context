@@ -44,12 +44,12 @@ rules, metric operators and thresholds.
 6. **Inventory protocols.** Close every input member with an explicit
    disposition. Use stable aggregation, full-path example identity and
    structured chain decisions; do not substitute page prose for inventory.
-7. **Metrics.** Reference registered metric ids and revision guidance. The CLI
-   alone owns recommended ranges, `inflation-sensitive` 150% enforcement and
-   mechanical audit results; a Provider cannot return a pass or threshold.
-8. **Revision boundary.** Use metric-specific revisions for at most the Route-
-   supplied attempts. After three failed attempts, report the complete issue
-   set for the human Gate. Forced approval cannot bypass base integrity rules.
+7. **Metrics.** Reference registered metric ids as reader-quality guidance.
+   The CLI may report advisory observations, but a Provider cannot return a
+   pass, threshold, retry count, or risk-acceptance decision.
+8. **Revision boundary.** Hard contract or source failures block at their
+   owner. Reader-quality feedback reopens the same Author or Composer through
+   `context revise`; it does not create a metric retry ledger or risk Gate.
 9. **Reader questions.** Declare reusable question templates with stable refs,
    target domains and allowed evidence contracts. Do not make a question id
    globally unique to one SubjectKey group.

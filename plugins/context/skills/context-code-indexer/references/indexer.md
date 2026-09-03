@@ -106,14 +106,47 @@ If a declared primary fact or Artifact requirement is absent, or the view does n
 
 ## Mechanical audit and revision
 
-Context independently validates inventory closure, owner closure, parser coverage, Artifact completeness, evidence scope, relationship candidates, semantic density, template repetition, enumeration, and implementation-body limits. These dimensions are independent; one strong dimension cannot offset a hard failure in another. Do not alter wording, Markdown syntax, sentence counts, or partitions solely to influence a counter.
+Context independently validates production invariants it can derive from current
+inputs, including inventory and owner closure, parser coverage, Artifact
+completeness, source scope, identity, layout, and currentness. These failures
+block the current Result and must be fixed at their source.
 
-For a failed metric, follow the matching entry in `references/metrics.md`. Each entry explains the denominator-preserving repair, a positive example, and an anti-example. It deliberately contains no numeric threshold: use the current CLI audit for actual, recommended, and hard values.
+Profile metrics are authoring guidance, not a second readiness protocol. Use
+`references/metrics.md` when the Result exhibits a real reader problem, but do
+not alter wording, Markdown syntax, sentence counts, or partitions merely to
+influence a counter. Context does not accept an Agent-supplied score as proof
+that a Result is ready.
 
-The reference-only reader-target metric is a zero-count hard gate. Context joins the proposed reader-target projection to its own current identity observations and separately rejects targets with no identity observation at all. Provider prose, display titles, filenames, inbound-reference counts, and self-reported target authority cannot satisfy this gate.
+## Two classes of evidence in a template Evidence pass
 
-Context recomputes example candidate decision coverage over the complete example inventory. Representative coverage and public-target linkage keep undecided and material-request candidates in their denominator, while only a confirmed exclusion removes a candidate. A scenario variant inherits coverage only when its canonical decision chain terminates at a retained representative; it inherits public-target linkage only when that terminal decision links the exact public target.
+A template Evidence pass lists what to locate. Those entries do not all resolve the same way, and the difference decides whether an assertion can be written at all.
 
-When the current audit reports a repairable profile failure, revise the complete affected logical-unit set and return a new Result under the same stable problem lineage. Use the reported uncovered identities, failed metric ids, evidence locators, and legal actions. Request material only when reliable correction requires a source, contract, protocol, or access boundary absent from the registered scope. Three failed revisions produce one complete human report; only the explicit non-delegable profile-risk Gate may accept that runtime profile risk, and no baseline integrity failure is bypassable.
+The parsers name structural identity and declarative contracts: files and symbols, imports and call relations, configuration values, source spans, page and redirect routes, workspace and release units, protocol services, methods and types, contract endpoints and operations, maintained examples and public target links, stylesheet modifiers, tables, views and indexes, and generated-source boundaries. When an Evidence pass entry falls in this set, a fact carries it and the assertion binds to that fact.
 
-Do not return output paths, collection names, quality thresholds, pass/fail decisions, extra owners, ad hoc question contracts, or facts outside the supplied authority. Context validates structure, evidence, layout, metrics, freshness, reconciliation, and final Review independently.
+Nothing in the parser layer is named for operational behavior. There is no fact for a retry, a timeout, a lifecycle transition, a permission, a schedule, a topic or queue identity, idempotency, concurrency, ordering, a cache, a transaction, observability, a CLI command or flag, an exit code, or a component prop, slot, or variant. Templates still ask you to locate these, because they are what the reader needs — but they resolve only through a configuration value, a source span, or a relation that literally states them.
+
+So for this second class: base the assertion on the configuration value or
+source span that states the behavior, and name the identity it uses. If nothing
+in the authorized view states it, the behavior is a material gap. Write the
+gap. Do not convert a library dependency, a symbol name, or a familiar
+framework convention into a behavioral claim. Context validates structured
+references, but final Review remains responsible for rejecting unsupported
+prose.
+
+Every profile template ends with a `Revise or stop when` condition. Stopping means recording the material gap that blocks the question — the evidence that is missing and what would resolve it — and never silently dropping the question from the Result. A template that tells you to stop when discovery is inferred is telling you not to guess, not to omit. Dropping the question satisfies no entry and fails question closure.
+
+The complete reader-question set and canonical inventory are production
+obligations rather than quality scores. A PartitionPlan must cover the current
+question set, dispositions must cover the inventory, and an answered question
+must satisfy its evidence contract. Natural-language sentences are not checked
+one by one by a metric engine; keep them grounded in the supplied material and
+use final Review to remove unsupported interpretation. Excluding inventory may
+close a disposition, but it does not manufacture an answer to a reader
+question.
+
+A required question with no authorized supporting material remains a material request and cannot be published. Repairable content feedback reopens the owning Author or Composer through the same `context revise` lifecycle. Context does not keep a profile retry ledger and does not provide a profile-risk override Gate.
+
+Do not return output paths, collection names, quality thresholds, pass/fail
+decisions, extra owners, ad hoc question contracts, or facts outside the
+supplied authority. Context validates deterministic structure, references,
+layout, freshness, reconciliation, and final Review independently.

@@ -162,120 +162,6 @@ describe("Context workflow Provider", () => {
     });
   });
 
-  test("does not re-enter the retired document optimization route before build", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      approvedPages: 1,
-      close: { state: "ready" as const, diagnostics: [] },
-      packages: [{
-        kind: "package.kb" as const,
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb" as const,
-        state: "stale" as const,
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-      packageTemplateReviews: [{
-        packageName: "knowledge",
-        templatePath: "src/package-templates/kb",
-        state: "starter-accepted" as const,
-      }],
-      documentOptimization: {
-        schema: "context.document-optimization-status.v3" as const,
-        enabled: true,
-        policy: "context.document-editorial-revision.v4",
-        revision_pages: 0,
-        eligible_views: 1,
-        eligible_fragments: 2,
-        revised_fragments: 0,
-        kept_fragments: 0,
-        pending_fragments: 2,
-        conflict_fragments: 0,
-        revision_requested: false,
-        current: false,
-        pending_fragment_ids: ["opt-a", "opt-b"],
-        conflict_fragment_ids: [],
-        retry_attempts: 0,
-        guidance_required: false,
-        guidance_problems: [],
-        signal_count: 2,
-        action_candidates: { repair: 1, reshape: 1, omit: 0, request_input: 0 },
-      },
-    };
-    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
-      const snapshot = await evaluateContextWorkflow({ observation, authorities });
-      expect(snapshot.route?.node).toBe("build-next");
-      expect(snapshot.route?.reason_code).toBe("route.build.package-stale");
-    }
-  });
-
-  test("routes a conversational document correction before optimization and build", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      approvedPages: 1,
-      close: { state: "ready" as const, diagnostics: [] },
-      packages: [{
-        kind: "package.kb" as const,
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb" as const,
-        state: "stale" as const,
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-      packageTemplateReviews: [{
-        packageName: "knowledge",
-        templatePath: "src/package-templates/kb",
-        state: "starter-accepted" as const,
-      }],
-      documentOptimization: {
-        schema: "context.document-optimization-status.v3" as const,
-        enabled: true,
-        policy: "context.document-editorial-revision.v4",
-        revision_pages: 0,
-        eligible_views: 1,
-        eligible_fragments: 1,
-        revised_fragments: 0,
-        kept_fragments: 1,
-        pending_fragments: 0,
-        conflict_fragments: 0,
-        revision_requested: true,
-        requested_approved_path: "faq/example.md",
-        current: true,
-        pending_fragment_ids: [],
-        conflict_fragment_ids: [],
-        retry_attempts: 0,
-        guidance_required: false,
-        guidance_problems: [],
-        signal_count: 0,
-        action_candidates: { repair: 0, reshape: 0, omit: 0, request_input: 0 },
-      },
-    };
-    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
-      const snapshot = await evaluateContextWorkflow({ observation, authorities });
-      expect(snapshot.route?.node).toBe("revise-document");
-      expect(snapshot.route?.reason_code).toBe("route.document-revision.requested");
-      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs revise-current --format json");
-    }
-  });
-
   test("defers stale close maintenance while draft candidates await Review", () => {
     const facts = createContextWorkflowFacts({
       ...emptyObservation(),
@@ -450,6 +336,55 @@ describe("Context workflow Provider", () => {
       authorities,
     });
     expect(first.evaluation.revision).not.toBe(second.evaluation.revision);
+  });
+
+  test("keeps final knowledge Review user-visible unless the session is fully managed", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      repoSources: [{ id: "module-a", name: "module-a" }],
+      readyRepoSources: 1,
+      draftCandidates: 2,
+      draftCollections: ["architecture" as const],
+      candidateSetDigest: "current-candidate-set",
+      indexerRegistry: {
+        state: "current" as const,
+        sourceRefs: ["repo:module-a"],
+      },
+      indexerCandidateCompile: { state: "current" as const },
+    };
+    const ordinary = await evaluateContextWorkflow({ observation, authorities: [] });
+    expect(ordinary.route).toMatchObject({
+      node: "review-current-batch",
+      availability: "requires-user",
+      gate: {
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
+        delegatable: true,
+        resolution: "user",
+      },
+    });
+    expect(ordinary.route?.commands).toContainEqual(expect.objectContaining({
+      command: expect.stringContaining("review approve-all architecture --force"),
+      availability: "after-human-confirmation",
+    }));
+
+    const managed = await evaluateContextWorkflow({
+      observation,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+    });
+    expect(managed.route).toMatchObject({
+      node: "review-current-batch",
+      availability: "immediate",
+      gate: {
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
+        delegatable: true,
+        resolution: "session-authority",
+      },
+    });
+    expect(managed.route?.commands).toContainEqual(expect.objectContaining({
+      command: expect.stringContaining("review approve-all architecture --managed"),
+      availability: "immediate",
+    }));
   });
 
   test("does not let legacy draft Candidates bypass the current Indexer compile", async () => {

@@ -157,3 +157,4 @@ quality_guidance:
     - reference-only-reader-targets
     - unresolved-ordinal-partitions
     - discretionary-artifacts-per-logical-unit
+  repair: references/indexer.md

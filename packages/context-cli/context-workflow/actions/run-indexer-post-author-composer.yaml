@@ -4,4 +4,4 @@ runner: agent
 effect: write
 skill: skills/run-indexer-post-author-composer/SKILL.md
 inputSchema: schemas/indexer-post-author-fragment-request.schema.json
-outputSchema: schemas/indexer-post-author-fragment-result.schema.json
+outputSchema: schemas/indexer-agent-step-result.schema.json

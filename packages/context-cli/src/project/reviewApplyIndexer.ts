@@ -2,6 +2,7 @@ import YAML from "yaml";
 import type { CandidateRecord } from "./candidateLedger.js";
 import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 import { okfTypeForCollection } from "./okfTypes.js";
+import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
 
 function escapeHtmlAttribute(value: string): string {
   return value
@@ -50,19 +51,6 @@ export function renderApprovedIndexerMarkdown(input: {
     item.source_ref,
   ]));
   const title = input.record.review.title;
-  const frontmatter = YAML.stringify({
-    title,
-    type: okfTypeForCollection(input.record.collection),
-    node_ref: input.record.node_ref,
-    view_ref: input.record.view_ref,
-    node_type: "entity",
-    description: input.record.review.summary,
-    tags: ["indexer", input.record.kind, input.record.module],
-    timestamp: input.timestamp,
-    resource: `knowledge:${input.record.path.replace(/\.md$/u, "")}`,
-    sources,
-    visibility: input.record.visibility,
-  }).trimEnd();
   const body = binding.sections.flatMap((section, index) => [
     ...(index === 0 ? [] : [""]),
     sectionMarkdown({
@@ -74,6 +62,24 @@ export function renderApprovedIndexerMarkdown(input: {
       }))].sort(),
     }),
   ]).join("\n");
+  const description = readerKnowledgeDescription({
+    description: input.record.review.summary,
+    markdown: body,
+    title,
+  });
+  const frontmatter = YAML.stringify({
+    title,
+    type: okfTypeForCollection(input.record.collection),
+    node_ref: input.record.node_ref,
+    view_ref: input.record.view_ref,
+    node_type: "entity",
+    description,
+    tags: ["indexer", input.record.kind, input.record.module],
+    timestamp: input.timestamp,
+    resource: `knowledge:${input.record.path.replace(/\.md$/u, "")}`,
+    sources,
+    visibility: input.record.visibility,
+  }).trimEnd();
   return [
     "---",
     frontmatter,

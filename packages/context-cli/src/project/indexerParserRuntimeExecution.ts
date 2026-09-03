@@ -137,9 +137,12 @@ function buildSourceBindings(input: {
     const conflicts = input.merge.conflicts.filter((conflict) =>
       sourceFactRefs.has(conflict.fact_ref)
     );
-    const analyzedPaths = [...new Set(
-      primaryOwners.filter((owner) => owner.disposition === "analyzed")
-        .map((owner) => owner.normalized_path),
+    // Source identity describes the complete parser-owned file set, not only
+    // files that yielded semantic facts. Unsupported files remain addressable
+    // with an empty fact list so downstream catalog-only handling can account
+    // for them without weakening parser evidence rules.
+    const identityPaths = [...new Set(
+      primaryOwners.map((owner) => owner.normalized_path),
     )].sort();
     const contentDigests = new Map<string, string>();
     for (const item of applicability) {
@@ -191,7 +194,7 @@ function buildSourceBindings(input: {
     });
     const factsByPath = new Map<string, Map<string, IndexerSourceIdentityFact>>();
     for (const fact of sourceFactValues) {
-      if (!analyzedPaths.includes(fact.locator.normalized_path)) continue;
+      if (!identityPaths.includes(fact.locator.normalized_path)) continue;
       const facts = factsByPath.get(fact.locator.normalized_path) ?? new Map();
       const projected = sourceIdentityFact(fact);
       const previous = facts.get(projected.fact_ref);
@@ -208,7 +211,7 @@ function buildSourceBindings(input: {
       source_ref: first.source_ref,
       module_ref: first.module_ref,
       source_input_digest: sourceInputDigest,
-      files: analyzedPaths.map((normalizedPath) => {
+      files: identityPaths.map((normalizedPath) => {
         const digest = contentDigests.get(normalizedPath);
         if (digest === undefined) {
           throw new TypeError(`parser source binding lacks content digest for ${normalizedPath}`);

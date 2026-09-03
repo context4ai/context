@@ -9,9 +9,6 @@ import {
   buildIndexerMainWorksetSet,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
-  buildIndexerWorksetReadReceipt,
-  buildIndexerWorksetReadRequest,
-  buildIndexerWorksetReadResponse,
   canonicalIndexerNodeRef,
   composeIndexerLayerInput,
   indexerRegistryDigests,
@@ -197,23 +194,10 @@ function fixture(requirementSetDigest = digest("2")) {
       primary_execution_projection: PRIMARY_EXECUTION_PROJECTION,
     }),
   });
-  const readRequest = buildIndexerWorksetReadRequest({
-    workset_digest: current.workset_digest,
-    read_kind: "source",
-    requested_refs: [current.source_ref],
-    allowed_refs: [current.source_ref],
-    page_size: 10,
-  });
-  const response = buildIndexerWorksetReadResponse({
-    request: readRequest,
-    items: [{ ref: current.source_ref, value: { content: "export const value = 1" } }],
-  });
-  const receipt = buildIndexerWorksetReadReceipt({ request: readRequest, responses: [response] });
   const result = {
     protocol: "context.indexer.run-result/v1",
     operation: "main-index",
     consumed_input_view_digest: request.composition_input.view_digest,
-    workset_read_receipt_digests: [receipt.receipt_digest],
     result: {
       protocol: "context.indexer.main-result/v1",
       stage: "partition",
@@ -233,7 +217,7 @@ function fixture(requirementSetDigest = digest("2")) {
       required_question_target_refs: [TARGET_REF],
     },
   };
-  return { current, request, receipt, result, spec };
+  return { current, request, result, spec };
 }
 
 describe("project main Indexer runtime store", () => {
@@ -256,7 +240,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: current.result,
-      workset_read_receipts: [current.receipt],
       inject_failure: (point) => {
         if (!injected && point.startsWith("after-target-rename:")) {
           injected = true;
@@ -303,7 +286,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: current.result,
-      workset_read_receipts: [current.receipt],
     });
     await rm(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "accepted"), {
       recursive: true,
@@ -343,7 +325,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: fixedCountResult,
-      workset_read_receipts: [current.receipt],
       inject_failure: (point) => {
         if (!injected && point.startsWith("after-target-rename:")) {
           injected = true;
@@ -391,7 +372,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: semanticResult,
-      workset_read_receipts: [current.receipt],
     });
     expect(accepted.convergence).toMatchObject({
       decision: "accepted",
@@ -453,7 +433,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: firstResult,
-      workset_read_receipts: [current.receipt],
     });
     expect(first.convergence.decision).toBe("retry-required");
 
@@ -477,7 +456,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: secondResult,
-      workset_read_receipts: [current.receipt],
     });
     expect(exhausted).toMatchObject({
       convergence: {
@@ -504,7 +482,6 @@ describe("project main Indexer runtime store", () => {
       request: fallbackStart.request,
       convergence: exhausted.convergence,
       validation: current.spec.validation,
-      workset_read_receipts: [current.receipt],
     }, null, 2)}\n`, "utf8");
     const accepted = JSON.parse(await runCliInDir(projectRoot, [
       "indexer", "build-main-index-catalog-fallback", "--input", fallbackPath,
@@ -572,7 +549,6 @@ describe("project main Indexer runtime store", () => {
       projectRoot,
       workset_digest: current.current.workset_digest,
       result: forgedResult,
-      workset_read_receipts: [current.receipt],
     })).rejects.toThrow(/predecessor is missing/);
   });
 
@@ -645,7 +621,6 @@ describe("project main Indexer runtime store", () => {
       requirement_set_digest: requirementSetDigest,
       workset_digest: current.current.workset_digest,
       result: current.result,
-      workset_read_receipts: [current.receipt],
     }, null, 2)}\n`, "utf8");
     const converged = JSON.parse(await runCliInDir(projectRoot, [
       "indexer", "converge-main-index-partition-run", "--input", convergencePath,

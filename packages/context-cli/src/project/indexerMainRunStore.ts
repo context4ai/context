@@ -9,6 +9,7 @@ import {
   observeIndexerMainRunLedger,
   recoverIndexerMainRunLedger,
   retryIndexerMainPartitionRun,
+  retryFailedIndexerMainRuns,
   startIndexerMainRun,
   validateAndRecordIndexerMainRun,
   validateIndexerMainWorksetSet,
@@ -72,7 +73,6 @@ async function acceptValidatedMainRun(input: {
   projectRoot: string;
   current: IndexerMainRunLedger;
   validated: ReturnType<typeof validateAndRecordIndexerMainRun>;
-  workset_read_receipts: readonly unknown[];
   immutable_records?: readonly { path: string; value: unknown }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
@@ -231,7 +231,6 @@ export async function acceptIndexerMainRunStore(input: {
   projectRoot: string;
   workset_digest: string;
   result: unknown;
-  workset_read_receipts: readonly unknown[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
@@ -240,7 +239,6 @@ export async function acceptIndexerMainRunStore(input: {
     const validated = validateAndRecordIndexerMainRun({
       request: spec.request,
       result: input.result,
-      workset_read_receipts: input.workset_read_receipts,
       validation: spec.validation as unknown as Parameters<
         typeof validateAndRecordIndexerMainRun
       >[0]["validation"],
@@ -281,7 +279,6 @@ export async function acceptIndexerMainRunStore(input: {
       projectRoot: input.projectRoot,
       current,
       validated,
-      workset_read_receipts: input.workset_read_receipts,
       ...(convergence === undefined
         ? {}
         : {
@@ -302,7 +299,6 @@ export async function acceptIndexerMainAuthorRunsStore(input: {
   runs: readonly {
     workset_digest: string;
     result: unknown;
-    workset_read_receipts: readonly unknown[];
   }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
@@ -332,7 +328,6 @@ export async function acceptIndexerMainAuthorRunsStore(input: {
       const validated = validateAndRecordIndexerMainRun({
         request: spec.request,
         result: run.result,
-        workset_read_receipts: run.workset_read_receipts,
         validation: spec.validation as unknown as Parameters<
           typeof validateAndRecordIndexerMainRun
         >[0]["validation"],
@@ -343,10 +338,7 @@ export async function acceptIndexerMainAuthorRunsStore(input: {
       });
       immutableRecords.push({
         path: acceptedCachePath(validated.request.execution_request_digest),
-        value: acceptedCacheRecord({
-          validated,
-          workset_read_receipts: run.workset_read_receipts,
-        }),
+        value: acceptedCacheRecord({ validated }),
       });
     }
     const receipt = await persistLedger({
@@ -365,7 +357,6 @@ export async function convergeIndexerMainPartitionRunStore(input: {
   projectRoot: string;
   workset_digest: string;
   result: unknown;
-  workset_read_receipts: readonly unknown[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   return withProjectWriteLock(
@@ -380,7 +371,6 @@ export async function convergeIndexerMainPartitionRunStore(input: {
       const validated = validateAndRecordIndexerMainRun({
         request: spec.request,
         result: input.result,
-        workset_read_receipts: input.workset_read_receipts,
         validation: spec.validation as unknown as Parameters<
           typeof validateAndRecordIndexerMainRun
         >[0]["validation"],
@@ -406,7 +396,6 @@ export async function convergeIndexerMainPartitionRunStore(input: {
             projectRoot: input.projectRoot,
             current,
             validated,
-            workset_read_receipts: input.workset_read_receipts,
             immutable_records: [convergenceRecord],
             ...(input.inject_failure === undefined
               ? {}
@@ -510,6 +499,22 @@ export async function failIndexerMainRunStore(input: {
   });
 }
 
+export async function retryFailedIndexerMainRunStore(projectRoot: string) {
+  return withProjectWriteLock(projectRoot, "retry-main-index-run", async () => {
+    await recoverDurableMultiFileTransactions(projectRoot);
+    const current = await currentLedger(projectRoot);
+    if (current === undefined) throw new TypeError("main run ledger is not prepared");
+    const ledger = retryFailedIndexerMainRuns(current);
+    const receipt = await persistLedger({
+      projectRoot,
+      operation: "retry",
+      transaction_kind: "retry-main-index-run",
+      ledger,
+    });
+    return { ledger, status: observeIndexerMainRunLedger(ledger), receipt };
+  });
+}
+
 export async function observeIndexerMainRunStore(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "observe-main-index-run-ledger", async () => {
     await recoverDurableMultiFileTransactions(projectRoot);
@@ -519,15 +524,18 @@ export async function observeIndexerMainRunStore(projectRoot: string) {
   });
 }
 
-async function readAcceptedMainAuthorResultRecordsUnlocked(projectRoot: string) {
+async function readAcceptedMainResultRecordsUnlocked(
+  projectRoot: string,
+  stage: "partition" | "author",
+) {
     await recoverDurableMultiFileTransactions(projectRoot);
     const ledger = await currentLedger(projectRoot);
     if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
-    if (ledger.entries.some((entry) => entry.stage !== "author")) {
-      throw new TypeError("current main run ledger is not the author stage");
+    if (ledger.entries.some((entry) => entry.stage !== stage)) {
+      throw new TypeError(`current main run ledger is not the ${stage} stage`);
     }
     if (ledger.entries.some((entry) => entry.state !== "accepted")) {
-      throw new TypeError("main author results cannot reconcile before every run is accepted");
+      throw new TypeError(`main ${stage} results require every run to be accepted`);
     }
     const records = [];
     for (const entry of ledger.entries) {
@@ -541,12 +549,12 @@ async function readAcceptedMainAuthorResultRecordsUnlocked(projectRoot: string) 
         acceptedCachePath(entry.execution_request_digest),
       );
       if (cached === undefined) {
-        throw new TypeError("accepted main author result cache is missing");
+        throw new TypeError(`accepted main ${stage} result cache is missing`);
       }
       const validated = validateAcceptedCache({ cache: cached, spec });
       if (canonicalIndexerJson(validated.accepted_record) !==
         canonicalIndexerJson(entry.accepted_record)) {
-        throw new TypeError("accepted main author cache does not match the current ledger");
+        throw new TypeError(`accepted main ${stage} cache does not match the current ledger`);
       }
       records.push({
         request: spec.request,
@@ -556,22 +564,31 @@ async function readAcceptedMainAuthorResultRecordsUnlocked(projectRoot: string) 
         run_envelope: validated.run_envelope,
         dependency_view: spec.validation.dependency_view,
         artifact_dependency_set: validated.artifact_dependency_set,
+        validation: spec.validation,
       });
     }
     return records;
+}
+
+export async function readAcceptedIndexerMainPartitionResultRecords(projectRoot: string) {
+  return withProjectWriteLock(
+    projectRoot,
+    "read-accepted-main-partition-result-records",
+    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "partition"),
+  );
 }
 
 export async function readAcceptedIndexerMainAuthorResultRecords(projectRoot: string) {
   return withProjectWriteLock(
     projectRoot,
     "read-accepted-main-author-result-records",
-    () => readAcceptedMainAuthorResultRecordsUnlocked(projectRoot),
+    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "author"),
   );
 }
 
 export async function readAcceptedIndexerMainAuthorResults(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "read-accepted-main-author-results", async () => {
-    const records = await readAcceptedMainAuthorResultRecordsUnlocked(projectRoot);
+    const records = await readAcceptedMainResultRecordsUnlocked(projectRoot, "author");
     return records.map((record) => record.artifact_result);
   });
 }

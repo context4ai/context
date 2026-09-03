@@ -1,6 +1,6 @@
 {
   "name": "context",
-  "version": "0.7.1",
+  "version": "0.7.4",
   "packageManager": "bun@1.3.9",
   "repository": {
     "type": "git",
@@ -27,11 +27,10 @@
     "build": "bun run --filter @c4a/core build && bun run --filter @c4a/context build && bun run --filter @c4a/extract build && bun run --filter @c4a/extract-ts build && bun run --filter @c4a/extract-go build && bun run --filter @c4a/extract-rush build && bun run --filter @c4a/extract-thrift build && bun run --filter @c4a/extract-proto build && bun run --filter @c4a/extract-mdx build && bun run --filter @c4a/extract-contract build && bun run --filter @c4a/extract-style build && bun run --filter @c4a/extract-sql build && bun run --filter @c4a/tui build && bun run --filter @c4a/context-cli build",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
-    "test:e2e": "bun run --filter @c4a/context-cli test:e2e",
     "lint": "bun run --filter '*' lint",
     "verify:fast": "bun run typecheck && bun run lint && bun run test",
     "verify": "bun run verify:fast",
-    "verify:full": "bun run verify:fast && bun run test:e2e && bun run test:dist",
+    "verify:full": "bun run verify:fast && bun run test:dist",
     "test:dist": "node packages/extract/scripts/smokeDist.mjs && node packages/extract-go/scripts/smokeDist.mjs && node packages/extract-ts/scripts/smokeDist.mjs && node packages/extract-thrift/scripts/smokeDist.mjs && node packages/extract-proto/scripts/smokeDist.mjs && node packages/extract-mdx/scripts/smokeDist.mjs && node packages/extract-contract/scripts/smokeDist.mjs && node packages/extract-style/scripts/smokeDist.mjs && node packages/extract-sql/scripts/smokeDist.mjs",
     "release:prepare": "bun run scripts/prepare-release.ts",
     "release:notes": "bun run scripts/release-metadata.ts --format markdown",

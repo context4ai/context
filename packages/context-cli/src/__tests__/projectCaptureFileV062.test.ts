@@ -249,26 +249,6 @@ describe("0.6.2 capture:file runtime", () => {
         message: "The current operation completed. Re-evaluate workflow.current before another workspace lifecycle action.",
       });
 
-      const investigation = JSON.parse(await runCliInDir(projectRoot, [
-        "run",
-        "capture:file:product-docs",
-        "--view",
-        "read-plan",
-        "--format",
-        "json",
-      ])) as { result: Record<string, unknown> };
-      expect(investigation.result).toMatchObject({
-        investigation_mode: "collection-neutral",
-        allowed_actions: ["view", "propose_collection"],
-        classification_state: {
-          required: true,
-          reason_code: "route.indexer.lifecycle-required",
-        },
-      });
-      expect(investigation.result).not.toHaveProperty("collection");
-      expect(investigation.result).not.toHaveProperty("payload_schema");
-      expect(investigation.result).not.toHaveProperty("payload_target");
-      expect(investigation.result).not.toHaveProperty("semantic_rules");
       expect(output.result.snapshot.snapshot_hash).toBe(
         computeLogicalRawHash([{ path: "intro.md", bytes: "# Intro\n\n- Alpha\n" }]),
       );

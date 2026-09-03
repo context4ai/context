@@ -23,10 +23,10 @@ function resolution(
   const mapping = buildIndexerParserCoordinateMapping({
     requirement,
     resolution: options.resolution ?? "direct",
-    registry: options.resolution === "wrapper" ? "bnpm" : "npm",
+    registry: options.resolution === "wrapper" ? "private-registry" : "npm",
     actual_coordinate: options.resolution === "wrapper"
       ? {
-          package: "@tiktok-ttkb/extract-config-wrapper",
+          package: "@example-private/extract-config-wrapper",
           export: requirement.community_coordinate.export,
           version: options.actualVersion ?? requirement.community_coordinate.version,
         }
@@ -108,7 +108,7 @@ describe("0.7.4 parser dependency intent projection", () => {
       mappings: [wrapper.mapping],
     });
     expect(projection.intents).toEqual([expect.objectContaining({
-      package: "@tiktok-ttkb/extract-config-wrapper",
+      package: "@example-private/extract-config-wrapper",
       version: "0.7.4",
       state: "requires-authorization",
     })]);

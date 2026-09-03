@@ -15,11 +15,6 @@ import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.j
 import { inspectPackageTemplateReviews } from "./packageTemplateReview.js";
 import type { ProjectStatus } from "./statusTypes.js";
 import {
-  collectDocumentOptimizationStatus,
-  disabledDocumentOptimizationStatus,
-} from "./documentOptimization.js";
-import { listApprovedKnowledge } from "./packageBuilder.js";
-import {
   evaluateContextWorkflow,
   projectContextWorkflowStatus,
 } from "./workflow/workflowProvider.js";
@@ -41,6 +36,7 @@ import {
   readIndexerWorkflowRegistryStatus,
   resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
+import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
 
 export {
   pendingDocumentCaptureCommands,
@@ -121,7 +117,6 @@ export async function collectProjectStatusSnapshot(
     join(projectRoot, "knowledge"),
     (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
   );
-  const approvedKnowledge = await listApprovedKnowledge(projectRoot);
   const approvedCollections = (await Promise.all(
     KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
       collection,
@@ -131,9 +126,6 @@ export async function collectProjectStatusSnapshot(
       ),
     })),
   )).filter((item) => item.count > 0).map((item) => item.collection);
-  const documentOptimization = phaseStatus.projectEntryValid
-    ? await collectDocumentOptimizationStatus({ projectRoot, files: approvedKnowledge })
-    : disabledDocumentOptimizationStatus();
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const verifyStatus = draftStatus.diagnostics.length === 0
@@ -195,7 +187,6 @@ export async function collectProjectStatusSnapshot(
     packages,
     packageFreshness,
     packageTemplateReviews,
-    documentOptimization,
     runtimeEvents,
     pendingCaptureCommands: pendingCapture.commands,
     missingCaptureSources: pendingCapture.missingSources,
@@ -224,7 +215,18 @@ export async function collectProjectStatusSnapshot(
       ? {}
       : { resourceReceiptsReference: options.resourceReceiptsReference }),
   });
-  const workflow = projectContextWorkflowStatus(workflowSnapshot);
+  const baseWorkflow = projectContextWorkflowStatus(workflowSnapshot);
+  const currentRoute = await projectCurrentIndexerWorkflowRoute({
+      projectRoot,
+      route: baseWorkflow.current,
+      authorities,
+      managed: options.managed === true,
+    });
+  const workflow = {
+    ...baseWorkflow,
+    ...(currentRoute === undefined ? {} : { current: currentRoute }),
+    ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+  };
   await recordWorkflowEvaluation(projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({
     workflow,
@@ -254,7 +256,6 @@ export async function collectProjectStatusSnapshot(
     phases: phases.map((phase) => phase.id),
     packages: packageFreshness,
     packageTemplateReviews,
-    documentOptimization,
     pendingCapturePhases: pendingCapture.phaseIds,
     evidenceStatus,
     evidenceWarnings,
@@ -308,7 +309,20 @@ export async function reevaluateProjectStatusWorkflow(input: {
       ? {}
       : { resourceReceiptsReference: input.resourceReceiptsReference }),
   });
-  const workflow = projectContextWorkflowStatus(workflowSnapshot);
+  const baseWorkflow = projectContextWorkflowStatus(workflowSnapshot);
+  const currentRoute = await projectCurrentIndexerWorkflowRoute({
+      projectRoot: input.snapshot.observation.projectRoot,
+      route: baseWorkflow.current,
+      authorities: input.snapshot.authorities,
+      managed: contextWorkflowAuthorities({ managed: true }).every((authority) =>
+        input.snapshot.authorities.includes(authority)
+      ),
+    });
+  const workflow = {
+    ...baseWorkflow,
+    ...(currentRoute === undefined ? {} : { current: currentRoute }),
+    ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+  };
   await recordWorkflowEvaluation(input.snapshot.observation.projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({
     workflow,

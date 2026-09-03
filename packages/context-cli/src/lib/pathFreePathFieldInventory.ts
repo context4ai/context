@@ -81,6 +81,8 @@ const DEFAULT_INTERNAL_FIELDS = [
   "old_snapshot_file",
   "new_snapshot",
   "new_snapshot_file",
+  "bundle_root",
+  "content_path",
 ] as const;
 
 function policyFor(field: string): PathFieldInventoryEntry["policy"] {
@@ -103,6 +105,8 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "stage_path" ||
     field === "entry_path" ||
     field === "program_path" ||
+    field === "bundle_root" ||
+    field === "content_path" ||
     field.startsWith("output") ||
     field === "out_dir" ||
     field === "index_path" ||

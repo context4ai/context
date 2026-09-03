@@ -6,6 +6,7 @@ import {
   indexerDependencyNodeRef,
   indexerInventoryMembersDigest,
   indexerMaterialQuestionKey,
+  indexerPartitionGroupBindingDigest,
   indexerPartitionGroupProjectionDigest,
   indexerPartitionGroupRef,
   indexerProtocolDigest,
@@ -36,6 +37,7 @@ import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { buildCurrentProjectIndexerAuthorRunSpec } from
   "./indexerCurrentMainRunSpec.js";
+import { materializeCurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
 
 type CompletePartitionPlan = Extract<IndexerPartitionPlan, { status: "complete" }>;
 type PartitionGroup = CompletePartitionPlan["groups"][number];
@@ -263,7 +265,13 @@ function parserDependencyView(input: {
     if (file === undefined) {
       throw new TypeError(`author group references unknown parser member ${member.member_id}`);
     }
-    if (file.disposition !== "analyzed") continue;
+    if (file.disposition !== "analyzed") {
+      // A parser may deliberately classify a file as unsupported or catalog-only.
+      // The Author stage still needs its source identity so it can account for the
+      // member without inventing parser facts or publishing unsupported content.
+      unrepresentedFiles.set(member.member_id, file.normalized_path);
+      continue;
+    }
     const identityFact = file.facts.find((fact) => fact.kind === "source-file") ??
       file.facts.find((fact) => fact.kind === "source-loc");
     if (identityFact === undefined) {
@@ -567,6 +575,7 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     let authority = authorityByIndexer.get(partition.workset.indexer_id);
     if (authority === undefined) {
       authority = await resolveCurrentProjectIndexerPrimaryAuthority({
+        projectRoot: input.projectRoot,
         registry: input.registry,
         indexer_id: partition.workset.indexer_id,
       });
@@ -658,12 +667,14 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     requirement_ref: string;
     source_ref: string;
     module_ref: string | null;
+    partition_plan_binding_digest: string;
     group_key: string;
   }) => [
     value.indexer_id,
     value.requirement_ref,
     value.source_ref,
     value.module_ref ?? "",
+    value.partition_plan_binding_digest,
     value.group_key,
   ].join("\u0000");
   const preparationByGroup = new Map(preparations.map((item) => [
@@ -672,6 +683,10 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       requirement_ref: item.partition.workset.requirement_ref,
       source_ref: item.partition.workset.source_ref,
       module_ref: item.partition.workset.module_ref,
+      partition_plan_binding_digest: indexerPartitionGroupBindingDigest(
+        item.partition.plan,
+        item.group.group_key,
+      ),
       group_key: item.group.group_key,
     }),
     item,
@@ -679,10 +694,32 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
   if (preparationByGroup.size !== preparations.length) {
     throw new TypeError("author preparation contains duplicate group identities");
   }
-  const runSpecs = built.worksets.map((workset) => {
+  const runSpecs = await Promise.all(built.worksets.map(async (workset) => {
     const prepared = preparationByGroup.get(groupIdentity(workset));
     if (prepared === undefined) {
       throw new TypeError(`author run preparation is missing ${workset.group_key}`);
+    }
+    const selectedFactRefs = prepared.dependency_view.positive_nodes.flatMap((node) =>
+      node.kind === "selected-fact" ? [node.fact_ref] : []
+    );
+    let enrichment: Awaited<ReturnType<typeof materializeCurrentIndexerExtensionFacts>> | undefined;
+    if (prepared.binding.adapter === "parser-facts") {
+      try {
+        enrichment = await materializeCurrentIndexerExtensionFacts({
+          projectRoot: input.projectRoot,
+          authority: prepared.authority,
+          workset_digest: workset.workset_digest,
+          target_ref: workset.logical_unit_ref,
+          parser_fact_view: prepared.binding.parser_fact_view,
+          selected_fact_refs: selectedFactRefs,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new TypeError(
+          `extension fact materialization failed for ${workset.indexer_id}/${workset.group_key}: ${message}`,
+          { cause: error },
+        );
+      }
     }
     return buildCurrentProjectIndexerAuthorRunSpec({
       workset,
@@ -694,8 +731,9 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       expected_subject_key: prepared.group.subject_key,
       artifact_policy_eligibility: prepared.eligibility,
       allowed_question_targets: prepared.allowed_question_targets,
+      ...(enrichment === undefined ? {} : { enrichment }),
     });
-  });
+  }));
   return {
     requirement_set_digest: inventory.requirement_set_digest,
     ...built,

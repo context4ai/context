@@ -171,6 +171,16 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "domain-capability",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    additionalSubjectKinds: [{
+      id: "operation-entrypoint",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "operation-flow",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "runtime-context-family",
+      localKeyOperator: "canonical-module-identity",
+    }],
     parserCapabilities: [
       "parser.typescript",
       "parser.javascript",
@@ -190,6 +200,16 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "runtime",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    additionalSubjectKinds: [{
+      id: "scheduled-operation",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "dispatch-contract",
+      localKeyOperator: "canonical-module-identity",
+    }, {
+      id: "dependency-boundary",
+      localKeyOperator: "canonical-export-family",
+    }],
     parserCapabilities: [
       "parser.typescript",
       "parser.javascript",

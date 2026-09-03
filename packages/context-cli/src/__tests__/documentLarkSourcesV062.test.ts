@@ -163,7 +163,7 @@ describe("0.6.2 Lark document source registry helpers", () => {
     }
   });
 
-  test("captured lark inspect routes to read-plan instead of dry-run", async () => {
+  test("captured lark inspect routes back to the workspace workflow", async () => {
     const root = await mkdtemp(join(tmpdir(), "ctx-doc-sources-v062-ready-lark-"));
     try {
       const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });

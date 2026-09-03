@@ -99,6 +99,38 @@ export function validateIndexerTargetResolutionView(
   return view;
 }
 
+const indexerRepairIntentPayloadSchema = z.object({
+  target_ref: z.string().min(1),
+  instruction: z.string().trim().min(1),
+}).strict();
+
+export const indexerRepairIntentSchema = indexerRepairIntentPayloadSchema.extend({
+  intent_digest: indexerDigestSchema,
+}).strict();
+
+export type IndexerRepairIntent = z.infer<typeof indexerRepairIntentSchema>;
+
+export function buildIndexerRepairIntent(input: {
+  target_ref: string;
+  instruction: string;
+}): IndexerRepairIntent {
+  const payload = indexerRepairIntentPayloadSchema.parse(input);
+  return indexerRepairIntentSchema.parse({
+    ...payload,
+    intent_digest: indexerProtocolDigest(payload),
+  });
+}
+
+export function validateIndexerRepairIntent(value: unknown): IndexerRepairIntent {
+  const intent = indexerRepairIntentSchema.parse(value);
+  const { intent_digest: _digest, ...payload } = intent;
+  void _digest;
+  if (indexerProtocolDigest(payload) !== intent.intent_digest) {
+    throw new TypeError("Indexer repair intent digest is invalid");
+  }
+  return intent;
+}
+
 const mainWorksetBaseFields = {
   protocol: z.literal("context.indexer.main-workset/v2"),
   workset_digest: indexerDigestSchema,
@@ -117,6 +149,7 @@ const mainWorksetBaseFields = {
   source_binding_digest: indexerDigestSchema,
   primary_resource_binding_digest: indexerDigestSchema,
   question_target_inventory_digest: indexerDigestSchema,
+  repair_intent: indexerRepairIntentSchema.optional(),
 };
 
 const partitionWorksetSchema = z.object({
@@ -235,6 +268,9 @@ export function buildIndexerMainWorkset(input: MainWorksetInput): IndexerMainWor
   if (normalized.stage === "author" && normalized.target_resolution_view !== undefined) {
     validateIndexerTargetResolutionView(normalized.target_resolution_view);
   }
+  if (normalized.repair_intent !== undefined) {
+    validateIndexerRepairIntent(normalized.repair_intent);
+  }
   const payload = { ...normalized } as MainWorksetPayload;
   return indexerMainWorksetSchema.parse({
     ...payload,
@@ -281,6 +317,8 @@ export const indexerMainWorksetSetSchema = z.object({
     stage: z.enum(["partition", "author"]),
     indexer_id: indexerIdSchema,
     owner_cohort_ref: indexerDigestSchema,
+    partition_key: indexerDigestSchema.optional(),
+    partition_binding_digest: indexerDigestSchema.optional(),
     group_key: z.string().min(1).optional(),
   }).strict()),
 }).strict();
@@ -297,15 +335,23 @@ export function buildIndexerMainWorksetSet(
   values: readonly IndexerMainWorkset[],
 ): IndexerMainWorksetSet {
   const worksets = values.map(validateIndexerMainWorkset);
-  const items = worksets.map((workset) => ({
+  const items = worksets.map((workset): IndexerMainWorksetSet["items"][number] => ({
     workset_digest: workset.workset_digest,
     stage: workset.stage,
     indexer_id: workset.indexer_id,
     owner_cohort_ref: indexerOwnerCohortRef(workset),
-    ...(workset.stage === "author" ? { group_key: workset.group_key } : {}),
+    ...(workset.stage === "partition"
+      ? { partition_key: indexerProtocolDigest({
+          partition_subject_key: workset.partition_subject_key,
+          partition_inventory_digest: workset.partition_inventory_digest,
+        }) }
+      : {
+          partition_binding_digest: workset.partition_plan_binding_digest,
+          group_key: workset.group_key,
+        }),
   })).sort((left, right) => {
-    const leftKey = `${left.stage}\u0000${left.owner_cohort_ref}\u0000${left.group_key ?? ""}\u0000${left.workset_digest}`;
-    const rightKey = `${right.stage}\u0000${right.owner_cohort_ref}\u0000${right.group_key ?? ""}\u0000${right.workset_digest}`;
+    const leftKey = `${left.stage}\u0000${left.owner_cohort_ref}\u0000${left.partition_key ?? left.partition_binding_digest ?? ""}\u0000${left.group_key ?? ""}\u0000${left.workset_digest}`;
+    const rightKey = `${right.stage}\u0000${right.owner_cohort_ref}\u0000${right.partition_key ?? right.partition_binding_digest ?? ""}\u0000${right.group_key ?? ""}\u0000${right.workset_digest}`;
     return compareIndexerCanonicalText(leftKey, rightKey);
   });
   if (new Set(items.map((item) => item.workset_digest)).size !== items.length) {
@@ -314,7 +360,7 @@ export function buildIndexerMainWorksetSet(
   const authorGroupIdentities = items
     .filter((item) => item.stage === "author")
     .map((item) =>
-      `${item.indexer_id}\u0000${item.owner_cohort_ref}\u0000${item.group_key}`
+      `${item.indexer_id}\u0000${item.owner_cohort_ref}\u0000${item.partition_binding_digest}\u0000${item.group_key}`
     );
   if (new Set(authorGroupIdentities).size !== authorGroupIdentities.length) {
     throw new TypeError("main workset set contains more than one author workset for a group");
@@ -341,8 +387,8 @@ export function validateIndexerMainWorksetSet(
     throw new TypeError("main workset set digest is invalid");
   }
   const sorted = [...set.items].sort((left, right) => {
-    const leftKey = `${left.stage}\u0000${left.owner_cohort_ref}\u0000${left.group_key ?? ""}\u0000${left.workset_digest}`;
-    const rightKey = `${right.stage}\u0000${right.owner_cohort_ref}\u0000${right.group_key ?? ""}\u0000${right.workset_digest}`;
+    const leftKey = `${left.stage}\u0000${left.owner_cohort_ref}\u0000${left.partition_key ?? left.partition_binding_digest ?? ""}\u0000${left.group_key ?? ""}\u0000${left.workset_digest}`;
+    const rightKey = `${right.stage}\u0000${right.owner_cohort_ref}\u0000${right.partition_key ?? right.partition_binding_digest ?? ""}\u0000${right.group_key ?? ""}\u0000${right.workset_digest}`;
     return compareIndexerCanonicalText(leftKey, rightKey);
   });
   if (
@@ -351,8 +397,19 @@ export function validateIndexerMainWorksetSet(
   ) {
     throw new TypeError("main workset set items must be unique and canonical");
   }
+  if (set.items.some((item) =>
+    item.stage === "partition"
+      ? item.partition_key === undefined ||
+        item.partition_binding_digest !== undefined ||
+        item.group_key !== undefined
+      : item.partition_key !== undefined ||
+        item.partition_binding_digest === undefined ||
+        item.group_key === undefined
+  )) {
+    throw new TypeError("main workset set items must carry exactly one stage identity");
+  }
   const authorGroups = set.items.filter((item) => item.stage === "author").map((item) =>
-    `${item.indexer_id}\u0000${item.owner_cohort_ref}\u0000${item.group_key}`
+    `${item.indexer_id}\u0000${item.owner_cohort_ref}\u0000${item.partition_binding_digest}\u0000${item.group_key}`
   );
   if (new Set(authorGroups).size !== authorGroups.length) {
     throw new TypeError("main workset set contains more than one author workset for a group");

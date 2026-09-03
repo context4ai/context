@@ -80,7 +80,6 @@ export const indexerPartitionConvergenceRecordSchema = z.object({
   next_strategy_attempt: indexerPartitionStrategyAttemptSchema.nullable(),
   outcome: z.enum(["completed", "partial", "failed"]),
   user_gate_required: z.literal(false),
-  profile_revision_ledger_consumed: z.literal(false),
   convergence_digest: indexerDigestSchema,
 }).strict();
 
@@ -363,7 +362,6 @@ export function convergeIndexerPartitionPlan(input: {
     attempts,
     ...decisionFields,
     user_gate_required: false,
-    profile_revision_ledger_consumed: false,
   };
   return validateIndexerPartitionConvergenceRecord({
     ...payload,

@@ -393,7 +393,6 @@ describe("projected Artifact fan-out audit", () => {
       state: "warning",
       candidate_materialization_allowed: true,
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
     });
     const blocked = auditWithInvalidCount(301);
     expect(blocked).toMatchObject({
@@ -402,7 +401,6 @@ describe("projected Artifact fan-out audit", () => {
       outcome: "indexer-plan-revision-required",
       graph_outcome: "partial",
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
       diagnostic_sample_truncated: true,
     });
     expect(blocked.diagnostic_sample).toHaveLength(100);

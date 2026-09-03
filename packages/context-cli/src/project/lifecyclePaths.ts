@@ -7,9 +7,8 @@ export const REVIEW_RUNTIME_ROOT = join(".tmp", "context-runtime", "review");
 export const REVIEW_ACTION_ROOT = join(".tmp", "context-runtime", "review-actions");
 export const STRUCTURE_REPORT_ROOT = join(".tmp", "context-runtime", "reports");
 export const CANDIDATE_SNAPSHOT_ROOT = join(".tmp", "context-runtime", "extract", "candidates");
+export const INDEXER_RUNTIME_ROOT = join(".tmp", "context-runtime", "indexer");
 export const INDEXER_WORKSET_VIEW_RUNTIME_ROOT = join(
-  ".tmp",
-  "context-runtime",
-  "indexer",
+  INDEXER_RUNTIME_ROOT,
   "workset-views",
 );

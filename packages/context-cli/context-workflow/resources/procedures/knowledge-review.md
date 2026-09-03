@@ -23,7 +23,7 @@ authorization.
 Without explicit session-managed authority:
 
 - open the report returned by the route;
-- let the user approve or reject candidates;
+- let the user publish or durably omit candidates;
 - apply the exact returned decision payload; and
 - retain the exact report reference and reviewed scope in this conversation for
   the final completion summary.
@@ -34,10 +34,19 @@ Use it only after the user cannot use the report and explicitly replies with
 the exact phrase `强制批准` in the current conversation. It approves the complete
 current scope atomically; no candidate-specific decisions are inferred.
 
-With explicit session-managed authority, Context may approve the complete
-current batch atomically. The authority exists only in the current
+With explicit session-managed authority, first run the read-only Review HTML
+command, then read the complete generated report and every reader-facing
+Candidate in its current scope. Only after deciding that the whole batch is
+publishable may the Agent run the managed atomic approval command. If any page
+needs repair, do not approve the batch; reopen the owning Author or Composer
+through the current repair route. The authority exists only in the current
 conversation. It does not bypass source permission, validation, close, or
-verify.
+verify, and it is not proof that the report was read.
 
 After apply, re-evaluate. Do not infer that close or package output is current.
 Do not persist a duplicate review-report ledger in the workspace.
+
+The Review UI names the internal `rejected` decision **Omit** because it is a
+durable content decision, not a request to rewrite the page. When a page needs
+changes, leave the whole batch unapplied and use `context revise` so the owning
+Author or Composer produces a new Candidate through the same lifecycle.

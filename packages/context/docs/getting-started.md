@@ -61,7 +61,16 @@ Run the current route and follow its declared next action. The Agent will:
 2. inspect source boundaries and select Code or Markdown Providers;
 3. prepare a registry-only proposal for `src/indexers.yaml`;
 4. ask only for choices that change scope, ownership, or visible output;
-5. run the selected Provider through the controlled Agent step.
+5. read the current bounded workset, return one compact Partition decision,
+   and review the resulting semantic outline;
+6. author each accepted subject, run any selected Composer, and let Context
+   compile the current Candidate set.
+
+In ordinary mode, a compatible layout pauses twice: once for the semantic
+outline and once for the final Candidate pages. In explicitly authorized fully
+managed mode, the Agent performs both judgments without showing them to the
+user. Destructive or ambiguous changes to an already approved layout always
+stop for a human decision.
 
 Do not manually create a second extraction or Markdown pipeline in
 `src/index.ts`.
@@ -72,6 +81,9 @@ Review shows readable paths, titles, summaries, and page content. Internal
 evidence IDs remain in runtime artifacts. Approve, reject, or revise based on
 whether the pages answer the intended reader questions and accurately reflect
 the source.
+
+Revision reopens the owning Author or Composer workset and then recompiles the
+same Candidate identity. It does not create a parallel document-editing flow.
 
 After approval, `close` writes the accepted pages under readable paths such as:
 
@@ -101,4 +113,3 @@ temporary Candidate and Review state.
 - Fix reader output through Provider instructions/templates, not by adding a
   parallel project phase.
 - Never treat generated `dist/` as source material.
-

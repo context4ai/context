@@ -11,7 +11,6 @@
     "execution_request_digest",
     "view_digest",
     "payload_digest",
-    "read_receipt_digest",
     "request_digest"
   ],
   "properties": {
@@ -22,7 +21,6 @@
     "execution_request_digest": { "$ref": "#/$defs/digest" },
     "view_digest": { "$ref": "#/$defs/digest" },
     "payload_digest": { "$ref": "#/$defs/digest" },
-    "read_receipt_digest": { "$ref": "#/$defs/digest" },
     "request_digest": { "$ref": "#/$defs/digest" }
   },
   "$defs": {

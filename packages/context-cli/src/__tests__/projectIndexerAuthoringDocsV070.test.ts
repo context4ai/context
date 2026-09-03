@@ -111,11 +111,12 @@ describe("0.7.0 Indexer authoring documentation", () => {
       $defs: Record<string, unknown>;
     };
     for (const definition of [
-      "runResult",
-      "partitionMainResult",
-      "authorMainResult",
-      "partitionPlan",
-      "artifactResult",
+      "providerSelection",
+      "partition",
+      "author",
+      "postAuthor",
+      "structureReview",
+      "layoutConfirmation",
     ]) {
       expect(agentStep.$defs[definition]).toBeDefined();
     }
@@ -146,9 +147,11 @@ describe("0.7.0 Indexer authoring documentation", () => {
       "`fact_kind` = the `fact` item's `value.kind`",
       "`value` = the `fact` item's `value.payload` exactly",
       "matching `selected-fact`",
-      "existing dependency, schema, owner, scope, and workset validation",
     ]) {
       expect(agentSkill).toContain(exactProjectionRule);
     }
+    expect(agentSkill).toMatch(
+      /existing dependency, schema,\s+owner, scope, and workset validation/u,
+    );
   });
 });

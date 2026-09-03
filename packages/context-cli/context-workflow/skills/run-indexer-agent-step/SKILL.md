@@ -22,6 +22,11 @@ authority values only from the Route input or authorized View; in particular,
 `consumed_input_view_digest` means `run_request.composition_input.view_digest`, not the
 authorized View's own digest.
 
+For a Partition Result, read `partition-authority` before choosing each group subject. A string
+changes only the local key and preserves `base_subject_key` namespace and kind. Use an explicit
+subject object only when its kind is listed in `subject_key_contract.kinds`; never invent a kind
+from a page title, operation name, framework term, or business vocabulary.
+
 For an Author Result, a selected parser Fact is an immutable projection, not material for a new
 Fact shape. Build it only from the matching View items:
 
@@ -36,6 +41,6 @@ Build each EvidenceBinding from that same source-span dependency's `evidence_ref
 `module_ref`, `locator`, and `content_digest`. Do not infer a new locator or digest from prose.
 Do not invent or manually copy read-receipt, execution-receipt, or stable-result digests. The Host
 integration must use Context's protocol builders to derive content-addressed fields and finalize
-exactly `context.indexer.agent-step-result/v1`; Context then binds the CLI-issued Workset View read
-receipt and performs the existing dependency, schema, owner, scope, and workset validation before
-reporting success. Never report success merely because the envelope or prose looks valid.
+exactly `context.indexer.agent-step-result/v1`; Context performs the existing dependency, schema,
+owner, scope, and workset validation before reporting success. Never report success merely because
+the envelope or prose looks valid.

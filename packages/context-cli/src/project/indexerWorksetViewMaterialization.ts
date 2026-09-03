@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import {
   hostActionInputDigest,
   validateHostActionResult,
@@ -20,7 +19,6 @@ import {
   indexerProtocolDigest,
   loadIndexerRegistry,
   validateIndexerAuthorizedWorksetProjection,
-  validateIndexerAuthorizedWorksetView,
   type IndexerAuthorizedWorksetView,
   type IndexerAuthorizedWorksetViewProjection,
   type IndexerAuthorizedWorksetViewSource,
@@ -55,12 +53,27 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
       throw new TypeError(`author run spec is missing ${field}`);
     }
   }
+  const workset = spec.request.workset;
   return JSON.parse(canonicalIndexerJson({
     expected_subject_key: spec.validation.expected_subject_key,
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
     allowed_artifact_intents: spec.validation.allowed_artifact_intents,
-    allowed_question_targets: spec.validation.allowed_question_targets,
+    allowed_question_targets: (spec.validation.allowed_question_targets as Array<{
+      question_target_key: string;
+      question_ref: string;
+    }>).map((target, index) => ({
+      alias: `question-target:${index + 1}`,
+      question: target.question_ref,
+    })),
+    target_resolutions: workset.stage === "author" &&
+        workset.target_resolution_view !== undefined
+      ? workset.target_resolution_view.entries.map((entry, index) => ({
+          alias: `target-resolution:${index + 1}`,
+          state: entry.state,
+          ...(entry.state === "resolved" ? { subject_key: entry.subject_key } : {}),
+        }))
+      : [],
   })) as IndexerJson;
 }
 
@@ -72,7 +85,6 @@ export interface IndexerWorksetViewMaterializationRequest {
   execution_request_digest: string;
   view_digest: string;
   payload_digest: string;
-  read_receipt_digest: string;
   request_digest: string;
 }
 
@@ -93,11 +105,6 @@ export interface IndexerWorksetViewManagedOutput {
   value: IndexerAuthorizedWorksetView;
 }
 
-const localManagedOutputReceipts = new WeakMap<
-  IndexerWorksetViewManagedOutput,
-  IndexerAuthorizedWorksetViewProjection["read_receipt"]
->();
-
 function requestDigest(
   value: Omit<IndexerWorksetViewMaterializationRequest, "request_digest"> |
     IndexerWorksetViewMaterializationRequest,
@@ -110,7 +117,6 @@ function requestDigest(
     execution_request_digest: value.execution_request_digest,
     view_digest: value.view_digest,
     payload_digest: value.payload_digest,
-    read_receipt_digest: value.read_receipt_digest,
   });
 }
 
@@ -133,7 +139,6 @@ export function validateIndexerWorksetViewMaterializationRequest(
     execution_request_digest: request.execution_request_digest,
     view_digest: request.view_digest,
     payload_digest: request.payload_digest,
-    read_receipt_digest: request.read_receipt_digest,
     request_digest: request.request_digest,
   })) {
     if (typeof candidate !== "string" || !DIGEST_RE.test(candidate)) {
@@ -157,8 +162,7 @@ function assertRequestProjectionBinding(input: {
     input.request.execution_request_digest !==
       input.projection.view.execution_request_digest ||
     input.request.view_digest !== input.projection.view.view_digest ||
-    input.request.payload_digest !== payloadDigest ||
-    input.request.read_receipt_digest !== input.projection.read_receipt.receipt_digest
+    input.request.payload_digest !== payloadDigest
   ) {
     throw new TypeError("Indexer workset View materialization request is stale");
   }
@@ -180,7 +184,6 @@ export function prepareIndexerWorksetViewMaterialization(input: {
     execution_request_digest: projection.view.execution_request_digest,
     view_digest: projection.view.view_digest,
     payload_digest: indexerProtocolDigest(projection.view),
-    read_receipt_digest: projection.read_receipt.receipt_digest,
   };
   return {
     projection,
@@ -250,6 +253,50 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
         }],
       })
     : null;
+  const partitionAuthorityProjection = request.workset.stage === "partition"
+    ? buildIndexerAuthorizedWorksetViewSource({
+        request,
+        projection_kind: "partition-authority",
+        input_digests: [spec.spec_digest],
+        items: [{
+          ref: `partition-authority:${request.workset.workset_digest}`,
+          category: "partition-authority",
+          provenance: {
+            protocol: spec.protocol,
+            digest: spec.spec_digest,
+          },
+          value: {
+            base_subject_key: request.workset.partition_subject_key,
+            ...(spec.validation.subject_key_contract === undefined
+              ? {}
+              : {
+                  subject_key_contract:
+                    spec.validation.subject_key_contract as IndexerJson,
+                }),
+          },
+        }],
+      })
+    : null;
+  const repairProjection = request.workset.repair_intent !== undefined
+    ? buildIndexerAuthorizedWorksetViewSource({
+        request,
+        projection_kind: "repair-intent",
+        input_digests: [request.workset.repair_intent.intent_digest],
+        items: [{
+          ref: `repair-intent:${request.workset.repair_intent.intent_digest}`,
+          category: "repair-intent",
+          provenance: {
+            protocol: "context.indexer.repair-intent/v1",
+            digest: request.workset.repair_intent.intent_digest,
+            container_ref: request.workset.repair_intent.target_ref,
+          },
+          value: {
+            target_ref: request.workset.repair_intent.target_ref,
+            instruction: request.workset.repair_intent.instruction,
+          },
+        }],
+      })
+    : null;
   const binding = await resolveProjectIndexerMainSourceBinding({
     projectRoot: input.projectRoot,
     indexer_id: request.workset.indexer_id,
@@ -264,15 +311,20 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       ? { dependency_view: spec.validation.dependency_view }
       : {}),
   });
-  const authorInventory = spec.validation.canonical_inventory_members;
-  if (request.workset.stage === "author" && !Array.isArray(authorInventory)) {
-    throw new TypeError("author run spec is missing its exact inventory members");
+  const runInventory = spec.validation.canonical_inventory_members;
+  if (!Array.isArray(runInventory)) {
+    throw new TypeError("main run spec is missing its exact inventory members");
   }
-  const inventoryMembers = request.workset.stage === "partition"
-    ? binding.partition_inventory
-    : canonicalIndexerInventoryMembers(
-        authorInventory as readonly IndexerInventoryMember[],
-      );
+  const inventoryMembers = canonicalIndexerInventoryMembers(
+    runInventory as readonly IndexerInventoryMember[],
+  );
+  if (
+    request.workset.stage === "partition" &&
+    indexerInventoryMembersDigest(inventoryMembers) !==
+      request.workset.partition_inventory_digest
+  ) {
+    throw new TypeError("partition workset View uses stale inventory members");
+  }
   if (
     request.workset.stage === "author" &&
     indexerInventoryMembersDigest(inventoryMembers) !==
@@ -290,8 +342,17 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
     ...(request.workset.stage === "author"
       ? { author_inventory_members: inventoryMembers }
       : {}),
+    ...(request.workset.stage === "partition"
+      ? { partition_inventory_members: inventoryMembers }
+      : {}),
   });
-  const inspectorProjectionSources = (input.inspector_materializations ?? []).map(
+  const storedInspectorMaterializations = Array.isArray(spec.validation.inspector_materializations)
+    ? spec.validation.inspector_materializations as unknown as IndexerInspectorWorksetViewMaterialization[]
+    : [];
+  const inspectorProjectionSources = [
+    ...storedInspectorMaterializations,
+    ...(input.inspector_materializations ?? []),
+  ].map(
     (materialization) => buildIndexerInspectorWorksetViewSource({
       request,
       inspector_request: materialization.inspector_request,
@@ -304,7 +365,9 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       request,
       source_projection_sources: [
         requirementProjection,
+        ...(partitionAuthorityProjection === null ? [] : [partitionAuthorityProjection]),
         ...(authorAuthorityProjection === null ? [] : [authorAuthorityProjection]),
+        ...(repairProjection === null ? [] : [repairProjection]),
         ...sourceProjectionSources,
         ...inspectorProjectionSources,
         ...(input.additional_projection_sources ?? []),
@@ -377,13 +440,11 @@ export async function materializeIndexerWorksetViewHostAction(input: {
 }): Promise<{
   result: HostActionResult;
   managed_output: IndexerWorksetViewManagedOutput;
-  workset_read_receipt: IndexerAuthorizedWorksetViewProjection["read_receipt"];
 }> {
   const request = validateIndexerWorksetViewMaterializationRequest(input.request);
   const projection = validateIndexerAuthorizedWorksetProjection({
     request: input.run_request,
     view: input.projection.view,
-    read_receipt: input.projection.read_receipt,
   });
   assertRequestProjectionBinding({ request, projection });
   const location = indexerWorksetViewHostLocation(request);
@@ -392,7 +453,6 @@ export async function materializeIndexerWorksetViewHostAction(input: {
     request,
     view: projection.view,
   });
-  localManagedOutputReceipts.set(managedOutput, projection.read_receipt);
   const result: HostActionResult = {
     schema: "agent-graph.host-action-result.v1",
     handler: location.materialize.handler,
@@ -413,97 +473,6 @@ export async function materializeIndexerWorksetViewHostAction(input: {
   return {
     result,
     managed_output: managedOutput,
-    workset_read_receipt: projection.read_receipt,
-  };
-}
-
-async function readManagedView(result: HostActionResult): Promise<{
-  value: unknown;
-  content_digest: string;
-}> {
-  if ("inline" in result.output) {
-    throw new TypeError("Indexer workset View must use managed-resource transport");
-  }
-  let filePath: string;
-  try {
-    const url = new URL(result.output.resource.ref);
-    if (url.protocol !== "file:") throw new Error("unsupported protocol");
-    filePath = fileURLToPath(url);
-  } catch {
-    throw new TypeError("Indexer workset View managed resource ref is unreadable");
-  }
-  const bytes = await readFile(filePath);
-  return {
-    value: JSON.parse(bytes.toString("utf8")) as unknown,
-    content_digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
-  };
-}
-
-export async function consumeIndexerWorksetViewHostResult(input: {
-  request: unknown;
-  run_request: unknown;
-  result: HostActionResult;
-  read_receipt: unknown;
-  managed_output?: IndexerWorksetViewManagedOutput;
-}): Promise<{
-  projection: IndexerAuthorizedWorksetViewProjection;
-  input_digest: string;
-  output_digest: string;
-  host_receipt: HostActionResult["receipt"];
-}> {
-  const request = validateIndexerWorksetViewMaterializationRequest(input.request);
-  const location = indexerWorksetViewHostLocation(request);
-  await validateHostActionResult(location, input.result);
-  if ("inline" in input.result.output) {
-    throw new TypeError("Indexer workset View Host result must be a managed resource");
-  }
-  if (input.managed_output !== undefined) {
-    const localReceipt = localManagedOutputReceipts.get(input.managed_output);
-    if (
-      localReceipt === undefined ||
-      localReceipt !== input.read_receipt ||
-      input.managed_output.ref !== input.result.output.resource.ref ||
-      input.managed_output.digest !== input.result.output.resource.digest ||
-      pathToFileURL(input.managed_output.file_path).href !== input.managed_output.ref
-    ) {
-      throw new TypeError("Indexer workset View local managed output does not match Host result");
-    }
-    if (input.managed_output.digest !== request.payload_digest) {
-      throw new TypeError("Indexer workset View managed resource digest is invalid");
-    }
-    return {
-      projection: {
-        view: input.managed_output.value,
-        read_receipt: localReceipt,
-      },
-      input_digest: input.result.input_digest,
-      output_digest: input.result.output.resource.digest,
-      host_receipt: input.result.receipt,
-    };
-  }
-  const managed = await readManagedView(input.result);
-  if (managed.content_digest !== input.result.output.resource.digest) {
-    throw new TypeError("Indexer workset View managed resource bytes changed after materialization");
-  }
-  const value = managed.value;
-  const view = validateIndexerAuthorizedWorksetView(value);
-  if (
-    input.result.output.resource.digest !== request.payload_digest ||
-    indexerProtocolDigest(view) !== request.payload_digest
-  ) {
-    throw new TypeError("Indexer workset View managed resource digest is invalid");
-  }
-  const projection = validateIndexerAuthorizedWorksetProjection({
-    request: input.run_request,
-    view,
-    read_receipt: input.read_receipt,
-  });
-  assertRequestProjectionBinding({ request, projection });
-  return {
-    projection,
-    input_digest: input.result.input_digest,
-    output_digest: input.result.output.resource.digest,
-    host_receipt: input.result.receipt,
   };
 }
 

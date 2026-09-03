@@ -45,8 +45,6 @@ import { validateBundledIndexerMarkdownMigrationFixtures } from
   "./indexerDistributionMarkdownMigrationValidation.js";
 import { validateBundledIndexerMetricGuidance } from
   "./indexerDistributionMetricGuidanceValidation.js";
-import { validateBundledIndexerHardRuleConformance } from
-  "./indexerHardRuleConformance.js";
 import { inspectCanonicalQuestionPayloadsInBundle } from
   "./canonicalQuestionOwnership.js";
 
@@ -151,10 +149,6 @@ export async function materializeBundledIndexerDistribution(input: {
 
   const operators = bundledIndexerOperatorContract();
   const profiles = bundledIndexerProfileContract(operators);
-  const hardRuleConformance = validateBundledIndexerHardRuleConformance({
-    operator_contract: operators,
-    profile_contract: profiles,
-  });
   const bundles: IndexerCliReleaseManifest["bundles"] = [];
 
   await rm(input.outputRoot, { recursive: true, force: true });
@@ -167,11 +161,6 @@ export async function materializeBundledIndexerDistribution(input: {
   await writeFile(
     join(input.outputRoot, "contracts", "profile-contract.json"),
     `${JSON.stringify(profiles, null, 2)}\n`,
-    "utf8",
-  );
-  await writeFile(
-    join(input.outputRoot, "contracts", "hard-rule-conformance.json"),
-    `${JSON.stringify(hardRuleConformance, null, 2)}\n`,
     "utf8",
   );
   for (const expected of EXPECTED_BUNDLES) {

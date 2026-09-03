@@ -2,7 +2,6 @@ import {
   evaluateGraph,
   resolveRoute,
   type JsonValue,
-  type ResourceReadReceiptSet,
   type HostActionResourceLocation,
 } from "@c4a/agent-graph";
 import {
@@ -14,16 +13,17 @@ import {
   type IndexerPostAuthorFragmentRequest,
 } from "@c4a/context";
 import {
-  indexerInstructionHostLocation,
   validateIndexerInstructionMaterializationRequest,
   type IndexerInstructionMaterializationRequest,
 } from "./indexerInstructionMaterialization.js";
+import { indexerInstructionHostLocation } from "./indexerInstructionHost.js";
 import {
   indexerWorksetViewHostLocation,
   validateIndexerWorksetViewMaterializationRequest,
   type IndexerWorksetViewMaterializationRequest,
 } from "./indexerWorksetViewMaterialization.js";
 import {
+  authorityCommandOptions,
   loadContextWorkflowProvider,
   projectWorkflowResourceLocation,
   projectWorkflowRouteAction,
@@ -68,18 +68,6 @@ function assertWorksetViewRunBinding(input: {
   }
 }
 
-function dynamicResourceReadState(input: {
-  location: HostActionResourceLocation;
-  receipts?: ResourceReadReceiptSet;
-}): "read-required" | "current" {
-  if (input.receipts?.provider !== "c4a/context") return "read-required";
-  return input.receipts.receipts.some((receipt) =>
-    receipt.id === input.location.id &&
-    receipt.revision === input.location.revision &&
-    receipt.digest.startsWith("sha256:")
-  ) ? "current" : "read-required";
-}
-
 export interface IndexerAgentStepRoute {
   route: ContextResolvedWorkflowRoute;
   step_input: IndexerAgentStepInput;
@@ -92,6 +80,7 @@ export interface IndexerPostAuthorAgentStepRoute {
   route: ContextResolvedWorkflowRoute;
   step_input: IndexerPostAuthorFragmentRequest;
   instruction_location: HostActionResourceLocation;
+  workset_view_location: HostActionResourceLocation;
   stable_fingerprint: string;
 }
 
@@ -100,7 +89,8 @@ export async function buildIndexerAgentStepRoute(input: {
   instruction_request: unknown;
   workset_view_request: unknown;
   workspaceRoot: string;
-  resource_receipts?: ResourceReadReceiptSet;
+  authorities?: readonly import("./workflow/workflowTypes.js").ContextWorkflowAuthority[];
+  managed?: boolean;
 }): Promise<IndexerAgentStepRoute> {
   const runRequest = validateIndexerProgramRunRequest(input.run_request);
   const instructionRequest = validateIndexerInstructionMaterializationRequest(
@@ -116,11 +106,7 @@ export async function buildIndexerAgentStepRoute(input: {
     instruction_request_digest: instructionRequest.request_digest,
   });
   const provider = await loadContextWorkflowProvider();
-  const evaluated = evaluateGraph(provider, INDEXER_GRAPH_ID, INDEXER_GRAPH_ENTRY, {
-    ...(input.resource_receipts === undefined
-      ? {}
-      : { resourceReceipts: input.resource_receipts }),
-  });
+  const evaluated = evaluateGraph(provider, INDEXER_GRAPH_ID, INDEXER_GRAPH_ENTRY);
   const primary = evaluated.evaluation.primaryRoute;
   if (primary === undefined) {
     throw new TypeError("Context Indexer graph has no run-indexer-agent-step Route");
@@ -130,12 +116,7 @@ export async function buildIndexerAgentStepRoute(input: {
     INDEXER_GRAPH_ID,
     INDEXER_GRAPH_ENTRY,
     primary.routeId,
-    {
-      workspace: input.workspaceRoot,
-      ...(input.resource_receipts === undefined
-        ? {}
-        : { resourceReceipts: input.resource_receipts }),
-    },
+    { workspace: input.workspaceRoot },
     evaluated.evaluation.revision,
   );
   if (
@@ -154,12 +135,7 @@ export async function buildIndexerAgentStepRoute(input: {
     throw new TypeError("Context Indexer graph has no resolved instructions Host Resource");
   }
   const dynamicLocation = indexerInstructionHostLocation(instructionRequest);
-  dynamicLocation.readState = dynamicResourceReadState({
-    location: dynamicLocation,
-    ...(input.resource_receipts === undefined
-      ? {}
-      : { receipts: input.resource_receipts }),
-  });
+  dynamicLocation.readState = "read-required";
   const templateWorksetViewLocation = resolved.resources.required.find((resource) =>
     resource.id === worksetViewRequest.resource_id
   );
@@ -170,12 +146,7 @@ export async function buildIndexerAgentStepRoute(input: {
     throw new TypeError("Context Indexer graph has no authorized workset View Resource");
   }
   const worksetViewLocation = indexerWorksetViewHostLocation(worksetViewRequest);
-  worksetViewLocation.readState = dynamicResourceReadState({
-    location: worksetViewLocation,
-    ...(input.resource_receipts === undefined
-      ? {}
-      : { receipts: input.resource_receipts }),
-  });
+  worksetViewLocation.readState = "read-required";
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -194,7 +165,7 @@ export async function buildIndexerAgentStepRoute(input: {
   const action = projectWorkflowRouteAction({
     action: actionSource,
     revision: stableFingerprint,
-    authorities: [],
+    authorities: input.authorities ?? [],
   });
   const required = resolved.resources.required.map((resource) =>
     projectWorkflowResourceLocation(
@@ -204,11 +175,19 @@ export async function buildIndexerAgentStepRoute(input: {
         ? worksetViewLocation
         : resource,
       stableFingerprint,
-      [],
+      input.authorities ?? [],
     )
   );
   const recommended = resolved.resources.recommended.map((resource) =>
-    projectWorkflowResourceLocation(resource, stableFingerprint, [])
+    projectWorkflowResourceLocation(
+      resource,
+      stableFingerprint,
+      input.authorities ?? [],
+    )
+  );
+  const authorityOptions = authorityCommandOptions(
+    input.authorities ?? [],
+    "workflow",
   );
   const route: ContextResolvedWorkflowRoute = {
     protocol: "context.workflow.route.v1",
@@ -217,7 +196,12 @@ export async function buildIndexerAgentStepRoute(input: {
     node: resolved.node,
     reason_code: resolved.reasonCode,
     availability: resolved.availability,
-    commands: [],
+    commands: [{
+      command: `context${authorityOptions} action complete-current --revision '${stableFingerprint}'${input.managed === true ? " --managed" : ""} --input - --format json`,
+      effect: "write",
+      availability: "immediate",
+      managed_execution: "agent-required",
+    }],
     ...(action === undefined ? {} : { action }),
     resources: { required, recommended },
     after_action: { evaluate: true },
@@ -261,7 +245,8 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
   fragment_request: unknown;
   instruction_request: unknown;
   workspaceRoot: string;
-  resource_receipts?: ResourceReadReceiptSet;
+  authorities?: readonly import("./workflow/workflowTypes.js").ContextWorkflowAuthority[];
+  managed?: boolean;
 }): Promise<IndexerPostAuthorAgentStepRoute> {
   const fragmentRequest = validateIndexerPostAuthorFragmentRequest(
     input.fragment_request,
@@ -278,11 +263,6 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
     provider,
     INDEXER_GRAPH_ID,
     INDEXER_POST_AUTHOR_GRAPH_ENTRY,
-    {
-      ...(input.resource_receipts === undefined
-        ? {}
-        : { resourceReceipts: input.resource_receipts }),
-    },
   );
   const primary = evaluated.evaluation.primaryRoute;
   if (primary === undefined) {
@@ -293,12 +273,7 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
     INDEXER_GRAPH_ID,
     INDEXER_POST_AUTHOR_GRAPH_ENTRY,
     primary.routeId,
-    {
-      workspace: input.workspaceRoot,
-      ...(input.resource_receipts === undefined
-        ? {}
-        : { resourceReceipts: input.resource_receipts }),
-    },
+    { workspace: input.workspaceRoot },
     evaluated.evaluation.revision,
   );
   if (
@@ -319,12 +294,23 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
     );
   }
   const instructionLocation = indexerInstructionHostLocation(instructionRequest);
-  instructionLocation.readState = dynamicResourceReadState({
-    location: instructionLocation,
-    ...(input.resource_receipts === undefined
-      ? {}
-      : { receipts: input.resource_receipts }),
-  });
+  instructionLocation.readState = "read-required";
+  const worksetViewLocation: HostActionResourceLocation = {
+    schema: "agent-graph.resource-location.host-action.v1",
+    id: "authorized-indexer-workset-view",
+    kind: "procedure",
+    mediaType: "application/json",
+    revision: fragmentRequest.primary_result_view.view_digest,
+    materialize: {
+      handler: "context.materialize-indexer-workset-view/v1",
+      input: {
+        schema: "context.indexer.layer-fragment-request/v1",
+        value: fragmentRequest as unknown as JsonValue,
+      },
+      output_schema: "context.indexer.primary-result-view/v1",
+    },
+  };
+  worksetViewLocation.readState = "read-required";
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -343,18 +329,23 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       input: fragmentRequest as unknown as JsonValue,
     },
     revision: stableFingerprint,
-    authorities: [],
+    authorities: input.authorities ?? [],
   });
-  const required = resolved.resources.required.map((resource) =>
+  const required = [...resolved.resources.required.map((resource) =>
     projectWorkflowResourceLocation(
       resource.id === instructionLocation.id ? instructionLocation : resource,
       stableFingerprint,
-      [],
+      input.authorities ?? [],
     )
-  );
+  ), projectWorkflowResourceLocation(
+    worksetViewLocation,
+    stableFingerprint,
+    input.authorities ?? [],
+  )];
   const recommended = resolved.resources.recommended.map((resource) =>
-    projectWorkflowResourceLocation(resource, stableFingerprint, [])
+    projectWorkflowResourceLocation(resource, stableFingerprint, input.authorities ?? [])
   );
+  const authorityOptions = authorityCommandOptions(input.authorities ?? [], "workflow");
   return {
     route: {
       protocol: "context.workflow.route.v1",
@@ -363,13 +354,19 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       node: resolved.node,
       reason_code: resolved.reasonCode,
       availability: resolved.availability,
-      commands: [],
+      commands: [{
+        command: `context${authorityOptions} action complete-current --revision '${stableFingerprint}'${input.managed === true ? " --managed" : ""} --input - --format json`,
+        effect: "write",
+        availability: "immediate",
+        managed_execution: "agent-required",
+      }],
       ...(action === undefined ? {} : { action }),
       resources: { required, recommended },
       after_action: { evaluate: true },
     },
     step_input: fragmentRequest,
     instruction_location: instructionLocation,
+    workset_view_location: worksetViewLocation,
     stable_fingerprint: stableFingerprint,
   };
 }

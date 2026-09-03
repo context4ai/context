@@ -28,4 +28,25 @@ Return only the current `main-index` `IndexerResult`/`ArtifactResult` contract. 
 
 Return all knowledge through the current Indexer result; do not create an independent authoring pipeline.
 
+## Quality guidance and production checks
+
+Context blocks only conditions it can derive from current inputs: the complete
+source inventory needs dispositions, the selected reader-question set needs a
+complete plan, answered questions must satisfy their evidence contracts, and
+references, layout and currentness must remain valid.
+
+Profile metrics are writing guidance rather than a separate pass decision.
+They point out duplicated facts, enumeration where explanation was expected,
+repeated template scaffolding, oversized quoted bodies, traversal-ordered
+Partitions, reference-only targets and unsupported optional Artifacts. Treat a
+finding as a prompt to reread the Section. Do not adjust wording, headings,
+sentence counts or Partitions merely to move a counter.
+
+Natural-language statements are not mechanically checked sentence by sentence.
+Use only behavior stated by the supplied material, record a material gap when
+the source does not establish a needed conclusion, and rely on final Review to
+reject unsupported interpretation. When shape guidance conflicts with source
+coverage, preserve the source-backed content and improve its presentation
+rather than deleting it.
+
 Do not return output paths, collection names, arbitrary question text, new authority, or pass/fail claims.

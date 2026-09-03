@@ -415,7 +415,16 @@ export function validateIndexerPartitionPlan(input: {
   });
   if (plan.status === "complete") {
     if (plan.groups.length === 0) {
-      throw new TypeError("complete PartitionPlan cannot have zero groups");
+      if (
+        plan.reader_question_refs.length > 0 ||
+        (input.required_question_target_refs ?? input.workset.allowed_question_target_refs)
+            .length > 0 ||
+        plan.member_dispositions.some((item) => item.inventory_disposition === "owned")
+      ) {
+        throw new TypeError(
+          "empty complete PartitionPlan requires no reader questions, no targets, and no owned members",
+        );
+      }
     }
     validateQuestionTargetClosure(
       plan,

@@ -21,6 +21,7 @@ import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { normalizeRunSpec, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import type { CurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
 
 function primarySourceRole(
   adapter: "parser-facts" | "captured-documents",
@@ -184,6 +185,8 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
   workset: unknown;
   binding: ProjectIndexerMainSourceBinding;
   authority: Awaited<ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>>;
+  canonical_inventory_members?: readonly IndexerInventoryMember[];
+  enrichment?: CurrentIndexerExtensionFacts;
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
   const authority = input.authority;
@@ -204,12 +207,30 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
     throw new TypeError("partition workset no longer matches current Provider authority");
   }
   const currentFinalAuthority = finalAuthority(authority);
+  const subjectSchema = authority.profile_contract.subject_key_schemas.find((candidate) =>
+    candidate.profile === authority.profile.id
+  );
+  if (subjectSchema === undefined) {
+    throw new TypeError(`missing partition SubjectKey contract for ${authority.profile.id}`);
+  }
+  const { profile: _subjectProfile, ...subjectKeyContract } = subjectSchema;
+  void _subjectProfile;
+  const enrichment = input.enrichment ?? { inspector_materializations: [], fragments: [] };
+  const canonicalInventory = canonicalIndexerInventoryMembers(
+    input.canonical_inventory_members ?? binding.partition_inventory,
+  );
+  if (
+    indexerInventoryMembersDigest(canonicalInventory) !==
+      workset.partition_inventory_digest
+  ) {
+    throw new TypeError("partition inventory members do not match their workset");
+  }
   const request = buildIndexerMainRunRequest({
     workset,
     composition_input: composeIndexerLayerInput({
       workset_digest: workset.workset_digest,
       final_authority_layer_ref: currentFinalAuthority.layer_ref,
-      fragments: [],
+      fragments: enrichment.fragments,
     }),
     final_authority: currentFinalAuthority,
     run_environment: runEnvironment({
@@ -230,10 +251,12 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
     request,
     validation: {
       stage: "partition",
-      canonical_inventory_members: binding.partition_inventory,
+      canonical_inventory_members: canonicalInventory,
       authorized_source_refs: [workset.source_ref],
       authorized_strategies: strategies,
+      subject_key_contract: subjectKeyContract,
       required_question_target_refs: workset.allowed_question_target_refs,
+      inspector_materializations: enrichment.inspector_materializations,
     },
   });
 }
@@ -251,6 +274,7 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     question_target_key: string;
     question_ref: string;
   }[];
+  enrichment?: CurrentIndexerExtensionFacts;
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
   if (workset.stage !== "author") {
@@ -290,12 +314,16 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     throw new TypeError("author Artifact policy eligibility does not match its workset");
   }
   const currentFinalAuthority = finalAuthority(input.authority);
+  const selectedFactRefs = dependencyView.positive_nodes.flatMap((node) =>
+    node.kind === "selected-fact" ? [node.fact_ref] : []
+  );
+  const enrichment = input.enrichment ?? { inspector_materializations: [], fragments: [] };
   const request = buildIndexerMainRunRequest({
     workset,
     composition_input: composeIndexerLayerInput({
       workset_digest: workset.workset_digest,
       final_authority_layer_ref: currentFinalAuthority.layer_ref,
-      fragments: [],
+      fragments: enrichment.fragments,
     }),
     final_authority: currentFinalAuthority,
     run_environment: runEnvironment({
@@ -305,25 +333,28 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
       dependency_view: dependencyView,
     }),
   });
-  const selectedFactRefs = dependencyView.positive_nodes.flatMap((node) =>
-    node.kind === "selected-fact" ? [node.fact_ref] : []
-  );
   const selectedPaths = new Set(dependencyView.positive_nodes.flatMap((node) =>
     node.kind === "source-span" ? [node.locator.path] : []
   ));
   const selectedFacts = new Set(selectedFactRefs);
+  const selectedIdentityFiles = input.binding.source_identity_inventory.files.flatMap((file) =>
+    selectedPaths.has(file.normalized_path)
+      ? [{
+          ...file,
+          facts: file.facts.filter((fact) => selectedFacts.has(fact.fact_ref)),
+        }]
+      : []
+  );
+  if (selectedIdentityFiles.length === 0) {
+    throw new TypeError(
+      `author group ${workset.indexer_id}/${workset.group_key} has no source identity files for its selected source spans`,
+    );
+  }
   const sourceIdentityInventory = buildIndexerSourceIdentityInventory({
     source_ref: input.binding.source_identity_inventory.source_ref,
     module_ref: input.binding.source_identity_inventory.module_ref,
     source_input_digest: workset.source_binding_digest,
-    files: input.binding.source_identity_inventory.files.flatMap((file) =>
-      selectedPaths.has(file.normalized_path)
-        ? [{
-            ...file,
-            facts: file.facts.filter((fact) => selectedFacts.has(fact.fact_ref)),
-          }]
-        : []
-    ),
+    files: selectedIdentityFiles,
   });
   const artifactIntents = allowedArtifactIntents({
     authority: input.authority,
@@ -347,6 +378,7 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
       }),
       source_identity_inventory: sourceIdentityInventory,
       allowed_question_targets: [...input.allowed_question_targets],
+      inspector_materializations: enrichment.inspector_materializations,
     },
   });
 }

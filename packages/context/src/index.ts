@@ -209,6 +209,7 @@ export type {
 export {
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
+  buildIndexerRepairIntent,
   buildIndexerMainTransportBatch,
   buildIndexerTargetResolutionView,
   indexerMainWorksetDigest,
@@ -221,6 +222,7 @@ export {
   indexerTargetResolutionViewSchema,
   validateIndexerMainWorkset,
   validateIndexerMainWorksetSet,
+  validateIndexerRepairIntent,
   validateIndexerTargetResolutionView,
 } from "./indexerMainWorkset.js";
 export type {
@@ -228,10 +230,12 @@ export type {
   IndexerMainPartitionWorkset,
   IndexerMainWorkset,
   IndexerMainWorksetSet,
+  IndexerRepairIntent,
   IndexerMainTransportBatch,
   IndexerTargetResolutionView,
 } from "./indexerMainWorkset.js";
 export {
+  indexerPartitionGroupBindingDigest,
   indexerPartitionGroupProjectionDigest,
   indexerPartitionPlanBindingDigest,
   indexerPartitionPlanCanonicalHash,
@@ -258,6 +262,7 @@ export * from "./indexerMainLifecycle.js";
 export * from "./indexerSubjectCatalog.js";
 export * from "./indexerProgramRunProtocol.js";
 export * from "./indexerAgentStepProtocol.js";
+export * from "./indexerSemanticInput.js";
 export * from "./indexerLifecycle.js";
 
 export type {

@@ -1,1302 +1,312 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "context.indexer.agent-step-result/v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "protocol",
-    "input_digest",
-    "instruction_payload_digest",
-    "run_result",
-    "execution_receipt",
-    "stable_result_digest"
+  "$id": "context.indexer.current-action-input/v1",
+  "oneOf": [
+    { "$ref": "#/$defs/providerSelection" },
+    { "$ref": "#/$defs/providerResolution" },
+    { "$ref": "#/$defs/providerProgramAuthorization" },
+    { "$ref": "#/$defs/providerFinalization" },
+    { "$ref": "#/$defs/partition" },
+    { "$ref": "#/$defs/author" },
+    { "$ref": "#/$defs/postAuthor" },
+    { "$ref": "#/$defs/structureReview" },
+    { "$ref": "#/$defs/layoutConfirmation" }
   ],
-  "properties": {
-    "protocol": { "const": "context.indexer.agent-step-result/v1" },
-    "input_digest": { "$ref": "#/$defs/digest" },
-    "instruction_payload_digest": { "$ref": "#/$defs/digest" },
-    "run_result": { "$ref": "#/$defs/runResult" },
-    "execution_receipt": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["adapter", "adapter_version", "execution_id", "receipt_digest"],
-      "properties": {
-        "adapter": { "type": "string", "minLength": 1 },
-        "adapter_version": { "type": "string", "minLength": 1 },
-        "model": { "type": "string", "minLength": 1 },
-        "execution_id": { "type": "string", "minLength": 1 },
-        "receipt_digest": { "$ref": "#/$defs/digest" }
-      }
-    },
-    "stable_result_digest": { "$ref": "#/$defs/digest" }
-  },
   "$defs": {
-    "digest": {
-      "type": "string",
-      "pattern": "^sha256:[a-f0-9]{64}$"
-    },
-    "id": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^[a-z0-9][a-z0-9._/-]*$"
-    },
-    "canonicalRef": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#@+-]*$"
-    },
-    "providerLayerRef": {
-      "allOf": [
-        { "$ref": "#/$defs/canonicalRef" },
-        { "not": { "pattern": "#composer:" } }
-      ]
-    },
-    "portablePath": {
-      "type": "string",
-      "minLength": 1,
-      "pattern": "^(?!/)(?![A-Za-z]:)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//)[^\\u0000]+$"
-    },
-    "jsonValue": {
-      "oneOf": [
-        { "type": "null" },
-        { "type": "boolean" },
-        { "type": "number" },
-        { "type": "string" },
-        {
+    "string": { "type": "string", "minLength": 1 },
+    "providerSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "host_visible_skills", "indexers"],
+      "properties": {
+        "stage": { "const": "provider-selection" },
+        "host_visible_skills": {
           "type": "array",
-          "items": { "$ref": "#/$defs/jsonValue" }
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["skill", "version", "source_type"],
+            "properties": {
+              "skill": { "$ref": "#/$defs/string" },
+              "version": { "oneOf": [{ "$ref": "#/$defs/string" }, { "type": "null" }] },
+              "source_type": {
+                "enum": ["community-plugin", "workspace", "installed-plugin", "marketplace"]
+              }
+            }
+          }
         },
-        {
-          "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/jsonValue" }
-        }
-      ]
-    },
-    "subjectKey": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["protocol", "namespace", "kind", "local_key"],
-      "properties": {
-        "protocol": { "const": "context.subject-key/v1" },
-        "namespace": { "type": "string", "minLength": 1 },
-        "kind": { "type": "string", "minLength": 1 },
-        "local_key": { "type": "string", "minLength": 1 }
-      }
-    },
-    "inventoryMemberKind": {
-      "enum": [
-        "project",
-        "document",
-        "entry",
-        "route",
-        "component",
-        "service",
-        "method",
-        "example",
-        "protocol-method",
-        "handler",
-        "event-branch",
-        "timer-branch",
-        "downstream-callsite",
-        "store",
-        "state-transition"
-      ]
-    },
-    "runResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "protocol",
-        "operation",
-        "consumed_input_view_digest",
-        "workset_read_receipt_digests",
-        "result"
-      ],
-      "properties": {
-        "protocol": { "const": "context.indexer.run-result/v1" },
-        "operation": { "const": "main-index" },
-        "consumed_input_view_digest": {
-          "$ref": "#/$defs/digest",
-          "description": "The run request composition_input.view_digest. The authorized workset View is bound separately by its CLI-issued read receipt."
-        },
-        "workset_read_receipt_digests": {
+        "indexers": {
           "type": "array",
           "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/digest" },
-          "description": "Bound mechanically by Context from CLI-issued workset read receipts after Agent execution."
-        },
-        "result": {
-          "oneOf": [
-            { "$ref": "#/$defs/partitionMainResult" },
-            { "$ref": "#/$defs/authorMainResult" }
-          ]
+          "items": { "type": "object" }
         }
       }
     },
-    "partitionMainResult": {
+    "providerResolution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["protocol", "stage", "workset_digest", "execution_request_digest", "result"],
+      "required": ["stage", "result"],
       "properties": {
-        "protocol": { "const": "context.indexer.main-result/v1" },
+        "stage": { "const": "provider-resolution" },
+        "result": { "type": "object" },
+        "managed_output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "digest", "value"],
+          "properties": {
+            "ref": { "$ref": "#/$defs/string" },
+            "digest": { "$ref": "#/$defs/string" },
+            "value": {}
+          }
+        }
+      }
+    },
+    "providerFinalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage"],
+      "properties": {
+        "stage": { "const": "provider-finalization" }
+      }
+    },
+    "providerProgramAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "decision"],
+      "properties": {
+        "stage": { "const": "provider-program-authorization" },
+        "decision": { "enum": ["approved", "rejected"] }
+      }
+    },
+    "partition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "outcome", "unit_type", "partition_axis", "groups", "excluded", "unsupported"],
+      "properties": {
         "stage": { "const": "partition" },
-        "workset_digest": { "$ref": "#/$defs/digest" },
-        "execution_request_digest": { "$ref": "#/$defs/digest" },
-        "result": { "$ref": "#/$defs/partitionPlan" }
-      }
-    },
-    "authorMainResult": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["protocol", "stage", "workset_digest", "execution_request_digest", "result"],
-      "properties": {
-        "protocol": { "const": "context.indexer.main-result/v1" },
-        "stage": { "const": "author" },
-        "workset_digest": { "$ref": "#/$defs/digest" },
-        "execution_request_digest": { "$ref": "#/$defs/digest" },
-        "result": { "$ref": "#/$defs/artifactResult" }
-      }
-    },
-    "partitionBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "partition_workset_digest",
-        "indexer_id",
-        "indexer_fingerprint",
-        "requirement_digest",
-        "subject_key_schema_digest",
-        "source_scope_digest",
-        "source_refs",
-        "module_ref",
-        "partition_subject_key",
-        "parent_scope_ref",
-        "inventory_digest",
-        "question_target_inventory_digest"
-      ],
-      "properties": {
-        "partition_workset_digest": { "$ref": "#/$defs/digest" },
-        "indexer_id": { "$ref": "#/$defs/id" },
-        "indexer_fingerprint": { "$ref": "#/$defs/digest" },
-        "requirement_digest": { "$ref": "#/$defs/digest" },
-        "subject_key_schema_digest": { "$ref": "#/$defs/digest" },
-        "source_scope_digest": { "$ref": "#/$defs/digest" },
-        "source_refs": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "module_ref": {
-          "oneOf": [
-            { "$ref": "#/$defs/canonicalRef" },
-            { "type": "null" }
-          ]
-        },
-        "partition_subject_key": { "$ref": "#/$defs/subjectKey" },
-        "parent_scope_ref": { "$ref": "#/$defs/canonicalRef" },
-        "inventory_digest": { "$ref": "#/$defs/digest" },
-        "question_target_inventory_digest": { "$ref": "#/$defs/digest" }
-      }
-    },
-    "partitionStrategy": {
-      "oneOf": [
+        "outcome": { "enum": ["complete", "failed"] },
+        "unit_type": { "$ref": "#/$defs/string" },
+        "partition_axis": { "$ref": "#/$defs/string" },
+        "groups": { "type": "array", "items": { "$ref": "#/$defs/partitionGroup" } },
+        "excluded": { "type": "array", "items": { "$ref": "#/$defs/excluded" } },
+        "unsupported": { "type": "array", "items": { "$ref": "#/$defs/unsupported" } },
+        "failure": { "$ref": "#/$defs/failure" }
+      },
+      "allOf": [
         {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "indexer_id", "strategy_id", "implementation_digest"],
-          "properties": {
-            "kind": { "const": "project-indexer" },
-            "indexer_id": { "$ref": "#/$defs/id" },
-            "strategy_id": { "$ref": "#/$defs/id" },
-            "implementation_digest": { "$ref": "#/$defs/digest" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "strategy_id", "implementation_digest"],
-          "properties": {
-            "kind": { "const": "cli-builtin" },
-            "strategy_id": { "$ref": "#/$defs/id" },
-            "implementation_digest": { "$ref": "#/$defs/digest" }
-          }
+          "if": { "properties": { "outcome": { "const": "failed" } } },
+          "then": { "required": ["failure"] }
         }
       ]
-    },
-    "partitionQuestionTargetBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["target_ref", "role"],
-      "properties": {
-        "target_ref": { "$ref": "#/$defs/canonicalRef" },
-        "role": { "enum": ["primary-carrier", "enricher"] }
-      }
     },
     "partitionGroup": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "group_key",
-        "subject_key",
-        "subject_intent",
-        "logical_unit_ref",
-        "label",
-        "reader_question_refs",
-        "question_target_bindings",
-        "member_ids"
-      ],
+      "required": ["key", "title", "reader_task", "subject", "subject_intent", "members", "questions", "question_targets", "outline"],
       "properties": {
-        "group_key": { "type": "string", "minLength": 1 },
-        "subject_key": { "$ref": "#/$defs/subjectKey" },
-        "subject_intent": { "enum": ["primary", "enrich-or-independent"] },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "label": { "type": "string", "minLength": 1 },
-        "reader_question_refs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "question_target_bindings": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/partitionQuestionTargetBinding" }
-        },
-        "member_ids": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        }
-      }
-    },
-    "partitionMemberDisposition": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "group_key"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "owned" },
-            "group_key": { "type": "string", "minLength": 1 }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "reason_code"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "excluded-with-reason" },
-            "reason_code": { "$ref": "#/$defs/id" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "missing_capabilities"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "unsupported" },
-            "missing_capabilities": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/id" }
-            }
-          }
-        }
-      ]
-    },
-    "partitionFailure": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["code", "message", "unassigned_member_ids"],
-      "properties": {
-        "code": {
-          "enum": [
-            "unsupported-domain",
-            "no-stable-axis",
-            "insufficient-identity-facts",
-            "invalid-input",
-            "strategy-failed"
-          ]
-        },
-        "message": { "type": "string", "minLength": 1 },
-        "unassigned_member_ids": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "missing_capabilities": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/id" }
-        },
-        "missing_source_refs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        }
-      }
-    },
-    "completePartitionPlan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "protocol",
-        "binding",
-        "strategy_ref",
-        "strategy_digest",
-        "unit_type",
-        "partition_axis",
-        "reader_question_refs",
-        "groups",
-        "member_dispositions",
-        "canonical_hash",
-        "status",
-        "failure"
-      ],
-      "properties": {
-        "protocol": { "const": "context.indexer.partition-plan/v1" },
-        "binding": { "$ref": "#/$defs/partitionBinding" },
-        "strategy_ref": { "$ref": "#/$defs/partitionStrategy" },
-        "strategy_digest": { "$ref": "#/$defs/digest" },
-        "unit_type": { "$ref": "#/$defs/id" },
-        "partition_axis": { "$ref": "#/$defs/id" },
-        "reader_question_refs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "groups": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/partitionGroup" }
-        },
-        "member_dispositions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/partitionMemberDisposition" }
-        },
-        "canonical_hash": { "$ref": "#/$defs/digest" },
-        "status": { "const": "complete" },
-        "failure": { "type": "null" }
-      }
-    },
-    "failedPartitionPlan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "protocol",
-        "binding",
-        "strategy_ref",
-        "strategy_digest",
-        "unit_type",
-        "partition_axis",
-        "reader_question_refs",
-        "groups",
-        "member_dispositions",
-        "canonical_hash",
-        "status",
-        "failure"
-      ],
-      "properties": {
-        "protocol": { "const": "context.indexer.partition-plan/v1" },
-        "binding": { "$ref": "#/$defs/partitionBinding" },
-        "strategy_ref": { "$ref": "#/$defs/partitionStrategy" },
-        "strategy_digest": { "$ref": "#/$defs/digest" },
-        "unit_type": { "$ref": "#/$defs/id" },
-        "partition_axis": { "$ref": "#/$defs/id" },
-        "reader_question_refs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "groups": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/partitionGroup" }
-        },
-        "member_dispositions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/partitionMemberDisposition" }
-        },
-        "canonical_hash": { "$ref": "#/$defs/digest" },
-        "status": { "const": "failed" },
-        "failure": { "$ref": "#/$defs/partitionFailure" }
-      }
-    },
-    "partitionPlan": {
-      "oneOf": [
-        { "$ref": "#/$defs/completePartitionPlan" },
-        { "$ref": "#/$defs/failedPartitionPlan" }
-      ]
-    },
-    "targetResolutionDisposition": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["query_ref", "disposition", "target_subject_key", "target_node_ref"],
-          "properties": {
-            "query_ref": { "$ref": "#/$defs/digest" },
-            "disposition": { "const": "reuse-existing" },
-            "target_subject_key": { "$ref": "#/$defs/subjectKey" },
-            "target_node_ref": { "$ref": "#/$defs/canonicalRef" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["query_ref", "disposition", "subject_key", "reason_code", "evidence_refs"],
-          "properties": {
-            "query_ref": { "$ref": "#/$defs/digest" },
-            "disposition": { "const": "create-independent" },
-            "subject_key": { "$ref": "#/$defs/subjectKey" },
-            "reason_code": { "$ref": "#/$defs/id" },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["query_ref", "disposition", "missing_facts", "source_hints"],
-          "properties": {
-            "query_ref": { "$ref": "#/$defs/digest" },
-            "disposition": { "const": "request-material" },
-            "missing_facts": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/id" }
-            },
-            "source_hints": {
-              "type": "array",
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["query_ref", "disposition", "missing_capabilities"],
-          "properties": {
-            "query_ref": { "$ref": "#/$defs/digest" },
-            "disposition": { "const": "unsupported" },
-            "missing_capabilities": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/id" }
-            }
-          }
-        }
-      ]
-    },
-    "logicalUnit": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["group_key", "subject_key", "logical_unit_ref", "target_resolution_dispositions"],
-      "properties": {
-        "group_key": { "type": "string", "minLength": 1 },
-        "subject_key": { "$ref": "#/$defs/subjectKey" },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "target_resolution_dispositions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/targetResolutionDisposition" }
-        }
-      }
-    },
-    "evidenceBinding": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "evidence_ref",
-        "kind",
-        "source_ref",
-        "module_ref",
-        "locator",
-        "content_digest",
-        "coverage_tier",
-        "binding_digest"
-      ],
-      "properties": {
-        "evidence_ref": { "$ref": "#/$defs/canonicalRef" },
-        "kind": {
-          "enum": [
-            "code",
-            "contract",
-            "configuration",
-            "documentation",
-            "runbook",
-            "decision-record",
-            "test-result",
-            "runtime-observation",
-            "tool-snapshot"
-          ]
-        },
-        "source_ref": { "$ref": "#/$defs/canonicalRef" },
-        "module_ref": {
+        "key": { "$ref": "#/$defs/string" },
+        "title": { "$ref": "#/$defs/string" },
+        "reader_task": { "$ref": "#/$defs/string" },
+        "subject": {
           "oneOf": [
-            { "$ref": "#/$defs/canonicalRef" },
-            { "type": "null" }
-          ]
-        },
-        "locator": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["path", "start_line", "end_line"],
-          "properties": {
-            "path": { "$ref": "#/$defs/portablePath" },
-            "start_line": { "type": "integer", "minimum": 1 },
-            "end_line": { "type": "integer", "minimum": 1 }
-          }
-        },
-        "content_digest": { "$ref": "#/$defs/digest" },
-        "coverage_tier": { "enum": ["ast-catalog", "lightweight-evidence"] },
-        "binding_digest": { "$ref": "#/$defs/digest" }
-      }
-    },
-    "artifactFact": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["fact_ref", "fact_kind", "subject_key", "value", "evidence_refs"],
-      "properties": {
-        "fact_ref": { "$ref": "#/$defs/canonicalRef" },
-        "fact_kind": { "$ref": "#/$defs/id" },
-        "subject_key": { "$ref": "#/$defs/subjectKey" },
-        "value": { "$ref": "#/$defs/jsonValue" },
-        "evidence_refs": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        }
-      }
-    },
-    "contentBlock": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["block_id", "layer", "renderer", "fact_refs"],
-          "properties": {
-            "block_id": { "$ref": "#/$defs/id" },
-            "layer": { "const": "deterministic-block" },
-            "renderer": { "enum": ["bullet-list", "key-value-table", "json-code-block"] },
-            "fact_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["block_id", "layer", "markdown", "evidence_refs"],
-          "properties": {
-            "block_id": { "$ref": "#/$defs/id" },
-            "layer": { "const": "semantic-prose" },
-            "markdown": { "type": "string", "minLength": 1 },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        }
-      ]
-    },
-    "sectionProjection": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["section_key", "owner_indexer_id", "document_kind", "reader_goal", "artifact_kind"],
-      "properties": {
-        "section_key": { "$ref": "#/$defs/id" },
-        "owner_indexer_id": { "$ref": "#/$defs/id" },
-        "document_kind": { "$ref": "#/$defs/id" },
-        "reader_goal": { "$ref": "#/$defs/id" },
-        "artifact_kind": { "$ref": "#/$defs/id" }
-      }
-    },
-    "artifact": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "artifact_id",
-            "artifact_kind",
-            "artifact_policy_variant",
-            "representation",
-            "template_id",
-            "variables",
-            "section_projections"
-          ],
-          "properties": {
-            "artifact_id": { "$ref": "#/$defs/id" },
-            "artifact_kind": { "$ref": "#/$defs/id" },
-            "artifact_policy_variant": { "$ref": "#/$defs/id" },
-            "representation": { "const": "template" },
-            "template_id": { "$ref": "#/$defs/id" },
-            "variables": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["value", "fact_refs", "evidence_refs"],
-                "properties": {
-                  "value": { "$ref": "#/$defs/jsonValue" },
-                  "fact_refs": {
-                    "type": "array",
-                    "uniqueItems": true,
-                    "items": { "$ref": "#/$defs/canonicalRef" }
-                  },
-                  "evidence_refs": {
-                    "type": "array",
-                    "uniqueItems": true,
-                    "items": { "$ref": "#/$defs/canonicalRef" }
-                  }
-                }
-              }
-            },
-            "section_projections": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "$ref": "#/$defs/sectionProjection" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "artifact_id",
-            "artifact_kind",
-            "artifact_policy_variant",
-            "representation",
-            "sections"
-          ],
-          "properties": {
-            "artifact_id": { "$ref": "#/$defs/id" },
-            "artifact_kind": { "$ref": "#/$defs/id" },
-            "artifact_policy_variant": { "$ref": "#/$defs/id" },
-            "representation": { "const": "sections" },
-            "sections": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "section_key",
-                  "owner_indexer_id",
-                  "document_kind",
-                  "reader_goal",
-                  "artifact_kind",
-                  "blocks"
-                ],
-                "properties": {
-                  "section_key": { "$ref": "#/$defs/id" },
-                  "owner_indexer_id": { "$ref": "#/$defs/id" },
-                  "document_kind": { "$ref": "#/$defs/id" },
-                  "reader_goal": { "$ref": "#/$defs/id" },
-                  "artifact_kind": { "$ref": "#/$defs/id" },
-                  "blocks": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": { "$ref": "#/$defs/contentBlock" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "artifactBundleEntry": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["artifact_id", "artifact_kind", "purpose", "reader_question_refs", "evidence_refs"],
-          "properties": {
-            "artifact_id": { "$ref": "#/$defs/id" },
-            "artifact_kind": { "$ref": "#/$defs/id" },
-            "purpose": { "enum": ["required", "discretionary"] },
-            "reader_question_refs": {
-              "type": "array",
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "artifact_id",
-            "artifact_kind",
-            "purpose",
-            "reader_question_refs",
-            "evidence_refs",
-            "split_of",
-            "boundary"
-          ],
-          "properties": {
-            "artifact_id": { "$ref": "#/$defs/id" },
-            "artifact_kind": { "$ref": "#/$defs/id" },
-            "purpose": { "const": "semantic-split" },
-            "reader_question_refs": {
-              "type": "array",
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            },
-            "split_of": { "$ref": "#/$defs/id" },
-            "boundary": {
+            { "$ref": "#/$defs/string" },
+            {
               "type": "object",
               "additionalProperties": false,
-              "required": ["axis", "start_key", "end_key"],
+              "required": ["namespace", "kind", "local_key"],
               "properties": {
-                "axis": { "$ref": "#/$defs/id" },
-                "start_key": { "type": "string", "minLength": 1 },
-                "end_key": { "type": "string", "minLength": 1 }
+                "namespace": { "$ref": "#/$defs/string" },
+                "kind": { "$ref": "#/$defs/string" },
+                "local_key": { "$ref": "#/$defs/string" }
               }
             }
-          }
-        }
-      ]
-    },
-    "artifactBundle": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "protocol",
-        "logical_unit_ref",
-        "artifact_policy_variant",
-        "artifacts",
-        "discretionary_artifact_count",
-        "semantic_split_part_count",
-        "bundle_digest"
-      ],
-      "properties": {
-        "protocol": { "const": "context.indexer.artifact-bundle/v1" },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "artifact_policy_variant": { "$ref": "#/$defs/id" },
-        "artifacts": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/artifactBundleEntry" }
+          ]
         },
-        "discretionary_artifact_count": { "type": "integer", "minimum": 0 },
-        "semantic_split_part_count": { "type": "integer", "minimum": 0 },
-        "bundle_digest": { "$ref": "#/$defs/digest" }
+        "subject_intent": { "enum": ["primary", "enrich-or-independent"] },
+        "members": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/string" } },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/string" } },
+        "question_targets": { "type": "array", "items": { "$ref": "#/$defs/questionTarget" } },
+        "outline": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/string" } }
       }
     },
-    "sectionEvidence": {
+    "questionTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["artifact_id", "section_key", "evidence_refs"],
+      "required": ["target", "role"],
       "properties": {
-        "artifact_id": { "$ref": "#/$defs/id" },
-        "section_key": { "$ref": "#/$defs/id" },
-        "evidence_refs": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        }
+        "target": { "$ref": "#/$defs/string" },
+        "role": { "enum": ["primary-carrier", "enricher"] }
       }
     },
-    "capabilityGroupEvidence": {
+    "excluded": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "protocol",
-        "author_workset_digest",
-        "group_projection_digest",
-        "logical_unit_ref",
-        "member_ids",
-        "member_ids_digest",
-        "capability_groups",
-        "evidence_digest"
-      ],
+      "required": ["item", "reason_code"],
       "properties": {
-        "protocol": { "const": "context.indexer.capability-group-evidence/v1" },
-        "author_workset_digest": { "$ref": "#/$defs/digest" },
-        "group_projection_digest": { "$ref": "#/$defs/digest" },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "member_ids": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        },
-        "member_ids_digest": { "$ref": "#/$defs/digest" },
-        "capability_groups": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["capability_group_ref", "capability_key", "member_evidence", "section_evidence"],
-            "properties": {
-              "capability_group_ref": { "$ref": "#/$defs/canonicalRef" },
-              "capability_key": { "$ref": "#/$defs/id" },
-              "member_evidence": {
-                "type": "array",
-                "minItems": 2,
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["member_id", "evidence_refs"],
-                  "properties": {
-                    "member_id": { "$ref": "#/$defs/canonicalRef" },
-                    "evidence_refs": {
-                      "type": "array",
-                      "minItems": 1,
-                      "uniqueItems": true,
-                      "items": { "$ref": "#/$defs/canonicalRef" }
-                    }
-                  }
-                }
-              },
-              "section_evidence": {
-                "type": "array",
-                "minItems": 1,
-                "items": { "$ref": "#/$defs/sectionEvidence" }
-              }
-            }
-          }
-        },
-        "evidence_digest": { "$ref": "#/$defs/digest" }
+        "item": { "$ref": "#/$defs/string" },
+        "reason_code": { "$ref": "#/$defs/string" }
       }
     },
-    "authorInventoryDisposition": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "projection_disposition", "section_evidence"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "owned" },
-            "projection_disposition": { "const": "detailed" },
-            "section_evidence": {
-              "type": "array",
-              "minItems": 1,
-              "items": { "$ref": "#/$defs/sectionEvidence" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "projection_disposition", "capability_group_ref"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "owned" },
-            "projection_disposition": { "const": "capability-group" },
-            "capability_group_ref": { "$ref": "#/$defs/canonicalRef" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "projection_disposition", "fact_refs"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "owned" },
-            "projection_disposition": { "const": "catalog-only" },
-            "fact_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "projection_disposition", "evidence_refs"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "owned" },
-            "projection_disposition": { "const": "boundary-only" },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "reason_code", "evidence_refs"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "excluded-with-reason" },
-            "reason_code": { "$ref": "#/$defs/id" },
-            "evidence_refs": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "missing_capabilities"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "unsupported" },
-            "missing_capabilities": {
-              "type": "array",
-              "minItems": 1,
-              "uniqueItems": true,
-              "items": { "$ref": "#/$defs/id" }
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["member_id", "member_kind", "inventory_disposition", "material_question_proposal_ref"],
-          "properties": {
-            "member_id": { "$ref": "#/$defs/canonicalRef" },
-            "member_kind": { "$ref": "#/$defs/inventoryMemberKind" },
-            "inventory_disposition": { "const": "request-material" },
-            "material_question_proposal_ref": { "$ref": "#/$defs/canonicalRef" }
-          }
-        }
-      ]
-    },
-    "inventoryDispositionSet": {
+    "unsupported": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "protocol",
-        "author_workset_digest",
-        "group_projection_digest",
-        "logical_unit_ref",
-        "member_ids_digest",
-        "member_inventory_digest",
-        "dispositions",
-        "disposition_digest"
-      ],
+      "required": ["item", "missing_capabilities"],
       "properties": {
-        "protocol": { "const": "context.indexer.inventory-disposition-set/v1" },
-        "author_workset_digest": { "$ref": "#/$defs/digest" },
-        "group_projection_digest": { "$ref": "#/$defs/digest" },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "member_ids_digest": { "$ref": "#/$defs/digest" },
-        "member_inventory_digest": { "$ref": "#/$defs/digest" },
-        "dispositions": {
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/authorInventoryDisposition" }
-        },
-        "disposition_digest": { "$ref": "#/$defs/digest" }
+        "item": { "$ref": "#/$defs/string" },
+        "missing_capabilities": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/string" } }
       }
     },
-    "structuredDeclarationTarget": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["target_type", "normalized_path"],
-          "properties": {
-            "target_type": { "const": "directory" },
-            "normalized_path": { "$ref": "#/$defs/portablePath" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["target_type", "normalized_path", "content_digest"],
-          "properties": {
-            "target_type": { "const": "file" },
-            "normalized_path": { "$ref": "#/$defs/portablePath" },
-            "content_digest": { "$ref": "#/$defs/digest" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["target_type", "normalized_path", "source_fact_ref", "qualified_item_path", "signature_digest"],
-          "properties": {
-            "target_type": { "const": "item" },
-            "normalized_path": { "$ref": "#/$defs/portablePath" },
-            "source_fact_ref": { "$ref": "#/$defs/canonicalRef" },
-            "qualified_item_path": { "type": "string", "minLength": 1, "maxLength": 1024 },
-            "signature_digest": { "$ref": "#/$defs/digest" }
-          }
-        }
-      ]
-    },
-    "structuredDeclarationSet": {
+    "failure": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["protocol", "source_identity_inventory_digest", "declarations", "declaration_set_digest"],
+      "required": ["code", "message", "unassigned"],
       "properties": {
-        "protocol": { "const": "context.indexer.structured-declaration-set/v1" },
-        "source_identity_inventory_digest": { "$ref": "#/$defs/digest" },
-        "declarations": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "carrier_kind",
-              "carrier_ref",
-              "declaration_kind",
-              "source_ref",
-              "module_ref",
-              "target",
-              "evidence_refs",
-              "declaration_ref"
-            ],
-            "properties": {
-              "carrier_kind": { "enum": ["indexer-result", "catalog", "manifest", "section-evidence"] },
-              "carrier_ref": { "$ref": "#/$defs/canonicalRef" },
-              "declaration_kind": { "enum": ["directory", "entry", "method", "handler", "store", "locator"] },
-              "source_ref": { "$ref": "#/$defs/canonicalRef" },
-              "module_ref": {
-                "oneOf": [
-                  { "$ref": "#/$defs/canonicalRef" },
-                  { "type": "null" }
-                ]
-              },
-              "target": { "$ref": "#/$defs/structuredDeclarationTarget" },
-              "evidence_refs": {
-                "type": "array",
-                "minItems": 1,
-                "uniqueItems": true,
-                "items": { "$ref": "#/$defs/canonicalRef" }
-              },
-              "declaration_ref": { "$ref": "#/$defs/canonicalRef" }
-            }
-          }
-        },
-        "declaration_set_digest": { "$ref": "#/$defs/digest" }
+        "code": { "enum": ["unsupported-domain", "no-stable-axis", "insufficient-identity-facts", "invalid-input", "strategy-failed"] },
+        "message": { "$ref": "#/$defs/string" },
+        "unassigned": { "type": "array", "items": { "$ref": "#/$defs/string" } },
+        "missing_capabilities": { "type": "array", "items": { "$ref": "#/$defs/string" } },
+        "missing_sources": { "type": "array", "items": { "$ref": "#/$defs/string" } }
       }
     },
-    "structuredClaimSet": {
+    "author": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["protocol", "author_workset_digest", "logical_unit_ref", "claims", "claims_digest"],
+      "required": ["stage", "group_key", "outcome", "target_resolutions", "sections", "member_dispositions", "material_gaps", "diagnostics"],
       "properties": {
-        "protocol": { "const": "context.indexer.structured-claim-set/v1" },
-        "author_workset_digest": { "$ref": "#/$defs/digest" },
-        "logical_unit_ref": { "$ref": "#/$defs/canonicalRef" },
-        "claims": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["claim_ref", "claim_kind", "subject_ref", "owner", "evidence_refs"],
-            "properties": {
-              "claim_ref": { "$ref": "#/$defs/canonicalRef" },
-              "claim_kind": { "$ref": "#/$defs/id" },
-              "subject_ref": { "$ref": "#/$defs/canonicalRef" },
-              "owner": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["artifact_id", "section_key"],
-                "properties": {
-                  "artifact_id": { "$ref": "#/$defs/id" },
-                  "section_key": { "$ref": "#/$defs/id" }
-                }
-              },
-              "evidence_refs": {
-                "type": "array",
-                "minItems": 1,
-                "uniqueItems": true,
-                "items": { "$ref": "#/$defs/canonicalRef" }
-              }
-            }
-          }
-        },
-        "claims_digest": { "$ref": "#/$defs/digest" }
+        "stage": { "const": "author" },
+        "group_key": { "$ref": "#/$defs/string" },
+        "outcome": { "enum": ["publish", "catalog-only", "request-material", "unsupported"] },
+        "artifact_intent": { "$ref": "#/$defs/string" },
+        "policy": { "$ref": "#/$defs/string" },
+        "target_resolutions": { "type": "array", "items": { "$ref": "#/$defs/targetResolution" } },
+        "title": { "$ref": "#/$defs/string" },
+        "summary": { "$ref": "#/$defs/string" },
+        "sections": { "type": "array", "items": { "$ref": "#/$defs/authorSection" } },
+        "member_dispositions": { "type": "array", "items": { "$ref": "#/$defs/memberDisposition" } },
+        "material_gaps": { "type": "array", "items": { "$ref": "#/$defs/materialGap" } },
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } }
       }
     },
-    "materialQuestionProposal": {
+    "targetResolution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["proposal_ref", "requirement_ref", "question_ref", "question_target_key", "source_hints"],
+      "required": ["target", "disposition"],
       "properties": {
-        "proposal_ref": { "$ref": "#/$defs/canonicalRef" },
-        "requirement_ref": { "$ref": "#/$defs/canonicalRef" },
-        "question_ref": { "$ref": "#/$defs/canonicalRef" },
-        "question_target_key": { "$ref": "#/$defs/canonicalRef" },
-        "source_hints": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": { "$ref": "#/$defs/canonicalRef" }
-        }
+        "target": { "$ref": "#/$defs/string" },
+        "disposition": { "enum": ["reuse-existing", "create-independent", "unresolved"] },
+        "reason_code": { "$ref": "#/$defs/string" }
       }
     },
-    "questionTargetDisposition": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["question_target_key", "state", "evidence_binding_digest"],
-          "properties": {
-            "question_target_key": { "$ref": "#/$defs/canonicalRef" },
-            "state": { "const": "answered" },
-            "evidence_binding_digest": { "$ref": "#/$defs/digest" }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["question_target_key", "state", "material_question_proposal_ref"],
-          "properties": {
-            "question_target_key": { "$ref": "#/$defs/canonicalRef" },
-            "state": { "const": "material-gap" },
-            "material_question_proposal_ref": { "$ref": "#/$defs/canonicalRef" }
-          }
-        }
-      ]
+    "authorSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "heading", "markdown", "source_items", "facts", "answers"],
+      "properties": {
+        "key": { "$ref": "#/$defs/string" },
+        "heading": { "$ref": "#/$defs/string" },
+        "markdown": { "$ref": "#/$defs/string" },
+        "source_items": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/string" } },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/string" } },
+        "answers": { "type": "array", "items": { "$ref": "#/$defs/string" } }
+      }
     },
-    "resultDiagnostic": {
+    "memberDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item", "state"],
+      "properties": {
+        "item": { "$ref": "#/$defs/string" },
+        "state": { "enum": ["covered", "catalog-only", "unsupported"] },
+        "section": { "$ref": "#/$defs/string" },
+        "reason_code": { "$ref": "#/$defs/string" }
+      }
+    },
+    "materialGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "source_hints"],
+      "properties": {
+        "question": { "$ref": "#/$defs/string" },
+        "source_hints": { "type": "array", "items": { "$ref": "#/$defs/string" } }
+      }
+    },
+    "diagnostic": {
       "type": "object",
       "additionalProperties": false,
       "required": ["code", "message"],
       "properties": {
-        "code": { "$ref": "#/$defs/id" },
-        "message": { "type": "string", "minLength": 1 },
-        "target_ref": { "$ref": "#/$defs/canonicalRef" }
+        "code": { "$ref": "#/$defs/string" },
+        "message": { "$ref": "#/$defs/string" },
+        "target": { "$ref": "#/$defs/string" }
       }
     },
-    "artifactResult": {
+    "postAuthor": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "protocol",
-        "author_workset_digest",
-        "partition_plan_binding_digest",
-        "group_projection_digest",
-        "indexer_id",
-        "provider_layer_ref",
-        "provider_integrity",
-        "provider_bundle_digest",
-        "config_fingerprint",
-        "customization_fingerprint",
-        "requirement_ref",
-        "source_ref",
-        "module_ref",
-        "source_role",
-        "logical_unit",
-        "capability_group_evidence",
-        "inventory_dispositions",
-        "facts",
-        "evidence_bindings",
-        "artifacts",
-        "artifact_bundle",
-        "material_question_proposals",
-        "question_target_dispositions",
-        "diagnostics",
-        "input_digest",
-        "output_digest"
-      ],
+      "required": ["stage", "outcome", "proposals", "diagnostics"],
       "properties": {
-        "protocol": { "const": "context.indexer.artifact-result/v1" },
-        "author_workset_digest": { "$ref": "#/$defs/digest" },
-        "partition_plan_binding_digest": { "$ref": "#/$defs/digest" },
-        "group_projection_digest": { "$ref": "#/$defs/digest" },
-        "indexer_id": { "$ref": "#/$defs/id" },
-        "provider_layer_ref": { "$ref": "#/$defs/providerLayerRef" },
-        "provider_integrity": { "$ref": "#/$defs/digest" },
-        "provider_bundle_digest": { "$ref": "#/$defs/digest" },
-        "config_fingerprint": { "$ref": "#/$defs/digest" },
-        "customization_fingerprint": {
-          "oneOf": [
-            { "$ref": "#/$defs/digest" },
-            { "type": "null" }
-          ]
-        },
-        "requirement_ref": { "$ref": "#/$defs/canonicalRef" },
-        "source_ref": { "$ref": "#/$defs/canonicalRef" },
-        "module_ref": {
-          "oneOf": [
-            { "$ref": "#/$defs/canonicalRef" },
-            { "type": "null" }
-          ]
-        },
-        "source_role": { "$ref": "#/$defs/id" },
-        "logical_unit": { "$ref": "#/$defs/logicalUnit" },
-        "capability_group_evidence": { "$ref": "#/$defs/capabilityGroupEvidence" },
-        "inventory_dispositions": { "$ref": "#/$defs/inventoryDispositionSet" },
-        "structured_declarations": { "$ref": "#/$defs/structuredDeclarationSet" },
-        "structured_claims": { "$ref": "#/$defs/structuredClaimSet" },
-        "facts": {
+        "stage": { "const": "post-author" },
+        "outcome": { "enum": ["complete", "failed"] },
+        "proposals": {
           "type": "array",
-          "items": { "$ref": "#/$defs/artifactFact" }
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target", "artifact_kind", "title", "summary", "sections"],
+            "properties": {
+              "target": { "$ref": "#/$defs/string" },
+              "artifact_kind": { "$ref": "#/$defs/string" },
+              "title": { "$ref": "#/$defs/string" },
+              "summary": { "$ref": "#/$defs/string" },
+              "sections": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["key", "heading", "markdown", "source_refs"],
+                  "properties": {
+                    "key": { "$ref": "#/$defs/string" },
+                    "heading": { "$ref": "#/$defs/string" },
+                    "markdown": { "$ref": "#/$defs/string" },
+                    "source_refs": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "$ref": "#/$defs/string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
-        "evidence_bindings": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/evidenceBinding" }
-        },
-        "artifacts": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/artifact" }
-        },
-        "artifact_bundle": {
-          "oneOf": [
-            { "$ref": "#/$defs/artifactBundle" },
-            { "type": "null" }
-          ]
-        },
-        "material_question_proposals": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/materialQuestionProposal" }
-        },
-        "question_target_dispositions": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/questionTargetDisposition" }
-        },
-        "diagnostics": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/resultDiagnostic" }
-        },
-        "input_digest": { "$ref": "#/$defs/digest" },
-        "output_digest": { "$ref": "#/$defs/digest" }
+        "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "const": "failed" } } },
+          "then": { "properties": { "diagnostics": { "minItems": 1 } } }
+        }
+      ]
+    },
+    "structureReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "decision"],
+      "properties": {
+        "stage": { "const": "structure-review" },
+        "decision": { "enum": ["approved", "request-adjustment"] },
+        "feedback": { "$ref": "#/$defs/string" }
+      }
+    },
+    "layoutConfirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "decision"],
+      "properties": {
+        "stage": { "const": "layout-confirmation" },
+        "decision": { "enum": ["approved", "rejected"] },
+        "feedback": { "$ref": "#/$defs/string" }
       }
     }
   }

@@ -18,7 +18,6 @@ import {
   type InstalledIndexerParserPackage,
 } from "./indexerParserRuntimeImport.js";
 import {
-  validateIndexerParserRuntimeExecutionReceipt,
   type IndexerParserRuntimeExecutionReceipt,
 } from "./indexerParserRuntimeExecution.js";
 import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
@@ -28,6 +27,7 @@ import {
 } from "./indexerParserSourceMaterialization.js";
 
 const CACHE_ROOT = join(LIFECYCLE_ROOT, "indexer-parser-executions");
+const CACHE_FORMAT = 2 as const;
 const inFlight = new Map<string, Promise<IndexerParserRuntimeExecutionReceipt>>();
 
 function cachePath(projectRoot: string, indexerId: string): string {
@@ -41,6 +41,7 @@ function cacheMetadataPath(projectRoot: string, indexerId: string): string {
 }
 
 interface IndexerParserExecutionCacheMetadata {
+  cache_format: typeof CACHE_FORMAT;
   indexer_digest: string;
   source_registry_digest: string;
   profile_contract_digest: string;
@@ -66,6 +67,9 @@ function parseCacheMetadata(value: unknown): IndexerParserExecutionCacheMetadata
     throw new TypeError("parser execution cache metadata must be an object");
   }
   const candidate = value as Record<string, unknown>;
+  if (candidate.cache_format !== CACHE_FORMAT) {
+    throw new TypeError("parser execution cache metadata format is stale");
+  }
   const requiredDigests = [
     "indexer_digest",
     "source_registry_digest",
@@ -234,6 +238,7 @@ async function executeCurrent(input: {
     left.package.localeCompare(right.package)
   );
   const metadata: IndexerParserExecutionCacheMetadata = {
+    cache_format: CACHE_FORMAT,
     indexer_digest: indexerProtocolDigest(materialized.indexer),
     source_registry_digest: plan.source_registry_digest,
     profile_contract_digest: plan.profile_contract_digest,

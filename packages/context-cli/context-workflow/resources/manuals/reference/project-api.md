@@ -91,8 +91,8 @@ primary Provider, with optional declared layers or composers. Provider code
 must return the current Indexer result protocol; it must not write Candidate,
 knowledge, or Review files directly.
 
-See [Indexer Provider Protocol](./indexer-provider-protocol.md) and
-[Provider Selection and Customization](../guides/indexer-provider-and-customization.md).
+Detailed Provider protocol and customization guidance is selected by the
+current workflow Route when it is needed.
 
 ## Persistent versus runtime state
 

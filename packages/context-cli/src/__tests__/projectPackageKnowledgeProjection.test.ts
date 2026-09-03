@@ -116,7 +116,7 @@ describe("package knowledge consumer projection", () => {
     expect(projectPackageKnowledgeMarkdown(input)).toBe(input);
   });
 
-  test("drops descriptions that only contain generated relationship navigation", () => {
+  test("replaces generated relationship navigation with a reader description", () => {
     const input = [
       "---",
       "title: Access rules",
@@ -129,7 +129,7 @@ describe("package knowledge consumer projection", () => {
     ].join("\n");
 
     const projected = projectPackageKnowledgeMarkdown(input);
-    expect(frontmatter(projected)).not.toHaveProperty("description");
+    expect(frontmatter(projected)).toHaveProperty("description", "Access rules");
     expect(projected).toContain("# Access rules");
   });
 
@@ -163,6 +163,7 @@ describe("package knowledge consumer projection", () => {
     expect(output).toEqual({
       title: "Toggle",
       type: "Wiki",
+      description: "Reader content.",
       timestamp: "2026-09-02T00:00:00.000Z",
     });
   });

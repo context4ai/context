@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command, Option } from "commander";
@@ -6,13 +6,15 @@ import { redactIndexerOutput, redactIndexerOutputText } from "@c4a/core";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
-import { registerDocumentOptimizationCommands } from "./commands/documentOptimizationCommands.js";
+import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
 import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
+import { registerProjectActionCommands } from "./commands/actionCommands.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
 import { ContextError } from "./lib/errors.js";
 import { ErrorCategory } from "./lib/cliFeedback.js";
 import { ExitCode } from "./types/exitCode.js";
+import { readPackageVersion } from "./lib/packageVersion.js";
 import {
   assertProjectWorkflowRevision,
 } from "./project/statusCommand.js";
@@ -63,9 +65,9 @@ const TOP_LEVEL_COMMANDS = new Set([
   "clean-cache",
   "debug",
   "revise",
-  "optimize-docs",
   "migrate",
   "logs",
+  "action",
   "help",
 ]);
 
@@ -80,34 +82,6 @@ function inferErrorCategory(message: string): string {
     return ErrorCategory.UserInputInvalid;
   }
   return ErrorCategory.Unknown;
-}
-
-/**
- * Read the CLI version from this package's package.json at runtime.
- *
- * Walks up from this file's location (dist/cli.js in prod, src/cli.ts in dev)
- * until it finds a package.json — that's always `packages/context-cli/package.json`.
- * This keeps the CLI version in lockstep with the package, and with the root
- * monorepo version after `./start.sh → package → bump`, without needing a
- * build-time string replacement.
- */
-function readPackageVersion(): string {
-  try {
-    let dir = dirname(fileURLToPath(import.meta.url));
-    for (let i = 0; i < 8; i++) {
-      const pkg = join(dir, "package.json");
-      if (existsSync(pkg)) {
-        const parsed = JSON.parse(readFileSync(pkg, "utf8")) as { version?: string };
-        return parsed.version ?? "unknown";
-      }
-      const parent = dirname(dir);
-      if (parent === dir) break;
-      dir = parent;
-    }
-  } catch {
-    /* fall through to unknown */
-  }
-  return "unknown";
 }
 
 function readQuickstartPath(): string {
@@ -249,10 +223,11 @@ export function createCliProgram(): Command {
   registerPluginCommands(program);
 
   registerDebugCommands(program);
-  registerDocumentOptimizationCommands(program);
+  registerDocumentRevisionCommand(program);
   registerCodeIndexMigrationCommands(program);
 
   registerContextWorkflowResourceCommands(program);
+  registerProjectActionCommands(program);
   registerPackageCommands(program);
 
   registerProjectStatusCommand(program);

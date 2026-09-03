@@ -2,7 +2,6 @@ import type { KnowledgeCollection } from "@c4a/context";
 import type { DocumentCaptureFidelityReport, DocumentResourceMaterializationReport } from "@c4a/extract";
 import type { ProjectCloseStatus } from "./close.js";
 import type { PackageFreshness } from "./packageBuilder.js";
-import type { DocumentOptimizationStatus } from "./documentOptimization.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
 import type { RepoSourceStatus } from "./repoSources.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
@@ -90,7 +89,6 @@ export interface ProjectStatus {
   documentSources: DocumentSourceStatus[];
   phases: string[];
   packages: PackageFreshness[];
-  documentOptimization: DocumentOptimizationStatus;
   packageTemplateReviews: PackageTemplateReviewStatus[];
   pendingCapturePhases: string[];
   evidenceStatus: EvidenceStatus;

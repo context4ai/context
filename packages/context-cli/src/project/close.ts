@@ -28,6 +28,7 @@ import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import {
   approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
+  ensureApprovedKnowledgePresentation,
   hydrateApprovedKnowledgeMarkdown,
   readApprovedKnowledgeMetadataIndex,
 } from "./approvedKnowledgeMetadata.js";
@@ -463,6 +464,13 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
       });
     }
     const resourceProjection = await repairApprovedKnowledgeAssetProjections(projectRoot);
+    const descriptionRepairs = (await approvedKnowledgeFiles(projectRoot)).flatMap((file) => {
+      const content = ensureApprovedKnowledgePresentation(file.content);
+      return content === file.content ? [] : [{ ...file, content }];
+    });
+    await Promise.all(descriptionRepairs.map((file) =>
+      writeFile(file.absPath, file.content, "utf8")
+    ));
     const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
     const nodes = Array.isArray(structure.nodes) ? structure.nodes.length : 0;
     const views = Array.isArray(structure.views) ? structure.views.length : 0;

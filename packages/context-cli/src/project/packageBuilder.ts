@@ -68,7 +68,6 @@ import {
   inspectPackageTemplateReviews,
   PACKAGE_TEMPLATE_REVIEW_FILE,
 } from "./packageTemplateReview.js";
-import { projectDocumentOptimizedKnowledge } from "./documentOptimization.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 import {
   hydrateApprovedKnowledgeMarkdown,
@@ -323,11 +322,9 @@ export async function collectPackageFreshness(
   packages: readonly PackageDefinition[],
 ): Promise<PackageFreshness[]> {
   const approved = await listApprovedKnowledge(projectRoot);
-  const optimized = await projectDocumentOptimizedKnowledge({ projectRoot, files: approved });
-  const approvedForBuild = optimized.status.current ? optimized.files : approved;
   return Promise.all(packages.map(async (pkg) => {
     assertPackageOutputDir(pkg);
-    const selected = selectPackageKnowledge(approvedForBuild, pkg);
+    const selected = selectPackageKnowledge(approved, pkg);
     assertSafeRenderedPath(pkg.template.path, "package template path");
     const templateRoot = join(projectRoot, pkg.template.path);
     const templateExists = existsSync(templateRoot);
@@ -351,7 +348,6 @@ export async function collectPackageFreshness(
       selected,
       structure,
       verifyEvidenceStatus: null,
-      documentOptimization: optimized.status,
     });
     validatePackageRenderPlan({
       pkg,
@@ -379,7 +375,7 @@ export async function collectPackageFreshness(
       structure,
       templateFiles,
     });
-    const inputIsCurrent = optimized.status.current && builtManifest !== null &&
+    const inputIsCurrent = builtManifest !== null &&
       builtManifest.builderProtocol === PACKAGE_BUILDER_PROTOCOL_VERSION &&
       builtManifest.fingerprint === currentFingerprint;
     if (inputIsCurrent && output.files > 0) {
@@ -461,23 +457,12 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       });
     }
   }
-  const optimized = await projectDocumentOptimizedKnowledge({ projectRoot, files: approved });
-  if (!optimized.status.current) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "document optimization must be current before package build", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      reason_code: "package/document-optimization-required",
-      pending_fragments: optimized.status.pending_fragments,
-      conflict_fragments: optimized.status.conflict_fragments,
-      next: "Run context status --format json and follow route.document-optimization.pending.",
-    });
-  }
-  const approvedForBuild = optimized.files;
   const summaries: PackageBuildSummary[] = [];
   const agentHints: PackageBuildAgentHint[] = [];
   await removeOrphanPackageDirs(projectRoot, packages);
   for (const pkg of packages) {
     assertPackageOutputDir(pkg);
-    const selected = selectPackageKnowledge(approvedForBuild, pkg);
+    const selected = selectPackageKnowledge(approved, pkg);
     const templateFiles = await listTemplateFiles(projectRoot, pkg.template.path);
     validatePackageTemplateContract(pkg, templateFiles);
     const bundle = await packageKnowledgeBundle(projectRoot, pkg, selected);
@@ -491,7 +476,6 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       selected,
       structure,
       verifyEvidenceStatus,
-      documentOptimization: optimized.status,
     });
     const fingerprint = await packageInputFingerprint({
       projectRoot,

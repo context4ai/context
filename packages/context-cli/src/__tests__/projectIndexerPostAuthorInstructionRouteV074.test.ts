@@ -134,7 +134,9 @@ describe("project Indexer post-author instruction Route", () => {
         output_schema: "context.indexer.materialized-resource/v1",
       },
     });
-    expect(route.instruction_location.materialize.input.value).toEqual(instructions);
+    expect(route.instruction_location.materialize.input.value).toEqual(
+      instructions as unknown as import("@c4a/agent-graph").JsonValue,
+    );
     expect(JSON.stringify(route.route)).not.toContain("__runtime__");
   });
 });

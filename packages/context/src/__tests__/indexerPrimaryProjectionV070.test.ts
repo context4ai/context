@@ -281,7 +281,6 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
     protocol: "context.indexer.run-result/v1" as const,
     operation: "main-index" as const,
     consumed_input_view_digest: authorRequest.composition_input.view_digest,
-    workset_read_receipt_digests: [digest("b")],
     result: {
       protocol: "context.indexer.main-result/v1" as const,
       stage: "author" as const,

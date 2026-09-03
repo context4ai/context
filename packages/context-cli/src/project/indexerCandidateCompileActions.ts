@@ -1,7 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  buildIndexerPrimaryRegistryProjection,
   buildIndexerCandidateCompile,
   canonicalIndexerJson,
   type IndexerCandidateCompile,
@@ -19,7 +18,6 @@ import {
   writeCandidateRecords,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { loadCliIndexerBaseContracts } from "./indexerCliBundledProvider.js";
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
 import {
@@ -35,6 +33,8 @@ import {
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { canonicalizeApprovedKnowledgeAssetPair } from "./knowledgeAssetRepair.js";
+import { resolveCurrentProjectIndexerPrimaryAuthority } from
+  "./indexerCurrentPrimaryAuthority.js";
 
 export const INDEXER_CANDIDATE_COMPILE_CURRENT_PATH = join(
   ".tmp",
@@ -42,6 +42,13 @@ export const INDEXER_CANDIDATE_COMPILE_CURRENT_PATH = join(
   "indexer",
   "candidate-compile",
   "current.json",
+);
+export const INDEXER_CURRENT_READINESS_PATH = join(
+  ".tmp",
+  "context-runtime",
+  "indexer",
+  "finalization",
+  "readiness.json",
 );
 
 const COMPILE_TRANSACTION = "compile-indexer-candidates";
@@ -80,10 +87,11 @@ async function currentRegistryStaleDiagnostic(
     }
     let currentProjection;
     try {
-      currentProjection = buildIndexerPrimaryRegistryProjection({
+      currentProjection = (await resolveCurrentProjectIndexerPrimaryAuthority({
+        projectRoot,
         registry: loaded.registry,
         indexer_id: workset.indexer_id,
-      });
+      })).primary_registry;
     } catch {
       return `Accepted author Result references inactive Indexer ${workset.indexer_id}.`;
     }
@@ -134,6 +142,39 @@ async function withCurrentPostAuthorEnvelopes(
     });
   }
   return resolved;
+}
+
+async function currentContractAuthority(input: {
+  projectRoot: string;
+  records: readonly AcceptedAuthorRecord[];
+}) {
+  const loaded = await loadIndexerRegistry(input.projectRoot);
+  const indexerIds = [...new Set(input.records.map((item) => {
+    const request = record(item.request, "accepted author request");
+    const workset = record(request.workset, "accepted author request workset");
+    if (typeof workset.indexer_id !== "string") {
+      throw new TypeError("Accepted author Result is missing its Indexer identity");
+    }
+    return workset.indexer_id;
+  }))].sort();
+  if (indexerIds.length === 0) {
+    throw new TypeError("Candidate compile requires accepted Author Results");
+  }
+  const authorities = await Promise.all(indexerIds.map((indexerId) =>
+    resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot,
+      registry: loaded.registry,
+      indexer_id: indexerId,
+    })
+  ));
+  const authority = authorities[0]!;
+  if (authorities.some((item) =>
+    item.operator_contract.contract_digest !== authority.operator_contract.contract_digest ||
+    item.profile_contract.contract_digest !== authority.profile_contract.contract_digest
+  )) {
+    throw new TypeError("Accepted Author Results disagree on Provider contract authority");
+  }
+  return authority;
 }
 
 function canonicalResultRefs(value: unknown): unknown[] {
@@ -359,6 +400,18 @@ export async function readProjectIndexerCandidateCompileStatus(
   if (raw === undefined) return { state: "missing", candidates: [] };
   try {
     const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
+    const readinessRaw = await readMaybe(join(projectRoot, INDEXER_CURRENT_READINESS_PATH));
+    const readiness = readinessRaw === undefined
+      ? undefined
+      : record(JSON.parse(readinessRaw) as unknown, "Indexer Candidate readiness");
+    if (readiness?.compile_digest !== compile.compile_digest) {
+      return {
+        state: "stale",
+        compile,
+        candidates: [],
+        diagnostic: "Candidate compile has not completed the current mechanical readiness checks.",
+      };
+    }
     const accepted = await withCurrentPostAuthorEnvelopes(
       projectRoot,
       await readAcceptedIndexerMainAuthorResultRecords(projectRoot),
@@ -571,7 +624,7 @@ async function projectIndexerCandidates(input: {
       review: {
         title,
         summary: indexerCandidateSummary(file.markdown, title),
-        signals: ["indexer-compiled", "mechanical-audit-bound"],
+        signals: ["indexer-compiled", "mechanically-validated"],
         reason: "Exact current Indexer Candidate compiled from accepted author Results.",
       },
       updated: previous?.fingerprint === file.file_digest ? previous.updated : now,
@@ -586,20 +639,18 @@ async function projectIndexerCandidates(input: {
 export async function compileProjectIndexerCandidates(input: {
   projectRoot: string;
   value: unknown;
-  assetsRoot?: string;
 }) {
-  const [currentRecords, contracts] = await Promise.all([
-    readAcceptedIndexerMainAuthorResultRecords(input.projectRoot),
-    loadCliIndexerBaseContracts(
-      input.assetsRoot === undefined ? {} : { assetsRoot: input.assetsRoot },
-    ),
-  ]);
+  const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+  const authority = await currentContractAuthority({
+    projectRoot: input.projectRoot,
+    records: currentRecords,
+  });
   const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
   const compile = buildProjectIndexerCandidateCompileFromRecords({
     value: input.value,
     records,
-    operator_contract: contracts.operators,
-    profile_contract: contracts.profiles,
+    operator_contract: authority.operator_contract,
+    profile_contract: authority.profile_contract,
   });
   const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
   const persisted = await withProjectWriteLock(
