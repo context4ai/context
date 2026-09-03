@@ -122,7 +122,12 @@ describe("plugin and workflow workspace guard", () => {
     expect(pluginMarkdown.some((file) => file.includes("internal-procedures"))).toBe(false);
     expect(pluginMarkdown.some((file) => file.endsWith("capture-source.md"))).toBe(false);
 
-    const semantic = await listMarkdown(join(WORKFLOW_ROOT, "resources", "semantic"));
+    const semantic = await listMarkdown(
+      join(WORKFLOW_ROOT, "resources", "semantic"),
+    ).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
     expect(semantic).toEqual([]);
   });
 

@@ -105,7 +105,7 @@ const expandWorkspacePattern = async (
   if (pattern.endsWith("/*")) {
     const prefix = pattern.slice(0, -2);
     const baseDir = prefix ? `${rootDir}/${prefix}` : rootDir;
-    const entries = await fs.readdir(baseDir);
+    const entries = (await fs.readdir(baseDir)).sort();
     return entries.map((entry) => `${baseDir}/${entry}`.replace(/^\.\//, ""));
   }
 
