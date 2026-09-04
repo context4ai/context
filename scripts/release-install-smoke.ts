@@ -42,6 +42,7 @@ await mkdir(scratchRoot, { recursive: true });
 const installRoot = await mkdtemp(resolve(scratchRoot, "release-install-smoke-"));
 
 const fixtures = {
+  "@c4a/extract": ["fixture.json", '{"enabled":true}'],
   "@c4a/extract-thrift": [
     "fixture.thrift",
     "service Fixture { string ping(1: string value) }",
@@ -109,12 +110,44 @@ await agentGraph.validateHostActionResult(location, hostResult);
 const graphReceipt = await agentGraph.hostActionResourceReadReceipt(location, hostResult);
 
 const parserResults = [];
+const extractionFixture = (pluginId, capability, language, path) => ({
+  version: "2",
+  meta: {
+    extractedAt: "2026-01-01T00:00:00.000Z",
+    pluginId,
+    commitHash: null,
+    language,
+  },
+  package: { name: "community-release-install-smoke", kind: "lib", language },
+  files: [{ path, language, lines: 1 }],
+  symbols: [],
+  relations: [],
+  coverage: {
+    tier: "ast-catalog",
+    capabilities: [capability],
+    files: [{ path, disposition: "analyzed", diagnosticCodes: [] }],
+    diagnostics: [],
+  },
+  stats: { files: 1, lines: 1, exportedSymbols: 0, internalSymbols: 0, relations: 0 },
+});
+const supportedParserPackages = new Set([
+  ...Object.keys(fixtures),
+  "@c4a/extract-ts",
+  "@c4a/extract-go",
+  "@c4a/extract-rush",
+]);
+const unsupportedParserPackages = parserPackages
+  .map((parserPackage) => parserPackage.name)
+  .filter((name) => !supportedParserPackages.has(name));
+if (unsupportedParserPackages.length > 0) {
+  throw new TypeError(
+    \`release install smoke lacks fixtures for: \${unsupportedParserPackages.join(", ")}\`,
+  );
+}
 for (const parserPackage of parserPackages) {
   const module = await import(parserPackage.name);
   const parser = module[parserPackage.export];
   if (typeof parser !== "function") throw new TypeError(\`\${parserPackage.name} lacks \${parserPackage.export}\`);
-  const [path, source] = fixtures[parserPackage.name];
-  const files = { [path]: source };
   const invocation = {
     adapter: {
       id: "community-release-install-smoke",
@@ -128,11 +161,62 @@ for (const parserPackage of parserPackages) {
       module_refs: [],
       scope_digest: \`sha256:\${createHash("sha256").update("release-install-smoke-scope").digest("hex")}\`,
     },
-    input_digest: \`sha256:\${createHash("sha256").update(JSON.stringify(files)).digest("hex")}\`,
+    input_digest: \`sha256:\${createHash("sha256")
+      .update(\`\${parserPackage.name}@\${version}:fixture\`)
+      .digest("hex")}\`,
     precedence: 1,
-    ...(parserPackage.name === "@c4a/extract-sql" ? { dialects: { [path]: "postgresql" } } : {}),
   };
-  const result = parser(files, invocation);
+  let path;
+  let materialized;
+  if (parserPackage.name === "@c4a/extract-ts") {
+    path = "fixture.ts";
+    materialized = parser(
+      extractionFixture("c4a-extract-ts", "parser.typescript", "typescript", path),
+      { ...invocation, module_ref: null },
+    );
+  } else if (parserPackage.name === "@c4a/extract-go") {
+    path = "fixture.go";
+    materialized = parser(
+      extractionFixture("c4a-extract-go", "parser.go", "go", path),
+      { ...invocation, module_ref: null },
+    );
+  } else if (parserPackage.name === "@c4a/extract-rush") {
+    path = "rush.json";
+    materialized = parser({
+      rushFile: path,
+      rushVersion: "5.120.0",
+      pnpmVersion: null,
+      nodeSupportedVersionRange: null,
+      selectedTags: [],
+      projects: [],
+      ownerBoundaries: [],
+      subspacesFile: null,
+      subspacesEnabled: false,
+      preventSelectingAllSubspaces: false,
+      subspaces: [],
+      commandLineFile: null,
+      buildPhases: [],
+      buildCommands: [],
+      versionPoliciesFile: null,
+      releaseUnits: [],
+      diagnostics: [],
+    }, {
+      ...invocation,
+      workspace_module_ref: null,
+      project_module_refs: {},
+    });
+  } else {
+    const [fixturePath, source] = fixtures[parserPackage.name];
+    path = fixturePath;
+    const files = { [path]: source };
+    materialized = parser(files, {
+      ...invocation,
+      ...(parserPackage.name === "@c4a/extract-sql"
+        ? { dialects: { [path]: "postgresql" } }
+        : {}),
+    });
+  }
+  const result = materialized?.result;
   const evidenceFile = result?.files?.find((file) => file.normalized_path === path);
   if (result?.protocol !== "context.indexer.evidence-adapter-result/v1" || evidenceFile?.disposition !== "analyzed") {
     throw new TypeError(\`\${parserPackage.name} failed its anonymous Evidence ABI fixture\`);
