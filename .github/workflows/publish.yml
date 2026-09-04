@@ -18,12 +18,12 @@ jobs:
 
     steps:
       - name: Check out release
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           registry-url: https://registry.npmjs.org
@@ -49,7 +49,7 @@ jobs:
             --receipt .tmp/release-registry-snapshot.json
 
       - name: Preserve pre-publish registry state
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-release-preflight-${{ github.event.release.tag_name }}
           path: .tmp/release-registry-snapshot.json
@@ -128,7 +128,7 @@ jobs:
           test "${succeeded}" = true
 
       - name: Preserve release receipts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-release-receipts-${{ github.event.release.tag_name }}
           path: |
