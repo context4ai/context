@@ -72,7 +72,7 @@
     "sharp": "^0.35.3",
     "typescript": "^5.5.4",
     "unified": "^11.0.5",
-    "web-tree-sitter": "^0.20.8",
+    "web-tree-sitter": "^0.27.0",
     "yaml": "^2.5.1",
     "zod": "^3.23.8"
   },
