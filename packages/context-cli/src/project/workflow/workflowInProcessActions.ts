@@ -5,12 +5,10 @@ import { assertProjectWorkflowRevision } from "../statusCommand.js";
 import { runProjectPhaseCommand } from "../run.js";
 import {
   runReviewApproveAllCommand,
-  runReviewReconcileIdentitiesCommand,
 } from "../review.js";
 import { runProjectCloseCommand } from "../close.js";
 import { runProjectBuildCommand } from "../packageBuilder.js";
 import { acceptStarterPackageTemplates } from "../packageTemplateReview.js";
-import type { ProseAlignRunOptions } from "../proseAlignTypes.js";
 import { formatFeedback } from "../../lib/cliFeedback.js";
 import { workflowAuthorities } from "./workflowCommandOptions.js";
 
@@ -113,32 +111,11 @@ function parseOptions(
 }
 
 const RUN_VALUE_OPTIONS = new Set([
-  "--input",
   "--format",
-  "--view",
-  "--token-budget",
-  "--byte-budget",
-  "--page-size",
-  "--page-token",
-  "--read-cursor",
-  "--rule",
-  "--source",
-  "--query",
-  "--collection",
-  "--node-type",
-  "--chunk",
-  "--span",
-  "--range",
 ]);
 const RUN_FLAG_OPTIONS = new Set([
   "--dry-run",
-  "--auto-promote",
   "--managed",
-  "--schema",
-  "--validate",
-  "--stage",
-  "--confirm",
-  "--compact",
   "--verbose",
 ]);
 
@@ -158,45 +135,15 @@ async function executePhase(
   invocation: ParsedWorkflowInvocation,
 ): Promise<void> {
   const options = parseOptions(invocation.command.slice(1), RUN_VALUE_OPTIONS, RUN_FLAG_OPTIONS);
-  if (options === undefined || options.positionals.length !== 1) {
+  if (options === undefined || options.positionals.length > 1) {
     throw new Error("managed in-process phase command has an unsupported shape");
   }
-  const phaseId = options.positionals[0]!;
+  const phaseId = options.positionals[0];
   const managed = invocation.managed || options.flags.has("--managed");
-  const align: ProseAlignRunOptions = {
-    ...(options.flags.has("--schema") ? { schema: true } : {}),
-    ...(options.flags.has("--validate") ? { validate: true } : {}),
-    ...(options.flags.has("--stage") ? { stage: true } : {}),
-    ...(options.flags.has("--confirm") ? { confirm: true } : {}),
-    ...(managed ? { managed: true } : {}),
-    ...(options.flags.has("--compact") ? { compact: true } : {}),
-  };
-  const alignValues: Array<[string, keyof ProseAlignRunOptions]> = [
-    ["--view", "view"],
-    ["--input", "input"],
-    ["--token-budget", "tokenBudget"],
-    ["--byte-budget", "byteBudget"],
-    ["--page-size", "pageSize"],
-    ["--page-token", "pageToken"],
-    ["--read-cursor", "readCursor"],
-    ["--rule", "rule"],
-    ["--source", "source"],
-    ["--query", "query"],
-    ["--collection", "collection"],
-    ["--node-type", "nodeType"],
-    ["--chunk", "chunk"],
-    ["--span", "span"],
-    ["--range", "range"],
-  ];
-  for (const [option, key] of alignValues) {
-    const value = optionValue(options, option);
-    if (value !== undefined) align[key] = value as never;
-  }
   await runProjectPhaseCommand({
     cwd,
-    phaseId,
+    ...(phaseId === undefined ? {} : { phaseId }),
     ...(options.flags.has("--dry-run") ? { dryRun: true } : {}),
-    ...(options.flags.has("--auto-promote") ? { autoPromote: true } : {}),
     ...(managed ? { managed: true } : {}),
     workflowRevision: invocation.revision,
     ...(invocation.resourceReceiptsReference === undefined
@@ -205,7 +152,6 @@ async function executePhase(
     authorities: contextWorkflowAuthorities({ managed, authorities: invocation.authorities }),
     ...(options.flags.has("--verbose") ? { verbose: true } : {}),
     format: optionValue(options, "--format") === "json" ? "json" : "text",
-    align,
   });
 }
 
@@ -213,7 +159,7 @@ function supportsCommand(command: readonly string[]): boolean {
   const [topLevel, subcommand] = command;
   if (topLevel === "run") {
     const options = parseOptions(command.slice(1), RUN_VALUE_OPTIONS, RUN_FLAG_OPTIONS);
-    return options !== undefined && options.positionals.length === 1 &&
+    return options !== undefined && options.positionals.length <= 1 &&
       outputFormat(options) !== undefined;
   }
   if (topLevel === "close" || topLevel === "build") {
@@ -233,17 +179,6 @@ function supportsCommand(command: readonly string[]): boolean {
     );
     return options !== undefined && options.positionals.length <= 1 &&
       !(options.flags.has("--all") && options.positionals.length === 1) &&
-      outputFormat(options) !== undefined;
-  }
-  if (topLevel === "review" && subcommand === "reconcile-identities") {
-    const options = parseOptions(
-      command.slice(2),
-      new Set(["--source", "--strategy", "--format"]),
-      new Set(),
-    );
-    return options !== undefined && options.positionals.length === 0 &&
-      optionValue(options, "--source") !== undefined &&
-      optionValue(options, "--strategy") === "preserve-approved" &&
       outputFormat(options) !== undefined;
   }
   if (topLevel === "package" && subcommand === "template" && command[2] === "accept") {
@@ -319,24 +254,6 @@ async function executeReviewApproveAll(
   });
 }
 
-async function executeReviewReconcile(
-  cwd: string,
-  command: readonly string[],
-): Promise<void> {
-  const options = parseOptions(
-    command.slice(2),
-    new Set(["--source", "--strategy", "--format"]),
-    new Set(),
-  );
-  if (options === undefined || options.positionals.length > 0) throw new Error("unsupported review reconciliation command");
-  await runReviewReconcileIdentitiesCommand({
-    cwd,
-    source: optionValue(options, "--source") ?? "",
-    strategy: optionValue(options, "--strategy") ?? "",
-    format: outputFormat(options) ?? "text",
-  });
-}
-
 async function executePackageTemplateAccept(
   cwd: string,
   command: readonly string[],
@@ -389,10 +306,6 @@ async function executeCommand(
   }
   if (command === "review" && subcommand === "approve-all") {
     await executeReviewApproveAll(cwd, invocation);
-    return;
-  }
-  if (command === "review" && subcommand === "reconcile-identities") {
-    await executeReviewReconcile(cwd, invocation.command);
     return;
   }
   if (command === "package" && subcommand === "template" && invocation.command[2] === "accept") {

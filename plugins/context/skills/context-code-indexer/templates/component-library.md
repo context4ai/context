@@ -30,6 +30,14 @@ Treat stories and examples as usage evidence, not as authority for unsupported
 props or behavior. When generated declarations disagree with source, identify
 the authoritative source and record the gap.
 
+When the Authorized Workset View supplies a public declaration together with
+structured props, events, defaults, variants, maintained examples, or source
+roles, the corresponding reader section must consume those facts or record an
+explicit supported omission/material-gap disposition. Do not replace available
+contract facts with a generic statement about the component directory. A group
+without any reader-authorizing public declaration remains catalog-only and does
+not produce an empty component page.
+
 ## Questions the knowledge must answer
 
 1. Which component families are public, and how are they imported?

@@ -2,14 +2,6 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import {
-  hostActionInputDigest,
-  hostActionOutputDigest,
-  validateHostActionResult,
-  type HostActionResult,
-  type JsonValue,
-  type HostActionResourceLocation,
-} from "@c4a/agent-graph";
-import {
   indexerProtocolDigest,
   loadIndexerProviderManifest,
   type ResolvedProviderBundle,
@@ -22,7 +14,7 @@ import {
 } from "./indexerProviderStage.js";
 
 const DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
-const MAX_INSTRUCTION_BYTES = 1024 * 1024;
+export const MAX_INSTRUCTION_BYTES = 1024 * 1024;
 
 export interface IndexerInstructionMaterializationRequest {
   protocol: "context.indexer.materialize-request/v1";
@@ -58,7 +50,7 @@ export interface MaterializedIndexerInstructions {
   request_digest: string;
   provider_fingerprint: string;
   resources: Array<{
-    kind: "provider" | "composer" | "customization-append";
+    kind: "provider" | "template" | "composer" | "customization-append";
     resource_ref: string;
     digest: string;
     content: string;
@@ -73,7 +65,8 @@ export interface MaterializedIndexerInstructions {
 }
 
 interface InstructionDescriptor {
-  kind: "provider" | "composer" | "customization-append";
+  kind: "provider" | "template" | "composer" | "customization-append";
+  location: "staged" | "workspace";
   path: string;
   digest: string;
   resource_ref: string;
@@ -88,7 +81,7 @@ function sameFiles(
   );
 }
 
-function requestDigest(
+export function requestDigest(
   value: Omit<IndexerInstructionMaterializationRequest, "request_digest"> |
     IndexerInstructionMaterializationRequest,
 ): string {
@@ -164,7 +157,7 @@ export function validateIndexerInstructionMaterializationRequest(
   return validated;
 }
 
-function assertCurrentMaterializationAuthority(input: {
+export function assertCurrentMaterializationAuthority(input: {
   request: IndexerInstructionMaterializationRequest;
   current: IndexerInstructionMaterializationAuthority;
 }): void {
@@ -187,7 +180,7 @@ function assertCurrentMaterializationAuthority(input: {
   }
 }
 
-function materializationReceiptDigest(value: {
+export function materializationReceiptDigest(value: {
   request_digest: string;
   payload_digest: string;
   staged_receipt_digest: string;
@@ -222,6 +215,7 @@ async function instructionDescriptors(input: {
       }
       return {
         kind: "provider" as const,
+        location: "staged" as const,
         path: instruction.path,
         digest: file.digest,
         resource_ref: `provider-instruction:${indexerProtocolDigest({
@@ -232,6 +226,44 @@ async function instructionDescriptors(input: {
       };
     })
     .sort((left, right) => left.resource_ref < right.resource_ref ? -1 : 1);
+  const templates = (manifest.provider.templates ?? [])
+    .filter((template) => template.profile === input.profile)
+    .map((template) => {
+      const overridePath = `templates/${template.id}.md`;
+      const override = input.customization.files.find((candidate) =>
+        candidate.path === overridePath
+      );
+      const providerFile = input.staged.files.find((candidate) =>
+        candidate.path === template.path
+      );
+      if (override === undefined && providerFile === undefined) {
+        throw new TypeError(`staged Provider has no declared template ${template.path}`);
+      }
+      return override === undefined
+        ? {
+            kind: "template" as const,
+            location: "staged" as const,
+            path: template.path,
+            digest: providerFile!.digest,
+            resource_ref: `provider-template:${indexerProtocolDigest({
+              provider: manifest.id,
+              version: manifest.version,
+              profile: template.profile,
+              template: template.id,
+              path: template.path,
+            })}`,
+          }
+        : {
+            kind: "template" as const,
+            location: "workspace" as const,
+            path: override.path,
+            digest: override.digest,
+            resource_ref:
+              `customization-template:${input.customization.indexer_id}#${template.profile}/${template.id}`,
+          };
+    })
+    .sort((left, right) => left.resource_ref < right.resource_ref ? -1 : 1);
+  descriptors.push(...templates);
   if (input.composerId !== null) {
     const composer = manifest.provides.composers?.find((candidate) =>
       candidate.id === input.composerId
@@ -254,6 +286,7 @@ async function instructionDescriptors(input: {
     }
     descriptors.push({
       kind: "composer",
+      location: "staged",
       path: composer.contract.instruction,
       digest: file.digest,
       resource_ref: `provider-composer-instruction:${indexerProtocolDigest({
@@ -268,6 +301,7 @@ async function instructionDescriptors(input: {
   if (local !== undefined) {
     descriptors.push({
       kind: "customization-append",
+      location: "workspace",
       path: local.path,
       digest: local.digest,
       resource_ref: `customization-instruction:${input.customization.indexer_id}#${local.digest}`,
@@ -295,7 +329,7 @@ async function readInstructionResources(input: {
   const resources: MaterializedIndexerInstructions["resources"] = [];
   let totalBytes = 0;
   for (const descriptor of input.descriptors) {
-    const absolute = descriptor.kind !== "customization-append"
+    const absolute = descriptor.location === "staged"
       ? join(input.staged.stage_path, descriptor.path)
       : join(input.workspaceRoot, "src", "indexer", input.customization.indexer_id, descriptor.path);
     const bytes = await readFile(absolute);
@@ -500,116 +534,4 @@ export function validateMaterializedIndexerInstructions(
   ) {
     throw new TypeError("materialized Indexer instruction receipt is invalid");
   }
-}
-
-export interface IndexerInstructionHostManagedOutput {
-  ref: string;
-  digest: string;
-  value: unknown;
-}
-
-export function indexerInstructionHostLocation(
-  value: unknown,
-): HostActionResourceLocation {
-  const request = validateIndexerInstructionMaterializationRequest(value);
-  return {
-    schema: "agent-graph.resource-location.host-action.v1",
-    id: request.resource_id,
-    kind: "procedure",
-    mediaType: "text/markdown",
-    revision: request.request_digest,
-    materialize: {
-      handler: request.handler,
-      input: {
-        schema: request.protocol,
-        value: request as unknown as JsonValue,
-      },
-      output_schema: "context.indexer.materialized-resource/v1",
-    },
-  };
-}
-
-export async function materializeIndexerInstructionHostAction(input: {
-  request: unknown;
-  currentAuthority: IndexerInstructionMaterializationAuthority;
-  bundle: ResolvedProviderBundle;
-  staged: StagedIndexerProviderBundle;
-  customization: IndexerCustomizationView;
-  workspaceRoot: string;
-  adapter: string;
-  adapterVersion: string;
-}): Promise<{ result: HostActionResult; materialized: MaterializedIndexerInstructions }> {
-  const request = validateIndexerInstructionMaterializationRequest(input.request);
-  const location = indexerInstructionHostLocation(request);
-  const materialized = await materializeIndexerInstructions({
-    request,
-    currentAuthority: input.currentAuthority,
-    bundle: input.bundle,
-    staged: input.staged,
-    customization: input.customization,
-    workspaceRoot: input.workspaceRoot,
-  });
-  const result: HostActionResult = {
-    schema: "agent-graph.host-action-result.v1",
-    handler: location.materialize.handler,
-    input_digest: hostActionInputDigest(location),
-    output: {
-      schema: location.materialize.output_schema,
-      inline: materialized as unknown as JsonValue,
-    },
-    receipt: {
-      adapter: input.adapter,
-      adapter_version: input.adapterVersion,
-    },
-  };
-  await validateHostActionResult(location, result);
-  return { result, materialized };
-}
-
-function materializedHostOutput(input: {
-  result: HostActionResult;
-  managed_output?: IndexerInstructionHostManagedOutput;
-}): unknown {
-  if ("inline" in input.result.output) return input.result.output.inline;
-  if (input.managed_output === undefined) {
-    throw new TypeError("Indexer instruction Host result requires its managed resource output");
-  }
-  if (
-    input.managed_output.ref !== input.result.output.resource.ref ||
-    input.managed_output.digest !== input.result.output.resource.digest
-  ) {
-    throw new TypeError("Indexer instruction managed resource does not match the Host result");
-  }
-  return input.managed_output.value;
-}
-
-export async function consumeIndexerInstructionHostResult(input: {
-  request: unknown;
-  currentAuthority: IndexerInstructionMaterializationAuthority;
-  result: HostActionResult;
-  managed_output?: IndexerInstructionHostManagedOutput;
-}): Promise<{
-  materialized: MaterializedIndexerInstructions;
-  input_digest: string;
-  output_digest: string;
-  host_receipt: HostActionResult["receipt"];
-}> {
-  const request = validateIndexerInstructionMaterializationRequest(input.request);
-  assertCurrentMaterializationAuthority({
-    request,
-    current: input.currentAuthority,
-  });
-  const location = indexerInstructionHostLocation(request);
-  await validateHostActionResult(location, input.result);
-  const materialized = materializedHostOutput({
-    result: input.result,
-    ...(input.managed_output === undefined ? {} : { managed_output: input.managed_output }),
-  }) as MaterializedIndexerInstructions;
-  validateMaterializedIndexerInstructions(materialized, request);
-  return {
-    materialized,
-    input_digest: input.result.input_digest,
-    output_digest: hostActionOutputDigest(input.result),
-    host_receipt: input.result.receipt,
-  };
 }

@@ -1,23 +1,11 @@
 import type { KnowledgeCollection } from "@c4a/context";
 import type { DocumentCaptureFidelityReport, DocumentResourceMaterializationReport } from "@c4a/extract";
 import type { ProjectCloseStatus } from "./close.js";
-import type {
-  DeclarationGraph,
-  StructureCompileResolution,
-} from "./declarationGraph.js";
 import type { PackageFreshness } from "./packageBuilder.js";
-import type { DocumentOptimizationStatus } from "./documentOptimization.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
-import type { ProseCompileBatchProgress } from "./proseCompileBatch.js";
 import type { RepoSourceStatus } from "./repoSources.js";
-import type { StructureDraftStatus } from "./statusReaders.js";
-import type { StructureBatchStatus } from "./statusStructureBatch.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
-import type { ReviewPathIdentityConflictStatus } from "./reviewIdentityConflicts.js";
-import type { ExtractionPreviewState } from "./extractionPreviewCache.js";
-import type { CodeIndexAuditStatus } from "./codeIndexAudit.js";
 
-export type SourceFreshnessState = "ready" | "stale" | "unknown";
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
 export type EvidenceStatus =
   | "pass"
@@ -74,63 +62,6 @@ export interface DocumentSourceStatus {
   workspaceDiagnostics: string[];
 }
 
-export interface UnclassifiedDocumentTarget {
-  sourceKey: string;
-  capturePhaseId: string;
-  command: string;
-}
-
-export interface PendingStructureTarget {
-  sourceKey: string;
-  collection: string;
-  alignPhaseId: string;
-  command: string;
-  payloadTarget: string;
-  configurationGaps: Array<"compile" | "review">;
-  suggestions: string[];
-}
-
-export interface AlignPhaseResolution {
-  state: "resolved" | "resolved-multiple" | "ambiguous" | "unresolved";
-  requestedSourceKeys: string[];
-  requestedCollections: string[];
-  requestedTargets: Array<{ sourceKey: string; collection: string }>;
-  matches: Array<{
-    phaseId: string;
-    sourceKey: string;
-    collection: string;
-    command: string;
-  }>;
-  checked: Array<{
-    phaseId: string;
-    declaredSourceKey: string;
-    sourceKey?: string;
-    collection: string;
-    matched: boolean;
-    reason?: string;
-  }>;
-}
-
-export interface ActiveStructuresStatus {
-  state: "missing" | "ready" | "invalid";
-  count: number;
-  slotCount: number;
-  sourceKeys: string[];
-  collections: string[];
-  structureDigests: string[];
-  slots: Array<{
-    sourceKey: string;
-    collection: string;
-    structureDigest: string;
-    snapshotReady: boolean;
-    snapshotCurrent: boolean;
-    evidenceSnapshotHash?: string;
-    currentSnapshotHash?: string;
-    phaseCollection?: string;
-  }>;
-  diagnostics: string[];
-}
-
 export interface ProjectStatus {
   projectRoot: string;
   sourceCount: number;
@@ -158,28 +89,18 @@ export interface ProjectStatus {
   documentSources: DocumentSourceStatus[];
   phases: string[];
   packages: PackageFreshness[];
-  documentOptimization: DocumentOptimizationStatus;
   packageTemplateReviews: PackageTemplateReviewStatus[];
-  sourceFreshness: SourceFreshnessState;
-  staleSourcePhases: string[];
-  pendingExtractPhases: string[];
-  extractionPreview: ExtractionPreviewState;
-  codeIndexAudit: CodeIndexAuditStatus;
   pendingCapturePhases: string[];
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;
   close: ProjectCloseStatus;
-  stagedStructure: StructureDraftStatus;
-  activeStructures: ActiveStructuresStatus;
-  structureBatch: StructureBatchStatus;
-  unclassifiedDocumentTargets: UnclassifiedDocumentTarget[];
-  pendingStructureTargets: PendingStructureTarget[];
-  declarationGraph: DeclarationGraph;
-  configurationGaps: string[];
-  alignPhaseResolution?: AlignPhaseResolution;
-  compilePhaseResolution?: StructureCompileResolution;
-  compileBatch?: ProseCompileBatchProgress;
-  reviewIdentityConflicts: ReviewPathIdentityConflictStatus;
+  codeIndexMigrationRequired: boolean;
+  indexerRegistry: {
+    state: "missing" | "pending" | "current" | "invalid";
+  };
+  indexerCandidateCompile: {
+    state: "missing" | "current" | "stale" | "invalid";
+  };
   pendingReview?: {
     scope: "collection" | "all";
     collections: KnowledgeCollection[];

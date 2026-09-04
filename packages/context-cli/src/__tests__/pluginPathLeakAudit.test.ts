@@ -42,6 +42,7 @@ const SOURCE_PATH_FIELD_ALLOWED_FIELDS = new Set([
   "manifestFilePath", "module_path", "modulePath", "nextHeadingPath", "outputPath", "packageJsonPath", "packagePath", "patchPath", "planPath", "pluginPath", "preparePath",
   "previousHeadingPath", "rawBlocksByFile", "rawByPath", "rawFile", "rawPath", "relPath", "repo_root_path", "repoPath", "reviewPath", "root", "savePath", "scanFile", "search_path", "settingsPath",
   "node_ref_is_identity_not_path", "snapshot_dir", "snapshotFile", "snapshotPathBySourcePath", "source_manifest_path", "sourceFile", "sourceFilePath", "sourcePath", "sourcesFile", "stderrPath", "stdoutPath", "sub_path", "targetAbsPath", "target_href", "targetPath", "templatesDir",
+  "qualified_item_path",
   "tmpPath", "workspace_root", "workspaceDir", "workspaceRoot",
 ]);
 const SOURCE_AUDITED_PATH_FIELDS = PATH_FIELD_INVENTORY.map((entry) => entry.field)
@@ -454,7 +455,7 @@ describe("path-free plugin source audit", () => {
     expect(scanProductionDoc("fixture.md", "Do not run `ls .context/raw/` in production flow.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Treat `source_ref` as an opaque citation token.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Write scratch payload JSON and pass it with `--input`.")).toEqual([]);
-    expect(scanProductionDoc("fixture.md", "Use `context run compile:file:docs:architecture --view node-context --source entity/api --format json`.")).toEqual([]);
+    expect(scanProductionDoc("fixture.md", "Use the current Route's `context action complete-current --input <file> --format json` command.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Register local `.md` inputs with `context source add file docs --local . --include docs/**/*.md`.")).toEqual([]);
     expect(scanProductionDoc("fixture.md", "Do not ask users to inspect or repair a code `.evidence` manifest.")).toEqual([]);
     expect(scanProductionDoc(

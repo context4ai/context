@@ -30,7 +30,7 @@ const HOST_LOCATION: ContextWorkflowHostResourceLocation = {
 };
 
 describe("Context Agent Graph Host ABI bridge", () => {
-  test("preserves a Host Action materialization envelope without projecting a Graph Action command", () => {
+  test("preserves a Host Action materialization envelope with its executable materialization command", () => {
     const projected = projectWorkflowResourceLocation(
       HOST_LOCATION,
       "workflow-revision",
@@ -43,9 +43,9 @@ describe("Context Agent Graph Host ABI bridge", () => {
       media_type: HOST_LOCATION.mediaType,
       revision: "revision-1",
       read_state: "read-required",
+      command: "context resource materialize 'context.indexer.instructions' --revision 'workflow-revision' --format json",
       materialize: HOST_LOCATION.materialize,
     });
-    expect(projected.command).toBeUndefined();
     expect(JSON.parse(JSON.stringify(projected))).toEqual(projected);
   });
 
@@ -89,8 +89,6 @@ describe("Context Agent Graph Host ABI bridge", () => {
 
     const projected = projectWorkflowRouteAction({
       action,
-      node: "materialize-indexer-instructions",
-      hasStructureBatch: false,
       revision: "workflow-revision",
       authorities: [],
     });

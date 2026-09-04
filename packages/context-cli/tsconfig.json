@@ -24,7 +24,6 @@
     "src/lib/userCache.ts",
     "src/lib/workspaceLayout.ts",
     "src/types/exitCode.ts",
-    "src/__e2e__/*.e2e.test.ts",
     "src/__tests__/cli.test.ts",
     "src/__tests__/document*V062.test.ts",
     "src/__tests__/okfTypes.test.ts",

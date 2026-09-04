@@ -11,6 +11,7 @@ import {
 
 export const INDEXER_INVENTORY_MEMBER_KINDS = [
   "project",
+  "document",
   "entry",
   "route",
   "component",

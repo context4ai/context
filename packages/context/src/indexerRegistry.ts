@@ -39,7 +39,7 @@ export type IndexerJson =
 
 const scopeTargetSchema = z.object({
   source_ref: stableRefSchema,
-  module_refs: z.array(stableRefSchema),
+  module_refs: z.array(stableRefSchema).default([]),
 }).strict().superRefine((value, context) => {
   addDuplicateIssues(value.module_refs, context, "module_refs");
 });
@@ -114,9 +114,14 @@ const ownedScopeSchema = z.union([
 const requirementBindingSchema = z.object({
   requirement_ref: indexerIdSchema,
   coverage_domains: z.array(indexerIdSchema).min(1),
-  owned_scope: ownedScopeSchema,
+  owned_scope: ownedScopeSchema.optional(),
   role: z.enum(["primary", "enricher"]),
-}).strict().superRefine((value, context) => {
+}).strict().transform((value) => ({
+  ...value,
+  owned_scope: value.owned_scope ?? {
+    ref: `requirement:${value.requirement_ref}#target_scope`,
+  },
+})).superRefine((value, context) => {
   addDuplicateIssues(value.coverage_domains, context, "coverage_domains");
 });
 
@@ -246,13 +251,19 @@ function forbiddenConfigPath(value: IndexerJson, path: readonly string[] = []): 
 
 const providerLayerSchema = z.object({
   id: indexerIdSchema,
-  role: z.enum(["primary", "extension"]),
+  role: z.enum(["primary", "extension"]).default("primary"),
   skill: indexerIdSchema,
   version: indexerSemverSchema,
   integrity: indexerDigestSchema,
-  distribution: indexerDistributionSchema,
+  distribution: indexerDistributionSchema.optional(),
   config: z.record(indexerJsonSchema).optional(),
-}).strict().superRefine((value, context) => {
+}).strict().transform((value) => ({
+  ...value,
+  distribution: value.distribution ?? {
+    kind: "cli-bundled" as const,
+    locator: `cli-bundled://context/${value.skill}`,
+  },
+})).superRefine((value, context) => {
   const forbidden = value.config === undefined
     ? undefined
     : forbiddenConfigPath(value.config);
@@ -267,9 +278,10 @@ const providerLayerSchema = z.object({
 
 export const indexerRegistryEntrySchema = z.object({
   id: indexerIdSchema,
-  operations: z.array(z.enum(INDEXER_SEMANTIC_OPERATIONS)).min(1),
+  operations: z.array(z.enum(INDEXER_SEMANTIC_OPERATIONS)).min(1)
+    .default(["main-index"]),
   requirement_bindings: z.array(requirementBindingSchema).min(1),
-  read_scope: readScopeSchema,
+  read_scope: readScopeSchema.optional(),
   profile: z.object({
     primary: profileBindingSchema,
     additional: z.array(additionalProfileBindingSchema).optional(),
@@ -279,7 +291,19 @@ export const indexerRegistryEntrySchema = z.object({
   customization: z.object({
     mode: z.enum(["extend", "replace"]),
   }).strict().optional(),
-}).strict().superRefine((value, context) => {
+}).strict().transform((value) => ({
+  ...value,
+  read_scope: value.read_scope ?? {
+    refs: [...new Set(value.requirement_bindings.flatMap((binding) =>
+      binding.role === "primary"
+        ? [
+            `requirement:${binding.requirement_ref}#target_scope`,
+            `requirement:${binding.requirement_ref}#evidence_source_scope`,
+          ]
+        : [`requirement:${binding.requirement_ref}#evidence_source_scope`]
+    ))],
+  },
+})).superRefine((value, context) => {
   addDuplicateIssues(value.operations, context, "operations");
   addDuplicateIssues(value.providers.map((provider) => provider.id), context, "providers");
   const primaryProviders = value.providers.filter((provider) => provider.role === "primary");

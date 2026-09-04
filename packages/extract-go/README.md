@@ -7,11 +7,9 @@ knowledge projects. It extracts declarations, signatures, documentation,
 imports, calls, and common HTTP route registrations without assigning
 product-specific meaning.
 
-This is an optional structural package. The Context runtime does not bundle it
-or add a Go lifecycle phase automatically. A knowledge project opts in through
-its own `extractCustom()` adapter, maps the returned facts to project-owned
-candidates, and keeps review, evidence, freshness, close, and build under the
-normal Context workflow.
+This is an optional structural package used by a Code Indexer Provider. The
+Provider maps its facts into the current Indexer result; Context owns Candidate
+state, Review, freshness, close, and build.
 
 ## Place in the knowledge workflow
 
@@ -20,7 +18,7 @@ confirmed Go repository boundary
              ↓
 Go structural index
              ↓
-project-owned extractCustom() mapping
+selected Code Indexer Provider
              ↓
 Context candidates → review → approved knowledge
 ```
@@ -52,10 +50,9 @@ knowledge project and its Agent workflow.
 
 ## When to use it
 
-Use this package when a Context workspace needs Go symbols or relationships and
-the project can define how those structures should become knowledge. Do not add
-a generic Go phase solely to avoid writing the project mapping: a language
-parser cannot know the audience, product boundaries, or useful knowledge shape.
+Use this package when a Code Indexer Provider needs Go symbols or relationships.
+A language parser cannot decide the audience, product boundaries, or useful
+knowledge shape; those remain Provider responsibilities.
 
 ## Development
 

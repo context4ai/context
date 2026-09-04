@@ -17,11 +17,26 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "worksets", "workset_set"],
+      "required": ["protocol", "requirement_set_digest", "worksets", "workset_set", "run_specs", "graph_outcome"],
       "properties": {
-        "protocol": { "enum": ["context.indexer.main-partition-workset-build/v1", "context.indexer.main-author-workset-build/v1"] },
+        "protocol": { "const": "context.indexer.main-partition-workset-build/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
         "worksets": { "type": "array" },
         "workset_set": { "type": "object" },
+        "run_specs": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "graph_outcome": { "const": "completed" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["protocol", "requirement_set_digest", "worksets", "workset_set", "run_specs", "graph_outcome"],
+      "properties": {
+        "protocol": { "const": "context.indexer.main-author-workset-build/v1" },
+        "requirement_set_digest": { "$ref": "#/$defs/digest" },
+        "worksets": { "type": "array" },
+        "workset_set": { "type": "object" },
+        "run_specs": { "type": "array", "minItems": 1, "items": { "type": "object" } },
         "graph_outcome": { "const": "completed" }
       },
       "additionalProperties": false

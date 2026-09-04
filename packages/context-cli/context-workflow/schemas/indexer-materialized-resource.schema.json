@@ -23,7 +23,14 @@
         "additionalProperties": false,
         "required": ["kind", "resource_ref", "digest", "content"],
         "properties": {
-          "kind": { "enum": ["provider", "customization-append"] },
+          "kind": {
+            "enum": [
+              "provider",
+              "template",
+              "composer",
+              "customization-append"
+            ]
+          },
           "resource_ref": { "type": "string", "minLength": 1 },
           "digest": { "$ref": "#/$defs/digest" },
           "content": { "type": "string" }

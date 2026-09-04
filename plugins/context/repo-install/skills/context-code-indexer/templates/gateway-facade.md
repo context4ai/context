@@ -36,6 +36,22 @@ fields, imports, or transport-library dependencies.
 4. What timeout, retry, compatibility, and failure behavior is source-backed?
 5. Which generated artifacts are locators rather than independent authority?
 
+## Chapter blueprint
+
+```markdown
+# <Gateway or facade boundary>
+## Exposed and translated responsibilities
+## Operations provided or consumed
+## Request, identity, and context mapping
+## Timeout, retry, compatibility, and failure translation
+## Contract authority and generated bindings
+## Source-backed provider-to-consumer relationships
+```
+
+Operations belong under the operations chapter as canonical records. Do not
+promote a single operation to a page heading unless its authority, security, or
+failure semantics differ materially from the rest of the boundary.
+
 ## Canonical operation record
 
 Use this record wherever another selected template asks for an operation,

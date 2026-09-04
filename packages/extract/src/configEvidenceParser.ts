@@ -1,4 +1,9 @@
 import { indexerEvidenceAdapterProtocolDigest } from "@c4a/core";
+import {
+  parseTree as parseJsonTree,
+  type Node as JsonNode,
+  type ParseError as JsonParseError,
+} from "jsonc-parser/lib/esm/main.js";
 import { getStaticTOMLValue, parseTOML, type AST as TOMLAST } from "toml-eslint-parser";
 import {
   LineCounter,
@@ -6,7 +11,6 @@ import {
   isScalar,
   isSeq,
   parseAllDocuments,
-  parseDocument,
   type Document,
   type ParsedNode,
 } from "yaml";
@@ -215,13 +219,9 @@ function yamlLocation(
 function parseYamlLike(
   context: ParseContext,
   source: string,
-  strictJson: boolean,
 ): void {
-  if (strictJson) JSON.parse(source);
   const lineCounter = new LineCounter();
-  const documents = strictJson
-    ? [parseDocument(source, { lineCounter, schema: "json", strict: true, uniqueKeys: true })]
-    : parseAllDocuments(source, { lineCounter, strict: true, uniqueKeys: true });
+  const documents = parseAllDocuments(source, { lineCounter, strict: true, uniqueKeys: true });
   if (documents.length === 0) throw new TypeError("configuration document is empty");
   for (const [documentIndex, document] of documents.entries()) {
     if (document.errors.length > 0) throw new TypeError("configuration syntax is invalid");
@@ -230,6 +230,81 @@ function parseYamlLike(
     const prefix = documents.length > 1 ? ["$document", String(documentIndex)] : [];
     walkValue(context, value, prefix, (path) => yamlLocation(document, lineCounter, path, prefix.length));
   }
+}
+
+function jsonLineStarts(source: string): number[] {
+  const starts = [0];
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.charCodeAt(index) === 10) starts.push(index + 1);
+  }
+  return starts;
+}
+
+function jsonLocation(lineStarts: readonly number[], offset: number): Location {
+  let low = 0;
+  let high = lineStarts.length;
+  while (low + 1 < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (lineStarts[middle]! <= offset) low = middle;
+    else high = middle;
+  }
+  return { line: low + 1, column: offset - lineStarts[low]! + 1 };
+}
+
+function jsonScalar(node: JsonNode): unknown {
+  if (node.type === "null") return null;
+  if (node.type === "string" || node.type === "number" || node.type === "boolean") {
+    return node.value;
+  }
+  throw new TypeError(`unsupported JSON scalar node ${node.type}`);
+}
+
+function walkJsonNode(
+  context: ParseContext,
+  node: JsonNode,
+  keyPath: string[],
+  lineStarts: readonly number[],
+): void {
+  const location = jsonLocation(lineStarts, node.offset);
+  if (node.type === "object") {
+    addValue(context, keyPath, {}, location);
+    const keys = new Set<string>();
+    for (const property of node.children ?? []) {
+      const [keyNode, valueNode] = property.children ?? [];
+      if (
+        property.type !== "property" || keyNode?.type !== "string" ||
+        typeof keyNode.value !== "string" || valueNode === undefined
+      ) {
+        throw new TypeError("JSON object property is unstable");
+      }
+      if (keys.has(keyNode.value)) throw new TypeError("JSON object contains a duplicate key");
+      keys.add(keyNode.value);
+      walkJsonNode(context, valueNode, [...keyPath, keyNode.value], lineStarts);
+    }
+    return;
+  }
+  if (node.type === "array") {
+    addValue(context, keyPath, [], location);
+    for (const [index, child] of (node.children ?? []).entries()) {
+      walkJsonNode(context, child, [...keyPath, String(index)], lineStarts);
+    }
+    return;
+  }
+  if (node.type === "property") throw new TypeError("JSON property cannot be a value root");
+  addValue(context, keyPath, jsonScalar(node), location);
+}
+
+function parseJsonLike(context: ParseContext, source: string): void {
+  const errors: JsonParseError[] = [];
+  const root = parseJsonTree(source, errors, {
+    allowTrailingComma: true,
+    disallowComments: false,
+    allowEmptyContent: false,
+  });
+  if (root === undefined || errors.length > 0) {
+    throw new TypeError("JSON configuration syntax is invalid");
+  }
+  walkJsonNode(context, root, [], jsonLineStarts(source));
 }
 
 function tomlKey(node: TOMLAST.TOMLKey): string[] {
@@ -324,7 +399,8 @@ function parseOne(path: string, source: string, format: ConfigFormat, allowlist:
   };
   try {
     if (format === "toml") parseToml(context, source);
-    else parseYamlLike(context, source, format === "json");
+    else if (format === "json") parseJsonLike(context, source);
+    else parseYamlLike(context, source);
     return { path, format, disposition: "analyzed", values: context.values, diagnostics: context.diagnostics };
   } catch {
     const root = locator(path, [], { line: 1, column: 1 });

@@ -171,11 +171,30 @@ describe("LayerCompositionInputView", () => {
         proposals: [{
           composer_ref: `${LAYER_REF}#composer:derived-docs`,
           target_node_ref: "node:sample",
-          artifact_kind: "reference",
-          artifact_key: "overview",
-          artifact_policy_variant: "standard",
-          variables: {},
-          evidence_refs: [],
+          artifact: {
+            artifact_id: "overview",
+            artifact_kind: "reference",
+            artifact_policy_variant: "standard",
+            representation: "sections",
+            sections: [{
+              section_key: "summary",
+              owner_indexer_id: "sample-indexer",
+              document_kind: "reference",
+              reader_goal: "understand-capability",
+              artifact_kind: "reference",
+              blocks: [{
+                block_id: "summary",
+                layer: "semantic-prose",
+                markdown: "Derived summary.",
+                evidence_refs: ["evidence:sample"],
+              }],
+            }],
+          },
+          evidence_refs: [{
+            ref: "evidence:sample",
+            kind: "code",
+            source_digest: `sha256:${"e".repeat(64)}`,
+          }],
         }],
       },
     };

@@ -3,7 +3,6 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { parseDocument } from "yaml";
 import { z } from "zod";
 import {
-  INDEXER_EVIDENCE_KINDS,
   INDEXER_LAYER_FRAGMENT_KINDS,
   INDEXER_PROGRAM_CAPABILITIES,
   INDEXER_PROVIDER_MANIFEST_NAME,
@@ -78,23 +77,12 @@ const preAuthorityFragmentKindSchema = z.enum([
 
 const mainIndexOperationSchema = z.object({
   id: z.literal("main-index"),
-  consumes: z.literal("context.indexer.main-workset/v1"),
+  consumes: z.literal("context.indexer.main-workset/v2"),
   produces: z.literal("context.indexer.main-result/v1"),
   accepts_layer_fragments: z.array(preAuthorityFragmentKindSchema).optional(),
 }).strict();
 
-const materialAnswerOperationSchema = z.object({
-  id: z.literal("material-answer"),
-  consumes: z.literal("context.indexer.material-question-workset/v1"),
-  produces: z.literal("context.indexer.material-answer-result/v1"),
-  supported_evidence_kinds: z.array(z.enum(INDEXER_EVIDENCE_KINDS)).min(1),
-  accepts_layer_fragments: z.array(preAuthorityFragmentKindSchema).optional(),
-}).strict();
-
-export const indexerProviderOperationSchema = z.discriminatedUnion("id", [
-  mainIndexOperationSchema,
-  materialAnswerOperationSchema,
-]);
+export const indexerProviderOperationSchema = mainIndexOperationSchema;
 
 const factEnrichmentFragmentSchema = z.object({
   kind: z.literal("fact-enrichment"),
@@ -252,13 +240,6 @@ const providesSchema = z.object({
       context,
       `operations.${index}.accepts_layer_fragments`,
     );
-    if (operation.id === "material-answer") {
-      addDuplicateIssues(
-        operation.supported_evidence_kinds,
-        context,
-        `operations.${index}.supported_evidence_kinds`,
-      );
-    }
   });
   (value.composers ?? []).forEach((composer, index) => {
     addDuplicateIssues(

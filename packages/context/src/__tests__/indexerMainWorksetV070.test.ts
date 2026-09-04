@@ -41,7 +41,7 @@ const common = {
   profile_contract_digest: DIGESTS[4]!,
   subject_key_schema_digest: DIGESTS[5]!,
   source_scope_digest: DIGESTS[6]!,
-  parser_contract_digest: DIGESTS[7]!,
+  source_binding_digest: DIGESTS[7]!,
   primary_resource_binding_digest: DIGESTS[8]!,
   question_target_inventory_digest: DIGESTS[9]!,
 };
@@ -224,6 +224,19 @@ describe("MainIndexWorkset", () => {
     expect(() => buildIndexerMainWorksetSet([author, conflicting])).toThrow(
       /more than one author workset for a group/,
     );
+  });
+
+  test("allows the same local group key in different partition plans", () => {
+    const first = authorWorkset();
+    const second = buildIndexerMainWorkset({
+      ...first,
+      workset_digest: undefined,
+      protocol: undefined,
+      operation: undefined,
+      partition_plan_binding_digest: DIGESTS[15]!,
+    } as unknown as Parameters<typeof buildIndexerMainWorkset>[0]);
+    expect(second.stage).toBe("author");
+    expect(buildIndexerMainWorksetSet([first, second]).items).toHaveLength(2);
   });
 
   test("keeps Host batching transport-only and preserves each workset identity", () => {

@@ -5,7 +5,6 @@ import {
   indexerInventoryMemberSchema,
   validateIndexerMainRunRequest,
   validateIndexerPartitionConvergenceRecord,
-  validateIndexerWorksetReadReceipt,
   type IndexerPartitionStrategy,
   type IndexerInventoryMember,
 } from "@c4a/context";
@@ -101,10 +100,6 @@ export async function buildProjectIndexerCatalogFallback(input: {
   ) {
     throw new TypeError("catalog fallback request does not continue the persisted convergence");
   }
-  if (!Array.isArray(value.workset_read_receipts)) {
-    throw new TypeError("catalog fallback requires workset_read_receipts");
-  }
-  const receipts = value.workset_read_receipts.map(validateIndexerWorksetReadReceipt);
   const fallback = buildIndexerCatalogFallback({
     workset: request.workset,
     convergence,
@@ -122,8 +117,6 @@ export async function buildProjectIndexerCatalogFallback(input: {
     protocol: "context.indexer.run-result/v1" as const,
     operation: "main-index" as const,
     consumed_input_view_digest: request.composition_input.view_digest,
-    workset_read_receipt_digests: receipts.map((receipt) => receipt.receipt_digest)
-      .sort(),
     result: {
       protocol: "context.indexer.main-result/v1" as const,
       stage: "partition" as const,
@@ -136,7 +129,6 @@ export async function buildProjectIndexerCatalogFallback(input: {
     projectRoot: input.projectRoot,
     workset_digest: request.workset.workset_digest,
     result,
-    workset_read_receipts: receipts,
   });
   return {
     protocol: "context.indexer.catalog-fallback-build/v1" as const,

@@ -7,6 +7,7 @@ import {
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterOutputDigest,
   indexerSectionEvidenceCarrierRef,
+  projectIndexerSourceIdentityInventory,
   validateIndexerStructuredDeclarationSet,
   type IndexerEvidenceAdapterResult,
   type IndexerStructuredDeclarationPayload,
@@ -226,6 +227,27 @@ function validate(values: readonly IndexerStructuredDeclarationPayload[] = decla
 }
 
 describe("structured source declaration existence", () => {
+  test("projects source identity to the exact facts authorized for one workset", () => {
+    const projected = projectIndexerSourceIdentityInventory({
+      inventory,
+      fact_refs: ["source-fact:request-handler"],
+    });
+    expect(projected.files).toEqual([{
+      normalized_path: "src/handler.ts",
+      content_digest: digest("4"),
+      facts: [{
+        fact_ref: "source-fact:request-handler",
+        fact_kind: "code-symbol",
+        qualified_item_path: "symbol:function:handleRequest@12",
+        signature_digest: digest("5"),
+      }],
+    }]);
+    expect(() => projectIndexerSourceIdentityInventory({
+      inventory,
+      fact_refs: ["source-fact:missing"],
+    })).toThrow(/unknown facts/);
+  });
+
   test("derives the source inventory from validated parser facts and unique ownership", () => {
     const result = adapterResult();
     const value = buildIndexerSourceIdentityInventoryFromAdapterResults({

@@ -109,20 +109,31 @@ describe("CLI bundled Indexer release", () => {
         values: ["spa", "mpa", "hybrid"],
       });
     expect(profiles.profiles.find((profile) => profile.id === "component-library")
-      ?.parser_requirements).toEqual([expect.objectContaining({
-        capability: "parser.typescript",
-        abi: "context.indexer.evidence-adapter-result/v1",
-        community_coordinate: {
-          package: "@c4a/extract-ts",
-          export: "typeScriptExtractionToEvidenceAdapterResult",
-          version: "0.7.0",
-        },
-      })]);
+      ?.parser_requirements.map((requirement) => requirement.capability)).toEqual([
+        "parser.typescript",
+        "parser.javascript",
+        "parser.mdx",
+        "parser.css",
+        "parser.scss",
+        "parser.json",
+        "parser.yaml",
+        "parser.toml",
+      ]);
     expect(profiles.profiles.find((profile) => profile.id === "documentation-site")
       ?.parser_requirements).toEqual([]);
-    expect(profiles.profiles.find((profile) => profile.id === "public-api-reference")
-      ?.metrics.find((metric) => metric.id === "narrative-enumeration-ratio"))
-      .toMatchObject({ recommended_max: 0.6, hard_max: 0.75 });
+    // Declared catalog Artifacts sit outside the measured scope, so a
+    // catalog-heavy profile carries the same enumeration allowance as a
+    // narrative one.
+    const enumerationAllowance = (id: string) =>
+      profiles.profiles.find((profile) => profile.id === id)
+        ?.metrics.find((metric) => metric.id === "narrative-enumeration-ratio");
+    expect(enumerationAllowance("public-api-reference")).toMatchObject({
+      recommended_max: 0.35,
+      hard_max: 0.53,
+    });
+    expect(enumerationAllowance("public-api-reference")).toEqual(
+      enumerationAllowance("documentation-site"),
+    );
 
     for (const bundle of fixture.manifest.bundles) {
       const provider = await loadIndexerProviderManifest(
@@ -225,7 +236,10 @@ describe("CLI bundled Indexer release", () => {
           BUNDLED_MARKDOWN_PROFILE_IDS,
         );
         expect(markdownContracts.every((profile) =>
-          profile.reader_question_contracts.some((question) =>
+          new Set(profile.reader_question_contracts.map((question) =>
+            question.coverage_domain
+          )).size === 4 &&
+          !profile.reader_question_contracts.some((question) =>
             question.ref === "question:source-authority"
           ) && profile.layout_mappings.length > 0
         )).toBe(true);

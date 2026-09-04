@@ -26,14 +26,21 @@ export const INDEXER_POST_AUTHOR_RUN_STORE_ROOT = join(
   "indexer",
   "post-author",
 );
-export const INDEXER_POST_AUTHOR_CURRENT_PATH = join(
-  INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
-  "current.json",
-);
-export const INDEXER_POST_AUTHOR_ENVELOPE_PATH = join(
-  INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
-  "current-envelope.json",
-);
+export function postAuthorCurrentStatePath(authorWorksetDigest: string): string {
+  return join(
+    INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
+    "current",
+    `${digestName(authorWorksetDigest)}.json`,
+  );
+}
+
+export function postAuthorCurrentEnvelopePath(authorWorksetDigest: string): string {
+  return join(
+    INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
+    "current-envelopes",
+    `${digestName(authorWorksetDigest)}.json`,
+  );
+}
 
 export interface PostAuthorRunSpec {
   protocol: "context.indexer.post-author-run-spec/v1";
@@ -62,7 +69,7 @@ export interface PostAuthorEnvelopeRecord {
 
 export interface IndexerPostAuthorStoreReceipt {
   protocol: "context.indexer.post-author-store-receipt/v1";
-  operation: "prepare" | "start" | "accept" | "fail" | "compose";
+  operation: "prepare" | "start" | "accept" | "fail" | "retry" | "compose";
   state_digest: string;
   transaction: DurableMultiFileTransactionReceipt | null;
 }
@@ -198,8 +205,12 @@ function validateState(value: unknown): PostAuthorRuntimeState {
 
 export async function readPostAuthorCurrentState(
   projectRoot: string,
+  authorWorksetDigest: string,
 ): Promise<PostAuthorRuntimeState | undefined> {
-  const value = await readPostAuthorJsonMaybe(projectRoot, INDEXER_POST_AUTHOR_CURRENT_PATH);
+  const value = await readPostAuthorJsonMaybe(
+    projectRoot,
+    postAuthorCurrentStatePath(authorWorksetDigest),
+  );
   return value === undefined ? undefined : validateState(value);
 }
 
@@ -223,8 +234,12 @@ function validateEnvelopeRecord(value: unknown): PostAuthorEnvelopeRecord {
 
 export async function readPostAuthorCurrentEnvelope(
   projectRoot: string,
+  authorWorksetDigest: string,
 ): Promise<PostAuthorEnvelopeRecord | undefined> {
-  const value = await readPostAuthorJsonMaybe(projectRoot, INDEXER_POST_AUTHOR_ENVELOPE_PATH);
+  const value = await readPostAuthorJsonMaybe(
+    projectRoot,
+    postAuthorCurrentEnvelopePath(authorWorksetDigest),
+  );
   return value === undefined ? undefined : validateEnvelopeRecord(value);
 }
 
@@ -269,6 +284,7 @@ export async function persistPostAuthorState(input: {
   clear_envelope?: boolean;
   inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<IndexerPostAuthorStoreReceipt> {
+  const authorWorksetDigest = input.state.spec.plan.workset_set.author_workset_digest;
   const writes = [
     ...(input.immutable_records ?? []).map((record) => writeTarget({
       projectRoot: input.projectRoot,
@@ -290,7 +306,7 @@ export async function persistPostAuthorState(input: {
     }),
     writeTarget({
       projectRoot: input.projectRoot,
-      path: INDEXER_POST_AUTHOR_CURRENT_PATH,
+      path: postAuthorCurrentStatePath(authorWorksetDigest),
       value: input.state,
     }),
   ];
@@ -306,13 +322,13 @@ export async function persistPostAuthorState(input: {
     }));
     writes.push(writeTarget({
       projectRoot: input.projectRoot,
-      path: INDEXER_POST_AUTHOR_ENVELOPE_PATH,
+      path: postAuthorCurrentEnvelopePath(authorWorksetDigest),
       value: input.envelope_record,
     }));
   } else if (input.clear_envelope === true) {
     writes.push(writeTarget({
       projectRoot: input.projectRoot,
-      path: INDEXER_POST_AUTHOR_ENVELOPE_PATH,
+      path: postAuthorCurrentEnvelopePath(authorWorksetDigest),
       remove: true,
     }));
   }

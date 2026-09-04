@@ -1,7 +1,3 @@
-import {
-  validateIndexerMaterialGapLedger,
-  type IndexerUnresolvedMaterialGap,
-} from "./indexerMaterialGapLedger.js";
 import type { IndexerArtifactResult } from "./indexerArtifactResult.js";
 import { validateIndexerQuestionTargetInventory } from "./indexerQuestionAuthority.js";
 import {
@@ -19,7 +15,6 @@ import {
   coverageCompletionReportPayloadSchema,
   coverageDomainCompletionSchema,
   dispositionMap,
-  exactRetainedEntry,
   indexerCoverageCompletionReportSchema,
   mainEvidenceMeetsContract,
   materialGap,
@@ -102,7 +97,6 @@ export function reconcileIndexerResults(input: {
   allowed_selector_fact_paths: ReadonlySet<string>;
   author_results: readonly unknown[];
   registered_material_sources: readonly unknown[];
-  retained_material_gap_ledger?: unknown;
 }): IndexerCoverageCompletionReport {
   const registry = indexerRegistrySchema.parse(input.registry);
   const inventory = validateIndexerQuestionTargetInventory(
@@ -127,13 +121,6 @@ export function reconcileIndexerResults(input: {
   });
   const results = validateArtifactResults(input.author_results);
   const sources = canonicalSources(input.registered_material_sources);
-  const retainedCandidate = input.retained_material_gap_ledger === undefined
-    ? undefined
-    : validateIndexerMaterialGapLedger(input.retained_material_gap_ledger);
-  const retained = retainedCandidate?.question_target_inventory_digest ===
-      inventory.inventory_digest
-    ? retainedCandidate
-    : undefined;
   const dispositions = dispositionMap({ pairs, results });
   const capabilityGaps: Array<ReturnType<typeof capabilityGap>> = [];
   for (const owner of owners.filter((item) => item.obligation === "required")) {
@@ -174,32 +161,23 @@ export function reconcileIndexerResults(input: {
   }
   const materialGaps: Array<ReturnType<typeof materialGap>> = [];
   const answered = new Set<string>();
-  const excluded = new Set<string>();
   for (const pair of pairs) {
     const current = dispositions.get(pair.question_key);
     const placeholder = materialGap({
       registry,
       pair,
       sources,
-      ...(retained === undefined ? {} : { retained_ledger: retained }),
       ...(current === undefined ? {} : { disposition: current }),
       reason_code: current?.disposition.state === "material-gap"
         ? "provider-requested-material"
         : "provider-omitted-required-question",
     });
-    const retainedEntry = exactRetainedEntry({
-      ...(retained === undefined ? {} : { ledger: retained }),
-      candidate: placeholder.entry as IndexerUnresolvedMaterialGap,
-    });
-    if (retainedEntry?.state === "resolved" ||
-      retainedEntry?.state === "excluded-with-confirmed-reason") {
-      (retainedEntry.state === "resolved" ? answered : excluded).add(pair.question_key);
-      continue;
-    }
     if (current?.disposition.state === "answered" && mainEvidenceMeetsContract({
       pair,
       result: current.result,
       evidence_binding_digest: current.disposition.evidence_binding_digest,
+      evidence_facts: input.target_facts[pair.target.target_ref] ?? {},
+      allowed_selector_fact_paths: input.allowed_selector_fact_paths,
     })) {
       answered.add(pair.question_key);
       continue;
@@ -209,7 +187,6 @@ export function reconcileIndexerResults(input: {
           registry,
           pair,
           sources,
-          ...(retained === undefined ? {} : { retained_ledger: retained }),
           disposition: current,
           reason_code: "main-evidence-contract-not-met",
         })
@@ -264,9 +241,6 @@ export function reconcileIndexerResults(input: {
         completed_owner_cell_count: completedOwners,
         answered_question_count: domainPairs.filter((pair) =>
           answered.has(pair.question_key)
-        ).length,
-        excluded_question_count: domainPairs.filter((pair) =>
-          excluded.has(pair.question_key)
         ).length,
         material_gap_count: domainMaterials.length,
         capability_gap_count: domainCapabilities.length,

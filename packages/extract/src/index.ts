@@ -15,7 +15,8 @@ export {
   configSourcesToEvidenceAdapterMaterialization,
   configSourcesToEvidenceAdapterResult,
 } from "./configEvidenceAdapter";
-export const CONFIG_EVIDENCE_ADAPTER_EXPORT = "configSourcesToEvidenceAdapterResult";
+export const CONFIG_EVIDENCE_ADAPTER_EXPORT =
+  "configSourcesToEvidenceAdapterMaterialization";
 export {
   scanSourceFiles,
   detectModules,

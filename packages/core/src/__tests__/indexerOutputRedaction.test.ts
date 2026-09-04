@@ -55,4 +55,25 @@ describe("Indexer common output redaction", () => {
       }).redacted).toBe(true);
     }
   });
+
+  test("treats its own redaction marker as already safe", () => {
+    const first = redactIndexerOutput({
+      channel: "success-payload",
+      value: {
+        clientSecret: "fixture-secret-do-not-emit",
+        message: "token=fixture-secret-do-not-emit",
+        authorization: "Authorization: Bearer fixture-secret-do-not-emit",
+        callback: "https://example.invalid/callback?access_token=fixture-secret-do-not-emit",
+      },
+    });
+    expect(first.redacted).toBe(true);
+    expect(redactIndexerOutput({
+      channel: "ipc-envelope",
+      value: first.value,
+    })).toEqual({
+      value: first.value,
+      redacted: false,
+      replacement_count: 0,
+    });
+  });
 });

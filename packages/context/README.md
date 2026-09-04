@@ -2,206 +2,105 @@
 
 [简体中文](./README.zh-CN.md)
 
-`@c4a/context` is the declarative model behind a Context knowledge workspace.
-It lets the workspace describe which sources contribute knowledge, how evidence
-is processed, where human review applies, and which reusable outputs should be
-built.
+`@c4a/context` is the declarative SDK used by a Context knowledge workspace.
+Most users work through the Context Agent and CLI; project authors use this
+package to declare source capture and package output.
 
-Most users do not install or operate this SDK directly. They start through the
-Context Agent entry, describe a knowledge goal, and let the selected workflow
-Route guide the Agent when `src/index.ts` needs configuration. This README is
-for knowledge-project authors, Agent maintainers, and developers who need to
-understand that project declaration.
+Knowledge authoring has one path: `src/indexers.yaml` selects Indexer Providers
+and owns requirements, profiles, scopes, and customization. Code and Markdown
+knowledge are not produced by project phases in `src/index.ts`.
 
-The SDK is intentionally declarative. It does not read sources, write workspace
-state, execute an Agent, or build packages by itself. Those operations belong
-to the [Context workflow runtime](../context-cli/README.md).
-
-## Place in the knowledge workflow
+## Project boundary
 
 ```text
-User intent + source boundaries
-              ↓
-       src/index.ts declaration   ← this package
-              ↓
-  Context Route + Agent judgment
-              ↓
- approved knowledge → package output
+sources/*/index.yaml       registered source boundaries
+src/index.ts               capture and package declarations
+src/indexers.yaml          knowledge-authoring authority
+knowledge/                 approved, human-readable knowledge
+dist/                      reader-facing package output
+.tmp/context-runtime/      recoverable runtime state (not committed)
 ```
 
-The declaration answers four stable questions:
+`src/index.ts` may declare:
 
-- Which registered source boundaries may contribute evidence?
-- Which capture, extraction, alignment, compilation, and review phases exist?
-- Which approved collections belong in each output?
-- Which templates and asset-delivery policies shape the built package?
+- `source()` / `allSources()` references;
+- `captureFile()` and `captureLark()` snapshot phases;
+- `customPhase()` for project orchestration that does not publish knowledge;
+- `kbPackage()` and `llmsPackage()` output definitions.
 
-It does not encode current progress. Workspace facts and the bundled workflow
-Provider select the next Route at runtime, so `src/index.ts` remains a project
-contract rather than a second state machine.
-
-## Project Model
-
-A Context project follows a sources-to-phases-to-packages model:
+Example:
 
 ```ts
 import {
+  captureFile,
   defineProject,
-  extractTs,
   kbPackage,
-  reviewValidity,
   source,
 } from "@c4a/context";
 
-const sampleLib = source("20260712", "sample-lib");
+const docs = source("product-docs", { type: "file" });
 
 export default defineProject({
-  sources: [sampleLib],
-  phases: [
-    extractTs({ source: sampleLib, collection: "codeindex" }),
-    reviewValidity({ collection: "codeindex" }),
-  ],
+  sources: [docs],
+  phases: [captureFile({ source: docs })],
   packages: [
     kbPackage({
-      name: "sample-lib-kb",
-      template: {
-        path: "src/package-templates/kb",
-        vars: { displayName: "Sample Library KB" },
-      },
-      select: { collections: ["codeindex"], okfRoots: ["wikis"] },
+      name: "product-kb",
+      template: "src/package-templates/kb",
+      select: { collections: ["product", "architecture"] },
     }),
   ],
 });
 ```
 
-`src/index.ts` is similar to a build configuration for knowledge. It defines
-what enters the project, which transformations and gates are available, and
-what can be built at the end. The installed Agent entry stays thin; the current
-workflow Route selects the exact procedures, schemas, and manuals needed to
-maintain this declaration from the user's requirements.
+The Context lifecycle discovers or updates `src/indexers.yaml`, runs the
+selected Provider, presents readable Candidate pages for Review, writes only
+approved knowledge, and then builds declared packages.
 
-## Public Surface
+## Public surface
 
 | API | Purpose |
 |---|---|
-| `defineProject()` | Declares the complete project graph. |
-| `source()` and `allSources()` | References registered repo, file, or Lark source boundaries. |
-| `extractTs()` | Extracts TypeScript/JavaScript and TSX/JSX symbols and relationships into `codeindex` candidates. |
-| `extractCustom()` | Runs a project-owned code extractor while Context owns candidate, evidence, freshness, and Review state. |
-| `alignProse()` and `compileProse()` | Legacy explicit phase factories retained for existing workspace migration and repair. New workspaces use `src/indexers.yaml` and the Context Indexer lifecycle. |
-| `reviewValidity()` | Declares the review gate for one collection or the project. |
-| `customPhase()` | Adds project-specific orchestration when built-in phase factories are not enough. |
-| `kbPackage()` | Builds an Agent knowledge-base package from approved knowledge and templates. |
-| `llmsPackage()` | Builds a single text bundle for model context or RAG import. |
+| `defineProject()` | Declares the project boundary. |
+| `source()` / `allSources()` | References registered repo, file, or Lark sources. |
+| `captureFile()` / `captureLark()` | Creates deterministic document snapshots. |
+| `mdxJsonDocs()` | Configures the MDX/JSON documentation capture processor. |
+| `customPhase()` | Runs non-knowledge project orchestration. |
+| `kbPackage()` | Builds an Agent-readable knowledge package. |
+| `llmsPackage()` | Builds a text bundle for model or retrieval input. |
 
-Use `extractCustom()` when a repository needs a non-TypeScript or aggregated
-code extractor. Use `customPhase()` only for orchestration that does not publish
-knowledge candidates; it is not a replacement for source, extraction, Review,
-and package lifecycle rules.
+The package also exports the Indexer schemas and validators used by Provider
+authors and the Context runtime. Those APIs describe the same
+`src/indexers.yaml` lifecycle; they are not a second user workflow.
 
-Context CLI intentionally does not bundle every language or repository parser.
-Optional structural libraries can be installed by the knowledge project and
-used inside `extractCustom()`:
+Parser packages such as `@c4a/extract-ts`, `@c4a/extract-go`, and
+`@c4a/extract-rush` are implementation dependencies of Indexer Providers. A
+workspace does not wrap them in project phases.
 
-| Package | Structural facts |
-|---|---|
-| `@c4a/extract-go` | Go declarations, imports, calls, and common HTTP route registrations |
-| `@c4a/extract-rush` | Rush projects, tags, entry signals, workspace dependencies, and owner boundaries |
-| `@c4a/extract-ts` | TypeScript extraction plus reusable React Router route facts |
+## Knowledge and package output
 
-These libraries do not create Context phases or candidates by themselves. The
-project maps their deterministic facts to its own candidate identities and
-review summaries; Context continues to own evidence validation, freshness,
-Review, close, and package output.
-
-## Knowledge Collections
-
-Approved Markdown is organized under `knowledge/<collection>/`:
-
-| Collection | What it contains | Typical sources |
-|---|---|---|
-| `codeindex` | Code symbols, modules, and relationships | Code repositories |
-| `business` | Business concepts, roles, and relationships | Business and Lark documents |
-| `product` | Product capabilities and behavior | Product and requirement documents |
-| `architecture` | System structure and design explanations | Architecture and design documents |
-| `sop` | Procedures, runbooks, and operational steps | Handbooks and operation documents |
-| `faq` | Common questions and troubleshooting | FAQs, support documents, experience notes |
-| `decision` | Decisions, alternatives, and trade-offs | Design reviews and decision records |
-| `incident` | Incident timelines, response, and follow-up | Incident reports and retrospectives |
-| `standards` | Normative rules and constraints | Engineering standards and business rules |
-| `test` | Validation rules, scenarios, and acceptance criteria | Test plans and acceptance documents |
-| `feats` | Capability records for a specific use case | Custom project workflows and approved knowledge |
-
-Collections are semantic classifications, not final package directories.
-Package build maps selected collections into OKF roots such as `wikis/`,
-`guides/`, `rules/`, and `feats/`. One source may contribute to several
-collections; classification should be based on evidence and user confirmation,
-not filenames.
-
-## Package Templates
-
-Package declarations point at editable templates under
-`src/package-templates/`. Installed examples are available at:
+Approved pages live under `knowledge/<collection>/`. Paths and filenames are
+reader-oriented, for example:
 
 ```text
-node_modules/@c4a/context/templates/package-templates/
+knowledge/codeindex/tux-web/avatar.md
+knowledge/architecture/tux-official-docs/react-lynx-input-fields.md
 ```
 
-The default KB template includes:
+Workspace pages keep only metadata required to rebuild or update knowledge.
+Package pages in `dist/` contain the smaller reader projection: useful title,
+kind, summary/tags when present, and content. Internal evidence identities and
+digests stay in runtime artifacts unless recovery requires them.
 
-```text
-kb/
-|-- AGENTS.md
-|-- skills/
-|   `-- knowledge-query/SKILL.md
-`-- wikis/index.md
-```
+Package templates live under `src/package-templates/`; installed examples are
+available from `node_modules/@c4a/context/templates/package-templates/`.
 
-The `knowledge-query` Skill teaches consuming Agents how to navigate indexes,
-inspect approved knowledge, and cite evidence. A project can add more Skills or
-template files under `wikis/`, `guides/`, `rules/`, and other package paths.
+## State boundary
 
-Templates use Handlebars variables in file contents and paths. Common variables
-include `{{packageName}}`, `{{displayName}}`, `{{knowledgeCount}}`,
-`{{knowledgeGroups}}`, `{{knowledgeItems}}`, `{{knowledgeTree}}`, and
-`{{buildInventory}}`.
-
-Every KB package emits flat roots such as `wikis/`, `guides/`, `rules/`, and
-`feats/`. The package `name` defines only the `dist/<package-name>/` boundary;
-it is not repeated inside knowledge paths. Context still accepts
-`distribution.knowledgeNamespace` from older workspaces, but the legacy value
-no longer changes build output and new declarations do not need it. Skill names
-remain author-maintained and independent.
-
-New KB setup should offer `assets: { delivery: "git-raw" }` first. Build
-rewrites resource links to Git raw URLs; committing and publishing the resource
-files remains the package author's responsibility. Non-Git workspaces may use
-an explicit `urlPrefix`; without one they can bundle resources or explicitly
-omit them and retain unresolved references. Bundled delivery may
-install `sharp` in the workspace and configure `assets.optimize`; Context
-itself has no image dependency and never changes source snapshots or approved
-resources.
-
-For advanced routing and retrieval, a template may carry a local script such as
-`query.ts`, with a Skill describing when and how an Agent should call it. The
-Skill can also route the Agent to MCP servers, CLI commands, or other tools to
-form a package-specific Agentic Search workflow.
-
-Long-lived, multi-source production workspaces can copy
-`templates/project-skills/maintain-project-knowledge/SKILL.md` into their
-`.agents/skills/` directory and customize it with project ownership, source
-impact mappings, and readiness criteria. This project adapter is not included
-in knowledge packages; lifecycle authority remains with the installed Context
-Skill and current Route.
-
-## State Boundary
-
-The SDK stays declarative. It may describe reads, writes, phases, review, and
-package selection, but the CLI owns source materialization, capture, extraction,
-review application, approved Markdown materialization, verification, and build.
-Do not replace CLI lifecycle operations with direct edits to `sources/`,
-`knowledge/`, `dist/`, or the ignored `.tmp/context-runtime/lifecycle/` runtime
-state. The CLI owns that runtime state and removes it after a successful close.
+Do not directly edit lifecycle files under `.tmp/context-runtime/`. The CLI
+owns Candidate state, Review application, recovery, close, verification, and
+build. Source registries, `src/index.ts`, `src/indexers.yaml`, approved
+`knowledge/`, and package templates are the durable project inputs.
 
 ## Documentation
 
@@ -209,11 +108,7 @@ state. The CLI owns that runtime state and removes it after a successful close.
 - [Getting Started](./docs/getting-started.md)
 - [Agent Guide](./docs/guides/agent-guide.md)
 - [Project API](./docs/reference/project-api.md)
+- [Indexer Provider Protocol](./docs/reference/indexer-provider-protocol.md)
 - [Package Outputs](./docs/guides/package-outputs.md)
-- [Lark Resource Materialization](./docs/guides/lark-resources.md)
 - [Package Templates](./docs/reference/package-templates.md)
-- [Template Variables](./docs/reference/template-variables.md)
 
-The [documentation index](./docs/README.md) explains which references should be
-read for each workflow decision. Agents should prefer Route-selected resources
-over preloading every manual.

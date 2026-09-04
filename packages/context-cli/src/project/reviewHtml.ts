@@ -1,24 +1,14 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import type { KnowledgeCollection } from "@c4a/context";
-import type {
-  DocumentResourceMaterializationItem,
-  DocumentSnapshotAssetEntry,
-  DocumentSnapshotManifest,
-} from "@c4a/extract";
-import { captureReportMaterialization } from "../lib/larkCaptureReport.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import { readDocumentSnapshotCaptureReport } from "./documentSnapshotFidelity.js";
 import {
   candidateIdsHash,
   candidateSetHash,
-  currentProseCandidateEvidence,
   readReviewCandidateSnapshot,
   REVIEW_PAYLOAD_SCHEMA,
   type ReviewCandidateView,
 } from "./reviewShared.js";
-import { collectReviewSourceExcerpts, type ReviewSourceExcerptMap } from "./reviewSourceExcerpts.js";
 import {
   candidateGroupKey,
   candidateGroupLabel,
@@ -32,136 +22,8 @@ import {
   type EdgePreview,
 } from "./reviewHtmlPresentation.js";
 import { REVIEW_HTML_STYLES } from "./reviewHtmlStyles.js";
-import { markdownInlineLinks } from "./markdownLinks.js";
 
 const REVIEW_HTML_ROOT = join(".tmp", "context-runtime", "review");
-
-export interface ReviewResourcePreview {
-  label: string;
-  kind: string;
-  status: "materialized" | "reference-only" | "failed";
-  url?: string;
-  media_type: string;
-  image: boolean;
-  reason?: string;
-}
-
-function decodedLinkTarget(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
-}
-
-function linkedResourcePreviews(input: {
-  projectRoot: string;
-  materializedAt: string;
-  documentPath: string;
-  markdown: string;
-  assetsByPath: ReadonlyMap<string, DocumentSnapshotAssetEntry>;
-}): Map<string, ReviewResourcePreview> {
-  const previews = new Map<string, ReviewResourcePreview>();
-  for (const link of markdownInlineLinks(input.markdown)) {
-    const target = link.target;
-    if (/^[a-z][a-z0-9+.-]*:/iu.test(target) || target.startsWith("/")) continue;
-    const assetPath = join(dirname(input.documentPath), decodedLinkTarget(target)).split("\\").join("/");
-    const asset = input.assetsByPath.get(assetPath);
-    if (asset?.content_hash === undefined || asset.role === "audit") continue;
-    previews.set(asset.path, {
-      label: link.label || "Resource",
-      kind: asset.source?.kind ?? "resource",
-      status: "materialized",
-      url: pathToFileURL(join(input.projectRoot, input.materializedAt, asset.path)).href,
-      media_type: asset.media_type ?? "application/octet-stream",
-      image: asset.media_type?.startsWith("image/") === true,
-    });
-  }
-  return previews;
-}
-
-function materializationPreview(input: {
-  projectRoot: string;
-  materializedAt: string;
-  item: DocumentResourceMaterializationItem;
-  assetsByPath: ReadonlyMap<string, DocumentSnapshotAssetEntry>;
-  existing?: ReviewResourcePreview;
-}): { key: string; preview: ReviewResourcePreview } {
-  const linkedAsset = input.item.asset_paths
-    .flatMap((path) => [path, path.startsWith("assets/") ? path : `assets/${path}`])
-    .map((path) => input.assetsByPath.get(path))
-    .find((asset) => asset !== undefined && asset.role !== "audit");
-  const url = input.existing?.url ?? (linkedAsset?.content_hash === undefined
-    ? undefined
-    : pathToFileURL(join(input.projectRoot, input.materializedAt, linkedAsset.path)).href);
-  return {
-    key: linkedAsset?.path ?? input.item.locator,
-    preview: {
-      label: input.existing?.label ?? linkedAsset?.source?.title ?? input.item.kind,
-      kind: input.item.kind,
-      status: input.item.status,
-      ...(url === undefined ? {} : { url }),
-      media_type: input.existing?.media_type ?? linkedAsset?.media_type ?? "application/octet-stream",
-      image: input.existing?.image ?? linkedAsset?.media_type?.startsWith("image/") === true,
-      ...(input.item.reason === undefined ? {} : { reason: input.item.reason }),
-    },
-  };
-}
-
-export function reviewResourcePreviewsFor(input: {
-  projectRoot: string;
-  materializedAt: string;
-  documentPath: string;
-  markdown: string;
-  manifest: DocumentSnapshotManifest;
-}): ReviewResourcePreview[] {
-  const byPath = new Map((input.manifest.assets ?? []).map((asset) => [asset.path, asset]));
-  const previews = linkedResourcePreviews({ ...input, assetsByPath: byPath });
-  const captureReport = readDocumentSnapshotCaptureReport({
-    projectRoot: input.projectRoot,
-    materializedAt: input.materializedAt,
-    manifest: input.manifest,
-  });
-  const resourceMaterialization = captureReport === undefined
-    ? input.manifest.metadata?.capture?.resourceMaterialization
-    : captureReportMaterialization(captureReport);
-  for (const item of resourceMaterialization?.items ?? []) {
-    if (!input.markdown.includes(item.locator)) continue;
-    const existing = [...previews.entries()]
-      .find(([key]) => item.asset_paths.some((path) => key === path || key === `assets/${path}`))?.[1];
-    const result = materializationPreview({
-      projectRoot: input.projectRoot,
-      materializedAt: input.materializedAt,
-      item,
-      assetsByPath: byPath,
-      ...(existing === undefined ? {} : { existing }),
-    });
-    previews.set(result.key, result.preview);
-  }
-  return [...previews.values()];
-}
-
-async function collectReviewResourcePreviews(
-  projectRoot: string,
-  candidates: readonly ReviewCandidateView[],
-): Promise<Map<string, ReviewResourcePreview[]>> {
-  const result = new Map<string, ReviewResourcePreview[]>();
-  for (const candidate of candidates) {
-    if (candidate.record.candidate_type !== "prose-align") continue;
-    const evidence = await currentProseCandidateEvidence(projectRoot, candidate.record);
-    if (evidence === undefined) continue;
-    const markdown = (candidate.record.sections ?? []).map((section) => section.body ?? "").join("\n\n");
-    const previews = reviewResourcePreviewsFor({
-      projectRoot,
-      materializedAt: evidence.indexResult.index.materialized_at,
-      documentPath: evidence.parsed.documentPath,
-      markdown,
-      manifest: evidence.indexResult.manifest,
-    });
-    if (previews.length > 0) result.set(candidate.record.candidate_id, previews);
-  }
-  return result;
-}
 
 export async function collectReviewCandidates(projectRoot: string, collection: KnowledgeCollection): Promise<ReviewCandidateView[]> {
   const rows = await readCandidateRecords(projectRoot);
@@ -202,8 +64,6 @@ function renderReviewHtml(
   candidates: readonly ReviewCandidateView[],
   reviewScope: KnowledgeCollection | "all",
   edgePreview: readonly EdgePreview[],
-  sourceExcerpts: ReviewSourceExcerptMap,
-  resourcePreviews: ReadonlyMap<string, ReviewResourcePreview[]>,
 ): string {
   const labels = endpointLabels(candidates);
   const candidateIds = candidates.map(({ record }) => record.candidate_id);
@@ -217,7 +77,10 @@ function renderReviewHtml(
     ...(reviewScope === "all" ? { visible_candidate_ids: visibleCandidateIds } : {}),
   };
   const candidateData = candidates.map(({ record, snapshot }) => {
-    const excerptsByRef = sourceExcerpts.get(record.candidate_id);
+    const sourceByEvidenceRef = new Map(record.indexer_candidate.evidence_bindings.map((binding) => [
+      binding.evidence_ref,
+      binding.source_ref,
+    ]));
     return {
     candidate_id: record.candidate_id,
     collection: record.collection,
@@ -227,21 +90,27 @@ function renderReviewHtml(
     status: record.status,
     kind: record.kind,
     entity_type: record.source_refs.some((ref) => ref.includes("#symbol:")) || record.node_ref.includes("/symbol/") ? "symbol" : "entity",
-    symbol_kind: snapshot?.symbol?.kind ?? record.kind,
+    symbol_kind: record.kind,
     visibility: record.visibility,
     source_refs: record.source_refs,
-    shared_source_refs: record.shared_source_refs ?? [],
+    source_paths: record.indexer_candidate === undefined
+      ? []
+      : [...new Set(record.indexer_candidate.evidence_bindings.map((binding) =>
+          binding.locator.path
+        ))].sort(),
+    shared_source_refs: [],
     related_edges: filterEdgePreviewForCandidate(record, edgePreview).map((edge) => edgeForReview(edge, labels)),
-    sections: (record.sections ?? []).map((section) => ({
-      id: section.id,
-      kind: section.kind,
-      summary: section.summary,
-      body: section.body,
-      source_refs: section.source_refs ?? [section.source_ref],
-      source_excerpts: (section.source_refs ?? [section.source_ref])
-        .map((sourceRef) => excerptsByRef?.get(sourceRef))
-        .filter((excerpt) => excerpt !== undefined),
-      content_mode: section.content_mode ?? "verbatim",
+    sections: record.indexer_candidate.sections.map((section) => ({
+      id: section.section_key,
+      kind: record.kind,
+      summary: section.section_key,
+      body: section.markdown,
+      source_refs: [...new Set(section.evidence_refs.flatMap((evidenceRef) => {
+        const sourceRef = sourceByEvidenceRef.get(evidenceRef);
+        return sourceRef === undefined ? [] : [sourceRef];
+      }))].sort(),
+      source_excerpts: [],
+      content_mode: "authored",
     })),
     group_key: reviewScope === "all"
       ? `${record.collection} / ${candidateGroupKey({ record, snapshot })}`
@@ -252,7 +121,7 @@ function renderReviewHtml(
     review: record.review,
     display_summary: record.review.behavior_summary ?? record.review.summary,
     preview: candidatePreview({ record, snapshot }),
-    resource_previews: resourcePreviews.get(record.candidate_id) ?? [],
+    resource_previews: [],
     snapshot_ready: snapshot !== undefined,
     };
   });
@@ -270,13 +139,13 @@ function renderReviewHtml(
     <header class="header">
       <div class="titleline">
         <h1>Context Review</h1>
-        <div class="subtle" id="count-state">${candidates.length} draft candidate(s) in ${escapeHtml(reviewScope)} · ${candidates.length} pending 0 approved 0 rejected</div>
+        <div class="subtle" id="count-state">${candidates.length} draft candidate(s) in ${escapeHtml(reviewScope)} · ${candidates.length} pending 0 approved 0 omitted</div>
       </div>
       <div class="toolbar">
         <span class="subtle payload-hint">After review, open Payload and paste it into agent chat -></span>
         <span class="bulk-actions">
           <button class="btn" id="all-approved">All approved</button>
-          <button class="btn" id="all-rejected">All rejected</button>
+          <button class="btn" id="all-rejected">Omit all</button>
         </span>
         <button class="btn brand" id="payload-open">Payload</button>
         <span class="subtle" id="copy-state"></span>
@@ -290,7 +159,7 @@ function renderReviewHtml(
           <span>Candidates</span>
           <div class="filters" aria-label="candidate filters">
             <label class="filter"><input id="filter-approved" type="checkbox" checked> approved</label>
-            <label class="filter"><input id="filter-rejected" type="checkbox" checked> rejected</label>
+            <label class="filter"><input id="filter-rejected" type="checkbox" checked> omitted</label>
             <label class="filter"><input id="filter-pending" type="checkbox" checked> pending</label>
           </div>
         </div>
@@ -354,7 +223,7 @@ function renderReviewHtml(
     function updateCountState() {
       const counts = decisionCounts();
       countState.textContent = candidates.length + " draft candidate(s) in " + payloadScopeLabel +
-        " · " + counts.pending + " pending " + counts.approved + " approved " + counts.rejected + " rejected";
+        " · " + counts.pending + " pending " + counts.approved + " approved " + counts.rejected + " omitted";
     }
     function visibleCandidates() {
       const showApproved = filterApproved.checked;
@@ -383,7 +252,8 @@ function renderReviewHtml(
       return groups;
     }
     function statusBadge(status) {
-      return '<span class="badge ' + html(status) + '">' + html(status) + '</span>';
+      const label = status === "rejected" ? "omitted" : status;
+      return '<span class="badge ' + html(status) + '">' + html(label) + '</span>';
     }
     function typeBadge(item) {
       return item.entity_type === "symbol"
@@ -398,7 +268,8 @@ function renderReviewHtml(
     function setGroupDecision(groupKey, status) {
       const items = candidates.filter((item) => (item.group_key || item.module || "ungrouped") === groupKey);
       if (items.length === 0) return;
-      if (!window.confirm("Set all " + items.length + " candidate(s) in " + groupKey + " to " + status + "?")) return;
+      const label = status === "rejected" ? "omitted" : status;
+      if (!window.confirm("Set all " + items.length + " candidate(s) in " + groupKey + " to " + label + "?")) return;
       for (const item of items) {
         if (status === "approved" && !item.snapshot_ready) continue;
         decisions.set(item.candidate_id, status);
@@ -408,7 +279,8 @@ function renderReviewHtml(
     }
     function setAllDecision(status) {
       if (candidates.length === 0) return;
-      if (!window.confirm("Set all " + candidates.length + " candidate(s) to " + status + "?")) return;
+      const label = status === "rejected" ? "omitted" : status;
+      if (!window.confirm("Set all " + candidates.length + " candidate(s) to " + label + "?")) return;
       for (const item of candidates) {
         if (status === "approved" && !item.snapshot_ready) continue;
         decisions.set(item.candidate_id, status);
@@ -422,7 +294,7 @@ function renderReviewHtml(
         return [
           "# Review payload is not ready",
           "# " + counts.pending + " pending candidate(s) remain.",
-          "# Approve or reject every candidate before copying.",
+          "# Approve or omit every candidate before copying.",
         ].join("\\n");
       }
       const defaultStatus = counts.rejected > counts.approved ? "rejected" : "approved";
@@ -513,7 +385,7 @@ function renderReviewHtml(
             '<span class="group-label"><span>' + (collapsed ? "▸" : "▾") + '</span><span class="group-key">' + html(group.label) + '</span><span class="group-count">' + group.items.length + ' items</span></span>' +
             '<span class="group-actions">' +
               '<button class="group-btn" data-group-status="approved" data-group="' + html(group.key) + '">All approved</button>' +
-              '<button class="group-btn" data-group-status="rejected" data-group="' + html(group.key) + '">All rejected</button>' +
+              '<button class="group-btn" data-group-status="rejected" data-group="' + html(group.key) + '">Omit all</button>' +
             '</span>' +
           '</div>' +
           (collapsed ? "" : group.items.map((item) => {
@@ -534,7 +406,7 @@ function renderReviewHtml(
       selected = item.candidate_id;
       const status = decisions.get(item.candidate_id);
       const evidenceWarning = item.snapshot_ready ? "" :
-        '<div class="notice warning">Evidence unavailable. Restore the committed snapshot before approving this candidate, or reject it.</div>';
+        '<div class="notice warning">Source snapshot unavailable. Restore it before approving this candidate, or omit the page.</div>';
       const sharedRefs = new Set(item.shared_source_refs || []);
       const sharedSourceBlock = sharedRefs.size === 0 ? "" :
         '<div class="notice">' + sharedRefs.size + ' 个证据片段也被其他候选使用，请结合上下文确认内容边界。</div>';
@@ -546,7 +418,7 @@ function renderReviewHtml(
           const body = section.body || "(section body unavailable)";
           const evidenceBlock = refs.length === 0 ? "" :
             '<details class="evidence-details">' +
-              '<summary>Evidence（' + refs.length + ' 个来源片段）</summary>' +
+              '<summary>Sources（' + refs.length + ' 个来源片段）</summary>' +
               '<div class="section-excerpts">' + excerpts.map((excerpt, index) =>
                 '<details class="source-excerpt ' + html(excerpt.status || "unavailable") + '">' +
                   '<summary>来源片段 ' + (index + 1) + (excerpt.line_range ? ' · ' + html(excerpt.line_range) : '') + '</summary>' +
@@ -582,20 +454,14 @@ function renderReviewHtml(
               (resource.reason ? '<div class="resource-preview-reason">' + html(resource.reason) + '</div>' : '') +
             '</section>'
           ).join('') + '</div></details>';
-      const identityBlock = '<div class="meta identity-meta">' +
-        '<span class="badge">' + html(item.collection || "unknown") + '</span>' +
-        '<code>candidate_id=' + html(item.candidate_id) + '</code>' +
-        '<code>node_ref=' + html(item.node_ref) + '</code>' +
-        '<code>view_ref=' + html(item.view_ref) + '</code>' +
-      '</div>';
-      const technicalDetailsBlock = '<details class="technical-details">' +
-        '<summary>Technical details（ID 与 ' + item.source_refs.length + ' 个来源引用）</summary>' +
-        '<div class="technical-content">' +
-          identityBlock +
-          '<div class="section-source-refs">' + item.source_refs.map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>' +
-          (sharedRefs.size === 0 ? "" : '<div class="section-source-refs"><span>Shared source refs</span>' + Array.from(sharedRefs).map((ref) => '<code>' + html(ref) + '</code>').join('') + '</div>') +
-        '</div>' +
-      '</details>';
+      const displayedSources = item.source_paths.length > 0 ? item.source_paths : item.source_refs;
+      const sourceLocationsBlock = displayedSources.length === 0 ? "" :
+        '<details class="technical-details">' +
+          '<summary>Source locations（' + displayedSources.length + '）</summary>' +
+          '<div class="technical-content"><div class="section-source-refs">' +
+            displayedSources.map((ref) => '<code>' + html(ref) + '</code>').join('') +
+          '</div></div>' +
+        '</details>';
       const relatedEdges = item.related_edges || [];
       const relatedEdgesBlock = relatedEdges.length === 0 ? "" :
         '<details class="edge-preview candidate-related-edges" aria-label="candidate related edges">' +
@@ -620,7 +486,7 @@ function renderReviewHtml(
           '<div><div class="detail-heading"><h2>' + html(item.review.title) + '</h2>' + typeBadge(item) + '</div><div class="subtle">' + html(item.display_summary || item.review.summary) + '</div></div>' +
           '<div class="actions">' +
             '<button class="btn approve ' + (status === "approved" ? "active" : "") + '" data-action="approved" ' + (!item.snapshot_ready ? "disabled" : "") + '>Approve</button>' +
-            '<button class="btn reject ' + (status === "rejected" ? "active" : "") + '" data-action="rejected">Reject</button>' +
+            '<button class="btn reject ' + (status === "rejected" ? "active" : "") + '" data-action="rejected">Omit</button>' +
           '</div>' +
         '</div>' +
         evidenceWarning +
@@ -629,7 +495,8 @@ function renderReviewHtml(
         resourcePreviewBlock +
         sectionDetails +
         previewBlock +
-        technicalDetailsBlock;
+        '<div class="notice">Need changes? Do not approve or omit this batch. Return to the agent and request a repair for this page.</div>' +
+        sourceLocationsBlock;
       document.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => { selected = button.dataset.id; render(); }));
       document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => setDecision(item.candidate_id, button.dataset.action)));
       document.querySelectorAll("[data-group-toggle]").forEach((header) => header.addEventListener("click", () => toggleGroup(header.dataset.groupToggle)));
@@ -695,11 +562,9 @@ export async function writeReviewHtml(input: {
     ? await collectAllReviewCandidates(input.projectRoot)
     : await collectReviewCandidates(input.projectRoot, reviewScope);
   const edgePreview = filterEdgePreviewForCandidates(candidates, await readEdgePreview(input.projectRoot));
-  const sourceExcerpts = await collectReviewSourceExcerpts(input.projectRoot, candidates);
-  const resourcePreviews = await collectReviewResourcePreviews(input.projectRoot, candidates);
   const outPath = resolveOutputPath(input.projectRoot, input.out, reviewScope);
   await mkdir(dirname(outPath), { recursive: true });
-  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, edgePreview, sourceExcerpts, resourcePreviews), "utf8");
+  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, edgePreview), "utf8");
   return {
     path: outPath,
     candidates: candidates.length,

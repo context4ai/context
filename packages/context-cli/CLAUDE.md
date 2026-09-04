@@ -85,7 +85,8 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 - Section source-ref 注释使用 `<!-- context:section ... -->`;不要在新 context 项目输出 `c4a:section`。
 - 不写 frontmatter `source_refs`;page-level provenance 由 Section 的 `source_ref` 注释派生。
 - accepted Section `source_ref` 文法为 `src-N#symbol:<file>:<symbol-id>:<kind>@<digest>` 和 `src-N#span:<heading-hint> L<start>-<end>@<span-hash>`。代码 ref 的 `file` 用于在当前 symbol index 内消除同名同摘要歧义;整个 `source_ref` 对 Agent 仍是不透明 token。`#span:` 必须保留行号范围,用于 human review、diff 和 re-pin;它走 file/lark snapshot source span resolver,不是 code symbol index,也不是 block/raw evidence identity。
-- 新 codeindex approved Markdown 只在顶层保留 `candidate_fingerprint`;不要生成冗余 `code_origin`。
+- 当前 Indexer approved Markdown 不保存 `candidate_fingerprint`、Indexer digest 或 `code_origin`；
+  current/stale 由本机 runtime 与批准页面的实际正文、来源共同判定。
 - 不写 `schema` 字段。协议版本由工具/文档和 verify 约束,不是 approved MD 的 frontmatter 字段。
 - `timestamp` 是内容或状态账本实际变化时间,不是 build/run 时间;无变化重跑不得刷新。
 - kb package 根目录可以包含 `AGENTS.md` 和 `skills/`;OKF-compatible interchange surface 是 `dist/<name>/wikis/`、`guides/`、`rules/`、`feats/` 子树。默认模板必须包含可编辑的 `src/package-templates/kb/wikis/index.md`,并在生成的 workspace `AGENTS.md` 中提醒用户可定制该入口页。
@@ -108,7 +109,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 - **有限选项必须用 askUser 形态**。当 human gate 是明确的二选一或少量选项（如“按原文档生成草稿” vs “语义整理候选”、“Agent 知识包” vs “LLM 文本包”、“创建替换候选” vs “确认现有内容仍有效”）时,优先使用宿主原生多选工具:Claude Code `AskUserQuestion`、Codex 当前暴露的 user-input 工具（例如 `request_user_input`）、Cursor Plan Mode `AskQuestion`;不可用时才退回 Markdown `A/B/C` 选项。每个选项必须带一句影响说明,不要只发自由文本问题让用户猜有哪些分支。选项标签必须是用户能理解的语义,不要用 SDK API 名作为选项;API 名只在用户要求实现细节、编辑 `src/index.ts` 总结或精确命令说明中出现。
 - **先讲产品语义,后讲实现细节**。例如先说“选择知识来源边界会影响 `knowledge/` 目录、`source_ref` 前缀和 `dist/<name>-kb` 这类包名”,再说需要登记 repo source;不要先问“source name 是什么”。monorepo/subspace 场景中,日期只组织 source 批次并进入 phase id/source_ref;稳定知识路径使用模块名,如 `knowledge/codeindex/<module>/...`,因此抽取前仍要确认具体 package/subdirectory 边界。
-- **避免裸露内部模块名**。`extractTs`、`reviewValidity`、`include`、`exportedOnly`、phase id、payload schema 等只在代码修改总结、精确命令、或用户要求细节时出现。默认对话应说“读取 `src/` 下 TS/TSX 导出符号,生成待审 wiki 草稿;非导出/internal helper 默认跳过;审阅通过后才写入 `knowledge/`”。
+- **避免裸露内部协议名**。Provider handler、phase id、payload schema 等只在代码修改总结、精确命令、或用户要求细节时出现。默认对话应说“读取已登记来源并生成待审知识；审阅通过后才写入 `knowledge/`”。
 - **每个确认问题都要说明影响面**。source 边界影响输出路径和引用前缀;抽取范围影响哪些文件/符号会进入草稿;review 影响哪些候选会变成 approved Markdown;package 选择影响 `dist/` 输出结构和 Agent 消费方式。
 - **不要把 CLI placeholder 原样转成用户问题**。看到 `<name>` / `<repo-or-subdir>` / `<phase-id>` / `<collection>` 时,先翻译成用户决策,并给 1-2 个基于当前上下文的候选示例。只有用户确认后才执行命令。
 - **不要把“默认范围”讲成黑盒**。默认提取必须解释为具体范围:选定 source 内的 `src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}`、导出符号、draft candidates、先 dry-run 展示数量和 `knowledgeTree`,再真实抽取。
@@ -120,18 +121,17 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 `node_modules/@c4a/context/docs/guides/agent-dialogue.md` 只介绍稳定原则和发现方式。
 修改门禁语义时必须更新 Graph 资源引用、可达性测试和必要的 SDK 概览。
 
-### Prose compile 覆盖进度
+### Indexer Author 覆盖进度
 
-- Prose compile 按 confirmed structure 的 Node/section 逐项收敛：先读
-  `read-plan` / `node-context` / schema，再提交
-  `context.compile-actions.v1`。不要 shell 循环或并发 stage/review/apply；
-  失败、coverage warning、schema error、unsupported evidence 都在当前 Node
+- Author 按 current Partition group 逐项收敛：读取 Route 返回的 instructions、
+  Authorized Workset View 和输入 schema，再通过唯一
+  `context action complete-current` 提交语义结果。不要 shell 循环或并发写入；
+  失败、coverage warning、schema error 和 unsupported material 都在当前 group
   内收敛。
-- 低覆盖 warning 表示 draft 只覆盖部分 citation-eligible source refs；
-  `covered/total`、remaining count、planned section id 是进度信号，必须查。
-  “第一条 action supported” 不代表 Node 完成。
-- 不要求抽满所有 source refs。重复、导航、placeholder、同一事实延续、无
-  citation 价值的片段可以 skip，但 skip 必须来自内容判断，不是为了提速。
+- 当前 group 的 member/question disposition 是完成信号。“写出第一节正文”
+  不代表 group 已关闭。
+- 不要求把所有来源片段写进正文。重复、导航、placeholder、同一事实延续、
+  无读者价值的材料可以排除，但排除必须来自内容判断，不是为了提速。
 
 ### 命名边界（必须遵守）
 
@@ -233,9 +233,9 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 **Phase operational rules**：
 
-- Prose document work is status-driven: capture writes source snapshots, align
-  writes confirmed `context.structure.v1`, compile writes review candidates from
-  confirmed structure, review/apply writes approved Markdown, close derives
+- Document work is status-driven: capture writes source snapshots, the current
+  Indexer route produces semantic structure and reader-ready Candidates,
+  review/apply writes approved Markdown, close derives
   `knowledge/structure.yaml`, and build writes packages.
 - `context status --format json` `workflow.current` is the only workspace Route
   authority. A phase `next_action` can continue that operation but cannot
@@ -284,10 +284,10 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 ## 模块职责
 
-- `project/run.ts` 只做 phase dispatch、resource/render 汇总和 CLI 输出；具体 document/capture/align/compile/extract 逻辑下沉到 `project/document*`、`project/proseAlign*`、`project/proseCompile*`、`project/extract*`。
-- `project/proseAlign*.ts` 只负责 evidence view、structure payload parse/validate/stage；不要写 approved Markdown 或 review candidates。
-- `project/proseCompile*.ts` 只负责 confirmed structure 读取、node context、compile actions validate/materialize 和 review candidates；不要改 structure 语义或 approved Markdown。
-- `project/review*.ts` 负责 review HTML、用户决策 apply、scoped quick decisions 和 source-mirrored approved Markdown materialization；`project/close.ts` 负责 approved `knowledge/structure.yaml` projection 与 final verify gate。
+- `project/run.ts` 只执行 capture 和明确声明的非知识 `customPhase`；知识生产由 `project/indexer*.ts` 当前生命周期负责。
+- `project/indexerParser*.ts` 负责 parser 计划、受控执行和结果导入；不得直接写 approved Markdown。
+- `project/indexerCandidateCompileActions.ts` 将已验证 Result 投影为唯一 current Candidate；不得新增旁路 Candidate writer。
+- `project/review*.ts` 负责 current Candidate HTML、用户决策和原子 apply；`project/close.ts` 负责 approved `knowledge/structure.yaml` projection 与 final verify gate。
 - 800 行限制是**事后体检**（详见根 `CLAUDE.md` §代码规模规则）：实现过程禁止主动探测当前行数，正常完成功能；**每个阶段结束后**才统一检查实际超 800 的文件并走分拆流程。拆分时默认目标 ≤600 行，内聚顶住才接受 600-800。
 
 ## Plugin / Shipped Docs

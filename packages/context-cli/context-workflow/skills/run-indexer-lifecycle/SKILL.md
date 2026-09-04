@@ -9,9 +9,10 @@ metadata:
 
 # Run The Indexer Lifecycle
 
-This Action replaces the retired extraction, document-classification, align,
-structure-confirmation, and prose default-plan routes. Do not invoke those
-paths and do not turn existing approved knowledge into an indexing fallback.
+This Action continues the sole registry-and-Provider indexing route. Use the
+current Indexer subroute for semantic partitioning, structure review, authoring,
+composition, layout, Candidate compilation, and repair. Existing approved
+knowledge is an input to incremental planning, never a parallel authoring path.
 
 Read
 `node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`,
@@ -19,7 +20,7 @@ then follow the root `context` Skill's Indexer instructions and the exact
 structured outcomes returned by `context indexer ...`. Start by forming and
 confirming requirements when `src/indexers.yaml` is absent or stale; otherwise
 continue the current registry selection, Provider resolution, execution,
-reconciliation, layout, audit, and Candidate compile subroute. The Indexer
+reconciliation, mechanical validation, layout, and Candidate compile subroute. The Indexer
 Graph is the authority for each substep. Never skip directly to compile and
 never synthesize a Provider Result or a default plan.
 

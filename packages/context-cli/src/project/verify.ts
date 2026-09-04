@@ -4,11 +4,8 @@ import { join } from "node:path";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { candidateIdFromViewRef } from "./candidateIdentity.js";
-import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import { CANDIDATE_LEDGER_FILE, readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { validateApprovedStructureEdges } from "./verifyApprovedStructure.js";
-import { validateCanonicalSourceRef } from "./verifyCanonicalSourceRefs.js";
 import { parseFrontmatterLoose, validateApprovedMarkdown } from "./verifyFrontmatter.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import {
@@ -17,7 +14,7 @@ import {
   type EvidenceIndexCache,
 } from "./verifySourceRefs.js";
 import type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
-import { findContextProjectRoot, loadContextProjectModule } from "./workspace.js";
+import { findContextProjectRoot } from "./workspace.js";
 import { readRejectedDecisions, REVIEW_DECISIONS_FILE } from "./reviewDecisions.js";
 import { knowledgeAssetReferences, unprojectedSourceAssetLinks } from "./knowledgeAssets.js";
 import { parseDocumentSourceLocator } from "@c4a/extract";
@@ -52,11 +49,9 @@ function evidenceStatusForIssues(issues: readonly ProjectVerifyIssue[]): Project
 
 async function readCandidateDecisionState(input: {
   projectRoot: string;
-  sourceRegistry: Awaited<ReturnType<typeof loadSourceRegistryLookup>>;
   issues: ProjectVerifyIssue[];
 }): Promise<{
-  candidateIds: Set<string>;
-  candidatesById: Map<string, CandidateRecord>;
+  candidatesByViewRef: Map<string, CandidateRecord>;
   rejectedDecisions: Map<string, string>;
 }> {
   let rejectedDecisions = new Map<string, string>();
@@ -72,14 +67,23 @@ async function readCandidateDecisionState(input: {
   }
 
   const candidateIds = new Set<string>();
-  const candidatesById = new Map<string, CandidateRecord>();
+  const candidatesByViewRef = new Map<string, CandidateRecord>();
   try {
     for (const record of await readCandidateRecords(input.projectRoot)) {
       if (candidateIds.has(record.candidate_id)) {
         input.issues.push({ severity: "error", code: "candidate-id-duplicate", path: CANDIDATE_LEDGER_FILE, message: `duplicate candidate_id: ${record.candidate_id}` });
       }
       candidateIds.add(record.candidate_id);
-      candidatesById.set(record.candidate_id, record);
+      const existingView = candidatesByViewRef.get(record.view_ref);
+      if (existingView !== undefined) {
+        input.issues.push({
+          severity: "error",
+          code: "candidate-view-ref-duplicate",
+          path: CANDIDATE_LEDGER_FILE,
+          message: `multiple Candidates target the same view_ref: ${record.view_ref}`,
+        });
+      }
+      candidatesByViewRef.set(record.view_ref, record);
       const rejectedFingerprint = rejectedDecisions.get(record.candidate_id);
       if (record.status === "rejected" && rejectedFingerprint !== record.fingerprint) {
         input.issues.push({
@@ -96,9 +100,6 @@ async function readCandidateDecisionState(input: {
           message: `draft candidate also has a durable rejected decision: ${record.candidate_id}`,
         });
       }
-      for (const ref of record.source_refs) {
-        validateCanonicalSourceRef({ ref, sourceRegistry: input.sourceRegistry, issues: input.issues });
-      }
     }
   } catch (error) {
     input.issues.push({
@@ -108,34 +109,17 @@ async function readCandidateDecisionState(input: {
       message: error instanceof Error ? error.message : String(error),
     });
   }
-  return { candidateIds, candidatesById, rejectedDecisions };
+  return { candidatesByViewRef, rejectedDecisions };
 }
 
 export async function verifyProjectWorkspace(
   projectRoot: string,
   options: {
     approvedStructureOverride?: Record<string, unknown>;
-    expectedExtractPhaseIds?: readonly string[];
   } = {},
 ): Promise<ProjectVerifyResult> {
   const issues: ProjectVerifyIssue[] = [];
-  let expectedExtractPhaseIds = options.expectedExtractPhaseIds;
-  if (expectedExtractPhaseIds === undefined) {
-    try {
-      const loaded = await loadContextProjectModule(projectRoot);
-      expectedExtractPhaseIds = loaded.project.phases
-        .filter((phase) =>
-          phase.kind === "phase.extract.ts" || phase.kind === "phase.extract.custom"
-        )
-        .map((phase) => phase.id);
-    } catch {
-      // Project-entry diagnostics are owned by status. Verification can still
-      // validate durable files without inferring extraction coverage.
-    }
-  }
-  const symbolIndex = await loadVerifiedSymbolIndex(projectRoot, {
-    ...(expectedExtractPhaseIds === undefined ? {} : { expectedPhaseIds: expectedExtractPhaseIds }),
-  });
+  const symbolIndex = await loadVerifiedSymbolIndex(projectRoot);
   const sourceRegistry = await loadSourceRegistryLookup(projectRoot, issues);
   const evidenceIndexCache: EvidenceIndexCache = {
     entries: new Map(),
@@ -146,9 +130,8 @@ export async function verifyProjectWorkspace(
     options.approvedStructureOverride,
   );
 
-  const { candidateIds, candidatesById, rejectedDecisions } = await readCandidateDecisionState({
+  const { candidatesByViewRef, rejectedDecisions } = await readCandidateDecisionState({
     projectRoot,
-    sourceRegistry,
     issues,
   });
 
@@ -156,15 +139,6 @@ export async function verifyProjectWorkspace(
   for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
     const rawContent = await readFile(file.absPath, "utf8");
-    const rawFrontmatter = parseFrontmatterLoose(rawContent);
-    if (typeof rawFrontmatter.node_type !== "string" || rawFrontmatter.node_type.trim().length === 0) {
-      issues.push({
-        severity: "error",
-        code: "approved-frontmatter-node-type-invalid",
-        path: file.relPath,
-        message: "approved markdown frontmatter must include non-empty node_type",
-      });
-    }
     const content = hydrateApprovedKnowledgeMarkdown({
       content: rawContent,
       relPath: file.relPath,
@@ -208,34 +182,32 @@ export async function verifyProjectWorkspace(
         message: "approved Markdown still contains a required Lark resource placeholder; recapture and re-review the source",
       });
     }
-    let isCodegraphDelta = false;
     if (viewRef !== undefined && viewRef.length > 0) {
-      try {
-        const candidateId = candidateIdFromViewRef(viewRef);
-        const pending = candidatesById.get(candidateId);
-        isCodegraphDelta = pending !== undefined && isCodeIndexCollection(pending.collection) &&
-          (pending.status === "draft" || pending.status === "rejected") &&
-          (pending.change === "update" || pending.change === "remove");
-        const isProseReplacement = pending?.candidate_type === "prose-align" &&
-          pending.status === "draft";
-        const isResolvedRejection = pending?.status === "rejected" &&
-          rejectedDecisions.get(candidateId) === pending.fingerprint;
-        const approvedFingerprint = typeof frontmatter.candidate_fingerprint === "string"
-          ? frontmatter.candidate_fingerprint
-          : undefined;
-        if (approvedFingerprint !== undefined && rejectedDecisions.get(candidateId) === approvedFingerprint) {
-          issues.push({
-            severity: "error",
-            code: "approved-decision-conflict",
-            path: file.relPath,
-            message: `approved page has the same fingerprint as a rejected decision: ${candidateId}`,
-          });
-        }
-        if (candidateIds.has(candidateId) && !isCodegraphDelta && !isProseReplacement && !isResolvedRejection) {
-          issues.push({ severity: "error", code: "entity-id-duplicate", path: file.relPath, message: `candidate id also exists in the lifecycle ledger: ${candidateId}` });
-        }
-      } catch {
-        // validateApprovedMarkdown reports malformed identity fields with detailed context below.
+      const pending = candidatesByViewRef.get(viewRef);
+      const isResolvedRejection = pending?.status === "rejected" &&
+        rejectedDecisions.get(pending.candidate_id) === pending.fingerprint;
+      const approvedFingerprint = typeof frontmatter.candidate_fingerprint === "string"
+        ? frontmatter.candidate_fingerprint
+        : undefined;
+      if (
+        pending !== undefined &&
+        approvedFingerprint !== undefined &&
+        rejectedDecisions.get(pending.candidate_id) === approvedFingerprint
+      ) {
+        issues.push({
+          severity: "error",
+          code: "approved-decision-conflict",
+          path: file.relPath,
+          message: `approved page has the same fingerprint as a rejected decision: ${pending.candidate_id}`,
+        });
+      }
+      if (pending !== undefined && pending.status !== "draft" && !isResolvedRejection) {
+        issues.push({
+          severity: "error",
+          code: "candidate-decision-conflict",
+          path: file.relPath,
+          message: `approved page has an unresolved Candidate state: ${pending.candidate_id}`,
+        });
       }
     }
     const pageIssues: ProjectVerifyIssue[] = [];
@@ -249,9 +221,7 @@ export async function verifyProjectWorkspace(
       evidenceIndexCache,
       issues: pageIssues,
     });
-    issues.push(...pageIssues.filter((issue) => !(
-      isCodegraphDelta && issue.code === "approved-source-ref-stale"
-    )));
+    issues.push(...pageIssues);
   }
 
   await validateApprovedStructureEdges({

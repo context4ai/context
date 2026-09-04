@@ -326,6 +326,29 @@ describe("ArtifactResult ABI", () => {
     expect(() => validate(unresolvedVariable)).toThrow(/generated-placeholder/);
   });
 
+  test("does not treat template-like syntax inside code examples as authoring residue", () => {
+    const result = artifactResult();
+    const artifact = result.artifacts[0]!;
+    if (artifact.representation !== "sections") throw new Error("expected sections");
+    const block = artifact.sections[0]!.blocks[0]!;
+    if (block.layer !== "semantic-prose") throw new Error("expected semantic prose");
+    block.markdown = [
+      "## Event callback",
+      "",
+      "Use the callback to handle the disabled state.",
+      "",
+      "```tsx",
+      "<Button style={{ color: 'red' }} onClick={() => {",
+      "  notify();",
+      "}} />",
+      "```",
+      "",
+      "Inline syntax such as `{{variable}}` is documentation, not an unresolved template.",
+    ].join("\n");
+    rehash(result);
+    expect(() => validate(result)).not.toThrow();
+  });
+
   test("routes structurally rich speculative prose to Agent Review", () => {
     const result = artifactResult();
     const artifact = result.artifacts[0]!;
@@ -502,6 +525,51 @@ describe("ArtifactResult ABI", () => {
     });
     rehash(sourceDrift);
     expect(() => validate(sourceDrift)).toThrow(/escapes its source\/module/);
+  });
+
+  test("accepts cross-source evidence only from an explicitly authorized read target", () => {
+    const result = artifactResult();
+    const payload = {
+      evidence_ref: "evidence:registered-docs",
+      kind: "documentation" as const,
+      source_ref: "file:registered-docs",
+      module_ref: null,
+      locator: { path: "guide.md", start_line: 1, end_line: 8 },
+      content_digest: digest("9"),
+      coverage_tier: "lightweight-evidence" as const,
+    };
+    result.evidence_bindings.push({
+      ...payload,
+      binding_digest: indexerEvidenceBindingDigest(payload),
+    });
+    rehash(result);
+
+    expect(() => validate(result)).toThrow(/escapes its source\/module/);
+    const authorizedEvidenceTargets = [{
+      source_ref: "file:registered-docs",
+      module_refs: [],
+    }];
+    expect(validate(result, authorWorkset(), {
+      authorized_evidence_targets: authorizedEvidenceTargets,
+    })).toEqual(result);
+    expect(buildIndexerArtifactDependencySet({
+      result,
+      workset: authorWorkset(),
+      run_envelope: buildIndexerRunEnvelope({
+        workset: authorWorkset(),
+        execution_request_digest: INPUT_DIGEST,
+        final_authority: PROVIDER,
+        run_environment: runEnvironment(authorWorkset()),
+      }),
+      dependency_view: authorDependencyView(),
+      authorized_evidence_targets: authorizedEvidenceTargets,
+    }).positive_dependencies).toBeArray();
+    expect(() => validate(result, authorWorkset(), {
+      authorized_evidence_targets: [{
+        source_ref: "file:other-docs",
+        module_refs: [],
+      }],
+    })).toThrow(/escapes its source\/module/);
   });
 
   test("rejects unknown evidence, ineligible policy, and inconsistent Section projection", () => {

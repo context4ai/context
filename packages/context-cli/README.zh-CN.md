@@ -144,11 +144,10 @@ context/
 - `context <command> --help` 是当前参数的权威来源；
 - `context plugin status` 检查已安装的 Agent 投影；
 - `context debug enable` 在 `.tmp/context-runtime/debug/` 记录可选轨迹；
-- 新工作区默认开启来源约束的编辑修订；`context optimize-docs enable|disable`
-  可调整工作区偏好，同时保持 `knowledge/` 中的正式知识不变；
-- `context revise "<标题或正式知识路径>"` 从对话启动一次单页修正，校验后再由
-  Route 提示重新构建；
-- 代码提取写入 `knowledge/codeindex/**`，并在 Review 前分别检查输入分析、稳定边界
+- `context revise "<当前候选标题、路径或 id>" --instruction "<修正要求>"`
+  会在批准前精确重开该候选所属的 Author workset；它不会创建第二套 revision
+  页面，也不会直接改写正式 `knowledge/`；
+- 代码提取先暂存可读的 `codeindex` Candidate，并在 Review 前分别检查输入分析、稳定边界
   覆盖、正文密度、证据范围和页面规模；旧 `codegraph` 工作区只通过 Route 返回的
   迁移动作升级；
 - `context indexer` 生命周期以内容寻址 ledger 恢复 main/post-author 运行，再由 CLI
@@ -165,33 +164,20 @@ context/
   major 与精确 re-identification 授权，漏映射、split、merge 或 collision 在 Gate 前失败；精确
   target 命中多个 Node 返回 `index-target-resolution-ambiguous`，非法复用返回
   `index-target-resolution-invalid`；
-- `context indexer build-material-question-workset` 从 current registry、Provider、scope、
-  source 与 evidence-kind authority 的交集派生二阶段回答资格；
-  `prepare|observe|start|accept|fail-material-answer-*` 使用独立 durable ledger，完整空 Result
-  也作为 cache hit，candidate evidence 则必须携带精确的 current source-span 读取回执；
-- material-answer candidate 使用独立的受限 Review Route，只批准一个精确问题目标与
-  canonical source-span evidence binding。批准结果只是供后续 checkpoint 写入的
-  `answer-approved` successor-ledger fact，不批准 Artifact、读者页面或主知识候选；
-- 主 Candidate Review 只有 `inspect-index-candidate-review-readiness` 一个 Graph 前驱。CLI
-  只接受内容寻址 precompile/postcompile audit record 的 digest，并复核 requirement、registry、
-  inventory、layout、candidate set 与 effective revision 绑定；record 缺失、stale、基础失败或
-  profile 未通过时都不能解析 Review Gate。profile 失败进入 `revise-index-output`；
-  `record-index-profile-revision` 按稳定 problem lineage 最多记录三个不同的 Result fingerprint。
-  第三轮后 `report-index-profile-failure` 才持久化包含指标、示例、历史、缺失输入与能力损失的完整
-  报告；`inspect-index-profile-failure` 只读展示该报告，随后
-  `override-index-profile-audit` 使用不可委托 Gate。回执精确绑定报告、审计、候选 revision、失败
-  指标、用户和时间；baseline 失败不能生成或消费该回执；
-- `checkpoint-material-gaps` 是 reconciliation 任何停止前的 retained writer。批准答案会
-  内联 accepted workset；`actualize-material-answer-bindings` 按同一个 current layout proposal
-  set 映射并在 source stale 时 reopen，`close-indexer-approved-knowledge` 只接受其同时关闭的
-  approved structure 内部 provenance，并原子收敛 ledger；`audit-material-gap-state` 始终只读，
-  内存复算 expected ledger，并把主 Review 前的漂移路由到 checkpoint、把已批准的后置状态路由到 close；
+- 未解决的 material question 只保留在 current reconciliation report。新采集的 Markdown
+  或其他授权材料重新运行普通 main Indexer，并更新同一个 Candidate；不存在第二份
+  checkpoint、answer-only operation 或 Review Route；
+- 主 Candidate Review 要求 current 的 precompile/postcompile audit record。CLI 会复核
+  requirement、registry、inventory、layout 与 candidate set 绑定；阻塞性的机械失败会重开受影响的
+  Author 或 Composer workset 后重新编译，建议性的 profile metric 只作为 warning，不建立重试账本或
+  override Gate；
+- 必需 material gap 会阻塞普通生命周期，直到新增 capture 重新运行受影响 workset；普通
+  `context close` 写入 approved structure 并清理已完成的运行时生命周期状态；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
 
 绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，
 不能替代当前 Route。参见[安装后快速说明](./docs/quickstart.zh-CN.md)和
 [debug tracing](./docs/debug-tracing.md)。
-文档编译优化与对话修订参见[来源约束的编辑修订](./docs/document-optimization.zh-CN.md)。
 
 ## 文档与开发
 

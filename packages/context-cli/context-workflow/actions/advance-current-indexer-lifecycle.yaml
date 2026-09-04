@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: advance-current-indexer-lifecycle
+description: Advance deterministic Indexer setup, fallback, recovery, and finalization to the next semantic step or Gate.
+runner: command
+effect: write
+command: context run --format json

@@ -2,6 +2,7 @@ import {
   acceptIndexerPostAuthorRun,
   buildIndexerPostAuthorFragmentRequest,
   failIndexerPostAuthorRun,
+  retryFailedIndexerPostAuthorRuns,
   indexerProtocolDigest,
   observeIndexerPostAuthorState,
   recoverIndexerPostAuthorRunLedger,
@@ -30,9 +31,9 @@ import {
   type PostAuthorRuntimeState,
 } from "./indexerPostAuthorStorePersistence.js";
 export {
-  INDEXER_POST_AUTHOR_CURRENT_PATH,
-  INDEXER_POST_AUTHOR_ENVELOPE_PATH,
   INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
+  postAuthorCurrentEnvelopePath,
+  postAuthorCurrentStatePath,
 } from "./indexerPostAuthorStorePersistence.js";
 
 const PREPARE_TRANSACTION = "prepare-post-author-run-ledger";
@@ -50,6 +51,10 @@ interface PostAuthorAcceptedCacheRecord {
   receipt: unknown;
   fragments: unknown[];
   cache_digest: string;
+}
+
+function authorWorksetDigest(plan: IndexerPostAuthorPlan): string {
+  return plan.workset_set.author_workset_digest;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -200,7 +205,8 @@ export async function prepareIndexerPostAuthorRunStore(input: {
   return withProjectWriteLock(input.projectRoot, PREPARE_TRANSACTION, async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
     const spec = normalizePostAuthorRunSpec(input);
-    const previous = await readPostAuthorCurrentState(input.projectRoot);
+    const digest = authorWorksetDigest(spec.plan);
+    const previous = await readPostAuthorCurrentState(input.projectRoot, digest);
     const ledger = recoverIndexerPostAuthorRunLedger({
       plan: spec.plan,
       ...(previous === undefined ? {} : { previous_ledger: previous.ledger }),
@@ -212,7 +218,7 @@ export async function prepareIndexerPostAuthorRunStore(input: {
     });
     const envelope = spec.plan.state === "not-required"
       ? undefined
-      : await readPostAuthorCurrentEnvelope(input.projectRoot);
+      : await readPostAuthorCurrentEnvelope(input.projectRoot, digest);
     const observed = observation(state, envelope);
     const receipt = await persistPostAuthorState({
       projectRoot: input.projectRoot,
@@ -235,7 +241,10 @@ export async function startIndexerPostAuthorRunStore(input: {
 }) {
   return withProjectWriteLock(input.projectRoot, START_TRANSACTION, async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
-    const current = await readPostAuthorCurrentState(input.projectRoot);
+    const current = await readPostAuthorCurrentState(
+      input.projectRoot,
+      authorWorksetDigest(input.plan),
+    );
     if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
     assertExpected({ state: current, plan: input.plan, ledger: input.ledger });
     const started = startIndexerPostAuthorRun({
@@ -266,7 +275,10 @@ export async function acceptIndexerPostAuthorRunStore(input: {
 }) {
   return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
-    const current = await readPostAuthorCurrentState(input.projectRoot);
+    const current = await readPostAuthorCurrentState(
+      input.projectRoot,
+      authorWorksetDigest(input.plan),
+    );
     if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
     assertExpected({ state: current, plan: input.plan, ledger: input.ledger });
     if (input.validator_contract_digest !== current.spec.validator_contract_digest) {
@@ -324,7 +336,10 @@ export async function failIndexerPostAuthorRunStore(input: {
 }) {
   return withProjectWriteLock(input.projectRoot, FAIL_TRANSACTION, async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
-    const current = await readPostAuthorCurrentState(input.projectRoot);
+    const current = await readPostAuthorCurrentState(
+      input.projectRoot,
+      authorWorksetDigest(input.plan),
+    );
     if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
     assertExpected({ state: current, plan: input.plan, ledger: input.ledger });
     const ledger = failIndexerPostAuthorRun({
@@ -346,6 +361,32 @@ export async function failIndexerPostAuthorRunStore(input: {
   });
 }
 
+export async function retryFailedIndexerPostAuthorRunStore(input: {
+  projectRoot: string;
+  plan: IndexerPostAuthorPlan;
+}) {
+  return withProjectWriteLock(input.projectRoot, "retry-post-author-run", async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const current = await readPostAuthorCurrentState(
+      input.projectRoot,
+      authorWorksetDigest(input.plan),
+    );
+    if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
+    const ledger = retryFailedIndexerPostAuthorRuns({
+      plan: current.spec.plan,
+      ledger: current.ledger,
+    });
+    const state = buildPostAuthorRuntimeState({ spec: current.spec, ledger });
+    const receipt = await persistPostAuthorState({
+      projectRoot: input.projectRoot,
+      operation: "retry",
+      transaction_kind: "retry-post-author-run",
+      state,
+    });
+    return { ledger, receipt };
+  });
+}
+
 export async function observeIndexerPostAuthorRunStore(input: {
   projectRoot: string;
   plan: IndexerPostAuthorPlan;
@@ -359,11 +400,15 @@ export async function observeIndexerPostAuthorRunStore(input: {
     "observe-post-author-run-ledger",
     async () => {
       await recoverDurableMultiFileTransactions(input.projectRoot);
-      const current = await readPostAuthorCurrentState(input.projectRoot);
+      const digest = authorWorksetDigest(input.plan);
+      const current = await readPostAuthorCurrentState(input.projectRoot, digest);
       if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
       assertExpected({ state: current, plan: input.plan, ledger: input.ledger });
       assertObservationSpec({ state: current, ...input });
-      return observation(current, await readPostAuthorCurrentEnvelope(input.projectRoot));
+      return observation(
+        current,
+        await readPostAuthorCurrentEnvelope(input.projectRoot, digest),
+      );
     },
   );
 }
@@ -379,11 +424,15 @@ export async function composeIndexerPostAuthorEnvelopeStore(input: {
 }) {
   return withProjectWriteLock(input.projectRoot, COMPOSE_TRANSACTION, async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
-    const current = await readPostAuthorCurrentState(input.projectRoot);
+    const digest = authorWorksetDigest(input.plan);
+    const current = await readPostAuthorCurrentState(input.projectRoot, digest);
     if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
     assertExpected({ state: current, plan: input.plan, ledger: input.ledger });
     assertObservationSpec({ state: current, ...input });
-    const observed = observation(current, await readPostAuthorCurrentEnvelope(input.projectRoot));
+    const observed = observation(
+      current,
+      await readPostAuthorCurrentEnvelope(input.projectRoot, digest),
+    );
     if (observed.expected_envelope === null) {
       throw new TypeError("post-author envelope requires every current composer run to be accepted");
     }
@@ -411,4 +460,47 @@ export async function composeIndexerPostAuthorEnvelopeStore(input: {
     }
     return { envelope: observed.expected_envelope, ...complete, receipt };
   });
+}
+
+export async function readCurrentIndexerPostAuthorEnvelopeForResult(input: {
+  projectRoot: string;
+  author_workset_digest: string;
+  primary_result_digest: string;
+}) {
+  return withProjectWriteLock(
+    input.projectRoot,
+    "read-current-post-author-result",
+    async () => {
+      await recoverDurableMultiFileTransactions(input.projectRoot);
+      const state = await readPostAuthorCurrentState(
+        input.projectRoot,
+        input.author_workset_digest,
+      );
+      if (state === undefined) {
+        throw new TypeError("post-author state is missing for an accepted author Result");
+      }
+      if (
+        state.spec.plan.workset_set.author_workset_digest !==
+          input.author_workset_digest ||
+        state.spec.plan.workset_set.primary_result_digest !== input.primary_result_digest
+      ) {
+        throw new TypeError("post-author state is stale for the accepted author Result");
+      }
+      const envelopeRecord = state.spec.plan.state === "not-required"
+        ? undefined
+        : await readPostAuthorCurrentEnvelope(
+            input.projectRoot,
+            input.author_workset_digest,
+          );
+      const observed = observation(state, envelopeRecord);
+      if (!observed.status.can_reconcile) {
+        throw new TypeError("post-author state is pending, failed, stale, or incomplete");
+      }
+      if (state.spec.plan.state === "not-required") return null;
+      if (envelopeRecord === undefined) {
+        throw new TypeError("post-author current envelope is missing");
+      }
+      return envelopeRecord.envelope;
+    },
+  );
 }

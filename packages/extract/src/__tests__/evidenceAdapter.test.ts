@@ -155,6 +155,36 @@ describe("ExtractionResult Evidence ABI adapter", () => {
       .toBe(false);
   });
 
+  test("keeps source expressions out of durable relation locators", () => {
+    const current = extraction();
+    const expression = "fetch('/session').then((value) => value.access_token)";
+    current.relations = [{
+      from: "src/index.ts",
+      to: expression,
+      type: EdgeType.Calls,
+      isExternal: false,
+      grounding: Grounding.Code,
+      confidence: 1,
+      source: EdgeSource.Ast,
+      line: 2,
+    }];
+    current.stats.relations = 1;
+
+    const materialized = extractionResultToEvidenceAdapterMaterialization(
+      current,
+      invocation(),
+    );
+    const relation = materialized.result.files[0]!.facts.find((item) =>
+      item.kind === "code-relation"
+    );
+    expect(relation?.locator.qualified_item_path).toMatch(
+      /^relation:calls@2#sha256:[a-f0-9]{64}$/u,
+    );
+    expect(relation?.locator.qualified_item_path).not.toContain(expression);
+    expect(materialized.fact_payloads.find((item) => item.fact_ref === relation?.fact_ref))
+      .toBeDefined();
+  });
+
   test("rejects legacy extraction output without per-file coverage", () => {
     const legacy = extraction();
     Reflect.deleteProperty(legacy, "coverage");

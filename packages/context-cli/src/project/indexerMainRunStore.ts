@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   acceptIndexerMainRun,
@@ -6,44 +6,44 @@ import {
   canonicalIndexerJson,
   failIndexerMainRun,
   INDEXER_CATALOG_FALLBACK_STRATEGY_ID,
-  indexerProtocolDigest,
   observeIndexerMainRunLedger,
   recoverIndexerMainRunLedger,
   retryIndexerMainPartitionRun,
+  retryFailedIndexerMainRuns,
   startIndexerMainRun,
   validateAndRecordIndexerMainRun,
-  validateIndexerMainRunLedger,
-  validateIndexerMainRunRequest,
   validateIndexerMainWorksetSet,
   type IndexerMainRunLedger,
-  type IndexerMainRunRequest,
-  type IndexerProjectFileTarget,
 } from "@c4a/context";
 import {
-  durableContentDigest,
-} from "./durableSingleFileTransaction.js";
-import {
   recoverDurableMultiFileTransactions,
-  runDurableMultiFileTransaction,
   type DurableMultiFileFailureInjector,
-  type DurableMultiFileTransactionReceipt,
 } from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import {
   convergeStoredIndexerPartition,
   readStoredIndexerPartitionConvergence,
 } from "./indexerPartitionConvergenceStore.js";
-
-export const INDEXER_MAIN_RUN_STORE_ROOT = join(
-  ".tmp",
-  "context-runtime",
-  "indexer",
-  "main-index",
-);
-export const INDEXER_MAIN_RUN_CURRENT_PATH = join(
+import {
   INDEXER_MAIN_RUN_STORE_ROOT,
-  "current.json",
-);
+  acceptedCachePath,
+  acceptedCacheRecord,
+  currentLedger,
+  currentSpec,
+  normalizeRunSpec,
+  partitionConvergencePath,
+  persistLedger,
+  readJsonMaybe,
+  runSpecPath,
+  validateAcceptedCache,
+  validateAcceptedCacheEnvelope,
+  type MainRunSpec,
+} from "./indexerMainRunStoreRecords.js";
+export {
+  INDEXER_MAIN_RUN_CURRENT_PATH,
+  INDEXER_MAIN_RUN_STORE_ROOT,
+} from "./indexerMainRunStoreRecords.js";
+export type { IndexerMainRunStoreReceipt } from "./indexerMainRunStoreRecords.js";
 
 const PREPARE_TRANSACTION = "prepare-main-index-run-ledger";
 const START_TRANSACTION = "start-main-index-run";
@@ -51,263 +51,6 @@ const ACCEPT_TRANSACTION = "accept-main-index-run";
 const FAIL_TRANSACTION = "fail-main-index-run";
 const CONVERGE_PARTITION_TRANSACTION = "converge-main-index-partition-run";
 
-interface MainRunSpec {
-  protocol: "context.indexer.main-run-spec/v1";
-  request: IndexerMainRunRequest;
-  validation: Record<string, unknown>;
-  spec_digest: string;
-}
-
-interface MainAcceptedCacheRecord {
-  protocol: "context.indexer.main-accepted-cache-record/v1";
-  request: IndexerMainRunRequest;
-  result: unknown;
-  workset_read_receipts: unknown[];
-  operation_result: unknown;
-  authoring_audit: unknown;
-  run_envelope: unknown;
-  artifact_dependency_set: unknown;
-  accepted_record: ReturnType<typeof validateAndRecordIndexerMainRun>["accepted_record"];
-  cache_digest: string;
-}
-
-export interface IndexerMainRunStoreReceipt {
-  protocol: "context.indexer.main-run-store-receipt/v1";
-  operation: "prepare" | "start" | "accept" | "fail" | "converge-partition";
-  ledger_digest: string;
-  transaction: DurableMultiFileTransactionReceipt | null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function digestName(digest: string): string {
-  if (!/^sha256:[a-f0-9]{64}$/u.test(digest)) {
-    throw new TypeError("content-addressed Indexer runtime path requires a sha256 digest");
-  }
-  return digest.slice("sha256:".length);
-}
-
-function ledgerSnapshotPath(digest: string): string {
-  return join(INDEXER_MAIN_RUN_STORE_ROOT, "ledgers", `${digestName(digest)}.json`);
-}
-
-function runSpecPath(requestDigest: string): string {
-  return join(INDEXER_MAIN_RUN_STORE_ROOT, "requests", `${digestName(requestDigest)}.json`);
-}
-
-function acceptedCachePath(requestDigest: string): string {
-  return join(INDEXER_MAIN_RUN_STORE_ROOT, "accepted", `${digestName(requestDigest)}.json`);
-}
-
-function resultCachePath(resultDigest: string): string {
-  return join(INDEXER_MAIN_RUN_STORE_ROOT, "results", `${digestName(resultDigest)}.json`);
-}
-
-function receiptCachePath(receiptDigest: string): string {
-  return join(INDEXER_MAIN_RUN_STORE_ROOT, "receipts", `${digestName(receiptDigest)}.json`);
-}
-
-function partitionConvergencePath(attemptDigest: string): string {
-  return join(
-    INDEXER_MAIN_RUN_STORE_ROOT,
-    "partition-convergence",
-    `${digestName(attemptDigest)}.json`,
-  );
-}
-
-function jsonContent(value: unknown): string {
-  const canonical = canonicalIndexerJson(value);
-  if (typeof canonical !== "string") throw new TypeError("runtime record is not JSON serializable");
-  return `${JSON.stringify(JSON.parse(canonical), null, 2)}\n`;
-}
-
-async function readMaybe(projectRoot: string, path: string): Promise<string | undefined> {
-  try {
-    return await readFile(join(projectRoot, path), "utf8");
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
-async function readJsonMaybe(projectRoot: string, path: string): Promise<unknown | undefined> {
-  const raw = await readMaybe(projectRoot, path);
-  if (raw === undefined) return undefined;
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    throw new TypeError(`Indexer runtime record is invalid JSON: ${path}`);
-  }
-}
-
-function normalizeRunSpec(value: unknown): MainRunSpec {
-  if (!isRecord(value) || value.protocol !== "context.indexer.main-run-spec/v1") {
-    throw new TypeError("main run spec must use context.indexer.main-run-spec/v1");
-  }
-  const request = validateIndexerMainRunRequest(value.request);
-  if (!isRecord(value.validation) || value.validation.stage !== request.workset.stage) {
-    throw new TypeError("main run spec validation must match the request stage");
-  }
-  const payload = {
-    protocol: "context.indexer.main-run-spec/v1" as const,
-    request,
-    validation: value.validation,
-  };
-  const specDigest = indexerProtocolDigest(payload);
-  if (value.spec_digest !== undefined && value.spec_digest !== specDigest) {
-    throw new TypeError("main run spec digest is invalid");
-  }
-  return { ...payload, spec_digest: specDigest };
-}
-
-function validateAcceptedCache(input: {
-  cache: unknown;
-  spec: MainRunSpec;
-}): MainAcceptedCacheRecord {
-  if (!isRecord(input.cache) || input.cache.protocol !== "context.indexer.main-accepted-cache-record/v1") {
-    throw new TypeError("main accepted cache record has an invalid protocol");
-  }
-  if (!Array.isArray(input.cache.workset_read_receipts)) {
-    throw new TypeError("main accepted cache record is missing read receipts");
-  }
-  const validated = validateAndRecordIndexerMainRun({
-    request: input.spec.request,
-    result: input.cache.result,
-    workset_read_receipts: input.cache.workset_read_receipts,
-    validation: input.spec.validation as unknown as Parameters<
-      typeof validateAndRecordIndexerMainRun
-    >[0]["validation"],
-  });
-  const payload = {
-    protocol: "context.indexer.main-accepted-cache-record/v1" as const,
-    request: validated.request,
-    result: validated.result,
-    workset_read_receipts: input.cache.workset_read_receipts,
-    operation_result: validated.operation_result,
-    authoring_audit: validated.authoring_audit,
-    run_envelope: validated.run_envelope,
-    artifact_dependency_set: validated.artifact_dependency_set,
-    accepted_record: validated.accepted_record,
-  };
-  const cacheDigest = indexerProtocolDigest(payload);
-  if (
-    input.cache.cache_digest !== cacheDigest ||
-    indexerProtocolDigest(input.cache.request) !== indexerProtocolDigest(payload.request) ||
-    indexerProtocolDigest(input.cache.operation_result) !==
-      indexerProtocolDigest(payload.operation_result) ||
-    indexerProtocolDigest(input.cache.authoring_audit) !==
-      indexerProtocolDigest(payload.authoring_audit) ||
-    indexerProtocolDigest(input.cache.run_envelope) !==
-      indexerProtocolDigest(payload.run_envelope) ||
-    indexerProtocolDigest(input.cache.artifact_dependency_set) !==
-      indexerProtocolDigest(payload.artifact_dependency_set) ||
-    indexerProtocolDigest(input.cache.accepted_record) !==
-      indexerProtocolDigest(payload.accepted_record)
-  ) {
-    throw new TypeError("main accepted cache record failed integrity validation");
-  }
-  return { ...payload, cache_digest: cacheDigest };
-}
-
-async function currentLedger(projectRoot: string): Promise<IndexerMainRunLedger | undefined> {
-  const value = await readJsonMaybe(projectRoot, INDEXER_MAIN_RUN_CURRENT_PATH);
-  return value === undefined ? undefined : validateIndexerMainRunLedger(value);
-}
-
-async function currentSpec(input: {
-  projectRoot: string;
-  request_digest: string;
-}): Promise<MainRunSpec> {
-  const value = await readJsonMaybe(input.projectRoot, runSpecPath(input.request_digest));
-  if (value === undefined) throw new TypeError("main run request cache is missing");
-  const spec = normalizeRunSpec(value);
-  if (spec.request.execution_request_digest !== input.request_digest) {
-    throw new TypeError("main run request cache path does not match its request digest");
-  }
-  return spec;
-}
-
-async function writeTarget(input: {
-  projectRoot: string;
-  path: string;
-  value: unknown;
-  immutable?: boolean;
-}): Promise<IndexerProjectFileTarget | undefined> {
-  const content = jsonContent(input.value);
-  const existing = await readMaybe(input.projectRoot, input.path);
-  if (existing === content) return undefined;
-  if (input.immutable === true && existing !== undefined) {
-    throw new TypeError(`content-addressed Indexer runtime record is immutable: ${input.path}`);
-  }
-  return {
-    path: input.path,
-    operation: "write",
-    base_digest: existing === undefined ? null : durableContentDigest(existing),
-    target_digest: durableContentDigest(content),
-    content,
-  };
-}
-
-async function persistLedger(input: {
-  projectRoot: string;
-  operation: IndexerMainRunStoreReceipt["operation"];
-  transaction_kind: string;
-  ledger: IndexerMainRunLedger;
-  immutable_records?: readonly { path: string; value: unknown }[];
-  inject_failure?: DurableMultiFileFailureInjector;
-}): Promise<IndexerMainRunStoreReceipt> {
-  const candidates = await Promise.all([
-    ...(input.immutable_records ?? []).map((record) => writeTarget({
-      projectRoot: input.projectRoot,
-      path: record.path,
-      value: record.value,
-      immutable: true,
-    })),
-    writeTarget({
-      projectRoot: input.projectRoot,
-      path: ledgerSnapshotPath(input.ledger.ledger_digest),
-      value: input.ledger,
-      immutable: true,
-    }),
-    writeTarget({
-      projectRoot: input.projectRoot,
-      path: INDEXER_MAIN_RUN_CURRENT_PATH,
-      value: input.ledger,
-    }),
-  ]);
-  const targets = candidates.filter(
-    (target): target is IndexerProjectFileTarget => target !== undefined,
-  ).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
-  const transaction = targets.length === 0
-    ? null
-    : await runDurableMultiFileTransaction({
-        projectRoot: input.projectRoot,
-        kind: input.transaction_kind,
-        proposal_digest: indexerProtocolDigest({
-          protocol: "context.indexer.main-run-store-proposal/v1",
-          operation: input.operation,
-          ledger_digest: input.ledger.ledger_digest,
-          targets: targets.map((target) => ({
-            path: target.path,
-            target_digest: target.target_digest,
-          })),
-        }),
-        targets,
-        ...(input.inject_failure === undefined
-          ? {}
-          : { inject_failure: input.inject_failure }),
-      });
-  return {
-    protocol: "context.indexer.main-run-store-receipt/v1",
-    operation: input.operation,
-    ledger_digest: input.ledger.ledger_digest,
-    transaction,
-  };
-}
 
 async function runningMainSpec(input: {
   projectRoot: string;
@@ -330,34 +73,10 @@ async function acceptValidatedMainRun(input: {
   projectRoot: string;
   current: IndexerMainRunLedger;
   validated: ReturnType<typeof validateAndRecordIndexerMainRun>;
-  workset_read_receipts: readonly unknown[];
   immutable_records?: readonly { path: string; value: unknown }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
-  const cachePayload = {
-    protocol: "context.indexer.main-accepted-cache-record/v1" as const,
-    request: input.validated.request,
-    result: input.validated.result,
-    workset_read_receipts: [...input.workset_read_receipts],
-    operation_result: input.validated.operation_result,
-    authoring_audit: input.validated.authoring_audit,
-    run_envelope: input.validated.run_envelope,
-    artifact_dependency_set: input.validated.artifact_dependency_set,
-    accepted_record: input.validated.accepted_record,
-  };
-  const cache: MainAcceptedCacheRecord = {
-    ...cachePayload,
-    cache_digest: indexerProtocolDigest(cachePayload),
-  };
-  const receiptRecord = {
-    protocol: "context.indexer.main-run-receipt-cache/v1",
-    workset_digest: input.validated.request.workset.workset_digest,
-    execution_request_digest: input.validated.request.execution_request_digest,
-    consumed_input_view_digest: input.validated.result.consumed_input_view_digest,
-    workset_read_receipt_digests: input.validated.result.workset_read_receipt_digests,
-    workset_read_receipts: input.workset_read_receipts,
-    receipt_digest: input.validated.accepted_record.receipt_digest,
-  };
+  const cache = acceptedCacheRecord(input);
   const ledger = acceptIndexerMainRun({
     ledger: input.current,
     accepted_record: input.validated.accepted_record,
@@ -368,12 +87,6 @@ async function acceptValidatedMainRun(input: {
     transaction_kind: ACCEPT_TRANSACTION,
     ledger,
     immutable_records: [{
-      path: resultCachePath(input.validated.accepted_record.result_digest),
-      value: input.validated.operation_result,
-    }, {
-      path: receiptCachePath(input.validated.accepted_record.receipt_digest),
-      value: receiptRecord,
-    }, {
       path: acceptedCachePath(input.validated.request.execution_request_digest),
       value: cache,
     }, ...(input.immutable_records ?? [])],
@@ -389,6 +102,15 @@ async function prepareUnlocked(input: {
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   await recoverDurableMultiFileTransactions(input.projectRoot);
+  // Older builds wrote three unread audit-copy trees. The accepted cache is
+  // the sole recovery authority, so keeping those copies only multiplies I/O
+  // and local disk usage.
+  await Promise.all(["ledgers", "results", "receipts"].map((directory) =>
+    rm(join(input.projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, directory), {
+      recursive: true,
+      force: true,
+    })
+  ));
   const worksetSet = validateIndexerMainWorksetSet(input.workset_set);
   const previousLedger = await currentLedger(input.projectRoot);
   const suppliedSpecs = input.run_specs.map(normalizeRunSpec);
@@ -438,7 +160,7 @@ async function prepareUnlocked(input: {
       acceptedCachePath(spec.request.execution_request_digest),
     );
     if (cached !== undefined) {
-      acceptedRecords.push(validateAcceptedCache({ cache: cached, spec }).accepted_record);
+      acceptedRecords.push(validateAcceptedCacheEnvelope({ cache: cached, spec }).accepted_record);
     }
   }
   const ledger = recoverIndexerMainRunLedger({
@@ -509,7 +231,6 @@ export async function acceptIndexerMainRunStore(input: {
   projectRoot: string;
   workset_digest: string;
   result: unknown;
-  workset_read_receipts: readonly unknown[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
@@ -518,7 +239,6 @@ export async function acceptIndexerMainRunStore(input: {
     const validated = validateAndRecordIndexerMainRun({
       request: spec.request,
       result: input.result,
-      workset_read_receipts: input.workset_read_receipts,
       validation: spec.validation as unknown as Parameters<
         typeof validateAndRecordIndexerMainRun
       >[0]["validation"],
@@ -559,7 +279,6 @@ export async function acceptIndexerMainRunStore(input: {
       projectRoot: input.projectRoot,
       current,
       validated,
-      workset_read_receipts: input.workset_read_receipts,
       ...(convergence === undefined
         ? {}
         : {
@@ -575,11 +294,69 @@ export async function acceptIndexerMainRunStore(input: {
   });
 }
 
+export async function acceptIndexerMainAuthorRunsStore(input: {
+  projectRoot: string;
+  runs: readonly {
+    workset_digest: string;
+    result: unknown;
+  }[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}) {
+  if (input.runs.length === 0) {
+    throw new TypeError("main author batch acceptance requires at least one run");
+  }
+  if (new Set(input.runs.map((run) => run.workset_digest)).size !== input.runs.length) {
+    throw new TypeError("main author batch acceptance contains duplicate worksets");
+  }
+  return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    let ledger = await currentLedger(input.projectRoot);
+    if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
+    const immutableRecords: Array<{ path: string; value: unknown }> = [];
+    for (const run of input.runs) {
+      const entry = ledger.entries.find((item) => item.workset_digest === run.workset_digest);
+      if (entry?.state !== "running") {
+        throw new TypeError("main author batch result requires running persisted ledger entries");
+      }
+      const spec = await currentSpec({
+        projectRoot: input.projectRoot,
+        request_digest: entry.execution_request_digest,
+      });
+      if (spec.request.workset.stage !== "author") {
+        throw new TypeError("main author batch acceptance cannot consume partition worksets");
+      }
+      const validated = validateAndRecordIndexerMainRun({
+        request: spec.request,
+        result: run.result,
+        validation: spec.validation as unknown as Parameters<
+          typeof validateAndRecordIndexerMainRun
+        >[0]["validation"],
+      });
+      ledger = acceptIndexerMainRun({
+        ledger,
+        accepted_record: validated.accepted_record,
+      });
+      immutableRecords.push({
+        path: acceptedCachePath(validated.request.execution_request_digest),
+        value: acceptedCacheRecord({ validated }),
+      });
+    }
+    const receipt = await persistLedger({
+      projectRoot: input.projectRoot,
+      operation: "accept",
+      transaction_kind: ACCEPT_TRANSACTION,
+      ledger,
+      immutable_records: immutableRecords,
+      ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
+    });
+    return { ledger, status: observeIndexerMainRunLedger(ledger), receipt };
+  });
+}
+
 export async function convergeIndexerMainPartitionRunStore(input: {
   projectRoot: string;
   workset_digest: string;
   result: unknown;
-  workset_read_receipts: readonly unknown[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   return withProjectWriteLock(
@@ -594,7 +371,6 @@ export async function convergeIndexerMainPartitionRunStore(input: {
       const validated = validateAndRecordIndexerMainRun({
         request: spec.request,
         result: input.result,
-        workset_read_receipts: input.workset_read_receipts,
         validation: spec.validation as unknown as Parameters<
           typeof validateAndRecordIndexerMainRun
         >[0]["validation"],
@@ -620,7 +396,6 @@ export async function convergeIndexerMainPartitionRunStore(input: {
             projectRoot: input.projectRoot,
             current,
             validated,
-            workset_read_receipts: input.workset_read_receipts,
             immutable_records: [convergenceRecord],
             ...(input.inject_failure === undefined
               ? {}
@@ -724,6 +499,22 @@ export async function failIndexerMainRunStore(input: {
   });
 }
 
+export async function retryFailedIndexerMainRunStore(projectRoot: string) {
+  return withProjectWriteLock(projectRoot, "retry-main-index-run", async () => {
+    await recoverDurableMultiFileTransactions(projectRoot);
+    const current = await currentLedger(projectRoot);
+    if (current === undefined) throw new TypeError("main run ledger is not prepared");
+    const ledger = retryFailedIndexerMainRuns(current);
+    const receipt = await persistLedger({
+      projectRoot,
+      operation: "retry",
+      transaction_kind: "retry-main-index-run",
+      ledger,
+    });
+    return { ledger, status: observeIndexerMainRunLedger(ledger), receipt };
+  });
+}
+
 export async function observeIndexerMainRunStore(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "observe-main-index-run-ledger", async () => {
     await recoverDurableMultiFileTransactions(projectRoot);
@@ -733,15 +524,18 @@ export async function observeIndexerMainRunStore(projectRoot: string) {
   });
 }
 
-async function readAcceptedMainAuthorResultRecordsUnlocked(projectRoot: string) {
+async function readAcceptedMainResultRecordsUnlocked(
+  projectRoot: string,
+  stage: "partition" | "author",
+) {
     await recoverDurableMultiFileTransactions(projectRoot);
     const ledger = await currentLedger(projectRoot);
     if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
-    if (ledger.entries.some((entry) => entry.stage !== "author")) {
-      throw new TypeError("current main run ledger is not the author stage");
+    if (ledger.entries.some((entry) => entry.stage !== stage)) {
+      throw new TypeError(`current main run ledger is not the ${stage} stage`);
     }
     if (ledger.entries.some((entry) => entry.state !== "accepted")) {
-      throw new TypeError("main author results cannot reconcile before every run is accepted");
+      throw new TypeError(`main ${stage} results require every run to be accepted`);
     }
     const records = [];
     for (const entry of ledger.entries) {
@@ -755,36 +549,46 @@ async function readAcceptedMainAuthorResultRecordsUnlocked(projectRoot: string) 
         acceptedCachePath(entry.execution_request_digest),
       );
       if (cached === undefined) {
-        throw new TypeError("accepted main author result cache is missing");
+        throw new TypeError(`accepted main ${stage} result cache is missing`);
       }
       const validated = validateAcceptedCache({ cache: cached, spec });
       if (canonicalIndexerJson(validated.accepted_record) !==
         canonicalIndexerJson(entry.accepted_record)) {
-        throw new TypeError("accepted main author cache does not match the current ledger");
+        throw new TypeError(`accepted main ${stage} cache does not match the current ledger`);
       }
       records.push({
+        request: spec.request,
         run_result: validated.result,
         accepted_record: validated.accepted_record,
         artifact_result: validated.operation_result,
         run_envelope: validated.run_envelope,
         dependency_view: spec.validation.dependency_view,
         artifact_dependency_set: validated.artifact_dependency_set,
+        validation: spec.validation,
       });
     }
     return records;
+}
+
+export async function readAcceptedIndexerMainPartitionResultRecords(projectRoot: string) {
+  return withProjectWriteLock(
+    projectRoot,
+    "read-accepted-main-partition-result-records",
+    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "partition"),
+  );
 }
 
 export async function readAcceptedIndexerMainAuthorResultRecords(projectRoot: string) {
   return withProjectWriteLock(
     projectRoot,
     "read-accepted-main-author-result-records",
-    () => readAcceptedMainAuthorResultRecordsUnlocked(projectRoot),
+    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "author"),
   );
 }
 
 export async function readAcceptedIndexerMainAuthorResults(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "read-accepted-main-author-results", async () => {
-    const records = await readAcceptedMainAuthorResultRecordsUnlocked(projectRoot);
+    const records = await readAcceptedMainResultRecordsUnlocked(projectRoot, "author");
     return records.map((record) => record.artifact_result);
   });
 }

@@ -348,4 +348,5 @@ describe("parser-side Evidence Adapter Result wire schema", () => {
       payload: new Date("2026-08-28T00:00:00.000Z"),
     })).toThrow(/plain JSON objects/u);
   });
+
 });

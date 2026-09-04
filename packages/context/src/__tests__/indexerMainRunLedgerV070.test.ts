@@ -22,6 +22,7 @@ function workset(input: {
   indexer_id: string;
   owner: string;
   input_digest: string;
+  partition_key?: string;
 }): IndexerMainPartitionWorkset {
   const built = buildIndexerMainWorkset({
     stage: "partition",
@@ -36,19 +37,21 @@ function workset(input: {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_subject_key: {
       protocol: "context.subject-key/v1",
       namespace: input.indexer_id,
       kind: "module",
-      local_key: "root",
+      local_key: input.partition_key ?? "root",
     },
     strategy_set_digest: digest("a"),
     reader_question_refs: ["question:knowledge"],
     partition_input_digests: [input.input_digest],
-    partition_inventory_digest: digest("b"),
+    partition_inventory_digest: input.partition_key === undefined
+      ? digest("b")
+      : indexerProtocolDigest({ partition_key: input.partition_key }),
     allowed_question_target_refs: ["question-target:knowledge"],
   });
   if (built.stage !== "partition") throw new Error("expected partition workset");
@@ -96,7 +99,7 @@ function authorWorkset(
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_plan_binding_digest: digest("a"),
@@ -114,6 +117,31 @@ function authorWorkset(
 }
 
 describe("content-addressed main Indexer run ledger", () => {
+  test("keeps multiple Partition shards in one owner cohort independently recoverable", () => {
+    const first = workset({
+      indexer_id: "components",
+      owner: "owner-cell:knowledge#components",
+      input_digest: digest("1"),
+      partition_key: "buttons",
+    });
+    const second = workset({
+      indexer_id: "components",
+      owner: "owner-cell:knowledge#components",
+      input_digest: digest("2"),
+      partition_key: "dialogs",
+    });
+    const set = buildIndexerMainWorksetSet([first, second]);
+    const ledger = initializeIndexerMainRunLedger({
+      workset_set: set,
+      run_identities: [
+        { workset_digest: first.workset_digest, execution_request_digest: digest("3") },
+        { workset_digest: second.workset_digest, execution_request_digest: digest("4") },
+      ],
+    });
+    expect(new Set(ledger.entries.map((entry) => entry.item_ref)).size).toBe(2);
+    expect(new Set(ledger.entries.map((entry) => entry.partition_key)).size).toBe(2);
+  });
+
   test("recovers exact accepted empty results and resets interrupted running work", () => {
     const first = workset({
       indexer_id: "components",

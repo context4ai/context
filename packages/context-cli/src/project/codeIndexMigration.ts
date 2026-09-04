@@ -1,15 +1,19 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { CANDIDATE_LEDGER_FILE, readCandidateRecords, writeCandidateRecords } from "./candidateLedger.js";
-import { CODE_INDEX_AUDIT_STATE_PATH } from "./codeIndexAudit.js";
-import { stableHash } from "./extractCandidateArtifacts.js";
+import { CANDIDATE_LEDGER_FILE } from "./candidateLedger.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
 const LEGACY = "codegraph";
 const CURRENT = "codeindex";
+const LEGACY_CODE_INDEX_AUDIT_STATE_PATH = ".tmp/context-runtime/code-index-audit/state.json";
 const TEXT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".yaml", ".yml", ".md", ".mdx"]);
+
+function migrationDigest(value: unknown): string {
+  return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
 
 async function filesBelow(root: string): Promise<string[]> {
   if (!existsSync(root)) return [];
@@ -34,6 +38,44 @@ function migrateText(value: string): string {
     .replace(/(["'])codegraph\1/gu, (_match, quote: string) => `${quote}codeindex${quote}`);
 }
 
+interface CandidateLedgerMigrationState {
+  hasLegacyRows: boolean;
+  retainedContent: string | undefined;
+}
+
+function inspectCandidateLedger(raw: string): CandidateLedgerMigrationState {
+  let hasLegacyRows = false;
+  const retainedLines: string[] = [];
+  for (const line of raw.split(/\r?\n/u)) {
+    if (line.trim().length === 0) continue;
+    let value: unknown;
+    try {
+      value = JSON.parse(line) as unknown;
+    } catch {
+      // An invalid row is not safe to classify or discard during migration.
+      retainedLines.push(line);
+      continue;
+    }
+    const isCurrent = value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).candidate_type === "indexer-artifact" &&
+      (value as Record<string, unknown>).collection !== LEGACY;
+    if (isCurrent) retainedLines.push(line);
+    else hasLegacyRows = true;
+  }
+  return {
+    hasLegacyRows,
+    retainedContent: retainedLines.length === 0 ? undefined : `${retainedLines.join("\n")}\n`,
+  };
+}
+
+async function readCandidateLedgerMigrationState(projectRoot: string): Promise<CandidateLedgerMigrationState> {
+  const path = join(projectRoot, CANDIDATE_LEDGER_FILE);
+  if (!existsSync(path)) return { hasLegacyRows: false, retainedContent: undefined };
+  return inspectCandidateLedger(await readFile(path, "utf8"));
+}
+
 export async function legacyCodeIndexMigrationRequired(projectRoot: string): Promise<boolean> {
   if ((await filesBelow(join(projectRoot, "knowledge", LEGACY))).length > 0) return true;
   const formalFiles = [...new Set([
@@ -47,13 +89,7 @@ export async function legacyCodeIndexMigrationRequired(projectRoot: string): Pro
     const content = await readFile(file, "utf8");
     if (migrateText(content) !== content) return true;
   }
-  try {
-    return (await readCandidateRecords(projectRoot)).some((record) => record.collection === LEGACY);
-  } catch {
-    // Candidate-ledger validation belongs to status/the requested command. Migration
-    // detection must not hide its actionable schema diagnostic with a preflight error.
-    return false;
-  }
+  return (await readCandidateLedgerMigrationState(projectRoot)).hasLegacyRows;
 }
 
 export interface CodeIndexMigrationResult {
@@ -63,14 +99,6 @@ export interface CodeIndexMigrationResult {
   rewritten_files: string[];
   removed_runtime_paths: string[];
   digest: string;
-}
-
-export async function migrateLegacyCodeIndexIfRequired(
-  projectRoot: string,
-): Promise<CodeIndexMigrationResult | undefined> {
-  return await legacyCodeIndexMigrationRequired(projectRoot)
-    ? migrateLegacyCodeIndex(projectRoot)
-    : undefined;
 }
 
 export async function migrateLegacyCodeIndex(projectRoot: string): Promise<CodeIndexMigrationResult> {
@@ -83,8 +111,14 @@ export async function migrateLegacyCodeIndex(projectRoot: string): Promise<CodeI
     let movedPages = 0;
     let moved = false;
     const originals = new Map<string, string>();
-    const candidateLedgerExists = existsSync(join(projectRoot, CANDIDATE_LEDGER_FILE));
-    const originalCandidateRecords = candidateLedgerExists ? await readCandidateRecords(projectRoot) : [];
+    const candidateLedgerPath = join(projectRoot, CANDIDATE_LEDGER_FILE);
+    const candidateLedgerExists = existsSync(candidateLedgerPath);
+    const originalCandidateLedger = candidateLedgerExists
+      ? await readFile(candidateLedgerPath, "utf8")
+      : undefined;
+    const candidateLedgerMigration = originalCandidateLedger === undefined
+      ? { hasLegacyRows: false, retainedContent: undefined }
+      : inspectCandidateLedger(originalCandidateLedger);
     const rewrittenFiles: string[] = [];
     try {
       if (existsSync(legacyRoot)) {
@@ -111,13 +145,19 @@ export async function migrateLegacyCodeIndex(projectRoot: string): Promise<CodeI
         await atomicWriteFile(file, after);
         rewrittenFiles.push(relative(projectRoot, file));
       }
-      if (candidateLedgerExists) {
-        await writeCandidateRecords(projectRoot, originalCandidateRecords.filter((record) => record.collection !== LEGACY));
+      if (candidateLedgerMigration.hasLegacyRows) {
+        if (candidateLedgerMigration.retainedContent === undefined) {
+          await rm(candidateLedgerPath, { force: true });
+        } else {
+          await atomicWriteFile(candidateLedgerPath, candidateLedgerMigration.retainedContent);
+        }
         rewrittenFiles.push(CANDIDATE_LEDGER_FILE);
       }
     } catch (error) {
       for (const [file, content] of originals) await atomicWriteFile(file, content);
-      if (candidateLedgerExists) await writeCandidateRecords(projectRoot, originalCandidateRecords);
+      if (originalCandidateLedger !== undefined) {
+        await atomicWriteFile(candidateLedgerPath, originalCandidateLedger);
+      }
       if (moved && existsSync(currentRoot) && !existsSync(legacyRoot)) await rename(currentRoot, legacyRoot);
       throw error;
     }
@@ -125,7 +165,7 @@ export async function migrateLegacyCodeIndex(projectRoot: string): Promise<CodeI
       ".tmp/context-runtime/extract",
       ".tmp/context-runtime/review",
       "dist",
-      CODE_INDEX_AUDIT_STATE_PATH,
+      LEGACY_CODE_INDEX_AUDIT_STATE_PATH,
     ];
     const removedRuntimePaths: string[] = [];
     for (const path of runtimePaths) {
@@ -141,7 +181,7 @@ export async function migrateLegacyCodeIndex(projectRoot: string): Promise<CodeI
       moved_pages: movedPages,
       rewritten_files: rewrittenFiles,
       removed_runtime_paths: removedRuntimePaths,
-      digest: stableHash({ movedPages, rewrittenFiles, removedRuntimePaths }),
+      digest: migrationDigest({ movedPages, rewrittenFiles, removedRuntimePaths }),
     };
   });
 }

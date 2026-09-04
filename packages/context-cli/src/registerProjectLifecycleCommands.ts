@@ -32,8 +32,6 @@ export function registerProjectEntryCommand(program: Command): void {
     .option("--language <language>", "workspace and starter-template language: en | zh-CN", "en")
     .option("--dev", "plan initialization with the locally linked @c4a/context SDK")
     .option("--debug", "plan initialization with workspace-local tracing enabled")
-    .option("--optimize-docs", "plan initialization with document optimization enabled")
-    .option("--no-optimize-docs", "plan initialization with document optimization disabled")
     .option("--managed", "use explicit current-conversation managed approval for workflow evaluation")
     .addOption(
       new Option("--authority <authority>", "current-conversation scoped authority granted by the user; repeatable")
@@ -54,7 +52,6 @@ export function registerProjectEntryCommand(program: Command): void {
         language: projectLanguage(options.language),
         ...(options.dev === true ? { dev: true } : {}),
         ...(options.debug === true ? { debug: true } : {}),
-        ...(typeof options.optimizeDocs === "boolean" ? { optimizeDocs: options.optimizeDocs } : {}),
         ...(options.managed === true ? { managed: true } : {}),
         authorities: workflowAuthorities(options.authority),
       })));
@@ -69,17 +66,10 @@ export function registerProjectInitCommand(program: Command): void {
     .option("--language <language>", "workspace and starter-template language: en | zh-CN")
     .option("--dev", "initialize with the locally linked @c4a/context SDK")
     .option("--debug", "enable workspace-local command and Agent Graph tracing")
-    .option("--optimize-docs", "enable source-constrained editorial revisions (default for new workspaces)")
-    .option("--no-optimize-docs", "disable document revisions for the initialized workspace")
     .option("--allow-nonempty", "after explicit confirmation, preserve existing files and initialize inside a non-empty non-Context directory")
     .action(async (projectDir: string | undefined, options: Record<string, unknown>) => {
       const targetRoot = resolveContextProjectInitTarget(process.cwd(), projectDir);
       const wasContextWorkspace = isContextProjectRoot(targetRoot);
-      const optimizeDocs = typeof options.optimizeDocs === "boolean"
-        ? options.optimizeDocs
-        : wasContextWorkspace
-        ? undefined
-        : true;
       const result = await initContextProject({
         cwd: process.cwd(),
         ...(projectDir !== undefined ? { projectDir } : {}),
@@ -89,7 +79,6 @@ export function registerProjectInitCommand(program: Command): void {
           : {}),
         ...(options.dev === true ? { dev: true } : {}),
         ...(options.debug === true ? { debug: true } : {}),
-        ...(optimizeDocs === undefined ? {} : { optimizeDocs }),
         ...(options.allowNonempty === true ? { allowNonempty: true } : {}),
       });
       process.stdout.write(formatProjectInitResult(result));

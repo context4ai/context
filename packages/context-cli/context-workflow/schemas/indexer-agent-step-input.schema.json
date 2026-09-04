@@ -10,8 +10,8 @@
       "type": "object",
       "required": ["protocol", "operation", "workset", "composition_input", "final_authority", "execution_request_digest"],
       "properties": {
-        "protocol": { "const": "context.indexer.run-request/v1" },
-        "operation": { "enum": ["main-index", "material-answer"] },
+        "protocol": { "const": "context.indexer.run-request/v2" },
+        "operation": { "const": "main-index" },
         "workset": { "type": "object" },
         "composition_input": { "type": "object" },
         "final_authority": { "type": "object" },

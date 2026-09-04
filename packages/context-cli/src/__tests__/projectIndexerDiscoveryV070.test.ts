@@ -11,24 +11,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import YAML from "yaml";
 import { invokeCliInDir, runCliInDir } from "./projectBuildVerifyV060Helpers.js";
-import { buildIndexerReleaseCapabilityManifest } from
-  "../project/indexerReleaseCapabilities.js";
 
 const INTEGRITY = `sha256:${"a".repeat(64)}`;
 const REPOSITORY_ROOT = resolve(import.meta.dir, "../../../..");
 
 function currentReleaseBundledSkills(): string[] {
-  const packageManifest = JSON.parse(readFileSync(
-    join(REPOSITORY_ROOT, "packages/context-cli/package.json"),
-    "utf8",
-  )) as { version: string };
-  const capabilities = buildIndexerReleaseCapabilityManifest(packageManifest.version);
-  return [
-    ["context-code-indexer", "code-indexer"],
-    ["context-markdown-indexer", "markdown-indexer"],
-  ].filter(([, capability]) =>
-    capabilities.capabilities.find((entry) => entry.id === capability)?.state === "ready"
-  ).map(([skill]) => skill!);
+  return ["context-code-indexer", "context-markdown-indexer"];
 }
 
 function requirement(readerGoals = ["understand"]) {
@@ -170,14 +158,13 @@ describe("0.7.0 Indexer discovery and static Provider selection", () => {
       join(REPOSITORY_ROOT, "plugins", "context", "skills", "context", "SKILL.md"),
       "utf8",
     );
-    expect(skill).toContain("context indexer catalog --format json");
-    expect(skill).toContain("together with every other Indexer\nSkill already visible");
+    expect(skill).toContain("Action input already contains the exact applied\nrequirements and CLI-bundled Provider catalog");
+    expect(skill).toMatch(/together with every other Indexer\s+Skill already visible/u);
     expect(skill).toContain("read only its YAML frontmatter and sibling `context-indexer.yaml`");
     expect(skill).toContain("Group observations with the same Skill name and exact version");
-    expect(skill).toContain("is not a second\nProvider");
+    expect(skill).toMatch(/is not a second\s+Provider/u);
     expect(skill).toContain("Keep this discovery report only in the conversation");
-    expect(skill).toContain("validate-indexer-selection-proposal");
-    expect(skill).toContain("does not authorize materialization");
+    expect(skill).toContain("Do not call their low-level commands as a\nsecond production workflow");
   });
 
   test("publishes a readable Provider version that matches the manifest authority", () => {

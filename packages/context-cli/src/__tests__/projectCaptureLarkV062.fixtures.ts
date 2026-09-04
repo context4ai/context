@@ -10,7 +10,7 @@ export function makeLarkCaptureTmp(): string {
 
 function writeLarkProjectEntry(projectRoot: string): void {
   writeFileSync(join(projectRoot, "src", "index.ts"), [
-    'import { alignProse, compileProse, captureLark, defineProject, source } from "@c4a/context";',
+    'import { captureLark, defineProject, source } from "@c4a/context";',
     "",
     'const handbook = source("handbook");',
     "",
@@ -18,8 +18,6 @@ function writeLarkProjectEntry(projectRoot: string): void {
     "  sources: [handbook],",
     "  phases: [",
     "    captureLark({ source: handbook }),",
-    '    alignProse({ source: handbook, collection: "architecture" }),',
-    '    compileProse({ source: handbook, collection: "architecture" }),',
     "  ],",
     "  packages: [],",
     "});",

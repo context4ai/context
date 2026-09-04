@@ -111,6 +111,66 @@ describe("context.indexer.registry/v1", () => {
     );
   });
 
+  test("expands the single compact authoring form with deterministic defaults", () => {
+    const compact = registryYaml().replace(
+      [
+        "          module_refs: []",
+        "    exclusions: []",
+        "  - id: application-indexer",
+        "    operations: [main-index]",
+      ].join("\n"),
+      [
+        "    exclusions: []",
+        "  - id: application-indexer",
+      ].join("\n"),
+    ).replace(
+      [
+        "        owned_scope:",
+        "          ref: requirement:workspace-knowledge#target_scope",
+        "        role: primary",
+        "    read_scope:",
+        "      refs:",
+        "        - requirement:workspace-knowledge#target_scope",
+        "        - requirement:workspace-knowledge#evidence_source_scope",
+      ].join("\n"),
+      "        role: primary",
+    ).replace(
+      [
+        "        role: primary",
+        "        skill: context-indexer-sample",
+      ].join("\n"),
+      "        skill: context-indexer-sample",
+    ).replace(
+      [
+        "        distribution:",
+        "          kind: cli-bundled",
+        "          locator: cli-bundled://context/context-indexer-sample",
+      ].join("\n"),
+      "",
+    );
+    const registry = parseIndexerRegistry(compact);
+    const indexer = registry.indexers[0]!;
+    expect(registry.requirements[0]!.evidence_source_scope.targets[1]).toEqual({
+      source_ref: "docs:operations-guide",
+      module_refs: [],
+    });
+    expect(indexer.operations).toEqual(["main-index"]);
+    expect(indexer.requirement_bindings[0]!.owned_scope).toEqual({
+      ref: "requirement:workspace-knowledge#target_scope",
+    });
+    expect(indexer.read_scope.refs).toEqual([
+      "requirement:workspace-knowledge#target_scope",
+      "requirement:workspace-knowledge#evidence_source_scope",
+    ]);
+    expect(indexer.providers[0]).toMatchObject({
+      role: "primary",
+      distribution: {
+        kind: "cli-bundled",
+        locator: "cli-bundled://context/context-indexer-sample",
+      },
+    });
+  });
+
   test("derives independent requirement, selection, and full registry digests", () => {
     const before = parseIndexerRegistry(registryYaml());
     const afterProviderUpgrade = parseIndexerRegistry(

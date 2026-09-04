@@ -314,3 +314,148 @@ export function buildIndexerParserFactViewFromMaterializations(input: {
     ...(input.file_refs === undefined ? {} : { file_refs: input.file_refs }),
   });
 }
+
+export function buildIndexerMergedParserFactView(input: {
+  materializations: readonly {
+    result: unknown;
+    fact_payloads: readonly IndexerParserFactPayload[];
+  }[];
+  merged_facts: readonly (IndexerEvidenceAdapterFact & {
+    adapter_id: string;
+    authority_domain?: string;
+    capability?: string;
+    precedence?: number;
+  })[];
+  primary_owners: readonly {
+    source_ref: string;
+    module_ref: string | null;
+    normalized_path: string;
+    disposition: IndexerEvidenceAdapterFile["disposition"];
+  }[];
+  inventory_digest: string;
+}): IndexerParserFactView {
+  if (input.materializations.length === 0) {
+    throw new TypeError("merged parser fact view requires at least one materialization");
+  }
+  const validated = input.materializations.map((materialization) => {
+    const result = validateIndexerEvidenceAdapterResult(materialization.result);
+    const view = buildIndexerParserFactView({
+      adapter_results: [result],
+      fact_payloads: materialization.fact_payloads,
+      inventory_digest: input.inventory_digest,
+    });
+    return { result, view };
+  });
+  const scope = validated[0]!.result.authorized_scope;
+  for (const { result } of validated.slice(1)) {
+    if (canonicalIndexerJson(result.authorized_scope) !== canonicalIndexerJson(scope)) {
+      throw new TypeError("merged parser fact view cannot combine different authorized scopes");
+    }
+  }
+  const payloads = new Map<string, IndexerParserFact>();
+  for (const { result, view } of validated) {
+    for (const file of view.files) {
+      for (const fact of file.facts) {
+        const key = `${result.adapter.id}\u0000${fact.fact_ref}`;
+        if (payloads.has(key)) {
+          throw new TypeError(`duplicate merged parser fact payload ${key}`);
+        }
+        payloads.set(key, fact);
+      }
+    }
+  }
+  const files = new Map<string, {
+    file_ref: string;
+    source_ref: string;
+    module_ref: string | null;
+    normalized_path: string;
+    dispositions: Set<IndexerEvidenceAdapterFile["disposition"]>;
+    facts: IndexerParserFact[];
+  }>();
+  for (const owner of input.primary_owners) {
+    if (
+      owner.source_ref !== scope.source_ref ||
+      (owner.module_ref !== null && !scope.module_refs.includes(owner.module_ref))
+    ) {
+      throw new TypeError("merged parser primary owner escapes its authorized scope");
+    }
+    const fileRef = indexerEvidenceAdapterFileRef({
+      source_ref: owner.source_ref,
+      module_ref: owner.module_ref,
+      normalized_path: owner.normalized_path,
+    });
+    const existing = files.get(fileRef);
+    const file = existing ?? {
+      file_ref: fileRef,
+      source_ref: owner.source_ref,
+      module_ref: owner.module_ref,
+      normalized_path: owner.normalized_path,
+      dispositions: new Set<IndexerEvidenceAdapterFile["disposition"]>(),
+      facts: [],
+    };
+    file.dispositions.add(owner.disposition);
+    files.set(fileRef, file);
+  }
+  for (const merged of input.merged_facts) {
+    const fileRef = indexerEvidenceAdapterFileRef({
+      source_ref: merged.locator.source_ref,
+      module_ref: merged.locator.module_ref,
+      normalized_path: merged.locator.normalized_path,
+    });
+    const file = files.get(fileRef);
+    if (file === undefined) {
+      throw new TypeError(`merged parser fact ${merged.fact_ref} lacks a primary file owner`);
+    }
+    const candidate = payloads.get(`${merged.adapter_id}\u0000${merged.fact_ref}`);
+    if (candidate === undefined) {
+      throw new TypeError(`merged parser fact payload is unavailable for ${merged.fact_ref}`);
+    }
+    const { payload: _candidatePayload, ...candidateDescriptor } = candidate;
+    void _candidatePayload;
+    const {
+      adapter_id: _adapterId,
+      authority_domain: _authorityDomain,
+      capability: _capability,
+      precedence: _precedence,
+      ...mergedDescriptor
+    } = merged;
+    void _adapterId;
+    void _authorityDomain;
+    void _capability;
+    void _precedence;
+    if (canonicalIndexerJson(candidateDescriptor) !== canonicalIndexerJson(mergedDescriptor)) {
+      throw new TypeError(`merged parser fact descriptor does not match ${merged.fact_ref}`);
+    }
+    file.facts.push(candidate);
+  }
+  const canonicalFiles = [...files.values()].sort((left, right) =>
+    compareIndexerCanonicalText(left.file_ref, right.file_ref)
+  ).map((file): IndexerParserFactFile => ({
+    file_ref: file.file_ref,
+    source_ref: file.source_ref,
+    module_ref: file.module_ref,
+    normalized_path: file.normalized_path,
+    disposition: mergedDisposition(file.dispositions),
+    facts: file.facts.sort((left, right) =>
+      compareIndexerCanonicalText(left.fact_ref, right.fact_ref)
+    ),
+  }));
+  const base = {
+    protocol: "context.indexer.parser-fact-view/v1" as const,
+    authorized_scope: scope,
+    inventory_digest: indexerDigestSchema.parse(input.inventory_digest),
+    origin_result_digests: canonicalUnique(
+      validated.map(({ result }) => result.output_digest),
+      "merged parser fact origin results",
+    ),
+    files: canonicalFiles,
+  };
+  const withFactDigest = {
+    ...base,
+    fact_set_digest: indexerProtocolDigest(factSetPayload(base)),
+  };
+  return validateIndexerParserFactView({
+    ...withFactDigest,
+    view_digest: indexerProtocolDigest(withFactDigest),
+  });
+}

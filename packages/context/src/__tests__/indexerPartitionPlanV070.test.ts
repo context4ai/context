@@ -69,7 +69,7 @@ function workset(): IndexerMainPartitionWorkset {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_subject_key: {
@@ -170,6 +170,25 @@ describe("PartitionPlan authority and closure", () => {
     );
   });
 
+  test("allows a complete semantic partition when the requirement has no questions", () => {
+    const currentWorkset = workset();
+    currentWorkset.reader_question_refs = [];
+    currentWorkset.allowed_question_target_refs = [];
+    const plan = completePlan(currentWorkset);
+    plan.reader_question_refs = [];
+    plan.groups[0]!.reader_question_refs = [];
+    plan.groups[0]!.question_target_bindings = [];
+    rehash(plan);
+    expect(validateIndexerPartitionPlan({
+      plan,
+      workset: currentWorkset,
+      canonical_inventory_members: INVENTORY,
+      authorized_source_refs: [currentWorkset.source_ref],
+      authorized_strategies: AUTHORIZED_STRATEGIES,
+      required_question_target_refs: [],
+    })).toEqual(plan);
+  });
+
   test("rejects incomplete disposition closure and inconsistent group projection", () => {
     const incomplete = completePlan();
     incomplete.member_dispositions.pop();
@@ -224,6 +243,63 @@ describe("PartitionPlan authority and closure", () => {
     unauthorized.strategy_digest = digest("e");
     rehash(unauthorized);
     expect(() => validate(unauthorized)).toThrow(/authorized strategy set/);
+  });
+
+  test("accepts an empty complete plan only when every member is non-reader inventory", () => {
+    const currentWorkset = buildIndexerMainWorkset({
+      stage: "partition",
+      indexer_id: "component-library",
+      requirement_ref: "requirement:public-knowledge",
+      owner_cell_refs: ["owner-cell:public-knowledge#public-contract"],
+      source_ref: "repo:sample@revision",
+      module_ref: "module:packages/sample",
+      primary_registry_projection_digest: digest("1"),
+      requirement_set_digest: digest("2"),
+      primary_execution_fingerprint: digest("3"),
+      profile_contract_digest: digest("4"),
+      subject_key_schema_digest: digest("5"),
+      source_scope_digest: digest("6"),
+      source_binding_digest: digest("7"),
+      primary_resource_binding_digest: digest("8"),
+      question_target_inventory_digest: digest("9"),
+      partition_subject_key: {
+        protocol: "context.subject-key/v1",
+        namespace: "sample-package",
+        kind: "component-library",
+        local_key: "root",
+      },
+      strategy_set_digest: indexerPartitionStrategySetDigest(AUTHORIZED_STRATEGIES),
+      reader_question_refs: [],
+      partition_input_digests: [digest("c")],
+      partition_inventory_digest: indexerInventoryMembersDigest(INVENTORY),
+      allowed_question_target_refs: [],
+    });
+    if (currentWorkset.stage !== "partition") throw new Error("expected partition workset");
+    const { canonical_hash: _canonicalHash, ...regular } = completePlan(currentWorkset);
+    void _canonicalHash;
+    const payload: Omit<CompletePartitionPlan, "canonical_hash"> = {
+      ...regular,
+      reader_question_refs: [],
+      groups: [],
+      member_dispositions: INVENTORY.map((member) => ({
+        member_id: member.member_id,
+        member_kind: member.member_kind,
+        inventory_disposition: "unsupported" as const,
+        missing_capabilities: ["supported-parser-input"],
+      })),
+    };
+    const empty = {
+      ...payload,
+      canonical_hash: indexerPartitionPlanCanonicalHash(payload),
+    };
+    expect(validateIndexerPartitionPlan({
+      plan: empty,
+      workset: currentWorkset,
+      canonical_inventory_members: INVENTORY,
+      authorized_source_refs: [currentWorkset.source_ref],
+      authorized_strategies: AUTHORIZED_STRATEGIES,
+      required_question_target_refs: [],
+    })).toEqual(empty);
   });
 
   test("requires exact missing identity diagnostics on a failed plan", () => {

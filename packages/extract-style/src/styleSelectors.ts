@@ -15,6 +15,7 @@ const STATE_PSEUDOS = new Set([
   "read-write", "required", "target", "user-invalid", "valid", "visited",
 ]);
 const GENERIC_MODULE_NAMES = new Set(["global", "index", "style", "styles", "theme", "themes", "token", "tokens", "variable", "variables"]);
+const DYNAMIC_SELECTOR_TOKEN = "c4a_dynamic_";
 
 function locator(path: string, rule: Rule, qualifiedItemPath: string): StyleLocator {
   return { path, line: rule.source?.start?.line ?? 1, column: rule.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
@@ -52,31 +53,78 @@ function moduleCandidate(path: string): string | null {
   return name.length > 0 && !GENERIC_MODULE_NAMES.has(name.toLowerCase()) ? name : null;
 }
 
+function maskScssSelectorInterpolation(selector: string): { text: string; dynamic: boolean } | null {
+  let cursor = 0;
+  let output = "";
+  let dynamic = false;
+  let ordinal = 0;
+  while (cursor < selector.length) {
+    const start = selector.indexOf("#{", cursor);
+    if (start < 0) {
+      output += selector.slice(cursor);
+      break;
+    }
+    output += selector.slice(cursor, start);
+    let index = start + 2;
+    let depth = 1;
+    let quote: "\"" | "'" | null = null;
+    while (index < selector.length && depth > 0) {
+      const character = selector[index]!;
+      if (quote !== null) {
+        if (character === "\\") index += 2;
+        else {
+          if (character === quote) quote = null;
+          index += 1;
+        }
+        continue;
+      }
+      if (character === "\"" || character === "'") quote = character;
+      else if (character === "{") depth += 1;
+      else if (character === "}") depth -= 1;
+      index += 1;
+    }
+    if (depth !== 0) return null;
+    output += `${DYNAMIC_SELECTOR_TOKEN}${ordinal}`;
+    ordinal += 1;
+    cursor = index;
+    dynamic = true;
+  }
+  return { text: output, dynamic };
+}
+
+function staticSelectorName(value: string): boolean {
+  return !value.includes(DYNAMIC_SELECTOR_TOKEN);
+}
+
 function parseSelectorNode(input: {
   path: string;
   rule: Rule;
   selector: Selector;
   ordinal: number;
+  digestValue?: unknown;
 }): { selector: StyleSelector; variants: StyleVariantState[]; candidates: StyleComponentCandidate[] } {
   const classNames = new Set<string>();
   const idNames = new Set<string>();
   const typeNames = new Set<string>();
   const pseudoClasses = new Set<string>();
   const attributeNames = new Set<string>();
-  input.selector.walkClasses((node) => { classNames.add(node.value); });
-  input.selector.walkIds((node) => { idNames.add(node.value); });
-  input.selector.walkTags((node) => { typeNames.add(node.value); });
+  input.selector.walkClasses((node) => { if (staticSelectorName(node.value)) classNames.add(node.value); });
+  input.selector.walkIds((node) => { if (staticSelectorName(node.value)) idNames.add(node.value); });
+  input.selector.walkTags((node) => { if (staticSelectorName(node.value)) typeNames.add(node.value); });
   input.selector.walkPseudos((node) => {
-    if (!node.value.startsWith("::")) pseudoClasses.add(node.value.replace(/^:/u, ""));
+    const value = node.value.replace(/^:/u, "");
+    if (!node.value.startsWith("::") && staticSelectorName(value)) pseudoClasses.add(value);
   });
-  input.selector.walkAttributes((node) => { attributeNames.add(node.attribute); });
+  input.selector.walkAttributes((node) => {
+    if (staticSelectorName(node.attribute)) attributeNames.add(node.attribute);
+  });
   const qualifiedItemPath = `selector:${input.ordinal}`;
   const currentLocator = locator(input.path, input.rule, qualifiedItemPath);
   const selectorText = input.selector.toString();
   const selectorRef = `${input.path}#${qualifiedItemPath}`;
   const catalog: StyleSelector = {
     selector_ref: selectorRef,
-    selector_digest: indexerEvidenceAdapterProtocolDigest(selectorText),
+    selector_digest: indexerEvidenceAdapterProtocolDigest(input.digestValue ?? selectorText),
     class_names: sorted(classNames),
     id_names: sorted(idNames),
     type_names: sorted(typeNames),
@@ -99,7 +147,9 @@ function parseSelectorNode(input: {
     if (modifier !== null) addVariant("class-modifier", modifier);
   }
   const nestedModifier = /^&--([A-Za-z0-9_-]+)$/u.exec(selectorText.trim());
-  if (nestedModifier !== null) addVariant("class-modifier", nestedModifier[1]!);
+  if (nestedModifier !== null && staticSelectorName(nestedModifier[1]!)) {
+    addVariant("class-modifier", nestedModifier[1]!);
+  }
   const candidates: StyleComponentCandidate[] = [];
   for (const name of classNames) {
     const root = classRoot(name);
@@ -127,21 +177,38 @@ export function collectStyleSelectors(input: {
   for (const rule of input.rules) {
     if (inKeyframes(rule)) continue;
     const qualifiedItemPath = `selector:${selectors.length + 1}`;
-    if (rule.selector.includes("#{")) {
+    const masked = maskScssSelectorInterpolation(rule.selector);
+    if (masked === null) {
       unsupported = true;
-      diagnostics.push({ code: "style-selector-unsupported", severity: "error", locator: locator(input.path, rule, qualifiedItemPath), detail: "dynamic SCSS selector interpolation is unsupported" });
+      diagnostics.push({ code: "style-selector-unsupported", severity: "error", locator: locator(input.path, rule, qualifiedItemPath), detail: "SCSS selector interpolation is malformed" });
       continue;
+    }
+    if (masked.dynamic) {
+      diagnostics.push({
+        code: "style-selector-dynamic-identity-omitted",
+        severity: "warning",
+        locator: locator(input.path, rule, qualifiedItemPath),
+        detail: "dynamic SCSS selector identity is not expanded; only static selector evidence is cataloged",
+      });
     }
     let root: SelectorRoot;
     try {
-      root = selectorParser().astSync(rule.selector);
+      root = selectorParser().astSync(masked.text);
     } catch (error) {
       unsupported = true;
       diagnostics.push({ code: "style-selector-unsupported", severity: "error", locator: locator(input.path, rule, qualifiedItemPath), detail: error instanceof Error ? error.message : String(error) });
       continue;
     }
-    for (const selector of root.nodes) {
-      const parsed = parseSelectorNode({ path: input.path, rule, selector, ordinal: selectors.length + 1 });
+    for (const [selectorIndex, selector] of root.nodes.entries()) {
+      const parsed = parseSelectorNode({
+        path: input.path,
+        rule,
+        selector,
+        ordinal: selectors.length + 1,
+        ...(masked.dynamic
+          ? { digestValue: { selector: rule.selector, selector_ordinal: selectorIndex } }
+          : {}),
+      });
       selectors.push(parsed.selector);
       variants.push(...parsed.variants);
       candidates.push(...parsed.candidates);

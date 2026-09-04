@@ -9,13 +9,42 @@ metadata:
 
 # Run one post-author composer
 
-Read the current Route input and the exact `context.indexer.layer-fragment-request/v1`.
-Use only its bounded `primary_result_view`, selected `composer_ref`, allowed target refs,
-and the resolved instructions supplied by Context. Do not discover another Skill or
-composer, read project files outside the request, change a SubjectKey, create a complete
-primary Result, or widen the target set.
+Read both required Route resources before acting:
 
-Return exactly `context.indexer.layer-fragment-result/v1`. Preserve the request digest,
-composer ref, and consumed PrimaryResultView digest. Return only zero or more
-`derived-artifact-proposal` fragments for allowed targets. Context performs final schema,
-identity, evidence, policy, layer, and receipt validation before accepting the Result.
+- `resolved-indexer-instructions` defines the selected Composer's job;
+- `authorized-indexer-workset-view` is the complete, bounded PrimaryResult View.
+
+Use only the target aliases and source aliases exposed by that View and the current Route.
+Do not discover another Skill or Composer, scan project files outside the View, change a
+SubjectKey, rewrite the primary Result, or widen the target set.
+
+Return only the minimal semantic JSON accepted by the current Route:
+
+```json
+{
+  "stage": "post-author",
+  "outcome": "complete",
+  "proposals": [
+    {
+      "target": "target:1",
+      "artifact_kind": "content",
+      "title": "Reader-facing title",
+      "summary": "Why this derived page is useful",
+      "sections": [
+        {
+          "key": "overview",
+          "heading": "Overview",
+          "markdown": "Reader-facing content",
+          "source_refs": ["fact:1"]
+        }
+      ]
+    }
+  ],
+  "diagnostics": []
+}
+```
+
+If no derived Artifact is needed, return `outcome: "complete"` with an empty
+`proposals` array. If the bounded inputs cannot be processed, return `outcome: "failed"`
+with at least one diagnostic. Context expands aliases, validates evidence and policy,
+creates internal fragments and digests, then resumes the same production state machine.

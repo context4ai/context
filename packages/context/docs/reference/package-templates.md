@@ -348,9 +348,8 @@ src-N#span:<heading-hint> L<start>-<end>@<span-hash>
 
 The code symbol form includes the source-relative file so same-name symbols in
 different files resolve to one exact symbol-index row. Consumers should still
-treat the complete `source_ref` as opaque. Production codeindex pages keep
-`candidate_fingerprint` at the top level and do not duplicate this evidence in
-`code_origin`.
+treat the complete `source_ref` as opaque. Production pages do not expose
+Candidate fingerprints, Indexer digests, or `code_origin`.
 
 `#span:` refs retain source snapshot line ranges for human review, diffing, and
 stable re-pinning. They resolve against committed file/lark document snapshots,

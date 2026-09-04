@@ -46,8 +46,9 @@ function isWithinPath(root: string, target: string): boolean {
 function linkedAssetSnapshotPath(documentPath: string, target: string): string | undefined {
   const decoded = decodedAssetTarget(target);
   if (/^[a-z][a-z0-9+.-]*:/iu.test(decoded) || decoded.startsWith("#") || decoded.startsWith("/")) return undefined;
-  const normalized = normalizeSnapshotRelativePath(toPosixPath(join(dirname(documentPath), decoded)));
-  return normalized === "assets" || normalized.startsWith("assets/") ? normalized : undefined;
+  const candidate = toPosixPath(join(dirname(documentPath), decoded));
+  if (candidate !== "assets" && !candidate.startsWith("assets/")) return undefined;
+  return normalizeSnapshotRelativePath(candidate);
 }
 
 export async function writeCaptureAssetIfChanged(path: string, content: Uint8Array): Promise<void> {

@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseProtoSources, type ProtoDocument, type ProtoLocator } from "./protoParser.js";
@@ -11,7 +13,7 @@ import { parseProtoSources, type ProtoDocument, type ProtoLocator } from "./prot
 export * from "./protoLexer.js";
 export * from "./protoParser.js";
 
-export const PROTO_EVIDENCE_ADAPTER_EXPORT = "protoSourcesToEvidenceAdapterResult";
+export const PROTO_EVIDENCE_ADAPTER_EXPORT = "protoSourcesToEvidenceAdapterMaterialization";
 
 export interface ProtoEvidenceAdapterInvocation {
   adapter: IndexerEvidenceAdapterResult["adapter"];
@@ -129,4 +131,13 @@ export function protoSourcesToEvidenceAdapterResult(files: Readonly<Record<strin
       output_digest: parserOutputDigest,
     }],
   });
+}
+
+export function protoSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: ProtoEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    protoSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

@@ -232,6 +232,10 @@ function extractCallsAndRoutes(root: SyntaxNode, filePath: string, imports: read
     const functionNode = call.childForFieldName("function");
     const args = call.childForFieldName("arguments")?.namedChildren ?? [];
     if (!functionNode) continue;
+    // An immediately-invoked function literal has no stable callable target.
+    // Its nested calls are visited independently, so emitting the literal body
+    // here only creates a large, source-bearing relation with no useful edge.
+    if (functionNode.type === "func_literal") continue;
     const functionText = compact(functionNode.text);
     const selectorPath = [...functionText.matchAll(/[A-Za-z_]\w*/gu)].map((match) => match[0]);
     const selector = /^[A-Za-z_]\w*(?:\.|\()/u.test(functionText) && selectorPath.length >= 2

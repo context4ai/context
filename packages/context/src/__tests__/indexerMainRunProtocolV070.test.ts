@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildIndexerAgentStepInput,
-  buildIndexerAgentStepResult,
   buildIndexerAuthorDependencyView,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
@@ -9,9 +8,6 @@ import {
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
   buildIndexerMainWorkset,
-  buildIndexerWorksetReadReceipt,
-  buildIndexerWorksetReadRequest,
-  buildIndexerWorksetReadResponse,
   canonicalIndexerNodeRef,
   composeIndexerLayerInput,
   indexerArtifactResultDigest,
@@ -21,7 +17,6 @@ import {
   indexerPartitionPlanCanonicalHash,
   indexerPartitionStrategySetDigest,
   validateAndMaterializeIndexerLayerFragment,
-  validateIndexerAgentStepResult,
   validateIndexerMainRunResult,
   type IndexerArtifactResult,
   type IndexerLayerFragment,
@@ -31,7 +26,6 @@ import {
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
   type IndexerSubjectKey,
-  type IndexerWorksetReadReceipt,
 } from "../index.js";
 import { artifactPolicyEligibilityFixture } from "./indexerArtifactPolicyV070.fixture.js";
 
@@ -100,7 +94,7 @@ const common = {
   profile_contract_digest: digest("4"),
   subject_key_schema_digest: digest("5"),
   source_scope_digest: digest("6"),
-  parser_contract_digest: digest("7"),
+  source_binding_digest: digest("7"),
   primary_resource_binding_digest:
     PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
   question_target_inventory_digest: digest("9"),
@@ -185,7 +179,7 @@ function request(workset: IndexerMainPartitionWorkset | IndexerMainAuthorWorkset
     final_authority: PROVIDER,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("a"),
-      parser_dependency_fingerprint: digest("b"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("c"),
       metric_set_digest: digest("d"),
@@ -195,23 +189,6 @@ function request(workset: IndexerMainPartitionWorkset | IndexerMainAuthorWorkset
       primary_execution_projection: PRIMARY_EXECUTION_PROJECTION,
     }),
   });
-}
-
-function readReceipt(
-  workset: IndexerMainPartitionWorkset | IndexerMainAuthorWorkset,
-): IndexerWorksetReadReceipt {
-  const readRequest = buildIndexerWorksetReadRequest({
-    workset_digest: workset.workset_digest,
-    read_kind: "source",
-    requested_refs: [workset.source_ref],
-    allowed_refs: [workset.source_ref],
-    page_size: 10,
-  });
-  const response = buildIndexerWorksetReadResponse({
-    request: readRequest,
-    items: [{ ref: workset.source_ref, value: { content: "export const value = 1;" } }],
-  });
-  return buildIndexerWorksetReadReceipt({ request: readRequest, responses: [response] });
 }
 
 function partitionPlan(workset: IndexerMainPartitionWorkset): IndexerPartitionPlan {
@@ -319,12 +296,10 @@ describe("main Indexer run protocol", () => {
   test("validates a partition Result only against a partition request", () => {
     const workset = partitionWorkset();
     const currentRequest = request(workset);
-    const receipt = readReceipt(workset);
     const result = {
       protocol: "context.indexer.run-result/v1",
       operation: "main-index",
       consumed_input_view_digest: currentRequest.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1",
         stage: "partition",
@@ -336,7 +311,6 @@ describe("main Indexer run protocol", () => {
     const validated = validateIndexerMainRunResult({
       request: currentRequest,
       result,
-      workset_read_receipts: [receipt],
       validation: {
         stage: "partition",
         canonical_inventory_members: INVENTORY,
@@ -353,13 +327,11 @@ describe("main Indexer run protocol", () => {
   test("validates an author ArtifactResult and consumed InputView digest", () => {
     const workset = authorWorkset();
     const currentRequest = request(workset);
-    const receipt = readReceipt(workset);
     const artifact = artifactResult(currentRequest);
     const result = {
       protocol: "context.indexer.run-result/v1",
       operation: "main-index",
       consumed_input_view_digest: currentRequest.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1",
         stage: "author",
@@ -371,7 +343,6 @@ describe("main Indexer run protocol", () => {
     const validated = validateIndexerMainRunResult({
       request: currentRequest,
       result,
-      workset_read_receipts: [receipt],
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
@@ -404,7 +375,6 @@ describe("main Indexer run protocol", () => {
     expect(() => validateIndexerMainRunResult({
       request: currentRequest,
       result,
-      workset_read_receipts: [receipt],
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
@@ -415,33 +385,16 @@ describe("main Indexer run protocol", () => {
       },
     })).toThrow(/request\/stage\/input view/);
 
-    result.consumed_input_view_digest = currentRequest.composition_input.view_digest;
-    result.workset_read_receipt_digests = [digest("1")];
-    expect(() => validateIndexerMainRunResult({
-      request: currentRequest,
-      result,
-      workset_read_receipts: [receipt],
-      validation: {
-        stage: "author",
-        dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
-        artifact_policy_eligibility: ELIGIBILITY,
-        allowed_source_roles: ["authoritative-source"],
-        allowed_question_targets: [],
-      },
-    })).toThrow(/CLI-issued read receipt set/);
   });
 
   test("does not accept an extractor Result bound to a reduced requirement set", () => {
     const reducedRequest = request(authorWorkset(digest("0")));
     const confirmedRequest = request(authorWorkset(common.requirement_set_digest));
-    const confirmedReceipt = readReceipt(confirmedRequest.workset);
     const reducedArtifact = artifactResult(reducedRequest);
     const reducedResult = {
       protocol: "context.indexer.run-result/v1",
       operation: "main-index",
       consumed_input_view_digest: reducedRequest.composition_input.view_digest,
-      workset_read_receipt_digests: [confirmedReceipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1",
         stage: "author",
@@ -457,7 +410,6 @@ describe("main Indexer run protocol", () => {
     expect(() => validateIndexerMainRunResult({
       request: confirmedRequest,
       result: reducedResult,
-      workset_read_receipts: [confirmedReceipt],
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
@@ -524,7 +476,6 @@ describe("main Indexer run protocol", () => {
 
   test("rejects a stage swap, forged request digest, and extension fragment envelope", () => {
     const currentRequest = request(authorWorkset());
-    const receipt = readReceipt(currentRequest.workset);
     expect(() => buildIndexerMainRunRequest({
       workset: currentRequest.workset,
       composition_input: currentRequest.composition_input,
@@ -565,7 +516,6 @@ describe("main Indexer run protocol", () => {
     expect(() => validateIndexerMainRunResult({
       request: forged,
       result: {},
-      workset_read_receipts: [receipt],
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
@@ -584,7 +534,6 @@ describe("main Indexer run protocol", () => {
         fragments: [],
         result_digest: digest("1"),
       },
-      workset_read_receipts: [receipt],
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
@@ -596,58 +545,16 @@ describe("main Indexer run protocol", () => {
     })).toThrow();
   });
 
-  test("separates stable Agent output identity from runtime execution provenance", () => {
+  test("binds the Agent step input to the current request and instructions", () => {
     const workset = partitionWorkset();
     const currentRequest = request(workset);
-    const receipt = readReceipt(workset);
-    const runResult = {
-      protocol: "context.indexer.run-result/v1" as const,
-      operation: "main-index" as const,
-      consumed_input_view_digest: currentRequest.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
-      result: {
-        protocol: "context.indexer.main-result/v1" as const,
-        stage: "partition" as const,
-        workset_digest: workset.workset_digest,
-        execution_request_digest: currentRequest.execution_request_digest,
-        result: partitionPlan(workset),
-      },
-    };
     const stepInput = buildIndexerAgentStepInput({
       run_request: currentRequest,
       instruction_request_digest: digest("e"),
     });
-    const first = buildIndexerAgentStepResult({
-      step_input: stepInput,
-      instruction_payload_digest: digest("f"),
-      run_result: runResult,
-      adapter: "codex",
-      adapter_version: "1.2.3",
-      model: "example-model",
-      execution_id: "execution-1",
-    });
-    const resumed = buildIndexerAgentStepResult({
-      step_input: stepInput,
-      instruction_payload_digest: digest("f"),
-      run_result: runResult,
-      adapter: "codex",
-      adapter_version: "1.2.3",
-      model: "example-model",
-      execution_id: "execution-2",
-    });
-    expect(first.stable_result_digest).toBe(resumed.stable_result_digest);
-    expect(first.execution_receipt.receipt_digest).not.toBe(
-      resumed.execution_receipt.receipt_digest,
+    expect(stepInput.run_request.execution_request_digest).toBe(
+      currentRequest.execution_request_digest,
     );
-    expect(validateIndexerAgentStepResult({
-      step_input: stepInput,
-      result: first,
-      expected_instruction_payload_digest: digest("f"),
-    })).toEqual(first);
-    expect(() => validateIndexerAgentStepResult({
-      step_input: stepInput,
-      result: first,
-      expected_instruction_payload_digest: digest("0"),
-    })).toThrow(/stale/);
+    expect(stepInput.instruction_request_digest).toBe(digest("e"));
   });
 });

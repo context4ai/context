@@ -6,6 +6,7 @@ import YAML from "yaml";
 import {
   buildIndexerDependencyIntentSet,
   buildIndexerProjectProposal,
+  buildIndexerProviderSelectionProposal,
   buildIndexerCustomizationPlan,
   buildIndexerFixedDependencySet,
   deriveIndexerProgramExecutionPolicy,
@@ -42,6 +43,12 @@ import {
   validateIndexerSelectionStatic,
   type IndexerResolvedSelectionInput,
 } from "../project/indexerSelectionValidation.js";
+import { persistCurrentIndexerProviderSetup } from
+  "../project/indexerCurrentProviderState.js";
+import {
+  buildCurrentIndexerProviderContinuationRoute,
+  completeCurrentIndexerProviderProgramAuthorization,
+} from "../project/indexerCurrentProviderContinuation.js";
 
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const POLICY_DIGEST = `sha256:${"d".repeat(64)}`;
@@ -76,7 +83,7 @@ function manifest(program: boolean): string {
     "provides:",
     "  profiles: [component-library]",
     "  operations:",
-    "    - { id: main-index, consumes: context.indexer.main-workset/v1, produces: context.indexer.main-result/v1 }",
+    "    - { id: main-index, consumes: context.indexer.main-workset/v2, produces: context.indexer.main-result/v1 }",
     "  source_roles: [authoritative-source]",
     "  logical_units:",
     "    - id: component-family",
@@ -257,6 +264,54 @@ async function fixture(
 }
 
 describe("two-stage Indexer selection validation", () => {
+  test("keeps non-allowlisted Provider program authorization on the current Route", async () => {
+    const sample = await fixture(true, "project-authorized");
+    await mkdir(join(sample.workspace, "src"), { recursive: true });
+    await writeFile(join(sample.workspace, "src", "indexers.yaml"), YAML.stringify({
+      ...sample.registry,
+      indexers: [],
+    }), "utf8");
+    const proposal = buildIndexerProviderSelectionProposal({
+      protocol: "context.indexer.selection-proposal-input/v1",
+      project_ref: "project:sample",
+      registry: sample.registry,
+    });
+    await persistCurrentIndexerProviderSetup({
+      projectRoot: sample.workspace,
+      proposal,
+      resolved: [{ ...sample.resolved, execution_policy_digest: null }],
+    });
+
+    const route = await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: sample.workspace,
+      authorities: [],
+      managed: false,
+    });
+    expect(route).toMatchObject({
+      node: "authorize-indexer-provider-program",
+      availability: "requires-user",
+      gate: {
+        id: "authorize-indexer-program-execution",
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution,
+        resolution: "user",
+      },
+      action: {
+        input: { stage: "provider-program-authorization" },
+      },
+    });
+    expect(route?.commands[0]?.command).toContain("action complete-current");
+
+    expect(await completeCurrentIndexerProviderProgramAuthorization({
+      projectRoot: sample.workspace,
+      decision: "rejected",
+    })).toBe("selection-rejected");
+    expect(await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: sample.workspace,
+      authorities: [],
+      managed: false,
+    })).toBeUndefined();
+  });
+
   test("keeps static validation pure and finalizes an exact staged Provider", async () => {
     const sample = await fixture();
     const staticReport = validateIndexerSelectionStatic(sample.registry);

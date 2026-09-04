@@ -158,10 +158,18 @@ export function renderMdxComponentEvidence(files: readonly MdxSourceFile[]): Mdx
   let fragmentCount = 0;
   for (const file of files) {
     if (extname(file.path).toLowerCase() !== ".mdx") continue;
-    const fragments = collectMdxComponentFragments({
-      documentPath: file.path,
-      markdown: file.raw,
-    });
+    let fragments: string[];
+    try {
+      fragments = collectMdxComponentFragments({
+        documentPath: file.path,
+        markdown: file.raw,
+      });
+    } catch {
+      // Static component text is optional generated evidence. Keep the raw MDX
+      // capture available when a documentation runtime accepts syntax that the
+      // standalone MDX parser cannot parse.
+      continue;
+    }
     if (fragments.length === 0) continue;
     fragmentCount += fragments.length;
     sections.push(

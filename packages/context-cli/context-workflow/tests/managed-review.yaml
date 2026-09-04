@@ -39,4 +39,4 @@ expect:
   primaryReasonCode: route.review.decision-required
   gateResolution: session-authority
   resolutionHandler: context.review.approve-current
-  requiredResources: []
+  requiredResources: [context.review-current]

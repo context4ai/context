@@ -1,15 +1,31 @@
-# Evidence, subject, and claim planning
+# Source, subject, and claim planning
 
-Use these rules while producing the operation selected by the current run
-request. For the current `main-index` `ArtifactResult`, apply every rule below. For
-`material-answer`, produce only evidence claims for eligible questions; the
-question identity, landing, canonical evidence items, planned-answer projection
-and post-layout actualization remain Context-owned. These rules preserve the
-useful semantic judgments from the former classification and align path without
-restoring `context.structure.v1`, collection selection, or a second write
-workflow. Context remains the authority for schemas, SubjectKey normalization,
-identities, paths, collisions, stale state, layout changes, Review, and
-publication.
+Use these rules while producing the current `main-index` `ArtifactResult`.
+Captured Markdown is ordinary source material: it may create or enrich the same
+knowledge candidates as code-derived input. If required material is still
+missing, return a material-gap disposition and let a later main-index run consume
+the newly captured source. Do not create an answer-only result, landing, or
+second review workflow. Context remains the authority for schemas, SubjectKey
+normalization, identities, paths, collisions, stale state, layout changes,
+Review, and publication.
+
+## `reader-subject` partition strategy
+
+For a partition workset, group captured document members by durable reader
+subject rather than by file, heading, route, or temporary capture batch. Use
+the complete authorized document text together with maintained title,
+`source_path`, route, audience, and reader-task evidence. These fields are
+evidence for the decision; none is sufficient by itself.
+
+One group may contain multiple documents when they jointly explain the same
+reader subject. Split platform or runtime variants only when their supported
+contract, behavior, lifecycle, or reader task is materially different. Keep
+navigation-only indexes, generated duplicates, empty placeholders, and
+superseded pages out of authored groups with an explicit inventory
+disposition. Every current inventory member must still receive exactly one
+partition disposition. If durable subject boundaries cannot be established,
+fail this semantic strategy so Context can use its existing catalog fallback;
+do not silently return one group per file under `reader-subject`.
 
 ## Evidence and authority
 
@@ -18,8 +34,8 @@ making a source-wide decision. A file name, URL, title, heading, navigation
 label, polished wording, profile id, or example is a navigation signal, not
 proof of subject identity, authority, or reader intent.
 
-Use only current source roles, evidence bindings, target-resolution views, and
-question targets supplied with the workset. Supporting or context-only material
+Use only current source roles, authorized source views, target-resolution views,
+and question targets supplied with the workset. Supporting or context-only material
 may guide investigation but cannot become a cited Section or structured claim
 unless the current authority makes it eligible. Preserve exact identifiers,
 commands, links, numbers, conditions, code, and source-authored uncertainty.

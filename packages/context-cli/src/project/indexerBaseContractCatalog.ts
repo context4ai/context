@@ -1,4 +1,5 @@
 import type {
+  IndexerParserCapability,
   IndexerSubjectDerivationOperator,
 } from "@c4a/context";
 
@@ -8,6 +9,11 @@ export interface BundledIndexerProfileSpec {
   subjectKind: string;
   namespaceOperator: IndexerSubjectDerivationOperator;
   localKeyOperator: IndexerSubjectDerivationOperator;
+  additionalSubjectKinds?: readonly {
+    id: string;
+    localKeyOperator: IndexerSubjectDerivationOperator;
+  }[];
+  parserCapabilities?: readonly IndexerParserCapability[];
   catalogHeavy?: boolean;
   variants?: ReadonlyArray<{
     id: string;
@@ -22,6 +28,12 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "project",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.rush",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     variants: [{
       id: "build_system",
       values: ["rush", "npm-workspaces", "nx", "turborepo", "bazel", "other"],
@@ -33,6 +45,20 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "application",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    additionalSubjectKinds: [{
+      id: "capability",
+      localKeyOperator: "canonical-export-family",
+    }],
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.mdx",
+      "parser.css",
+      "parser.scss",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     variants: [{ id: "application_mode", values: ["spa", "mpa", "hybrid"] }],
   },
   {
@@ -41,6 +67,16 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "component",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-export-family",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.mdx",
+      "parser.css",
+      "parser.scss",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "sdk-library",
@@ -48,6 +84,15 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "capability",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-export-family",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.mdx",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "cli-tool",
@@ -55,6 +100,14 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "command-family",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     catalogHeavy: true,
   },
   {
@@ -63,6 +116,14 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "extension",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.mdx",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "api-service",
@@ -70,6 +131,18 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "service",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.openapi",
+      "parser.graphql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     variants: [{ id: "transport", values: ["http", "rpc", "hybrid"] }],
   },
   {
@@ -78,6 +151,18 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "gateway",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.openapi",
+      "parser.graphql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     catalogHeavy: true,
   },
   {
@@ -86,6 +171,27 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "domain-capability",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    additionalSubjectKinds: [{
+      id: "operation-entrypoint",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "operation-flow",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "runtime-context-family",
+      localKeyOperator: "canonical-module-identity",
+    }],
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.sql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     variants: [{ id: "state_model", values: ["stateless", "stateful"] }],
   },
   {
@@ -94,6 +200,24 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "runtime",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    additionalSubjectKinds: [{
+      id: "scheduled-operation",
+      localKeyOperator: "canonical-export-family",
+    }, {
+      id: "dispatch-contract",
+      localKeyOperator: "canonical-module-identity",
+    }, {
+      id: "dependency-boundary",
+      localKeyOperator: "canonical-export-family",
+    }],
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     variants: [{
       id: "trigger_model",
       values: ["function", "scheduled-worker"],
@@ -105,6 +229,16 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "consumer",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "data-sync-reconciliation",
@@ -112,6 +246,15 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "sync-pipeline",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.sql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "storage-repository",
@@ -119,6 +262,15 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "store",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.sql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "adapter-integration",
@@ -126,6 +278,18 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "adapter",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.openapi",
+      "parser.graphql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
   },
   {
     id: "contract-source",
@@ -133,6 +297,14 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "contract-family",
     namespaceOperator: "canonical-service-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.thrift",
+      "parser.proto",
+      "parser.openapi",
+      "parser.graphql",
+      "parser.json",
+      "parser.yaml",
+    ],
     catalogHeavy: true,
   },
   {
@@ -141,6 +313,18 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "generated-surface",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-module-identity",
+    parserCapabilities: [
+      "parser.typescript",
+      "parser.javascript",
+      "parser.go",
+      "parser.thrift",
+      "parser.proto",
+      "parser.openapi",
+      "parser.graphql",
+      "parser.json",
+      "parser.yaml",
+      "parser.toml",
+    ],
     catalogHeavy: true,
   },
 ];

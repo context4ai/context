@@ -102,7 +102,7 @@ const ENVELOPE_COMPARE_FIELDS = [
   "plan_binding_digest",
   "runtime_fingerprint",
   "resource_binding_digest",
-  "parser_dependency_fingerprint",
+  "source_dependency_fingerprint",
   "source_role",
   "source_precedence_digest",
   "metric_set_digest",

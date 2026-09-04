@@ -3,12 +3,12 @@
 [English](./README.md)
 
 `@c4a/extract-ts` 将 TypeScript、JavaScript、TSX 和 JSX 结构转化为 Context 知识生产可使用的确定性
-代码证据。它实现 `@c4a/extract` 的 `ExtractionPlugin` 协议，也是 npm-style
-package 使用 `extractTs({ source, collection: "codegraph" })` 阶段时的默认插件。
+代码证据。它实现 `@c4a/extract` 的 `ExtractionPlugin` 协议，也是社区 Code
+Indexer Provider 面向 npm-style package 使用的 ECMAScript 解析器。
 
 它只提取代码事实，不判断产品含义、不写正式 Markdown，也不替用户选择来源边界。
-知识工作区用户通过 Context Agent 入口和已确认的提取阶段使用它；直接 API 面向
-可复用结构分析和项目自有 Adapter。
+知识工作区用户通过选中的 Code Indexer Provider 使用它；直接 API 面向 Provider
+作者和可复用结构分析。
 
 ## 在知识生产链中的职责
 
@@ -17,7 +17,7 @@ package 使用 `extractTs({ source, collection: "codegraph" })` 阶段时的默�
           ↓
 入口检测 + 导出追踪 + AST 事实
           ↓
-原始代码快照 → 审核候选 → 正式知识
+Indexer 事实 → 面向读者的 Candidate → 正式知识
 ```
 
 `@c4a/extract-ts` 负责 npm package 入口检测和 ECMAScript-family AST 提取。它不直接写工作区；
@@ -29,7 +29,7 @@ package 使用 `extractTs({ source, collection: "codegraph" })` 阶段时的默�
 
 ### React Router 结构事实
 
-使用 `extractCustom()` 的项目可以复用 `extractReactRouterRoutes()`，索引 JSX
+Indexer Provider 可以复用 `extractReactRouterRoutes()`，索引 JSX
 `<Route>` 声明和 route-object 数组：
 
 ```ts
@@ -83,9 +83,8 @@ const moduleFacts = extractEcmaScriptModuleExports(source, "src/index.cjs");
 - 将 package version 写入 `ExtractionResult.package.version`。
 - 直接识别源码目录中的 `.js`、`.jsx`、`.mjs` 和 `.cjs`，不会误映射为 TypeScript。
 
-Context 项目可以使用 source-relative `extractTs.entries` 覆盖自动检测，或用
-`mode: "scan"` 把所有 `include` 命中的文件作为提取根。这些设置属于知识工作区，
-无需修改被分析 package。
+Code Indexer Provider 可以使用 source-relative entries 覆盖自动检测，或用 scan
+模式把所有命中 include 的文件作为解析根；无需修改被分析 package。
 
 入口文件以 module-relative 路径返回，Repository Runner 再为原始快照补充
 repo-relative 前缀。
@@ -162,25 +161,9 @@ const registry = new ExtractionPluginRegistry();
 registry.register(new TypeScriptPlugin());
 ```
 
-正常工作区在 `src/index.ts` 声明项目阶段：
-
-```ts
-import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";
-
-const componentLib = source("component-lib");
-
-export default defineProject({
-  sources: [componentLib],
-  phases: [
-    extractTs({ source: componentLib, collection: "codegraph" }),
-    reviewValidity({ collection: "codegraph" }),
-  ],
-  packages: [],
-});
-```
-
-实际提取由当前 Context Route 驱动。Agent 不应在正常知识生产中手工构造 Runner
-输入或原始快照。
+正常工作区先登记来源，再由 `src/indexers.yaml` 选择 Code Indexer Provider。
+实际解析由当前 Context Route 驱动。Agent 不应在正常知识生产中手工构造 Runner
+输入、原始快照或 Candidate 文件。
 
 ## 开发
 

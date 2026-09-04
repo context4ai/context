@@ -31,11 +31,6 @@ import {
 import { readCandidateRecords } from "./candidateLedger.js";
 import { htmlReportReference, openLocalFile } from "./localHtmlReport.js";
 import { findContextProjectRoot } from "./workspace.js";
-import { assertProseCompileBatchReadyForReview } from "./proseCompileBatch.js";
-import { preserveApprovedPathIdentities } from "./reviewIdentityConflicts.js";
-import { collectCodeIndexAuditStatus } from "./codeIndexAudit.js";
-import { isCodeIndexCollection } from "./codeIndexCollection.js";
-import { readLatestExtractionBatchPreview } from "./extractionPreviewCache.js";
 
 export { applyReviewDecisions } from "./reviewApply.js";
 export { collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
@@ -264,48 +259,6 @@ function projectRootFromCwd(cwd: string): string {
   return found.projectRoot;
 }
 
-async function assertCodeIndexAuditResolvedForReview(input: {
-  projectRoot: string;
-  rows: Awaited<ReturnType<typeof readCandidateRecords>>;
-  collection?: KnowledgeCollection;
-}): Promise<void> {
-  const codeIndexDrafts = input.rows.filter((row) =>
-    row.status === "draft" &&
-    isCodeIndexCollection(row.collection) &&
-    (input.collection === undefined || row.collection === input.collection)
-  );
-  if (codeIndexDrafts.length === 0) return;
-  const preview = await readLatestExtractionBatchPreview(input.projectRoot);
-  if (preview === undefined) return;
-  const previewUnits = new Set(preview.phases.flatMap((phase) =>
-    phase.indexUnits.flatMap((unit) => [unit.id, unit.outputOwner])
-  ));
-  const guardedDrafts = codeIndexDrafts.filter((row) => previewUnits.has(row.module));
-  if (guardedDrafts.length === 0) return;
-  const audit = await collectCodeIndexAuditStatus(input.projectRoot);
-  if (audit.resolved) return;
-  const absoluteFailures = audit.report?.units.flatMap((unit) => [
-    ...unit.dimensions
-      .filter((dimension) => dimension.absolute_gate)
-      .map((dimension) => `${unit.id}:${dimension.dimension}`),
-    ...audit.report!.signals
-      .filter((signal) =>
-        signal.unit_id === unit.id &&
-        signal.absolute_gate === true &&
-        !signal.code.startsWith("dimension-")
-      )
-      .map((signal) => `${unit.id}:${signal.code}`),
-  ]) ?? [];
-  throw new ContextError(ExitCode.WorkspaceStateError, "code-index quality audit must pass before candidate review", {
-    category: ErrorCategory.WorkspaceStateInvalid,
-    code: "code-index-audit-required-before-review",
-    draft_candidates: guardedDrafts.length,
-    ...(audit.report === undefined ? {} : { report_digest: audit.report.digest }),
-    absolute_failures: [...new Set(absoluteFailures)].sort(),
-    next: "Run context status --format json and complete the current code-index audit Route before opening or applying candidate review.",
-  });
-}
-
 async function reviewCommandScope(input: {
   projectRoot: string;
   collection?: string;
@@ -367,16 +320,6 @@ export async function runReviewHtmlCommand(input: {
     });
   }
   const collection = input.all === true ? undefined : assertCollection(input.collection);
-  const reviewRows = await readCandidateRecords(projectRoot);
-  await assertCodeIndexAuditResolvedForReview({ projectRoot, rows: reviewRows, ...(collection === undefined ? {} : { collection }) });
-  const proseCollections = [...new Set(reviewRows
-    .filter((row) =>
-      row.status === "draft" &&
-      row.candidate_type === "prose-align" &&
-      (collection === undefined || row.collection === collection)
-    )
-    .map((row) => row.collection))];
-  await assertProseCompileBatchReadyForReview({ projectRoot, collections: proseCollections });
   const result = await writeReviewHtml({
     projectRoot,
     ...(collection !== undefined ? { collection } : { all: true }),
@@ -487,12 +430,6 @@ export async function runReviewApplyCommand(input: {
   const projectRoot = projectRootFromCwd(input.cwd);
   const payloadPath = isAbsolute(input.payloadInput) ? input.payloadInput : resolve(input.cwd, input.payloadInput);
   const payload = await readReviewPayloadFile(payloadPath);
-  const rows = await readCandidateRecords(projectRoot);
-  await assertCodeIndexAuditResolvedForReview({
-    projectRoot,
-    rows,
-    ...(payload.collection === undefined ? {} : { collection: payload.collection }),
-  });
   const result = await applyReviewDecisions({ projectRoot, payload });
   process.stdout.write(formatApplyResult(result, input.format ?? "text"));
 }
@@ -529,20 +466,6 @@ export async function runReviewApproveAllCommand(input: {
     ...(input.collection !== undefined ? { collection: input.collection } : {}),
     ...(input.all === true ? { all: true } : {}),
   });
-  const rows = await readCandidateRecords(projectRoot);
-  await assertCodeIndexAuditResolvedForReview({
-    projectRoot,
-    rows,
-    ...(scoped.collection === undefined ? {} : { collection: scoped.collection }),
-  });
-  const proseCollections = [...new Set(rows
-    .filter((row) =>
-      row.status === "draft" &&
-      row.candidate_type === "prose-align" &&
-      (scoped.collection === undefined || row.collection === scoped.collection)
-    )
-    .map((row) => row.collection))];
-  await assertProseCompileBatchReadyForReview({ projectRoot, collections: proseCollections });
   const result = await applyReviewDecisions({
     projectRoot,
     payload: {
@@ -596,44 +519,6 @@ export async function runReviewApproveAllCommand(input: {
   }));
 }
 
-export async function runReviewReconcileIdentitiesCommand(input: {
-  cwd: string;
-  source: string;
-  strategy: string;
-  format?: ReviewFormat;
-}): Promise<void> {
-  if (input.strategy !== "preserve-approved") {
-    throw new ContextError(ExitCode.UserError, "approved identity migration requires a separate explicit lifecycle decision", {
-      category: ErrorCategory.UserInputInvalid,
-      code: "identity-migration-authority-required",
-      strategy: input.strategy,
-      supported_strategy: "preserve-approved",
-      next: "Use --strategy preserve-approved, or return to structure planning and choose a different path for a genuinely new identity.",
-    });
-  }
-  const projectRoot = projectRootFromCwd(input.cwd);
-  const result = await preserveApprovedPathIdentities({
-    projectRoot,
-    sourceKey: input.source,
-  });
-  if ((input.format ?? "text") === "json") {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-  process.stdout.write(formatFeedback({
-    symbol: "✓",
-    action: "preserved",
-    subject: "approved path identities",
-    headline: `${result.conflictsResolved} conflict(s) coordinated`,
-    body: [
-      `source: ${result.source}`,
-      `affected views: ${result.affectedViews}`,
-      "identity migration: not performed",
-    ],
-    next: "context status --format json",
-  }));
-}
-
 export async function runReviewMarkCommand(input: {
   cwd: string;
   id: string;
@@ -647,12 +532,6 @@ export async function runReviewMarkCommand(input: {
     projectRoot,
     ...(input.collection !== undefined ? { collection: input.collection } : {}),
     ...(input.all === true ? { all: true } : {}),
-  });
-  const rows = await readCandidateRecords(projectRoot);
-  await assertCodeIndexAuditResolvedForReview({
-    projectRoot,
-    rows,
-    ...(scope.collection === undefined ? {} : { collection: scope.collection }),
   });
   const result = await applyReviewDecisions({
     projectRoot,

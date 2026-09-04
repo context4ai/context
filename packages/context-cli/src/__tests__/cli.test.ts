@@ -191,14 +191,13 @@ describe("CLI error handling", () => {
     }
   });
 
-  test("run help is the current phase entrypoint for prose align and compile payloads", () => {
+  test("run help exposes the current project workflow controls", () => {
     const run = createCliProgram().commands.find((cmd) => cmd.name() === "run")?.helpInformation() ?? "";
     expect(run).toContain("Inspect or run a declared project phase");
-    expect(run).toContain("--view <view>");
-    expect(run).toContain("--validate");
-    expect(run).toContain("--stage");
-    expect(run).toContain("--input <file>");
-    expect(run).toContain("--auto-promote");
+    expect(run).toContain("--list");
+    expect(run).toContain("--dry-run");
+    expect(run).toContain("--until <condition>");
+    expect(run).toContain("--max-steps <n>");
     expect(run).toContain("--managed");
   });
 

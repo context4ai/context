@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  INDEXER_EVIDENCE_ADAPTER_ABI,
+  INDEXER_PARSER_CAPABILITY_SPECS,
+  indexerProtocolDigest,
+} from "@c4a/context";
 
 export type PackageEntry = { name: string; dir: string };
 
@@ -28,10 +33,10 @@ export const NPM_TRUSTED_PUBLISHER = {
   environment: "npm",
 } as const;
 
-export const PARSER_EVIDENCE_ABI = "context.indexer.evidence-adapter-result/v1";
-export const PARSER_EVIDENCE_ABI_DIGEST = `sha256:${createHash("sha256")
-  .update(JSON.stringify({ protocol: PARSER_EVIDENCE_ABI }))
-  .digest("hex")}`;
+export const PARSER_EVIDENCE_ABI = INDEXER_EVIDENCE_ADAPTER_ABI;
+export const PARSER_EVIDENCE_ABI_DIGEST = indexerProtocolDigest({
+  protocol: PARSER_EVIDENCE_ABI,
+});
 
 function canonicalReleaseJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -46,44 +51,31 @@ export function releaseEvidenceDigest(value: unknown): string {
   return `sha256:${createHash("sha256").update(canonicalReleaseJson(value)).digest("hex")}`;
 }
 
-export const PARSER_RELEASE_PACKAGES: readonly ParserReleasePackageEntry[] = [
-  {
-    name: "@c4a/extract-thrift",
-    dir: "extract-thrift",
-    export: "thriftSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.thrift"],
-  },
-  {
-    name: "@c4a/extract-proto",
-    dir: "extract-proto",
-    export: "protoSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.proto"],
-  },
-  {
-    name: "@c4a/extract-mdx",
-    dir: "extract-mdx",
-    export: "mdxSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.mdx"],
-  },
-  {
-    name: "@c4a/extract-contract",
-    dir: "extract-contract",
-    export: "contractSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.graphql", "parser.openapi"],
-  },
-  {
-    name: "@c4a/extract-style",
-    dir: "extract-style",
-    export: "styleSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.css", "parser.scss"],
-  },
-  {
-    name: "@c4a/extract-sql",
-    dir: "extract-sql",
-    export: "sqlSourcesToEvidenceAdapterResult",
-    capabilities: ["parser.sql"],
-  },
-] as const;
+function parserReleasePackages(): ParserReleasePackageEntry[] {
+  const packages = new Map<string, ParserReleasePackageEntry>();
+  for (const spec of INDEXER_PARSER_CAPABILITY_SPECS) {
+    if (!spec.release_metadata) continue;
+    const key = `${spec.package}\u0000${spec.export}`;
+    const existing = packages.get(key);
+    if (existing === undefined) {
+      packages.set(key, {
+        name: spec.package,
+        dir: spec.package.replace(/^@c4a\//u, ""),
+        export: spec.export,
+        capabilities: [spec.capability],
+      });
+    } else {
+      packages.set(key, {
+        ...existing,
+        capabilities: [...existing.capabilities, spec.capability].sort(),
+      });
+    }
+  }
+  return [...packages.values()];
+}
+
+export const PARSER_RELEASE_PACKAGES: readonly ParserReleasePackageEntry[] =
+  parserReleasePackages();
 
 export const PUBLISH_PACKAGES: PackageEntry[] = [
   { name: "@c4a/core", dir: "core" },
@@ -100,6 +92,15 @@ export const PUBLISH_PACKAGES: PackageEntry[] = [
   { name: "@c4a/extract-sql", dir: "extract-sql" },
   { name: "@c4a/context-cli", dir: "context-cli" },
 ];
+
+const PREVIEW_2_INTRODUCED_PARSER_PACKAGES = new Set([
+  "@c4a/extract-thrift",
+  "@c4a/extract-proto",
+  "@c4a/extract-mdx",
+  "@c4a/extract-contract",
+  "@c4a/extract-style",
+  "@c4a/extract-sql",
+]);
 
 export function releaseChannel(version: string): ReleaseChannel {
   const match = /^(\d+)\.(\d+)\.(\d+)(?:-(preview|rc)\.(\d+))?$/u.exec(version);
@@ -134,8 +135,9 @@ export function releasePackagesForVersion(version: string): PackageEntry[] {
   const channel = releaseChannel(version);
   const preview = /-preview\.(\d+)$/u.exec(version);
   const parserReady = channel !== "preview" || Number(preview?.[1] ?? 0) >= 2;
-  const parserNames = new Set(PARSER_RELEASE_PACKAGES.map((pkg) => pkg.name));
-  return PUBLISH_PACKAGES.filter((pkg) => parserReady || !parserNames.has(pkg.name));
+  return PUBLISH_PACKAGES.filter((pkg) =>
+    parserReady || !PREVIEW_2_INTRODUCED_PARSER_PACKAGES.has(pkg.name)
+  );
 }
 
 export function parserReleaseMetadata(version: string): {

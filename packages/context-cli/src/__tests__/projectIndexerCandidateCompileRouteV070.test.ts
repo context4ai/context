@@ -8,16 +8,11 @@ import {
   buildIndexerAuthorDependencyView,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
-  buildIndexerLayoutProposalSet,
-  buildIndexerLayoutTransition,
   buildIndexerMainRunRequest,
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
-  buildIndexerWorksetReadReceipt,
-  buildIndexerWorksetReadRequest,
-  buildIndexerWorksetReadResponse,
   canonicalIndexerNodeRef,
   composeIndexerLayerInput,
   indexerArtifactResultDigest,
@@ -25,30 +20,16 @@ import {
   indexerEvidenceBindingDigest,
   indexerInventoryMembersDigest,
   indexerProtocolDigest,
-  resolveIndexerLayout,
-  resolveIndexerSubjectKeySchemas,
   type IndexerArtifactPolicyEligibility,
   type IndexerArtifactResult,
   type IndexerMainAuthorWorkset,
   type IndexerSubjectKey,
 } from "@c4a/context";
 import { loadContextWorkflowProvider } from "../project/workflow/workflowProvider.js";
-import {
-  INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-  buildProjectIndexerCandidateCompileFromRecords,
-  compileProjectIndexerCandidates,
-  readProjectIndexerCandidateCompileStatus,
-} from
+import { buildProjectIndexerCandidateCompileFromRecords } from
   "../project/indexerCandidateCompileActions.js";
-import { readCandidateRecords } from "../project/candidateLedger.js";
-import { applyReviewDecisions } from "../project/reviewApply.js";
-import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
-import { verifyProjectWorkspace } from "../project/verify.js";
-import { closeProjectWorkspace } from "../project/close.js";
 import { reportProjectIndexerIncrementalImpact } from
   "../project/indexerIncrementalImpactActions.js";
-import { loadCliIndexerBaseContracts } from
-  "../project/indexerCliBundledProvider.js";
 import {
   acceptIndexerMainRunStore,
   prepareIndexerMainRunStore,
@@ -168,7 +149,7 @@ function acceptedAuthorFixture(input: {
     profile_contract_digest: eligibility.profile_contract_digest,
     subject_key_schema_digest: digest("6"),
     source_scope_digest: digest("7"),
-    parser_contract_digest: digest("8"),
+    source_binding_digest: digest("8"),
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("a"),
@@ -204,28 +185,13 @@ function acceptedAuthorFixture(input: {
     final_authority: authority,
     run_environment: buildIndexerRunEnvironment({
       source_snapshot_digest: digest("2"),
-      parser_dependency_fingerprint: digest("3"),
+      source_dependency_fingerprint: workset.source_binding_digest,
       source_role: "authoritative-source",
       source_precedence_digest: digest("4"),
       metric_set_digest: digest("5"),
       dependency_view_digest: dependencyView.view_digest,
       primary_execution_projection: primaryExecutionProjection,
     }),
-  });
-  const readRequest = buildIndexerWorksetReadRequest({
-    workset_digest: workset.workset_digest,
-    read_kind: "source",
-    requested_refs: [SOURCE_REF],
-    allowed_refs: [SOURCE_REF],
-    page_size: 10,
-  });
-  const readResponse = buildIndexerWorksetReadResponse({
-    request: readRequest,
-    items: [{ ref: SOURCE_REF, value: { content: "export const Toggle = true" } }],
-  });
-  const receipt = buildIndexerWorksetReadReceipt({
-    request: readRequest,
-    responses: [readResponse],
   });
   const evidencePayload = {
     evidence_ref: evidenceNode.evidence_ref,
@@ -346,7 +312,6 @@ function acceptedAuthorFixture(input: {
     artifact,
     dependencyView,
     request,
-    receipt,
     spec: {
       protocol: "context.indexer.main-run-spec/v1",
       request,
@@ -366,7 +331,6 @@ function acceptedAuthorFixture(input: {
       protocol: "context.indexer.run-result/v1",
       operation: "main-index",
       consumed_input_view_digest: request.composition_input.view_digest,
-      workset_read_receipt_digests: [receipt.receipt_digest],
       result: {
         protocol: "context.indexer.main-result/v1",
         stage: "author",
@@ -453,7 +417,6 @@ describe("Indexer Candidate compile Route", () => {
         projectRoot,
         workset_digest: previous.workset.workset_digest,
         result: previous.result,
-        workset_read_receipts: [previous.receipt],
       });
       const records = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
       const accepted = records[0]!.accepted_record as { acceptance_digest: string };
@@ -528,178 +491,6 @@ describe("Indexer Candidate compile Route", () => {
       operator_contract: {},
       profile_contract: {},
     })).toThrow(/exact current accepted Result set/);
-  });
-
-  test("compiles the durable accepted author store into one audited Candidate record", async () => {
-    const projectRoot = await mkdtemp(join(tmpdir(), "context-candidate-compile-"));
-    try {
-      await mkdir(join(projectRoot, "src"), { recursive: true });
-      await Promise.all([
-        writeFile(join(projectRoot, "package.json"), `${JSON.stringify({
-          name: "anonymous-candidate-compile-fixture",
-          private: true,
-          context: { project: true, entry: "src/index.ts" },
-        }, null, 2)}\n`, "utf8"),
-        writeFile(join(projectRoot, "src", "index.ts"), "export {};\n", "utf8"),
-      ]);
-      const fixture = acceptedAuthorFixture();
-      await prepareIndexerMainRunStore({
-        projectRoot,
-        workset_set: buildIndexerMainWorksetSet([fixture.workset]),
-        run_specs: [fixture.spec],
-      });
-      await startIndexerMainRunStore({
-        projectRoot,
-        workset_digest: fixture.workset.workset_digest,
-      });
-      await acceptIndexerMainRunStore({
-        projectRoot,
-        workset_digest: fixture.workset.workset_digest,
-        result: fixture.result,
-        workset_read_receipts: [fixture.receipt],
-      });
-      const records = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
-      expect(records).toHaveLength(1);
-      const accepted = records[0]!.accepted_record as {
-        workset_digest: string;
-        execution_request_digest: string;
-        acceptance_digest: string;
-      };
-      const contracts = await loadCliIndexerBaseContracts();
-      const subjectKeySchemaSet = resolveIndexerSubjectKeySchemas({
-        profile_contract: contracts.profiles,
-        operator_contract: contracts.operators,
-        selections: [{
-          indexer_id: fixture.artifact.indexer_id,
-          profile: "component-library",
-          role: "primary",
-          provider_layer_id: "primary",
-        }],
-        providers: [],
-      });
-      const proposal = resolveIndexerLayout({
-        artifact_result: fixture.artifact,
-        profile: "component-library",
-        profile_contract: contracts.profiles,
-        operator_contract: contracts.operators,
-        subject_key_schema_set: subjectKeySchemaSet,
-        shared_artifact_fingerprint:
-          fixture.request.run_environment.primary_execution_projection
-            .shared_artifact_fingerprint,
-      });
-      const layoutProposalSet = buildIndexerLayoutProposalSet([proposal]);
-      const layoutTransition = buildIndexerLayoutTransition({
-        layout_proposal_set: layoutProposalSet,
-        base_projections: [],
-        planned_output: { state: "not-required" },
-      });
-      const value = {
-        protocol: "context.indexer.candidate-compile-input/v1",
-        accepted_result_refs: [{
-          workset_digest: accepted.workset_digest,
-          execution_request_digest: accepted.execution_request_digest,
-          acceptance_digest: accepted.acceptance_digest,
-          artifact_result_digest: fixture.artifact.output_digest,
-        }],
-        subject_key_schema_set: subjectKeySchemaSet,
-        layout_proposal_set: layoutProposalSet,
-        layout_transition: layoutTransition,
-        layout_change_confirmations: [],
-        rendered_artifacts: [],
-      };
-      const inputPath = join(projectRoot, "candidate-compile-input.json");
-      await writeFile(inputPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-      const result = JSON.parse(await runCliInDir(projectRoot, [
-        "indexer",
-        "compile-indexer-candidates",
-        "--input",
-        inputPath,
-        "--format",
-        "json",
-      ])) as Awaited<ReturnType<typeof compileProjectIndexerCandidates>>;
-      expect(result).toMatchObject({
-        protocol: "context.indexer.candidate-compile-action/v1",
-        outcome: "indexer-candidates-compiled",
-        graph_outcome: "completed",
-        compile: {
-          protocol: "context.indexer.candidate-compile/v1",
-          physical_artifact_audit: { state: "passed" },
-        },
-      });
-      expect(result.compile.files).toHaveLength(1);
-      expect(result.compile.files[0]).toMatchObject({
-        indexer_id: fixture.artifact.indexer_id,
-        artifact_result_digest: fixture.artifact.output_digest,
-        markdown: "# Toggle\n\nAn anonymous component capability.",
-      });
-      const persisted = JSON.parse(await readFile(
-        join(projectRoot, INDEXER_CANDIDATE_COMPILE_CURRENT_PATH),
-        "utf8",
-      ));
-      expect(persisted.compile_digest).toBe(result.compile.compile_digest);
-      const candidates = await readCandidateRecords(projectRoot);
-      expect(candidates).toHaveLength(1);
-      expect(candidates[0]).toMatchObject({
-        candidate_type: "indexer-artifact",
-        status: "draft",
-        fingerprint: result.compile.files[0]!.file_digest,
-        node_ref: result.compile.files[0]!.node_ref,
-        view_ref: result.compile.files[0]!.internal_view_ref,
-      });
-      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
-        .toMatchObject({ state: "current", candidates: [{ status: "draft" }] });
-
-      expect(await applyReviewDecisions({
-        projectRoot,
-        payload: {
-          collection: result.compile.files[0]!.collection,
-          scope: {
-            kind: "collection",
-            collection: result.compile.files[0]!.collection,
-            count: 1,
-            ids_sha256: candidateIdsHash([candidates[0]!.candidate_id]),
-            candidates_sha256: candidateSetHash(candidates),
-          },
-          decisions: [{
-            candidate_id: candidates[0]!.candidate_id,
-            status: "approved",
-          }],
-        },
-      })).toMatchObject({ approved: 1, materialized: 1 });
-      const approved = await readFile(
-        join(projectRoot, result.compile.files[0]!.output_path),
-        "utf8",
-      );
-      expect(approved).toContain(`indexer_file_digest: ${result.compile.files[0]!.file_digest}`);
-      expect(approved).toContain(`view_ref: ${result.compile.files[0]!.internal_view_ref}`);
-      expect(await readProjectIndexerCandidateCompileStatus(projectRoot))
-        .toMatchObject({ state: "current", candidates: [] });
-      expect((await verifyProjectWorkspace(projectRoot)).issues.filter((issue) =>
-        issue.severity === "error"
-      )).toEqual([]);
-      expect(await closeProjectWorkspace(projectRoot)).toMatchObject({
-        action: "closed",
-        nodes: 1,
-        views: 1,
-      });
-      expect(YAML.parse(await readFile(
-        join(projectRoot, "knowledge", "structure.yaml"),
-        "utf8",
-      ))).toMatchObject({
-        nodes: [{ node_ref: result.compile.files[0]!.node_ref }],
-        views: [{
-          view_ref: result.compile.files[0]!.internal_view_ref,
-          collection: result.compile.files[0]!.collection,
-        }],
-      });
-
-      const stale = structuredClone(value);
-      stale.accepted_result_refs[0]!.acceptance_digest = digest("f");
-      await expect(compileProjectIndexerCandidates({ projectRoot, value: stale }))
-        .rejects.toThrow(/exact current accepted Result set/);
-    } finally {
-      await rm(projectRoot, { recursive: true, force: true });
-    }
   });
 
   test("uses one universal explicit customization-required outcome", async () => {

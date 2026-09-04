@@ -4,7 +4,7 @@
 
 本目录包含 [English](../../docs/en/case-studies/agent-graph-workflow.md) 和[中文](../../docs/zh-CN/case-studies/agent-graph-workflow.md)案例所介绍的 Context 公开回放。
 
-回放使用一份经过字段白名单处理的真实 Context 调试记录。它保留路由顺序、重复求值、状态、原因码与相对时间，同时排除来源正文、本机路径、凭证、不透明标识和组织相关名称。
+回放由一份经过字段白名单处理的 Context 调试记录按当前工作区契约归一化。已经退役的提取、对齐和文档编译路由统一表现为唯一的 `run-indexer-lifecycle` Route；仍可对应的路由顺序、状态与相对时间继续保留，同时排除来源正文、本机路径、凭证、不透明标识和组织相关名称。
 
 每一步都会链接到 Context 已发布的 [Action 与 Resource 文件](https://github.com/context4ai/context/tree/main/packages/context-cli/context-workflow)；“工作图”弹层展示本次回放捕获的静态契约，当前工作流仍以链接的 [`workspace.yaml`](https://github.com/context4ai/context/blob/main/packages/context-cli/context-workflow/graphs/workspace.yaml) 为准。
 

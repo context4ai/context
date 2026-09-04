@@ -112,8 +112,13 @@ The Provider is considered valid only when all of the following are true:
     and reconciliation is unreachable until the independent composer set is
     either explicitly not required or fully accepted with a current envelope.
 18. Main Indexer dispatch first recovers a local content-addressed run ledger.
-    A validated Result, its read receipts, and the accepted transition share one
-    durable journal; interrupted running work returns to pending, while a complete
+    Context exposes one Host-managed Authorized Workset View for the exact run;
+    the Agent does not manage evidence-specific readers, cursors, or receipts.
+    Partition, Author and Composer Routes expose one compact semantic schema and
+    one `context action complete-current` submission command; the Agent never
+    constructs internal Result envelopes or workspace payload scripts.
+    A validated Result and the accepted transition share one durable journal;
+    interrupted running work returns to pending, while a complete
     accepted cache hit, including an empty Result, is not dispatched again.
     Ordinal/fixed-count partition output advances to the next authorized strategy.
     Once those strategies are exhausted, the graph starts a release-bound CLI
@@ -128,29 +133,15 @@ The Provider is considered valid only when all of the following are true:
     every current question-target pair, and turns omitted pairs into material gaps.
     Missing owners, missing accepted cache, unsupported targets, or blocking
     material gaps cannot reach reconciliation readiness or a complete report.
-21. Material-answer Review is a separate digest-bound Gate over one exact
-    question-target and canonical evidence binding. It may emit an unpersisted
-    `answer-approved` successor-ledger fact, but cannot approve reader content or
-    bypass the later mechanical audit and main candidate Review. Only
-    `checkpoint-material-gaps` may persist that fact.
-22. Material-answer dispatch is a second-phase loop over a CLI-built immutable
-    question workset. Eligibility is the intersection of registry operation,
-    enricher binding, primary Provider declaration, read scope, current source,
-    and evidence kind. Its independent durable ledger recovers accepted empty
-    Results, resets incomplete running work to pending, and admits candidates
-    only after current CLI evidence-read receipts validate every claimed span.
-23. Every reconciliation outcome passes through the retained material-gap
-    checkpoint before it can complete, dispatch answer work, or block. An
-    approved answer retains its full accepted workset for cross-machine recovery.
-    Context derives a body-free planned-answer projection from the canonical
-    source/span binding. Actualization binds that projection and its landing to one
-    current layout-proposal-set digest; stale source authority or a missing/ambiguous
-    landing reopens the question as unresolved. Final close derives exact answer
-    provenance from the approved structure itself and shares the ledger CAS write.
-    `audit-material-gap-state` performs the expected-ledger comparison in memory
-    without a write and routes pre-Review drift to checkpoint or approved
-    post-Review state to close. Retained answer state and planned-answer provenance
-    are excluded from reader Markdown and package projections.
+21. Material gaps remain part of the current reconciliation report and do not
+    create a second checkpoint ledger, authoring product, or Review surface.
+22. Newly captured Markdown or other authorized material re-enters the ordinary
+    main Indexer path. The same Result reconciliation either closes the question
+    from current source or keeps it unresolved. There is no answer-only operation,
+    planned landing, post-layout actualization, or second content Review.
+23. Final close is allowed only when no required gap remains, writes only the
+    approved knowledge structure, and then clears completed runtime lifecycle
+    state. Optional unresolved gaps do not become published knowledge metadata.
 24. Requirement confirmation always uses the CLI-recomputed canonical comparator.
     Ordinary changes may use only their explicit session authority; contraction
     and incomparable obligation replacement enter a non-delegable human Gate.
@@ -159,12 +150,20 @@ The Provider is considered valid only when all of the following are true:
     a Provider major and one exact human re-identification authorization; invalid
     mappings fail before the Gate. Ambiguous and invalid target resolution are
     typed blocking/failure Outcomes and cannot enter author work.
-26. The Markdown Provider Route starts by proving current document capture,
-    then separates Agent-only visible-Skill discovery from CLI routing, static
-    validation, resolution, staging, and final validation. CLI-bundled Bundles
-    may complete automatically; external Bundles return a Host-action resource request and
-    project customization returns its own blocking Outcome. Host re-entry carries
-    only structured Host results; the CLI owns all staged paths.
+26. Initial Provider selection is part of the same current Route as the main
+    Indexer lifecycle. Its Agent Action receives exact requirements and the
+    CLI-bundled catalog and returns only non-CLI visible Skill identities plus
+    semantic Indexer entries through `context action complete-current`. The CLI
+    owns routing, fallback/conflict checks, static validation, resolution,
+    staging, final validation, and atomic registry apply. External Bundles use
+    one existing Host resolver continuation; non-allowlisted programs use the
+    existing execution Gate; successful Host results are recoverable without
+    exposing low-level payload commands.
+27. Once every Partition shard is current, Context exposes one semantic-outline
+    Review. Once Author/Composer output compiles, it exposes the ordinary final
+    Candidate Review. Ordinary mode presents both; explicitly managed mode lets
+    the Agent resolve both without user display. Destructive or ambiguous layout
+    transitions remain non-delegable in every mode.
 
 ## Managed host-loop receipts
 

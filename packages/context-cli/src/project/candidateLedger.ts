@@ -5,47 +5,11 @@ import { KNOWLEDGE_COLLECTIONS, type KnowledgeCollection } from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { candidateIdFromViewRef, nodeRefFromViewRef } from "./candidateIdentity.js";
 import { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
 export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
 export type CandidateStatus = "draft" | "rejected";
-export type CandidateType = "code-symbol" | "prose-align" | "indexer-artifact";
-export type CandidateChange = "add" | "update" | "remove";
-export type CodeRelationshipMode = "source-backed-ast" | "source-backed-explicit";
-
-export interface ProseCandidateSource {
-  type: "file" | "lark";
-  name: string;
-  document_path: string;
-  locator: string;
-  source_ref: string;
-  snapshot_hash?: string;
-}
-
-export interface ProseCandidateSection {
-  id: string;
-  kind?: string;
-  title?: string;
-  summary?: string;
-  body?: string;
-  source_ref: string;
-  source_refs?: string[];
-  content_mode?: "verbatim" | "empty";
-}
-
-export interface ParentIndexChildRecord {
-  view_ref: string;
-  node_ref: string;
-  title: string;
-  path: string;
-  summary?: string;
-}
-
-export interface ParentIndexRecord {
-  children: ParentIndexChildRecord[];
-}
 
 export interface CandidateReviewSummary {
   title: string;
@@ -54,14 +18,6 @@ export interface CandidateReviewSummary {
   edge_summary?: string;
   signals: string[];
   reason: string;
-}
-
-export interface CodeCandidateEdge {
-  type: "contains" | "depends_on";
-  from: string;
-  to: string;
-  source_refs: string[];
-  relation_type: string;
 }
 
 export interface IndexerCandidateEvidenceBinding {
@@ -79,6 +35,14 @@ export interface IndexerCandidateEvidenceBinding {
   binding_digest: string;
 }
 
+export interface IndexerCandidateSection {
+  section_ref: string;
+  section_key: string;
+  evidence_refs: string[];
+  markdown: string;
+  markdown_digest: string;
+}
+
 export interface IndexerCandidateBinding {
   compile_digest: string;
   file_digest: string;
@@ -86,13 +50,7 @@ export interface IndexerCandidateBinding {
   section_refs: string[];
   source_ref: string;
   evidence_bindings: IndexerCandidateEvidenceBinding[];
-  sections: Array<{
-    section_ref: string;
-    section_key: string;
-    evidence_refs: string[];
-    markdown: string;
-    markdown_digest: string;
-  }>;
+  sections: IndexerCandidateSection[];
 }
 
 export interface CandidateRecord {
@@ -101,24 +59,15 @@ export interface CandidateRecord {
   view_ref: string;
   collection: KnowledgeCollection;
   status: CandidateStatus;
-  candidate_type?: CandidateType;
-  change?: CandidateChange;
-  generated?: "parent_index";
-  parent_index?: ParentIndexRecord;
+  candidate_type: "indexer-artifact";
   kind: string;
-  node_tags?: string[];
   visibility: string;
   module: string;
   path: string;
-  structure_digest?: string;
+  structure_digest: string;
   source_refs: string[];
-  shared_source_refs?: string[];
-  source?: ProseCandidateSource;
-  body?: string;
-  sections?: ProseCandidateSection[];
-  code_edges?: CodeCandidateEdge[];
-  relationship_mode?: CodeRelationshipMode;
-  indexer_candidate?: IndexerCandidateBinding;
+  body: string;
+  indexer_candidate: IndexerCandidateBinding;
   fingerprint: string;
   review: CandidateReviewSummary;
   updated: string;
@@ -126,24 +75,28 @@ export interface CandidateRecord {
 
 const KNOWLEDGE_COLLECTION_SET = new Set<KnowledgeCollection>(KNOWLEDGE_COLLECTIONS);
 const CANDIDATE_STATUSES = new Set<CandidateStatus>(["draft", "rejected"]);
-const CANDIDATE_TYPES = new Set<CandidateType>([
-  "code-symbol",
-  "prose-align",
-  "indexer-artifact",
+const RECORD_FIELDS = new Set([
+  "candidate_id", "node_ref", "view_ref", "collection", "status",
+  "candidate_type", "kind", "visibility", "module", "path",
+  "structure_digest", "source_refs", "body", "indexer_candidate",
+  "fingerprint", "review", "updated",
 ]);
-const CANDIDATE_CHANGES = new Set<CandidateChange>(["add", "update", "remove"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function schemaError(line: number, message: string): ContextError {
-  return new ContextError(ExitCode.WorkspaceStateError, `${CANDIDATE_LEDGER_FILE}:${line} ${message}`, {
-    category: ErrorCategory.SchemaInvalid,
-    path: CANDIDATE_LEDGER_FILE,
-    line,
-    next: `Fix ${CANDIDATE_LEDGER_FILE}, then rerun the command.`,
-  });
+  return new ContextError(
+    ExitCode.WorkspaceStateError,
+    `${CANDIDATE_LEDGER_FILE}:${line} ${message}`,
+    {
+      category: ErrorCategory.SchemaInvalid,
+      path: CANDIDATE_LEDGER_FILE,
+      line,
+      next: "Regenerate Candidates through the current Indexer lifecycle.",
+    },
+  );
 }
 
 function stringField(record: Record<string, unknown>, field: string, line: number): string {
@@ -154,17 +107,27 @@ function stringField(record: Record<string, unknown>, field: string, line: numbe
   return value;
 }
 
-function stringArrayField(record: Record<string, unknown>, field: string, line: number): string[] {
-  const value = record[field];
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string" || item.length === 0)) {
-    throw schemaError(line, `field ${field} must be a non-empty string array`);
+function stringArray(value: unknown, field: string, line: number, allowEmpty = false): string[] {
+  if (
+    !Array.isArray(value) ||
+    (!allowEmpty && value.length === 0) ||
+    value.some((item) => typeof item !== "string" || item.length === 0)
+  ) {
+    throw schemaError(line, `field ${field} must be ${allowEmpty ? "a" : "a non-empty"} string array`);
   }
   return value as string[];
 }
 
-function optionalStringArrayField(record: Record<string, unknown>, field: string, line: number): string[] | undefined {
-  if (record[field] === undefined) return undefined;
-  return stringArrayField(record, field, line);
+function assertExactFields(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  field: string,
+  line: number,
+): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) {
+    throw schemaError(line, `${field} contains unsupported fields: ${unknown.sort().join(", ")}`);
+  }
 }
 
 export function isSafeKnowledgeTargetPath(collection: string, value: string): boolean {
@@ -186,46 +149,138 @@ export function knowledgeTargetPathForNode(collection: string, nodeRef: string):
   return `${collection}/${segments.join("/")}.md`;
 }
 
-function collectionField(record: Record<string, unknown>, line: number): KnowledgeCollection {
-  const value = record.collection;
-  if (typeof value !== "string" || !KNOWLEDGE_COLLECTION_SET.has(value as KnowledgeCollection)) {
-    throw schemaError(line, `field collection must be one of ${KNOWLEDGE_COLLECTIONS.join(", ")}`);
-  }
-  return value as KnowledgeCollection;
-}
-
-function statusField(record: Record<string, unknown>, line: number): CandidateStatus {
-  const value = record.status;
-  if (typeof value !== "string" || !CANDIDATE_STATUSES.has(value as CandidateStatus)) {
-    throw schemaError(line, "field status must be one of draft, rejected");
-  }
-  return value as CandidateStatus;
-}
-
-function reviewField(record: Record<string, unknown>, line: number): CandidateReviewSummary {
-  const value = record.review;
-  if (!isRecord(value)) {
-    throw schemaError(line, "field review must be an object");
-  }
+function reviewField(value: unknown, line: number): CandidateReviewSummary {
+  if (!isRecord(value)) throw schemaError(line, "field review must be an object");
+  assertExactFields(
+    value,
+    new Set(["title", "summary", "behavior_summary", "edge_summary", "signals", "reason"]),
+    "field review",
+    line,
+  );
   return {
     title: stringField(value, "title", line),
     summary: stringField(value, "summary", line),
-    ...(value.behavior_summary !== undefined ? { behavior_summary: stringField(value, "behavior_summary", line) } : {}),
-    ...(value.edge_summary !== undefined ? { edge_summary: stringField(value, "edge_summary", line) } : {}),
-    signals: stringArrayField(value, "signals", line),
+    ...(value.behavior_summary === undefined
+      ? {}
+      : { behavior_summary: stringField(value, "behavior_summary", line) }),
+    ...(value.edge_summary === undefined
+      ? {}
+      : { edge_summary: stringField(value, "edge_summary", line) }),
+    signals: stringArray(value.signals, "review.signals", line),
     reason: stringField(value, "reason", line),
   };
 }
 
-function candidateTypeField(record: Record<string, unknown>, line: number): CandidateType | undefined {
-  if (record.candidate_type === undefined) return undefined;
-  if (typeof record.candidate_type !== "string" || !CANDIDATE_TYPES.has(record.candidate_type as CandidateType)) {
+function locatorField(value: unknown, line: number, index: number): IndexerCandidateEvidenceBinding["locator"] {
+  if (!isRecord(value)) {
+    throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].locator must be an object`);
+  }
+  assertExactFields(value, new Set(["path", "start_line", "end_line"]), "field locator", line);
+  const startLine = value.start_line;
+  const endLine = value.end_line;
+  if (
+    !Number.isSafeInteger(startLine) || Number(startLine) < 1 ||
+    !Number.isSafeInteger(endLine) || Number(endLine) < Number(startLine)
+  ) {
+    throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].locator lines are invalid`);
+  }
+  return {
+    path: stringField(value, "path", line),
+    start_line: Number(startLine),
+    end_line: Number(endLine),
+  };
+}
+
+function evidenceBindingField(
+  value: unknown,
+  line: number,
+  index: number,
+): IndexerCandidateEvidenceBinding {
+  if (!isRecord(value)) {
+    throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}] must be an object`);
+  }
+  assertExactFields(
+    value,
+    new Set([
+      "evidence_ref", "kind", "source_ref", "module_ref", "locator",
+      "content_digest", "coverage_tier", "binding_digest",
+    ]),
+    `field indexer_candidate.evidence_bindings[${index}]`,
+    line,
+  );
+  if (value.coverage_tier !== "ast-catalog" && value.coverage_tier !== "lightweight-evidence") {
+    throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].coverage_tier is invalid`);
+  }
+  if (value.module_ref !== null && (typeof value.module_ref !== "string" || value.module_ref.length === 0)) {
     throw schemaError(
       line,
-      "field candidate_type must be one of code-symbol, prose-align, indexer-artifact",
+      `field indexer_candidate.evidence_bindings[${index}].module_ref must be a non-empty string or null`,
     );
   }
-  return record.candidate_type as CandidateType;
+  return {
+    evidence_ref: stringField(value, "evidence_ref", line),
+    kind: stringField(value, "kind", line),
+    source_ref: stringField(value, "source_ref", line),
+    module_ref: value.module_ref,
+    locator: locatorField(value.locator, line, index),
+    content_digest: stringField(value, "content_digest", line),
+    coverage_tier: value.coverage_tier,
+    binding_digest: stringField(value, "binding_digest", line),
+  };
+}
+
+function sectionField(value: unknown, line: number, index: number): IndexerCandidateSection {
+  if (!isRecord(value)) {
+    throw schemaError(line, `field indexer_candidate.sections[${index}] must be an object`);
+  }
+  assertExactFields(
+    value,
+    new Set(["section_ref", "section_key", "evidence_refs", "markdown", "markdown_digest"]),
+    `field indexer_candidate.sections[${index}]`,
+    line,
+  );
+  return {
+    section_ref: stringField(value, "section_ref", line),
+    section_key: stringField(value, "section_key", line),
+    evidence_refs: stringArray(value.evidence_refs, "indexer_candidate.sections[].evidence_refs", line, true),
+    markdown: stringField(value, "markdown", line),
+    markdown_digest: stringField(value, "markdown_digest", line),
+  };
+}
+
+function indexerCandidateField(value: unknown, line: number): IndexerCandidateBinding {
+  if (!isRecord(value)) throw schemaError(line, "field indexer_candidate must be an object");
+  assertExactFields(
+    value,
+    new Set([
+      "compile_digest", "file_digest", "artifact_ref", "section_refs",
+      "source_ref", "evidence_bindings", "sections",
+    ]),
+    "field indexer_candidate",
+    line,
+  );
+  if (!Array.isArray(value.evidence_bindings)) {
+    throw schemaError(line, "field indexer_candidate.evidence_bindings must be an array");
+  }
+  if (!Array.isArray(value.sections) || value.sections.length === 0) {
+    throw schemaError(line, "field indexer_candidate.sections must be a non-empty array");
+  }
+  const sections = value.sections.map((section, index) => sectionField(section, line, index));
+  const sectionRefs = stringArray(value.section_refs, "indexer_candidate.section_refs", line);
+  if (JSON.stringify(sectionRefs) !== JSON.stringify(sections.map((section) => section.section_ref))) {
+    throw schemaError(line, "field indexer_candidate.section_refs must match sections in order");
+  }
+  return {
+    compile_digest: stringField(value, "compile_digest", line),
+    file_digest: stringField(value, "file_digest", line),
+    artifact_ref: stringField(value, "artifact_ref", line),
+    section_refs: sectionRefs,
+    source_ref: stringField(value, "source_ref", line),
+    evidence_bindings: value.evidence_bindings.map((binding, index) =>
+      evidenceBindingField(binding, line, index)
+    ),
+    sections,
+  };
 }
 
 export function indexerCandidateId(fileDigest: string): string {
@@ -236,338 +291,63 @@ export function indexerCandidateId(fileDigest: string): string {
   return `indexer/${match[1]}`;
 }
 
-function indexerCandidateBindingField(
-  record: Record<string, unknown>,
-  candidateType: CandidateType | undefined,
-  line: number,
-): IndexerCandidateBinding | undefined {
-  if (candidateType !== "indexer-artifact") {
-    if (record.indexer_candidate !== undefined) {
-      throw schemaError(line, "field indexer_candidate is supported only for indexer-artifact candidates");
-    }
-    return undefined;
-  }
-  if (!isRecord(record.indexer_candidate)) {
-    throw schemaError(line, "field indexer_candidate is required for indexer-artifact candidates");
-  }
-  const binding = record.indexer_candidate;
-  const sectionRefs = stringArrayField(binding, "section_refs", line);
-  if (!Array.isArray(binding.evidence_bindings)) {
-    throw schemaError(line, "field indexer_candidate.evidence_bindings must be an array");
-  }
-  const evidenceBindings = binding.evidence_bindings.map<IndexerCandidateEvidenceBinding>((value, index) => {
-    if (!isRecord(value) || !isRecord(value.locator)) {
-      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}] must be an object`);
-    }
-    const startLine = value.locator.start_line;
-    const endLine = value.locator.end_line;
-    if (
-      !Number.isSafeInteger(startLine) || Number(startLine) < 1 ||
-      !Number.isSafeInteger(endLine) || Number(endLine) < Number(startLine)
-    ) {
-      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].locator lines are invalid`);
-    }
-    const coverageTier = value.coverage_tier;
-    if (coverageTier !== "ast-catalog" && coverageTier !== "lightweight-evidence") {
-      throw schemaError(line, `field indexer_candidate.evidence_bindings[${index}].coverage_tier is invalid`);
-    }
-    return {
-      evidence_ref: stringField(value, "evidence_ref", line),
-      kind: stringField(value, "kind", line),
-      source_ref: stringField(value, "source_ref", line),
-      module_ref: value.module_ref === null
-        ? null
-        : stringField(value, "module_ref", line),
-      locator: {
-        path: stringField(value.locator, "path", line),
-        start_line: Number(startLine),
-        end_line: Number(endLine),
-      },
-      content_digest: stringField(value, "content_digest", line),
-      coverage_tier: coverageTier,
-      binding_digest: stringField(value, "binding_digest", line),
-    };
-  });
-  if (!Array.isArray(binding.sections) || binding.sections.length === 0) {
-    throw schemaError(line, "field indexer_candidate.sections must be a non-empty array");
-  }
-  const sections = binding.sections.map((value, index) => {
-    if (!isRecord(value)) {
-      throw schemaError(line, `field indexer_candidate.sections[${index}] must be an object`);
-    }
-    return {
-      section_ref: stringField(value, "section_ref", line),
-      section_key: stringField(value, "section_key", line),
-      evidence_refs: value.evidence_refs === undefined ||
-          (Array.isArray(value.evidence_refs) && value.evidence_refs.length === 0)
-        ? []
-        : stringArrayField(value, "evidence_refs", line),
-      markdown: stringField(value, "markdown", line),
-      markdown_digest: stringField(value, "markdown_digest", line),
-    };
-  });
-  return {
-    compile_digest: stringField(binding, "compile_digest", line),
-    file_digest: stringField(binding, "file_digest", line),
-    artifact_ref: stringField(binding, "artifact_ref", line),
-    section_refs: sectionRefs,
-    source_ref: stringField(binding, "source_ref", line),
-    evidence_bindings: evidenceBindings,
-    sections,
-  };
-}
-
-function candidateChangeField(record: Record<string, unknown>, line: number): CandidateChange | undefined {
-  if (record.change === undefined) return undefined;
-  if (typeof record.change !== "string" || !CANDIDATE_CHANGES.has(record.change as CandidateChange)) {
-    throw schemaError(line, "field change must be one of add, update, remove");
-  }
-  return record.change as CandidateChange;
-}
-
-function relationshipModeField(
-  record: Record<string, unknown>,
-  line: number,
-): CodeRelationshipMode | undefined {
-  if (record.relationship_mode === undefined) return undefined;
-  if (
-    record.relationship_mode !== "source-backed-ast" &&
-    record.relationship_mode !== "source-backed-explicit"
-  ) {
-    throw schemaError(line, "field relationship_mode must be source-backed-ast or source-backed-explicit");
-  }
-  return record.relationship_mode;
-}
-
-function optionalStringField(record: Record<string, unknown>, field: string, line: number): string | undefined {
-  if (record[field] === undefined) return undefined;
-  if (typeof record[field] !== "string" || (record[field] as string).length === 0) {
-    throw schemaError(line, `field ${field} must be a non-empty string when present`);
-  }
-  return record[field] as string;
-}
-
-function sourceField(record: Record<string, unknown>, line: number): ProseCandidateSource | undefined {
-  if (record.source === undefined) return undefined;
-  if (!isRecord(record.source)) {
-    throw schemaError(line, "field source must be an object when present");
-  }
-  const source = record.source;
-  if (source.type !== "file" && source.type !== "lark") {
-    throw schemaError(line, "field source.type must be file or lark");
-  }
-  return {
-    type: source.type,
-    name: stringField(source, "name", line),
-    document_path: stringField(source, "document_path", line),
-    locator: stringField(source, "locator", line),
-    source_ref: stringField(source, "source_ref", line),
-    ...(source.snapshot_hash !== undefined ? { snapshot_hash: stringField(source, "snapshot_hash", line) } : {}),
-  };
-}
-
-function parentIndexField(record: Record<string, unknown>, line: number): ParentIndexRecord | undefined {
-  if (record.parent_index === undefined) return undefined;
-  if (!isRecord(record.parent_index)) {
-    throw schemaError(line, "field parent_index must be an object when present");
-  }
-  const children = record.parent_index.children;
-  if (!Array.isArray(children) || children.length === 0) {
-    throw schemaError(line, "field parent_index.children must be a non-empty array");
-  }
-  return {
-    children: children.map((rawChild, index) => {
-      if (!isRecord(rawChild)) {
-        throw schemaError(line, `field parent_index.children[${index}] must be an object`);
-      }
-      return {
-        view_ref: stringField(rawChild, "view_ref", line),
-        node_ref: stringField(rawChild, "node_ref", line),
-        title: stringField(rawChild, "title", line),
-        path: stringField(rawChild, "path", line),
-        ...(rawChild.summary !== undefined ? { summary: stringField(rawChild, "summary", line) } : {}),
-      };
-    }),
-  };
-}
-
-function generatedField(record: Record<string, unknown>, line: number): "parent_index" | undefined {
-  if (record.generated === undefined) return undefined;
-  if (record.generated !== "parent_index") {
-    throw schemaError(line, "field generated must be parent_index when present");
-  }
-  return "parent_index";
-}
-
-function sectionsField(record: Record<string, unknown>, line: number): ProseCandidateSection[] | undefined {
-  if (record.sections === undefined) return undefined;
-  if (!Array.isArray(record.sections)) {
-    throw schemaError(line, "field sections must be an array when present");
-  }
-  return record.sections.map((rawSection, index) => {
-    if (!isRecord(rawSection)) {
-      throw schemaError(line, `field sections[${index}] must be an object`);
-    }
-    const kind = optionalStringField(rawSection, "kind", line);
-    const title = optionalStringField(rawSection, "title", line);
-    const summary = optionalStringField(rawSection, "summary", line);
-    const body = optionalStringField(rawSection, "body", line);
-    const sourceRefs = rawSection.source_refs === undefined
-      ? undefined
-      : stringArrayField(rawSection, "source_refs", line);
-    const contentMode = optionalStringField(rawSection, "content_mode", line);
-    if (
-      contentMode !== undefined &&
-      contentMode !== "verbatim" &&
-      contentMode !== "empty"
-    ) {
-      throw schemaError(line, "field sections[].content_mode must be verbatim or empty");
-    }
-    if (rawSection.content_source_digest !== undefined) throw schemaError(line, "field sections[].content_source_digest is not supported");
-    if (rawSection.content_intent !== undefined) throw schemaError(line, "field sections[].content_intent is not supported");
-    if (rawSection.rewritten_confirmed !== undefined) throw schemaError(line, "field sections[].rewritten_confirmed is not supported");
-    if (rawSection.audit !== undefined) throw schemaError(line, "field sections[].audit is not supported");
-    return {
-      id: stringField(rawSection, "id", line),
-      ...(kind !== undefined ? { kind } : {}),
-      ...(title !== undefined ? { title } : {}),
-      ...(summary !== undefined ? { summary } : {}),
-      ...(body !== undefined ? { body } : {}),
-      source_ref: stringField(rawSection, "source_ref", line),
-      ...(sourceRefs !== undefined ? { source_refs: sourceRefs } : {}),
-      ...(contentMode !== undefined ? { content_mode: contentMode } : {}),
-    };
-  });
-}
-
-function codeEdgesField(record: Record<string, unknown>, line: number): CodeCandidateEdge[] | undefined {
-  if (record.code_edges === undefined) return undefined;
-  if (!Array.isArray(record.code_edges)) {
-    throw schemaError(line, "field code_edges must be an array when present");
-  }
-  return record.code_edges.map((rawEdge, index) => {
-    if (!isRecord(rawEdge)) {
-      throw schemaError(line, `field code_edges[${index}] must be an object`);
-    }
-    if (rawEdge.type !== "contains" && rawEdge.type !== "depends_on") {
-      throw schemaError(line, `field code_edges[${index}].type must be contains or depends_on`);
-    }
-    return {
-      type: rawEdge.type,
-      from: stringField(rawEdge, "from", line),
-      to: stringField(rawEdge, "to", line),
-      source_refs: stringArrayField(rawEdge, "source_refs", line),
-      relation_type: stringField(rawEdge, "relation_type", line),
-    };
-  });
-}
-
-function validateCodeEdgesCandidate(input: {
-  candidateType: CandidateType | undefined;
-  codeEdges: readonly CodeCandidateEdge[] | undefined;
-  nodeRef: string;
-  line: number;
-}): void {
-  if (input.codeEdges !== undefined && input.candidateType !== "code-symbol") {
-    throw schemaError(input.line, "field code_edges is supported only for code-symbol candidates");
-  }
-  if (input.codeEdges?.some((edge) => edge.from !== input.nodeRef)) {
-    throw schemaError(input.line, "field code_edges[].from must equal candidate node_ref");
-  }
-}
-
 export function parseCandidateRecord(value: unknown, line: number): CandidateRecord {
-  if (!isRecord(value)) {
-    throw schemaError(line, "must be a JSON object");
+  if (!isRecord(value)) throw schemaError(line, "must be a JSON object");
+  assertExactFields(value, RECORD_FIELDS, "Candidate", line);
+  if (value.candidate_type !== "indexer-artifact") {
+    throw schemaError(line, "field candidate_type must be indexer-artifact");
   }
-  const candidateType = candidateTypeField(value, line);
-  const candidateChange = candidateChangeField(value, line);
-  const generated = generatedField(value, line);
-  const parentIndex = parentIndexField(value, line);
-  if (generated === "parent_index" && parentIndex === undefined) {
-    throw schemaError(line, "field parent_index is required when generated is parent_index");
+  const collection = value.collection;
+  if (typeof collection !== "string" || !KNOWLEDGE_COLLECTION_SET.has(collection as KnowledgeCollection)) {
+    throw schemaError(line, `field collection must be one of ${KNOWLEDGE_COLLECTIONS.join(", ")}`);
   }
-  if (generated === undefined && parentIndex !== undefined) {
-    throw schemaError(line, "field generated=parent_index is required when parent_index is present");
+  const status = value.status;
+  if (typeof status !== "string" || !CANDIDATE_STATUSES.has(status as CandidateStatus)) {
+    throw schemaError(line, "field status must be one of draft, rejected");
   }
-  const source = sourceField(value, line);
-  const targetPath = optionalStringField(value, "target_path", line);
+  const binding = indexerCandidateField(value.indexer_candidate, line);
   const candidateId = stringField(value, "candidate_id", line);
-  const viewRef = stringField(value, "view_ref", line);
   const nodeRef = stringField(value, "node_ref", line);
-  const collection = collectionField(value, line);
+  const viewRef = stringField(value, "view_ref", line);
   const path = stringField(value, "path", line);
-  const indexerCandidate = indexerCandidateBindingField(value, candidateType, line);
-  if (candidateType === "indexer-artifact") {
-    const expectedCandidateId = indexerCandidateId(indexerCandidate!.file_digest);
-    if (candidateId !== expectedCandidateId) {
-      throw schemaError(line, `field candidate_id must bind Indexer file digest: ${expectedCandidateId}`);
-    }
-    if (!/^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef)) {
-      throw schemaError(line, "field node_ref must be a canonical Indexer Subject ref");
-    }
-    if (!viewRef.startsWith("view:artifact:")) {
-      throw schemaError(line, "field view_ref must be a canonical Indexer Artifact view ref");
-    }
-  } else {
-    const expectedCandidateId = candidateIdFromViewRef(viewRef);
-    if (candidateId !== expectedCandidateId) {
-      throw schemaError(line, `field candidate_id must be derived from view_ref: ${expectedCandidateId}`);
-    }
-    const expectedNodeRef = nodeRefFromViewRef(viewRef);
-    if (expectedNodeRef === undefined || nodeRef !== expectedNodeRef) {
-      throw schemaError(line, "field node_ref must equal the suffix of view_ref");
-    }
-    if (!viewRef.startsWith(`${collection}:`)) {
-      throw schemaError(line, "field view_ref must start with <collection>:");
-    }
+  const structureDigest = stringField(value, "structure_digest", line);
+  const fingerprint = stringField(value, "fingerprint", line);
+  const expectedCandidateId = indexerCandidateId(binding.file_digest);
+  if (candidateId !== expectedCandidateId) {
+    throw schemaError(line, `field candidate_id must bind Indexer file digest: ${expectedCandidateId}`);
+  }
+  if (!/^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef)) {
+    throw schemaError(line, "field node_ref must be a canonical Indexer Subject ref");
+  }
+  if (!/^view:artifact:sha256:[a-f0-9]{64}$/u.test(viewRef)) {
+    throw schemaError(line, "field view_ref must be a canonical Indexer Artifact view ref");
   }
   if (!isSafeKnowledgeTargetPath(collection, path)) {
-    throw schemaError(line, "field path must be an approved knowledge path relative to knowledge/<collection>/");
+    throw schemaError(line, "field path must be relative to its knowledge collection");
   }
-  const body = optionalStringField(value, "body", line);
-  const structureDigest = optionalStringField(value, "structure_digest", line);
-  const sections = sectionsField(value, line);
-  const codeEdges = codeEdgesField(value, line);
-  const relationshipMode = relationshipModeField(value, line);
-  const sharedSourceRefs = optionalStringArrayField(value, "shared_source_refs", line);
-  const nodeTags = value.node_tags === undefined
-    ? undefined
-    : stringArrayField(value, "node_tags", line);
-  if (value.id !== undefined) throw schemaError(line, "field id is not supported; use candidate_id");
-  if (value.target_id !== undefined) throw schemaError(line, "field target_id is not supported");
-  if (targetPath !== undefined) throw schemaError(line, "field target_path is not supported; use path");
-  if (value.replaces !== undefined) throw schemaError(line, "field replaces is not supported");
-  validateCodeEdgesCandidate({ candidateType, codeEdges, nodeRef, line });
-  if (relationshipMode !== undefined && candidateType !== "code-symbol") {
-    throw schemaError(line, "field relationship_mode is supported only for code-symbol candidates");
+  if (structureDigest !== binding.compile_digest) {
+    throw schemaError(line, "field structure_digest must equal indexer_candidate.compile_digest");
+  }
+  if (fingerprint !== binding.file_digest) {
+    throw schemaError(line, "field fingerprint must equal indexer_candidate.file_digest");
   }
   return {
     candidate_id: candidateId,
     node_ref: nodeRef,
     view_ref: viewRef,
-    collection,
-    status: statusField(value, line),
-    ...(candidateType !== undefined ? { candidate_type: candidateType } : {}),
-    ...(candidateChange !== undefined ? { change: candidateChange } : {}),
-    ...(generated !== undefined ? { generated } : {}),
-    ...(parentIndex !== undefined ? { parent_index: parentIndex } : {}),
+    collection: collection as KnowledgeCollection,
+    status: status as CandidateStatus,
+    candidate_type: "indexer-artifact",
     kind: stringField(value, "kind", line),
-    ...(nodeTags !== undefined ? { node_tags: nodeTags } : {}),
     visibility: stringField(value, "visibility", line),
     module: stringField(value, "module", line),
     path,
-    ...(structureDigest !== undefined ? { structure_digest: structureDigest } : {}),
-    source_refs: stringArrayField(value, "source_refs", line),
-    ...(sharedSourceRefs !== undefined ? { shared_source_refs: sharedSourceRefs } : {}),
-    ...(source !== undefined ? { source } : {}),
-    ...(body !== undefined ? { body } : {}),
-    ...(sections !== undefined ? { sections } : {}),
-    ...(codeEdges !== undefined ? { code_edges: codeEdges } : {}),
-    ...(relationshipMode !== undefined ? { relationship_mode: relationshipMode } : {}),
-    ...(indexerCandidate !== undefined ? { indexer_candidate: indexerCandidate } : {}),
-    fingerprint: stringField(value, "fingerprint", line),
-    review: reviewField(value, line),
+    structure_digest: structureDigest,
+    source_refs: stringArray(value.source_refs, "source_refs", line),
+    body: stringField(value, "body", line),
+    indexer_candidate: binding,
+    fingerprint,
+    review: reviewField(value.review, line),
     updated: stringField(value, "updated", line),
   };
 }
@@ -587,21 +367,27 @@ export async function readCandidateRecords(projectRoot: string): Promise<Candida
   const filePath = join(projectRoot, CANDIDATE_LEDGER_FILE);
   if (!existsSync(filePath)) return [];
   const raw = await readFile(filePath, "utf8");
-  const rows: CandidateRecord[] = [];
-  for (const [index, line] of raw.split(/\r?\n/u).entries()) {
-    if (line.trim().length === 0) continue;
-    rows.push(parseCandidateLine(line, index + 1));
-  }
-  return rows;
+  return raw.split(/\r?\n/u).flatMap((line, index) =>
+    line.trim().length === 0 ? [] : [parseCandidateLine(line, index + 1)]
+  );
 }
 
-export async function writeCandidateRecords(projectRoot: string, rows: readonly CandidateRecord[]): Promise<void> {
+export function candidateRecordsContent(rows: readonly CandidateRecord[]): string | undefined {
+  return rows.length === 0
+    ? undefined
+    : `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`;
+}
+
+export async function writeCandidateRecords(
+  projectRoot: string,
+  rows: readonly CandidateRecord[],
+): Promise<void> {
   const filePath = join(projectRoot, CANDIDATE_LEDGER_FILE);
-  if (rows.length === 0) {
+  const content = candidateRecordsContent(rows);
+  if (content === undefined) {
     await rm(filePath, { force: true });
     return;
   }
   await mkdir(dirname(filePath), { recursive: true });
-  const content = rows.map((row) => JSON.stringify(row)).join("\n");
-  await writeFile(filePath, `${content}\n`, "utf8");
+  await writeFile(filePath, content, "utf8");
 }

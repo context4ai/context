@@ -6,13 +6,9 @@ import {
 } from "./indexerArtifactResult.js";
 import { indexerCanonicalRefSchema } from "./indexerLayerComposition.js";
 import {
-  indexerMaterialGapQuestionKey,
   indexerMaterialGapLedgerSchema,
-  type IndexerMaterialGapLedger,
   type IndexerUnresolvedMaterialGap,
 } from "./indexerMaterialGapLedger.js";
-import { indexerMaterialAnswerSourceInputSetDigest } from
-  "./indexerMaterialAnswerReview.js";
 import {
   indexerMaterialQuestionKey,
   indexerQuestionRevisionDigest,
@@ -24,7 +20,6 @@ import {
 } from "./indexerQuestionAuthority.js";
 import {
   INDEXER_EVIDENCE_KINDS,
-  canonicalIndexerJson,
   compareIndexerCanonicalText,
   indexerDigestSchema,
   indexerIdSchema,
@@ -74,8 +69,6 @@ export const materialGapDetailSchema = z.object({
     "provider-requested-material",
     "provider-omitted-required-question",
     "main-evidence-contract-not-met",
-    "answer-approved-awaiting-actualization",
-    "retained-question-unresolved",
   ]),
   registered_material_source_refs: z.array(indexerCanonicalRefSchema),
   suggested_source_refs: z.array(indexerCanonicalRefSchema),
@@ -90,7 +83,6 @@ export const coverageDomainCompletionSchema = z.object({
   owner_cell_count: z.number().int().nonnegative(),
   completed_owner_cell_count: z.number().int().nonnegative(),
   answered_question_count: z.number().int().nonnegative(),
-  excluded_question_count: z.number().int().nonnegative(),
   material_gap_count: z.number().int().nonnegative(),
   capability_gap_count: z.number().int().nonnegative(),
   domain_digest: indexerDigestSchema,
@@ -426,54 +418,12 @@ function materialSources(input: {
   return input.sources.filter((source) => authorized.has(source.source_ref));
 }
 
-function plannedLanding(input: {
-  pair: QuestionPair;
-  result?: IndexerArtifactResult;
-  proposal?: IndexerArtifactResult["material_question_proposals"][number];
-}): string {
-  if (input.proposal?.answer_landing_hint === undefined || input.result === undefined) {
-    return input.pair.target.node_ref;
-  }
-  const hint = input.proposal.answer_landing_hint;
-  return hint.section_key === undefined
-    ? `planned-artifact:${indexerProtocolDigest({
-        author_result_digest: input.result.output_digest,
-        artifact_id: hint.artifact_id,
-      })}`
-    : `planned-section:${indexerProtocolDigest({
-        author_result_digest: input.result.output_digest,
-        artifact_id: hint.artifact_id,
-        section_key: hint.section_key,
-      })}`;
-}
-
-export function exactRetainedEntry(input: {
-  ledger?: IndexerMaterialGapLedger;
-  candidate: IndexerUnresolvedMaterialGap;
-}) {
-  const entry = input.ledger?.entries.find((item) =>
-    indexerMaterialGapQuestionKey(item) === indexerMaterialGapQuestionKey(input.candidate)
-  );
-  if (entry === undefined) return undefined;
-  const stable = {
-    owner_cell_ref: entry.owner_cell_ref,
-    question_ref: entry.question_ref,
-    question_contract_digest: entry.question_contract_digest,
-    question_subject_target_ref: entry.question_subject_target_ref,
-    question_target_item_digest: entry.question_target_item_digest,
-    answer_landing_ref: entry.answer_landing_ref,
-    question_revision_digest: entry.question_revision_digest,
-    dependencies: entry.dependencies,
-  };
-  return canonicalIndexerJson(stable) === canonicalIndexerJson(input.candidate)
-    ? entry
-    : undefined;
-}
-
 export function mainEvidenceMeetsContract(input: {
   pair: QuestionPair;
   result: IndexerArtifactResult;
   evidence_binding_digest: string;
+  evidence_facts: Readonly<Record<string, unknown>>;
+  allowed_selector_fact_paths: ReadonlySet<string>;
 }): boolean {
   const binding = input.result.evidence_bindings.find((item) =>
     item.binding_digest === input.evidence_binding_digest
@@ -483,14 +433,18 @@ export function mainEvidenceMeetsContract(input: {
     contract.accepted_kinds.includes(binding.kind) &&
     contract.minimum_items <= 1 &&
     contract.minimum_distinct_sources <= 1 &&
-    contract.provenance_constraints === undefined;
+    (contract.provenance_constraints === undefined ||
+      evaluateIndexerRestrictedSelector({
+        selector: contract.provenance_constraints,
+        facts: input.evidence_facts,
+        allowed_fact_paths: input.allowed_selector_fact_paths,
+      }));
 }
 
 export function materialGap(input: {
   registry: IndexerRegistry;
   pair: QuestionPair;
   sources: readonly IndexerRegisteredMaterialSource[];
-  retained_ledger?: IndexerMaterialGapLedger;
   disposition?: ReturnType<typeof dispositionMap> extends Map<string, infer V> ? V : never;
   reason_code: z.infer<typeof materialGapDetailSchema>["reason_code"];
 }): z.infer<typeof materialGapDetailSchema> {
@@ -502,11 +456,6 @@ export function materialGap(input: {
     : input.disposition!.result.material_question_proposals.find((item) =>
         item.proposal_ref === materialDisposition.material_question_proposal_ref
       );
-  const landing = plannedLanding({
-    pair: input.pair,
-    ...(input.disposition === undefined ? {} : { result: input.disposition.result }),
-    ...(proposal === undefined ? {} : { proposal }),
-  });
   const registered = materialSources({
     registry: input.registry,
     owner: input.pair.owner,
@@ -517,17 +466,16 @@ export function materialGap(input: {
     owner_indexer_ids: input.pair.owner.owner_indexer_ids,
   });
   const questionTargetItemDigest = indexerQuestionTargetItemDigest(input.pair.target);
-  const landingDigest = indexerProtocolDigest({ answer_landing_ref: landing });
   const questionRevision = indexerQuestionRevisionDigest({
     question_contract_digest: input.pair.question.contract_digest,
     question_key: input.pair.question_key,
     owner_cell_digest: ownerCellDigest,
     question_target_item_digest: questionTargetItemDigest,
-    answer_landing_dependency_digest: landingDigest,
   });
-  const sourceInputSetDigest = indexerMaterialAnswerSourceInputSetDigest(
-    registered.map((source) => source.source_input_digest),
-  );
+  const sourceInputSetDigest = indexerProtocolDigest({
+    source_input_digests: registered.map((source) => source.source_input_digest)
+      .sort(compareIndexerCanonicalText),
+  });
   const emittedQuestionDigest = proposal === undefined
     ? indexerProtocolDigest({
         protocol: "context.indexer.automatic-material-question/v1",
@@ -541,7 +489,6 @@ export function materialGap(input: {
     question_contract_digest: input.pair.question.contract_digest,
     question_subject_target_ref: input.pair.target.target_ref,
     question_target_item_digest: questionTargetItemDigest,
-    answer_landing_ref: landing,
     question_revision_digest: questionRevision,
     state: "unresolved",
     dependencies: {
@@ -550,26 +497,16 @@ export function materialGap(input: {
       ),
       owner_cell_digest: ownerCellDigest,
       emitted_question_digest: emittedQuestionDigest,
-      answer_landing_dependency_digest: landingDigest,
       source_input_set_digest: sourceInputSetDigest,
     },
   };
-  const retained = exactRetainedEntry({
-    ...(input.retained_ledger === undefined ? {} : { ledger: input.retained_ledger }),
-    candidate,
-  });
-  const reasonCode = retained?.state === "answer-approved"
-    ? "answer-approved-awaiting-actualization" as const
-    : retained?.state === "unresolved"
-    ? "retained-question-unresolved" as const
-    : input.reason_code;
   return materialGapDetailSchema.parse({
     question_key: input.pair.question_key,
     owner_cell_ref: input.pair.owner.owner_cell_ref,
     requirement_ref: input.pair.owner.requirement_ref,
     coverage_domain: input.pair.owner.coverage_domain,
     severity: input.pair.owner.obligation === "required" ? "blocking" : "recommended",
-    reason_code: reasonCode,
+    reason_code: input.reason_code,
     registered_material_source_refs: registered.map((source) => source.source_ref),
     suggested_source_refs: [...new Set(proposal?.source_hints ?? [])]
       .sort(compareIndexerCanonicalText),

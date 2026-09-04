@@ -34,7 +34,11 @@ import { isJsxLikePath } from "./ecmaScriptLanguage.js";
 import { collectStaticCallRelations } from "./staticCallRelations.js";
 import { collectImportBindings } from "./symbolExtractorImports.js";
 import type { TsConfigPathResolver } from "./tsconfigPaths.js";
-import { createEcmaScriptSourceFile, syntaxDiagnostics } from "./typescriptAst.js";
+import {
+  createEcmaScriptSourceFile,
+  syntaxDiagnostics,
+  treeSitterCompatibleJsxSource,
+} from "./typescriptAst.js";
 
 const analyzeDeclaration = (
   node: SyntaxNode,
@@ -357,7 +361,11 @@ export const analyzeFile = async (
   const source = await fs.readFile(filePath);
   const sourceFile = createEcmaScriptSourceFile(source, filePath);
   const commonJs = analyzeCommonJsModule(source, filePath);
-  const tree = await parseFile(source, isJsxLikePath(filePath));
+  const jsxLike = isJsxLikePath(filePath);
+  const parserSource = jsxLike
+    ? treeSitterCompatibleJsxSource(sourceFile, source)
+    : source;
+  const tree = await parseFile(parserSource, jsxLike);
   if (!tree) {
     const diagnostics = syntaxDiagnostics(sourceFile);
     if (diagnostics.length === 0) {

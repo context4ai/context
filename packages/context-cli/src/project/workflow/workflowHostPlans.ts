@@ -115,6 +115,9 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.materialize-indexer-instructions/v1": () => ({
     commands: [],
   }),
+  "context.materialize-indexer-workset-view/v1": () => ({
+    commands: [],
+  }),
   "context.inspect-indexer-project-proposal/v1": () => ({
     commands: [],
   }),
@@ -142,19 +145,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.confirm-subject-reidentification/v1": () => ({
     commands: [command(
       "context indexer confirm-subject-reidentification --input .tmp/agent-payloads/indexer-subject-reidentification-confirmation.json --format json",
-      "external",
-      "agent-required",
-    )],
-  }),
-  "context.inspect-material-answer-review/v1": () => ({
-    commands: [command(
-      "context indexer inspect-material-answer-review --input .tmp/agent-payloads/indexer-material-answer-review-inspection.json --format json",
-      "read",
-    )],
-  }),
-  "context.review-material-answer-candidate/v1": () => ({
-    commands: [command(
-      "context indexer review-material-answer-candidate --input .tmp/agent-payloads/indexer-material-answer-review-resolution.json --format json",
       "external",
       "agent-required",
     )],
@@ -191,147 +181,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         : [command(withJsonFormat(next), "external", "automatic")],
     };
   },
-  "context.extract.inspect-capabilities": (observation) => ({
-    commands: observation.repoSources.length === 0
-      ? []
-      : [command("context source inspect --repo-only --format json", "read")],
-  }),
-  "context.project.configure-extraction": () => ({
-    commands: [],
-    configuration: {
-      file: "src/index.ts",
-      action:
-        "Declare extraction for every user-confirmed repository module and scope.",
-    },
-  }),
-  "context.extract.preview-batch": (observation) => {
-    const phases = [...new Set([
-      ...observation.staleSourcePhases,
-      ...observation.pendingExtractPhases,
-    ])];
-    return {
-      commands: [command(
-        `context run --preview-extraction-batch${phases.map((phase) => ` --preview-phase ${JSON.stringify(phase)}`).join("")} --format json`,
-        "write",
-        "automatic",
-        { target: "subprocess" },
-      )],
-    };
-  },
-  "context.code-index.migrate": () => ({
-    commands: [command(
-      "context migrate codeindex --format json",
-      "write",
-      "automatic",
-      { target: "subprocess" },
-    )],
-  }),
-  "context.extract.next": (observation) => {
-    const phase = observation.staleSourcePhases[0] ??
-      observation.pendingExtractPhases[0];
-    const definition = observation.phases.find((candidate) => candidate.id === phase);
-    const projectCode = definition?.kind === "phase.extract.custom" || definition?.kind === "phase.custom";
-    return {
-      commands: phase === undefined
-        ? []
-        : [command(
-            `context run ${phase} --format json`,
-            "write",
-            "automatic",
-            projectCode ? { target: "subprocess" } : undefined,
-          )],
-    };
-  },
-  "context.code-index-audit.submit": () => ({
-    commands: [command(
-      "context review code-index --input .tmp/agent-payloads/code-index-audit-decision.json --format json",
-      "write",
-      "agent-required",
-    )],
-  }),
-  "context.project.revise-code-index": (observation) => {
-    const decision = observation.codeIndexAudit?.decision;
-    const units = decision?.revision_plan?.units ?? [];
-    const actions = decision?.revision_plan?.actions ?? [];
-    return {
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-        action: [
-          units.length === 0
-            ? "Revise the code-index units identified by the current Agent audit."
-            : `Revise code-index units ${units.join(", ")}.`,
-          actions.length === 0
-            ? "Improve aggregation, explanatory sections, evidence scope, source coverage, or structured handoffs as reported."
-            : `Apply this accepted revision plan: ${actions.join("; ")}.`,
-          "Then run context status --format json; the Route will preview, extract, and audit the new revision before review.",
-        ].join(" "),
-      },
-    };
-  },
-  "context.project.apply-code-index-guidance": (observation) => {
-    const units = observation.codeIndexAudit?.guidance_units ?? [];
-    return {
-      commands: [],
-      configuration: {
-        file: "src/index.ts",
-        action: [
-          `Apply the user's current guidance to code-index units ${units.map((unit) => unit.unit_id).join(", ") || "reported by the current audit"}.`,
-          "Change only the confirmed source scope, profile, supplied material, extraction inventory, or Section construction.",
-          "Do not restart modules that already pass. Then run context status --format json and continue from the returned Route.",
-        ].join(" "),
-      },
-    };
-  },
-  "context.document.inspect-classification": (observation) => ({
-    commands: observation.unclassifiedDocumentTargets.map((target) =>
-      command(target.command, "read")
-    ),
-  }),
-  "context.project.configure-prose": (observation) => ({
-    commands: [],
-    configuration: {
-      file: "src/index.ts",
-      action: observation.pendingStructureTargets
-        .flatMap((target) => target.suggestions)
-        .join("; ") ||
-        "Declare align, compile, and review for the confirmed document source and collection.",
-    },
-  }),
-  "context.align.next": (observation) => ({
-    commands: observation.pendingStructureTargets.map((target) =>
-      command(target.command, "read")
-    ),
-  }),
-  "context.structure.inspect": (observation) => ({
-    commands: [
-      observation.alignDocumentStructureSummaryNext,
-      observation.alignDocumentValidateNext,
-    ].flatMap((value) =>
-      value === undefined ? [] : [command(value, "read")]
-    ),
-  }),
-  "context.structure.confirm": (observation) => ({
-    commands: observation.alignDocumentConfirmNext === undefined
-      ? []
-      : [command(observation.alignDocumentConfirmNext, "write")],
-  }),
-  "context.compile.next": (observation) => ({
-    commands: observation.compileDocumentNext === undefined
-      ? []
-      : [command(observation.compileDocumentNext, "write")],
-  }),
-  "context.review.preserve-approved-identities": (observation) => {
-    const source = observation.reviewIdentityConflicts.sourceKeys[0];
-    return {
-      commands: source === undefined
-        ? []
-        : [command(
-            `context review reconcile-identities --source ${source} --strategy preserve-approved --format json`,
-            "write",
-          )],
-    };
-  },
   "context.review.inspect-current": (observation) => {
     const next = reviewOpenCommand(observation);
     return {
@@ -341,7 +190,11 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.review.approve-current": (observation) => {
     const next = reviewApproveCommand(observation);
     return {
-      commands: next === undefined ? [] : [command(next, "write")],
+      // Managed approval is a semantic decision. Keep it visible to the Agent
+      // after the complete Candidate report has been generated and read.
+      commands: next === undefined
+        ? []
+        : [command(next, "write", "agent-required")],
     };
   },
   "context.review.force-approve-current": (observation) => {
@@ -401,21 +254,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         after_edit: "context status --format json",
       },
     },
-  }),
-  "context.document-optimization.next": (observation) => ({
-    commands: observation.documentOptimization?.enabled === true && !observation.documentOptimization.current
-      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
-      : [],
-  }),
-  "context.document-optimization.guidance": (observation) => ({
-    commands: observation.documentOptimization?.guidance_required === true
-      ? [command("context optimize-docs plan --format json", "read", "agent-required")]
-      : [],
-  }),
-  "context.document-revision.next": (observation) => ({
-    commands: observation.documentOptimization?.revision_requested === true
-      ? [command("context optimize-docs revise-current --format json", "read", "agent-required")]
-      : [],
   }),
   "context.logs.flush": () => ({
     commands: [command(

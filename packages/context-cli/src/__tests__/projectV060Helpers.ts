@@ -78,16 +78,13 @@ export function initTsMonorepoFixture(path: string): string {
 
 export async function writeSampleLibProjectEntry(project: string): Promise<void> {
   await writeFile(join(project, "src", "index.ts"), [
-    'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
+    'import { defineProject, source } from "@c4a/context";',
     "",
     'const sampleLib = source("20260712", "sample-lib");',
     "",
     "export default defineProject({",
     "  sources: [sampleLib],",
-    "  phases: [",
-    '    extractTs({ source: sampleLib, collection: "codegraph" }),',
-    '    reviewValidity({ collection: "codegraph" }),',
-    "  ],",
+    "  phases: [],",
     "  packages: [],",
     "});",
     "",

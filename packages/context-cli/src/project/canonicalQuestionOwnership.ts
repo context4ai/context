@@ -55,3 +55,41 @@ export function assertNoCanonicalQuestionDefinition(path: string, source: string
     );
   }
 }
+
+async function collectFiles(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await collectFiles(path));
+    else if (entry.isFile()) files.push(path);
+  }
+  return files;
+}
+
+export async function inspectCanonicalQuestionPayloadsInBundle(input: {
+  repositoryRoot: string;
+  bundlePath: string;
+}): Promise<CanonicalQuestionPayloadFinding[]> {
+  const findings: CanonicalQuestionPayloadFinding[] = [];
+  for (const absolute of await collectFiles(join(input.repositoryRoot, input.bundlePath))) {
+    const extension = extname(absolute);
+    const path = relative(input.repositoryRoot, absolute).split(sep).join("/");
+    const source = await readFile(absolute, "utf8");
+    if ([".json", ".yaml", ".yml"].includes(extension)) {
+      const parsed = extension === ".json"
+        ? JSON.parse(source) as unknown
+        : YAML.parse(source) as unknown;
+      findings.push(...findCanonicalQuestionPayloads(path, parsed));
+      continue;
+    }
+    const payloadKeys = findCanonicalQuestionDefinitionKeys(source);
+    if (payloadKeys.length >= 3) {
+      findings.push({ path, pointer: "$text", payload_keys: payloadKeys });
+    }
+  }
+  return findings;
+}
+import { readdir, readFile } from "node:fs/promises";
+import { extname, join, relative, sep } from "node:path";
+import YAML from "yaml";

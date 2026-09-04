@@ -7,14 +7,13 @@ import { ContextError } from "../lib/errors.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import { queueContextRuntimeEvent } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
-import { readApprovedStructureEdges, readConfirmedStructureEdgeProjection } from "./approvedStructureEdges.js";
+import { readApprovedStructureEdges } from "./approvedStructureEdges.js";
 import { verifyProjectWorkspace } from "./verify.js";
 import { validateStructureEdgeContract, type StructureEdgeContractResult } from "./structureEdgeContract.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { withProjectWriteLock } from "./writeLock.js";
-import { PARENT_INDEX_GENERATED_KIND } from "./parentIndexView.js";
+import { PARENT_INDEX_GENERATED_KIND } from "./approvedParentIndex.js";
 import { approvedStructureInputHash, sha256Text, type ApprovedStructureInputFile } from "./approvedStructureInputHash.js";
-import { readProseCompileBatchProgress } from "./proseCompileBatch.js";
 import {
   codegraphEdgesFromFrontmatter,
   codegraphRelationshipCoverage,
@@ -23,19 +22,17 @@ import {
 } from "./codegraphRelationshipProjection.js";
 import { clearCompletedLifecycle } from "./lifecycleCleanup.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import {
-  approvedStructureSourceInputsRecord,
-  mergedApprovedStructureSourceInputs,
-} from "./approvedStructureInputs.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import {
   approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
+  ensureApprovedKnowledgePresentation,
   hydrateApprovedKnowledgeMarkdown,
   readApprovedKnowledgeMetadataIndex,
 } from "./approvedKnowledgeMetadata.js";
+import { packageKnowledgeDescription } from "./packageKnowledgeProjection.js";
 
 interface ApprovedKnowledgeFile {
   relPath: string;
@@ -249,6 +246,11 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
     const nodeTags = Array.isArray(frontmatter.node_tags)
       ? frontmatter.node_tags.filter((item): item is string => typeof item === "string")
       : undefined;
+    const summary = packageKnowledgeDescription(frontmatter.description);
+    const tags = Array.isArray(frontmatter.tags)
+      ? frontmatter.tags.filter((item): item is string => typeof item === "string")
+      : undefined;
+    const structureTags = tags?.includes("indexer") ? undefined : tags;
     return {
       view_ref: viewRef,
       node_ref: nodeRef,
@@ -260,9 +262,9 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       path: file.relPath,
       ...(frontmatter.generated === PARENT_INDEX_GENERATED_KIND ? { generated: PARENT_INDEX_GENERATED_KIND } : {}),
       ...(parseParentIndexChildren(frontmatter) !== undefined ? { children: parseParentIndexChildren(frontmatter) } : {}),
-      ...(typeof frontmatter.description === "string" ? { summary: frontmatter.description } : {}),
+      ...(typeof summary === "string" ? { summary } : {}),
       ...(nodeTags !== undefined ? { node_tags: nodeTags } : {}),
-      ...(Array.isArray(frontmatter.tags) ? { tags: frontmatter.tags.filter((item): item is string => typeof item === "string") } : {}),
+      ...(structureTags === undefined ? {} : { tags: structureTags }),
       ...(typeof frontmatter.relationship_mode === "string"
         ? { relationship_mode: frontmatter.relationship_mode }
         : {}),
@@ -306,40 +308,29 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
     }
   }
   const edgeWarnings: string[] = [];
-  const confirmedEdges = await readConfirmedStructureEdgeProjection(projectRoot, approvedEndpointRefs, {
+  const existingEdges = await readApprovedStructureEdges(projectRoot, approvedEndpointRefs, {
     tolerateInvalidYaml: true,
-    tolerateMissingEndpoints: true,
+    tolerateMissingSourceBackedAstEndpoints: true,
     onInvalidYaml: (message) => {
-      edgeWarnings.push(`Dropped confirmed structure edges because .tmp/context-runtime/lifecycle/structure.yaml could not be parsed: ${message}`);
+      edgeWarnings.push(`Dropped existing approved edges because ${STRUCTURE_PATH} could not be parsed: ${message}`);
     },
-    onMissingEndpoint: (message) => {
-      edgeWarnings.push(message);
-    },
+    onMissingEndpoint: (message) => edgeWarnings.push(message),
   });
-  const existingEdges = confirmedEdges === null
-    ? await readApprovedStructureEdges(projectRoot, approvedEndpointRefs, {
-        tolerateInvalidYaml: true,
-        tolerateMissingSourceBackedAstEndpoints: true,
-        onInvalidYaml: (message) => {
-          edgeWarnings.push(`Dropped existing approved edges because ${STRUCTURE_PATH} could not be parsed: ${message}`);
-        },
-        onMissingEndpoint: (message) => edgeWarnings.push(message),
-      })
-    : [];
   const markdownCodeEdges = views.flatMap((view) => view.code_edges);
   const edges = uniqueEdges(currentCodegraphEdges({
-    baseEdges: confirmedEdges ?? existingEdges,
+    baseEdges: existingEdges,
     markdownEdges: markdownCodeEdges,
     endpointRefs: approvedEndpointRefs,
     onMissingEndpoint: (message) => edgeWarnings.push(message),
   }));
-  const sourceInputs = await mergedApprovedStructureSourceInputs(projectRoot);
   const compactFiles = rawFiles.map((file) => ({
     ...file,
     content: compactApprovedKnowledgeMarkdown(file.content),
   }));
   const metadataHashRecords = projectedViews.map((view) => ({
     view_ref: view.view_ref,
+    node_ref: view.node_ref,
+    sources: view.sources,
     node_type: view.node_type,
     ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
     ...(view.generated === undefined ? {} : { generated: view.generated }),
@@ -352,7 +343,6 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
     schemaVersion: STRUCTURE_SCHEMA_VERSION,
     files: approvedStructureInputFiles(compactFiles),
     edges,
-    sourceInputs,
     metadata: metadataHashRecords,
   });
   return {
@@ -363,9 +353,6 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       nodes,
       views: projectedViews,
       edges,
-      ...(sourceInputs.length === 0
-        ? {}
-        : { source_inputs: approvedStructureSourceInputsRecord(sourceInputs) }),
     },
     edgeWarnings,
     compactFiles,
@@ -463,8 +450,10 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
 }
 
 export async function closeProjectWorkspace(projectRoot: string): Promise<ProjectCloseResult> {
-  return withProjectWriteLock(projectRoot, "close-prose", async () => {
-    const draftCandidates = (await readCandidateRecords(projectRoot)).filter((candidate) => candidate.status === "draft");
+  return withProjectWriteLock(projectRoot, "close-knowledge", async () => {
+    const draftCandidates = (await readCandidateRecords(projectRoot)).filter((candidate) =>
+      candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
+    );
     if (draftCandidates.length > 0) {
       throw new ContextError(ExitCode.WorkspaceStateError, "close is blocked while draft candidates still need Review", {
         category: ErrorCategory.WorkspaceStateInvalid,
@@ -474,18 +463,14 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
         next: "Run context status --format json and complete the current Review route before close.",
       });
     }
-    const compileBatch = await readProseCompileBatchProgress({ projectRoot });
-    if (compileBatch !== undefined && !compileBatch.complete) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "close is blocked until the confirmed compile batch is fully reviewed", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        planned: compileBatch.plannedViewRefs.length,
-        drafts: compileBatch.draftViewRefs,
-        rejected: compileBatch.rejectedViewRefs,
-        remaining: compileBatch.remainingViewRefs,
-        next: "Run context status --format json and finish the remaining compile or batch Review route before close.",
-      });
-    }
     const resourceProjection = await repairApprovedKnowledgeAssetProjections(projectRoot);
+    const descriptionRepairs = (await approvedKnowledgeFiles(projectRoot)).flatMap((file) => {
+      const content = ensureApprovedKnowledgePresentation(file.content);
+      return content === file.content ? [] : [{ ...file, content }];
+    });
+    await Promise.all(descriptionRepairs.map((file) =>
+      writeFile(file.absPath, file.content, "utf8")
+    ));
     const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
     const nodes = Array.isArray(structure.nodes) ? structure.nodes.length : 0;
     const views = Array.isArray(structure.views) ? structure.views.length : 0;

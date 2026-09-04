@@ -70,7 +70,7 @@ const partitionGroupSchema = z.object({
   subject_intent: z.enum(["primary", "enrich-or-independent"]),
   logical_unit_ref: indexerCanonicalRefSchema,
   label: z.string().min(1),
-  reader_question_refs: z.array(indexerCanonicalRefSchema).min(1),
+  reader_question_refs: z.array(indexerCanonicalRefSchema),
   question_target_bindings: z.array(questionTargetBindingSchema),
   member_ids: z.array(indexerCanonicalRefSchema).min(1),
 }).strict();
@@ -166,6 +166,30 @@ export function indexerPartitionPlanBindingDigest(plan: IndexerPartitionPlan): s
     strategy_digest: plan.strategy_digest,
     unit_type: plan.unit_type,
     partition_axis: plan.partition_axis,
+  });
+}
+
+export function indexerPartitionGroupBindingDigest(
+  plan: IndexerPartitionPlan,
+  groupKey: string,
+): string {
+  return indexerProtocolDigest({
+    strategy_ref: plan.strategy_ref,
+    strategy_digest: plan.strategy_digest,
+    unit_type: plan.unit_type,
+    partition_axis: plan.partition_axis,
+    group_projection_digest: indexerPartitionGroupProjectionDigest(plan, groupKey),
+  });
+}
+
+export function indexerPartitionGroupQuestionTargetInventoryDigest(
+  plan: IndexerPartitionPlan,
+  groupKey: string,
+): string {
+  const group = plan.groups.find((item) => item.group_key === groupKey);
+  if (group === undefined) throw new TypeError(`unknown partition group ${groupKey}`);
+  return indexerProtocolDigest({
+    question_target_bindings: group.question_target_bindings,
   });
 }
 
@@ -391,7 +415,16 @@ export function validateIndexerPartitionPlan(input: {
   });
   if (plan.status === "complete") {
     if (plan.groups.length === 0) {
-      throw new TypeError("complete PartitionPlan cannot have zero groups");
+      if (
+        plan.reader_question_refs.length > 0 ||
+        (input.required_question_target_refs ?? input.workset.allowed_question_target_refs)
+            .length > 0 ||
+        plan.member_dispositions.some((item) => item.inventory_disposition === "owned")
+      ) {
+        throw new TypeError(
+          "empty complete PartitionPlan requires no reader questions, no targets, and no owned members",
+        );
+      }
     }
     validateQuestionTargetClosure(
       plan,

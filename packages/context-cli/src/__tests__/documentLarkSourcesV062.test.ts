@@ -126,21 +126,18 @@ describe("0.6.2 Lark document source registry helpers", () => {
     }
   });
 
-  test("source add lark returns declared align next_action", async () => {
+  test("source add lark returns the lifecycle reevaluation next action", async () => {
     const root = await mkdtemp(join(tmpdir(), "ctx-doc-sources-v062-add-lark-next-"));
     try {
       const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
       await writeFile(join(result.projectRoot, "src", "index.ts"), [
-        'import { alignProse, captureLark, defineProject, source } from "@c4a/context";',
+        'import { captureLark, defineProject, source } from "@c4a/context";',
         "",
         'const handbook = source("handbook");',
         "",
         "export default defineProject({",
         "  sources: [handbook],",
-        "  phases: [",
-        "    captureLark({ source: handbook }),",
-        '    alignProse({ source: handbook, collection: "sop" }),',
-        "  ],",
+        "  phases: [captureLark({ source: handbook })],",
         "  packages: [],",
         "});",
         "",
@@ -166,7 +163,7 @@ describe("0.6.2 Lark document source registry helpers", () => {
     }
   });
 
-  test("captured lark inspect routes to read-plan instead of dry-run", async () => {
+  test("captured lark inspect routes back to the workspace workflow", async () => {
     const root = await mkdtemp(join(tmpdir(), "ctx-doc-sources-v062-ready-lark-"));
     try {
       const result = await initContextProject({ cwd: root, projectDir: "kb", dev: true });

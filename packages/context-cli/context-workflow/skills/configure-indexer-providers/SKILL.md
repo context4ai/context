@@ -17,17 +17,17 @@ completion conditions. This Action is the entry for
 the guide's `indexer-provider-unavailable` handling instead of substituting a
 different version or cache.
 
-Report the exact CLI-bundled catalog together with other Indexer entry Skills
-already visible in this conversation. For an exact Skill root already exposed
-by the Host, read only `SKILL.md` frontmatter and the sibling
+The current Action input already contains the exact requirements and
+CLI-bundled catalog. Report those bundled entries together with other Indexer
+entry Skills already visible in this conversation. For an exact Skill root
+already exposed by the Host, read only `SKILL.md` frontmatter and the sibling
 `context-indexer.yaml`: the manifest version is authoritative and
 `metadata.context-provider-version` must match it. Do not load Provider guidance
 until selection. Group the same Skill name and exact version into one
 conversation item with all observed source types; an installed copy of the
-same CLI-bundled identity is not another Provider. Preserve distinct source
-observations in `visible_skills`, keep different versions separate, and never
-use source count or discovery order as precedence. Do not scan plugin caches or
-persist this discovery list.
+same CLI-bundled identity is not another Provider. Keep different versions
+separate, never use source count or discovery order as precedence, and do not
+scan plugin caches or persist this discovery list.
 
 When the Graph enters through `markdown-provider`, first require the completed
 capture report and report the visible `context-markdown-indexer*` Skills before
@@ -36,23 +36,36 @@ current evidence. Do not infer semantic ownership from filenames, titles, or
 headings, and do not persist the discovery list. Capture proves byte/currentness
 only; the selected Markdown Provider remains responsible for semantic indexing.
 
-Produce `context.indexer.provider-route-input/v1` for the current, unchanged
-requirement set. Select portable distribution locators and exact versions and
-integrities. Each required requirement/domain/source/module owner cell needs one
-primary Indexer; overlapping read scope is allowed for enrichers. One Indexer
-may combine a primary layer, supporting profiles, extension layers, and
-composers, but Provider array order is not precedence.
+Return only the compact current-Action result:
 
-On the first pass set `community_fallback_attempted: false`. If the CLI records
-the route Action as `partial`, retry with the applicable CLI-bundled community
-profile and set it to `true`. If the CLI reports conflicting primary owner cells,
-do not choose one by name order: present the exact conflict and wait for a
-decision. If fallback still leaves an unowned required cell, preserve the exact
-CLI `capability_gap_proof` and record `blocked`; never invent a Provider or
-weaken the requirement. Only the following `propose-indexer-customization`
-Action may use that proof to draft a dependency-free minimal `extend`.
+```yaml
+stage: provider-selection
+host_visible_skills: []
+indexers:
+  - <one complete selected Indexer registry entry>
+```
 
-Record the CLI Route Action outcome exactly from `route.graph_outcome`. Only a
-`completed` report may pass its `selection_proposal_input` to
-`validate-indexer-selection-proposal`. Provider resolution and execution remain
-separate Actions.
+`host_visible_skills` contains only non-CLI observations already visible to
+the Host. `indexers` contains the semantic registry entries selected for the
+unchanged requirements in the Action input. Select portable distribution
+locators and exact versions and integrities. Each required
+requirement/domain/source/module owner cell needs one primary Indexer;
+overlapping read scope is allowed for enrichers. One Indexer may combine a
+primary layer, supporting profiles, extension layers, and composers, but
+Provider array order is not precedence.
+
+Choose the applicable CLI-bundled community profile directly when no visible
+specialized Provider is required. The CLI constructs the full route input,
+performs fallback/conflict checks, validates the proposal, resolves and stages
+bundles, and atomically applies `src/indexers.yaml`. If the current Route reports
+a primary owner conflict or an uncovered required cell, present that exact
+problem and wait; never invent a Provider or weaken the requirement.
+
+Submit the result only through the exact `context action complete-current`
+command returned by the Route. Never call the low-level route, validation,
+resolution, staging or apply commands as a production workflow. If a selected
+external Provider needs Host resolution, the next current Route exposes that
+existing Host Action and its exact request; invoke it once and submit its Host
+result through the next `complete-current` command. If the resolved Bundle carries a
+non-allowlisted program, continue through the returned existing program-execution
+Gate; never bypass it or fall back to its low-level command.

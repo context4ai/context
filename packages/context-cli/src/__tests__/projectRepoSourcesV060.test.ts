@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -16,7 +16,7 @@ import {
 } from "./projectV060Helpers.js";
 
 describe("0.6.0 repository source behavior", () => {
-  test("source add repo accepts a monorepo subdirectory and scopes extraction to it", async () => {
+  test("source add repo accepts a monorepo subdirectory and scopes freshness to it", async () => {
     const root = makeTmp();
     const monorepo = join(root, "product_monorepo");
     const packageDir = join(monorepo, "packages", "component-lib");
@@ -43,16 +43,13 @@ describe("0.6.0 repository source behavior", () => {
 
       await runCliInDir(root, ["init", "kb"]);
       await writeFile(join(project, "src", "index.ts"), [
-        'import { defineProject, extractTs, reviewValidity, source } from "@c4a/context";',
+        'import { defineProject, source } from "@c4a/context";',
         "",
         'const componentLib = source("20260712", "component-lib");',
         "",
         "export default defineProject({",
         "  sources: [componentLib],",
-        "  phases: [",
-        '    extractTs({ source: componentLib, collection: "codeindex" }),',
-        '    reviewValidity({ collection: "codeindex" }),',
-        "  ],",
+        "  phases: [],",
         "  packages: [],",
         "});",
         "",
@@ -129,12 +126,6 @@ describe("0.6.0 repository source behavior", () => {
         }],
       });
 
-      await runCliInDir(project, ["run", "extract:20260712/component-lib:codeindex"]);
-      const ledger = readFileSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"), "utf8");
-      expect(ledger).toContain("ComponentButton");
-      expect(ledger).toContain('"candidate_id":"codeindex/component-lib/symbol/componentbutton"');
-      expect(ledger).not.toContain("component-lib/demo-component-lib");
-      expect(ledger).toContain("repo:20260712/component-lib#symbol:src/index.ts:ComponentButton:function@");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

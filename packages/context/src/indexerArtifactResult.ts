@@ -6,12 +6,15 @@ import {
   type IndexerArtifactPolicyEligibility,
 } from "./indexerArtifactPolicy.js";
 import {
-  indexerArtifactContentBlockSchema,
   indexerArtifactFactSchema,
-  indexerCanonicalJsonSchema,
   projectIndexerFactValue,
   type IndexerArtifactFact,
 } from "./indexerContentLayers.js";
+import {
+  indexerArtifactSchema,
+  indexerArtifactSectionProjectionSchema,
+  type IndexerArtifactSectionProjection,
+} from "./indexerArtifact.js";
 import {
   indexerCapabilityGroupEvidenceSchema,
   validateIndexerCapabilityGroupEvidence,
@@ -70,49 +73,6 @@ export const indexerEvidenceBindingSchema = z.object({
   binding_digest: indexerDigestSchema,
 }).strict();
 
-export const indexerArtifactSectionProjectionSchema = z.object({
-  section_key: indexerIdSchema,
-  owner_indexer_id: indexerIdSchema,
-  document_kind: indexerIdSchema,
-  reader_goal: indexerIdSchema,
-  artifact_kind: indexerIdSchema,
-}).strict();
-
-const artifactSectionSchema = indexerArtifactSectionProjectionSchema.extend({
-  blocks: z.array(indexerArtifactContentBlockSchema).min(1),
-}).strict();
-
-const artifactTemplateVariableSchema = z.object({
-  value: indexerCanonicalJsonSchema,
-  fact_refs: z.array(indexerCanonicalRefSchema),
-  evidence_refs: z.array(indexerCanonicalRefSchema),
-}).strict();
-
-const artifactCommonFields = {
-  artifact_id: indexerIdSchema,
-  artifact_kind: indexerIdSchema,
-  artifact_policy_variant: indexerIdSchema,
-};
-
-const templateArtifactSchema = z.object({
-  ...artifactCommonFields,
-  representation: z.literal("template"),
-  template_id: indexerIdSchema,
-  variables: z.record(artifactTemplateVariableSchema),
-  section_projections: z.array(indexerArtifactSectionProjectionSchema).min(1),
-}).strict();
-
-const sectionArtifactSchema = z.object({
-  ...artifactCommonFields,
-  representation: z.literal("sections"),
-  sections: z.array(artifactSectionSchema).min(1),
-}).strict();
-
-const artifactSchema = z.discriminatedUnion("representation", [
-  templateArtifactSchema,
-  sectionArtifactSchema,
-]);
-
 const targetResolutionDispositionSchema = z.union([
   z.object({
     query_ref: indexerDigestSchema,
@@ -152,10 +112,6 @@ const materialQuestionProposalSchema = z.object({
   requirement_ref: indexerCanonicalRefSchema,
   question_ref: indexerCanonicalRefSchema,
   question_target_key: indexerCanonicalRefSchema,
-  answer_landing_hint: z.object({
-    artifact_id: indexerIdSchema,
-    section_key: indexerIdSchema.optional(),
-  }).strict().optional(),
   source_hints: z.array(indexerCanonicalRefSchema),
 }).strict();
 
@@ -200,7 +156,7 @@ export const indexerArtifactResultSchema = z.object({
   structured_claims: indexerStructuredClaimSetSchema.optional(),
   facts: z.array(indexerArtifactFactSchema),
   evidence_bindings: z.array(indexerEvidenceBindingSchema),
-  artifacts: z.array(artifactSchema),
+  artifacts: z.array(indexerArtifactSchema),
   artifact_bundle: indexerArtifactBundleSchema.nullable(),
   material_question_proposals: z.array(materialQuestionProposalSchema),
   question_target_dispositions: z.array(questionTargetDispositionSchema),
@@ -210,9 +166,8 @@ export const indexerArtifactResultSchema = z.object({
 }).strict();
 
 export type IndexerArtifactResult = z.infer<typeof indexerArtifactResultSchema>;
-export type IndexerArtifactSectionProjection = z.infer<
-  typeof indexerArtifactSectionProjectionSchema
->;
+export type { IndexerArtifactSectionProjection };
+export { indexerArtifactSectionProjectionSchema };
 
 export function indexerEvidenceBindingDigest(
   value: Omit<z.infer<typeof indexerEvidenceBindingSchema>, "binding_digest">,
@@ -240,9 +195,27 @@ function assertCanonicalUnique(values: readonly string[], field: string): void {
   }
 }
 
+export interface IndexerAuthorizedEvidenceTarget {
+  source_ref: string;
+  module_refs: readonly string[];
+}
+
+export function indexerEvidenceTargetAllows(input: {
+  targets: readonly IndexerAuthorizedEvidenceTarget[];
+  source_ref: string;
+  module_ref: string | null;
+}): boolean {
+  return input.targets.some((target) =>
+    target.source_ref === input.source_ref &&
+    (target.module_refs.length === 0 ||
+      (input.module_ref !== null && target.module_refs.includes(input.module_ref)))
+  );
+}
+
 function validateEvidenceBindings(
   result: IndexerArtifactResult,
   workset: IndexerMainAuthorWorkset,
+  authorizedEvidenceTargets: readonly IndexerAuthorizedEvidenceTarget[] = [],
 ): Set<string> {
   assertUnique(
     result.evidence_bindings.map((item) => item.evidence_ref),
@@ -256,10 +229,14 @@ function validateEvidenceBindings(
     if (indexerEvidenceBindingDigest(payload) !== evidence.binding_digest) {
       throw new TypeError(`evidence binding ${evidence.evidence_ref} digest is invalid`);
     }
-    if (
-      evidence.source_ref !== workset.source_ref ||
-      evidence.module_ref !== workset.module_ref
-    ) {
+    const belongsToPrimary = evidence.source_ref === workset.source_ref &&
+      evidence.module_ref === workset.module_ref;
+    const belongsToAuthorizedEvidence = indexerEvidenceTargetAllows({
+      targets: authorizedEvidenceTargets,
+      source_ref: evidence.source_ref,
+      module_ref: evidence.module_ref,
+    });
+    if (!belongsToPrimary && !belongsToAuthorizedEvidence) {
       throw new TypeError("ArtifactResult evidence escapes its source/module workset");
     }
     refs.add(evidence.evidence_ref);
@@ -596,21 +573,6 @@ function validateQuestions(input: {
     ) {
       throw new TypeError("material question proposal is outside CLI question authority");
     }
-    if (proposal.answer_landing_hint !== undefined) {
-      const artifact = input.result.artifacts.find(
-        (item) => item.artifact_id === proposal.answer_landing_hint!.artifact_id,
-      );
-      if (artifact === undefined) throw new TypeError("answer landing references unknown Artifact");
-      const sectionKey = proposal.answer_landing_hint.section_key;
-      if (
-        sectionKey !== undefined &&
-        !(artifact.representation === "sections"
-          ? artifact.sections.some((section) => section.section_key === sectionKey)
-          : artifact.section_projections.some((section) => section.section_key === sectionKey))
-      ) {
-        throw new TypeError("answer landing references unknown Section");
-      }
-    }
     proposals.set(proposal.proposal_ref, proposal);
   }
   const evidenceDigests = new Set(
@@ -665,6 +627,7 @@ export function validateIndexerArtifactResult(input: {
   }[];
   artifact_policy_eligibility: unknown;
   allowed_source_roles: readonly string[];
+  authorized_evidence_targets?: readonly IndexerAuthorizedEvidenceTarget[];
   source_identity_inventory?: unknown;
   authorized_declaration_carriers?: {
     catalog_refs?: readonly string[];
@@ -713,7 +676,11 @@ export function validateIndexerArtifactResult(input: {
   ) {
     throw new TypeError("Artifact policy eligibility does not match its author workset");
   }
-  const evidenceRefs = validateEvidenceBindings(result, input.workset);
+  const evidenceRefs = validateEvidenceBindings(
+    result,
+    input.workset,
+    input.authorized_evidence_targets,
+  );
   assertCanonicalUnique(result.facts.map((fact) => fact.fact_ref), "facts.fact_ref");
   const facts = new Map(result.facts.map((fact) => [fact.fact_ref, fact]));
   const allowedFactNodeRefs = new Set([result.logical_unit.logical_unit_ref]);

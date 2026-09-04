@@ -18,9 +18,9 @@ payload keys, and `source_ref` values exact.
 
 When two or three fixed choices exist, prefer the host's native choice UI. If
 none is available, present concise A/B/C choices with one impact sentence each.
-Labels must describe user outcomes, not SDK factories or internal route names.
-Do not start with raw TypeScript, placeholder commands, `alignProse`,
-`compileProse`, `reviewValidity`, `kbPackage`, or `llmsPackage`.
+Labels must describe user outcomes, not SDK factories, parser calls, schema
+names, or internal route names. Do not start with raw TypeScript or placeholder
+commands.
 
 An explicit fully managed request in the current conversation resolves only
 delegatable gates. Use the returned managed route without asking those

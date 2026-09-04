@@ -106,7 +106,6 @@ describe("0.6.0 project init and source ensure", () => {
           project?: boolean;
           entry?: string;
           language?: string;
-          documentOptimization?: boolean;
         };
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
@@ -118,7 +117,6 @@ describe("0.6.0 project init and source ensure", () => {
         project: true,
         entry: "src/index.ts",
         language: "en",
-        documentOptimization: true,
       });
       expect(pkg.dependencies?.["@c4a/context"]).toBe(cliPkg.version);
       expect(pkg.devDependencies?.typescript).toBe("^5.5.4");
@@ -203,46 +201,6 @@ describe("0.6.0 project init and source ensure", () => {
     }
   });
 
-  test("context init can explicitly disable document optimization", async () => {
-    const project = makeTmp();
-    try {
-      await runCliInDir(project, [
-        "init",
-        ".",
-        "--name",
-        "sample-kb",
-        "--no-optimize-docs",
-      ]);
-
-      const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
-        context: { documentOptimization?: boolean };
-      };
-      expect(pkg.context.documentOptimization).toBeUndefined();
-    } finally {
-      rmSync(project, { recursive: true, force: true });
-    }
-  });
-
-  test("context init preserves an existing workspace preference when no flag is passed", async () => {
-    const project = makeTmp();
-    try {
-      await runCliInDir(project, [
-        "init",
-        ".",
-        "--name",
-        "sample-kb",
-        "--no-optimize-docs",
-      ]);
-      await runCliInDir(project, ["init", "."]);
-
-      const pkg = JSON.parse(await readFile(join(project, "package.json"), "utf8")) as {
-        context: { documentOptimization?: boolean };
-      };
-      expect(pkg.context.documentOptimization).toBeUndefined();
-    } finally {
-      rmSync(project, { recursive: true, force: true });
-    }
-  });
 
   test("context init requires explicit confirmation before adding a workspace to a non-empty directory", async () => {
     const project = makeTmp();
@@ -349,50 +307,59 @@ describe("0.6.0 project init and source ensure", () => {
     }
   });
 
-  test("project run lists and dry-runs declared init phases", async () => {
-    const project = makeTmp();
+  test("project module loader ignores conflicting ancestor tsconfig package aliases", async () => {
+    const root = makeTmp();
+    const project = join(root, "nested", "project");
     try {
-      await runCliInDir(project, ["init", "."]);
-      await writeSampleLibProjectEntry(project);
+      await mkdir(join(root, "packages", "context", "src"), { recursive: true });
+      await mkdir(join(project, "src"), { recursive: true });
+      await mkdir(join(project, "node_modules", "@c4a", "context"), { recursive: true });
+      await writeFile(join(root, "tsconfig.json"), JSON.stringify({
+        compilerOptions: {
+          baseUrl: ".",
+          paths: { "@c4a/*": ["packages/*/src"] },
+        },
+      }));
+      await writeFile(join(root, "packages", "context", "src", "index.ts"), [
+        "export function source(name: string) {",
+        "  return { kind: 'source.ref', name, materializedAt: `sources/${name}` };",
+        "}",
+      ].join("\n"));
+      await writeFile(join(project, "node_modules", "@c4a", "context", "package.json"), JSON.stringify({
+        name: "@c4a/context",
+        type: "module",
+        exports: { ".": "./index.js", "./package.json": "./package.json" },
+      }));
+      await writeFile(join(project, "node_modules", "@c4a", "context", "index.js"), [
+        "export function defineProject(project) { return { kind: 'context.project', project }; }",
+        "export function source(namespace, module, options) {",
+        "  return {",
+        "    kind: 'source.ref',",
+        "    type: options.type,",
+        "    name: `${namespace}/${module}`,",
+        "    materializedAt: `sources/${options.type}/${namespace}`,",
+        "  };",
+        "}",
+      ].join("\n"));
+      await writeFile(join(project, "package.json"), JSON.stringify({
+        type: "module",
+        context: { project: true, entry: "src/index.ts" },
+      }));
+      await writeFile(join(project, "src", "index.ts"), [
+        "import { defineProject, source } from '@c4a/context';",
+        "const docs = source('20260903', 'docs', { type: 'file' });",
+        "export default defineProject({ sources: [docs], phases: [], packages: [] });",
+      ].join("\n"));
 
-      const list = await runCliInDir(project, ["run", "--list"]);
-      expect(list).toContain("extract:20260712/sample-lib:codeindex");
-      expect(list).toContain("review:codeindex:validity");
-
-      const plan = JSON.parse(await runCliInDir(project, [
-        "run",
-        "extract:20260712/sample-lib:codeindex",
-        "--dry-run",
-        "--format",
-        "json",
-      ])) as {
-        phase: { id: string; kind: string; reads: string[]; writes: string[] };
-        dryRun: boolean;
-      };
-      expect(plan.dryRun).toBe(true);
-      expect(plan.phase).toMatchObject({
-        id: "extract:20260712/sample-lib:codeindex",
-        kind: "phase.extract.ts",
-      });
-      expect(plan.phase.reads).toContain("source:repo:20260712/sample-lib");
-      expect(plan.phase.writes).toContain("lifecycle:candidates:codeindex:draft");
+      const loaded = await loadContextProjectModule(project);
+      expect(loaded.project.sources).toEqual([{
+        kind: "source.ref",
+        type: "file",
+        name: "20260903/docs",
+        materializedAt: "sources/file/20260903",
+      }]);
     } finally {
-      rmSync(project, { recursive: true, force: true });
-    }
-  });
-
-  test("project extract fails clearly when the repo registry is empty", async () => {
-    const project = makeTmp();
-    try {
-      await runCliInDir(project, ["init", "."]);
-      await writeSampleLibProjectEntry(project);
-
-      await expect(runCliInDir(project, ["run", "extract:20260712/sample-lib:codeindex"])).rejects.toThrow(
-        "repo source is not registered",
-      );
-      expect(existsSync(join(project, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);
-    } finally {
-      rmSync(project, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

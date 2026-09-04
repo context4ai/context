@@ -1,18 +1,26 @@
 import {
   buildIndexerArtifactBundle,
   buildIndexerCapabilityGroupEvidence,
+  buildIndexerPostAuthorFragmentRequest,
   buildIndexerInventoryDispositionSet,
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutTransition,
   buildIndexerSharedArtifactFingerprint,
   canonicalIndexerNodeRef,
+  composeIndexerPostAuthorEnvelope,
   indexerArtifactResultDigest,
   indexerEvidenceBindingDigest,
+  indexerLayerFragmentDigest,
   indexerProtocolDigest,
   indexerRenderedArtifactDigest,
+  materializeIndexerPrimaryResultViewFromArtifactResult,
+  planIndexerPostAuthorComposition,
+  resolveEffectiveIndexerComposers,
   resolveIndexerLayout,
   resolveIndexerSubjectKeySchemas,
+  validateIndexerPostAuthorFragmentResult,
   type IndexerArtifactResult,
+  type IndexerLayerFragment,
   type IndexerRenderedArtifact,
   type IndexerSubjectKey,
 } from "../index.js";
@@ -138,7 +146,6 @@ function acceptedResult(result: IndexerArtifactResult) {
     protocol: "context.indexer.run-result/v1" as const,
     operation: "main-index" as const,
     consumed_input_view_digest: candidateCompileDigest("9"),
-    workset_read_receipt_digests: [candidateCompileDigest("b")],
     result: {
       protocol: "context.indexer.main-result/v1" as const,
       stage: "author" as const,
@@ -148,7 +155,7 @@ function acceptedResult(result: IndexerArtifactResult) {
     },
   };
   const runEnvelopePayload = {
-    protocol: "context.indexer.run-envelope/v1" as const,
+    protocol: "context.indexer.run-envelope/v2" as const,
     stage: "author" as const,
     workset_digest: result.author_workset_digest,
     execution_request_digest: executionRequestDigest,
@@ -167,7 +174,7 @@ function acceptedResult(result: IndexerArtifactResult) {
     runtime_fingerprint: candidateCompileDigest("c"),
     resource_binding_digest: candidateCompileDigest("d"),
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
-    parser_dependency_fingerprint: candidateCompileDigest("e"),
+    source_dependency_fingerprint: candidateCompileDigest("e"),
     source_role: result.source_role,
     source_precedence_digest: candidateCompileDigest("f"),
     metric_set_digest: candidateCompileDigest("0"),
@@ -224,7 +231,6 @@ export function candidateCompileFixture() {
   const transition = buildIndexerLayoutTransition({
     layout_proposal_set: layoutSet,
     base_projections: [],
-    planned_output: { state: "not-required" },
   });
   return {
     ...contracts,
@@ -234,6 +240,136 @@ export function candidateCompileFixture() {
     proposal,
     layoutSet,
     transition,
+  };
+}
+
+export function candidateCompilePostAuthorFixture() {
+  const fixture = candidateCompileFixture();
+  const primaryResultDigest = indexerProtocolDigest(fixture.result);
+  const validatorContractDigest = candidateCompileDigest("7");
+  const effectiveComposerSet = resolveEffectiveIndexerComposers({
+    selections: [{
+      id: "examples",
+      provider: "sample-extension",
+      composer_selection_entry_digest: candidateCompileDigest("8"),
+    }],
+    manifest_layers: [{
+      provider: "sample-extension",
+      layer_ref: "provider:sample-extension#layer:supporting",
+      layer_integrity: candidateCompileDigest("9"),
+      bundle_digest: candidateCompileDigest("0"),
+      composers: [{ id: "examples", supported_profiles: ["component-library"] }],
+    }],
+    current_profiles: ["component-library"],
+  });
+  const primaryView = materializeIndexerPrimaryResultViewFromArtifactResult({
+    artifact_result: fixture.result,
+    primary_result_digest: primaryResultDigest,
+    validator_contract_digest: validatorContractDigest,
+  });
+  const plan = planIndexerPostAuthorComposition({
+    effective_composer_set: effectiveComposerSet,
+    author_workset_digest: fixture.result.author_workset_digest,
+    primary_result_digest: primaryResultDigest,
+    primary_facts: primaryView.facts,
+    primary_artifacts: primaryView.artifacts,
+    validator_contract_digest: validatorContractDigest,
+    current_profile_binding_digest: candidateCompileDigest("a"),
+    allowed_target_refs: [fixture.result.logical_unit.logical_unit_ref],
+  });
+  if (plan.state !== "pending") throw new Error("expected a post-author workset");
+  const request = buildIndexerPostAuthorFragmentRequest({
+    workset: plan.worksets[0]!,
+    primary_result_view: plan.primary_result_view,
+  });
+  const evidence = fixture.result.evidence_bindings[0]!;
+  const fragmentPayload: Omit<IndexerLayerFragment, "fragment_digest"> = {
+    protocol: "context.indexer.layer-fragment/v1",
+    workset_digest: request.workset.workset_digest,
+    layer_ref: request.target_layer_ref,
+    layer_integrity: request.target_layer_integrity,
+    composer_ref: request.composer_ref,
+    phase: "post-author",
+    kind: "derived-artifact-proposal",
+    target_refs: [fixture.result.logical_unit.logical_unit_ref],
+    payload: {
+      protocol: "context.indexer.fragment.derived-artifact-proposal/v1",
+      proposals: [{
+        composer_ref: request.composer_ref,
+        target_node_ref: fixture.result.logical_unit.logical_unit_ref,
+        artifact: {
+          artifact_id: "toggle-examples",
+          artifact_kind: "examples",
+          artifact_policy_variant: "standard",
+          representation: "sections",
+          sections: [{
+            section_key: "examples",
+            owner_indexer_id: fixture.result.indexer_id,
+            document_kind: "reference",
+            reader_goal: "understand-capability",
+            artifact_kind: "examples",
+            blocks: [{
+              block_id: "examples",
+              layer: "semantic-prose",
+              markdown: "# Toggle examples\n\nUse the public Toggle capability.",
+              evidence_refs: [evidence.evidence_ref],
+            }],
+          }],
+        },
+        evidence_refs: [{
+          ref: evidence.evidence_ref,
+          kind: evidence.kind,
+          source_digest: evidence.content_digest,
+        }],
+      }],
+    },
+  };
+  const resultPayload = {
+    protocol: "context.indexer.layer-fragment-result/v1" as const,
+    request_digest: request.request_digest,
+    composer_ref: request.composer_ref,
+    consumed_primary_result_view_digest: request.primary_result_view.view_digest,
+    fragments: [{
+      ...fragmentPayload,
+      fragment_digest: indexerLayerFragmentDigest(fragmentPayload),
+    }],
+  };
+  const invocation = validateIndexerPostAuthorFragmentResult({
+    request,
+    result: {
+      ...resultPayload,
+      result_digest: indexerProtocolDigest(resultPayload),
+    },
+    validator_contract_digest: validatorContractDigest,
+  });
+  const envelope = composeIndexerPostAuthorEnvelope({
+    workset_digest: fixture.result.author_workset_digest,
+    primary_result_digest: primaryResultDigest,
+    primary_result_view: plan.primary_result_view,
+    accepted_input_view_digest: fixture.accepted.run_result.consumed_input_view_digest,
+    effective_composer_set: effectiveComposerSet,
+    invocations: [invocation],
+  });
+  const proposal = resolveIndexerLayout({
+    artifact_result: fixture.result,
+    post_author_envelope: envelope,
+    profile: "component-library",
+    profile_contract: fixture.profiles,
+    operator_contract: fixture.operators,
+    subject_key_schema_set: fixture.subjectKeySchemaSet,
+    shared_artifact_fingerprint: fixture.accepted.run_envelope.shared_artifact_fingerprint,
+  });
+  const layoutSet = buildIndexerLayoutProposalSet([proposal]);
+  return {
+    ...fixture,
+    envelope,
+    accepted: { ...fixture.accepted, post_author_envelope: envelope },
+    proposal,
+    layoutSet,
+    transition: buildIndexerLayoutTransition({
+      layout_proposal_set: layoutSet,
+      base_projections: [],
+    }),
   };
 }
 
@@ -324,7 +460,61 @@ export function candidateCompileTemplateFixture() {
     transition: buildIndexerLayoutTransition({
       layout_proposal_set: layoutSet,
       base_projections: [],
-      planned_output: { state: "not-required" },
+    }),
+  };
+}
+
+export function candidateCompileMultiSectionFixture() {
+  const fixture = candidateCompileFixture();
+  const result = structuredClone(fixture.result);
+  const artifact = result.artifacts[0];
+  if (artifact?.representation !== "sections") {
+    throw new Error("multi-section fixture requires a structured Artifact");
+  }
+  artifact.sections.push({
+    section_key: "dependency-handoff",
+    owner_indexer_id: "component-indexer",
+    document_kind: "reference",
+    reader_goal: "understand-capability",
+    artifact_kind: "overview",
+    blocks: [{
+      block_id: "dependency-handoff-block",
+      layer: "semantic-prose",
+      markdown: "## Dependency handoff\n\nAnonymous dependency evidence.",
+      evidence_refs: ["evidence:anonymous-toggle-source"],
+    }],
+  });
+  const disposition = result.inventory_dispositions.dispositions[0];
+  if (disposition === undefined || !("section_evidence" in disposition)) {
+    throw new Error("multi-section fixture requires a detailed inventory disposition");
+  }
+  disposition.section_evidence.push({
+    artifact_id: "toggle-overview",
+    section_key: "dependency-handoff",
+    evidence_refs: ["evidence:anonymous-toggle-source"],
+  });
+  const { output_digest: _digest, ...payload } = result;
+  void _digest;
+  result.output_digest = indexerArtifactResultDigest(payload);
+  const accepted = acceptedResult(result);
+  const proposal = resolveIndexerLayout({
+    artifact_result: result,
+    profile: "component-library",
+    profile_contract: fixture.profiles,
+    operator_contract: fixture.operators,
+    subject_key_schema_set: fixture.subjectKeySchemaSet,
+    shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
+  });
+  const layoutSet = buildIndexerLayoutProposalSet([proposal]);
+  return {
+    ...fixture,
+    result,
+    accepted,
+    proposal,
+    layoutSet,
+    transition: buildIndexerLayoutTransition({
+      layout_proposal_set: layoutSet,
+      base_projections: [],
     }),
   };
 }

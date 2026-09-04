@@ -61,7 +61,7 @@ function workset(): IndexerMainPartitionWorkset {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_subject_key: {
@@ -186,7 +186,6 @@ describe("partition strategy convergence", () => {
       decision: "retry-required",
       outcome: "partial",
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
       next_strategy_attempt: {
         strategy_order: 1,
         strategy_ref: SECOND_STRATEGY,

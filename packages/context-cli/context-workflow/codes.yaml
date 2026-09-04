@@ -18,17 +18,19 @@ codes:
   - { code: route.capture.configuration-required, kind: route-reason, summary: Registered document sources are missing capture declarations., document: resources/procedures/project-configuration.md }
   - { code: route.capture.permission-required, kind: route-reason, summary: External document capture requires source-read permission., document: resources/procedures/document-capture.md }
   - { code: route.capture.pending-target, kind: route-reason, summary: Capture the next declared document target., document: resources/procedures/document-capture.md }
-  - { code: route.review.identity-conflict, kind: route-reason, summary: Preserve approved ViewRef and path identity before Review., document: resources/procedures/knowledge-review.md }
   - { code: route.review.decision-required, kind: route-reason, summary: The complete current candidate batch needs one review decision set., document: resources/procedures/knowledge-review.md }
   - { code: route.review.apply-managed, kind: route-reason, summary: Apply the current candidate batch under explicit session-managed authority., document: resources/procedures/knowledge-review.md }
   - { code: route.close.projection-stale, kind: route-reason, summary: Rebuild the deterministic approved structure projection., document: resources/procedures/close-and-build.md }
   - { code: route.package.output-required, kind: route-reason, summary: Approved knowledge has no confirmed package output., document: resources/procedures/package-output.md }
   - { code: route.package.configuration-required, kind: route-reason, summary: Declare the confirmed package output in the Context project., document: resources/procedures/package-output.md }
   - { code: route.package.template-review-required, kind: route-reason, summary: "Replace or edit package templates, or explicitly accept the generic defaults.", document: resources/procedures/package-output.md }
-  - { code: route.document-revision.requested, kind: route-reason, summary: Apply and validate the user's requested correction on one approved knowledge page., document: resources/procedures/document-revision.md }
   - { code: route.build.package-stale, kind: route-reason, summary: Build the declared package outputs from current approved knowledge., document: resources/procedures/close-and-build.md }
   - { code: route.logs.delivery-pending, kind: route-reason, summary: Send locally queued runtime logs through the configured generic sink., document: resources/procedures/close-and-build.md }
   - { code: route.indexer.lifecycle-required, kind: route-reason, summary: Continue the sole registry-and-Provider indexing lifecycle until current Candidates exist. }
+  - { code: route.indexer.lifecycle-advance, kind: route-reason, summary: Advance deterministic Indexer lifecycle state to the next Agent step or user Gate. }
+  - { code: route.indexer.semantic-structure-review, kind: route-reason, summary: Review the complete semantic structure and create-or-enrich targets before Author work starts. }
+  - { code: route.indexer.recovery-required, kind: route-reason, summary: "Resolve a persisted source, material, or execution failure before retrying the Indexer lifecycle." }
+  - { code: route.indexer.layout-confirmation-required, kind: route-reason, summary: Confirm the proposed knowledge layout change or reject it with revision feedback. }
   - { code: route.indexer.agent-step, kind: route-reason, summary: Run one digest-bound Indexer workset with the static Context Agent Action. }
   - { code: route.indexer.provider-configuration, kind: route-reason, summary: Configure an exact path-free Provider selection from currently visible Indexer Skills. }
   - { code: route.indexer.markdown-capture-validation, kind: route-reason, summary: Require exact current document capture before discovering a semantic Markdown Provider. }
@@ -75,25 +77,7 @@ codes:
   - { code: route.indexer.post-author-observation, kind: route-reason, summary: Join current composer worksets with their ledger and publish independent completion Facts. }
   - { code: route.indexer.post-author-composition, kind: route-reason, summary: Compose the current result envelope after every selected composer is accepted. }
   - { code: route.indexer.result-reconciliation, kind: route-reason, summary: Recompute per-domain completion and emit exact capability or material gaps before reporting success. }
-  - { code: route.indexer.material-question-workset, kind: route-reason, summary: Build immutable question-target pairs and derive exact answer eligibility from current registry authority. }
-  - { code: route.indexer.material-answer-run-preparation, kind: route-reason, summary: Recover content-addressed material-answer runs and accepted empty or non-empty Results. }
-  - { code: route.indexer.material-answer-observation, kind: route-reason, summary: "Publish material-answer counts, next refs, candidates, and unresolved question keys." }
-  - { code: route.indexer.material-answer-run-start, kind: route-reason, summary: Persist one exact pending or stale material-answer run before dispatch. }
-  - { code: route.indexer.material-answer-agent-step, kind: route-reason, summary: Run one semantic-operation-gated material-answer request without rerunning main extraction. }
-  - { code: route.indexer.material-answer-run-acceptance, kind: route-reason, summary: Validate current source-span read receipts and atomically accept one material-answer Result. }
-  - { code: route.indexer.material-answer-run-failure, kind: route-reason, summary: Persist one exact material-answer failure without accepting partial evidence. }
-  - { code: route.indexer.material-answer-review, kind: route-reason, summary: Approve or reject only one exact material-answer evidence binding; final reader content remains unapproved. }
-  - { code: route.indexer.material-gap-audit, kind: route-reason, summary: Read-only recompute the expected retained material-gap ledger and route pre-Review drift to checkpoint or post-Review closure to close. }
-  - { code: route.indexer.material-gap-checkpoint, kind: route-reason, summary: Recompute and durably checkpoint the retained material-gap ledger before any blocking outcome. }
-  - { code: route.indexer.material-answer-review-checkpoint, kind: route-reason, summary: Persist one exact answer-approved successor under retained ledger CAS. }
-  - { code: route.indexer.candidate-review-readiness, kind: route-reason, summary: Prove exact precompile and postcompile mechanical audits are current for the effective candidate revision. }
   - { code: route.indexer.candidate-compile, kind: route-reason, summary: Compile Candidate Artifacts from the exact accepted author IndexerResult set and authorized layout. }
   - { code: route.indexer.incremental-impact, kind: route-reason, summary: "Report exact logical-unit, Artifact, and Section impact from complete current Merkle dependency views." }
-  - { code: route.indexer.profile-revision, kind: route-reason, summary: Revise one exact candidate set against the recorded runtime profile failure without changing baseline authority. }
-  - { code: route.indexer.profile-revision-record, kind: route-reason, summary: Record one distinct result revision under the stable problem lineage and three-attempt ledger CAS. }
-  - { code: route.indexer.profile-failure-report, kind: route-reason, summary: "Persist the complete module, artifact, metric, attempt, missing-input, and capability-loss report after three failures." }
-  - { code: route.indexer.profile-override, kind: route-reason, summary: Require the user to force approve one exact current runtime profile risk through a non-delegable Gate. }
-  - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after the mechanical audit readiness proof passes. }
-  - { code: route.indexer.material-gap-evaluation, kind: route-reason, summary: Derive layout and main Review admission from the current retained ledger. }
-  - { code: route.indexer.material-answer-actualization, kind: route-reason, summary: Map answer-approved landings to current Artifact or Section identities and checkpoint the result. }
-  - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure with exact resolved material-answer provenance. }
+  - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after current mechanical validation passes. }
+  - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure after required material gaps are resolved. }

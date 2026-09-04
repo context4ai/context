@@ -153,7 +153,7 @@ export function runEnvironment(
 ): IndexerRunEnvironment {
   return buildIndexerRunEnvironment({
     source_snapshot_digest: digest("e"),
-    parser_dependency_fingerprint: digest("f"),
+    source_dependency_fingerprint: workset.source_binding_digest,
     source_role: "authoritative-source",
     source_precedence_digest: digest("0"),
     metric_set_digest: digest("1"),
@@ -197,7 +197,7 @@ export function authorWorkset(
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("9"),
@@ -318,10 +318,6 @@ export function artifactResult(
       requirement_ref: workset.requirement_ref,
       question_ref: QUESTION_REF,
       question_target_key: QUESTION_TARGET,
-      answer_landing_hint: {
-        artifact_id: "button-overview",
-        section_key: "summary",
-      },
       source_hints: [workset.source_ref],
     }],
     question_target_dispositions: [{
@@ -343,6 +339,10 @@ export function validateArtifactResultFixture(
   workset = authorWorkset(),
   declarationValidation: {
     source_identity_inventory?: unknown;
+    authorized_evidence_targets?: readonly {
+      source_ref: string;
+      module_refs: readonly string[];
+    }[];
     authorized_declaration_carriers?: {
       catalog_refs?: readonly string[];
       manifest_refs?: readonly string[];

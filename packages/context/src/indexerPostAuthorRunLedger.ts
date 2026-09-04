@@ -175,6 +175,8 @@ function validatePostAuthorPlan(plan: IndexerPostAuthorPlan): void {
   if (
     indexerPostAuthorWorksetSetDigest({
       protocol: set.protocol,
+      author_workset_digest: set.author_workset_digest,
+      primary_result_digest: set.primary_result_digest,
       effective_composer_set_digest: set.effective_composer_set_digest,
       ...(set.primary_result_view_digest === undefined
         ? {}
@@ -203,7 +205,11 @@ function validatePostAuthorPlan(plan: IndexerPostAuthorPlan): void {
     return;
   }
   const view = validateIndexerPrimaryResultView(plan.primary_result_view);
-  if (set.primary_result_view_digest !== view.view_digest) {
+  if (
+    set.primary_result_view_digest !== view.view_digest ||
+    set.primary_result_digest !== view.primary_result_digest ||
+    set.author_workset_digest !== view.workset_digest
+  ) {
     throw new TypeError("post-author set does not bind its PrimaryResultView");
   }
   const worksets = plan.worksets.map((candidate) => {
@@ -217,6 +223,9 @@ function validatePostAuthorPlan(plan: IndexerPostAuthorPlan): void {
     const expectedFingerprint = indexerProtocolDigest({
       composer_ref: workset.composer_ref,
       composer_selection_entry_digest: workset.composer_selection_entry_digest,
+      ...(workset.composer_contract_digest === undefined
+        ? {}
+        : { composer_contract_digest: workset.composer_contract_digest }),
       current_profile_binding_digest: workset.current_profile_binding_digest,
       primary_result_view_digest: workset.primary_result_view_digest,
     });
@@ -491,6 +500,26 @@ export function failIndexerPostAuthorRun(input: {
         compareIndexerCanonicalText,
       ),
     },
+  });
+}
+
+export function retryFailedIndexerPostAuthorRuns(input: {
+  plan: IndexerPostAuthorPlan;
+  ledger: unknown;
+}): IndexerPostAuthorRunLedger {
+  const plan = requirePendingPlan(input.plan);
+  const ledger = validateIndexerPostAuthorRunLedger(input.ledger);
+  return buildLedger({
+    workset_set_digest: ledger.workset_set_digest,
+    entries: ledger.entries.map((entry) => {
+      if (entry.state !== "failed") return entry;
+      const workset = worksetFor(plan, entry.composer_ref);
+      return {
+        composer_ref: entry.composer_ref,
+        workset_digest: workset.workset_digest,
+        state: "pending" as const,
+      };
+    }),
   });
 }
 

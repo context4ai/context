@@ -122,9 +122,7 @@ async function collectSourceReferences(projectRoot: string, source: RemovableSou
 
   for (const candidate of await readCandidateRecords(projectRoot)) {
     if (
-      candidate.source?.name === source.name ||
-      candidate.source_refs.some((ref) => stringReferencesSource(ref, source)) ||
-      candidate.shared_source_refs?.some((ref) => stringReferencesSource(ref, source)) === true
+      candidate.source_refs.some((ref) => stringReferencesSource(ref, source))
     ) {
       references.add(`draft candidate ${candidate.candidate_id}`);
     }

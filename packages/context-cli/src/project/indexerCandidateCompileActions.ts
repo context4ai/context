@@ -7,6 +7,8 @@ import {
   indexerCandidateCompileSchema,
   indexerArtifactResultSchema,
   indexerProtocolDigest,
+  indexerRegistryDigests,
+  loadIndexerRegistry,
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
 import {
@@ -16,14 +18,23 @@ import {
   writeCandidateRecords,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { loadCliIndexerBaseContracts } from "./indexerCliBundledProvider.js";
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
+import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
 import {
   durableContentDigest,
   recoverDurableSingleFileTransaction,
   runDurableSingleFileTransaction,
 } from "./durableSingleFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import {
+  readApprovedKnowledgeMetadataIndex,
+  type ApprovedKnowledgeMetadataIndex,
+} from "./approvedKnowledgeMetadata.js";
+import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
+import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
+import { canonicalizeApprovedKnowledgeAssetPair } from "./knowledgeAssetRepair.js";
+import { resolveCurrentProjectIndexerPrimaryAuthority } from
+  "./indexerCurrentPrimaryAuthority.js";
 
 export const INDEXER_CANDIDATE_COMPILE_CURRENT_PATH = join(
   ".tmp",
@@ -32,14 +43,63 @@ export const INDEXER_CANDIDATE_COMPILE_CURRENT_PATH = join(
   "candidate-compile",
   "current.json",
 );
+export const INDEXER_CURRENT_READINESS_PATH = join(
+  ".tmp",
+  "context-runtime",
+  "indexer",
+  "finalization",
+  "readiness.json",
+);
 
 const COMPILE_TRANSACTION = "compile-indexer-candidates";
 
 interface AcceptedAuthorRecord {
+  request: unknown;
   run_result: unknown;
   accepted_record: unknown;
   artifact_result: unknown;
   run_envelope: unknown;
+  post_author_envelope?: unknown | null;
+}
+
+async function currentRegistryStaleDiagnostic(
+  projectRoot: string,
+  records: readonly AcceptedAuthorRecord[],
+): Promise<string | undefined> {
+  let loaded: Awaited<ReturnType<typeof loadIndexerRegistry>>;
+  try {
+    loaded = await loadIndexerRegistry(projectRoot);
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+    throw error;
+  }
+  const requirementSetDigest = indexerRegistryDigests(loaded.registry).requirementSetDigest;
+  for (const item of records) {
+    const request = record(item.request, "accepted author request");
+    const workset = record(request.workset, "accepted author request workset");
+    if (workset.requirement_set_digest !== requirementSetDigest) {
+      return "Accepted author Results do not bind the current requirement set.";
+    }
+    if (typeof workset.indexer_id !== "string") {
+      return "Accepted author Result is missing its Indexer identity.";
+    }
+    let currentProjection;
+    try {
+      currentProjection = (await resolveCurrentProjectIndexerPrimaryAuthority({
+        projectRoot,
+        registry: loaded.registry,
+        indexer_id: workset.indexer_id,
+      })).primary_registry;
+    } catch {
+      return `Accepted author Result references inactive Indexer ${workset.indexer_id}.`;
+    }
+    if (workset.primary_registry_projection_digest !== currentProjection.projection_digest) {
+      return `Accepted author Results for ${workset.indexer_id} do not bind its current registry selection.`;
+    }
+  }
+  return undefined;
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -63,6 +123,58 @@ function currentResultRef(item: AcceptedAuthorRecord) {
     acceptance_digest: accepted.acceptance_digest,
     artifact_result_digest: artifact.output_digest,
   };
+}
+
+async function withCurrentPostAuthorEnvelopes(
+  projectRoot: string,
+  records: readonly AcceptedAuthorRecord[],
+): Promise<AcceptedAuthorRecord[]> {
+  const resolved: AcceptedAuthorRecord[] = [];
+  for (const item of records) {
+    const accepted = record(item.accepted_record, "accepted author record");
+    resolved.push({
+      ...item,
+      post_author_envelope: await readCurrentIndexerPostAuthorEnvelopeForResult({
+        projectRoot,
+        author_workset_digest: String(accepted.workset_digest ?? ""),
+        primary_result_digest: String(accepted.result_digest ?? ""),
+      }),
+    });
+  }
+  return resolved;
+}
+
+async function currentContractAuthority(input: {
+  projectRoot: string;
+  records: readonly AcceptedAuthorRecord[];
+}) {
+  const loaded = await loadIndexerRegistry(input.projectRoot);
+  const indexerIds = [...new Set(input.records.map((item) => {
+    const request = record(item.request, "accepted author request");
+    const workset = record(request.workset, "accepted author request workset");
+    if (typeof workset.indexer_id !== "string") {
+      throw new TypeError("Accepted author Result is missing its Indexer identity");
+    }
+    return workset.indexer_id;
+  }))].sort();
+  if (indexerIds.length === 0) {
+    throw new TypeError("Candidate compile requires accepted Author Results");
+  }
+  const authorities = await Promise.all(indexerIds.map((indexerId) =>
+    resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot,
+      registry: loaded.registry,
+      indexer_id: indexerId,
+    })
+  ));
+  const authority = authorities[0]!;
+  if (authorities.some((item) =>
+    item.operator_contract.contract_digest !== authority.operator_contract.contract_digest ||
+    item.profile_contract.contract_digest !== authority.profile_contract.contract_digest
+  )) {
+    throw new TypeError("Accepted Author Results disagree on Provider contract authority");
+  }
+  return authority;
 }
 
 function canonicalResultRefs(value: unknown): unknown[] {
@@ -133,6 +245,7 @@ export function buildProjectIndexerCandidateCompileFromRecords(input: {
       run_result: item.run_result,
       accepted_record: item.accepted_record,
       run_envelope: item.run_envelope,
+      post_author_envelope: item.post_author_envelope,
       rendered_artifacts: artifacts,
     };
   });
@@ -164,8 +277,37 @@ async function readMaybe(path: string): Promise<string | undefined> {
   }
 }
 
-function candidateTitle(markdown: string, artifactKind: string): string {
-  return /^#\s+(.+)$/mu.exec(markdown)?.[1]?.trim() || artifactKind;
+function readableArtifactName(outputPath: string, artifactKind: string): string {
+  const filename = outputPath.split("/").at(-1)?.replace(/\.md$/iu, "") ?? "";
+  const kindSuffix = `-${artifactKind.toLocaleLowerCase()}`;
+  const semanticName = filename.toLocaleLowerCase().endsWith(kindSuffix)
+    ? filename.slice(0, -kindSuffix.length)
+    : filename;
+  const words = semanticName.replace(/[-_]+/gu, " ").trim();
+  return words.length === 0
+    ? artifactKind
+    : `${words[0]!.toLocaleUpperCase()}${words.slice(1)}`;
+}
+
+export function indexerCandidateTitle(
+  markdown: string,
+  outputPath: string,
+  artifactKind: string,
+): string {
+  return /^#\s+(.+)$/mu.exec(markdown)?.[1]?.trim() ||
+    readableArtifactName(outputPath, artifactKind);
+}
+
+export function indexerCandidateSummary(markdown: string, title: string): string {
+  const paragraph = markdown
+    .split(/\n\s*\n/gu)
+    .map((value) => value.trim())
+    .find((value) => value.length > 0 && !/^#/u.test(value) && !/^<!--/u.test(value));
+  if (paragraph === undefined) return `Knowledge page for ${title}.`;
+  const normalized = paragraph.replace(/\s+/gu, " ");
+  const sentence = /^.{1,240}?[.!?。！？](?=\s|$)/u.exec(normalized)?.[0];
+  if (sentence !== undefined) return sentence;
+  return normalized.length <= 240 ? normalized : `${normalized.slice(0, 239).trimEnd()}…`;
 }
 
 function candidatePath(outputPath: string, collection: string): string {
@@ -179,12 +321,59 @@ function candidatePath(outputPath: string, collection: string): string {
 
 async function approvedFileDigest(
   projectRoot: string,
-  outputPath: string,
+  file: IndexerCandidateCompile["files"][number],
+  metadata?: ApprovedKnowledgeMetadataIndex,
 ): Promise<string | undefined> {
+  const outputPath = file.output_path;
+  const relPath = outputPath.startsWith("knowledge/")
+    ? outputPath.slice("knowledge/".length)
+    : outputPath;
   const content = await readMaybe(join(projectRoot, outputPath));
   if (content === undefined) return undefined;
-  const match = /^indexer_file_digest:\s*["']?([^"'\n]+)["']?\s*$/mu.exec(content);
-  return match?.[1]?.trim();
+  const frontmatter = {
+    ...(metadata?.byPath.get(relPath) ?? {}),
+    ...parseFrontmatterLoose(content),
+  };
+  if (
+    frontmatter.node_ref !== file.node_ref ||
+    frontmatter.view_ref !== file.internal_view_ref
+  ) {
+    return undefined;
+  }
+  const sourceByEvidenceRef = new Map(file.evidence_bindings.map((binding) => [
+    binding.evidence_ref,
+    binding.source_ref,
+  ]));
+  const expectedSections = file.sections.map((section) => ({
+    id: section.section_key,
+    markdown: section.markdown.trim(),
+    source_refs: [...new Set(section.evidence_refs.flatMap((evidenceRef) => {
+      const sourceRef = sourceByEvidenceRef.get(evidenceRef);
+      return sourceRef === undefined ? [] : [sourceRef];
+    }))].sort(),
+  }));
+  const actualSections = approvedContextSectionsInMarkdown(content).map((section) => ({
+    id: section.id,
+    markdown: section.readerVisibleBody.trim(),
+    source_refs: [...section.refs].sort(),
+  }));
+  const actualById = new Map(actualSections.map((section) => [section.id, section]));
+  for (const expected of expectedSections) {
+    const actual = actualById.get(expected.id);
+    if (actual === undefined) continue;
+    const canonical = await canonicalizeApprovedKnowledgeAssetPair({
+      projectRoot,
+      pageRelPath: outputPath,
+      expectedContent: expected.markdown,
+      approvedContent: actual.markdown,
+      sourceLocators: [file.source_ref, ...expected.source_refs],
+    });
+    expected.markdown = canonical.expectedContent.trim();
+    actual.markdown = canonical.approvedContent.trim();
+  }
+  return canonicalIndexerJson(actualSections) === canonicalIndexerJson(expectedSections)
+    ? file.file_digest
+    : undefined;
 }
 
 function validatePersistedCompile(value: unknown): IndexerCandidateCompile {
@@ -211,7 +400,31 @@ export async function readProjectIndexerCandidateCompileStatus(
   if (raw === undefined) return { state: "missing", candidates: [] };
   try {
     const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
-    const accepted = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+    const readinessRaw = await readMaybe(join(projectRoot, INDEXER_CURRENT_READINESS_PATH));
+    const readiness = readinessRaw === undefined
+      ? undefined
+      : record(JSON.parse(readinessRaw) as unknown, "Indexer Candidate readiness");
+    if (readiness?.compile_digest !== compile.compile_digest) {
+      return {
+        state: "stale",
+        compile,
+        candidates: [],
+        diagnostic: "Candidate compile has not completed the current mechanical readiness checks.",
+      };
+    }
+    const accepted = await withCurrentPostAuthorEnvelopes(
+      projectRoot,
+      await readAcceptedIndexerMainAuthorResultRecords(projectRoot),
+    );
+    const registryDiagnostic = await currentRegistryStaleDiagnostic(projectRoot, accepted);
+    if (registryDiagnostic !== undefined) {
+      return {
+        state: "stale",
+        compile,
+        candidates: [],
+        diagnostic: registryDiagnostic,
+      };
+    }
     const currentRefs = accepted.map(currentResultRef)
       .sort((left, right) => canonicalIndexerJson(left).localeCompare(canonicalIndexerJson(right)));
     const compileRefs = compile.result_bindings.map((binding) => ({
@@ -228,8 +441,35 @@ export async function readProjectIndexerCandidateCompileStatus(
         diagnostic: "Candidate compile does not bind the exact current accepted author Result set.",
       };
     }
+    const currentCompositions = accepted.map((item) => ({
+      artifact_result_digest: indexerArtifactResultSchema.parse(item.artifact_result)
+        .output_digest,
+      post_author_composition_fingerprint: item.post_author_envelope === null ||
+          item.post_author_envelope === undefined
+        ? null
+        : String(record(item.post_author_envelope, "post-author envelope")
+          .composition_fingerprint ?? ""),
+    })).sort((left, right) => left.artifact_result_digest.localeCompare(
+      right.artifact_result_digest,
+    ));
+    const compileCompositions = compile.result_bindings.map((binding) => ({
+      artifact_result_digest: binding.artifact_result_digest,
+      post_author_composition_fingerprint:
+        binding.post_author_composition_fingerprint,
+    })).sort((left, right) => left.artifact_result_digest.localeCompare(
+      right.artifact_result_digest,
+    ));
+    if (canonicalIndexerJson(currentCompositions) !== canonicalIndexerJson(compileCompositions)) {
+      return {
+        state: "stale",
+        compile,
+        candidates: [],
+        diagnostic: "Candidate compile does not bind the current post-author composition.",
+      };
+    }
     const rows = (await readCandidateRecords(projectRoot))
       .filter((record) => record.candidate_type === "indexer-artifact");
+    const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
     const expectedIds = new Set(compile.files.map((file) => indexerCandidateId(file.file_digest)));
     if (rows.some((record) => !expectedIds.has(record.candidate_id))) {
       return {
@@ -242,7 +482,7 @@ export async function readProjectIndexerCandidateCompileStatus(
     for (const file of compile.files) {
       const candidateId = indexerCandidateId(file.file_digest);
       const record = rows.find((candidate) => candidate.candidate_id === candidateId);
-      const approved = await approvedFileDigest(projectRoot, file.output_path);
+      const approved = await approvedFileDigest(projectRoot, file, metadata);
       if (approved === file.file_digest) continue;
       if (
         record === undefined ||
@@ -276,19 +516,49 @@ export async function assertProjectIndexerCandidateCurrent(input: {
   projectRoot: string;
   record: CandidateRecord;
 }): Promise<IndexerCandidateCompile["files"][number]> {
+  const index = await loadProjectIndexerCandidateCompileIndex(input.projectRoot);
+  return assertProjectIndexerCandidateInCompileIndex({
+    index,
+    record: input.record,
+  });
+}
+
+export interface ProjectIndexerCandidateCompileIndex {
+  compile: IndexerCandidateCompile;
+  filesByDigest: ReadonlyMap<string, IndexerCandidateCompile["files"][number]>;
+}
+
+export async function loadProjectIndexerCandidateCompileIndex(
+  projectRoot: string,
+): Promise<ProjectIndexerCandidateCompileIndex> {
   const raw = await readMaybe(join(
-    input.projectRoot,
+    projectRoot,
     INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
   ));
   if (raw === undefined) throw new TypeError("Indexer Candidate compile is missing");
   const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
-  const file = compile.files.find((candidate) =>
-    candidate.file_digest === input.record.indexer_candidate?.file_digest
-  );
+  const filesByDigest = new Map<string, IndexerCandidateCompile["files"][number]>();
+  for (const file of compile.files) {
+    if (!filesByDigest.has(file.file_digest)) filesByDigest.set(file.file_digest, file);
+  }
+  return {
+    compile,
+    filesByDigest,
+  };
+}
+
+export function assertProjectIndexerCandidateInCompileIndex(input: {
+  index: ProjectIndexerCandidateCompileIndex;
+  record: CandidateRecord;
+}): IndexerCandidateCompile["files"][number] {
+  const fileDigest = input.record.indexer_candidate?.file_digest;
+  const file = fileDigest === undefined
+    ? undefined
+    : input.index.filesByDigest.get(fileDigest);
   if (
     file === undefined ||
     indexerCandidateId(file.file_digest) !== input.record.candidate_id ||
-    input.record.indexer_candidate?.compile_digest !== compile.compile_digest ||
+    input.record.indexer_candidate?.compile_digest !== input.index.compile.compile_digest ||
     input.record.fingerprint !== file.file_digest ||
     canonicalIndexerJson(input.record.indexer_candidate.evidence_bindings) !==
       canonicalIndexerJson(file.evidence_bindings) ||
@@ -309,12 +579,18 @@ async function projectIndexerCandidates(input: {
     .filter((record) => record.candidate_type === "indexer-artifact")
     .map((record) => [record.candidate_id, record]));
   const now = new Date().toISOString();
+  const metadata = await readApprovedKnowledgeMetadataIndex(input.projectRoot);
   const projected = await Promise.all(input.compile.files.map(async (file) => {
-    if (await approvedFileDigest(input.projectRoot, file.output_path) === file.file_digest) {
+    if (await approvedFileDigest(input.projectRoot, file, metadata) === file.file_digest) {
       return undefined;
     }
     const candidateId = indexerCandidateId(file.file_digest);
     const previous = existingById.get(candidateId);
+    const title = indexerCandidateTitle(
+      file.markdown,
+      file.output_path,
+      file.artifact_kind,
+    );
     const candidate = {
       candidate_id: candidateId,
       node_ref: file.node_ref,
@@ -324,15 +600,16 @@ async function projectIndexerCandidates(input: {
         ? previous.status
         : "draft" as const,
       candidate_type: "indexer-artifact" as const,
-      change: "add" as const,
       kind: file.artifact_kind,
       visibility: "public",
       module: file.indexer_id,
       path: candidatePath(file.output_path, file.collection),
       structure_digest: input.compile.compile_digest,
-      source_refs: file.evidence_bindings.length > 0
-        ? file.evidence_bindings.map((binding) => binding.evidence_ref)
-        : [file.source_ref],
+      source_refs: [...new Set(
+        file.evidence_bindings.length > 0
+          ? file.evidence_bindings.map((binding) => binding.source_ref)
+          : [file.source_ref],
+      )].sort(),
       body: file.markdown,
       fingerprint: file.file_digest,
       indexer_candidate: {
@@ -345,9 +622,9 @@ async function projectIndexerCandidates(input: {
         sections: file.sections,
       },
       review: {
-        title: candidateTitle(file.markdown, file.artifact_kind),
-        summary: `${file.artifact_kind} Artifact from ${file.indexer_id}.`,
-        signals: ["indexer-compiled", "mechanical-audit-bound"],
+        title,
+        summary: indexerCandidateSummary(file.markdown, title),
+        signals: ["indexer-compiled", "mechanically-validated"],
         reason: "Exact current Indexer Candidate compiled from accepted author Results.",
       },
       updated: previous?.fingerprint === file.file_digest ? previous.updated : now,
@@ -355,7 +632,6 @@ async function projectIndexerCandidates(input: {
     return parseCandidateRecord(candidate, 1);
   }));
   return [
-    ...input.existing.filter((record) => record.candidate_type !== "indexer-artifact"),
     ...projected.filter((record): record is CandidateRecord => record !== undefined),
   ];
 }
@@ -363,19 +639,18 @@ async function projectIndexerCandidates(input: {
 export async function compileProjectIndexerCandidates(input: {
   projectRoot: string;
   value: unknown;
-  assetsRoot?: string;
 }) {
-  const [records, contracts] = await Promise.all([
-    readAcceptedIndexerMainAuthorResultRecords(input.projectRoot),
-    loadCliIndexerBaseContracts(
-      input.assetsRoot === undefined ? {} : { assetsRoot: input.assetsRoot },
-    ),
-  ]);
+  const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+  const authority = await currentContractAuthority({
+    projectRoot: input.projectRoot,
+    records: currentRecords,
+  });
+  const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
   const compile = buildProjectIndexerCandidateCompileFromRecords({
     value: input.value,
     records,
-    operator_contract: contracts.operators,
-    profile_contract: contracts.profiles,
+    operator_contract: authority.operator_contract,
+    profile_contract: authority.profile_contract,
   });
   const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
   const persisted = await withProjectWriteLock(

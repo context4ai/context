@@ -52,6 +52,7 @@ function keyTokens(key: string): string[] {
 }
 
 function sensitiveKey(key: string, value: unknown): boolean {
+  if (value === INDEXER_OUTPUT_REDACTION_MARKER) return false;
   const tokens = keyTokens(key);
   if (tokens.length === 0) return false;
   const normalized = tokens.join("-");
@@ -110,7 +111,11 @@ function redactKnownText(value: string, count: MutableCount): string {
   );
   output = replaceWithCount(
     output,
-    /(\bauthorization\s*:\s*(?:bearer|basic)\s+)[^\s,;]+/giu,
+    new RegExp(
+      `(\\bauthorization\\s*:\\s*(?:bearer|basic)\\s+)` +
+        `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^\\s,;]+`,
+      "giu",
+    ),
     (_match, prefix) => `${prefix}${INDEXER_OUTPUT_REDACTION_MARKER}`,
     count,
   );
@@ -122,7 +127,11 @@ function redactKnownText(value: string, count: MutableCount): string {
   );
   output = replaceWithCount(
     output,
-    /([?&](?:access_token|refresh_token|api_key|password|secret)=)[^&#\s]+/giu,
+    new RegExp(
+      `([?&](?:access_token|refresh_token|api_key|password|secret)=)` +
+        `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^&#\\s]+`,
+      "giu",
+    ),
     (_match, prefix) => `${prefix}${INDEXER_OUTPUT_REDACTION_MARKER}`,
     count,
   );
@@ -130,7 +139,12 @@ function redactKnownText(value: string, count: MutableCount): string {
   const assignment = "(?:=\\s*|:\\s+(?=\\S)|:\\s*(?=[\"']))";
   output = replaceWithCount(
     output,
-    new RegExp(`((?:["']?${key}["']?)\\s*${assignment})(?:"(?:\\\\.|[^"])*"|'(?:\\\\.|[^'])*'|[^\\s,;}\\]]+)`, "giu"),
+    new RegExp(
+      `((?:["']?${key}["']?)\\s*${assignment})` +
+        `(?!["']?${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})` +
+        `(?:"(?:\\\\.|[^"])*"|'(?:\\\\.|[^'])*'|[^\\s,;}\\]]+)`,
+      "giu",
+    ),
     (_match, prefix) => `${prefix}"${INDEXER_OUTPUT_REDACTION_MARKER}"`,
     count,
   );

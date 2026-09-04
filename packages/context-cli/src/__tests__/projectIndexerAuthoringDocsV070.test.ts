@@ -73,7 +73,7 @@ describe("0.7.0 Indexer authoring documentation", () => {
       "context-indexer.yaml",
       "Artifact Bundles",
       "Reader questions",
-      "material questions",
+      "Material gaps",
       "Provider only → config",
       "controlled execution",
       "forward tests",
@@ -93,7 +93,7 @@ describe("0.7.0 Indexer authoring documentation", () => {
       "Reusing Code Nodes",
       "Artifact and Section planning",
       "Editorial policy",
-      "Material questions and answers",
+      "Missing material",
       "Section/Artifact-local",
       "Source authorization, capture revision safety",
     ]) {
@@ -101,5 +101,57 @@ describe("0.7.0 Indexer authoring documentation", () => {
     }
     expect(await body(resolve(PLUGIN_ROOT, "skills/context-markdown-indexer/SKILL.md")))
       .toContain("docs/guides/markdown-indexer-skill-authoring.md");
+  });
+
+  test("publishes the complete Agent step and instruction materialization contracts", async () => {
+    const agentStep = JSON.parse(await body(resolve(
+      WORKFLOW_ROOT,
+      "schemas/indexer-agent-step-result.schema.json",
+    ))) as {
+      $defs: Record<string, unknown>;
+    };
+    for (const definition of [
+      "providerSelection",
+      "partition",
+      "author",
+      "postAuthor",
+      "structureReview",
+      "layoutConfirmation",
+    ]) {
+      expect(agentStep.$defs[definition]).toBeDefined();
+    }
+
+    const materialized = JSON.parse(await body(resolve(
+      WORKFLOW_ROOT,
+      "schemas/indexer-materialized-resource.schema.json",
+    ))) as {
+      properties: {
+        resources: {
+          items: { properties: { kind: { enum: string[] } } };
+        };
+      };
+    };
+    expect(materialized.properties.resources.items.properties.kind.enum).toEqual([
+      "provider",
+      "template",
+      "composer",
+      "customization-append",
+    ]);
+
+    const agentSkill = await body(resolve(
+      WORKFLOW_ROOT,
+      "skills/run-indexer-agent-step/SKILL.md",
+    ));
+    for (const exactProjectionRule of [
+      "`fact_ref` = the `fact` item's `value.fact_ref`",
+      "`fact_kind` = the `fact` item's `value.kind`",
+      "`value` = the `fact` item's `value.payload` exactly",
+      "matching `selected-fact`",
+    ]) {
+      expect(agentSkill).toContain(exactProjectionRule);
+    }
+    expect(agentSkill).toMatch(
+      /existing dependency, schema,\s+owner, scope, and workset validation/u,
+    );
   });
 });

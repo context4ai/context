@@ -4,6 +4,23 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+- Replaced the parallel Indexer authoring and review paths with one current-action
+  workflow covering Provider setup, Partition, Author, Composer, Layout, final
+  Review, close, recovery, and targeted revision.
+- Connected runtime parsers, captured Markdown, and accepted extension fragments
+  through one authorized workset projection while keeping remote tool enrichment
+  optional and local-first.
+- Removed the legacy material-answer, metric-audit, hard-rule, document-optimization,
+  prose compile, read-window, duplicate Review, and Indexer-specific close surfaces.
+- Upgraded the bundled community Code and Markdown Indexers with semantic partitioning,
+  reader-focused templates, compact metadata, visible page titles, and deterministic
+  package projection.
+- Added deterministic local dogfood summaries derived from approved knowledge,
+  close, verify, build freshness, and runtime cleanup without retaining Review or
+  evidence audit ledgers.
+- Added and integrated the TypeScript, JavaScript, Go, Rush, MDX, Thrift, Proto,
+  OpenAPI, GraphQL, CSS, SCSS, SQL, JSON, YAML, and TOML parser capability chain.
+
 ## 0.7.1 - 2026-08-31
 
 - Migrated workflow resources to the independent Agent Graph file, Graph

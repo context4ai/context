@@ -34,7 +34,6 @@ state:
     review: { gate_clear: true, batch_resolved: true }
     close: { current: true }
     packages: { declared: true, templates_reviewed: true, current: true }
-    document_optimization: { enabled: false, current: true, pending_count: 0, conflict_count: 0, guidance_required: false }
 expect:
   statusCode: complete
   outcome: completed

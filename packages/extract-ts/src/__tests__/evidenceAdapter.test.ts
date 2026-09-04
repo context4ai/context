@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { indexerEvidenceAdapterProtocolDigest, PackageKind } from "@c4a/core";
+import {
+  INDEXER_OUTPUT_REDACTION_MARKER,
+  indexerEvidenceAdapterProtocolDigest,
+  PackageKind,
+} from "@c4a/core";
 import {
   TypeScriptPlugin,
   typeScriptExtractionToEvidenceAdapterMaterialization,
@@ -97,5 +101,45 @@ describe("TypeScript Evidence ABI", () => {
       input_digest: DIGEST_B,
       precedence: 100,
     })).toThrow(/requires c4a-extract-ts output/);
+  });
+
+  test("filters secret-like symbol text before signing fact payloads", async () => {
+    const fs = getFixtureFs("ecmascript-project");
+    const plugin = new TypeScriptPlugin();
+    const manifest = {
+      type: "package.json" as const,
+      path: "package.json",
+      content: await fs.readJson<Record<string, unknown>>("package.json"),
+    };
+    const entries = await plugin.detectEntries(manifest, fs);
+    const extraction = await plugin.extractSymbols(entries.entries, fs);
+    const firstSymbol = extraction.symbols[0]!;
+    const secret = "fixture-secret-do-not-emit";
+    const materialized = typeScriptExtractionToEvidenceAdapterMaterialization({
+      ...extraction,
+      symbols: [{
+        ...firstSymbol,
+        initializer: `accessToken = "${secret}"`,
+      }, ...extraction.symbols.slice(1)],
+    }, {
+      adapter: {
+        id: "extract-ts",
+        package: "@c4a/extract-ts",
+        export: "typeScriptExtractionToEvidenceAdapterMaterialization",
+        version: "0.7.1",
+        digest: DIGEST_A,
+      },
+      authorized_scope: {
+        source_ref: "repo:ecmascript-project",
+        module_refs: ["module:web"],
+        scope_digest: DIGEST_B,
+      },
+      module_ref: "module:web",
+      input_digest: DIGEST_B,
+      precedence: 100,
+    });
+    const serialized = JSON.stringify(materialized.fact_payloads);
+    expect(serialized).not.toContain(secret);
+    expect(serialized).toContain(INDEXER_OUTPUT_REDACTION_MARKER);
   });
 });

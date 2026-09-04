@@ -33,14 +33,9 @@ function providerManifest(domain = "code"): string {
     "    - { id: semantic-subject, profiles: [component-library], priority: 200 }",
     "  operations:",
     "    - id: main-index",
-    "      consumes: context.indexer.main-workset/v1",
+    "      consumes: context.indexer.main-workset/v2",
     "      produces: context.indexer.main-result/v1",
     "      accepts_layer_fragments: [fact-enrichment, template-variables]",
-    "    - id: material-answer",
-    "      consumes: context.indexer.material-question-workset/v1",
-    "      produces: context.indexer.material-answer-result/v1",
-    "      supported_evidence_kinds: [documentation, runbook]",
-    "      accepts_layer_fragments: [fact-enrichment]",
     "  layer_fragments:",
     "    - { kind: fact-enrichment, phase: pre-authority, produces: context.indexer.layer-fragment/v1 }",
     "    - { kind: template-variables, phase: pre-authority, produces: context.indexer.layer-fragment/v1 }",
@@ -109,10 +104,7 @@ describe("context.indexer.provider/v1", () => {
     const markdown = parseIndexerProviderManifest(providerManifest("markdown"));
 
     expect(code.protocol).toBe("context.indexer.provider/v1");
-    expect(code.provides.operations.map((operation) => operation.id)).toEqual([
-      "main-index",
-      "material-answer",
-    ]);
+    expect(code.provides.operations.map((operation) => operation.id)).toEqual(["main-index"]);
     expect(code.provides.partition_strategies).toEqual([{
       id: "canonical-export-family",
       profiles: ["component-library"],
@@ -209,8 +201,8 @@ describe("context.indexer.provider/v1", () => {
 
     expect(() => parseIndexerProviderManifest(
       providerManifest().replace(
-        "      supported_evidence_kinds: [documentation, runbook]",
-        "      supported_evidence_kinds: [documentation, nearby-notes]",
+        "      produces: context.indexer.main-result/v1",
+        "      produces: context.indexer.main-result/v1\n      supported_evidence_kinds: [documentation]",
       ),
     )).toThrow(/supported_evidence_kinds/);
   });

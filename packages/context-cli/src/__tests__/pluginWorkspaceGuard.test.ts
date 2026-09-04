@@ -95,7 +95,7 @@ describe("plugin and workflow workspace guard", () => {
     );
     expect(review).toContain("explicit session-managed authority");
     expect(review).toContain("current\nconversation");
-    expect(review).toMatch(/complete\s+current batch atomically/u);
+    expect(review).toMatch(/complete\s+current scope atomically/u);
   });
 
   test("generated workspace guidance stays concise and graph-led", async () => {
@@ -117,19 +117,18 @@ describe("plugin and workflow workspace guard", () => {
     expect(continuation).toMatch(/not inside a restricted child\s+sandbox/u);
   });
 
-  test("semantic resources are absent from skill directories and present in workflow bundle source", async () => {
+  test("retired semantic resource trees are absent from Skills and workflow source", async () => {
     const pluginMarkdown = await listMarkdown(PLUGIN_ROOT);
     expect(pluginMarkdown.some((file) => file.includes("internal-procedures"))).toBe(false);
     expect(pluginMarkdown.some((file) => file.endsWith("capture-source.md"))).toBe(false);
 
-    const semantic = await listMarkdown(join(WORKFLOW_ROOT, "resources", "semantic"));
-    expect(semantic.length).toBeGreaterThan(0);
-    expect(semantic.some((file) => file.endsWith("compile/index.md"))).toBe(true);
-    for (const file of semantic) {
-      const text = await readFile(file, "utf8");
-      expect(text, file).toContain("kind: procedure");
-      expect(text, file).toContain("media-type: text/markdown");
-    }
+    const semantic = await listMarkdown(
+      join(WORKFLOW_ROOT, "resources", "semantic"),
+    ).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    });
+    expect(semantic).toEqual([]);
   });
 
   test("SDK package templates preserve current OKF root mapping", async () => {

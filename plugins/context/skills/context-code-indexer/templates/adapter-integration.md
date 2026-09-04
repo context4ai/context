@@ -90,8 +90,8 @@ helper separately.
 Add structured edges only for concrete registration and call paths. Keep a
 narrative locator when dynamic dispatch prevents an unambiguous edge.
 
-Return `identityGroups` when several target identities share one explained
-adapter responsibility. Return every source-backed adjacency in
+Use one canonical semantic subject when several target identities share one
+explained adapter responsibility. Return every source-backed adjacency in
 `chainCandidates`, then provide one `chainCandidateDecisions` record for each
 candidate. A documented decision names the reader-facing view and emits its
 structured edge; an equivalent candidate merges into that canonical candidate;

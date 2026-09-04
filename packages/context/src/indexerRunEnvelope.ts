@@ -19,9 +19,9 @@ import {
 } from "./indexerSharedArtifactFingerprint.js";
 
 const indexerRunEnvironmentPayloadSchema = z.object({
-  protocol: z.literal("context.indexer.run-environment/v1"),
+  protocol: z.literal("context.indexer.run-environment/v2"),
   source_snapshot_digest: indexerDigestSchema,
-  parser_dependency_fingerprint: indexerDigestSchema,
+  source_dependency_fingerprint: indexerDigestSchema,
   source_role: indexerIdSchema,
   source_precedence_digest: indexerDigestSchema,
   metric_set_digest: indexerDigestSchema,
@@ -48,7 +48,7 @@ export function buildIndexerRunEnvironment(
     input.primary_execution_projection,
   );
   const payload = indexerRunEnvironmentPayloadSchema.parse({
-    protocol: "context.indexer.run-environment/v1",
+    protocol: "context.indexer.run-environment/v2",
     ...input,
     primary_execution_projection: primaryExecutionProjection,
   });
@@ -70,7 +70,7 @@ export function validateIndexerRunEnvironment(value: unknown): IndexerRunEnviron
 }
 
 const indexerRunEnvelopePayloadSchema = z.object({
-  protocol: z.literal("context.indexer.run-envelope/v1"),
+  protocol: z.literal("context.indexer.run-envelope/v2"),
   stage: z.enum(["partition", "author"]),
   workset_digest: indexerDigestSchema,
   execution_request_digest: indexerDigestSchema,
@@ -89,7 +89,7 @@ const indexerRunEnvelopePayloadSchema = z.object({
   runtime_fingerprint: indexerDigestSchema,
   resource_binding_digest: indexerDigestSchema,
   shared_artifact_fingerprint: indexerSharedArtifactFingerprintSchema,
-  parser_dependency_fingerprint: indexerDigestSchema,
+  source_dependency_fingerprint: indexerDigestSchema,
   source_role: indexerIdSchema,
   source_precedence_digest: indexerDigestSchema,
   metric_set_digest: indexerDigestSchema,
@@ -117,6 +117,7 @@ export function validateIndexerRunEnvironmentBinding(
     environment.primary_execution_projection,
   );
   if (
+    environment.source_dependency_fingerprint !== workset.source_binding_digest ||
     execution.indexer_id !== workset.indexer_id ||
     execution.primary_registry_projection_digest !==
       workset.primary_registry_projection_digest ||
@@ -127,7 +128,7 @@ export function validateIndexerRunEnvironmentBinding(
     execution.profile_contract_digest !== workset.profile_contract_digest
   ) {
     throw new TypeError(
-      "run environment primary execution projection does not match its workset",
+      "run environment source or primary execution projection does not match its workset",
     );
   }
   if (workset.stage === "author") {
@@ -151,7 +152,7 @@ export function buildIndexerRunEnvelope(input: {
   const environment = validateIndexerRunEnvironment(input.run_environment);
   validateIndexerRunEnvironmentBinding(input.workset, environment);
   const payload = indexerRunEnvelopePayloadSchema.parse({
-    protocol: "context.indexer.run-envelope/v1",
+    protocol: "context.indexer.run-envelope/v2",
     stage: input.workset.stage,
     workset_digest: input.workset.workset_digest,
     execution_request_digest: input.execution_request_digest,
@@ -175,7 +176,7 @@ export function buildIndexerRunEnvelope(input: {
     resource_binding_digest: input.workset.primary_resource_binding_digest,
     shared_artifact_fingerprint:
       environment.primary_execution_projection.shared_artifact_fingerprint,
-    parser_dependency_fingerprint: environment.parser_dependency_fingerprint,
+    source_dependency_fingerprint: environment.source_dependency_fingerprint,
     source_role: environment.source_role,
     source_precedence_digest: environment.source_precedence_digest,
     metric_set_digest: environment.metric_set_digest,

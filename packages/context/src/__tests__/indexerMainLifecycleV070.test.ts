@@ -5,6 +5,7 @@ import {
   buildIndexerMainPartitionWorksets,
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
+  buildIndexerRepairIntent,
   buildIndexerTargetResolutionView,
   canonicalIndexerNodeRef,
   indexerPartitionPlanCanonicalHash,
@@ -33,7 +34,7 @@ const common = {
   profile_contract_digest: digest("4"),
   subject_key_schema_digest: digest("5"),
   source_scope_digest: digest("6"),
-  parser_contract_digest: digest("7"),
+  source_binding_digest: digest("7"),
   primary_resource_binding_digest: digest("8"),
   question_target_inventory_digest: digest("9"),
 };
@@ -143,7 +144,6 @@ function acceptedRecord(workset: IndexerMainPartitionWorkset) {
   } as Parameters<typeof buildIndexerMainAcceptedRecord>[0]["request"];
   const result = {
     consumed_input_view_digest: digest("f"),
-    workset_read_receipt_digests: [digest("0")],
     result: { result: { status: "complete" } },
   } as Parameters<typeof buildIndexerMainAcceptedRecord>[0]["result"];
   return buildIndexerMainAcceptedRecord({
@@ -194,7 +194,17 @@ describe("main workset lifecycle facts", () => {
   });
 
   test("derives one author workset per fully validated group and binds its exact target query", () => {
-    const partitionWorkset = partition();
+    const basePartition = partition();
+    const { workset_digest: _digest, ...partitionPayload } = basePartition;
+    void _digest;
+    const partitionWorkset = buildIndexerMainWorkset({
+      ...partitionPayload,
+      repair_intent: buildIndexerRepairIntent({
+        target_ref: "knowledge/codeindex/sample/button.md",
+        instruction: "Clarify the public integration contract.",
+      }),
+    });
+    if (partitionWorkset.stage !== "partition") throw new Error("expected partition workset");
     const plan = partitionPlan(partitionWorkset);
     const queryRef = indexerTargetQueryRef({
       subject_intent: "enrich-or-independent",
@@ -230,6 +240,7 @@ describe("main workset lifecycle facts", () => {
       stage: "author",
       group_key: "component:button",
       target_resolution_view: targetView,
+      repair_intent: partitionWorkset.repair_intent,
     });
     expect(built.workset_set.items[0]?.stage).toBe("author");
   });

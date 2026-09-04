@@ -235,7 +235,7 @@ exact registry install harness after publication to validate every planned
 package, the shipped capability/catalog manifests, the Agent Graph Host ABI,
 and all parsers present at that milestone.
 
-`release:parser-coordinates` renders the six new parser packages, eight parser
+`release:parser-coordinates` renders all ten parser packages, fifteen parser
 capabilities, exact named exports, Evidence ABI and expected npm Trusted
 Publisher tuple from that release manifest. `release:publisher-audit` is a
 blocking live registry check: it requires one explicit npm publisher-setting
@@ -293,15 +293,7 @@ Run focused package checks while developing:
 bun run --filter @c4a/context-cli typecheck
 bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
-bun run report:semantic-source-ownership
 ```
-
-`report:semantic-source-ownership` writes the deterministic migration report to
-`.tmp/semantic-source-ownership-report.json`. During the 0.7.0 migration it is
-intentionally report-only: retained legacy resources and duplicate taxonomy are
-visible, but the command cannot authorize deletion or become a blocking gate.
-The owner map records the prerequisites that must be completed before Phase G
-can introduce a separate blocking check.
 
 Run the repository gates before handing off a completed change:
 

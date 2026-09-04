@@ -114,7 +114,7 @@ function providerManifest(withProgram = true) {
     "provides:",
     "  profiles: [component-library]",
     "  operations:",
-    "    - { id: main-index, consumes: context.indexer.main-workset/v1, produces: context.indexer.main-result/v1 }",
+    "    - { id: main-index, consumes: context.indexer.main-workset/v2, produces: context.indexer.main-result/v1 }",
     "provider:",
     ...(withProgram
       ? [

@@ -39,6 +39,23 @@ describe("indexGoSource", () => {
       }),
     ]));
   });
+
+  test("does not emit a function literal body as a callable target", () => {
+    const indexed = indexGoSource(`
+      package service
+      import "log"
+      func Load() {
+        defer func(token string) {
+          log.Printf("token=[%s]", token)
+        }("secret")
+      }
+    `, "service/load.go");
+
+    expect(indexed.calls.some((call) => call.callee.startsWith("func("))).toBe(false);
+    expect(indexed.calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ callee: "log.Printf" }),
+    ]));
+  });
 });
 
 describe("indexGoRepository", () => {

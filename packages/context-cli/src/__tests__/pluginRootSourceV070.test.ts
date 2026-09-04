@@ -39,48 +39,13 @@ async function fileBodies(root: string, prefix = ""): Promise<Array<[string, str
 }
 
 describe("0.7.0 root plugin source", () => {
-  test("keeps one maintained Context body and a complete migration disposition", async () => {
+  test("keeps one maintained Context entry body", async () => {
     const canonical = await readFile(
       join(SOURCE_ROOT, "skills", "context", "SKILL.md"),
       "utf8",
     );
-    const legacy = await readFile(
-      join(PACKAGE_ROOT, "plugin", "commands", "context.md"),
-      "utf8",
-    );
-    const migration = JSON.parse(await readFile(
-      join(SOURCE_ROOT, "migrations", "0.7.0-source-migration.json"),
-      "utf8",
-    )) as {
-      coverage: string;
-      blocks: Array<{ id: string; disposition: string; new_location: string }>;
-    };
-
     expect(canonical).toContain("## Your Task");
     expect(canonical).toContain("workflow.current");
-    expect(legacy).toContain("Phase G deletion candidate");
-    expect(legacy).not.toContain("## Your Task");
-    expect(legacy).not.toContain("context status");
-    expect(migration.coverage).toBe("complete");
-    expect(migration.blocks.map((block) => block.id)).toEqual([
-      "frontmatter-description",
-      "task-and-product-boundary",
-      "workspace-entry-and-revision",
-      "conversation-modes",
-      "current-route-execution",
-      "review-report-ledger",
-      "publication-boundary",
-      "legacy-command-container",
-    ]);
-    expect(new Set(migration.blocks.map((block) => block.disposition))).toEqual(
-      new Set([
-        "retain-verbatim",
-        "rewrite-equivalent",
-        "merge-into",
-        "retire-with-reason",
-      ]),
-    );
-    expect(migration.blocks.every((block) => block.new_location.length > 0)).toBe(true);
   });
 
   test("generates semantic-equivalent adapters and keeps only the public entry in Host plugins", async () => {

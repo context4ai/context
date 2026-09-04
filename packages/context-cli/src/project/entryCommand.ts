@@ -16,7 +16,6 @@ export interface ContextEntryInput {
   language: ProjectLanguage;
   dev?: boolean;
   debug?: boolean;
-  optimizeDocs?: boolean;
   managed?: boolean;
   authorities?: readonly ContextWorkflowAuthority[];
 }
@@ -71,8 +70,6 @@ function initCommand(input: ContextEntryInput, projectDir: string): string {
   if (input.name !== undefined) args.push("--name", input.name);
   if (input.dev === true) args.push("--dev");
   if (input.debug === true) args.push("--debug");
-  if (input.optimizeDocs === false) args.push("--no-optimize-docs");
-  else args.push("--optimize-docs");
   return args.map(shellQuote).join(" ");
 }
 

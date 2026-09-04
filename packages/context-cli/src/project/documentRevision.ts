@@ -1,211 +1,438 @@
-import { readFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  buildIndexerMainRunRequest,
+  buildIndexerMainWorkset,
+  buildIndexerMainWorksetSet,
+  buildIndexerRepairIntent,
+  composeIndexerLayerInput,
+  loadIndexerRegistry,
+} from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
-import { enableDocumentOptimization, isDocumentOptimizationEnabled } from "./documentOptimizationConfig.js";
+import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import {
-  collectDocumentOptimizationFragments,
-  fragmentSectionState,
-  sha256,
-} from "./documentOptimizationModel.js";
+  INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
+  INDEXER_CURRENT_READINESS_PATH,
+  readProjectIndexerCandidateCompileStatus,
+} from "./indexerCandidateCompileActions.js";
+import { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerCurrentFinalization.js";
 import {
-  documentRevisionPath,
-  ensureDocumentRevision,
-  readDocumentRevision,
-  removeDocumentRevision,
-  writeDocumentOptimizationKeepState,
-} from "./documentOptimizationStorage.js";
+  prepareIndexerMainRunStore,
+  startIndexerMainRunStore,
+} from "./indexerMainRunStore.js";
 import {
-  clearDocumentRevisionRequest,
-  collectDocumentRevisionTargets,
-  documentRevisionRequestPath,
-  readDocumentRevisionRequest,
-  resolveDocumentRevisionTarget,
-  writeDocumentRevisionRequest,
-  type DocumentRevisionTarget,
-} from "./documentRevisionRequest.js";
+  currentLedger,
+  currentSpec,
+  normalizeRunSpec,
+} from "./indexerMainRunStoreRecords.js";
 import {
-  collectDocumentOptimizationStatus,
-  reconcileDocumentOptimizationRevisions,
-  type DocumentOptimizationStatus,
-} from "./documentOptimization.js";
-import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
+  buildProjectIndexerMainPartitionWorksets,
+  buildProjectIndexerQuestionTargetInventory,
+} from "./indexerMainLifecycleActions.js";
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { INDEXER_POST_AUTHOR_RUN_STORE_ROOT } from
+  "./indexerPostAuthorStorePersistence.js";
 
-export async function createDocumentOptimizationRevision(input: {
+function normalizedSelector(value: string): string {
+  return value.normalize("NFC").replace(/^knowledge\//u, "").replace(/^\.\//u, "");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
+}
+
+function candidateAliases(candidate: CandidateRecord): string[] {
+  return [
+    candidate.candidate_id,
+    candidate.path,
+    `knowledge/${candidate.path}`,
+    candidate.review.title,
+  ];
+}
+
+function resolveCandidate(
+  candidates: readonly CandidateRecord[],
+  selector: string,
+): CandidateRecord {
+  const normalized = normalizedSelector(selector);
+  const exact = candidates.filter((candidate) =>
+    candidateAliases(candidate).some((alias) =>
+      normalizedSelector(alias).toLocaleLowerCase() === normalized.toLocaleLowerCase()
+    )
+  );
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length > 1) {
+    throw new ContextError(
+      ExitCode.UserError,
+      `revision target is ambiguous: ${selector}`,
+      {
+        category: ErrorCategory.UserInputInvalid,
+        candidates: exact.map((candidate) => ({
+          candidate_id: candidate.candidate_id,
+          path: candidate.path,
+          title: candidate.review.title,
+        })),
+      },
+    );
+  }
+  throw new ContextError(ExitCode.UserError, `current Candidate not found: ${selector}`, {
+    category: ErrorCategory.UserInputInvalid,
+    next: "Use a candidate id or canonical Candidate path from context review list --all --format json.",
+  });
+}
+
+async function clearDerivedCurrentState(projectRoot: string): Promise<void> {
+  await Promise.all([
+    INDEXER_CURRENT_FINALIZATION_PATH,
+    INDEXER_CURRENT_READINESS_PATH,
+    INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
+    INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
+  ].map((path) => rm(join(projectRoot, path), { recursive: true, force: true })));
+}
+
+export async function reopenCurrentAuthorWorksets(input: {
   projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-  fragmentId: string;
-}): Promise<{ path: string; created: boolean; approved_path: string; line_range: string }> {
-  const fragments = collectDocumentOptimizationFragments(input.files);
-  const fragment = fragments.find((item) => item.fragment_id === input.fragmentId);
-  if (fragment === undefined) {
-    throw new ContextError(ExitCode.UserError, `document optimization fragment not found: ${input.fragmentId}`, {
+  instruction: string;
+  target_ref: string;
+  workset_digests?: readonly string[];
+}) {
+  const ledger = await currentLedger(input.projectRoot);
+  if (
+    ledger === undefined || ledger.entries.length === 0 ||
+    ledger.entries.some((entry) => entry.stage !== "author")
+  ) {
+    throw new TypeError("Author repair requires the current Author run ledger");
+  }
+  const selected = input.workset_digests === undefined
+    ? new Set(ledger.entries.map((entry) => entry.workset_digest))
+    : new Set(input.workset_digests);
+  if (selected.size === 0) {
+    throw new TypeError("Author repair requires at least one workset");
+  }
+  const repairIntent = buildIndexerRepairIntent({
+    target_ref: input.target_ref,
+    instruction: input.instruction,
+  });
+  let repairedCount = 0;
+  const specs = await Promise.all(ledger.entries.map(async (entry) => {
+    const oldSpec = await currentSpec({
+      projectRoot: input.projectRoot,
+      request_digest: entry.execution_request_digest,
+    });
+    if (!selected.has(entry.workset_digest)) return oldSpec;
+    repairedCount += 1;
+    const oldWorkset = oldSpec.request.workset;
+    const { workset_digest: _oldDigest, repair_intent: _oldRepair, ...worksetPayload } = oldWorkset;
+    void _oldDigest;
+    void _oldRepair;
+    const repairedWorkset = buildIndexerMainWorkset({
+      ...worksetPayload,
+      repair_intent: repairIntent,
+    });
+    if (repairedWorkset.stage !== "author") {
+      throw new TypeError("Author repair produced a non-Author workset");
+    }
+    const repairedRequest = buildIndexerMainRunRequest({
+      workset: repairedWorkset,
+      composition_input: composeIndexerLayerInput({
+        workset_digest: repairedWorkset.workset_digest,
+        final_authority_layer_ref:
+          oldSpec.request.composition_input.final_authority_layer_ref,
+        fragments: oldSpec.request.composition_input.accepted_fragments,
+      }),
+      final_authority: oldSpec.request.final_authority,
+      run_environment: oldSpec.request.run_environment,
+    });
+    return normalizeRunSpec({
+      protocol: "context.indexer.main-run-spec/v1",
+      request: repairedRequest,
+      validation: oldSpec.validation,
+    });
+  }));
+  if (repairedCount !== selected.size) {
+    throw new TypeError("Author repair references a workset outside the current ledger");
+  }
+  await clearDerivedCurrentState(input.projectRoot);
+  await prepareIndexerMainRunStore({
+    projectRoot: input.projectRoot,
+    workset_set: buildIndexerMainWorksetSet(specs.map((spec) => spec.request.workset)),
+    run_specs: specs,
+  });
+  const firstIndex = ledger.entries.findIndex((entry) => selected.has(entry.workset_digest));
+  const first = firstIndex < 0 ? undefined : specs[firstIndex];
+  if (first === undefined) throw new TypeError("Author repair lost its selected workset");
+  await startIndexerMainRunStore({
+    projectRoot: input.projectRoot,
+    workset_digest: first.request.workset.workset_digest,
+  });
+  return {
+    workset_count: repairedCount,
+    first_workset_digest: first.request.workset.workset_digest,
+    repair_intent_digest: repairIntent.intent_digest,
+  };
+}
+
+function approvedViewAliases(view: Record<string, unknown>): string[] {
+  const path = typeof view.path === "string" ? view.path : undefined;
+  return [
+    ...(typeof view.view_ref === "string" ? [view.view_ref] : []),
+    ...(typeof view.node_ref === "string" ? [view.node_ref] : []),
+    ...(path === undefined ? [] : [path, `knowledge/${path}`]),
+    ...(typeof view.title === "string" ? [view.title] : []),
+  ];
+}
+
+function resolveApprovedView(
+  structure: Record<string, unknown>,
+  selector: string,
+): Record<string, unknown> {
+  const views = Array.isArray(structure.views)
+    ? structure.views.filter(isRecord)
+    : [];
+  const normalized = normalizedSelector(selector).toLocaleLowerCase();
+  const exact = views.filter((view) => approvedViewAliases(view).some((alias) =>
+    normalizedSelector(alias).toLocaleLowerCase() === normalized
+  ));
+  if (exact.length === 1) return exact[0]!;
+  if (exact.length > 1) {
+    throw new ContextError(
+      ExitCode.UserError,
+      `approved knowledge target is ambiguous: ${selector}`,
+      {
+        category: ErrorCategory.UserInputInvalid,
+        candidates: exact.map((view) => ({
+          path: view.path,
+          title: view.title,
+          view_ref: view.view_ref,
+        })),
+      },
+    );
+  }
+  throw new ContextError(
+    ExitCode.UserError,
+    `approved knowledge target not found: ${selector}`,
+    {
+      category: ErrorCategory.UserInputInvalid,
+      next: "Use a canonical path or exact title from knowledge/structure.yaml.",
+    },
+  );
+}
+
+function approvedViewSources(view: Record<string, unknown>): string[] {
+  const sectionSources = Array.isArray(view.sections)
+    ? view.sections.flatMap((section) => isRecord(section) ? stringList(section.source_refs) : [])
+    : [];
+  return [...new Set([...stringList(view.sources), ...sectionSources])].sort();
+}
+
+async function reopenApprovedPartition(input: {
+  projectRoot: string;
+  selector: string;
+  instruction: string;
+}) {
+  const structure = await readKnowledgeStructure(input.projectRoot);
+  if (structure.parsed === null) {
+    throw new ContextError(
+      ExitCode.WorkspaceStateError,
+      "context revise requires approved knowledge structure after close",
+      { category: ErrorCategory.WorkspaceStateInvalid },
+    );
+  }
+  const view = resolveApprovedView(structure.parsed, input.selector);
+  const sourceRefs = approvedViewSources(view);
+  if (sourceRefs.length === 0) {
+    throw new ContextError(
+      ExitCode.WorkspaceStateError,
+      "approved knowledge target has no recoverable source reference",
+      { category: ErrorCategory.WorkspaceStateInvalid },
+    );
+  }
+  const loaded = await loadIndexerRegistry(input.projectRoot);
+  const questionTargets = await buildProjectIndexerQuestionTargetInventory({
+    projectRoot: input.projectRoot,
+    value: {
+      protocol: "context.indexer.question-target-inventory-input/v1",
+      requirement_set_digest: loaded.requirementSetDigest,
+    },
+  });
+  const partition = await buildProjectIndexerMainPartitionWorksets({
+    projectRoot: input.projectRoot,
+    value: {
+      protocol: "context.indexer.main-partition-workset-build-input/v1",
+      question_target_inventory: questionTargets,
+    },
+  });
+  const selected = partition.worksets.filter((workset) =>
+    sourceRefs.includes(workset.source_ref)
+  );
+  if (selected.length === 0) {
+    throw new ContextError(
+      ExitCode.WorkspaceStateError,
+      "approved knowledge sources no longer resolve to a current Indexer Partition",
+      {
+        category: ErrorCategory.WorkspaceStateInvalid,
+        sources: sourceRefs,
+        next: "Update src/indexers.yaml or recapture the source before retrying.",
+      },
+    );
+  }
+  const repairIntent = buildIndexerRepairIntent({
+    target_ref: typeof view.path === "string" ? `knowledge/${view.path}` : input.selector,
+    instruction: input.instruction,
+  });
+  const specByWorkset = new Map(partition.run_specs.map((spec) => [
+    spec.request.workset.workset_digest,
+    spec,
+  ]));
+  const repairedSpecs = selected.map((oldWorkset) => {
+    const oldSpec = specByWorkset.get(oldWorkset.workset_digest);
+    if (oldSpec === undefined) {
+      throw new TypeError("targeted Partition is missing its current run specification");
+    }
+    const {
+      workset_digest: _oldDigest,
+      repair_intent: _oldRepair,
+      ...worksetPayload
+    } = oldWorkset;
+    void _oldDigest;
+    void _oldRepair;
+    const repairedWorkset = buildIndexerMainWorkset({
+      ...worksetPayload,
+      repair_intent: repairIntent,
+    });
+    if (repairedWorkset.stage !== "partition") {
+      throw new TypeError("approved knowledge repair produced a non-Partition workset");
+    }
+    const request = buildIndexerMainRunRequest({
+      workset: repairedWorkset,
+      composition_input: composeIndexerLayerInput({
+        workset_digest: repairedWorkset.workset_digest,
+        final_authority_layer_ref:
+          oldSpec.request.composition_input.final_authority_layer_ref,
+        fragments: oldSpec.request.composition_input.accepted_fragments,
+      }),
+      final_authority: oldSpec.request.final_authority,
+      run_environment: oldSpec.request.run_environment,
+      partition_strategy_attempt: oldSpec.request.partition_strategy_attempt,
+    });
+    return normalizeRunSpec({
+      protocol: "context.indexer.main-run-spec/v1",
+      request,
+      validation: oldSpec.validation,
+    });
+  });
+  await clearDerivedCurrentState(input.projectRoot);
+  await prepareIndexerMainRunStore({
+    projectRoot: input.projectRoot,
+    workset_set: buildIndexerMainWorksetSet(
+      repairedSpecs.map((spec) => spec.request.workset),
+    ),
+    run_specs: repairedSpecs,
+  });
+  await startIndexerMainRunStore({
+    projectRoot: input.projectRoot,
+    workset_digest: repairedSpecs[0]!.request.workset.workset_digest,
+  });
+  return {
+    status: "partition-reopened" as const,
+    path: view.path,
+    source_refs: sourceRefs,
+    workset_count: repairedSpecs.length,
+    repair_intent_digest: repairIntent.intent_digest,
+    next_action: { command: "context status --format json" },
+  };
+}
+
+/**
+ * Reopen the exact Author workset that produced a current Candidate. The
+ * instruction is part of the new workset identity, so an old accepted Result
+ * can never satisfy the repair run.
+ */
+export async function beginDocumentRevision(input: {
+  projectRoot: string;
+  selector: string;
+  instruction: string;
+}) {
+  const instruction = input.instruction.trim();
+  if (instruction.length === 0) {
+    throw new ContextError(ExitCode.UserError, "--instruction must not be empty", {
       category: ErrorCategory.UserInputInvalid,
     });
   }
-  const file = input.files.find((item) => item.relPath === fragment.approved_path)!;
-  const revision = await ensureDocumentRevision({
-    projectRoot: input.projectRoot,
-    file,
-    fragments: fragments.filter((candidate) => candidate.approved_path === file.relPath),
-  });
-  return { path: revision.path, created: revision.created, approved_path: file.relPath, line_range: fragment.line_range };
-}
-
-export interface DocumentRevisionEntryResult {
-  schema: "context.document-revision-entry.v1";
-  status: "started" | "target-selection-required";
-  selector: string;
-  target?: DocumentRevisionTarget;
-  candidates?: DocumentRevisionTarget[];
-  revision_path?: string;
-  created?: boolean;
-  next_action?: { kind: "reevaluate-workspace"; command: string };
-}
-
-export async function beginDocumentRevision(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-  selector: string;
-}): Promise<DocumentRevisionEntryResult> {
-  const targets = collectDocumentRevisionTargets(input.files);
-  const resolution = resolveDocumentRevisionTarget(targets, input.selector);
-  if (resolution.target === undefined) {
-    return {
-      schema: "context.document-revision-entry.v1",
-      status: "target-selection-required",
-      selector: input.selector,
-      candidates: resolution.candidates.slice(0, 20),
-    };
-  }
-
-  const target = resolution.target;
-  const active = await readDocumentRevisionRequest(input.projectRoot);
-  if (active !== null && active.approved_path === target.approved_path) {
-    return {
-      schema: "context.document-revision-entry.v1",
-      status: "started",
-      selector: input.selector,
-      target,
-      revision_path: documentRevisionRequestPath(target.approved_path),
-      created: false,
-      next_action: { kind: "reevaluate-workspace", command: "context status --format json" },
-    };
-  }
-  if (active !== null) {
-    const activeRevision = await readDocumentRevision(input.projectRoot, active.approved_path);
-    if (activeRevision === null || sha256(activeRevision) !== active.revision_digest) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "another document revision is already awaiting validation", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        approved_path: active.approved_path,
-        next: "Finish the current revision and run context optimize-docs validate before selecting another page.",
-      });
+  const status = await readProjectIndexerCandidateCompileStatus(input.projectRoot);
+  if (status.state !== "current" || status.compile === undefined) {
+    if (await currentLedger(input.projectRoot) !== undefined) {
+      throw new ContextError(
+        ExitCode.WorkspaceStateError,
+        "context revise cannot replace an unfinished Indexer lifecycle",
+        {
+          category: ErrorCategory.WorkspaceStateInvalid,
+          next: "Finish or repair the current workflow route first.",
+        },
+      );
     }
-    await removeDocumentRevision(input.projectRoot, active.approved_path);
-  }
-
-  const wasEnabled = await isDocumentOptimizationEnabled(input.projectRoot);
-  let currentFiles = [...input.files];
-  if (!wasEnabled) {
-    await enableDocumentOptimization(input.projectRoot);
-    currentFiles = await Promise.all(input.files.map(async (file) => {
-      const fragments = collectDocumentOptimizationFragments([file]);
-      return fragments.length === 0 ? file : writeDocumentOptimizationKeepState({
-        projectRoot: input.projectRoot,
-        file,
-        sections: new Map(fragments.map((fragment) => [fragment.section_id, fragmentSectionState(fragment)])),
-      });
-    }));
-  }
-  const file = currentFiles.find((item) => item.relPath === target.approved_path)!;
-  const revision = await ensureDocumentRevision({
-    projectRoot: input.projectRoot,
-    file,
-    fragments: collectDocumentOptimizationFragments([file]),
-  });
-  await writeDocumentRevisionRequest({
-    projectRoot: input.projectRoot,
-    approvedPath: target.approved_path,
-    revisionContent: revision.content,
-  });
-  return {
-    schema: "context.document-revision-entry.v1",
-    status: "started",
-    selector: input.selector,
-    target,
-    revision_path: documentRevisionRequestPath(target.approved_path),
-    created: revision.created,
-    next_action: { kind: "reevaluate-workspace", command: "context status --format json" },
-  };
-}
-
-export async function currentDocumentRevisionPlan(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-}): Promise<{
-  schema: "context.document-revision-plan.v1";
-  target: DocumentRevisionTarget;
-  revision_path: string;
-  changed: boolean;
-  next_action: { kind: "validate-document-revision"; command: string };
-}> {
-  const request = await readDocumentRevisionRequest(input.projectRoot);
-  if (request === null) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "no document revision is currently requested", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      next: "Run context revise \"<document title or approved path>\" --format json first.",
+    return reopenApprovedPartition({
+      projectRoot: input.projectRoot,
+      selector: input.selector,
+      instruction,
     });
   }
-  const target = collectDocumentRevisionTargets(input.files)
-    .find((item) => item.approved_path === request.approved_path);
-  const revision = await readDocumentRevision(input.projectRoot, request.approved_path);
-  if (target === undefined || revision === null) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "the requested document revision no longer resolves", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      approved_path: request.approved_path,
-      next: "Restore the approved page and its revision, or disable document optimization.",
-    });
-  }
-  return {
-    schema: "context.document-revision-plan.v1",
-    target,
-    revision_path: documentRevisionRequestPath(target.approved_path),
-    changed: sha256(revision) !== request.revision_digest,
-    next_action: {
-      kind: "validate-document-revision",
-      command: "context optimize-docs validate --format json",
-    },
-  };
-}
-
-export async function validateDocumentOptimizationRevisions(input: {
-  projectRoot: string;
-  files: readonly ApprovedKnowledgeFile[];
-}): Promise<DocumentOptimizationStatus> {
-  const request = await readDocumentRevisionRequest(input.projectRoot);
-  if (request !== null) {
-    const path = documentRevisionPath(input.projectRoot, request.approved_path);
-    let revision: string;
-    try {
-      revision = await readFile(path, "utf8");
-    } catch {
-      throw new ContextError(ExitCode.WorkspaceStateError, "the requested document revision file is missing", {
+  if (status.compile === undefined) {
+    throw new ContextError(
+      ExitCode.WorkspaceStateError,
+      "context revise requires a current Candidate or approved knowledge structure",
+      {
         category: ErrorCategory.WorkspaceStateInvalid,
-        approved_path: request.approved_path,
-      });
-    }
-    if (sha256(revision) === request.revision_digest) {
-      throw new ContextError(ExitCode.UserError, "the requested document revision has not changed", {
-        category: ErrorCategory.UserInputInvalid,
-        approved_path: request.approved_path,
-        next: `Edit ${documentRevisionRequestPath(request.approved_path)}, then rerun context optimize-docs validate.`,
-      });
-    }
+        next: "Finish the current Indexer lifecycle or select an approved knowledge path after close.",
+      },
+    );
   }
-  const status = await reconcileDocumentOptimizationRevisions(input);
-  if (status.conflict_fragments === 0 && request !== null) {
-    await clearDocumentRevisionRequest(input.projectRoot);
-    return collectDocumentOptimizationStatus(input);
+  const candidates = (await readCandidateRecords(input.projectRoot)).filter((candidate) =>
+    candidate.candidate_type === "indexer-artifact"
+  );
+  const candidate = resolveCandidate(candidates, input.selector);
+  const file = status.compile.files.find((item) =>
+    item.file_digest === candidate.indexer_candidate.file_digest
+  );
+  if (file === undefined) {
+    throw new TypeError("current Candidate does not resolve to its compiled Artifact");
   }
-  return status;
+  const binding = status.compile.result_bindings.find((item) =>
+    item.artifact_result_digest === file.artifact_result_digest
+  );
+  if (binding === undefined) {
+    throw new TypeError("current Candidate does not resolve to its owning Author workset");
+  }
+  const ledger = await currentLedger(input.projectRoot);
+  if (ledger === undefined || ledger.entries.some((entry) => entry.stage !== "author")) {
+    throw new TypeError("current Candidate repair requires the Author run ledger");
+  }
+  const owner = ledger.entries.find((entry) =>
+    entry.workset_digest === binding.workset_digest
+  );
+  if (owner === undefined) {
+    throw new TypeError("owning Author workset is absent from the current ledger");
+  }
+  const repaired = await reopenCurrentAuthorWorksets({
+    projectRoot: input.projectRoot,
+    instruction,
+    target_ref: candidate.candidate_id,
+    workset_digests: [binding.workset_digest],
+  });
+  return {
+    status: "author-reopened" as const,
+    candidate_id: candidate.candidate_id,
+    path: candidate.path,
+    workset_digest: repaired.first_workset_digest,
+    repair_intent_digest: repaired.repair_intent_digest,
+    next_action: { command: "context status --format json" },
+  };
 }

@@ -20,12 +20,6 @@ import {
   type ResolvedProviderBundle,
 } from "@c4a/context";
 import { collectIndexerBundleFiles } from "./indexerDistributionBuild.js";
-import {
-  assertIndexerReleaseCapabilityReady,
-  indexerBundleReleaseCapability,
-  validateIndexerReleaseCapabilityManifest,
-  type IndexerReleaseCapabilityManifest,
-} from "./indexerReleaseCapabilities.js";
 
 export interface CliBundledIndexerCatalogEntry {
   skill: string;
@@ -96,17 +90,6 @@ export async function loadCliIndexerReleaseManifest(input: {
   return manifest;
 }
 
-export async function loadCliReleaseCapabilityManifest(input: {
-  assetsRoot?: string;
-  expectedPackageVersion?: string;
-} = {}): Promise<IndexerReleaseCapabilityManifest> {
-  const assetsRoot = input.assetsRoot ?? defaultCliIndexerAssetsRoot();
-  return validateIndexerReleaseCapabilityManifest(
-    await readJson(join(assetsRoot, "capability-manifest.json")),
-    input.expectedPackageVersion,
-  );
-}
-
 export async function loadCliIndexerBaseContracts(input: {
   assetsRoot?: string;
 } = {}): Promise<{
@@ -129,19 +112,12 @@ export async function listCliBundledIndexers(input: {
   expectedPackageVersion?: string;
 } = {}): Promise<CliBundledIndexerCatalog> {
   const manifest = await loadCliIndexerReleaseManifest(input);
-  const capabilities = await loadCliReleaseCapabilityManifest({
-    ...(input.assetsRoot === undefined ? {} : { assetsRoot: input.assetsRoot }),
-    expectedPackageVersion: input.expectedPackageVersion ?? manifest.version,
-  });
   return {
     protocol: "context.indexer.cli-bundled-catalog/v1",
     package: manifest.package,
     version: manifest.version,
     issuer: manifest.issuer,
-    bundles: manifest.bundles.filter((bundle) => {
-      const feature = indexerBundleReleaseCapability(bundle.skill);
-      return capabilities.capabilities.find((item) => item.id === feature)?.state === "ready";
-    }).map((bundle) => ({
+    bundles: manifest.bundles.map((bundle) => ({
       skill: bundle.skill,
       version: bundle.version,
       source_type: "cli-bundled",
@@ -204,14 +180,6 @@ export async function resolveCliBundledIndexerProvider(input: {
     assetsRoot,
     expectedPackageVersion: input.expectedPackageVersion,
   });
-  const capabilities = await loadCliReleaseCapabilityManifest({
-    assetsRoot,
-    expectedPackageVersion: input.expectedPackageVersion,
-  });
-  assertIndexerReleaseCapabilityReady(
-    capabilities,
-    indexerBundleReleaseCapability(input.expected.skill),
-  );
   const selected = manifest.bundles.find((bundle) =>
     bundle.skill === input.expected.skill &&
     bundle.version === input.expected.version &&

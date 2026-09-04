@@ -36,55 +36,17 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 describe("plugin prompt and workflow resource contract", () => {
-  test("document revision stays one sibling-page contract across CLI, Route, and Agent guidance", async () => {
-    const [
-      command,
-      graph,
-      action,
-      procedure,
-      registration,
-      classification,
-      storage,
-      optimization,
-      hostPlans,
-    ] = await Promise.all([
+  test("candidate revision has one Author-repair entry and no side-channel page", async () => {
+    const [command, registration, revision] = await Promise.all([
       read(PLUGIN_ROOT, ...ENTRY_PATH),
-      read(WORKFLOW_ROOT, "graphs", "workspace.yaml"),
-      read(WORKFLOW_ROOT, "actions", "revise-document.yaml"),
-      read(WORKFLOW_ROOT, "resources", "procedures", "document-revision.md"),
-      read(PACKAGE_ROOT, "src", "commands", "documentOptimizationCommands.ts"),
-      read(PACKAGE_ROOT, "src", "project", "knowledgeFileClassification.ts"),
-      read(PACKAGE_ROOT, "src", "project", "documentOptimizationStorage.ts"),
-      read(PACKAGE_ROOT, "src", "project", "documentOptimization.ts"),
-      read(PACKAGE_ROOT, "src", "project", "workflow", "workflowHostPlans.ts"),
+      read(PACKAGE_ROOT, "src", "commands", "documentRevisionCommands.ts"),
+      read(PACKAGE_ROOT, "src", "project", "documentRevision.ts"),
     ]);
 
-    expect(command).toContain('context revise "<the user\'s page title, approved path, ViewRef, or wording>"');
-    expect(command).toContain("knowledge/**/*__revision.md");
-    expect(command).toContain("route.document-revision.requested");
-    expect(graph).toContain("id: revise-document");
-    expect(graph).toContain("reasonCode: route.document-revision.requested");
-    expect(action).toContain("handler: context.document-revision.next");
-    expect(hostPlans).toContain('command("context optimize-docs revise-current --format json"');
-    expect(procedure).toContain("sibling `__revision.md` page");
+    expect(command).toContain('context revise "<candidate title, path, or id>"');
+    expect(command).not.toContain("__revision.md");
     expect(registration).toContain('program.command("revise <target>")');
-    expect(classification).toContain('DOCUMENT_REVISION_SUFFIX = "__revision.md"');
-    expect(storage).toContain('join(projectRoot, "knowledge", documentRevisionPathForApprovedPath(approvedPath))');
-
-    for (const source of [
-      command,
-      graph,
-      action,
-      procedure,
-      registration,
-      classification,
-      storage,
-      optimization,
-      hostPlans,
-    ]) {
-      expect(source).not.toContain("overlays/");
-      expect(source).not.toContain("migrateLegacyDocumentOptimization");
-    }
+    expect(revision).toContain("Reopen the exact Author workset");
   });
 
   test("plugin README exposes only current public entrypoints", async () => {
@@ -187,7 +149,7 @@ describe("plugin prompt and workflow resource contract", () => {
   test("human-gate dialogue is route-selected instead of embedded in CLI branches", async () => {
     const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
     const dialogue = [
-      ["human-gates.md", ["user's conversation language", "placeholder commands"]],
+      ["human-gates.md", ["user's conversation language", "raw TypeScript"]],
       ["source-boundary.md", ["whole repository/subspace", "`include`"]],
       ["document-capture.md", ["permission to read", "documentation site"]],
       ["knowledge-review.md", ["exact Payload", "fully managed operation"]],
@@ -252,27 +214,7 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(closeProcedure).toContain("fully managed or force approval");
   });
 
-  test("phase source code does not duplicate the Provider semantic resource catalog", async () => {
-    const types = await read(PACKAGE_ROOT, "src", "project", "proseAlignTypes.ts");
-    expect(types).not.toContain("PROSE_ALIGN_REFERENCE_FILES");
-    expect(types).not.toContain("PROSE_COMPILE_REFERENCE_FILES");
-    expect(types).not.toContain("resources/semantic/align/");
-    expect(types).not.toContain("resources/semantic/compile/");
-
-    const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
-    expect(rules).toContain('source: "context-markdown-indexer"');
-    expect(rules).toContain("bundle:context-markdown-indexer/references/");
-    const compileRoot = join(WORKFLOW_ROOT, "resources", "semantic", "compile");
-    for (const entry of await readdir(compileRoot, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-      const body = await readFile(join(compileRoot, entry.name), "utf8");
-      expect(body, `compile/${entry.name}`).toMatch(
-        /^---\n[\s\S]*?\napplies-to:\n(?:\s+- [a-z0-9_-]+\n)+[\s\S]*?\n---\n/u,
-      );
-    }
-  });
-
-  test("semantic planning has one Provider-owned source after Phase G", async () => {
+  test("semantic planning has one Provider-owned source", async () => {
     expect(await listFiles(join(WORKFLOW_ROOT, "resources", "semantic", "align"))).toEqual([]);
     const planning = await read(MARKDOWN_INDEXER_ROOT, "references", "semantic-planning.md");
     const structure = await read(
@@ -280,7 +222,7 @@ describe("plugin prompt and workflow resource contract", () => {
       "references",
       "structure-and-artifacts.md",
     );
-    expect(planning).toContain("Evidence, subject, and claim planning");
+    expect(planning).toContain("Source, subject, and claim planning");
     expect(planning).toContain("On\na stale workset");
     expect(structure).toContain("Section first, Artifact when justified");
     expect(structure).toContain("Candidate resolution");
@@ -316,14 +258,11 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(graph).not.toContain("resources/semantic/align/");
     expect(graph).not.toContain("resources/semantic/code-index/");
     expect(graph).toContain("resources/procedures/source-capture-detailed.md");
-    expect(graph).toContain("- { from: apply-managed-review, to: close-approved-knowledge }");
+    expect(graph).toContain("- { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }");
     expect(graph).toContain("- { from: close-approved-knowledge, to: choose-package-output }");
     expect(graph).not.toContain("- { from: maintain-evidence, to: close-approved-knowledge }");
     expect(graph).not.toContain("- { from: close-approved-knowledge, to: revise-document }");
 
-    const rules = await read(PACKAGE_ROOT, "src", "project", "semanticRules.ts");
-    expect(rules).toContain("semanticRuleDescriptors");
-    expect(rules).toContain('source: "context-markdown-indexer"');
   });
 
   test("route-selected SDK manuals remain complete mirrors of the public docs", async () => {
@@ -344,7 +283,7 @@ describe("plugin prompt and workflow resource contract", () => {
         workflowPath,
       );
       const body = resource.replace(/^---\n[\s\S]*?\n---\n\n?/u, "");
-      expect(body, workflowPath).toBe(sdk);
+      expect(body.trimEnd(), workflowPath).toBe(sdk.trimEnd());
     }
   });
 

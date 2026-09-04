@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -9,13 +8,12 @@ import { isSafeEntityId } from "./entityId.js";
 
 export const REVIEW_DECISIONS_FILE = join("knowledge", "decisions.json");
 const FINGERPRINT_PATTERN = /^sha256:[a-f0-9]{64}$/u;
-const COLLECTIONS = new Set<string>(KNOWLEDGE_COLLECTIONS);
 
 export type RejectedDecisions = Map<string, string>;
 
 function isCandidateId(value: string): boolean {
   const separator = value.indexOf("/");
-  return isSafeEntityId(value) && separator > 0 && COLLECTIONS.has(value.slice(0, separator));
+  return isSafeEntityId(value) && separator > 0 && value.slice(0, separator) === "indexer";
 }
 
 function invalidDecisions(reason: string): ContextError {
@@ -56,13 +54,23 @@ export async function writeRejectedDecisions(
   decisions: ReadonlyMap<string, string>,
 ): Promise<void> {
   const path = join(projectRoot, REVIEW_DECISIONS_FILE);
-  if (decisions.size === 0) {
+  const content = rejectedDecisionsContent(decisions);
+  if (content === undefined) {
     await rm(path, { force: true });
     return;
   }
-  const rejected = Object.fromEntries([...decisions.entries()].sort(([left], [right]) => left.localeCompare(right)));
   const tempPath = `${path}.${process.pid}.tmp`;
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(tempPath, `${JSON.stringify(rejected, null, 2)}\n`, "utf8");
+  await writeFile(tempPath, content, "utf8");
   await rename(tempPath, path);
+}
+
+export function rejectedDecisionsContent(
+  decisions: ReadonlyMap<string, string>,
+): string | undefined {
+  if (decisions.size === 0) return undefined;
+  const rejected = Object.fromEntries(
+    [...decisions.entries()].sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return `${JSON.stringify(rejected, null, 2)}\n`;
 }

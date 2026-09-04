@@ -1,12 +1,55 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { legacyCodeIndexMigrationRequired, migrateLegacyCodeIndex } from "../project/codeIndexMigration.js";
-import { CODE_INDEX_AUDIT_STATE_PATH } from "../project/codeIndexAudit.js";
-import { CANDIDATE_LEDGER_FILE, writeCandidateRecords } from "../project/candidateLedger.js";
+import { CANDIDATE_LEDGER_FILE } from "../project/candidateLedger.js";
 import { cli_main } from "../cli.js";
+
+const CODE_INDEX_AUDIT_STATE_PATH = ".tmp/context-runtime/code-index-audit/state.json";
+
+function currentCandidateRecord(): Record<string, unknown> {
+  const digest = `sha256:${"a".repeat(64)}`;
+  return {
+    candidate_id: `indexer/${"a".repeat(64)}`,
+    node_ref: `node:subject:sha256:${"b".repeat(64)}`,
+    view_ref: `view:artifact:sha256:${"c".repeat(64)}`,
+    collection: "codeindex",
+    status: "draft",
+    candidate_type: "indexer-artifact",
+    kind: "Guide",
+    visibility: "public",
+    module: "sample",
+    path: "codeindex/sample.md",
+    structure_digest: digest,
+    source_refs: ["repo:sample"],
+    body: "# Sample",
+    indexer_candidate: {
+      compile_digest: digest,
+      file_digest: digest,
+      artifact_ref: `artifact:subject:sha256:${"d".repeat(64)}`,
+      section_refs: [`section:subject:sha256:${"e".repeat(64)}`],
+      source_ref: "repo:sample",
+      evidence_bindings: [],
+      sections: [{
+        section_ref: `section:subject:sha256:${"e".repeat(64)}`,
+        section_key: "overview",
+        evidence_refs: [],
+        markdown: "# Sample",
+        markdown_digest: digest,
+      }],
+    },
+    fingerprint: digest,
+    review: {
+      title: "Sample",
+      summary: "Sample",
+      signals: ["current"],
+      reason: "Current Indexer Candidate",
+    },
+    updated: "2026-07-12T00:00:00.000Z",
+  };
+}
 
 describe("0.6.19 codeindex migration", () => {
   test("moves legacy knowledge and rewrites formal identities without a marker", async () => {
@@ -84,21 +127,13 @@ describe("0.6.19 codeindex migration", () => {
     try {
       await mkdir(join(root, "src"), { recursive: true });
       await writeFile(join(root, "src", "index.ts"), 'extractTs({ collection: "codegraph" });\n', "utf8");
-      await writeCandidateRecords(root, [{
+      const candidateLedger = join(root, CANDIDATE_LEDGER_FILE);
+      await mkdir(dirname(candidateLedger), { recursive: true });
+      await writeFile(candidateLedger, `${JSON.stringify({
         candidate_id: "codegraph/sample/map",
-        node_ref: "sample/map",
-        view_ref: "codegraph:sample/map",
         collection: "codegraph",
         status: "draft",
-        kind: "module-map",
-        visibility: "exported",
-        module: "sample",
-        path: "codegraph/sample/map.md",
-        source_refs: ["repo:sample#symbol:src/index.ts:entry:function@sha256:abc"],
-        fingerprint: "legacy",
-        review: { title: "Map", summary: "Legacy", signals: ["legacy"], reason: "Legacy" },
-        updated: "2026-08-25T00:00:00.000Z",
-      }]);
+      })}\n`, "utf8");
       await mkdir(join(root, ".tmp", "context-runtime", "extract"), { recursive: true });
       await mkdir(join(root, ".tmp", "context-runtime", "review"), { recursive: true });
       await mkdir(join(root, ".tmp", "context-runtime", "code-index-audit"), { recursive: true });
@@ -123,7 +158,46 @@ describe("0.6.19 codeindex migration", () => {
     }
   });
 
-  test("a direct review command migrates legacy protocol and continues the requested action", async () => {
+  test("does not classify or remove a current Indexer Candidate ledger", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-codeindex-current-candidate-"));
+    try {
+      const candidateLedger = join(root, CANDIDATE_LEDGER_FILE);
+      const content = `${JSON.stringify(currentCandidateRecord())}\n`;
+      await mkdir(dirname(candidateLedger), { recursive: true });
+      await writeFile(candidateLedger, content, "utf8");
+
+      expect(await legacyCodeIndexMigrationRequired(root)).toBe(false);
+      expect((await migrateLegacyCodeIndex(root)).changed).toBe(false);
+      expect(await readFile(candidateLedger, "utf8")).toBe(content);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("removes legacy Candidate rows while retaining current rows", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-codeindex-mixed-candidate-"));
+    try {
+      const candidateLedger = join(root, CANDIDATE_LEDGER_FILE);
+      const current = JSON.stringify(currentCandidateRecord());
+      const legacy = JSON.stringify({
+        candidate_id: "codegraph/sample/map",
+        collection: "codegraph",
+        status: "draft",
+      });
+      await mkdir(dirname(candidateLedger), { recursive: true });
+      await writeFile(candidateLedger, `${legacy}\n${current}\n`, "utf8");
+
+      expect(await legacyCodeIndexMigrationRequired(root)).toBe(true);
+      const result = await migrateLegacyCodeIndex(root);
+      expect(result.changed).toBe(true);
+      expect(await readFile(candidateLedger, "utf8")).toBe(`${current}\n`);
+      expect(await legacyCodeIndexMigrationRequired(root)).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a direct review command leaves legacy state unchanged until explicit migration", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-codeindex-direct-"));
     const cwd = process.cwd();
     const stdout = process.stdout.write;
@@ -139,8 +213,9 @@ describe("0.6.19 codeindex migration", () => {
       process.chdir(root);
       process.stdout.write = (() => true) as typeof process.stdout.write;
       await cli_main(["node", "context", "review", "list", "codeindex", "--format", "json"]);
-      expect(existsSync(join(root, "knowledge", "codeindex", "sample", "map.md"))).toBe(true);
-      expect(await legacyCodeIndexMigrationRequired(root)).toBe(false);
+      expect(existsSync(join(root, "knowledge", "codegraph", "sample", "map.md"))).toBe(true);
+      expect(existsSync(join(root, "knowledge", "codeindex"))).toBe(false);
+      expect(await legacyCodeIndexMigrationRequired(root)).toBe(true);
     } finally {
       process.stdout.write = stdout;
       process.chdir(cwd);

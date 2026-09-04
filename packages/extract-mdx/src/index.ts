@@ -1,5 +1,8 @@
 export { parseMdxSources } from "./mdxParser.js";
-export { mdxSourcesToEvidenceAdapterResult } from "./evidenceAdapter.js";
+export {
+  mdxSourcesToEvidenceAdapterMaterialization,
+  mdxSourcesToEvidenceAdapterResult,
+} from "./evidenceAdapter.js";
 export type { MdxEvidenceAdapterInvocation } from "./evidenceAdapter.js";
 export type {
   MdxComponentReference,

@@ -49,39 +49,6 @@ async function writeRepoEvidence(projectRoot: string): Promise<void> {
 }
 
 describe("codegraph file-aware approved source refs", () => {
-  test("defers reverse lookup while the symbol index covers only part of the declared extraction phases", async () => {
-    const projectRoot = await makeProject();
-    try {
-      await writeRepoEvidence(projectRoot);
-      await writeApproved({
-        projectRoot,
-        collection: "codegraph",
-        sources: [`repo:${SOURCE_NAME}`],
-        sourceRef: `src-1#symbol:src/first.ts:Button:function@${SYMBOL_DIGEST}`,
-        body: "Button API evidence.",
-        extraFrontmatter: {
-          visibility: "exported",
-          code_symbols: [`${SOURCE_NAME}|Button|function`],
-          candidate_fingerprint: "sha256:candidate-fingerprint",
-        },
-      });
-
-      const result = await verifyProjectWorkspace(projectRoot, {
-        expectedExtractPhaseIds: [PHASE_ID, "extract:20260712/other:codegraph"],
-      });
-
-      expect(result.ok).toBe(true);
-      expect(result.evidenceStatus).toBe("pass-with-unverifiable-evidence");
-      expect(result.issues).toContainEqual(expect.objectContaining({
-        severity: "warning",
-        code: "extract-symbol-index-incomplete",
-      }));
-      expect(result.issues.map((issue) => issue.code)).not.toContain("approved-source-ref-stale");
-    } finally {
-      await rm(projectRoot, { recursive: true, force: true });
-    }
-  });
-
   test("uses file identity to verify duplicate symbols without ambiguity", async () => {
     const projectRoot = await makeProject();
     try {

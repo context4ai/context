@@ -15,8 +15,9 @@ import {
   type IndexerMainRunResult,
 } from "./indexerMainRunProtocol.js";
 import {
+  indexerPartitionGroupBindingDigest,
   indexerPartitionGroupProjectionDigest,
-  indexerPartitionPlanBindingDigest,
+  indexerPartitionGroupQuestionTargetInventoryDigest,
   validateIndexerPartitionPlan,
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
@@ -167,10 +168,17 @@ export function buildIndexerMainAuthorWorksets(input: {
         profile_contract_digest: workset.profile_contract_digest,
         subject_key_schema_digest: workset.subject_key_schema_digest,
         source_scope_digest: workset.source_scope_digest,
-        parser_contract_digest: workset.parser_contract_digest,
+        source_binding_digest: context.group_dependency_view_digest,
         primary_resource_binding_digest: workset.primary_resource_binding_digest,
-        question_target_inventory_digest: workset.question_target_inventory_digest,
-        partition_plan_binding_digest: indexerPartitionPlanBindingDigest(plan),
+        question_target_inventory_digest:
+          indexerPartitionGroupQuestionTargetInventoryDigest(plan, group.group_key),
+        ...(workset.repair_intent === undefined
+          ? {}
+          : { repair_intent: workset.repair_intent }),
+        partition_plan_binding_digest: indexerPartitionGroupBindingDigest(
+          plan,
+          group.group_key,
+        ),
         group_key: group.group_key,
         logical_unit_ref: group.logical_unit_ref,
         member_ids_digest: indexerProtocolDigest({ member_ids: group.member_ids }),
@@ -251,8 +259,9 @@ export function buildIndexerMainAcceptedRecord(input: {
     execution_request_digest: input.request.execution_request_digest,
     result_digest: indexerProtocolDigest(input.result.result.result),
     receipt_digest: indexerProtocolDigest({
+      protocol: "context.indexer.main-result-binding/v1",
       consumed_input_view_digest: input.result.consumed_input_view_digest,
-      workset_read_receipt_digests: input.result.workset_read_receipt_digests,
+      execution_request_digest: input.request.execution_request_digest,
     }),
     run_envelope_digest: input.run_envelope.envelope_digest,
     artifact_dependency_set_digest:
@@ -308,6 +317,8 @@ const mainNextRefSchema = z.object({
   stage: z.enum(["partition", "author"]),
   indexer_id: indexerIdSchema,
   owner_cohort_ref: indexerDigestSchema,
+  partition_key: indexerDigestSchema.optional(),
+  partition_binding_digest: indexerDigestSchema.optional(),
   group_key: z.string().min(1).optional(),
   state: z.enum(["pending", "failed", "stale"]),
 }).strict();

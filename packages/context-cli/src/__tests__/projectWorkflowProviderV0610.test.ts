@@ -12,8 +12,6 @@ import {
 } from "../project/workflow/workflowProvider.js";
 import { planForHostHandler } from "../project/workflow/workflowHostPlans.js";
 import { CONTEXT_WORKFLOW_AUTHORITIES } from "../project/workflow/workflowTypes.js";
-import { renderContextWorkflowResource } from "../project/workflow/workflowResource.js";
-import type { ProjectStatus } from "../project/statusTypes.js";
 import { emptyObservation } from "./projectWorkflowProviderV0610.fixtures.js";
 
 describe("Context workflow Provider", () => {
@@ -164,120 +162,6 @@ describe("Context workflow Provider", () => {
     });
   });
 
-  test("does not re-enter the retired document optimization route before build", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      approvedPages: 1,
-      close: { state: "ready" as const, diagnostics: [] },
-      packages: [{
-        kind: "package.kb" as const,
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb" as const,
-        state: "stale" as const,
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-      packageTemplateReviews: [{
-        packageName: "knowledge",
-        templatePath: "src/package-templates/kb",
-        state: "starter-accepted" as const,
-      }],
-      documentOptimization: {
-        schema: "context.document-optimization-status.v3" as const,
-        enabled: true,
-        policy: "context.document-editorial-revision.v4",
-        revision_pages: 0,
-        eligible_views: 1,
-        eligible_fragments: 2,
-        revised_fragments: 0,
-        kept_fragments: 0,
-        pending_fragments: 2,
-        conflict_fragments: 0,
-        revision_requested: false,
-        current: false,
-        pending_fragment_ids: ["opt-a", "opt-b"],
-        conflict_fragment_ids: [],
-        retry_attempts: 0,
-        guidance_required: false,
-        guidance_problems: [],
-        signal_count: 2,
-        action_candidates: { repair: 1, reshape: 1, omit: 0, request_input: 0 },
-      },
-    };
-    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
-      const snapshot = await evaluateContextWorkflow({ observation, authorities });
-      expect(snapshot.route?.node).toBe("build-next");
-      expect(snapshot.route?.reason_code).toBe("route.build.package-stale");
-    }
-  });
-
-  test("routes a conversational document correction before optimization and build", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      approvedPages: 1,
-      close: { state: "ready" as const, diagnostics: [] },
-      packages: [{
-        kind: "package.kb" as const,
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb" as const,
-        state: "stale" as const,
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-      packageTemplateReviews: [{
-        packageName: "knowledge",
-        templatePath: "src/package-templates/kb",
-        state: "starter-accepted" as const,
-      }],
-      documentOptimization: {
-        schema: "context.document-optimization-status.v3" as const,
-        enabled: true,
-        policy: "context.document-editorial-revision.v4",
-        revision_pages: 0,
-        eligible_views: 1,
-        eligible_fragments: 1,
-        revised_fragments: 0,
-        kept_fragments: 1,
-        pending_fragments: 0,
-        conflict_fragments: 0,
-        revision_requested: true,
-        requested_approved_path: "faq/example.md",
-        current: true,
-        pending_fragment_ids: [],
-        conflict_fragment_ids: [],
-        retry_attempts: 0,
-        guidance_required: false,
-        guidance_problems: [],
-        signal_count: 0,
-        action_candidates: { repair: 0, reshape: 0, omit: 0, request_input: 0 },
-      },
-    };
-    for (const authorities of [[], contextWorkflowAuthorities({ managed: true })]) {
-      const snapshot = await evaluateContextWorkflow({ observation, authorities });
-      expect(snapshot.route?.node).toBe("revise-document");
-      expect(snapshot.route?.reason_code).toBe("route.document-revision.requested");
-      expect(snapshot.route?.commands[0]?.command).toContain("optimize-docs revise-current --format json");
-    }
-  });
-
   test("defers stale close maintenance while draft candidates await Review", () => {
     const facts = createContextWorkflowFacts({
       ...emptyObservation(),
@@ -292,12 +176,12 @@ describe("Context workflow Provider", () => {
     expect(facts.review.gate_clear).toBe(false);
   });
 
-  test("managed authority excludes source reads and the gate returns an explicit conversation-scoped resume command", async () => {
+  test("managed authority includes source reads and advances pending capture", async () => {
     const authorities = contextWorkflowAuthorities({ managed: true });
     expect(authorities).toContain(
       CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
     );
-    expect(authorities).not.toContain(
+    expect(authorities).toContain(
       CONTEXT_WORKFLOW_AUTHORITIES.sourceRead,
     );
 
@@ -316,23 +200,22 @@ describe("Context workflow Provider", () => {
         workspaceDiagnostics: [],
       }],
       missingCaptureSources: [],
+      pendingCaptureCommands: ["context run capture:file:manual"],
     };
     const facts = createContextWorkflowFacts(captureObservation, authorities);
-    expect(facts.gates.source_read_resolved).toBe(false);
+    expect(facts.gates.source_read_resolved).toBe(true);
     const snapshot = await evaluateContextWorkflow({
       observation: captureObservation,
       authorities,
     });
     expect(snapshot.route).toMatchObject({
-      node: "authorize-document-capture",
-      availability: "requires-user",
+      node: "capture-next",
+      availability: "immediate",
       commands: [{
-        command:
-          "context run --managed --authority 'context.source-read' --until blocked-or-complete --format json",
+        command: expect.stringContaining("run capture:file:manual --format json"),
         effect: "external",
-        availability: "after-human-confirmation",
-        managed_execution: "agent-required",
-        execution: { target: "agent-host" },
+        availability: "immediate",
+        managed_execution: "automatic",
       }],
     });
     const ordinarySnapshot = await evaluateContextWorkflow({
@@ -357,10 +240,7 @@ describe("Context workflow Provider", () => {
     const authorities = contextWorkflowAuthorities({ managed: true });
     const facts = createContextWorkflowFacts(observation, authorities);
 
-    expect(authorities).toContain(
-      CONTEXT_WORKFLOW_AUTHORITIES.extractionScope,
-    );
-    expect(facts.gates.extraction_scope_resolved).toBe(false);
+    expect(facts.indexer.lifecycle_current).toBe(false);
 
     const snapshot = await evaluateContextWorkflow({
       observation,
@@ -380,50 +260,6 @@ describe("Context workflow Provider", () => {
     });
     expect(snapshot.route?.resources.required.map((resource) => resource.id))
       .toEqual(["skill.context-run-indexer-lifecycle"]);
-  });
-
-  test("a build receipt cannot hide an unclassified captured document", () => {
-    const observation = emptyObservation();
-    const facts = createContextWorkflowFacts({
-      ...observation,
-      sourceCount: 1,
-      documentSources: [{
-        type: "file",
-        name: "manual",
-        materializedAt: "sources/file/manual",
-        manifest: "sources/file/manual/manifest.json",
-        snapshotReady: true,
-        diagnostics: [],
-        agent_hints: [],
-        workspaceDiagnostics: [],
-      }],
-      capturedDocumentSources: 1,
-      unclassifiedDocumentTargets: [{
-        sourceKey: "file:manual",
-        capturePhaseId: "capture:file:manual",
-        command: "context run capture:file:manual --view read-plan --format json",
-      }],
-      approvedPages: 1,
-      close: { state: "ready", diagnostics: [] },
-      packages: [{
-        kind: "package.kb",
-        name: "knowledge",
-        reads: [],
-        writes: [],
-        template: { path: "src/package-templates/kb" },
-        outDir: "dist/knowledge",
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      }],
-      packageFreshness: [{
-        name: "knowledge",
-        kind: "kb",
-        state: "ready",
-        inputFiles: 1,
-        outputFiles: 1,
-      }],
-    }, []);
-    expect(facts.documents.classified).toBe(false);
-    expect(facts.packages.current).toBe(true);
   });
 
   test("a confirmed source boundary has a revision-bound batch command and input schema", async () => {
@@ -502,6 +338,55 @@ describe("Context workflow Provider", () => {
     expect(first.evaluation.revision).not.toBe(second.evaluation.revision);
   });
 
+  test("keeps final knowledge Review user-visible unless the session is fully managed", async () => {
+    const observation = {
+      ...emptyObservation(),
+      sourceCount: 1,
+      repoSources: [{ id: "module-a", name: "module-a" }],
+      readyRepoSources: 1,
+      draftCandidates: 2,
+      draftCollections: ["architecture" as const],
+      candidateSetDigest: "current-candidate-set",
+      indexerRegistry: {
+        state: "current" as const,
+        sourceRefs: ["repo:module-a"],
+      },
+      indexerCandidateCompile: { state: "current" as const },
+    };
+    const ordinary = await evaluateContextWorkflow({ observation, authorities: [] });
+    expect(ordinary.route).toMatchObject({
+      node: "review-current-batch",
+      availability: "requires-user",
+      gate: {
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
+        delegatable: true,
+        resolution: "user",
+      },
+    });
+    expect(ordinary.route?.commands).toContainEqual(expect.objectContaining({
+      command: expect.stringContaining("review approve-all architecture --force"),
+      availability: "after-human-confirmation",
+    }));
+
+    const managed = await evaluateContextWorkflow({
+      observation,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+    });
+    expect(managed.route).toMatchObject({
+      node: "review-current-batch",
+      availability: "immediate",
+      gate: {
+        authority: CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
+        delegatable: true,
+        resolution: "session-authority",
+      },
+    });
+    expect(managed.route?.commands).toContainEqual(expect.objectContaining({
+      command: expect.stringContaining("review approve-all architecture --managed"),
+      availability: "immediate",
+    }));
+  });
+
   test("does not let legacy draft Candidates bypass the current Indexer compile", async () => {
     const observation = {
       ...emptyObservation(),
@@ -534,34 +419,6 @@ describe("Context workflow Provider", () => {
       node: "review-current-batch",
       reason_code: "route.review.decision-required",
     });
-  });
-
-  test("accepts a cleaned runtime only when every approved page retains Indexer binding", async () => {
-    const observation = {
-      ...emptyObservation(),
-      sourceCount: 1,
-      repoSources: [{ id: "anonymous/repo", name: "anonymous/repo" }],
-      readyRepoSources: 1,
-      approvedPages: 1,
-      approvedIndexerPages: 0,
-      close: { state: "ready" as const, diagnostics: [] },
-      indexerRegistry: {
-        state: "current" as const,
-        sourceRefs: ["repo:anonymous/repo"],
-      },
-      indexerCandidateCompile: { state: "missing" as const },
-    };
-    const legacy = await evaluateContextWorkflow({ observation, authorities: [] });
-    expect(legacy.route).toMatchObject({
-      node: "run-indexer-lifecycle",
-      reason_code: "route.indexer.lifecycle-required",
-    });
-
-    const indexerBound = await evaluateContextWorkflow({
-      observation: { ...observation, approvedIndexerPages: 1 },
-      authorities: [],
-    });
-    expect(indexerBound.route?.node).not.toBe("run-indexer-lifecycle");
   });
 
   test("reports a close-repairable stale projection as lifecycle information", async () => {
@@ -603,54 +460,6 @@ describe("Context workflow Provider", () => {
     }));
   });
 
-  test("the structure confirmation view includes its staged target", () => {
-    const content = renderContextWorkflowResource(
-      "context.structure-current",
-      {
-        stagedStructure: {
-          state: "draft",
-          sourceKeys: ["file:manual-b"],
-          collections: ["guide"],
-          structureDigest: `sha256:${"a".repeat(64)}`,
-          nodeCount: 2,
-          viewCount: 2,
-          sectionCount: 5,
-          sourceRefCount: 5,
-          edgeCount: 1,
-          unresolvedCount: 0,
-          diagnostics: [],
-        },
-        activeStructures: {
-          state: "ready",
-          count: 1,
-          slotCount: 1,
-          sourceKeys: ["file:manual-a"],
-          collections: ["guide"],
-          structureDigests: [`sha256:${"b".repeat(64)}`],
-          slots: [{
-            sourceKey: "file:manual-a",
-            collection: "guide",
-            structureDigest: `sha256:${"b".repeat(64)}`,
-            snapshotReady: true,
-          }],
-          diagnostics: [],
-        },
-        structureBatch: {
-          state: "structures-active",
-          sourceCount: 1,
-          slotCount: 1,
-          slots: [],
-        },
-        configurationGaps: [],
-      } as unknown as ProjectStatus,
-    );
-    expect(content).toContain("## Staged confirmation target");
-    expect(content).toContain("`file:manual-b`");
-    expect(content).toContain("2 node(s), 2 view(s), 5 section(s), 5 source ref(s)");
-    expect(content).toContain("## Active confirmed slots");
-    expect(content).toContain("`file:manual-a`");
-  });
-
   test("every Provider host Action has a registered Context adapter", async () => {
     const provider = await loadContextWorkflowProvider();
     const handlers = [...provider.actions.values()].flatMap((action) =>
@@ -664,27 +473,6 @@ describe("Context workflow Provider", () => {
       expect(() => planForHostHandler(handler, emptyObservation())).not
         .toThrow();
     }
-  });
-
-  test("code extraction inspection returns one batch technology probe for all repo sources", () => {
-    expect(planForHostHandler("context.extract.inspect-capabilities", {
-      ...emptyObservation(),
-      sourceCount: 2,
-      repoSources: [
-        { id: "repo-a", name: "20260818/module-a" },
-        { id: "repo-b", name: "20260818/module-b" },
-      ],
-      readyRepoSources: 2,
-    })).toEqual({
-      commands: [
-        {
-          command: "context source inspect --repo-only --format json",
-          effect: "read",
-          availability: "immediate",
-          managed_execution: "agent-required",
-        },
-      ],
-    });
   });
 
 });

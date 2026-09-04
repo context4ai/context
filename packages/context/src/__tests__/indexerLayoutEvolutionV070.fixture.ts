@@ -107,6 +107,7 @@ function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
     subject_key_schema_set_digest: digest("subject-key-schema-set"),
     subject_key_schema_digest: digest("subject-key-schema"),
     artifact_result_digest: digest(`result:${canonicalSpecs(specs)}`),
+    post_author_composition_fingerprint: null,
     shared_artifact_fingerprint: sharedArtifactFingerprint,
     node: { node_ref: nodeRef, subject_key: subject },
     artifacts,

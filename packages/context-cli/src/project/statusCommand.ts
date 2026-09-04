@@ -14,19 +14,13 @@ import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
 
 function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
   const complete = status.workflow.status === "complete";
-  const requestedSourceKeys = status.unclassifiedDocumentTargets.length > 0
-    ? status.unclassifiedDocumentTargets.map((target) => target.sourceKey)
-    : status.pendingStructureTargets.length > 0
-    ? [...new Set(status.pendingStructureTargets.map((target) => target.sourceKey))]
-    : status.compilePhaseResolution?.requestedSourceKeys ??
-      status.alignPhaseResolution?.requestedSourceKeys ?? [];
-  const requestedCollections = status.unclassifiedDocumentTargets.length > 0
-    ? []
-    : status.pendingStructureTargets.length > 0
-    ? [...new Set(status.pendingStructureTargets.map((target) => target.collection))]
-    : status.compilePhaseResolution?.requestedCollections ??
-      status.alignPhaseResolution?.requestedCollections ??
-      status.pendingReview?.collections ?? [];
+  const requestedSourceKeys = [
+    ...status.sources.filter((source) => !source.ready).map((source) => `repo:${source.name}`),
+    ...status.documentSources
+      .filter((source) => !source.snapshotReady)
+      .map((source) => `${source.type}:${source.name}`),
+  ].sort();
+  const requestedCollections = status.pendingReview?.collections ?? [];
   const completedSourceKeys = [
     ...status.sources.map((source) => `repo:${source.name}`),
     ...status.documentSources.map((source) =>
@@ -52,34 +46,16 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
           currentTarget: {
             sourceKeys: requestedSourceKeys,
             collections: requestedCollections,
-            ...(status.unclassifiedDocumentTargets.length > 0
-              ? { unclassifiedDocumentTargets: status.unclassifiedDocumentTargets }
-              : {}),
-            ...(status.pendingStructureTargets.length > 0
-              ? { pendingStructureTargets: status.pendingStructureTargets }
-              : {}),
             ...(status.pendingReview !== undefined
               ? { pendingReview: status.pendingReview }
               : {}),
           },
         }),
     progress: {
-      structureBatch: {
-        state: status.structureBatch.state,
-        slotCount: status.structureBatch.slotCount,
-        sourceCount: status.structureBatch.sourceCount,
-        pendingTargets: status.pendingStructureTargets.length,
-      },
       pendingCapturePhases: status.pendingCapturePhases.length,
-      pendingExtractPhases: status.pendingExtractPhases.length,
-      documentOptimization: {
-        enabled: status.documentOptimization.enabled,
-        current: status.documentOptimization.current,
-        revisionPages: status.documentOptimization.revision_pages,
-        pendingFragments: status.documentOptimization.pending_fragments,
-        conflicts: status.documentOptimization.conflict_fragments,
-      },
-      configurationGaps: status.configurationGaps,
+      indexerRegistry: status.indexerRegistry.state,
+      indexerCandidateCompile: status.indexerCandidateCompile.state,
+      legacyCodeIndexMigrationRequired: status.codeIndexMigrationRequired,
     },
     counts: {
       sources: status.sourceSummary,

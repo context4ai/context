@@ -3,7 +3,9 @@ import {
   createIndexerEvidenceAdapterFact,
   indexerEvidenceAdapterFileRef,
   indexerEvidenceAdapterProtocolDigest,
+  materializeIndexerEvidenceAdapterResult,
   type IndexerEvidenceAdapterFact,
+  type IndexerEvidenceAdapterMaterialization,
   type IndexerEvidenceAdapterResult,
 } from "@c4a/core";
 import { parseStyleSources } from "./styleParser.js";
@@ -108,4 +110,13 @@ export function styleSourcesToEvidenceAdapterResult(
       output_digest: indexerEvidenceAdapterProtocolDigest(documents),
     }],
   });
+}
+
+export function styleSourcesToEvidenceAdapterMaterialization(
+  files: Readonly<Record<string, string>>,
+  invocation: StyleEvidenceAdapterInvocation,
+): IndexerEvidenceAdapterMaterialization {
+  return materializeIndexerEvidenceAdapterResult(
+    styleSourcesToEvidenceAdapterResult(files, invocation),
+  );
 }

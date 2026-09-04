@@ -1,7 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IndexerProviderManifest } from "@c4a/context";
-import { BUNDLED_CODE_METRIC_REPAIR_GUIDANCE } from "./indexerBaseMetricAudit.js";
+import { BUNDLED_INDEXER_METRIC_IDS } from "./indexerBaseContracts.js";
+
+const BUNDLED_CODE_METRIC_GUIDANCE = Object.fromEntries(
+  BUNDLED_INDEXER_METRIC_IDS.map((metricId) => [
+    metricId,
+    `bundle:context-code-indexer/references/metrics.md#${metricId}`,
+  ]),
+) as Readonly<Record<typeof BUNDLED_INDEXER_METRIC_IDS[number], string>>;
 
 const REQUIRED_SUBHEADINGS = [
   "Meaning",
@@ -60,8 +67,8 @@ export async function validateBundledIndexerMetricGuidance(input: {
     }
     const expectedRef = `bundle:context-code-indexer/references/metrics.md#${section.id}`;
     if (
-      BUNDLED_CODE_METRIC_REPAIR_GUIDANCE[
-        section.id as keyof typeof BUNDLED_CODE_METRIC_REPAIR_GUIDANCE
+      BUNDLED_CODE_METRIC_GUIDANCE[
+        section.id as keyof typeof BUNDLED_CODE_METRIC_GUIDANCE
       ] !== expectedRef
     ) {
       throw new TypeError(`metric guidance ${section.id} has no matching CLI audit reference`);

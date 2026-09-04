@@ -1,9 +1,8 @@
 import {
   INDEXER_COVERAGE_DOMAINS,
-  buildIndexerParserRequirement,
+  buildIndexerParserCapabilityRequirements,
   indexerOperatorContractDigest,
   indexerProfileContractDigest,
-  indexerProtocolDigest,
   validateIndexerOperatorContract,
   validateIndexerProfileContract,
   type IndexerMetricContract,
@@ -18,19 +17,17 @@ import {
   type BundledIndexerProfileSpec,
 } from "./indexerBaseContractCatalog.js";
 import { bundledCodeReaderQuestionContracts } from "./indexerBaseCodeAuthoringCatalog.js";
+import { bundledMarkdownReaderQuestionContracts } from
+  "./indexerBaseMarkdownAuthoringCatalog.js";
 
-const BASE_CONTRACT_VERSION = "1.0.0";
-const EVIDENCE_ADAPTER_ABI = "context.indexer.evidence-adapter-result/v1";
-const TYPESCRIPT_PARSER_REQUIREMENT = buildIndexerParserRequirement({
-  capability: "parser.typescript",
-  abi: EVIDENCE_ADAPTER_ABI,
-  abi_digest: indexerProtocolDigest({ protocol: EVIDENCE_ADAPTER_ABI }),
-  community_coordinate: {
-    package: "@c4a/extract-ts",
-    export: "typeScriptExtractionToEvidenceAdapterResult",
-    version: "0.7.0",
-  },
-});
+const BASE_CONTRACT_VERSION = "1.1.0";
+export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.4";
+const BUNDLED_PARSER_REQUIREMENTS = buildIndexerParserCapabilityRequirements(
+  BUNDLED_INDEXER_PARSER_PACKAGE_VERSION,
+);
+const BUNDLED_PARSER_REQUIREMENT_BY_CAPABILITY = new Map(
+  BUNDLED_PARSER_REQUIREMENTS.map((requirement) => [requirement.capability, requirement]),
+);
 const CODE_SOURCE_ROLES = [
   "authoritative-source",
   "example-source",
@@ -173,7 +170,10 @@ function profileLayoutMappings(
   }));
 }
 
-function commonMetrics(catalogHeavy: boolean): IndexerMetricContract[] {
+// Profile metrics describe authoring quality goals. They do not decide Result
+// readiness: blocking belongs to deterministic protocol validation and final
+// Review, not to Agent-supplied measurements.
+function commonMetrics(): IndexerMetricContract[] {
   return [{
     id: "inventory-disposition-coverage",
     unit: "ratio",
@@ -196,8 +196,11 @@ function commonMetrics(catalogHeavy: boolean): IndexerMetricContract[] {
     operator: "narrative-enumeration-ratio",
     threshold_policy: "explicit",
     direction: "maximum",
-    recommended_max: catalogHeavy ? 0.6 : 0.35,
-    hard_max: catalogHeavy ? 0.75 : 0.53,
+    // Declared catalog Artifacts sit outside the measured scope, so a
+    // catalog-heavy profile is measured on its prose like any other and one
+    // allowance serves them all.
+    recommended_max: 0.35,
+    hard_max: 0.53,
   }, {
     id: "normalized-template-repetition-ratio",
     unit: "ratio",
@@ -267,67 +270,6 @@ function codeExampleMetrics(): IndexerMetricContract[] {
   }];
 }
 
-function profileQuestion(
-  spec: BundledIndexerProfileSpec,
-): IndexerProfileContractEntry["reader_question_contracts"][number] {
-  if (spec.domain === "markdown") {
-    return {
-      ref: "question:source-authority",
-      semantic: "Which current authoritative evidence supports this document claim?",
-      version: 1,
-      coverage_domain: "public-contract",
-      target_domain_ref: "primary-subject",
-      target_selector: {
-        protocol: "context.indexer.selector/v1" as const,
-        expression: { op: "equals" as const, fact: "target.eligible", value: true },
-      },
-      evidence_contract: {
-        accepted_kinds: [
-          "documentation",
-          "decision-record",
-          "runbook",
-          "contract",
-        ],
-        minimum_items: 1,
-        minimum_distinct_sources: 1,
-        provenance_constraints: {
-          protocol: "context.indexer.selector/v1" as const,
-          expression: { op: "equals" as const, fact: "evidence.current", value: true },
-        },
-      },
-      allowed_exclusion_reason_codes: ["not-applicable", "authority-unavailable"],
-    };
-  }
-  return {
-    ref: "question:failure-recovery",
-    semantic: "How does this capability fail, recover, retry, or preserve consistency?",
-    version: 1,
-    coverage_domain: "operations",
-    target_domain_ref: "primary-subject",
-    target_selector: {
-      protocol: "context.indexer.selector/v1" as const,
-      expression: { op: "equals" as const, fact: "target.eligible", value: true },
-    },
-    evidence_contract: {
-      accepted_kinds: [
-        "code",
-        "configuration",
-        "documentation",
-        "runbook",
-        "test-result",
-        "runtime-observation",
-      ],
-      minimum_items: 1,
-      minimum_distinct_sources: 1,
-      provenance_constraints: {
-        protocol: "context.indexer.selector/v1" as const,
-        expression: { op: "equals" as const, fact: "evidence.current", value: true },
-      },
-    },
-    allowed_exclusion_reason_codes: ["not-applicable", "no-runtime-behavior"],
-  };
-}
-
 function artifactPolicyVariants(
   spec: BundledIndexerProfileSpec,
 ): IndexerProfileContractEntry["artifact_policy_variants"] {
@@ -383,7 +325,13 @@ function artifactPolicyVariants(
 function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEntry {
   return {
     id: spec.id,
-    parser_requirements: spec.domain === "code" ? [TYPESCRIPT_PARSER_REQUIREMENT] : [],
+    parser_requirements: (spec.parserCapabilities ?? []).map((capability) => {
+      const requirement = BUNDLED_PARSER_REQUIREMENT_BY_CAPABILITY.get(capability);
+      if (requirement === undefined) {
+        throw new TypeError(`missing bundled parser requirement for ${capability}`);
+      }
+      return requirement;
+    }),
     inventory_domains: [{
       id: "eligible-inventory",
       selector: { operator: "all-inventory" },
@@ -391,7 +339,7 @@ function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEn
     }],
     required_dispositions: ["owned", "excluded", "unsupported"],
     metrics: [
-      ...commonMetrics(spec.catalogHeavy ?? false),
+      ...commonMetrics(),
       ...(spec.domain === "code" ? codeExampleMetrics() : []),
     ],
     artifact_policy_variants: artifactPolicyVariants(spec),
@@ -404,7 +352,7 @@ function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEn
     }],
     reader_question_contracts: spec.domain === "code"
       ? bundledCodeReaderQuestionContracts(spec.id)
-      : [profileQuestion(spec)],
+      : bundledMarkdownReaderQuestionContracts(),
     layout_mappings: profileLayoutMappings(spec),
     variant_schema: {
       axes: (spec.variants ?? []).map((axis) => ({
@@ -427,7 +375,10 @@ function profileSubjectKeySchema(
     kinds: [{
       id: spec.subjectKind,
       local_key: { operator: spec.localKeyOperator },
-    }],
+    }, ...(spec.additionalSubjectKinds ?? []).map((kind) => ({
+      id: kind.id,
+      local_key: { operator: kind.localKeyOperator },
+    }))],
     normalization: ["trim", "unicode-nfc", "preserve-case"],
   };
 }

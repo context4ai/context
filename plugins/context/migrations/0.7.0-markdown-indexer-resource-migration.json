@@ -48,8 +48,8 @@
           "source_anchors": ["After the decision", "Re-evaluate instead of assuming"],
           "disposition": "rewrite-equivalent",
           "authority": "context-runtime",
-          "targets": ["plugins/context/skills/context-markdown-indexer/references/indexer.md", "packages/context/src/indexerMainRunProtocol.ts", "packages/context/src/indexerMaterialAnswerRunProtocol.ts"],
-          "target_anchors": ["Follow the operation in the supplied run request", "context.indexer.main-result/v1", "context.indexer.material-answer-result/v1"],
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/indexer.md", "packages/context/src/indexerMainRunProtocol.ts"],
+          "target_anchors": ["Return only the current `main-index`", "context.indexer.main-result/v1"],
           "preserves": ["applicability", "gate-semantics", "recovery-guidance"]
         }
       ]

@@ -12,6 +12,13 @@ interface ReaderQuestionDefinition {
 }
 
 const QUESTION_DEFINITIONS = {
+  "question:behavior-and-purpose": {
+    semantic:
+      "What user or business outcome does this subject enable, and which behavioral boundaries matter to its consumers?",
+    coverageDomain: "business-semantics",
+    acceptedKinds: ["code", "configuration", "contract", "documentation", "test-result"],
+    exclusionReasonCodes: ["no-business-semantics", "not-applicable"],
+  },
   "question:responsibility-and-entry": {
     semantic: "What stable responsibility and entrypoints define this subject?",
     coverageDomain: "technical-structure",
@@ -222,7 +229,7 @@ export function bundledCodeReaderQuestionContracts(
 ): ReaderQuestionContract[] {
   const refs = PROFILE_QUESTION_REFS[profileId];
   if (refs === undefined) throw new TypeError(`missing Code reader questions for ${profileId}`);
-  return refs.map(questionContract);
+  return ["question:behavior-and-purpose" as const, ...refs].map(questionContract);
 }
 
 export function bundledCodeReaderQuestionRefs(
@@ -230,5 +237,5 @@ export function bundledCodeReaderQuestionRefs(
 ): readonly BundledCodeReaderQuestionRef[] {
   const refs = PROFILE_QUESTION_REFS[profileId];
   if (refs === undefined) throw new TypeError(`missing Code reader questions for ${profileId}`);
-  return refs;
+  return ["question:behavior-and-purpose", ...refs];
 }

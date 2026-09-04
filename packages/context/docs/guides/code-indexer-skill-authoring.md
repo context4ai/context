@@ -34,18 +34,22 @@ rules, metric operators and thresholds.
 4. **Activation and profiles.** Declare strong/supporting/negative signals.
    Dependency names are candidates, not runtime proof. One module may combine
    one primary profile with supporting/extensions and selected composers.
-5. **Sources and Artifacts.** Declare source roles and logical-unit intent;
+5. **Sources and Artifacts.** Write for a reader outside the indexed module:
+   make responsibility, stable interfaces/entrypoints, handoffs and the core
+   state, failure, operation and source-of-truth facts needed for correct use
+   and attribution discoverable. Declare source roles and logical-unit intent;
    select only CLI-registered Artifact kinds/policy variants. Keep logical unit
-   identity separate from physical Artifact count.
+   identity separate from physical Artifact count, and measure useful coverage
+   by answered profile questions rather than symbol or path counts.
 6. **Inventory protocols.** Close every input member with an explicit
    disposition. Use stable aggregation, full-path example identity and
    structured chain decisions; do not substitute page prose for inventory.
-7. **Metrics.** Reference registered metric ids and revision guidance. The CLI
-   alone owns recommended ranges, `inflation-sensitive` 150% enforcement and
-   mechanical audit results; a Provider cannot return a pass or threshold.
-8. **Revision boundary.** Use metric-specific revisions for at most the Route-
-   supplied attempts. After three failed attempts, report the complete issue
-   set for the human Gate. Forced approval cannot bypass base integrity rules.
+7. **Metrics.** Reference registered metric ids as reader-quality guidance.
+   The CLI may report advisory observations, but a Provider cannot return a
+   pass, threshold, retry count, or risk-acceptance decision.
+8. **Revision boundary.** Hard contract or source failures block at their
+   owner. Reader-quality feedback reopens the same Author or Composer through
+   `context revise`; it does not create a metric retry ledger or risk Gate.
 9. **Reader questions.** Declare reusable question templates with stable refs,
    target domains and allowed evidence contracts. Do not make a question id
    globally unique to one SubjectKey group.
@@ -68,11 +72,13 @@ rules, metric operators and thresholds.
 15. **Marketplace layout.** Archives keep one top-level Skill directory with
     `SKILL.md`, the manifest and referenced runtime resources. Exclude tests,
     caches, credentials, local paths and Host-specific temporary manifests.
-16. **Material handoff.** Return structured material questions when required
-    evidence is missing. Bind owner cell, question contract, Subject target and
-    intended landing. Never render gaps as empty pages or speculative prose;
-    Context owns the retained ledger, checkpoints, reconciliation and any
-    Markdown answer run.
+16. **Material gaps.** Return a canonical question disposition in the same
+    main Result when required evidence is missing. Never render a gap as an
+    empty page or speculative prose. Registered Markdown or tool material may
+    enrich the same main indexing batch before Candidate generation; do not
+    create a separate answer operation, Candidate, checkpoint or Review. The
+    CLI projects allowed enrichment material into that same Authorized
+    Workset View; Providers must not reopen registered sources themselves.
 17. **Backend profiles.** Test neutral RPC/HTTP, Gateway, Event/function,
     Cron/worker, sync/reconciliation, stateful service/storage and library
     shapes. Local facts remain baseline when optional remote metadata is absent.
@@ -114,6 +120,11 @@ Use canonical SubjectKey schemas and the Context NodeRef formula. Code and
 Markdown Indexers must reuse the same Node when the SubjectKey is equal. An
 enricher uses the supplied TargetResolutionView (`resolved`, `absent` or
 `ambiguous`) and never guesses identity from a title or path resemblance.
+
+Every Section uses the exact `document_kind`, `reader_goal` and
+`artifact_kind` tuple from the current profile's unique layout mapping. The
+Provider never returns a collection name; Context resolves the collection from
+that tuple and rejects missing or ambiguous mappings.
 
 ## Publication gate
 

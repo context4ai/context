@@ -1,15 +1,11 @@
 import { parseDocumentSourceLocator } from "@c4a/extract";
-import {
-  indexerEvidenceBindingDigest,
-  indexerEvidenceBindingSchema,
-} from "@c4a/context";
 import YAML from "yaml";
 import { okfTypeForKnowledgePath } from "./okfTypes.js";
 import {
   PARENT_INDEX_GENERATED_KIND,
   renderParentIndexBody,
   type ParentIndexChild,
-} from "./parentIndexView.js";
+} from "./approvedParentIndex.js";
 import {
   approvedContextSectionsInMarkdown,
   sourceRefKinds,
@@ -289,101 +285,38 @@ function validateIndexerApprovedMetadata(input: {
   content: string;
   issues: ProjectVerifyIssue[];
 }): boolean {
-  if (input.frontmatter.indexer_file_digest === undefined) return false;
-  const digest = /^sha256:[a-f0-9]{64}$/u;
-  for (const field of ["indexer_compile_digest", "indexer_file_digest"] as const) {
-    if (typeof input.frontmatter[field] !== "string" || !digest.test(input.frontmatter[field])) {
-      input.issues.push({
-        severity: "error",
-        code: "approved-indexer-binding-invalid",
-        path: input.relPath,
-        message: `approved Indexer page ${field} must be a sha256 digest`,
-      });
-    }
-  }
-  if (input.frontmatter.candidate_fingerprint !== input.frontmatter.indexer_file_digest) {
+  const indexerPage = typeof input.frontmatter.view_ref === "string" &&
+    input.frontmatter.view_ref.startsWith("view:artifact:");
+  if (!indexerPage) return false;
+  const sources = input.frontmatter.sources;
+  const sourceRefs = Array.isArray(sources)
+    ? new Set(sources.filter((source): source is string => typeof source === "string"))
+    : new Set<string>();
+  if (sourceRefs.size === 0) {
     input.issues.push({
       severity: "error",
-      code: "approved-indexer-binding-invalid",
+      code: "approved-sources-invalid",
       path: input.relPath,
-      message: "approved Indexer page candidate fingerprint must equal its file digest",
+      message: "approved Indexer page sources must be a non-empty string array",
     });
-  }
-  const sectionRefs = input.frontmatter.indexer_section_refs;
-  if (
-    !Array.isArray(sectionRefs) || sectionRefs.length === 0 ||
-    sectionRefs.some((ref) => typeof ref !== "string" || ref.length === 0)
-  ) {
-    input.issues.push({
-      severity: "error",
-      code: "approved-indexer-binding-invalid",
-      path: input.relPath,
-      message: "approved Indexer page must retain non-empty indexer_section_refs",
-    });
-  }
-  const evidence = input.frontmatter.indexer_evidence;
-  const evidenceRefs = new Set<string>();
-  if (!Array.isArray(evidence)) {
-    input.issues.push({
-      severity: "error",
-      code: "approved-indexer-evidence-invalid",
-      path: input.relPath,
-      message: "approved Indexer page must retain indexer_evidence",
-    });
-  } else {
-    for (const item of evidence) {
-      if (!isRecord(item) || !isRecord(item.locator)) {
-        input.issues.push({
-          severity: "error",
-          code: "approved-indexer-evidence-invalid",
-          path: input.relPath,
-          message: "approved Indexer evidence binding is malformed",
-        });
-        continue;
-      }
-      const parsed = indexerEvidenceBindingSchema.safeParse(item);
-      if (!parsed.success) {
-        input.issues.push({
-          severity: "error",
-          code: "approved-indexer-evidence-invalid",
-          path: input.relPath,
-          message: "approved Indexer evidence binding is malformed",
-        });
-        continue;
-      }
-      const { binding_digest: bindingDigest, ...payload } = parsed.data;
-      if (indexerEvidenceBindingDigest(payload) !== bindingDigest) {
-        input.issues.push({
-          severity: "error",
-          code: "approved-indexer-evidence-invalid",
-          path: input.relPath,
-          message: "approved Indexer evidence binding digest is invalid",
-        });
-        continue;
-      }
-      evidenceRefs.add(parsed.data.evidence_ref);
-    }
   }
   const sections = approvedContextSectionsInMarkdown(input.content);
-  if (
-    Array.isArray(sectionRefs) &&
-    sections.length !== sectionRefs.length
-  ) {
+  if (sections.length === 0) {
     input.issues.push({
       severity: "error",
       code: "approved-indexer-section-invalid",
       path: input.relPath,
-      message: "approved Indexer page Section count does not match indexer_section_refs",
+      message: "approved Indexer page must contain at least one Context Section",
     });
   }
   for (const section of sections) {
     for (const ref of section.refs) {
-      if (!evidenceRefs.has(ref)) {
+      if (!sourceRefs.has(ref)) {
         input.issues.push({
           severity: "error",
           code: "approved-indexer-section-invalid",
           path: input.relPath,
-          message: `approved Indexer Section references unknown evidence: ${ref}`,
+          message: `approved Indexer Section references an undeclared source: ${ref}`,
         });
       }
     }

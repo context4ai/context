@@ -119,43 +119,6 @@ export function writeMdxCaptureProjectEntry(projectRoot: string, sourceName = "p
   ].join("\n"), "utf8");
 }
 
-export function writeAmbiguousAlignProjectEntry(projectRoot: string, sourceName = "product-docs"): void {
-  writeFileSync(join(projectRoot, "src", "index.ts"), [
-    'import { alignProse, captureFile, defineProject, source } from "@c4a/context";',
-    "",
-    `const docs = source("${sourceName}");`,
-    "",
-    "export default defineProject({",
-    "  sources: [docs],",
-    "  phases: [",
-    "    captureFile({ source: docs }),",
-    '    alignProse({ source: docs, collection: "architecture" }),',
-    '    alignProse({ source: docs, collection: "product" }),',
-    "  ],",
-    "  packages: [],",
-    "});",
-    "",
-  ].join("\n"), "utf8");
-}
-
-export function writeAliasedAlignProjectEntry(projectRoot: string): void {
-  writeFileSync(join(projectRoot, "src", "index.ts"), [
-    'import { alignProse, captureFile, defineProject, source } from "@c4a/context";',
-    "",
-    'const docs = source("product-docs-alias");',
-    "",
-    "export default defineProject({",
-    "  sources: [docs],",
-    "  phases: [",
-    "    captureFile({ source: docs }),",
-    '    alignProse({ source: docs, collection: "architecture" }),',
-    "  ],",
-    "  packages: [],",
-    "});",
-    "",
-  ].join("\n"), "utf8");
-}
-
 export function readRunLogs(projectRoot: string): Record<string, unknown>[] {
   const dir = join(projectRoot, ".tmp", "context-runtime", "runs");
   if (!existsSync(dir)) return [];

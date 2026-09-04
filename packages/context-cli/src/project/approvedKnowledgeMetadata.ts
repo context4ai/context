@@ -3,45 +3,46 @@ import { readFile } from "node:fs/promises";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { join } from "node:path";
 import YAML from "yaml";
+import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
+import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 
 const STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
+// Approved Markdown is the reader-facing source. Machine identity, source
+// ownership, and incremental-recovery state live once in structure.yaml and
+// are hydrated only while Context is running.
 const COMPACT_FIELDS = new Set([
   "title",
   "type",
   "description",
   "tags",
   "timestamp",
+  "resource",
+  "deprecated",
+]);
+const STRUCTURED_FIELDS = new Set([
   "node_ref",
   "view_ref",
   "sources",
-  "resource",
-  "deprecated",
-  // Keep a small recovery capsule in each page. These fields are cheap, make
-  // an invalid or deleted structure.yaml rebuildable, and avoid making the
-  // generated projection the only copy of page identity and containment.
   "node_type",
   "node_tags",
   "generated",
   "children",
-  "structure_digest",
   "relationship_mode",
   "evidence_status",
+  "code_edges",
+]);
+// Candidate/Result digests are runtime data. Currentness is recovered from the
+// approved page's exact identity and Section content, so none of these fields
+// need to persist in Git-backed knowledge or structure.
+const CLOSE_TRANSIENT_FIELDS = new Set([
+  "candidate_fingerprint",
   "indexer_compile_digest",
   "indexer_file_digest",
   "indexer_artifact_ref",
   "indexer_section_refs",
   "indexer_source_ref",
-  "indexer_evidence",
-]);
-const STRUCTURED_FIELDS = new Set([
-  "node_type",
-  "node_tags",
-  "generated",
-  "children",
-  "relationship_mode",
-  "code_edges",
-  "evidence_status",
+  "context_optimization",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,11 +69,10 @@ function stringList(value: unknown): string[] {
 
 function machineMetadata(frontmatter: Record<string, unknown>): Record<string, unknown> {
   const metadata = Object.fromEntries(Object.entries(frontmatter).filter(([field]) =>
-    !COMPACT_FIELDS.has(field) && !STRUCTURED_FIELDS.has(field)
+    !COMPACT_FIELDS.has(field) &&
+    !STRUCTURED_FIELDS.has(field) &&
+    !CLOSE_TRANSIENT_FIELDS.has(field)
   ));
-  if (metadata.context_optimization !== undefined) {
-    metadata.context_optimization = compactOptimizationState(metadata.context_optimization);
-  }
   const symbols = stringList(metadata.code_symbols);
   if (symbols.length > 0) {
     const parts = symbols.map((symbol) => symbol.split("|"));
@@ -88,49 +88,8 @@ function machineMetadata(frontmatter: Record<string, unknown>): Record<string, u
   return metadata;
 }
 
-function compactOptimizationState(value: unknown): unknown {
-  if (!isRecord(value) || !isRecord(value.sections)) return value;
-  const policies = Object.values(value.sections).flatMap((section) =>
-    isRecord(section) && typeof section.policy_digest === "string" ? [section.policy_digest] : []
-  );
-  if (policies.length < 2) return value;
-  const counts = new Map<string, number>();
-  for (const policy of policies) counts.set(policy, (counts.get(policy) ?? 0) + 1);
-  const defaultPolicy = [...counts].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0];
-  if (defaultPolicy === undefined) return value;
-  return {
-    ...value,
-    policy_digest: defaultPolicy,
-    sections: Object.fromEntries(Object.entries(value.sections).map(([id, section]) => {
-      if (!isRecord(section) || section.policy_digest !== defaultPolicy) return [id, section];
-      const { policy_digest: omitted, ...rest } = section;
-      void omitted;
-      return [id, rest];
-    })),
-  };
-}
-
-function expandOptimizationState(value: unknown): unknown {
-  if (!isRecord(value) || !isRecord(value.sections) || typeof value.policy_digest !== "string") return value;
-  const { policy_digest: defaultPolicy, ...rest } = value;
-  return {
-    ...rest,
-    sections: Object.fromEntries(Object.entries(value.sections).map(([id, section]) => [
-      id,
-      isRecord(section) && section.policy_digest === undefined
-        ? { ...section, policy_digest: defaultPolicy }
-        : section,
-    ])),
-  };
-}
-
 function expandedMachineMetadata(machine: Record<string, unknown>): Record<string, unknown> {
-  const expanded: Record<string, unknown> = {
-    ...machine,
-    ...(machine.context_optimization === undefined
-      ? {}
-      : { context_optimization: expandOptimizationState(machine.context_optimization) }),
-  };
+  const expanded: Record<string, unknown> = { ...machine };
   const symbolTable = machine.code_symbol_table;
   if (isRecord(symbolTable) && typeof symbolTable.module === "string") {
     const entries = stringList(symbolTable.entries);
@@ -172,8 +131,18 @@ function viewFrontmatter(
   const machine = isRecord(view.machine) ? view.machine : {};
   const hydratedMachine = expandedMachineMetadata(machine);
   const codeEdges = outgoingCodeEdges(structure, view);
+  const viewRef = typeof view.view_ref === "string" ? view.view_ref : undefined;
+  const tags = Array.isArray(view.tags)
+    ? view.tags
+    : viewRef?.startsWith("view:artifact:") === true
+      ? ["indexer"]
+      : undefined;
   return {
     ...hydratedMachine,
+    ...(typeof view.node_ref === "string" ? { node_ref: view.node_ref } : {}),
+    ...(viewRef === undefined ? {} : { view_ref: viewRef }),
+    ...(Array.isArray(view.sources) ? { sources: view.sources } : {}),
+    ...(tags === undefined ? {} : { tags }),
     ...(typeof view.node_type === "string" ? { node_type: view.node_type } : {}),
     ...(Array.isArray(view.node_tags) ? { node_tags: view.node_tags } : {}),
     ...(view.generated !== undefined ? { generated: view.generated } : {}),
@@ -254,22 +223,38 @@ export function hydrateApprovedKnowledgeMarkdown(input: {
 export function isIndexerApprovedKnowledgeMarkdown(content: string): boolean {
   const parsed = parseFrontmatter(content);
   if (parsed === undefined) return false;
-  const digest = /^sha256:[a-f0-9]{64}$/u;
-  return typeof parsed.record.indexer_compile_digest === "string" &&
-    digest.test(parsed.record.indexer_compile_digest) &&
-    typeof parsed.record.indexer_file_digest === "string" &&
-    digest.test(parsed.record.indexer_file_digest) &&
-    parsed.record.candidate_fingerprint === parsed.record.indexer_file_digest;
+  return typeof parsed.record.view_ref === "string" &&
+    parsed.record.view_ref.startsWith("view:artifact:");
 }
 
 export function compactApprovedKnowledgeMarkdown(content: string): string {
   const parsed = parseFrontmatter(content);
   if (parsed === undefined) return content;
-  const indexerPage = typeof parsed.record.indexer_file_digest === "string";
+  const indexerPage = typeof parsed.record.indexer_file_digest === "string" ||
+    (typeof parsed.record.view_ref === "string" && parsed.record.view_ref.startsWith("view:artifact:"));
   const compact = Object.fromEntries(Object.entries(parsed.record).filter(([field]) =>
-    COMPACT_FIELDS.has(field) || (indexerPage && field === "candidate_fingerprint")
+    COMPACT_FIELDS.has(field) && !(indexerPage && field === "tags")
   ));
+  compact.description = readerKnowledgeDescription({
+    description: compact.description,
+    markdown: parsed.body,
+    ...(typeof compact.title === "string" ? { title: compact.title } : {}),
+  });
   return `---\n${YAML.stringify(compact).trimEnd()}\n---\n${parsed.body}`;
+}
+
+export function ensureApprovedKnowledgePresentation(content: string): string {
+  const parsed = parseFrontmatter(content);
+  if (parsed === undefined) return content;
+  const title = typeof parsed.record.title === "string" ? parsed.record.title : undefined;
+  const body = title === undefined ? parsed.body : ensureMarkdownPageTitle(parsed.body, title);
+  const description = readerKnowledgeDescription({
+    description: parsed.record.description,
+    markdown: body,
+    ...(title === undefined ? {} : { title }),
+  });
+  if (parsed.record.description === description && parsed.body === body) return content;
+  return `---\n${YAML.stringify({ ...parsed.record, description }).trimEnd()}\n---\n${body}`;
 }
 
 export function approvedViewMachineMetadata(frontmatter: Record<string, unknown>): Record<string, unknown> | undefined {

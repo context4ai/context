@@ -12,6 +12,7 @@ import {
 import type { IndexerCustomizationView } from "./indexerCustomization.js";
 import {
   applyIndexerProjectProposal,
+  loadIndexerProjectApplyRecord,
   stageIndexerProjectProposal,
   type IndexerProjectApplyReceipt,
   type StagedIndexerProjectProposalReceipt,
@@ -29,6 +30,8 @@ import {
   type IndexerResolvedSelectionInput,
   type IndexerSelectionStaticReport,
 } from "./indexerSelectionValidation.js";
+import { persistCurrentIndexerProviderSelection } from
+  "./indexerCurrentProviderSelection.js";
 import {
   validateIndexerProgramExecutionAuthorizationResult,
   type IndexerProgramExecutionAuthorizationResult,
@@ -271,12 +274,54 @@ export async function applyProjectIndexerProposal(input: {
       rebind_receipt: overlayInput.rebind_receipt,
     });
   }
-  return applyIndexerProjectProposal({
+  const validation = stagingValidationInput(input.validation);
+  let finalReport: Awaited<ReturnType<typeof validateIndexerSelectionFinal>> | undefined;
+  const receipt = await applyIndexerProjectProposal({
     projectRoot: input.projectRoot,
     proposal_digest: input.proposal_digest,
-    validate_staging: (proposal) => validateIndexerProjectStaging({
-      proposal,
-      validation: input.validation,
-    }),
+    validate_staging: async (proposal) => {
+      validateIndexerProjectCustomizationGap({
+        proposal,
+        capability_gap: validation.capability_gap,
+        customizations: validation.customizations,
+      });
+      finalReport = await validateIndexerSelectionFinal({
+        registry: proposal.target_document,
+        static_report: validation.static_report,
+        resolved: validation.resolved,
+        customizations: validation.customizations,
+        operator_contract: validation.operator_contract,
+        profile_contract: validation.profile_contract,
+        ...(validation.overlay_question_authorities === undefined
+          ? {}
+          : { overlay_question_authorities: validation.overlay_question_authorities }),
+      });
+      validateProjectProgramAuthorization({
+        proposal,
+        final_report: finalReport,
+        authorization: validation.program_authorization,
+      });
+      return [finalReport.report_digest];
+    },
   });
+  if (finalReport === undefined) {
+    throw new TypeError("Indexer project apply did not resolve its final Provider selection");
+  }
+  const proposal = await loadIndexerProjectApplyRecord({
+    projectRoot: input.projectRoot,
+    proposal_digest: input.proposal_digest,
+  });
+  await persistCurrentIndexerProviderSelection({
+    projectRoot: input.projectRoot,
+    registry: proposal.proposal.target_document,
+    resolved: validation.resolved,
+    customizations: validation.customizations,
+    ...(validation.overlay_question_authorities === undefined
+      ? {}
+      : { overlay_question_authorities: validation.overlay_question_authorities }),
+    operator_contract: validation.operator_contract,
+    profile_contract: validation.profile_contract,
+    final_report: finalReport,
+  });
+  return receipt;
 }

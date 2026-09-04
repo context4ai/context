@@ -101,6 +101,7 @@ function logicalUnit(namespace: string, specs: readonly ArtifactSpec[]): {
     subject_key_schema_set_digest: digest("subject-schema-set"),
     subject_key_schema_digest: digest("subject-schema"),
     artifact_result_digest: digest(`${namespace}:result`),
+    post_author_composition_fingerprint: null,
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
     node: { node_ref: nodeRef, subject_key: subject },
     artifacts,
@@ -142,6 +143,40 @@ function fileFor(
 }
 
 describe("physical Artifact manifest and audit", () => {
+  test("accepts catalog-only logical units without manufacturing an empty physical Artifact", () => {
+    const published = logicalUnit("anonymous-published", [{
+      id: "overview",
+      kind: "overview",
+      purpose: "required",
+    }]);
+    const catalogOnly = logicalUnit("anonymous-catalog-only", [{
+      id: "unused",
+      kind: "overview",
+      purpose: "required",
+    }]).proposal;
+    const { proposal_digest: _digest, ...catalogPayload } = catalogOnly;
+    void _digest;
+    catalogPayload.artifacts = [];
+    const catalogProposal: IndexerLayoutProposal = {
+      ...catalogPayload,
+      proposal_digest: indexerProtocolDigest(catalogPayload),
+    };
+    const layoutSet = buildIndexerLayoutProposalSet([
+      published.proposal,
+      catalogProposal,
+    ]);
+    const result = auditIndexerPhysicalArtifacts({
+      layout_proposal_set: layoutSet,
+      artifact_bundles: [published.bundle, null],
+      files: [fileFor(published.proposal, "overview")],
+    });
+
+    expect(result.audit.state).toBe("passed");
+    expect(result.audit.summary.logical_unit_count).toBe(2);
+    expect(result.audit.summary.physical_artifact_count).toBe(1);
+    expect(result.audit.logical_unit_fan_out).toHaveLength(1);
+  });
+
   test("closes multi-Artifact Bundles, fan-out, semantic splits, and registered navigation", () => {
     const component = logicalUnit("anonymous-components", [{
       id: "overview",

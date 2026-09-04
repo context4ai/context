@@ -52,9 +52,9 @@ describe("workflow revision recovery", () => {
   test("keeps managed mode and additional session authority", () => {
     const authorities = contextWorkflowAuthorities({
       managed: true,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.sourceRead],
+      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.repositoryRestore],
     });
-    const command = "context status --managed --authority 'context.source-read' --format json";
+    const command = "context status --managed --authority 'context.repository-restore' --format json";
     const error = captureRevisionError({ managed: true, authorities });
     expect(error.detail).toMatchObject({
       category: ErrorCategory.WorkflowRevisionStale,

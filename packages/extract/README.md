@@ -14,13 +14,12 @@ knowledge through the normal lifecycle.
 
 ## Package Role
 
-`@c4a/extract` is the protocol and runner layer used by declared Context
-project extraction phases such as `extractTs({ source, collection: "codegraph" })`.
+`@c4a/extract` is the protocol and runner layer used by Code Indexer Providers.
 
 - Language plugins implement `ExtractionPlugin` and return `ExtractionResult` v2.
 - The runner loads one or more plugins, scans repository modules, emits progress/module-error/summary events, and can build an optional low-level code snapshot payload.
-- `@c4a/context-cli` invokes the runner from `context run extract:<source>:codegraph` after the workspace declares an `extractTs` phase.
-- The project flow stages review candidates under `.tmp/context-runtime/lifecycle/candidates.jsonl` and keeps runtime candidate artifacts under `.tmp/context-runtime/extract/`; approved Markdown is written only by review/apply.
+- The selected Provider invokes the runner through the controlled Indexer workset and returns typed facts and artifacts.
+- Context stages Candidate state under `.tmp/context-runtime/`; approved Markdown is written only by Review apply and close.
 
 **Depends on:** `@c4a/core`, `web-tree-sitter`, `zod`
 
@@ -31,12 +30,12 @@ language plugins + repository runner
           ↓
 versioned raw code snapshot
           ↓
-Context candidates → review → approved knowledge
+Indexer facts → reader-oriented Candidates → approved knowledge
 ```
 
 Knowledge-workspace users normally reach this package through the installed
-Agent entry and a declared extraction phase. The runner protocol below is for
-extractor authors, Context maintainers, and project-owned adapters.
+Agent entry and selected Code Indexer Provider. The runner protocol below is
+for parser authors, Provider authors, and Context maintainers.
 
 ## Protocol Layers
 
@@ -108,10 +107,9 @@ Every plugin returns:
 
 ### 3. Repository Runner Protocol
 
-The package exposes `c4a-extract-code`, a low-level NDJSON runner. The current
-Context project flow normally reaches it through a declared `extractTs` phase
-and `context run extract:<source>:codegraph`; agents should not hand-build runner
-input for normal workspace operation.
+The package exposes `c4a-extract-code`, a low-level NDJSON runner. Code Indexer
+Providers may invoke it as an implementation detail; agents should not
+hand-build runner input for normal workspace operation.
 
 Input is JSON on stdin:
 
@@ -192,9 +190,8 @@ Minimum requirements:
 5. Emit `SymbolInfo[]` with stable `name`, `kind`, `visibility`, `file`, `line`, and `endLine`.
 6. Emit `RelationInfo[]` for imports and important type/inheritance/use edges.
 7. Keep paths module-relative inside the plugin; the repository runner prefixes them to repo-relative paths.
-8. Register the plugin in the runner input used by the project extraction
-   phase. User-facing workspaces should declare the matching phase in
-   `src/index.ts` and execute it through `context run <phase-id>`.
+8. Register the plugin in the Code Indexer Provider's runner configuration.
+   User-facing workspaces select the Provider through `src/indexers.yaml`.
 
 Example skeleton:
 
@@ -229,31 +226,30 @@ export class PythonPlugin implements ExtractionPlugin {
 }
 ```
 
-## Relationship to Context Project Extraction
+## Relationship to the Code Indexer
 
-`@c4a/extract` is upstream of the Context project extraction phase; it does not
-render approved knowledge itself.
+`@c4a/extract` is upstream of the Code Indexer Provider; it does not render
+approved knowledge itself.
 
 - `context source add repo <name> --local <repo-or-subdir>` registers the code
   source boundary.
-- `src/index.ts` declares `extractTs({ source: source("<name>"), collection: "codegraph" })`.
-- `context run extract:<name>:codegraph --dry-run` previews resolved modules,
-  candidate estimates, knowledge path examples, and module warnings.
-- `context run extract:<name>:codegraph` writes draft candidates for review. It
-  uses `.tmp/context-runtime/extract/` for candidate snapshots, source
-  fingerprints, and symbol indexes; that scratch directory is not committed
-  state.
+- `src/indexers.yaml` binds the source scope and reader requirements to a Code
+  Indexer Provider.
+- The current Route prepares a controlled workset and the Provider returns the
+  current Indexer result.
+- Context writes draft Candidates and recoverable runtime artifacts under
+  `.tmp/context-runtime/`; that directory is not committed state.
 - `context review html` and `context review apply` own human approval and
   approved Markdown materialization.
 - `context close`, `context verify`, and `context build` own final package
   readiness.
 
 That means language plugins affect published knowledge only through the current
-project flow: better symbols/relations produce better draft candidates, stable
+Indexer flow: better symbols/relations produce better draft Candidates, stable
 `repo:<source>#symbol:...` source refs, review evidence, approved Markdown, and
 package output.
 
-Approved codegraph Markdown localizes canonical refs as
+Approved code knowledge may localize canonical refs as
 `src-N#symbol:<file>:<symbol>:<kind>@<digest>`. The file segment is part of the
 deterministic evidence identity used by verification; agents copy the complete
 ref as an opaque token.

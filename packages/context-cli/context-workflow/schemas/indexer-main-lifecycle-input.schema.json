@@ -4,33 +4,29 @@
   "oneOf": [
     {
       "type": "object",
-      "required": ["protocol", "requirement_set_digest", "profile_contract_digests", "source_inventory_digests", "items"],
+      "required": ["protocol", "requirement_set_digest"],
       "properties": {
         "protocol": { "const": "context.indexer.question-target-inventory-input/v1" },
-        "requirement_set_digest": { "$ref": "#/$defs/digest" },
-        "profile_contract_digests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/digest" } },
-        "source_inventory_digests": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/digest" } },
-        "items": { "type": "array", "items": { "type": "object" } }
+        "requirement_set_digest": { "$ref": "#/$defs/digest" }
       },
       "additionalProperties": false
     },
     {
       "type": "object",
-      "required": ["protocol", "worksets"],
+      "required": ["protocol", "question_target_inventory"],
       "properties": {
         "protocol": { "const": "context.indexer.main-partition-workset-build-input/v1" },
-        "worksets": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        "question_target_inventory": { "type": "object" }
       },
       "additionalProperties": false
     },
     {
       "type": "object",
-      "required": ["protocol", "request", "result", "workset_read_receipts", "validation"],
+      "required": ["protocol", "request", "result", "validation"],
       "properties": {
         "protocol": { "const": "context.indexer.main-run-validation-input/v1" },
         "request": { "type": "object" },
         "result": { "type": "object" },
-        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } },
         "validation": { "type": "object" }
       },
       "additionalProperties": false
@@ -60,11 +56,11 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "partitions", "group_contexts"],
+      "required": ["protocol", "partitions", "target_resolution_views"],
       "properties": {
         "protocol": { "const": "context.indexer.main-author-workset-build-input/v1" },
         "partitions": { "type": "array", "minItems": 1, "items": { "type": "object" } },
-        "group_contexts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        "target_resolution_views": { "type": "array", "items": { "type": "object" } }
       },
       "additionalProperties": false
     },
@@ -124,38 +120,35 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "requirement_set_digest", "workset_digest", "result", "workset_read_receipts"],
+      "required": ["protocol", "requirement_set_digest", "workset_digest", "result"],
       "properties": {
         "protocol": { "const": "context.indexer.main-run-partition-convergence-input/v1" },
         "requirement_set_digest": { "$ref": "#/$defs/digest" },
         "workset_digest": { "$ref": "#/$defs/digest" },
-        "result": { "type": "object" },
-        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        "result": { "type": "object" }
       },
       "additionalProperties": false
     },
     {
       "type": "object",
-      "required": ["protocol", "requirement_set_digest", "request", "convergence", "validation", "workset_read_receipts"],
+      "required": ["protocol", "requirement_set_digest", "request", "convergence", "validation"],
       "properties": {
         "protocol": { "const": "context.indexer.catalog-fallback-build-input/v1" },
         "requirement_set_digest": { "$ref": "#/$defs/digest" },
         "request": { "type": "object" },
         "convergence": { "type": "object" },
-        "validation": { "type": "object" },
-        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        "validation": { "type": "object" }
       },
       "additionalProperties": false
     },
     {
       "type": "object",
-      "required": ["protocol", "requirement_set_digest", "workset_digest", "result", "workset_read_receipts"],
+      "required": ["protocol", "requirement_set_digest", "workset_digest", "result"],
       "properties": {
         "protocol": { "const": "context.indexer.main-run-store-accept-input/v1" },
         "requirement_set_digest": { "$ref": "#/$defs/digest" },
         "workset_digest": { "$ref": "#/$defs/digest" },
-        "result": { "type": "object" },
-        "workset_read_receipts": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+        "result": { "type": "object" }
       },
       "additionalProperties": false
     },

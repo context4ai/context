@@ -65,7 +65,6 @@ const fanOutAuditPayloadSchema = z.object({
   diagnostic_sample_truncated: z.boolean(),
   candidate_materialization_allowed: z.boolean(),
   user_gate_required: z.literal(false),
-  profile_revision_ledger_consumed: z.literal(false),
   outcome: z.enum([
     "projected-artifact-fan-out-current",
     "indexer-plan-revision-required",
@@ -364,7 +363,6 @@ export function auditIndexerProjectedArtifactFanOut(input: {
     diagnostic_sample_truncated: diagnostics.length > DIAGNOSTIC_SAMPLE_LIMIT,
     candidate_materialization_allowed: allowed,
     user_gate_required: false,
-    profile_revision_ledger_consumed: false,
     outcome: allowed
       ? "projected-artifact-fan-out-current"
       : "indexer-plan-revision-required",

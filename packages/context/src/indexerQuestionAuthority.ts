@@ -275,7 +275,6 @@ export function indexerQuestionRevisionDigest(input: {
   question_key: string;
   owner_cell_digest: string;
   question_target_item_digest: string;
-  answer_landing_dependency_digest?: string;
 }): string {
   return indexerProtocolDigest(input);
 }

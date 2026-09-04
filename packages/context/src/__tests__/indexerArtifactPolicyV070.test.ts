@@ -186,7 +186,7 @@ activation:
 provides:
   profiles: [component-library]
   operations:
-    - { id: main-index, consumes: context.indexer.main-workset/v1, produces: context.indexer.main-result/v1 }
+    - { id: main-index, consumes: context.indexer.main-workset/v2, produces: context.indexer.main-result/v1 }
   source_roles: [authoritative-source]
   logical_units:
     - id: component-family
@@ -244,6 +244,31 @@ describe("CLI-owned Artifact policy eligibility", () => {
       profile_contract: profiles,
       operator_contract: operators,
     })).toThrow(/digest|forged/);
+  });
+
+  test("allows required Artifacts when the requirement has no canonical questions", () => {
+    const bundle = buildIndexerArtifactBundle({
+      logical_unit_ref: "node:questionless-documentation",
+      artifact_policy_variant: "standard",
+      artifacts: [{
+        artifact_id: "overview",
+        artifact_kind: "content",
+        purpose: "required",
+        reader_question_refs: [],
+        evidence_refs: ["evidence:source"],
+      }],
+    });
+    expect(validateIndexerArtifactBundlePolicy({
+      bundle,
+      eligibility: eligibility(),
+      actual_artifacts: [{
+        artifact_id: "overview",
+        artifact_kind: "content",
+        evidence_refs: ["evidence:source"],
+      }],
+      allowed_question_refs: [],
+      known_evidence_refs: ["evidence:source"],
+    })).toEqual(bundle);
   });
 });
 
@@ -344,7 +369,7 @@ activation:
 provides:
   profiles: [component-library]
   operations:
-    - { id: main-index, consumes: context.indexer.main-workset/v1, produces: context.indexer.main-result/v1 }
+    - { id: main-index, consumes: context.indexer.main-workset/v2, produces: context.indexer.main-result/v1 }
   logical_units:
     - id: component-family
       identity: canonical-export-family

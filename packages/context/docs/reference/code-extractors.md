@@ -1,131 +1,39 @@
-# Code Extractor Selection
+# Code Parser Selection
 
-Use this manual only when the current code-extraction Route asks the Agent to
-choose or declare an extractor. The CLI reports repository facts; the Agent
-chooses how those facts become source-backed code knowledge.
+Code parsing is an Indexer Provider implementation detail. A knowledge
+workspace selects the Provider and profile in `src/indexers.yaml`; it does not
+declare a separate extraction phase in `src/index.ts`.
 
-## Inspect Before Declaring
+## Selection order
 
-Run the single batch inspection command returned by the extraction-scope Gate.
-The result identifies every confirmed module, its recognized `manifests`,
-README locations, entry candidates, protocol locators, and lifecycle markers.
-Treat these as deterministic technology signals, not as product semantics:
+1. Identify the target boundary and the knowledge questions.
+2. Let the selected Provider inspect language, manifests, entries, routes, and
+   contracts.
+3. Use the smallest parser set that covers those questions.
+4. Keep deterministic parser output as Provider facts; let the Provider author
+   reader-oriented knowledge pages from those facts and readable sources.
 
-| Signal | Technology candidate |
+## Community parser packages
+
+| Package | Useful structural facts |
 |---|---|
-| `package.json` | TypeScript, TSX, JavaScript, or JSX |
-| `go.mod` | Go |
-| `Cargo.toml` | Rust |
-| `pyproject.toml` or `setup.py` | Python |
-| `pom.xml` or `build.gradle` | Java or JVM |
-| multiple manifests | a mixed module that may need more than one extractor |
+| `@c4a/extract-ts` | TypeScript/JavaScript symbols, exports, imports, calls, and React Router routes |
+| `@c4a/extract-go` | Go declarations, imports, calls, and common HTTP routes |
+| `@c4a/extract-rush` | Rush projects, tags, entries, dependencies, and owner boundaries |
+| `@c4a/extract` | Shared extraction result and adapter contracts |
 
-Do not select `extractTs()` merely because a repository contains some
-TypeScript. Decide against the exact confirmed module and include boundary. A
-mixed module may compose multiple structural passes; parser selection is not an
-exclusive repository-wide switch.
+These packages do not create Candidate rows, write `knowledge/`, or control
+Review. The Code Indexer Provider owns those lifecycle responsibilities.
 
-## Selection Order
+## Unsupported technologies
 
-Use the narrowest reusable capability that covers the confirmed source:
+When the current Provider cannot parse a required boundary, first use its
+supported customization ladder (`config`, instruction append, template
+override, then program extension). Add a reusable parser to the Provider only
+when the same technology boundary is useful across projects. Do not create a
+project-local parallel knowledge pipeline.
 
-1. Use a Context-owned phase when its contract matches the source.
-2. Otherwise use a reusable structural package inside `extractCustom()`.
-3. If no reusable package covers the syntax or repository protocol, implement a
-   project-owned adapter and keep it in the Context workspace.
+Parser coverage is complete when every required inventory item has an explicit
+disposition and the resulting pages answer the declared reader questions. A
+large symbol count by itself is not useful coverage.
 
-Current reusable capabilities are:
-
-| Source fact | Preferred capability | Lifecycle integration |
-|---|---|---|
-| TypeScript/JavaScript package or TSX/JSX file scope | `extractTs()` | Context-owned phase |
-| Go declarations, imports, calls, and common HTTP routes | `@c4a/extract-go` | call from `extractCustom()` |
-| Rush workspace packages, tags, dependencies, entries, and owners | `@c4a/extract-rush` | call from `extractCustom()`; may complement a language extractor |
-| React Router route declarations | `extractReactRouterRoutes()` from `@c4a/extract-ts` | call from `extractCustom()`; complements ECMAScript symbols |
-| Rust, Python, Java/JVM, or an unsupported framework/protocol | no assumed built-in parser | project-owned `extractCustom()` adapter |
-
-The custom extraction preview verifies this selection mechanically. Context
-detects applicable community capabilities from source manifests and stable path
-signals, then checks that candidate evidence covers every required entry,
-route, implementation boundary, workspace, or protocol probe. One aggregated
-module page is valid when it closes that structural coverage. A callback that
-only hashes a few filenames or renders configured prose does not satisfy the
-probe, even when its Markdown count is small.
-
-The probe does not assign business meaning and does not require one page per
-fact. The project adapter still owns grouping, titles, explanations, and
-cross-module semantics. If the source uses an unsupported language or protocol,
-report a capability gap instead of claiming that a known probe was consumed.
-
-An optional package does not create a new CLI phase. Add it as an explicit
-workspace dependency, then map its structural facts to candidates in the
-project callback. Do not add a parser package when its documented coverage does
-not match the inspected source.
-
-## Read The Contract Before Extending
-
-Before editing `src/index.ts`, read the Route-selected Context lifecycle and
-extractor resources completely. They are the installed contract for
-Context-owned phases such as `extractTs()`; do not require a separate
-workspace copy of an implementation package and do not infer APIs from bundled
-JavaScript.
-
-Only a capability imported directly by a project-owned `extractCustom()`
-adapter requires its package README. Use this matrix to decide whether that
-optional capability is relevant, add only that dependency, then read the
-README from the resolved installed package before implementing the callback.
-Never assume that a transitive or dev-only package is present at a hard-coded
-`node_modules` path.
-
-A project-owned adapter may use an existing parser, compiler API, or command
-whose output is deterministic. It must return source-backed candidates through
-`extractCustom()`; it must not write lifecycle, knowledge, or Review files.
-Framework-specific classification and rendering remain in the project. The CLI
-and structural parser must not infer product meaning.
-
-## Decision To Report
-
-Before the first extraction preview, state briefly:
-
-- the inspected module and manifest signals;
-- the selected Context phase or structural package;
-- whether coverage is complete or which facts remain project-owned; and
-- why another available extractor is not needed.
-
-After preview, use `inspection.structuralProbes` and each index unit's
-`structuralCoverage` as the exact audit result. An uncovered probe is a
-configuration problem, not a Review decision.
-
-If no current capability can parse the source reliably, stop at configuration
-and report the missing generic capability. Do not silently emit an empty
-codeindex or reuse an unrelated parser.
-
-## Plan Before Parsing
-
-The root workflow no longer owns module taxonomy or archetype templates. The
-Indexer registry selects the applicable Provider profile, and the resolved
-Provider Bundle supplies the semantic plan, evidence questions, composition
-rules, and output guidance. Context only validates the closed selection,
-digests, inventories, and resulting Candidate contracts. Do not reconstruct a
-parallel profile taxonomy in this reference or route around the Indexer
-lifecycle with an extractor-specific plan.
-
-Extractor shape defines what can be emitted. `extractTs()` creates one page per
-selected symbol and permits one owning index unit per source. Use it for an
-intentional granular public reference. Use `extractCustom()` for module-level
-aggregation, registries, protocol indexes, cross-module flows, or multiple
-candidate owners over one source; each candidate declares its `module` and
-at least one evidence-scoped `section`; there is no page-level Markdown
-fallback. Each section's typed coverage and exact evidence is checked against
-the output profile during preview. Resolve repositories from
-the extractor context's `sources[].absolutePath`, never from a
-machine-specific checkout path. Cross-module flow output must also emit
-source-backed structured edges. Generated clients/models, mirrored sources, legacy
-implementations, and internal helpers should normally be excluded or recorded
-as provenance rather than expanded one symbol per page.
-
-If a repository uses service manifests or protocol registrations that the
-community inspector cannot interpret, keep that interpretation in a generic
-project-owned `inspect` adapter attached to `extractCustom()`. Return findings
-and capability gaps through the public Context contract; do not add internal
-framework names or directory rules to the CLI.

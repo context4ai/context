@@ -67,7 +67,7 @@ function workset(): IndexerMainPartitionWorkset {
     profile_contract_digest: digest("4"),
     subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
-    parser_contract_digest: digest("7"),
+    source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
     partition_subject_key: {
@@ -200,7 +200,6 @@ describe("catalog fallback and folded continuation", () => {
     expect(fallback).toMatchObject({
       protocol: "context.indexer.catalog-fallback/v1",
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
       continuation_policy: {
         advisory_line_threshold: 1500,
         oversized_behavior: "advisory-only",
@@ -238,7 +237,6 @@ describe("catalog fallback and folded continuation", () => {
       readability_advisory: true,
       blocking: false,
       user_gate_required: false,
-      profile_revision_ledger_consumed: false,
     });
     expect(continuation.fragments).toHaveLength(2);
     expect(continuation.fragments.every((fragment) =>

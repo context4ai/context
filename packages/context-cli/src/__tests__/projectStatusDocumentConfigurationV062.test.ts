@@ -112,7 +112,7 @@ describe("0.6.2 document source and capture status routing", () => {
     }
   });
 
-  test("suggests read-plan after captured Lark source", async () => {
+  test("routes a captured Lark source into the Indexer lifecycle", async () => {
     const root = await makeProject();
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -124,16 +124,13 @@ describe("0.6.2 document source and capture status routing", () => {
         files: [{ path: "doc.md", bytes: "# Handbook\n\nRemote evidence text.\n", title: "Handbook" }],
       });
       await writeFile(join(initialized.projectRoot, "src", "index.ts"), [
-        'import { alignProse, captureLark, defineProject, source } from "@c4a/context";',
+        'import { captureLark, defineProject, source } from "@c4a/context";',
         "",
         'const handbook = source("handbook");',
         "",
         "export default defineProject({",
         "  sources: [handbook],",
-        "  phases: [",
-        "    captureLark({ source: handbook }),",
-        '    alignProse({ source: handbook, collection: "architecture" }),',
-        "  ],",
+        "  phases: [captureLark({ source: handbook })],",
         "  packages: [],",
         "});",
         "",

@@ -114,6 +114,7 @@ function logicalUnitRegistrations(input: {
   const registrations = input.layoutSet.proposals.flatMap((proposal) => {
     const bundle = bundleByUnit.get(proposal.node.node_ref);
     if (bundle === undefined) {
+      if (proposal.artifacts.length === 0) return [];
       throw new TypeError(`layout Node ${proposal.node.node_ref} lacks an Artifact Bundle`);
     }
     const entries = bundleEntryById(bundle);
@@ -146,7 +147,15 @@ function logicalUnitRegistrations(input: {
       };
     });
   });
-  if (bundleByUnit.size !== input.layoutSet.proposals.length) {
+  const artifactBearingUnits = input.layoutSet.proposals.filter((proposal) =>
+    proposal.artifacts.length > 0
+  );
+  if (
+    bundleByUnit.size !== artifactBearingUnits.length ||
+    [...bundleByUnit.keys()].some((nodeRef) =>
+      !artifactBearingUnits.some((proposal) => proposal.node.node_ref === nodeRef)
+    )
+  ) {
     throw new TypeError("physical Artifact audit received an unrelated Artifact Bundle");
   }
   return registrations;
@@ -177,7 +186,9 @@ function validatePlans(input: {
   navigation_artifacts: readonly unknown[];
 }): ValidatedArtifactPlan {
   const layoutSet = validateIndexerLayoutProposalSet(input.layout_proposal_set);
-  const bundles = input.artifact_bundles.map(validateIndexerArtifactBundle);
+  const bundles = input.artifact_bundles.flatMap((value) =>
+    value === null ? [] : [validateIndexerArtifactBundle(value)]
+  );
   const logicalRegistrations = logicalUnitRegistrations({ layoutSet, bundles });
   const knownArtifactRefs = new Set(logicalRegistrations.map((registration) => {
     if (registration.owner.kind !== "logical-unit") throw new TypeError("unreachable owner kind");
@@ -346,7 +357,7 @@ function buildPhysicalArtifactAudit(
     artifact_manifest_digest: manifest.manifest_digest,
     state: diagnostics.length === 0 ? "passed" : "failed",
     summary: {
-      logical_unit_count: plan.bundles.length,
+      logical_unit_count: plan.layoutSet.proposals.length,
       planned_bundle_artifact_count: logicalUnitFanOut.reduce(
         (total, unit) => total + unit.planned_artifact_count,
         0,

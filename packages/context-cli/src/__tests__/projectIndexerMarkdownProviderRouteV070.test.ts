@@ -16,11 +16,13 @@ import {
 } from "../project/indexerMarkdownProviderRoute.js";
 import { routeProjectIndexerProviderSelection } from
   "../project/indexerProviderRouting.js";
-import { buildIndexerReleaseCapabilityManifest } from
-  "../project/indexerReleaseCapabilities.js";
 import { validateProjectIndexerSelectionProposal } from
   "../project/indexerSelectionProposal.js";
 import { initContextProject } from "../project/workspace.js";
+import { persistCurrentIndexerProviderSetup } from
+  "../project/indexerCurrentProviderState.js";
+import { buildCurrentIndexerProviderContinuationRoute } from
+  "../project/indexerCurrentProviderContinuation.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -171,10 +173,10 @@ describe("Markdown Provider Route", () => {
           "packages/context/src/indexerArtifactDependencies.ts",
         ), "utf8"),
       ]);
-    expect(manifest).toContain("consumes: context.indexer.main-workset/v1");
+    expect(manifest).toContain("consumes: context.indexer.main-workset/v2");
     expect(manifest).toContain("produces: context.indexer.main-result/v1");
     expect(instructions).toContain(
-      "Never create a legacy `MarkdownCollectionSlice` or invoke the independent `alignProse` phase.",
+      "Return all knowledge through the current Indexer result; do not create an independent authoring pipeline.",
     );
     expect(manifest).toContain("path: references/classification.md");
     expect(manifest).toContain("path: references/structure-and-artifacts.md");
@@ -260,12 +262,6 @@ describe("Markdown Provider Route", () => {
       }],
       community_fallback_attempted: true,
     });
-    const packageManifest = JSON.parse(
-      await readFile(join(PACKAGE_ROOT, "package.json"), "utf8"),
-    ) as { version: string };
-    const markdownCapability = buildIndexerReleaseCapabilityManifest(
-      packageManifest.version,
-    ).capabilities.find((capability) => capability.id === "markdown-indexer")!;
     const route = await routeProjectIndexerProviderSelection({
       projectRoot: fixture.projectRoot,
       value: routeInput,
@@ -274,25 +270,6 @@ describe("Markdown Provider Route", () => {
       projectRoot: fixture.projectRoot,
       value: route.selection_proposal_input,
     });
-    if (markdownCapability.state !== "ready") {
-      await expect(validateProjectMarkdownProviderSelection({
-        projectRoot: fixture.projectRoot,
-        assetsRoot: fixture.assetsRoot,
-        value: {
-          protocol: "context.indexer.markdown-provider-validation-input/v1",
-          capture_report: capture,
-          provider_route_input: routeInput,
-          provider_route_report: route,
-          static_validation: staticValidation,
-        },
-      })).rejects.toMatchObject({
-        code: "indexer-feature-not-ready",
-        feature: "markdown-indexer",
-        releaseVersion: packageManifest.version,
-        requiredMilestone: markdownCapability.required_milestone,
-      });
-      return;
-    }
     const result = await validateProjectMarkdownProviderSelection({
       projectRoot: fixture.projectRoot,
       assetsRoot: fixture.assetsRoot,
@@ -357,7 +334,7 @@ describe("Markdown Provider Route", () => {
         projectRoot: fixture.projectRoot,
         value: route.selection_proposal_input,
       });
-      return validateProjectMarkdownProviderSelection({
+      const result = await validateProjectMarkdownProviderSelection({
         projectRoot: fixture.projectRoot,
         value: {
           protocol: "context.indexer.markdown-provider-validation-input/v1",
@@ -368,6 +345,14 @@ describe("Markdown Provider Route", () => {
           ...(hostResults === undefined ? {} : { host_results: hostResults }),
         },
       });
+      if (customization === undefined && hostResults === undefined) {
+        await persistCurrentIndexerProviderSetup({
+          projectRoot: fixture.projectRoot,
+          proposal: staticValidation.proposal,
+          resolved: [],
+        });
+      }
+      return result;
     };
 
     const host = await validate();
@@ -384,6 +369,26 @@ describe("Markdown Provider Route", () => {
         },
       }],
     });
+    const currentRoute = await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: fixture.projectRoot,
+      authorities: [],
+      managed: false,
+    });
+    expect(currentRoute).toMatchObject({
+      node: "resolve-indexer-provider",
+      action: {
+        runner: "host",
+        handler: "context.resolve-indexer-provider/v1",
+      },
+      resources: {
+        required: [{
+          materialize: {
+            handler: "context.resolve-indexer-provider/v1",
+          },
+        }],
+      },
+    });
+    expect(currentRoute?.commands[0]?.command).toContain("action complete-current");
     const customization = await validate("extend");
     expect(customization).toMatchObject({
       outcome: "indexer-customization-required",
