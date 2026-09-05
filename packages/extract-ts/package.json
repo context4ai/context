@@ -31,6 +31,6 @@
     "@c4a/core": "workspace:*",
     "@c4a/extract": "workspace:*",
     "typescript": "^5.5.4",
-    "web-tree-sitter": "^0.20.8"
+    "web-tree-sitter": "^0.27.0"
   }
 }
