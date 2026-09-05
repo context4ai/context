@@ -112,7 +112,7 @@ describe("0.6.2 document source and capture status routing", () => {
     }
   });
 
-  test("routes a captured Lark source into the Indexer lifecycle", async () => {
+  test("routes a captured Lark source into Indexer requirements configuration", async () => {
     const root = await makeProject();
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -145,7 +145,10 @@ describe("0.6.2 document source and capture status routing", () => {
         kind: "none",
       });
       expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
-      expect(status.routing.configuration).toBeUndefined();
+      expect(status.routing.configuration).toMatchObject({
+        file: "src/indexers.yaml",
+        action: expect.stringContaining("indexers: []"),
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
