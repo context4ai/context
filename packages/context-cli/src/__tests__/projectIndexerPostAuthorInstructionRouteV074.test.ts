@@ -21,7 +21,7 @@ const SUBJECT_KEY = {
 };
 const NODE_REF = canonicalIndexerNodeRef(SUBJECT_KEY);
 
-function postAuthorRequest() {
+function postAuthorRequest(seed = "4") {
   const composers = resolveEffectiveIndexerComposers({
     selections: [{
       id: "public-contract",
@@ -42,8 +42,8 @@ function postAuthorRequest() {
   });
   const plan = planIndexerPostAuthorComposition({
     effective_composer_set: composers,
-    author_workset_digest: digest("4"),
-    primary_result_digest: digest("5"),
+    author_workset_digest: digest(seed),
+    primary_result_digest: digest(seed === "4" ? "5" : "e"),
     primary_facts: [{
       fact_ref: "fact:component-summary",
       subject_key: SUBJECT_KEY,
@@ -81,11 +81,9 @@ function postAuthorRequest() {
   };
 }
 
-function instructionRequest(
-  worksetDigest: string,
-): IndexerInstructionMaterializationRequest {
+function instructionRequest(): IndexerInstructionMaterializationRequest {
   const input = {
-    protocol: "context.indexer.materialize-request/v1" as const,
+    protocol: "context.indexer.materialize-request/v2" as const,
     handler: "context.materialize-indexer-instructions/v1" as const,
     resource_id: "resolved-indexer-instructions" as const,
     indexer_id: "sample-indexer",
@@ -93,9 +91,7 @@ function instructionRequest(
     provider_fingerprint: digest("9"),
     provider_integrity: digest("2"),
     manifest_digest: digest("a"),
-    requirement_set_digest: digest("b"),
-    workset_ref: `post-author-workset:${worksetDigest}`,
-    workset_digest: worksetDigest,
+    stage: "post-author" as const,
     profile: "component-library",
     composer_id: "public-contract",
     instruction_set_digest: digest("c"),
@@ -110,33 +106,53 @@ function instructionRequest(
 describe("project Indexer post-author instruction Route", () => {
   test("gives the selected composer instruction and the same PrimaryResultView to the Agent", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-indexer-post-author-route-"));
-    const postAuthor = postAuthorRequest();
-    const instructions = instructionRequest(postAuthor.request.workset.workset_digest);
+    const first = postAuthorRequest();
+    const second = postAuthorRequest("f");
+    const instructions = instructionRequest();
     const route = await buildIndexerPostAuthorAgentStepRoute({
-      fragment_request: postAuthor.request,
+      fragment_requests: [first.request, second.request],
       instruction_request: instructions,
+      ready_instruction: {
+        path: join(root, "instructions.json"),
+        digest: digest("b"),
+      },
+      ready_workset_views: [first, second].map((item, index) => ({
+        resource_id: `authorized-indexer-workset-view/task-${String(index + 1).padStart(3, "0")}`,
+        path: join(root, `view-${index + 1}.json`),
+        digest: item.primaryResultView.view_digest,
+      })),
       workspaceRoot: root,
     });
 
     expect(route.route.action).toMatchObject({
       id: "run-indexer-post-author-composer",
       runner: "agent",
-      input: postAuthor.request,
+      input: {
+        protocol: "context.indexer.agent-step-input/v2",
+        stage: "post-author",
+      },
     });
-    expect(route.step_input.primary_result_view).toEqual(postAuthor.primaryResultView);
+    expect(route.step_input.tasks.map((task) => task.task_key)).toEqual([
+      "task-001",
+      "task-002",
+    ]);
+    expect(route.step_input.tasks.map((task) => task.primary_result_view_digest)).toEqual([
+      first.primaryResultView.view_digest,
+      second.primaryResultView.view_digest,
+    ]);
     expect(route.route.resources.required.find((resource) =>
       resource.id === "resolved-indexer-instructions"
     )).toMatchObject({
       read_state: "read-required",
-      materialize: {
-        handler: "context.materialize-indexer-instructions/v1",
-        input: { value: instructions },
-        output_schema: "context.indexer.materialized-resource/v1",
-      },
+      path: join(root, "instructions.json"),
+      digest: digest("b"),
     });
     expect(route.instruction_location.materialize.input.value).toEqual(
       instructions as unknown as import("@c4a/agent-graph").JsonValue,
     );
+    expect(route.route.resources.required.filter((resource) =>
+      resource.id.startsWith("authorized-indexer-workset-view/task-")
+    )).toHaveLength(2);
     expect(JSON.stringify(route.route)).not.toContain("__runtime__");
   });
 });

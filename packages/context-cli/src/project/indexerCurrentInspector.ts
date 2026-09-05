@@ -5,6 +5,7 @@ import {
   indexerLayerFragmentDigest,
   validateAndMaterializeIndexerLayerFragment,
   validateIndexerActivationResult,
+  type IndexerInspectorResult,
   type IndexerMaterializedLayerFragment,
   type IndexerParserFactView,
 } from "@c4a/context";
@@ -31,6 +32,40 @@ export interface CurrentIndexerInspectorMaterialization {
 export interface CurrentIndexerExtensionFacts {
   inspector_materializations: CurrentIndexerInspectorMaterialization[];
   fragments: IndexerMaterializedLayerFragment[];
+}
+
+export function buildCurrentIndexerExtensionFactPayload(input: {
+  target_ref: string;
+  fact_payloads: IndexerInspectorResult["fact_payloads"];
+  source_facts: ReadonlyMap<string, { payload_digest: string }>;
+}) {
+  const compare = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
+  const facts = [...input.fact_payloads]
+    .sort((left, right) => compare(left.fact_ref, right.fact_ref))
+    .map((item, index) => ({
+      target_ref: input.target_ref,
+      fact_id: `enrichment-${item.payload.profile}-${index + 1}`,
+      value: {
+        profile: item.payload.profile,
+        profile_variants: item.payload.profile_variants,
+        source_fact_refs: item.payload.source_fact_refs,
+        template_variables: item.payload.template_variables,
+        status: item.payload.status,
+        ...(item.payload.reason_code === undefined ? {} : { reason_code: item.payload.reason_code }),
+      },
+      evidence_refs: item.payload.source_fact_refs.map((ref) => {
+        const fact = input.source_facts.get(ref);
+        if (fact === undefined) {
+          throw new TypeError(`extension enrichment references unknown source fact ${ref}`);
+        }
+        return { ref, kind: "code" as const, source_digest: fact.payload_digest };
+      }).sort((left, right) => compare(left.ref, right.ref)),
+    }));
+  // Inspector fact order is not fragment item order: profile names and numeric
+  // suffixes can reorder the resulting identities. Canonicalize the final shape
+  // before hashing, using the same code-unit ordering as the SDK validator.
+  facts.sort((left, right) => compare(left.fact_id, right.fact_id));
+  return { protocol: "context.indexer.fragment.fact-enrichment/v1" as const, facts };
 }
 
 export async function materializeCurrentIndexerExtensionFacts(input: {
@@ -113,8 +148,7 @@ export async function materializeCurrentIndexerExtensionFacts(input: {
     if (input.target_ref === undefined) continue;
     const factPayloads = [...executed.result.fact_payloads]
       .filter((item) => selectedFacts === null ||
-        item.payload.source_fact_refs.some((ref) => selectedFacts.has(ref)))
-      .sort((left, right) => left.fact_ref.localeCompare(right.fact_ref));
+        item.payload.source_fact_refs.some((ref) => selectedFacts.has(ref)));
     if (factPayloads.length === 0) continue;
     const layerRef = `provider:${layer.layer.id}#layer:${layer.layer.role}`;
     const fragmentBase = {
@@ -125,34 +159,11 @@ export async function materializeCurrentIndexerExtensionFacts(input: {
       phase: "pre-authority" as const,
       kind: "fact-enrichment" as const,
       target_refs: [input.target_ref],
-      payload: {
-        protocol: "context.indexer.fragment.fact-enrichment/v1" as const,
-        facts: factPayloads.map((item, index) => ({
-          target_ref: input.target_ref!,
-          fact_id: `enrichment-${item.payload.profile}-${index + 1}`,
-          value: {
-            profile: item.payload.profile,
-            profile_variants: item.payload.profile_variants,
-            source_fact_refs: item.payload.source_fact_refs,
-            template_variables: item.payload.template_variables,
-            status: item.payload.status,
-            ...(item.payload.reason_code === undefined
-              ? {}
-              : { reason_code: item.payload.reason_code }),
-          },
-          evidence_refs: item.payload.source_fact_refs.map((ref) => {
-            const fact = sourceFacts.get(ref);
-            if (fact === undefined) {
-              throw new TypeError(`extension enrichment references unknown source fact ${ref}`);
-            }
-            return {
-              ref,
-              kind: "code" as const,
-              source_digest: fact.payload_digest,
-            };
-          }).sort((left, right) => left.ref.localeCompare(right.ref)),
-        })),
-      },
+      payload: buildCurrentIndexerExtensionFactPayload({
+        target_ref: input.target_ref,
+        fact_payloads: factPayloads,
+        source_facts: sourceFacts,
+      }),
     };
     const fragment = {
       ...fragmentBase,

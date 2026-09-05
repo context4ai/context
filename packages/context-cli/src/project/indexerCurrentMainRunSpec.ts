@@ -22,6 +22,8 @@ import { resolveCurrentProjectIndexerPrimaryAuthority } from
 import { normalizeRunSpec, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
 import type { CurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
+import type { IndexerConsumerWorksetProjection } from
+  "./indexerConsumerWorksetPlanner.js";
 
 function primarySourceRole(
   adapter: "parser-facts" | "captured-documents",
@@ -39,6 +41,41 @@ function primarySourceRole(
 type CurrentPrimaryAuthority = Awaited<
   ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>
 >;
+
+export interface AuthorSupplementarySource {
+  indexer_id: string;
+  source_ref: string;
+  module_ref: string | null;
+  profile_contract_digest: string;
+  source_binding_digest: string;
+}
+
+function supplementarySourceIdentity(source: AuthorSupplementarySource): string {
+  return [source.indexer_id, source.source_ref, source.module_ref ?? ""].join("\u0000");
+}
+
+export function canonicalProjectIndexerSupplementarySources(
+  sources: readonly AuthorSupplementarySource[],
+): AuthorSupplementarySource[] {
+  const byIdentity = new Map<string, AuthorSupplementarySource>();
+  for (const source of sources) {
+    const identity = supplementarySourceIdentity(source);
+    const previous = byIdentity.get(identity);
+    if (
+      previous !== undefined &&
+      (previous.profile_contract_digest !== source.profile_contract_digest ||
+        previous.source_binding_digest !== source.source_binding_digest)
+    ) {
+      throw new TypeError(
+        `author supplementary source ${source.indexer_id}/${source.source_ref} has conflicting authority`,
+      );
+    }
+    byIdentity.set(identity, source);
+  }
+  return [...byIdentity.values()].sort((left, right) =>
+    supplementarySourceIdentity(left).localeCompare(supplementarySourceIdentity(right))
+  );
+}
 
 function assertCurrentAuthority(input: {
   workset: ReturnType<typeof validateIndexerMainWorkset>;
@@ -186,6 +223,7 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
   binding: ProjectIndexerMainSourceBinding;
   authority: Awaited<ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>>;
   canonical_inventory_members?: readonly IndexerInventoryMember[];
+  partition_projection?: IndexerConsumerWorksetProjection;
   enrichment?: CurrentIndexerExtensionFacts;
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
@@ -257,6 +295,9 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
       subject_key_contract: subjectKeyContract,
       required_question_target_refs: workset.allowed_question_target_refs,
       inspector_materializations: enrichment.inspector_materializations,
+      ...(input.partition_projection === undefined
+        ? {}
+        : { partition_projection: input.partition_projection }),
     },
   });
 }
@@ -275,6 +316,7 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     question_ref: string;
   }[];
   enrichment?: CurrentIndexerExtensionFacts;
+  supplementary_sources?: readonly AuthorSupplementarySource[];
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
   if (workset.stage !== "author") {
@@ -334,7 +376,10 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     }),
   });
   const selectedPaths = new Set(dependencyView.positive_nodes.flatMap((node) =>
-    node.kind === "source-span" ? [node.locator.path] : []
+    node.kind === "source-span" && node.source_ref === input.binding.source_ref &&
+        node.module_ref === input.binding.module_ref
+      ? [node.locator.path]
+      : []
   ));
   const selectedFacts = new Set(selectedFactRefs);
   const selectedIdentityFiles = input.binding.source_identity_inventory.files.flatMap((file) =>
@@ -379,6 +424,9 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
       source_identity_inventory: sourceIdentityInventory,
       allowed_question_targets: [...input.allowed_question_targets],
       inspector_materializations: enrichment.inspector_materializations,
+      supplementary_sources: canonicalProjectIndexerSupplementarySources(
+        input.supplementary_sources ?? [],
+      ),
     },
   });
 }

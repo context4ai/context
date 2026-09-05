@@ -4,7 +4,7 @@ description: Context-managed Provider for source-grounded document knowledge. Us
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.1.0"
+  context-provider-version: "1.1.1"
 ---
 
 # Context Markdown Indexer

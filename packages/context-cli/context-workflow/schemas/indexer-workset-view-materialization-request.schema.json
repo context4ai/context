@@ -16,7 +16,10 @@
   "properties": {
     "protocol": { "const": "context.indexer.workset-view-materialization-request/v1" },
     "handler": { "const": "context.materialize-indexer-workset-view/v1" },
-    "resource_id": { "const": "authorized-indexer-workset-view" },
+    "resource_id": {
+      "type": "string",
+      "pattern": "^authorized-indexer-workset-view(?:/task-[0-9]{3})?$"
+    },
     "workset_digest": { "$ref": "#/$defs/digest" },
     "execution_request_digest": { "$ref": "#/$defs/digest" },
     "view_digest": { "$ref": "#/$defs/digest" },

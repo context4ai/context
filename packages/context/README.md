@@ -54,8 +54,10 @@ export default defineProject({
 ```
 
 The Context lifecycle discovers or updates `src/indexers.yaml`, runs the
-selected Provider, presents readable Candidate pages for Review, writes only
-approved knowledge, and then builds declared packages.
+selected Provider in bounded batches of independently recoverable semantic
+tasks, presents readable Candidate pages for Review, writes only approved
+knowledge, and then builds declared packages. Batch keys and runtime timing
+never enter knowledge identity or package output.
 
 ## Public surface
 
@@ -83,8 +85,8 @@ Approved pages live under `knowledge/<collection>/`. Paths and filenames are
 reader-oriented, for example:
 
 ```text
-knowledge/codeindex/tux-web/avatar.md
-knowledge/architecture/tux-official-docs/react-lynx-input-fields.md
+knowledge/codeindex/ui-kit/avatar.md
+knowledge/architecture/product-guides/component-input-fields.md
 ```
 
 Workspace pages keep only metadata required to rebuild or update knowledge.
@@ -111,4 +113,3 @@ build. Source registries, `src/index.ts`, `src/indexers.yaml`, approved
 - [Indexer Provider Protocol](./docs/reference/indexer-provider-protocol.md)
 - [Package Outputs](./docs/guides/package-outputs.md)
 - [Package Templates](./docs/reference/package-templates.md)
-

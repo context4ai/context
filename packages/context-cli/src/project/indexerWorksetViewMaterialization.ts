@@ -32,7 +32,12 @@ import {
   resolveProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
 import { normalizeRunSpec } from "./indexerMainRunStoreRecords.js";
+import { indexerParserTaskSelection } from "./indexerParserTaskSelection.js";
 import { INDEXER_WORKSET_VIEW_RUNTIME_ROOT } from "./lifecyclePaths.js";
+import {
+  projectIndexerReadTargetAllows,
+  projectIndexerReadTargets,
+} from "./indexerReadScopeAuthorization.js";
 
 const DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
 const RESOURCE_ID = "authorized-indexer-workset-view" as const;
@@ -80,7 +85,7 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
 export interface IndexerWorksetViewMaterializationRequest {
   protocol: typeof REQUEST_PROTOCOL;
   handler: typeof HANDLER;
-  resource_id: typeof RESOURCE_ID;
+  resource_id: string;
   workset_digest: string;
   execution_request_digest: string;
   view_digest: string;
@@ -130,7 +135,8 @@ export function validateIndexerWorksetViewMaterializationRequest(
   if (
     request.protocol !== REQUEST_PROTOCOL ||
     request.handler !== HANDLER ||
-    request.resource_id !== RESOURCE_ID
+    (request.resource_id !== RESOURCE_ID &&
+      !/^authorized-indexer-workset-view\/task-[0-9]{3}$/u.test(request.resource_id ?? ""))
   ) {
     throw new TypeError("Indexer workset View materialization request protocol is invalid");
   }
@@ -168,9 +174,60 @@ function assertRequestProjectionBinding(input: {
   }
 }
 
+interface SupplementarySourceDescriptor {
+  indexer_id: string;
+  source_ref: string;
+  module_ref: string | null;
+  profile_contract_digest: string;
+  source_binding_digest: string;
+}
+
+function supplementarySourceDescriptors(value: unknown): SupplementarySourceDescriptor[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new TypeError("author supplementary_sources must be an array");
+  }
+  const descriptors = value.map((candidate) => {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+      throw new TypeError("author supplementary source must be an object");
+    }
+    const descriptor = candidate as Partial<SupplementarySourceDescriptor>;
+    for (const [field, fieldValue] of Object.entries({
+      indexer_id: descriptor.indexer_id,
+      source_ref: descriptor.source_ref,
+      profile_contract_digest: descriptor.profile_contract_digest,
+      source_binding_digest: descriptor.source_binding_digest,
+    })) {
+      if (typeof fieldValue !== "string" || fieldValue.length === 0) {
+        throw new TypeError(`author supplementary source ${field} is invalid`);
+      }
+    }
+    if (descriptor.module_ref !== null && typeof descriptor.module_ref !== "string") {
+      throw new TypeError("author supplementary source module_ref is invalid");
+    }
+    if (!DIGEST_RE.test(descriptor.profile_contract_digest!) ||
+        !DIGEST_RE.test(descriptor.source_binding_digest!)) {
+      throw new TypeError("author supplementary source digest is invalid");
+    }
+    return descriptor as SupplementarySourceDescriptor;
+  }).sort((left, right) =>
+    [left.indexer_id, left.source_ref, left.module_ref ?? ""].join("\u0000").localeCompare(
+      [right.indexer_id, right.source_ref, right.module_ref ?? ""].join("\u0000"),
+    )
+  );
+  const identities = descriptors.map((descriptor) =>
+    [descriptor.indexer_id, descriptor.source_ref, descriptor.module_ref ?? ""].join("\u0000")
+  );
+  if (new Set(identities).size !== identities.length) {
+    throw new TypeError("author supplementary sources must be unique");
+  }
+  return descriptors;
+}
+
 export function prepareIndexerWorksetViewMaterialization(input: {
   run_request: unknown;
   projection_sources: readonly unknown[];
+  resource_id?: string;
 }): PreparedIndexerWorksetViewMaterialization {
   const projection = buildIndexerAuthorizedWorksetView({
     request: input.run_request,
@@ -179,7 +236,7 @@ export function prepareIndexerWorksetViewMaterialization(input: {
   const payload: Omit<IndexerWorksetViewMaterializationRequest, "request_digest"> = {
     protocol: REQUEST_PROTOCOL,
     handler: HANDLER,
-    resource_id: RESOURCE_ID,
+    resource_id: input.resource_id ?? RESOURCE_ID,
     workset_digest: projection.view.workset_digest,
     execution_request_digest: projection.view.execution_request_digest,
     view_digest: projection.view.view_digest,
@@ -194,6 +251,7 @@ export function prepareIndexerWorksetViewMaterialization(input: {
 export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   projectRoot: string;
   run_spec: unknown;
+  resource_id?: string;
   inspector_materializations?: readonly IndexerInspectorWorksetViewMaterialization[];
   additional_projection_sources?: readonly IndexerAuthorizedWorksetViewSource[];
 }): Promise<PreparedIndexerWorksetViewMaterialization> {
@@ -288,7 +346,6 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           provenance: {
             protocol: "context.indexer.repair-intent/v1",
             digest: request.workset.repair_intent.intent_digest,
-            container_ref: request.workset.repair_intent.target_ref,
           },
           value: {
             target_ref: request.workset.repair_intent.target_ref,
@@ -303,6 +360,12 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
     source_ref: request.workset.source_ref,
     module_ref: request.workset.module_ref,
     profile_contract_digest: request.workset.profile_contract_digest,
+    parser_selection: indexerParserTaskSelection({
+      stage: request.workset.stage,
+      source_ref: request.workset.source_ref,
+      module_ref: request.workset.module_ref,
+      validation: spec.validation,
+    }),
   });
   assertProjectIndexerMainSourceBinding({
     workset: request.workset,
@@ -334,6 +397,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   }
   const sourceProjectionSources = await buildProjectIndexerMainSourceViewSources({
     projectRoot: input.projectRoot,
+    registry: loadedRegistry.registry,
     request,
     binding,
     ...(request.workset.stage === "author"
@@ -345,7 +409,50 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
     ...(request.workset.stage === "partition"
       ? { partition_inventory_members: inventoryMembers }
       : {}),
+    ...(request.workset.stage === "partition" &&
+        spec.validation.partition_projection !== undefined
+      ? { partition_projection: spec.validation.partition_projection }
+      : {}),
   });
+  const supplementaryProjectionSources = request.workset.stage === "author"
+    ? (await Promise.all(supplementarySourceDescriptors(
+        spec.validation.supplementary_sources,
+      ).map(async (descriptor) => {
+        const readTargets = projectIndexerReadTargets({
+          registry: loadedRegistry.registry,
+          indexer_id: request.workset.indexer_id,
+        });
+        if (!projectIndexerReadTargetAllows({
+          targets: readTargets,
+          source_ref: descriptor.source_ref,
+          module_ref: descriptor.module_ref,
+        })) {
+          throw new TypeError("author supplementary source is outside Indexer read scope");
+        }
+        const supplementaryBinding = await resolveProjectIndexerMainSourceBinding({
+          projectRoot: input.projectRoot,
+          indexer_id: descriptor.indexer_id,
+          source_ref: descriptor.source_ref,
+          module_ref: descriptor.module_ref,
+          profile_contract_digest: descriptor.profile_contract_digest,
+          parser_selection: indexerParserTaskSelection({
+            stage: "author", source_ref: descriptor.source_ref, module_ref: descriptor.module_ref,
+            validation: spec.validation,
+          }),
+        });
+        if (supplementaryBinding.source_binding_digest !== descriptor.source_binding_digest) {
+          throw new TypeError("author supplementary source binding is stale");
+        }
+        return buildProjectIndexerMainSourceViewSources({
+          projectRoot: input.projectRoot,
+          request,
+          binding: supplementaryBinding,
+          dependency_view: spec.validation.dependency_view,
+          registry: loadedRegistry.registry,
+          supplementary: true,
+        });
+      }))).flat()
+    : [];
   const storedInspectorMaterializations = Array.isArray(spec.validation.inspector_materializations)
     ? spec.validation.inspector_materializations as unknown as IndexerInspectorWorksetViewMaterialization[]
     : [];
@@ -359,21 +466,34 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       inspector_result: materialization.inspector_result,
     }),
   );
+  const mainSources = buildIndexerMainRunWorksetViewSources({
+    request,
+    source_projection_sources: [
+      requirementProjection,
+      ...(partitionAuthorityProjection === null ? [] : [partitionAuthorityProjection]),
+      ...(authorAuthorityProjection === null ? [] : [authorAuthorityProjection]),
+      ...(repairProjection === null ? [] : [repairProjection]),
+      ...sourceProjectionSources,
+      ...supplementaryProjectionSources,
+      ...inspectorProjectionSources,
+      ...(input.additional_projection_sources ?? []),
+    ],
+    canonical_inventory_members: inventoryMembers,
+  });
+  // Author Facts also include supporting material; they are not the owned
+  // member denominator. Deliver that existing inventory explicitly so a fresh
+  // Agent can close exactly this group without reopening Partition state.
+  const projectInventorySeparately = binding.adapter !== "parser-facts" ||
+    request.workset.stage === "author" ||
+    (request.workset.stage === "partition" &&
+      spec.validation.partition_projection !== undefined &&
+      (spec.validation.partition_projection as { unresolved?: unknown }).unresolved === true);
   return prepareIndexerWorksetViewMaterialization({
     run_request: request,
-    projection_sources: buildIndexerMainRunWorksetViewSources({
-      request,
-      source_projection_sources: [
-        requirementProjection,
-        ...(partitionAuthorityProjection === null ? [] : [partitionAuthorityProjection]),
-        ...(authorAuthorityProjection === null ? [] : [authorAuthorityProjection]),
-        ...(repairProjection === null ? [] : [repairProjection]),
-        ...sourceProjectionSources,
-        ...inspectorProjectionSources,
-        ...(input.additional_projection_sources ?? []),
-      ],
-      canonical_inventory_members: inventoryMembers,
-    }),
+    ...(input.resource_id === undefined ? {} : { resource_id: input.resource_id }),
+    projection_sources: projectInventorySeparately
+      ? mainSources
+      : mainSources.filter((source) => source.projection_kind !== "inventory-members"),
   });
 }
 
@@ -428,6 +548,21 @@ async function writeManagedView(input: {
     file_path: filePath,
     value: input.view,
   };
+}
+
+export async function persistPreparedIndexerWorksetView(input: {
+  workspaceRoot: string;
+  prepared: PreparedIndexerWorksetViewMaterialization;
+}): Promise<IndexerWorksetViewManagedOutput> {
+  assertRequestProjectionBinding({
+    request: input.prepared.request,
+    projection: input.prepared.projection,
+  });
+  return writeManagedView({
+    workspaceRoot: input.workspaceRoot,
+    request: input.prepared.request,
+    view: input.prepared.projection.view,
+  });
 }
 
 export async function materializeIndexerWorksetViewHostAction(input: {

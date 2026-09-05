@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import type { Readable } from "node:stream";
 import YAML from "yaml";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -17,14 +18,58 @@ function parsePayloadText(raw: string): unknown {
   return YAML.parse(raw) as unknown;
 }
 
-async function readPayloadText(path: string): Promise<string> {
-  if (path !== "-") return readFile(path, "utf8");
+function isCompleteJsonLine(raw: string): boolean {
+  if (!raw.endsWith("\n") && !raw.endsWith("\r")) return false;
+  const trimmed = raw.trimStart();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return false;
+  try {
+    JSON.parse(raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function readPayloadTextFromStdin(stdin: Readable): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     const chunks: Buffer[] = [];
-    process.stdin.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    process.stdin.on("error", reject);
+    let settled = false;
+    const cleanup = () => {
+      stdin.off("data", onData);
+      stdin.off("end", onEnd);
+      stdin.off("error", onError);
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      stdin.pause();
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    const onData = (chunk: Buffer | string) => {
+      const buffer = Buffer.from(chunk);
+      chunks.push(buffer);
+      const last = buffer.at(-1);
+      if (last !== 10 && last !== 13) return;
+      const raw = Buffer.concat(chunks).toString("utf8");
+      if (isCompleteJsonLine(raw)) finish();
+    };
+    const onEnd = () => finish();
+    const onError = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    stdin.on("data", onData);
+    stdin.on("end", onEnd);
+    stdin.on("error", onError);
   });
+}
+
+async function readPayloadText(path: string): Promise<string> {
+  if (path !== "-") return readFile(path, "utf8");
+  return readPayloadTextFromStdin(process.stdin);
 }
 
 export async function readYamlOrJsonInput(input: {

@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   buildIndexerParserCoordinateMapping,
   buildIndexerParserDependencyIntentSet,
@@ -16,6 +19,13 @@ import { buildProjectIndexerParserExecutionPlan } from
   "../project/indexerParserExecutionPlanning.js";
 import { executeProjectIndexerParserPlan } from
   "../project/indexerParserRuntimeExecution.js";
+import {
+  indexerParserRuntimeManifestPath,
+  readIndexerParserRuntimeExecution,
+  readIndexerParserRuntimeIndexManifest,
+  readIndexerParserRuntimeSourceSlice,
+  writeIndexerParserRuntimeIndex,
+} from "../project/indexerParserRuntimeIndex.js";
 
 const digest = (label: string) => indexerProtocolDigest({ label });
 const contentDigest = (content: string) =>
@@ -255,13 +265,15 @@ describe("0.7.4 parser runtime execution", () => {
       lock_integrity: "sha512-c291cmNlLWJpbmRpbmdz",
       resolved_content_digest: digest("extract-package"),
     });
-    const sourceRegistryDigest = digest("source-registry");
-    const run = async (moduleAContent: string) => {
+    const run = async (
+      moduleAContent: string,
+      previousExecution?: Awaited<ReturnType<typeof executeProjectIndexerParserPlan>>,
+    ) => {
       const moduleBContent = JSON.stringify({ module: "b" });
       const plan = buildProjectIndexerParserExecutionPlan({
         profile_contract: profiles,
         profile_id: "monorepo-container",
-        source_registry_digest: sourceRegistryDigest,
+        source_registry_digest: digest(`source-registry:${moduleAContent}`),
         authorized_files: [{
           source_ref: "source:fixture-repository",
           module_ref: "module:web",
@@ -283,17 +295,81 @@ describe("0.7.4 parser runtime execution", () => {
         dependencies: lockedDependencies({ requirement, mapping, lock }),
         mappings: [mapping],
         locks: [lock],
-        entry_inputs: plan.entries.map((entry) => ({
+        entry_inputs: plan.entries.filter((entry) =>
+          previousExecution === undefined || entry.module_ref === "module:web"
+        ).map((entry) => ({
           entry_digest: indexerParserExecutionEntryDigest(entry),
           files: Object.fromEntries(entry.files.map((file) => [
             file.normalized_path,
             entry.module_ref === "module:web" ? moduleAContent : moduleBContent,
           ])),
         })),
+        ...(previousExecution === undefined
+          ? {}
+          : { previous_execution: previousExecution }),
       });
     };
     const before = await run(JSON.stringify({ module: "a", revision: 1 }));
-    const after = await run(JSON.stringify({ module: "a", revision: 2 }));
+    const cacheRoot = await mkdtemp(join(tmpdir(), "context-parser-source-cache-"));
+    try {
+      await writeIndexerParserRuntimeIndex({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+        indexer_digest: digest("indexer"),
+        source_registry_digest: digest("source-registry:before"),
+        parser_packages: [{
+          package: lock.actual_coordinate.package,
+          version: lock.actual_coordinate.version,
+          lock_integrity: lock.lock_integrity,
+          resolved_digest: lock.resolved_content_digest,
+        }],
+        parser_package_set_digest: digest("parser-packages"),
+        execution: before,
+      });
+      const manifest = await readIndexerParserRuntimeIndexManifest({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+      });
+      const moduleA = manifest.sources.find((source) => source.module_ref === "module:web")!;
+      const moduleB = manifest.sources.find((source) =>
+        source.module_ref === "module:web-sandbox"
+      )!;
+      const moduleBSlice = await readIndexerParserRuntimeSourceSlice({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+        manifest,
+        source_ref: "source:fixture-repository",
+        module_ref: "module:web-sandbox",
+      });
+      await writeFile(join(
+        dirname(indexerParserRuntimeManifestPath(cacheRoot, "source-local-fixture")),
+        "chunks",
+        moduleA.chunk.file,
+      ), "corrupt\n", "utf8");
+      await expect(readIndexerParserRuntimeSourceSlice({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+        manifest,
+        source_ref: "source:fixture-repository",
+        module_ref: "module:web",
+      })).rejects.toThrow(/corrupt/u);
+      expect((await readIndexerParserRuntimeSourceSlice({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+        manifest,
+        source_ref: "source:fixture-repository",
+        module_ref: "module:web-sandbox",
+      })).fact_view.view_digest).toBe(moduleBSlice.fact_view.view_digest);
+      await expect(readIndexerParserRuntimeExecution({
+        projectRoot: cacheRoot,
+        indexer_id: "source-local-fixture",
+        manifest,
+      })).rejects.toThrow(/corrupt/u);
+      expect(moduleB.chunk.file).not.toBe(moduleA.chunk.file);
+    } finally {
+      await rm(cacheRoot, { recursive: true, force: true });
+    }
+    const after = await run(JSON.stringify({ module: "a", revision: 2 }), before);
     const beforeByModule = new Map(before.source_bindings.map((binding) => [
       binding.module_ref,
       binding.binding_digest,

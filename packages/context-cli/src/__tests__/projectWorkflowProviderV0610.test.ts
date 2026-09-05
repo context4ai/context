@@ -260,6 +260,7 @@ describe("Context workflow Provider", () => {
     });
     expect(snapshot.route?.resources.required.map((resource) => resource.id))
       .toEqual(["skill.context-run-indexer-lifecycle"]);
+    expect(snapshot.route?.action?.output_schema).toBeUndefined();
   });
 
   test("a confirmed source boundary has a revision-bound batch command and input schema", async () => {
@@ -385,6 +386,13 @@ describe("Context workflow Provider", () => {
       command: expect.stringContaining("review approve-all architecture --managed"),
       availability: "immediate",
     }));
+    expect(managed.route?.commands.some((item) =>
+      item.command.includes("review html")
+    )).toBe(false);
+    expect(managed.route?.gate?.inspection_action).toBeUndefined();
+    expect(managed.route?.resources.required).toContainEqual(
+      expect.objectContaining({ id: "context.review-current" }),
+    );
   });
 
   test("does not let legacy draft Candidates bypass the current Indexer compile", async () => {

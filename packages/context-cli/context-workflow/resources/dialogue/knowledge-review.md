@@ -37,6 +37,9 @@ Do not open Review for one page or module while another confirmed item in the
 same round is still being generated. If a repeat codeindex run has no delta,
 state that existing approvals were preserved and no Review gate remains.
 
-When the user explicitly requested fully managed operation, use only the
-revision-bound atomic approve command returned by the managed route. Do not
-synthesize per-candidate approval calls.
+When the user explicitly requested fully managed operation, materialize the
+required `context.review-current` Markdown Resource once, read its index and
+every listed reader-facing batch, then use only the revision-bound atomic
+approve command returned by the managed route. Do not open HTML, synthesize
+per-candidate approval calls, persist review receipts, or approve any subset
+before all batches have been judged.

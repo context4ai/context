@@ -15,7 +15,6 @@ import {
   type IndexerRegistry,
   type IndexerPartitionValidationInput,
 } from "@c4a/context";
-import { posix } from "node:path";
 import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
@@ -32,6 +31,12 @@ import {
 } from "./indexerMainLifecycleSupport.js";
 import { buildProjectIndexerQuestionTargetInventory } from
   "./indexerQuestionTargetInventoryActions.js";
+import {
+  planCapturedDocumentInventoryShards,
+  planIndexerConsumerInventoryShards,
+  type IndexerConsumerInventoryShard,
+} from "./indexerConsumerWorksetPlanner.js";
+import { capturedDocumentIndexerRef } from "./indexerWorksetEvidenceProjection.js";
 export { buildProjectIndexerQuestionTargetInventory };
 export { buildProjectIndexerMainAuthorWorksets } from "./indexerMainAuthorActions.js";
 export { validateProjectIndexerMainRun } from "./indexerMainRunValidationActions.js";
@@ -60,50 +65,36 @@ function assertClosedOwnerCohorts(
   }
 }
 
-function codePartitionShardKey(
-  binding: Extract<Awaited<ReturnType<typeof resolveProjectIndexerMainSourceBinding>>, {
-    adapter: "parser-facts";
-  }>,
-  member: { member_id: string; member_kind: string },
-): string {
-  const directFact = binding.parser_fact_index.get(member.member_id);
-  const file = directFact === undefined
-    ? binding.parser_fact_view.files.find((candidate) =>
-        candidate.file_ref === member.member_id
-      )
-    : binding.parser_fact_view.files.find((candidate) =>
-        candidate.file_ref === directFact.file_ref
-      );
-  const directory = file === undefined
-    ? "."
-    : posix.dirname(file.normalized_path);
-  return directory;
-}
-
 function partitionInventoryShards(
-  binding: Awaited<ReturnType<typeof resolveProjectIndexerMainSourceBinding>>,
-) {
+  input: {
+    binding: Awaited<ReturnType<typeof resolveProjectIndexerMainSourceBinding>>;
+    profile: Awaited<ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>>["profile"];
+    strategyId: string;
+  },
+): IndexerConsumerInventoryShard[] {
+  const binding = input.binding;
   if (binding.adapter === "captured-documents") {
-    return [{
-      inventory: binding.partition_inventory,
-      question_carrier_score: binding.partition_inventory.length,
-    }];
+    return planCapturedDocumentInventoryShards(
+      binding.evidence.index.documents.map((document) => {
+        const memberId = capturedDocumentIndexerRef({
+          source_ref: binding.source_ref,
+          path: document.path,
+        });
+        const member = binding.partition_inventory.find((candidate) =>
+          candidate.member_id === memberId
+        );
+        if (member === undefined) {
+          throw new TypeError(`captured document inventory is missing ${document.path}`);
+        }
+        return { member, path: document.path };
+      }),
+    );
   }
-  const shards = new Map<string, typeof binding.partition_inventory>();
-  for (const member of binding.partition_inventory) {
-    const key = codePartitionShardKey(binding, member);
-    const values = shards.get(key) ?? [];
-    values.push(member);
-    shards.set(key, values);
-  }
-  return [...shards.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, members]) => ({
-      inventory: members,
-      question_carrier_score: members.filter((member) =>
-        binding.parser_fact_index.has(member.member_id)
-      ).length,
-    }));
+  return planIndexerConsumerInventoryShards({
+    factView: binding.parser_fact_view,
+    profile: input.profile,
+    strategyId: input.strategyId,
+  });
 }
 
 function questionCarrierShardIndex(
@@ -334,15 +325,24 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       partition_input_digests: binding.partition_input_digests,
       allowed_question_target_refs: allowedTargets,
     };
-    const shards = partitionInventoryShards(binding);
+    const primaryStrategy = strategies[0]?.strategy_ref;
+    if (primaryStrategy === undefined) {
+      throw new TypeError(`missing partition strategy for ${indexerId}`);
+    }
+    const shards = partitionInventoryShards({
+      binding,
+      profile: authority.profile,
+      strategyId: primaryStrategy.strategy_id,
+    });
     const carrierShardIndex = questionCarrierShardIndex(shards);
-    return shards.map(({ inventory }, shardIndex) => ({
+    return shards.map(({ inventory, projection }, shardIndex) => ({
       input: {
         ...base,
         partition_inventory_digest: indexerInventoryMembersDigest(inventory),
         allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
       },
       inventory,
+      projection,
       authority,
       binding,
     }));
@@ -375,6 +375,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       binding: item.binding,
       authority: item.authority,
       canonical_inventory_members: item.inventory,
+      partition_projection: item.projection,
       ...(enrichment === undefined ? {} : { enrichment }),
     });
   }));

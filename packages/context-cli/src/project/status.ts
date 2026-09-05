@@ -27,7 +27,11 @@ import type {
 import { verifyErrorsAreCloseRepairable } from "./workflow/verifyFacts.js";
 import { projectWorkflowRoute } from "./workflow/workflowStatusProjection.js";
 import { compactProjectVerifyDiagnostics } from "./verifyDiagnostics.js";
-import { recordAgentGraphEvaluation } from "./debugTrace.js";
+import {
+  measureContextDebugOperation,
+  recordAgentGraphEvaluation,
+  recordContextDebugPerformance,
+} from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateCompileActions.js";
@@ -37,6 +41,7 @@ import {
   resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
 import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
+import { currentIndexerProgress } from "./indexerCurrentProgress.js";
 
 export {
   pendingDocumentCaptureCommands,
@@ -97,7 +102,7 @@ async function recordWorkflowEvaluation(
   });
 }
 
-export async function collectProjectStatusSnapshot(
+async function collectProjectStatusSnapshotInternal(
   projectRoot: string,
   options: CollectProjectStatusOptions = {},
 ): Promise<ProjectStatusSnapshot> {
@@ -215,6 +220,7 @@ export async function collectProjectStatusSnapshot(
       ? {}
       : { resourceReceiptsReference: options.resourceReceiptsReference }),
   });
+  const statusProjectionStarted = performance.now();
   const baseWorkflow = projectContextWorkflowStatus(workflowSnapshot);
   const currentRoute = await projectCurrentIndexerWorkflowRoute({
       projectRoot,
@@ -227,6 +233,10 @@ export async function collectProjectStatusSnapshot(
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
   };
+  const indexerProgress = await currentIndexerProgress({
+    projectRoot,
+    ...(currentRoute === undefined ? {} : { route: currentRoute }),
+  });
   await recordWorkflowEvaluation(projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({
     workflow,
@@ -263,6 +273,7 @@ export async function collectProjectStatusSnapshot(
     codeIndexMigrationRequired,
     indexerRegistry: { state: indexerRegistry.state },
     indexerCandidateCompile: { state: indexerCandidateCompile.state },
+    ...(indexerProgress === undefined ? {} : { indexerProgress }),
     packageCount: packages.length,
     verifyErrors,
     verifyWarnings,
@@ -287,11 +298,33 @@ export async function collectProjectStatusSnapshot(
         : compactProjectVerifyDiagnostics(verifyStatus.issues)),
     ],
   };
+  const projectedStatus = withContentAddressedWorkflowResources(
+    status,
+    options.resourceReceipts,
+  );
+  await recordContextDebugPerformance({
+    projectRoot,
+    operation: "status.projection",
+    durationMs: performance.now() - statusProjectionStarted,
+    outcome: "success",
+    counters: { status_projection_count: 1 },
+  });
   return {
-    status: withContentAddressedWorkflowResources(status, options.resourceReceipts),
+    status: projectedStatus,
     observation,
     authorities,
   };
+}
+
+export async function collectProjectStatusSnapshot(
+  projectRoot: string,
+  options: CollectProjectStatusOptions = {},
+): Promise<ProjectStatusSnapshot> {
+  return measureContextDebugOperation({
+    projectRoot,
+    operation: "status.snapshot-build",
+    counters: { status_rebuild_count: 1 },
+  }, () => collectProjectStatusSnapshotInternal(projectRoot, options));
 }
 
 export async function reevaluateProjectStatusWorkflow(input: {
@@ -309,6 +342,7 @@ export async function reevaluateProjectStatusWorkflow(input: {
       ? {}
       : { resourceReceiptsReference: input.resourceReceiptsReference }),
   });
+  const statusProjectionStarted = performance.now();
   const baseWorkflow = projectContextWorkflowStatus(workflowSnapshot);
   const currentRoute = await projectCurrentIndexerWorkflowRoute({
       projectRoot: input.snapshot.observation.projectRoot,
@@ -328,11 +362,20 @@ export async function reevaluateProjectStatusWorkflow(input: {
     workflow,
     observation: input.snapshot.observation,
   });
-  return withContentAddressedWorkflowResources({
+  const status = withContentAddressedWorkflowResources({
     ...input.snapshot.status,
     ...routeProjection,
     workflow,
   }, input.resourceReceipts);
+  await recordContextDebugPerformance({
+    projectRoot: input.snapshot.observation.projectRoot,
+    operation: "status.projection",
+    durationMs: performance.now() - statusProjectionStarted,
+    outcome: "success",
+    counters: { status_projection_count: 1 },
+    data: { reuse_observation: true },
+  });
+  return status;
 }
 
 export async function collectProjectStatus(

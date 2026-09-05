@@ -45,6 +45,9 @@ describe("package knowledge consumer projection", () => {
       "relationship_mode: source-backed-ast",
       "code_edges: []",
       "candidate_fingerprint: sha256:example",
+      "current_batch_digest: sha256:batch",
+      "evidence_bindings: []",
+      "benchmark_summary: expensive",
       "---",
       "",
       "# Example Guide",
@@ -88,6 +91,9 @@ describe("package knowledge consumer projection", () => {
       "relationship_mode",
       "code_edges",
       "candidate_fingerprint",
+      "current_batch_digest",
+      "evidence_bindings",
+      "benchmark_summary",
       "resource",
       "sources",
     ]) {
@@ -107,7 +113,6 @@ describe("package knowledge consumer projection", () => {
       generated: "parent_index",
       visibility: "exported",
       code_symbols: ["module|Example|function"],
-      candidate_fingerprint: "sha256:example",
     });
   });
 
@@ -138,11 +143,11 @@ describe("package knowledge consumer projection", () => {
       "---",
       "title: Toggle",
       "type: Wiki",
-      "description: content Artifact from tux-code-indexer.",
+      "description: content Artifact from sample-code-indexer.",
       "tags:",
       "  - indexer",
       "  - content",
-      "  - tux-code-indexer",
+      "  - sample-code-indexer",
       "timestamp: 2026-09-02T00:00:00.000Z",
       "candidate_fingerprint: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "indexer_compile_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

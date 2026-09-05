@@ -7,7 +7,7 @@ import {
   type IndexerParserFactView,
 } from "@c4a/context";
 import { selectProjectIndexerAuthorRelationFacts } from
-  "../project/indexerCurrentAuthorPreparation.js";
+  "../project/indexerAuthorDependencyView.js";
 
 const SOURCE_REF = "repo:sample";
 

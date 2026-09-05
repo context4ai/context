@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: resolve-current-indexer-gate
+runner: agent
+effect: write
+skill: skills/resolve-current-indexer-gate/SKILL.md
+outputSchema: schemas/indexer-agent-step-result.schema.json

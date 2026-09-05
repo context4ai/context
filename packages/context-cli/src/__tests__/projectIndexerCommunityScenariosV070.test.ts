@@ -2,8 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { loadIndexerProviderManifest } from "@c4a/context";
 import { materializeBundledIndexerDistribution } from
   "../project/indexerDistributionBuild.js";
+import {
+  bundledIndexerOperatorContract,
+  bundledIndexerProfileContract,
+} from "../project/indexerBaseContracts.js";
+import { validateBundledIndexerCommunityScenarioFixtures } from
+  "../project/indexerDistributionCommunityScenarioValidation.js";
 
 const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -66,11 +73,13 @@ describe("community Indexer scenario fixtures", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects missing, reordered, relabelled, or de-anonymized scenarios", async () => {
+    const operatorContract = bundledIndexerOperatorContract();
+    const profileContract = bundledIndexerProfileContract(operatorContract);
     for (const mutation of ["missing", "reordered", "relabelled", "de-anonymized"] as const) {
-      const { root, sourceRoot } = await isolatedSource();
+      const { sourceRoot } = await isolatedSource();
+      const source = join(sourceRoot, "context-code-indexer");
       const path = join(
-        sourceRoot,
-        "context-code-indexer",
+        source,
         "tests",
         "fixtures",
         "scenarios.json",
@@ -86,10 +95,12 @@ describe("community Indexer scenario fixtures", () => {
       }
       if (mutation === "de-anonymized") fixture.anonymized = false;
       await writeFile(path, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-      await expect(materializeBundledIndexerDistribution({
-        packageRoot: PACKAGE_ROOT,
-        sourceRoot,
-        outputRoot: join(root, "output"),
+      const manifest = await loadIndexerProviderManifest(source);
+      await expect(validateBundledIndexerCommunityScenarioFixtures({
+        source,
+        manifest,
+        profileContract,
+        operatorContract,
       })).rejects.toThrow(/scenario fixture|scenario rpc-query-catalog/);
     }
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);

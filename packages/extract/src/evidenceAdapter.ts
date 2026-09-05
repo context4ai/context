@@ -18,6 +18,8 @@ export interface ExtractionEvidenceAdapterInvocation {
   input_digest: string;
   precedence: number;
   role?: "primary-owner" | "enricher";
+  /** Already scoped source text; used only for physical file extents, never persisted. */
+  source_files?: Readonly<Record<string, string>>;
 }
 
 function fact(input: {
@@ -180,6 +182,10 @@ export function extractionResultToEvidenceAdapterResult(
     }
     const facts: IndexerEvidenceAdapterFact[] = [];
     if (coverageFile.disposition === "analyzed" && fileInfo) {
+      const source = invocation.source_files?.[normalizedPath];
+      if (invocation.source_files !== undefined && source === undefined) {
+        throw new TypeError(`Analyzed file ${normalizedPath} has no scoped source text`);
+      }
       facts.push(fact({
         sourceRef: invocation.authorized_scope.source_ref,
         moduleRef: invocation.module_ref,
@@ -187,7 +193,11 @@ export function extractionResultToEvidenceAdapterResult(
         qualifiedItemPath: "file",
         kind: "source-file",
         signature: { path: normalizedPath, language: fileInfo.language },
-        payload: fileInfo,
+        // `lines` is the non-empty LOC denominator, not an end-line coordinate.
+        // Keep that metric intact and use the existing span fields for reading.
+        payload: source === undefined ? fileInfo : {
+          ...fileInfo, line: 1, endLine: source.split(/\r\n|\r|\n/u).length,
+        },
         denominator: ownsDenominators ? "eligible-file" : "none",
       }));
       facts.push(fact({

@@ -195,10 +195,29 @@ function resolveCustomizationPlan(input: {
     const primary = input.indexer.providers.find((provider) => provider.role === "primary")!;
     const hasConfig = Object.keys(primary.config ?? {}).length > 0;
     if (hasConfig) {
-      if (input.declared === undefined) {
-        throw new TypeError("configured Provider requires a minimal customization ladder plan");
-      }
-      const plan = validateIndexerCustomizationPlan(input.declared);
+      const configSelectionDigest = indexerProtocolDigest({
+        indexer_id: input.indexer.id,
+        provider_id: primary.id,
+        provider_integrity: input.providerIntegrity,
+        config: primary.config ?? {},
+      });
+      const plan = input.declared === undefined
+        ? buildIndexerCustomizationPlan({
+            project_ref: input.projectRef,
+            indexer_id: input.indexer.id,
+            provider_integrity: input.providerIntegrity,
+            capability_gap_digest: configSelectionDigest,
+            selected_step: "config",
+            rejected_smaller_steps: [{
+              step: "provider-only",
+              disposition: "insufficient",
+              reason_code: "provider-config-selected",
+              evidence_digest: configSelectionDigest,
+            }],
+            affected_scope_refs: input.indexer.read_scope.refs,
+            introduces_external_dependencies: false,
+          })
+        : validateIndexerCustomizationPlan(input.declared);
       if (
         plan.project_ref !== input.projectRef ||
         plan.indexer_id !== input.indexer.id ||

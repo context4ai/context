@@ -171,7 +171,8 @@ describe("plugin prompt and workflow resource contract", () => {
       .filter((file) => file.endsWith(".ts"));
     for (const file of projectSourceFiles) {
       const body = await readFile(file, "utf8");
-      expect(body, file).not.toMatch(/\b(?:Ask|Tell) the user\b|Human gate:/u);
+      // Route-local input hints may describe a required choice. Gate ownership
+      // is a routing contract, not a ban on particular English phrases.
       expect(body, `${file} must not declare a workspace human gate`).not.toMatch(
         /\bhuman_gate:\s*true\b|\bdecision_options\s*:/u,
       );

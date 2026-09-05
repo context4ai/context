@@ -17,6 +17,7 @@ import {
   type IndexerMainRunResult,
   type IndexerSubjectKey,
 } from "@c4a/context";
+import { renderMarkdownSection } from "./markdownPageTitle.js";
 
 type AuthorValidation = {
   dependency_view: unknown;
@@ -75,6 +76,11 @@ function slug(value: string): string {
   const normalized = value.toLowerCase().replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
   return normalized.length > 0 ? normalized : "content";
+}
+
+function isAuthorizedFactCategory(category: string): boolean {
+  return category === "fact" || category === "consumer-anchor" ||
+    category === "supporting-fact";
 }
 
 function evidenceIndex(input: {
@@ -142,7 +148,7 @@ function factIndex(input: {
   const facts = new Map<string, IndexerArtifactFact>();
   const aliases: Array<{ canonical: string; aliases: string[] }> = [];
   for (const item of input.view.items) {
-    if (item.category !== "fact") continue;
+    if (!isAuthorizedFactCategory(item.category)) continue;
     const value = object(item.value, `fact ${item.ref}`);
     const factRef = typeof value.fact_ref === "string" ? value.fact_ref : item.ref;
     const node = selected.get(factRef);
@@ -309,16 +315,14 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
       blocks: [{
         block_id: `${slug(section.semantic.key)}-prose`,
         layer: "semantic-prose",
-        markdown: [
+        markdown: renderMarkdownSection({
+          markdown: section.semantic.markdown,
+          heading: section.semantic.heading,
           ...(index === 0 && input.semantic.title !== undefined
-            ? [`# ${input.semantic.title}`]
-            : []),
+            ? { pageTitle: input.semantic.title } : {}),
           ...(index === 0 && input.semantic.summary !== undefined
-            ? [input.semantic.summary]
-            : []),
-          `## ${section.semantic.heading}`,
-          section.semantic.markdown,
-        ].join("\n\n"),
+            ? { summary: input.semantic.summary } : {}),
+        }),
         evidence_refs: section.evidenceRefs,
       }],
     })),

@@ -31,6 +31,12 @@ import {
   validateIndexerParserImportReceipt,
   type IndexerParserImportReceipt,
 } from "./indexerParserRuntimeImport.js";
+import {
+  assertIndexerParserResultIdentity,
+  collectReusableIndexerParserSources,
+  indexerParserEntryExecutionInputDigest,
+  indexerParserEntryRole,
+} from "./indexerParserRuntimeReuse.js";
 
 export interface IndexerParserRuntimeEntryInput {
   entry_digest: string;
@@ -65,6 +71,11 @@ export interface IndexerParserRuntimeSourceBinding {
   source_toolchain_digest: string;
   source_identity_inventory: IndexerSourceIdentityInventory;
   binding_digest: string;
+}
+
+export interface IndexerParserRuntimeSourceSlice {
+  source_binding: IndexerParserRuntimeSourceBinding;
+  fact_view: IndexerParserFactView;
 }
 
 const PREPARED_INPUT_CAPABILITIES = new Set([
@@ -103,6 +114,43 @@ function sourceBindingDigest(
   value: Omit<IndexerParserRuntimeSourceBinding, "binding_digest">,
 ): string {
   return indexerProtocolDigest(value);
+}
+
+export function validateIndexerParserRuntimeSourceSlice(
+  input: IndexerParserRuntimeSourceSlice,
+): IndexerParserRuntimeSourceSlice {
+  const binding = input.source_binding;
+  const inventory = validateIndexerSourceIdentityInventory(
+    binding.source_identity_inventory,
+  );
+  if (
+    inventory.source_ref !== binding.source_ref ||
+    inventory.module_ref !== binding.module_ref ||
+    binding.entry_digests.length === 0 ||
+    binding.result_digests.length === 0 ||
+    binding.import_receipt_digests.length === 0
+  ) {
+    throw new TypeError("parser runtime source binding identity is invalid");
+  }
+  canonicalUnique(binding.entry_digests, "source binding entry_digests");
+  canonicalUnique(binding.parser_lock_digests, "source binding parser_lock_digests");
+  canonicalUnique(binding.import_receipt_digests, "source binding import_receipt_digests");
+  canonicalUnique(binding.result_digests, "source binding result_digests");
+  const { binding_digest: _digest, ...payload } = binding;
+  void _digest;
+  if (sourceBindingDigest(payload) !== binding.binding_digest) {
+    throw new TypeError("parser runtime source binding digest is invalid");
+  }
+  const factView = validateIndexerParserFactView(input.fact_view);
+  if (
+    factViewSourceKey(factView) !== sourceKey(binding) ||
+    factView.inventory_digest !== inventory.inventory_digest ||
+    canonicalIndexerJson(factView.origin_result_digests) !==
+      canonicalIndexerJson(binding.result_digests)
+  ) {
+    throw new TypeError("parser runtime Fact View does not match its source binding");
+  }
+  return { source_binding: binding, fact_view: factView };
 }
 
 function sourceIdentityFact(
@@ -183,7 +231,6 @@ function buildSourceBindings(input: {
     });
     const sourceInputDigest = indexerProtocolDigest({
       profile_contract_digest: input.plan.profile_contract_digest,
-      source_registry_digest: input.plan.source_registry_digest,
       entry_digests: entryDigests,
       parser_lock_digests: parserLockDigests,
       import_receipt_digests: importReceiptDigests,
@@ -275,32 +322,11 @@ export function validateIndexerParserRuntimeExecutionReceipt(
   }
   canonicalUnique(sourceBindings.map(sourceKey), "parser runtime source bindings");
   for (const binding of sourceBindings) {
-    const inventory = validateIndexerSourceIdentityInventory(
-      binding.source_identity_inventory,
-    );
-    if (
-      inventory.source_ref !== binding.source_ref ||
-      inventory.module_ref !== binding.module_ref ||
-      binding.entry_digests.length === 0 ||
-      binding.result_digests.length === 0 ||
-      binding.import_receipt_digests.length === 0
-    ) {
-      throw new TypeError("parser runtime source binding identity is invalid");
-    }
-    canonicalUnique(binding.entry_digests, "source binding entry_digests");
-    canonicalUnique(binding.parser_lock_digests, "source binding parser_lock_digests");
-    canonicalUnique(binding.import_receipt_digests, "source binding import_receipt_digests");
-    canonicalUnique(binding.result_digests, "source binding result_digests");
     if (
       binding.import_receipt_digests.some((digest) => !importReceiptDigests.has(digest)) ||
       binding.result_digests.some((digest) => !resultDigests.has(digest))
     ) {
       throw new TypeError("parser runtime source binding escapes its execution receipt");
-    }
-    const { binding_digest: _digest, ...payload } = binding;
-    void _digest;
-    if (sourceBindingDigest(payload) !== binding.binding_digest) {
-      throw new TypeError("parser runtime source binding digest is invalid");
     }
   }
   const factViews = value.fact_views.map(validateIndexerParserFactView);
@@ -321,14 +347,8 @@ export function validateIndexerParserRuntimeExecutionReceipt(
   }
   for (const binding of sourceBindings) {
     const view = factViews.find((candidate) => factViewSourceKey(candidate) === sourceKey(binding));
-    if (
-      view === undefined ||
-      view.inventory_digest !== binding.source_identity_inventory.inventory_digest ||
-      canonicalIndexerJson(view.origin_result_digests) !==
-        canonicalIndexerJson(binding.result_digests)
-    ) {
-      throw new TypeError("parser runtime fact view does not match its source binding");
-    }
+    if (view === undefined) throw new TypeError("parser runtime Fact View is missing");
+    validateIndexerParserRuntimeSourceSlice({ source_binding: binding, fact_view: view });
   }
   const { execution_digest: _executionDigest, ...payload } = value;
   void _executionDigest;
@@ -361,14 +381,6 @@ function exactEntryInput(
       `${entry.capability} ${prepared ? "requires" : "does not accept"} prepared parser input`,
     );
   }
-}
-
-function entryRole(entry: IndexerParserExecutionPlanEntry): "primary-owner" | "enricher" {
-  const roles = new Set(entry.files.map((file) => file.role));
-  if (roles.size !== 1) {
-    throw new TypeError(`parser execution entry ${entry.capability} mixes owner roles`);
-  }
-  return entry.files[0]!.role;
 }
 
 function protectedAdapterOptions(options: Readonly<Record<string, unknown>>): void {
@@ -414,31 +426,6 @@ function uniqueByCapability<T extends { capability: string }>(
   return result;
 }
 
-function assertResultIdentity(input: {
-  result: IndexerEvidenceAdapterResult;
-  capability: string;
-  coordinate: IndexerParserResolutionLock["actual_coordinate"];
-  resolvedContentDigest: string;
-}): void {
-  const expected = {
-    id: input.capability,
-    package: input.coordinate.package,
-    export: input.coordinate.export,
-    version: input.coordinate.version,
-    digest: input.resolvedContentDigest,
-  };
-  if (canonicalIndexerJson(input.result.adapter) !== canonicalIndexerJson(expected)) {
-    throw new TypeError(`adapter Result identity does not match ${input.capability} lock`);
-  }
-  const first = input.result.toolchain[0]!;
-  if (
-    first.package !== expected.package || first.export !== expected.export ||
-    first.version !== expected.version || first.digest !== expected.digest
-  ) {
-    throw new TypeError(`adapter Result toolchain does not start from ${input.capability} lock`);
-  }
-}
-
 export async function executeProjectIndexerParserPlan(input: {
   projectRoot: string;
   profile_contract: IndexerProfileContract;
@@ -448,6 +435,7 @@ export async function executeProjectIndexerParserPlan(input: {
   mappings: readonly IndexerParserCoordinateMapping[];
   locks: readonly IndexerParserResolutionLock[];
   entry_inputs: readonly IndexerParserRuntimeEntryInput[];
+  previous_execution?: IndexerParserRuntimeExecutionReceipt;
 }): Promise<IndexerParserRuntimeExecutionReceipt> {
   const plan = validateIndexerParserExecutionPlan(input.execution_plan);
   if (plan.profile_contract_digest !== input.profile_contract.contract_digest) {
@@ -464,13 +452,26 @@ export async function executeProjectIndexerParserPlan(input: {
   if (entryInputs.size !== input.entry_inputs.length) {
     throw new TypeError("parser runtime entry inputs must be unique");
   }
+  const planEntryDigests = new Set(plan.entries.map(indexerParserExecutionEntryDigest));
+  const unexpectedInput = [...entryInputs.keys()].find((digest) => !planEntryDigests.has(digest));
+  if (unexpectedInput !== undefined) {
+    throw new TypeError("parser runtime input contains entries absent from the execution plan");
+  }
+  const reusableSources = collectReusableIndexerParserSources({
+    ...(input.previous_execution === undefined
+      ? {}
+      : { previous_execution: input.previous_execution }),
+    entries: plan.entries,
+    locks: input.locks,
+    profile_contract_digest: plan.profile_contract_digest,
+  });
   const imports: IndexerParserImportReceipt[] = [];
   const results: IndexerEvidenceAdapterResult[] = [];
   const executions: IndexerEvidenceAdapterExecution[] = [];
   const sourceExecutions: Array<{
     entry: IndexerParserExecutionPlanEntry;
     result: IndexerEvidenceAdapterResult;
-    materialization: {
+    materialization?: {
       result: IndexerEvidenceAdapterResult;
       fact_payloads: IndexerParserFactPayload[];
     };
@@ -479,6 +480,27 @@ export async function executeProjectIndexerParserPlan(input: {
 
   for (const entry of plan.entries) {
     const entryDigest = indexerParserExecutionEntryDigest(entry);
+    const reusedSource = reusableSources.get(sourceKey(entry));
+    const reused = reusedSource?.executions.find((candidate) =>
+      indexerParserExecutionEntryDigest(candidate.entry) === entryDigest
+    );
+    if (reused !== undefined) {
+      imports.push(reused.receipt);
+      results.push(reused.result);
+      sourceExecutions.push({
+        entry,
+        result: reused.result,
+        receipt: reused.receipt,
+      });
+      executions.push({
+        capability: entry.capability,
+        authority_domain: entry.authority_domain,
+        source_ref: entry.source_ref,
+        module_ref: entry.module_ref,
+        result: reused.result,
+      });
+      continue;
+    }
     const entryInput = entryInputs.get(entryDigest);
     if (entryInput === undefined) {
       throw new TypeError(`parser runtime lacks input for ${entry.capability} entry`);
@@ -512,17 +534,13 @@ export async function executeProjectIndexerParserPlan(input: {
         throw new TypeError("Rush project module refs must remain inside the execution entry");
       }
     }
-    const role = entryRole(entry);
+    const role = indexerParserEntryRole(entry);
     const moduleRefs = entry.module_ref === null ? [] : [entry.module_ref];
     const authorizedScope = {
       source_ref: entry.source_ref,
       module_refs: moduleRefs,
     };
-    const executionInputDigest = indexerProtocolDigest({
-      entry_digest: entryDigest,
-      parser_lock_digest: entry.parser_lock_digest,
-      source_content_digests: entry.files.map((file) => file.content_digest),
-    });
+    const executionInputDigest = indexerParserEntryExecutionInputDigest(entry);
     const capabilityAdapterOptions = entry.capability === "parser.sql"
       ? { dialects: {}, ...adapterOptions }
       : adapterOptions;
@@ -559,6 +577,7 @@ export async function executeProjectIndexerParserPlan(input: {
         value = await loaded.adapter(entryInput.prepared_input, {
           ...commonInvocation,
           module_ref: entry.module_ref,
+          source_files: entryInput.files,
         });
       } else {
         value = await loaded.adapter(entryInput.files, {
@@ -590,7 +609,7 @@ export async function executeProjectIndexerParserPlan(input: {
       result,
       fact_payloads: value.fact_payloads as IndexerParserFactPayload[],
     };
-    assertResultIdentity({
+    assertIndexerParserResultIdentity({
       result,
       capability: entry.capability,
       coordinate: lock.actual_coordinate,
@@ -612,9 +631,6 @@ export async function executeProjectIndexerParserPlan(input: {
       result,
     });
   }
-  if (entryInputs.size !== plan.entries.length) {
-    throw new TypeError("parser runtime input contains entries absent from the execution plan");
-  }
   const merge = mergeIndexerEvidenceAdapterExecutions({
     execution_plan: plan,
     executions,
@@ -622,9 +638,21 @@ export async function executeProjectIndexerParserPlan(input: {
   const sourceBindings = buildSourceBindings({ plan, merge, executions: sourceExecutions });
   const factViews = sourceBindings.map((binding) => {
     const key = sourceKey(binding);
+    const reused = reusableSources.get(key);
+    if (reused !== undefined) {
+      if (canonicalIndexerJson(reused.source_binding) !== canonicalIndexerJson(binding)) {
+        throw new TypeError("reusable parser source binding changed during global merge");
+      }
+      return reused.fact_view;
+    }
     const sourceMaterializations = sourceExecutions.filter(({ entry }) =>
       sourceKey(entry) === key
-    ).map(({ materialization }) => materialization);
+    ).map(({ materialization }) => {
+      if (materialization === undefined) {
+        throw new TypeError("changed parser source lacks a current materialization");
+      }
+      return materialization;
+    });
     return buildIndexerMergedParserFactView({
       materializations: sourceMaterializations,
       merged_facts: merge.facts.filter((fact) => sourceKey(fact.locator) === key),

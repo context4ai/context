@@ -1,5 +1,7 @@
-import { loadIndexerRegistry } from "@c4a/context";
+import { indexerProtocolDigest, loadIndexerRegistry } from "@c4a/context";
 import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
+import type { JsonValue, Route } from "@c4a/agent-graph";
+import { basename } from "node:path";
 import {
   buildIndexerAgentStepRoute,
   buildIndexerPostAuthorAgentStepRoute,
@@ -7,29 +9,22 @@ import {
 import { loadIndexerCustomization } from "./indexerCustomization.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
 import {
-  buildCurrentIndexerInstructionMaterializationRequest,
-} from "./indexerCurrentInstructionMaterialization.js";
-import {
   currentLedger,
   currentSpec,
 } from "./indexerMainRunStoreRecords.js";
-import { prepareProjectIndexerWorksetViewMaterialization } from "./indexerWorksetViewMaterialization.js";
 import {
   authorityCommandOptions,
   loadContextWorkflowProvider,
+  projectWorkflowRouteAction,
   projectWorkflowResourceLocation,
 } from "./workflow/workflowProvider.js";
-import {
-  currentIndexerStructureReview,
-  readPendingIndexerStructureFeedback,
-} from "./indexerStructureReview.js";
-import { CONTEXT_WORKFLOW_AUTHORITIES } from "./workflow/workflowTypes.js";
+import { currentIndexerStructureReview } from "./indexerStructureReview.js";
 import type {
   ContextResolvedWorkflowRoute,
   ContextWorkflowAuthority,
 } from "./workflow/workflowTypes.js";
 import { readCurrentIndexerFinalization } from "./indexerCurrentFinalization.js";
-import { readCurrentIndexerComposerContext } from "./indexerCurrentComposer.js";
+import { readCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import {
   buildCurrentIndexerProviderSelectionRoute,
   indexerRegistryNeedsProviderSelection,
@@ -38,24 +33,90 @@ import { buildCurrentIndexerProviderContinuationRoute } from
   "./indexerCurrentProviderContinuation.js";
 import { readProjectIndexerCandidateCompileStatus } from
   "./indexerCandidateCompileActions.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { ensureCurrentIndexerBatchDescriptor } from "./indexerCurrentBatch.js";
+import { hasChangedIndexerWorksetAuthority } from "./indexerCurrentRegistryFreshness.js";
 
 const OUTER_INDEXER_NODE = "run-indexer-lifecycle";
 const INDEXER_GRAPH_ID = "indexer";
 const CURRENT_INDEXER_ENTRY = "current-lifecycle";
+const CURRENT_ACTION_OUTPUT_SCHEMA_FILE = "indexer-agent-step-result.schema.json";
+
+function projectCurrentIndexerGateResolution(input: {
+  resolved: Route;
+  revision: string;
+  authorities: readonly ContextWorkflowAuthority[];
+  value: JsonValue;
+}): NonNullable<
+  NonNullable<ContextResolvedWorkflowRoute["gate"]>["resolution_action"]
+> {
+  const source = input.resolved.gate?.resolutionAction?.action;
+  if (source === undefined) {
+    throw new TypeError(
+      `current Indexer Gate ${input.resolved.node} has no Graph-owned resolution Action`,
+    );
+  }
+  if (source.runner !== "agent" || source.effect !== "write") {
+    throw new TypeError(
+      `current Indexer Gate ${input.resolved.node} must resolve through an Agent write Action`,
+    );
+  }
+  if (
+    source.outputSchema === undefined ||
+    !("filePath" in source.outputSchema) ||
+    source.outputSchema.filePath === undefined ||
+    basename(source.outputSchema.filePath) !== CURRENT_ACTION_OUTPUT_SCHEMA_FILE
+  ) {
+    throw new TypeError(
+      `current Indexer Gate ${input.resolved.node} must expose ${CURRENT_ACTION_OUTPUT_SCHEMA_FILE}`,
+    );
+  }
+  const projected = projectWorkflowRouteAction({
+    action: { ...source, input: input.value },
+    revision: input.revision,
+    authorities: input.authorities,
+  });
+  if (projected === undefined || projected.effect === "read") {
+    throw new TypeError(
+      `current Indexer Gate ${input.resolved.node} resolution Action is unavailable`,
+    );
+  }
+  return { ...projected, effect: source.effect };
+}
+
+function projectCurrentIndexerGate(
+  resolved: Route,
+  resolutionAction: NonNullable<
+    NonNullable<ContextResolvedWorkflowRoute["gate"]>["resolution_action"]
+  >,
+): NonNullable<ContextResolvedWorkflowRoute["gate"]> {
+  if (resolved.gate === undefined) {
+    throw new TypeError(`current Indexer node ${resolved.node} is not a Gate`);
+  }
+  return {
+    id: resolved.gate.id,
+    ...(resolved.gate.authority === undefined
+      ? {}
+      : { authority: resolved.gate.authority }),
+    delegatable: resolved.gate.delegatable === true,
+    resolution: resolved.gate.resolution,
+    resolution_action: resolutionAction,
+  };
+}
 
 async function resolveCurrentIndexerGraphNode(input: {
   projectRoot: string;
   authorities: readonly ContextWorkflowAuthority[];
 }) {
-  const [ledger, current, finalization, structure, compile] = await Promise.all([
+  const [ledger, finalization, structure, compile] = await Promise.all([
     currentLedger(input.projectRoot),
-    resolveCurrentIndexerAgentContext(input.projectRoot),
     readCurrentIndexerFinalization(input.projectRoot),
     currentIndexerStructureReview(input.projectRoot),
     readProjectIndexerCandidateCompileStatus(input.projectRoot),
   ]);
+  const runningEntries = ledger?.entries.filter((entry) => entry.state === "running") ?? [];
   const composer = finalization?.state === "composer-required"
-    ? await readCurrentIndexerComposerContext(input.projectRoot)
+    ? await readCurrentIndexerComposerBatch(input.projectRoot)
     : undefined;
   const failedEntry = ledger?.entries.find((entry) => entry.state === "failed");
   const blocked = failedEntry !== undefined || finalization?.state === "blocked" ||
@@ -63,12 +124,13 @@ async function resolveCurrentIndexerGraphNode(input: {
   const structureReviewRequired = structure !== undefined && !structure.approved;
   const layoutRequired = finalization?.state === "layout-confirmation-required";
   const candidateCurrent = compile.state === "current";
-  const advanceRequired = !blocked && current === undefined && composer === undefined &&
-    !structureReviewRequired && !layoutRequired && !candidateCurrent;
+  const authorityChanged = await hasChangedIndexerWorksetAuthority(input.projectRoot, ledger);
+  const advanceRequired = authorityChanged || (!blocked && runningEntries.length === 0 &&
+    composer === undefined && !structureReviewRequired && !layoutRequired && !candidateCurrent);
   const facts = {
     indexer_current: {
       advance_complete: !advanceRequired,
-      agent_complete: current === undefined,
+      agent_complete: runningEntries.length === 0,
       structure_review_complete: !structureReviewRequired,
       composer_complete: composer === undefined,
       blockers_clear: !blocked,
@@ -76,15 +138,27 @@ async function resolveCurrentIndexerGraphNode(input: {
     },
   };
   const provider = await loadContextWorkflowProvider();
-  const evaluated = evaluateGraph(provider, INDEXER_GRAPH_ID, CURRENT_INDEXER_ENTRY, {
-    facts,
-    authorities: [...input.authorities],
-    workspace: input.projectRoot,
-  });
+  const evaluated = await measureContextDebugOperation({
+    projectRoot: input.projectRoot,
+    operation: "agent-graph.evaluate",
+    counters: { graph_evaluate_count: 1 },
+    data: { graph: INDEXER_GRAPH_ID },
+  }, async () => evaluateGraph(provider, INDEXER_GRAPH_ID, CURRENT_INDEXER_ENTRY, {
+      facts,
+      authorities: [...input.authorities],
+      workspace: input.projectRoot,
+    }));
   const primary = evaluated.evaluation.primaryRoute;
   if (primary === undefined) {
     if (evaluated.evaluation.statusCode === "complete") {
-      return { node: "current-indexer-ready", current, composer, finalization, structure, failedEntry };
+      return {
+        node: "current-indexer-ready",
+        current: undefined,
+        composer,
+        finalization,
+        structure,
+        failedEntry,
+      };
     }
     throw new TypeError("current Indexer graph has no resolvable Route");
   }
@@ -96,7 +170,18 @@ async function resolveCurrentIndexerGraphNode(input: {
     { facts, authorities: [...input.authorities], workspace: input.projectRoot },
     evaluated.evaluation.revision,
   );
-  return { node: resolved.node, current, composer, finalization, structure, failedEntry };
+  const current = resolved.node === "run-current-indexer-agent"
+    ? await resolveCurrentIndexerAgentContext(input.projectRoot)
+    : undefined;
+  return {
+    node: resolved.node,
+    resolved,
+    current,
+    composer,
+    finalization,
+    structure,
+    failedEntry,
+  };
 }
 
 export async function resolveCurrentIndexerAgentContext(projectRoot: string) {
@@ -104,14 +189,18 @@ export async function resolveCurrentIndexerAgentContext(projectRoot: string) {
   if (ledger === undefined) return undefined;
   const running = ledger.entries.filter((entry) => entry.state === "running");
   if (running.length === 0) return undefined;
-  if (running.length !== 1) {
-    throw new TypeError("Indexer lifecycle must expose exactly one current Agent workset");
+  const descriptor = await ensureCurrentIndexerBatchDescriptor(projectRoot);
+  if (descriptor === undefined) {
+    throw new TypeError("Indexer lifecycle has running work without a current batch descriptor");
   }
-  const entry = running[0]!;
-  const spec = await currentSpec({
-    projectRoot,
-    request_digest: entry.execution_request_digest,
-  });
+  const specs = [];
+  for (const task of descriptor.tasks) {
+    specs.push(await currentSpec({
+      projectRoot,
+      request_digest: task.execution_request_digest,
+    }));
+  }
+  const spec = specs[0]!;
   const loaded = await loadIndexerRegistry(projectRoot);
   const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
     projectRoot,
@@ -125,37 +214,18 @@ export async function resolveCurrentIndexerAgentContext(projectRoot: string) {
     manifest: authority.manifest,
     providerIntegrity: authority.provider.integrity,
   });
-  const instructionRequest = buildCurrentIndexerInstructionMaterializationRequest({
-    authority,
-    customization,
-    requirementSetDigest: spec.request.workset.requirement_set_digest,
-    worksetDigest: spec.request.workset.workset_digest,
-  });
-  const structureFeedback = spec.request.workset.stage === "partition"
-    ? await readPendingIndexerStructureFeedback({
-        projectRoot,
-        request: spec.request,
-      })
-    : undefined;
-  const worksetView = await prepareProjectIndexerWorksetViewMaterialization({
-    projectRoot,
-    run_spec: spec,
-    ...(structureFeedback === undefined
-      ? {}
-      : { additional_projection_sources: [structureFeedback] }),
-  });
   return {
-    spec,
+    descriptor,
+    specs,
     authority,
     customization,
-    instructionRequest,
-    worksetView,
+    instructionRequest: descriptor.instruction_request,
   };
 }
 
 /**
- * Replace the workspace's coarse Indexer placeholder with the one current,
- * digest-bound Agent workset. Deterministic lifecycle setup remains owned by
+ * Replace the workspace's coarse Indexer placeholder with the current,
+ * digest-bound Agent batch. Deterministic lifecycle setup remains owned by
  * the CLI and is advanced separately; this projection never invents work.
  */
 export async function projectCurrentIndexerWorkflowRoute(input: {
@@ -179,14 +249,19 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       error !== null && typeof error === "object" && "code" in error &&
       error.code === "ENOENT"
     ) {
-      // The outer workspace graph owns initial Indexer configuration. Until
-      // that source file exists, keep its coarse lifecycle route instead of
-      // attempting to specialize a current workset from absent state.
-      return input.route;
+      // The outer Graph owns initial requirements. Expose its project edit
+      // explicitly so both run entrypoints stop before preparing any workset.
+      return {
+        ...input.route,
+        configuration: {
+          file: "src/indexers.yaml",
+          action: "Declare the confirmed knowledge requirements for the registered sources, with indexers: []. Then re-evaluate the workflow for Provider selection.",
+        },
+      };
     }
     throw error;
   }
-  if (indexerRegistryNeedsProviderSelection(loadedRegistry.registry)) {
+  if (await indexerRegistryNeedsProviderSelection(input.projectRoot, loadedRegistry.registry)) {
     return buildCurrentIndexerProviderSelectionRoute({
       projectRoot: input.projectRoot,
       registry: loadedRegistry.registry,
@@ -203,9 +278,20 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       throw new TypeError("current Indexer graph selected an unavailable Agent workset");
     }
     return (await buildIndexerAgentStepRoute({
-      run_request: selected.current.spec.request,
+      run_requests: selected.current.specs.map((spec) => spec.request),
       instruction_request: selected.current.instructionRequest,
-      workset_view_request: selected.current.worksetView.request,
+      workset_view_requests: selected.current.descriptor.tasks.map((task) =>
+        task.view_request
+      ),
+      ready_instruction: {
+        path: selected.current.descriptor.instruction_path,
+        digest: selected.current.descriptor.instruction_payload_digest,
+      },
+      ready_workset_views: selected.current.descriptor.tasks.map((task) => ({
+        resource_id: task.view_request.resource_id,
+        path: task.view_path,
+        digest: task.view_request.payload_digest,
+      })),
       workspaceRoot: input.projectRoot,
       authorities: input.authorities,
       managed: input.managed,
@@ -215,27 +301,22 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
     const composer = selected.composer;
     if (
       composer === undefined || selected.finalization?.state !== "composer-required" ||
-      composer.request.request_digest !== selected.finalization.revision
+      composer.batch_digest !== selected.finalization.revision
     ) {
       throw new TypeError("current Indexer graph selected an unavailable Composer workset");
     }
-      const customization = await loadIndexerCustomization({
-        workspaceRoot: input.projectRoot,
-        projectRef: input.projectRoot,
-        indexer: composer.authority.indexer,
-        manifest: composer.authority.manifest,
-        providerIntegrity: composer.authority.provider.integrity,
-      });
-      const instructionRequest = buildCurrentIndexerInstructionMaterializationRequest({
-        authority: composer.authority,
-        customization,
-        requirementSetDigest: composer.requirement_set_digest,
-        worksetDigest: composer.request.workset.workset_digest,
-        composerId: composer.composer.id,
-      });
       return (await buildIndexerPostAuthorAgentStepRoute({
-        fragment_request: composer.request,
-        instruction_request: instructionRequest,
+        fragment_requests: composer.tasks.map((task) => task.context.request),
+        instruction_request: composer.instruction_request,
+        ready_instruction: {
+          path: composer.instruction_path,
+          digest: composer.instruction_payload_digest,
+        },
+        ready_workset_views: composer.tasks.map((task) => ({
+          resource_id: `authorized-indexer-workset-view/${task.task_key}`,
+          path: task.view_path,
+          digest: task.context.request.primary_result_view.view_digest,
+        })),
         workspaceRoot: input.projectRoot,
         authorities: input.authorities,
         managed: input.managed,
@@ -243,47 +324,50 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
   }
   if (selected.node === "confirm-current-indexer-layout") {
       const finalization = selected.finalization;
-      if (finalization?.state !== "layout-confirmation-required") {
+      const resolved = selected.resolved;
+      if (
+        finalization?.state !== "layout-confirmation-required" ||
+        resolved === undefined
+      ) {
         throw new TypeError("current Indexer graph selected a stale layout Gate");
       }
       const authorityOptions = authorityCommandOptions(input.authorities, "workflow");
       const completion = `context${authorityOptions} action complete-current --revision '${finalization.revision}'${input.managed ? " --managed" : ""} --input - --format json`;
+      const resolutionAction = projectCurrentIndexerGateResolution({
+        resolved,
+        revision: finalization.revision,
+        authorities: input.authorities,
+        value: {
+          stage: "layout-confirmation",
+          change_reports: finalization.layout_transition?.change_reports ?? [],
+          ...(finalization.path_preparation === undefined ? {} : {
+            path_conflicts: finalization.path_preparation.conflicts,
+            path_selection: "Ask the user for distinct readable filenames. Submit paths with artifact_ref and output_path for every conflicting page (including any name kept unchanged). Do not rename unrelated pages.",
+          }),
+        },
+      });
       return {
         protocol: "context.workflow.route.v1",
-        id: "confirm-indexer-layout-change",
+        id: resolved.routeId,
         revision: finalization.revision,
-        node: "confirm-indexer-layout-change",
-        reason_code: "route.indexer.layout-confirmation-required",
-        availability: "requires-user",
+        node: resolved.node,
+        reason_code: resolved.reasonCode,
+        availability: resolved.availability,
         commands: [{
           command: completion,
           effect: "write",
           availability: "after-human-confirmation",
           managed_execution: "agent-required",
         }],
-        action: {
-          id: "confirm-indexer-layout-change",
-          runner: "command",
-          effect: "write",
-          handler: "context.confirm-indexer-layout-change/v1",
-          input: {
-            stage: "layout-confirmation",
-            change_reports: finalization.layout_transition?.change_reports ?? [],
-          },
-        },
         resources: { required: [], recommended: [] },
-        gate: {
-          id: "confirm-layout-change",
-          authority: "human",
-          delegatable: false,
-          resolution: "user",
-        },
+        gate: projectCurrentIndexerGate(resolved, resolutionAction),
         after_action: { evaluate: true },
       };
   }
   if (selected.node === "review-current-indexer-structure") {
       const structure = selected.structure;
-      if (structure === undefined || structure.approved) {
+      const resolved = selected.resolved;
+      if (structure === undefined || structure.approved || resolved === undefined) {
         throw new TypeError("current Indexer graph selected a stale semantic structure Gate");
       }
       const authorityOptions = authorityCommandOptions(input.authorities, "workflow");
@@ -303,36 +387,32 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
           output_schema: "context.indexer.semantic-structure-preview/v1",
         },
       }, structure.revision, input.authorities);
+      const resolutionAction = projectCurrentIndexerGateResolution({
+        resolved,
+        revision: structure.revision,
+        authorities: input.authorities,
+        value: {
+          stage: "structure-review",
+          preview_digest: structure.preview.preview_digest,
+        },
+      });
       return {
         protocol: "context.workflow.route.v1",
-        id: "review-indexer-semantic-structure",
+        id: resolved.routeId,
         revision: structure.revision,
-        node: "review-indexer-semantic-structure",
-        reason_code: "route.indexer.semantic-structure-review",
-        availability: input.managed ? "immediate" : "requires-user",
+        node: resolved.node,
+        reason_code: resolved.reasonCode,
+        availability: resolved.availability,
         commands: [{
           command: completion,
           effect: "write",
-          availability: input.managed ? "immediate" : "after-human-confirmation",
+          availability: resolved.availability === "requires-user"
+            ? "after-human-confirmation"
+            : "immediate",
           managed_execution: "agent-required",
         }],
-        action: {
-          id: "review-indexer-semantic-structure",
-          runner: "agent",
-          effect: "write",
-          handler: "context.review-indexer-semantic-structure/v1",
-          input: {
-            stage: "structure-review",
-            preview_digest: structure.preview.preview_digest,
-          },
-        },
         resources: { required: [location], recommended: [] },
-        gate: {
-          id: "indexer-semantic-structure-review",
-          authority: CONTEXT_WORKFLOW_AUTHORITIES.knowledgeReview,
-          delegatable: true,
-          resolution: input.managed ? "session-authority" : "user",
-        },
+        gate: projectCurrentIndexerGate(resolved, resolutionAction),
         after_action: { evaluate: true },
       };
   }
@@ -370,17 +450,57 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
   if (selected.node === "advance-current-indexer-lifecycle") {
     const authorityOptions = authorityCommandOptions(input.authorities, "workflow");
     return {
-      ...input.route,
+      protocol: "context.workflow.route.v1",
       id: "advance-current-indexer-lifecycle",
+      revision: input.route.revision,
       node: "advance-current-indexer-lifecycle",
       reason_code: "route.indexer.lifecycle-advance",
+      availability: "immediate",
       commands: [{
         command: `context --workflow-revision '${input.route.revision}'${authorityOptions} run${input.managed ? " --managed" : ""} --format json`,
         effect: "write",
         availability: "immediate",
         managed_execution: "automatic",
       }],
+      resources: { required: [], recommended: [] },
+      after_action: { evaluate: true },
     };
   }
   return input.route;
+}
+
+/**
+ * Resolve only the current Indexer subgraph. This is the hot-path projection
+ * used after a batch commit; it deliberately avoids rebuilding the outer
+ * workspace status. Returning undefined means the Indexer subgraph reached a
+ * stage boundary and the caller may perform one full workspace observation.
+ */
+export async function resolveCurrentIndexerWorkflowRoute(input: {
+  projectRoot: string;
+  authorities: readonly ContextWorkflowAuthority[];
+  managed: boolean;
+}): Promise<ContextResolvedWorkflowRoute | undefined> {
+  const triggerRevision = indexerProtocolDigest({
+    purpose: "current-indexer-route-trigger",
+    authorities: [...input.authorities].sort(),
+    managed: input.managed,
+  });
+  const trigger: ContextResolvedWorkflowRoute = {
+    protocol: "context.workflow.route.v1",
+    id: OUTER_INDEXER_NODE,
+    revision: triggerRevision,
+    node: OUTER_INDEXER_NODE,
+    reason_code: "route.indexer.lifecycle",
+    availability: "immediate",
+    commands: [],
+    resources: { required: [], recommended: [] },
+    after_action: { evaluate: true },
+  };
+  const route = await projectCurrentIndexerWorkflowRoute({ ...input, route: trigger });
+  if (
+    route === undefined ||
+    route.node === OUTER_INDEXER_NODE ||
+    route.node === "advance-current-indexer-lifecycle"
+  ) return undefined;
+  return route;
 }

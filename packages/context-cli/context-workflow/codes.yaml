@@ -33,6 +33,8 @@ codes:
   - { code: route.indexer.layout-confirmation-required, kind: route-reason, summary: Confirm the proposed knowledge layout change or reject it with revision feedback. }
   - { code: route.indexer.agent-step, kind: route-reason, summary: Run one digest-bound Indexer workset with the static Context Agent Action. }
   - { code: route.indexer.provider-configuration, kind: route-reason, summary: Configure an exact path-free Provider selection from currently visible Indexer Skills. }
+  - { code: route.indexer.provider-host-resolution-required, kind: route-reason, summary: Resolve the exact current Indexer Provider through its declared Host Action. }
+  - { code: route.indexer.provider-finalization-required, kind: route-reason, summary: Deterministically validate and apply the fully resolved current Indexer Provider selection. }
   - { code: route.indexer.markdown-capture-validation, kind: route-reason, summary: Require exact current document capture before discovering a semantic Markdown Provider. }
   - { code: route.indexer.markdown-provider-discovery, kind: route-reason, summary: Report visible Markdown Indexer Skills and build one capture-bound Provider route input. }
   - { code: route.indexer.markdown-provider-validation, kind: route-reason, summary: Revalidate the capture-bound selection and resolve it through the exact CLI or Host boundary. }

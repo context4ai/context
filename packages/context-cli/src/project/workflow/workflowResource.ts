@@ -33,13 +33,13 @@ import {
   CONTEXT_WORKFLOW_PROVIDER_ID,
   type ContextWorkflowAuthority,
 } from "./workflowTypes.js";
-import { readPackageVersion } from "../../lib/packageVersion.js";
 import { resolveCurrentIndexerAgentContext } from "../indexerCurrentWorkflowRoute.js";
 import { materializeCurrentIndexerInstructions } from
   "../indexerCurrentInstructionMaterialization.js";
-import { materializeIndexerWorksetViewHostAction } from "../indexerWorksetViewMaterialization.js";
+import { validateIndexerWorksetViewMaterializationRequest } from
+  "../indexerWorksetViewMaterialization.js";
 import { materializeCurrentIndexerStructurePreview } from "../indexerStructureReview.js";
-import { readCurrentIndexerComposerContext } from "../indexerCurrentComposer.js";
+import { readCurrentIndexerComposerBatch } from "../indexerCurrentComposer.js";
 import { loadIndexerCustomization } from "../indexerCustomization.js";
 import {
   canonicalIndexerJson,
@@ -47,6 +47,8 @@ import {
 } from "@c4a/context";
 import { atomicWriteFile } from "../../lib/atomicWrite.js";
 import { collectAllReviewCandidates } from "../reviewHtml.js";
+import { materializeCurrentReviewBatchSet } from "../reviewCurrentResource.js";
+import { measureContextDebugOperation } from "../debugTrace.js";
 
 export {
   CONTEXT_WORKFLOW_RESOURCE_IDS,
@@ -206,14 +208,14 @@ async function materializeCurrentIndexerResource(input: {
     const request = materialize.input.value as { composer_id?: unknown };
     const composer = request.composer_id === null || request.composer_id === undefined
       ? undefined
-      : await readCurrentIndexerComposerContext(input.projectRoot);
+      : await readCurrentIndexerComposerBatch(input.projectRoot);
     const current = composer === undefined
       ? await resolveCurrentIndexerAgentContext(input.projectRoot)
       : undefined;
     if (composer === undefined && current === undefined) {
       throw new TypeError("current Indexer Agent workset is no longer available");
     }
-    const authority = composer?.authority ?? current!.authority;
+    const authority = composer?.tasks[0]?.context.authority ?? current!.authority;
     const customization = composer === undefined
       ? current!.customization
       : await loadIndexerCustomization({
@@ -223,12 +225,16 @@ async function materializeCurrentIndexerResource(input: {
           manifest: authority.manifest,
           providerIntegrity: authority.provider.integrity,
         });
-    const value = await materializeCurrentIndexerInstructions({
-      request: materialize.input.value,
-      authority,
-      customization,
-      workspaceRoot: input.projectRoot,
-    });
+    const value = await measureContextDebugOperation({
+      projectRoot: input.projectRoot,
+      operation: "indexer.instructions-materialize",
+      counters: { instruction_materialize_count: 1 },
+    }, () => materializeCurrentIndexerInstructions({
+        request: materialize.input.value,
+        authority,
+        customization,
+        workspaceRoot: input.projectRoot,
+      }));
     const path = join(
       input.projectRoot,
       ".tmp",
@@ -261,11 +267,13 @@ async function materializeCurrentIndexerResource(input: {
       materialize.input.value.protocol === "context.indexer.layer-fragment-request/v1"
     ) {
       const request = validateIndexerPostAuthorFragmentRequest(materialize.input.value);
-      const current = await readCurrentIndexerComposerContext(input.projectRoot);
+      const current = await readCurrentIndexerComposerBatch(input.projectRoot);
+      const task = current?.tasks.find((candidate) =>
+        candidate.context.request.request_digest === request.request_digest
+      );
       if (
-        current === undefined ||
-        current.request.request_digest !== request.request_digest ||
-        current.request.primary_result_view.view_digest !==
+        task === undefined ||
+        task.context.request.primary_result_view.view_digest !==
           request.primary_result_view.view_digest
       ) {
         throw new TypeError("current Composer PrimaryResultView is stale");
@@ -296,27 +304,31 @@ async function materializeCurrentIndexerResource(input: {
     }
     const current = await resolveCurrentIndexerAgentContext(input.projectRoot);
     if (current === undefined) {
-      throw new TypeError("current Indexer Agent workset is no longer available");
+      throw new TypeError("current Indexer Agent batch is no longer available");
     }
-    const projected = await materializeIndexerWorksetViewHostAction({
-      request: materialize.input.value,
-      run_request: current.spec.request,
-      projection: current.worksetView.projection,
-      workspaceRoot: input.projectRoot,
-      adapter: "context-cli",
-      adapterVersion: readPackageVersion(),
-    });
+    const request = validateIndexerWorksetViewMaterializationRequest(
+      materialize.input.value,
+    );
+    const task = current.descriptor.tasks.find((candidate) =>
+      candidate.view_request.resource_id === input.resourceId
+    );
+    if (
+      task === undefined ||
+      task.view_request.request_digest !== request.request_digest
+    ) {
+      throw new TypeError("current Indexer Agent View is stale");
+    }
     return {
       protocol: "context.workflow.resource.v1",
       id: input.resourceId,
-      revision: input.currentResource.revision ?? current.worksetView.request.request_digest,
-      digest: projected.managed_output.digest,
+      revision: input.currentResource.revision ?? request.request_digest,
+      digest: request.payload_digest,
       media_type: "application/json",
-      path: projected.managed_output.file_path,
+      path: task.view_path,
       next_action: {
         kind: "read_resource_file",
-        path: projected.managed_output.file_path,
-        message: "Read the complete authorized workset View, then complete the current Agent action.",
+        path: task.view_path,
+        message: "Read the complete authorized task View, then complete the current Agent batch.",
         command: input.nextCommand,
       },
     };
@@ -330,46 +342,21 @@ async function materializeCurrentReview(input: {
   nextCommand: string;
 }): Promise<ContextWorkflowResourceResult> {
   const candidates = await collectAllReviewCandidates(input.projectRoot);
-  const sections = candidates.flatMap(({ record }, index) => [
-    `## ${index + 1}. ${record.review.title}`,
-    "",
-    record.review.behavior_summary ?? record.review.summary,
-    "",
-    ...record.indexer_candidate.sections.flatMap((section) => [
-      `### ${section.section_key}`,
-      "",
-      section.markdown,
-      "",
-    ]),
-  ]);
-  const content = [
-    "# Current knowledge candidates",
-    "",
-    "Read every candidate below as reader-facing knowledge before approving this batch.",
-    "Internal evidence identifiers and hashes are intentionally omitted.",
-    "",
-    ...sections,
-  ].join("\n");
-  const digest = digestText(content);
-  const path = join(
-    input.projectRoot,
-    ".tmp",
-    "context-runtime",
-    "review",
-    `current-${digest.slice("sha256:".length)}.md`,
-  );
-  await atomicWriteFile(path, `${content}\n`);
+  const materialized = await materializeCurrentReviewBatchSet({
+    projectRoot: input.projectRoot,
+    candidates,
+  });
   return {
     protocol: "context.workflow.resource.v1",
     id: "context.review-current",
     revision: input.revision,
-    digest,
+    digest: materialized.digest,
     media_type: "text/markdown",
-    path,
+    path: materialized.path,
     next_action: {
       kind: "read_resource_file",
-      path,
-      message: "Read the complete reader-facing Candidate batch before resolving the final Review gate.",
+      path: materialized.path,
+      message: `Read the Review index and all ${materialized.batch_count} reader-facing batch files before resolving the final Review gate.`,
       command: input.nextCommand,
     },
   };

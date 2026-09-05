@@ -339,12 +339,15 @@ async function preparedInput(input: {
       extractSymbolsInScope: (entries: unknown[], paths: string[], fs: unknown) => Promise<unknown>;
     })();
     const manifestPath = "package.json";
-    const manifest = {
-      type: "package.json",
-      path: manifestPath,
-      content: await fs.readJson(manifestPath),
-    };
-    const detected = await plugin.detectEntries(manifest, fs);
+    // Component/source subdirectories need no package manifest. Do not probe
+    // parent directories or promote their local exports to package-public APIs.
+    const detected = await fs.exists(manifestPath)
+      ? await plugin.detectEntries({
+        type: "package.json",
+        path: manifestPath,
+        content: await fs.readJson(manifestPath),
+      }, fs)
+      : { entries: [] };
     const allowed = new Set(input.scopedPaths);
     return plugin.extractSymbolsInScope(
       detected.entries.filter((entry) => allowed.has(entry.path)),

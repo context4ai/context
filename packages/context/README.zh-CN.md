@@ -52,8 +52,9 @@ export default defineProject({
 });
 ```
 
-Context 生命周期负责发现或更新 `src/indexers.yaml`、运行选中的 Provider、展示可读
-Candidate 供审核、只写入批准后的知识，最后构建声明的知识包。
+Context 生命周期负责发现或更新 `src/indexers.yaml`，以有界批次运行彼此独立、可恢复
+的语义任务，展示可读 Candidate 供审核，只写入批准后的知识，最后构建声明的知识包。
+批次标识和运行耗时不会进入知识身份或知识包产物。
 
 ## 主要 API
 
@@ -78,8 +79,8 @@ Indexer Provider 的实现依赖，工作区不再把它们包装成项目阶段
 批准后的知识位于 `knowledge/<collection>/`，目录和文件名面向人阅读，例如：
 
 ```text
-knowledge/codeindex/tux-web/avatar.md
-knowledge/architecture/tux-official-docs/react-lynx-input-fields.md
+knowledge/codeindex/ui-kit/avatar.md
+knowledge/architecture/product-guides/component-input-fields.md
 ```
 
 工作区页面只保留后续重建或更新所需的元数据。`dist/` 中的知识包页面使用更小的
@@ -104,4 +105,3 @@ knowledge/architecture/tux-official-docs/react-lynx-input-fields.md
 - [Indexer Provider 协议](./docs/reference/indexer-provider-protocol.md)
 - [知识包输出](./docs/guides/package-outputs.md)
 - [知识包模板](./docs/reference/package-templates.md)
-

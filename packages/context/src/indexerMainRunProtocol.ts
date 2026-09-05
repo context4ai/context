@@ -293,6 +293,7 @@ export function validateIndexerMainRunResult(input: {
       workset: request.workset as IndexerMainAuthorWorkset,
       run_envelope: runEnvelope,
       dependency_view: input.validation.dependency_view,
+      composition_input: request.composition_input,
       ...(input.validation.authorized_evidence_targets === undefined
         ? {}
         : {

@@ -19,6 +19,7 @@ import {
   type BuildCommittedEvidenceIndexResult,
 } from "./documentEvidenceIndex.js";
 import {
+  buildCapturedDocumentEnrichmentWorksetViewSource,
   buildCapturedDocumentWorksetViewSource,
   capturedDocumentIndexerRef,
 } from "./indexerWorksetEvidenceProjection.js";
@@ -27,8 +28,14 @@ import {
   type IndexerParserRuntimeExecutionReceipt,
   type IndexerParserRuntimeSourceBinding,
 } from "./indexerParserRuntimeExecution.js";
-import { ensureCurrentProjectIndexerParserExecution } from
+import { ensureCurrentProjectIndexerParserSourceSlice, ensureCurrentProjectIndexerParserSourceIdentity } from
   "./indexerParserCurrentExecution.js";
+import {
+  validateIndexerConsumerWorksetProjection,
+  type IndexerConsumerWorksetProjection,
+} from "./indexerConsumerWorksetPlanner.js";
+import type { IndexerParserSourceSelection } from "./indexerParserRuntimeIndex.js";
+import { buildProjectIndexerAuthorSourceText } from "./indexerAuthorSourceText.js";
 
 interface ProjectIndexerMainSourceBindingBase {
   source_ref: string;
@@ -44,7 +51,6 @@ interface ProjectIndexerMainSourceBindingBase {
 export interface ProjectIndexerParserFactsSourceBinding
   extends ProjectIndexerMainSourceBindingBase {
   adapter: "parser-facts";
-  execution: IndexerParserRuntimeExecutionReceipt;
   parser_binding: IndexerParserRuntimeSourceBinding;
   parser_fact_view: IndexerParserFactView;
   parser_fact_index: ReadonlyMap<string, {
@@ -244,6 +250,18 @@ async function capturedDocumentsBinding(input: {
   };
 }
 
+export async function resolveProjectIndexerMainSourceIdentity(input: {
+  projectRoot: string;
+  indexer_id: string;
+  source_ref: string;
+  module_ref: string | null;
+  profile_contract_digest: string;
+}): Promise<IndexerSourceIdentityInventory> {
+  return capturedDocumentCoordinates(input.source_ref) !== null
+    ? (await capturedDocumentsBinding(input)).source_identity_inventory
+    : ensureCurrentProjectIndexerParserSourceIdentity(input);
+}
+
 export async function resolveProjectIndexerMainSourceBinding(input: {
   projectRoot: string;
   indexer_id: unknown;
@@ -251,6 +269,7 @@ export async function resolveProjectIndexerMainSourceBinding(input: {
   module_ref: unknown;
   profile_contract_digest: unknown;
   parser_execution?: IndexerParserRuntimeExecutionReceipt;
+  parser_selection?: IndexerParserSourceSelection;
 }): Promise<ProjectIndexerMainSourceBinding> {
   const currentIndexerId = requiredText(input.indexer_id, "main Indexer indexer_id");
   const sourceRef = requiredText(input.source_ref, "main Indexer source_ref");
@@ -267,31 +286,44 @@ export async function resolveProjectIndexerMainSourceBinding(input: {
       profile_contract_digest: profileContractDigest,
     });
   }
-  const execution = input.parser_execution ??
-    await ensureCurrentProjectIndexerParserExecution({
+  const slice = input.parser_execution === undefined
+    ? await ensureCurrentProjectIndexerParserSourceSlice({
       projectRoot: input.projectRoot,
       indexer_id: currentIndexerId,
-    });
-  if (execution.profile_contract_digest !== profileContractDigest) {
-    throw new TypeError("main Indexer source targets another parser profile contract");
-  }
-  const binding = parserSourceBinding({
-    execution,
-    source_ref: sourceRef,
-    module_ref: sourceModuleRef,
-  });
-  const factView = parserFactView({ execution, binding });
+      source_ref: sourceRef,
+      module_ref: sourceModuleRef,
+      profile_contract_digest: profileContractDigest,
+      ...(input.parser_selection === undefined ? {} : { selection: input.parser_selection }),
+    })
+    : (() => {
+        if (input.parser_execution!.profile_contract_digest !== profileContractDigest) {
+          throw new TypeError("main Indexer source targets another parser profile contract");
+        }
+        const sourceBinding = parserSourceBinding({
+          execution: input.parser_execution!,
+          source_ref: sourceRef,
+          module_ref: sourceModuleRef,
+        });
+        return {
+          source_binding: sourceBinding,
+          fact_view: parserFactView({
+            execution: input.parser_execution!,
+            binding: sourceBinding,
+          }),
+        };
+      })();
+  const binding = slice.source_binding;
+  const factView = slice.fact_view;
   return {
     adapter: "parser-facts",
     source_ref: sourceRef,
     module_ref: sourceModuleRef,
-    profile_contract_digest: execution.profile_contract_digest,
+    profile_contract_digest: profileContractDigest,
     source_binding_digest: binding.binding_digest,
     source_snapshot_digest: binding.source_identity_inventory.source_input_digest,
     partition_inventory: buildIndexerPartitionInventoryFromParserFactView(factView),
     partition_input_digests: parserBindingInputDigests(binding),
     source_identity_inventory: binding.source_identity_inventory,
-    execution,
     parser_binding: binding,
     parser_fact_view: factView,
     parser_fact_index: parserFactIndex(factView),
@@ -333,8 +365,11 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
   request: unknown;
   binding: ProjectIndexerMainSourceBinding;
   dependency_view?: unknown;
+  registry?: unknown;
+  supplementary?: boolean;
   author_inventory_members?: readonly IndexerInventoryMember[];
   partition_inventory_members?: readonly IndexerInventoryMember[];
+  partition_projection?: unknown;
 }): Promise<IndexerAuthorizedWorksetViewSource[]> {
   if (input.binding.adapter === "parser-facts") {
     const binding = input.binding;
@@ -348,52 +383,67 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
     if (request.workset.stage === "author" && dependencyView === null) {
       throw new TypeError("author workset requires its exact dependency view");
     }
+    if (request.workset.stage === "partition" && input.partition_projection === undefined) {
+      throw new TypeError("partition workset requires its consumer projection");
+    }
     if (dependencyView !== null) {
       if (request.workset.stage !== "author") {
         throw new TypeError("partition workset cannot carry an author dependency view");
       }
       if (
         dependencyView.view_digest !== request.workset.group_dependency_view_digest ||
+        dependencyView.logical_unit_ref !== request.workset.logical_unit_ref ||
         dependencyView.source_ref !== request.workset.source_ref ||
-        dependencyView.module_ref !== request.workset.module_ref ||
-        dependencyView.logical_unit_ref !== request.workset.logical_unit_ref
+        dependencyView.module_ref !== request.workset.module_ref
       ) {
         throw new TypeError("author dependency view does not match the current workset");
       }
+      if (
+        input.supplementary === true &&
+        !dependencyView.positive_nodes.some((node) =>
+          node.kind === "source-span" && node.source_ref === binding.source_ref &&
+          node.module_ref === binding.module_ref
+        )
+      ) {
+        throw new TypeError("supplementary source is absent from the author dependency view");
+      }
     }
-    const partitionMemberIds = new Set(
-      input.partition_inventory_members === undefined
-        ? []
-        : canonicalIndexerInventoryMembers(input.partition_inventory_members)
-          .map((member) => member.member_id),
-    );
-    const selectedFactRefs = dependencyView === null
-      ? input.partition_inventory_members === undefined
-        ? [...binding.parser_fact_index.keys()]
-        : [...binding.parser_fact_index.keys()].filter((factRef) =>
-            partitionMemberIds.has(factRef)
-          )
+    const partitionProjection: IndexerConsumerWorksetProjection | null =
+      request.workset.stage === "partition"
+        ? validateIndexerConsumerWorksetProjection({
+            value: input.partition_projection,
+            factView: binding.parser_fact_view,
+            inventory: input.partition_inventory_members ?? [],
+          })
+        : null;
+    const selectedFactItems = (dependencyView === null
+      ? partitionProjection!.fact_items.filter((item) =>
+          partitionProjection!.unresolved || item.role === "consumer-anchor"
+        )
       : dependencyView.positive_nodes.flatMap((node) =>
-        node.kind === "selected-fact" ? [node.fact_ref] : []
-      );
-    const selectedFacts = selectedFactRefs.map((factRef) => {
+        node.kind === "selected-fact"
+          ? [{ fact_ref: node.fact_ref, role: "supporting-fact" as const }]
+          : []
+      )).filter((item) => binding.parser_fact_index.has(item.fact_ref));
+    const selectedFacts = selectedFactItems.map((item) => {
+      const factRef = item.fact_ref;
       const indexed = binding.parser_fact_index.get(factRef);
       if (indexed === undefined) {
-        throw new TypeError(`author dependency view selects an unknown parser Fact: ${factRef}`);
+        throw new TypeError(`source projection selects an unknown parser Fact: ${factRef}`);
       }
-      return indexed;
+      return { ...indexed, role: item.role };
     });
-    const authorMemberIds = new Set(
-      input.author_inventory_members === undefined
-        ? []
-        : canonicalIndexerInventoryMembers(input.author_inventory_members)
-          .map((member) => member.member_id),
-    );
+    const authorSourcePaths = new Set(dependencyView?.positive_nodes.flatMap((node) =>
+      node.kind === "source-span" && node.source_ref === binding.source_ref &&
+          node.module_ref === binding.module_ref
+        ? [node.locator.path]
+        : []
+    ) ?? []);
+    const partitionFileRefs = new Set(partitionProjection?.file_refs ?? []);
     const selectedFileDescriptors = binding.parser_fact_view.files.filter((file) =>
       request.workset.stage === "partition"
-        ? input.partition_inventory_members === undefined ||
-          partitionMemberIds.has(file.file_ref)
-        : file.facts.length === 0 && authorMemberIds.has(file.file_ref)
+        ? partitionFileRefs.has(file.file_ref)
+        : file.facts.length === 0 && authorSourcePaths.has(file.normalized_path)
     );
     const sources = [buildIndexerAuthorizedWorksetViewSource({
       request,
@@ -402,9 +452,9 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
         ? [binding.parser_fact_view.view_digest]
         : [dependencyView.view_digest],
       items: [
-        ...selectedFacts.map(({ file_ref, fact }) => ({
+        ...selectedFacts.map(({ file_ref, fact, role }) => ({
           ref: fact.fact_ref,
-          category: "fact",
+          category: request.workset.stage === "author" ? "fact" : role,
           provenance: {
             protocol: binding.parser_fact_view.protocol,
             digest: dependencyView?.view_digest ?? binding.parser_fact_view.view_digest,
@@ -419,11 +469,24 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
             protocol: binding.parser_fact_view.protocol,
             digest: dependencyView?.view_digest ?? binding.parser_fact_view.view_digest,
           },
-          value: file,
+          value: {
+            file_ref: file.file_ref,
+            source_ref: file.source_ref,
+            module_ref: file.module_ref,
+            normalized_path: file.normalized_path,
+            disposition: file.disposition,
+            fact_count: file.facts.length,
+          },
         })),
       ],
     })];
     if (dependencyView !== null) {
+      sources.push(await buildProjectIndexerAuthorSourceText({
+        projectRoot: input.projectRoot, request, indexer_id: request.workset.indexer_id,
+        registry: input.registry, binding, dependency_view: dependencyView,
+      }));
+    }
+    if (dependencyView !== null && input.supplementary !== true) {
       sources.push(buildIndexerAuthorDependencyWorksetViewSource({
         request,
         dependency_view: dependencyView,
@@ -438,13 +501,22 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
     }),
     document.path,
   ]));
-  const scopedDocumentMembers = input.author_inventory_members ??
-    input.partition_inventory_members;
-  const authorizedDocumentPaths = scopedDocumentMembers === undefined
+  const dependencyView = input.dependency_view === undefined
+    ? null
+    : validateIndexerAuthorDependencyView(input.dependency_view);
+  const scopedDocumentMembers = input.partition_inventory_members;
+  const authorizedDocumentPaths = dependencyView !== null
+    ? dependencyView.positive_nodes.flatMap((node) =>
+        node.kind === "source-span" && node.source_ref === input.binding.source_ref &&
+            node.module_ref === null
+          ? [node.locator.path]
+          : []
+      )
+    : scopedDocumentMembers === undefined
     ? input.binding.authorized_document_paths
     : canonicalIndexerInventoryMembers(scopedDocumentMembers).map((member) => {
         if (member.member_kind !== "document") {
-          throw new TypeError("captured document author inventory contains a non-document member");
+          throw new TypeError("captured document partition inventory contains a non-document member");
         }
         const path = documentsByRef.get(member.member_id);
         if (path === undefined) {
@@ -452,13 +524,25 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
         }
         return path;
       });
-  const sources = [await buildCapturedDocumentWorksetViewSource({
-    projectRoot: input.projectRoot,
-    request: input.request,
-    evidence: input.binding.evidence,
-    authorized_document_paths: authorizedDocumentPaths,
-  })];
-  if (input.dependency_view !== undefined) {
+  if (authorizedDocumentPaths.length === 0) {
+    throw new TypeError("captured document source has no dependency spans in the author workset");
+  }
+  const source = input.supplementary === true
+    ? await buildCapturedDocumentEnrichmentWorksetViewSource({
+        projectRoot: input.projectRoot,
+        request: input.request,
+        registry: input.registry,
+        evidence: input.binding.evidence,
+        authorized_document_paths: authorizedDocumentPaths,
+      })
+    : await buildCapturedDocumentWorksetViewSource({
+        projectRoot: input.projectRoot,
+        request: input.request,
+        evidence: input.binding.evidence,
+        authorized_document_paths: authorizedDocumentPaths,
+      });
+  const sources = [source];
+  if (input.dependency_view !== undefined && input.supplementary !== true) {
     sources.push(buildIndexerAuthorDependencyWorksetViewSource({
       request: input.request,
       dependency_view: input.dependency_view,

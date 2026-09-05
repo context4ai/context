@@ -5,9 +5,7 @@ import {
   type IndexerProfileContract,
 } from "@c4a/context";
 import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
-import { ensureCurrentProjectIndexerParserExecution } from
-  "./indexerParserCurrentExecution.js";
-import { resolveProjectIndexerMainSourceBinding } from
+import { resolveProjectIndexerMainSourceIdentity } from
   "./indexerMainSourceAdapter.js";
 import {
   assertCurrentRequirement,
@@ -97,7 +95,7 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
   );
   const profileContract = bundledIndexerProfileContract();
   const bindingCache = new Map<string, Awaited<ReturnType<
-    typeof resolveProjectIndexerMainSourceBinding
+    typeof resolveProjectIndexerMainSourceIdentity
   >>>();
   const profileById = new Map(profileContract.profiles.map((profile) => [profile.id, profile]));
   const schemaByProfile = new Map(
@@ -106,17 +104,6 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
   const currentOwners = ownerCells(registry).filter((owner) =>
     !(owner.owner_indexer_ids.length === 0 && owner.obligation === "optional")
   );
-  const parserExecutionByIndexer = new Map<string, Awaited<ReturnType<
-    typeof ensureCurrentProjectIndexerParserExecution
-  >>>();
-  await Promise.all([...new Set(currentOwners.flatMap((owner) =>
-    owner.source_ref.startsWith("repo:") ? owner.owner_indexer_ids : []
-  ))].map(async (indexerId) => {
-    parserExecutionByIndexer.set(indexerId, await ensureCurrentProjectIndexerParserExecution({
-      projectRoot: input.projectRoot,
-      indexer_id: indexerId,
-    }));
-  }));
   const sourceInventoryDigests = new Set<string>();
   const items: Array<
     Parameters<typeof buildIndexerQuestionTargetInventory>[0]["items"][number]
@@ -147,22 +134,19 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
     const bindingKey = [currentIndexer.id, owner.source_ref, owner.module_ref ?? ""].join("\u0000");
     let binding = bindingCache.get(bindingKey);
     if (binding === undefined) {
-      binding = await resolveProjectIndexerMainSourceBinding({
+      binding = await resolveProjectIndexerMainSourceIdentity({
         projectRoot: input.projectRoot,
         indexer_id: currentIndexer.id,
         source_ref: owner.source_ref,
         module_ref: owner.module_ref,
         profile_contract_digest: profileContract.contract_digest,
-        ...(parserExecutionByIndexer.get(currentIndexer.id) === undefined
-          ? {}
-          : { parser_execution: parserExecutionByIndexer.get(currentIndexer.id)! }),
       });
       bindingCache.set(bindingKey, binding);
     }
-    sourceInventoryDigests.add(binding.source_identity_inventory.inventory_digest);
+    sourceInventoryDigests.add(binding.inventory_digest);
     const targetFiles = targetDomain.granularity === "module"
       ? [null]
-      : binding.source_identity_inventory.files;
+      : binding.files;
     for (const targetFile of targetFiles) {
       const subjectKey = questionTargetSubjectKey({
         profile_contract: profileContract,
@@ -173,11 +157,11 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
         normalized_path: targetFile?.normalized_path ?? null,
       });
       const factSliceDigest = targetFile === null
-        ? binding.source_identity_inventory.inventory_digest
+        ? binding.inventory_digest
         : buildIndexerSourceIdentityInventory({
-            source_ref: binding.source_identity_inventory.source_ref,
-            module_ref: binding.source_identity_inventory.module_ref,
-            source_input_digest: binding.source_identity_inventory.source_input_digest,
+            source_ref: binding.source_ref,
+            module_ref: binding.module_ref,
+            source_input_digest: binding.source_input_digest,
             files: [targetFile],
           }).inventory_digest;
       items.push({

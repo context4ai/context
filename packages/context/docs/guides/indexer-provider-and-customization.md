@@ -12,27 +12,38 @@ authority. A Provider-only project does not create `src/indexer/`.
 
 ## Selection flow
 
+Follow `workflow.current` from `context status --format json` or `context run`.
+When the registry is missing, the Route names `src/indexers.yaml` in
+`configuration`: declare the confirmed requirements with `indexers: []`, then
+re-evaluate. The next Route supplies the Provider selection input and completion
+command. An unconfigured project does not begin Partition or require a fabricated
+primary owner. `run --managed --until blocked-or-complete` stops at the same
+configuration or semantic input boundary; it does not make those decisions.
+
 1. Inspect and confirm the complete `IndexRequirementSet`. A Provider,
    registry entry or Result may strengthen it but cannot remove targets,
    questions, evidence obligations or required owner cells.
-2. Run `context indexer catalog --format json` and report those CLI-bundled
-   entry Skills together with Indexer Skills already visible to the Host.
-   When the Host exposes an exact Skill root, read only its `SKILL.md`
-   frontmatter and sibling `context-indexer.yaml`; the manifest version is
-   authoritative and `metadata.context-provider-version` must match it. Group
-   the same Skill name and exact version into one conversational item with all
-   observed source types. An installed projection of an identical CLI-bundled
-   identity is not a second Provider; different versions remain distinct. Do
-   not scan `.claude`, `.codex`, `.agents` or arbitrary user directories.
-3. Route the path-free visible identities with
-   `context indexer route-indexer-provider-selection`. Try the applicable
-   community fallback once when the Route requests it.
-4. Statically validate the returned selection proposal before a Host resolves
-   any Bundle. Resolve only the emitted exact requests, then stage and validate
-   the complete content ledger.
-5. Apply the registry and any declared customization through the staged,
-   CAS-bound project proposal. A successful static report is not write or
-   execution authority.
+2. Select applicable Providers from the Host-visible Skills and the CLI-bundled
+   catalog already in the current Action input. No separate catalog command,
+   installed-Skill inventory, discovery report, or discovery-only confirmation
+   is required. Use the supplied exact identity and cli-bundled distribution
+   for shipped Providers, even when their Skills are also visible to the Host.
+   For a relevant external Skill, read only its exact Host-exposed frontmatter
+   and sibling `context-indexer.yaml` needed for selection. Do not guess versions
+   or scan `.claude`, `.codex`, `.agents` or arbitrary user directories. Different
+   versions remain distinct; discovery order is not selection precedence.
+3. Submit the semantic `indexers` and any relevant non-CLI `host_visible_skills`
+   through the current Route's `context action complete-current` command. The
+   latter may be empty; it is not an inventory or an additional discovery step.
+4. The CLI performs routing, validation, resolution and staging internally.
+   Shipped Providers load directly from this CLI release; only external
+   Providers may require the returned Host resolution Action. Follow the
+   current Route if a distribution is missing, a version conflicts, or program
+   execution needs authorization. Do not call the low-level commands below as
+   a second production workflow.
+5. The CLI atomically applies the validated registry and any declared
+   customization. A successful static report alone is not write or execution
+   authority. Resume from the returned current Route.
 
 Every required requirement/domain/source/module cell has exactly one primary
 owner. Read scope may overlap for supporting profiles, extensions and
@@ -97,8 +108,9 @@ These outcomes all point back to this guide:
 
 ## Debugging commands
 
-Use `--help` for the current payload schema and copy Route-returned commands
-when available:
+These are diagnostic/manual primitives, not a checklist for normal selection.
+Use them only for an explicit diagnostic or a returned recovery. Use `--help`
+for the current payload schema and prefer Route-returned commands:
 
 ```bash
 context indexer catalog --format json

@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: authorize-current-indexer-provider-program
+runner: agent
+effect: external
+skill: skills/authorize-current-indexer-provider-program/SKILL.md
+outputSchema: schemas/indexer-agent-step-result.schema.json

@@ -355,21 +355,45 @@ export function startIndexerMainRun(input: {
   ledger: unknown;
   workset_digest: string;
 }): IndexerMainRunLedger {
+  return startIndexerMainRuns({
+    ledger: input.ledger,
+    workset_digests: [input.workset_digest],
+  });
+}
+
+export function startIndexerMainRuns(input: {
+  ledger: unknown;
+  workset_digests: readonly string[];
+}): IndexerMainRunLedger {
   const ledger = validateIndexerMainRunLedger(input.ledger);
-  return replaceEntry({
-    ledger,
-    workset_digest: input.workset_digest,
-    replace: (entry) => {
-      if (entry.state !== "pending" && entry.state !== "stale") {
-        throw new TypeError("only pending or stale main work may start");
-      }
+  if (input.workset_digests.length === 0) {
+    throw new TypeError("main run batch must contain at least one workset");
+  }
+  const requested = new Set(input.workset_digests);
+  if (requested.size !== input.workset_digests.length) {
+    throw new TypeError("main run batch contains duplicate worksets");
+  }
+  const selected = ledger.entries.filter((entry) => requested.has(entry.workset_digest));
+  if (selected.length !== requested.size) {
+    throw new TypeError("main run ledger has no requested workset");
+  }
+  if (new Set(selected.map((entry) => entry.stage)).size !== 1) {
+    throw new TypeError("main run batch must contain one stage");
+  }
+  if (selected.some((entry) => entry.state !== "pending" && entry.state !== "stale")) {
+    throw new TypeError("only pending or stale main work may start");
+  }
+  return buildLedger({
+    workset_set: ledger.workset_set,
+    entries: ledger.entries.map((entry) => {
+      if (!requested.has(entry.workset_digest)) return entry;
       const clean = Object.fromEntries(Object.entries(entry).filter(([key]) =>
         key !== "state" &&
         key !== "previous_workset_digest" &&
         key !== "previous_execution_request_digest"
       ));
       return { ...clean, state: "running" } as IndexerMainRunLedgerEntry;
-    },
+    }),
   });
 }
 

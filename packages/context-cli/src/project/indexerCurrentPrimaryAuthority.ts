@@ -11,6 +11,9 @@ import {
   type IndexerRegistryEntry,
   type ResolvedProviderBundle,
 } from "@c4a/context";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ContextError } from "../lib/errors.js";
+import { ExitCode } from "../types/exitCode.js";
 import {
   defaultCliIndexerAssetsRoot,
   listCliBundledIndexers,
@@ -42,6 +45,15 @@ export interface CurrentIndexerProviderLayerAuthority {
   staged?: StagedIndexerProviderBundle | undefined;
 }
 
+function bundledProviderIdentity(input: {
+  skill: string;
+  version: string;
+  integrity: string;
+  distribution: { kind: string; locator: string };
+}): string {
+  return `${input.skill}@${input.version} (integrity ${input.integrity}; ${input.distribution.kind} ${input.distribution.locator})`;
+}
+
 async function resolveBundledPrimary(input: {
   indexer: IndexerRegistryEntry;
   provider: IndexerRegistryEntry["providers"][number];
@@ -67,8 +79,25 @@ async function resolveBundledPrimary(input: {
   );
   const releaseBundle = releaseBundles[0];
   if (selected === undefined || releaseBundle === undefined || releaseBundles.length !== 1) {
-    throw new TypeError(
-      `Indexer ${input.indexer.id} primary Provider is absent from this exact CLI release`,
+    const available = catalog.bundles
+      .filter((candidate) => candidate.skill === input.provider.skill)
+      .map(bundledProviderIdentity);
+    const reason = selected === undefined
+      ? "the bundle catalog has no exact identity match"
+      : `the release manifest has ${releaseBundles.length} exact identity matches`;
+    throw new ContextError(
+      ExitCode.WorkspaceStateError,
+      `Indexer ${input.indexer.id} requires exact primary Provider ${bundledProviderIdentity(input.provider)}, ` +
+        `but the current CLI provides ${available.length === 0 ? `no ${input.provider.skill} bundle` : available.join(", ")}; ${reason}`,
+      {
+        category: ErrorCategory.ProviderIdentityMismatch,
+        indexer_id: input.indexer.id,
+        required_provider: input.provider,
+        available_providers: catalog.bundles.filter((candidate) =>
+          candidate.skill === input.provider.skill
+        ),
+        next: "Use the exact CLI release pinned by the current registry, or start a new lifecycle after updating the registry through Provider selection.",
+      },
     );
   }
   const bundleRoot = join(assetsRoot, "bundles", input.provider.skill);

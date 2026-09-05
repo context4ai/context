@@ -1,13 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "context.indexer.current-action-input/v1",
+  "$id": "context.indexer.current-action-input/v2",
   "oneOf": [
     { "$ref": "#/$defs/providerSelection" },
     { "$ref": "#/$defs/providerResolution" },
     { "$ref": "#/$defs/providerProgramAuthorization" },
-    { "$ref": "#/$defs/providerFinalization" },
-    { "$ref": "#/$defs/partition" },
-    { "$ref": "#/$defs/author" },
+    { "$ref": "#/$defs/partitionBatch" },
+    { "$ref": "#/$defs/authorBatch" },
     { "$ref": "#/$defs/postAuthor" },
     { "$ref": "#/$defs/structureReview" },
     { "$ref": "#/$defs/layoutConfirmation" }
@@ -61,14 +60,6 @@
         }
       }
     },
-    "providerFinalization": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["stage"],
-      "properties": {
-        "stage": { "const": "provider-finalization" }
-      }
-    },
     "providerProgramAuthorization": {
       "type": "object",
       "additionalProperties": false,
@@ -78,15 +69,37 @@
         "decision": { "enum": ["approved", "rejected"] }
       }
     },
+    "partitionBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "results"],
+      "properties": {
+        "stage": { "const": "partition" },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_key", "result"],
+            "properties": {
+              "task_key": { "type": "string", "pattern": "^task-[0-9]{3}$" },
+              "result": { "$ref": "#/$defs/partition" }
+            }
+          }
+        }
+      }
+    },
     "partition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["stage", "outcome", "unit_type", "partition_axis", "groups", "excluded", "unsupported"],
+      "required": ["stage", "outcome", "groups", "excluded", "unsupported"],
       "properties": {
         "stage": { "const": "partition" },
-        "outcome": { "enum": ["complete", "failed"] },
-        "unit_type": { "$ref": "#/$defs/string" },
-        "partition_axis": { "$ref": "#/$defs/string" },
+        "outcome": {
+          "enum": ["complete", "failed"],
+          "description": "Use complete when the semantic partition is ready; use failed only with failure details. accepted is not an Agent outcome."
+        },
         "groups": { "type": "array", "items": { "$ref": "#/$defs/partitionGroup" } },
         "excluded": { "type": "array", "items": { "$ref": "#/$defs/excluded" } },
         "unsupported": { "type": "array", "items": { "$ref": "#/$defs/unsupported" } },
@@ -98,6 +111,27 @@
           "then": { "required": ["failure"] }
         }
       ]
+    },
+    "authorBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "results"],
+      "properties": {
+        "stage": { "const": "author" },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_key", "result"],
+            "properties": {
+              "task_key": { "type": "string", "pattern": "^task-[0-9]{3}$" },
+              "result": { "$ref": "#/$defs/author" }
+            }
+          }
+        }
+      }
     },
     "partitionGroup": {
       "type": "object",
@@ -122,7 +156,10 @@
             }
           ]
         },
-        "subject_intent": { "enum": ["primary", "enrich-or-independent"] },
+        "subject_intent": {
+          "enum": ["primary", "enrich-or-independent"],
+          "description": "Use primary when this group owns a reader subject. Use enrich-or-independent for a publishable supplemental view, including test or example behavior: Context enriches an existing matching subject when one exists and otherwise creates an independent subject. supporting is not a valid intent; material that must never become a reader subject must not be emitted as a group."
+        },
         "members": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/string" } },
         "questions": { "type": "array", "items": { "$ref": "#/$defs/string" } },
         "question_targets": { "type": "array", "items": { "$ref": "#/$defs/questionTarget" } },
@@ -243,6 +280,27 @@
     "postAuthor": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["stage", "results"],
+      "properties": {
+        "stage": { "const": "post-author" },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_key", "result"],
+            "properties": {
+              "task_key": { "type": "string", "pattern": "^task-[0-9]{3}$" },
+              "result": { "$ref": "#/$defs/postAuthorResult" }
+            }
+          }
+        }
+      }
+    },
+    "postAuthorResult": {
+      "type": "object",
+      "additionalProperties": false,
       "required": ["stage", "outcome", "proposals", "diagnostics"],
       "properties": {
         "stage": { "const": "post-author" },
@@ -285,7 +343,11 @@
       "allOf": [
         {
           "if": { "properties": { "outcome": { "const": "failed" } } },
-          "then": { "properties": { "diagnostics": { "minItems": 1 } } }
+          "then": {
+            "properties": {
+              "diagnostics": { "type": "array", "minItems": 1 }
+            }
+          }
         }
       ]
     },
@@ -297,7 +359,13 @@
         "stage": { "const": "structure-review" },
         "decision": { "enum": ["approved", "request-adjustment"] },
         "feedback": { "$ref": "#/$defs/string" }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "decision": { "const": "request-adjustment" } } },
+          "then": { "required": ["feedback"] }
+        }
+      ]
     },
     "layoutConfirmation": {
       "type": "object",
@@ -306,8 +374,27 @@
       "properties": {
         "stage": { "const": "layout-confirmation" },
         "decision": { "enum": ["approved", "rejected"] },
-        "feedback": { "$ref": "#/$defs/string" }
-      }
+        "feedback": { "$ref": "#/$defs/string" },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["artifact_ref", "output_path"],
+            "properties": {
+              "artifact_ref": { "$ref": "#/$defs/string" },
+              "output_path": { "$ref": "#/$defs/string" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "decision": { "const": "rejected" } } },
+          "then": { "required": ["feedback"], "not": { "required": ["paths"] } }
+        }
+      ]
     }
   }
 }

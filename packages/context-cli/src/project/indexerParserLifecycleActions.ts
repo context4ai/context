@@ -20,7 +20,9 @@ import {
 import { indexerRequirementSourceBoundaryDigest } from "./indexerRequirementProject.js";
 import {
   executeProjectIndexerParserPlan,
+  type IndexerParserRuntimeExecutionReceipt,
 } from "./indexerParserRuntimeExecution.js";
+import { collectReusableIndexerParserSources } from "./indexerParserRuntimeReuse.js";
 import { loadProjectIndexerParser } from "./indexerParserRuntimeImport.js";
 import {
   materializeProjectIndexerParserEntryInput,
@@ -83,6 +85,7 @@ export async function executeProjectIndexerParserPlanAction(input: {
   projectRoot: string;
   value: unknown;
   materialized?: ProjectIndexerParserFilesMaterialization;
+  previous_execution?: IndexerParserRuntimeExecutionReceipt;
 }) {
   const value = record(input.value, "parser runtime execution input");
   if (value.protocol !== "context.indexer.parser-runtime-execution-input/v1") {
@@ -119,8 +122,18 @@ export async function executeProjectIndexerParserPlanAction(input: {
   );
   const mappingByCapability = new Map(mappings.map((mapping) => [mapping.capability, mapping]));
   const lockByCapability = new Map(locks.map((lock) => [lock.capability, lock]));
+  const reusableSources = collectReusableIndexerParserSources({
+    ...(input.previous_execution === undefined
+      ? {}
+      : { previous_execution: input.previous_execution }),
+    entries: plan.entries,
+    locks,
+    profile_contract_digest: plan.profile_contract_digest,
+  });
   const entryInputs = [];
   for (const entry of plan.entries) {
+    const sourceKey = `${entry.source_ref}\u0000${entry.module_ref ?? ""}`;
+    if (reusableSources.has(sourceKey)) continue;
     const requirement = requirementByCapability.get(entry.capability);
     const mapping = mappingByCapability.get(entry.capability);
     const lock = lockByCapability.get(entry.capability);
@@ -150,6 +163,9 @@ export async function executeProjectIndexerParserPlanAction(input: {
     mappings,
     locks,
     entry_inputs: entryInputs,
+    ...(input.previous_execution === undefined
+      ? {}
+      : { previous_execution: input.previous_execution }),
   });
 }
 

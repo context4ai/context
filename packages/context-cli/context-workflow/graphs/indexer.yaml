@@ -4,6 +4,9 @@ description: Static Agent route for one digest-bound Indexer workset.
 entrypoints:
   agent-step: run-indexer-agent-step
   provider-selection: configure-indexer-providers
+  current-provider-resolution: resolve-current-indexer-provider
+  current-provider-program-authorization: authorize-current-indexer-provider-program
+  current-provider-finalization: finalize-current-indexer-provider-selection
   markdown-provider: inspect-markdown-provider-capture
   requirement-confirmation: route-index-requirement-confirmation
   contract-overlay-validation: validate-indexer-contract-overlays
@@ -41,6 +44,7 @@ nodes:
   - id: review-current-indexer-structure
     kind: gate
     reasonCode: route.indexer.semantic-structure-review
+    resolutionAction: actions/resolve-current-indexer-gate.yaml
     gate:
       id: indexer-semantic-structure-review
       prompt: Review the complete semantic structure and its create-or-enrich targets before authoring.
@@ -72,6 +76,7 @@ nodes:
   - id: confirm-current-indexer-layout
     kind: gate
     reasonCode: route.indexer.layout-confirmation-required
+    resolutionAction: actions/resolve-current-indexer-gate.yaml
     gate:
       id: confirm-layout-change
       prompt: Confirm the proposed knowledge layout change or reject it with revision feedback.
@@ -86,6 +91,23 @@ nodes:
     kind: action
     reasonCode: route.indexer.provider-configuration
     action: actions/configure-indexer-providers.yaml
+  - id: resolve-current-indexer-provider
+    kind: action
+    reasonCode: route.indexer.provider-host-resolution-required
+    action: actions/resolve-current-indexer-provider.yaml
+  - id: authorize-current-indexer-provider-program
+    kind: gate
+    reasonCode: route.indexer.program-execution-authorization
+    resolutionAction: actions/authorize-current-indexer-provider-program.yaml
+    gate:
+      id: authorize-indexer-program-execution
+      prompt: Authorize the exact current Provider program for trusted non-sandboxed execution.
+      authority: context.indexer-program-execution
+      delegatable: true
+  - id: finalize-current-indexer-provider-selection
+    kind: action
+    reasonCode: route.indexer.provider-finalization-required
+    action: actions/finalize-current-indexer-provider-selection.yaml
   - id: inspect-markdown-provider-capture
     kind: action
     reasonCode: route.indexer.markdown-capture-validation

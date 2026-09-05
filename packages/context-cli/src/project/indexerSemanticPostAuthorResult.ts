@@ -7,6 +7,7 @@ import {
   type IndexerPostAuthorSemanticInput,
   type IndexerPrimaryResultView,
 } from "@c4a/context";
+import { renderMarkdownSection } from "./markdownPageTitle.js";
 
 type PrimaryEvidenceRef = IndexerPrimaryResultView["facts"][number]["evidence_refs"][number];
 
@@ -100,11 +101,11 @@ export function buildIndexerPostAuthorResultFromSemantic(input: {
       blocks: [{
         block_id: `${slug(section.key)}-prose`,
         layer: "semantic-prose" as const,
-        markdown: [
-          ...(index === 0 ? [`# ${proposal.title}`, proposal.summary] : []),
-          `## ${section.heading}`,
-          section.markdown,
-        ].join("\n\n"),
+        markdown: renderMarkdownSection({
+          markdown: section.markdown,
+          heading: section.heading,
+          ...(index === 0 ? { pageTitle: proposal.title, summary: proposal.summary } : {}),
+        }),
         evidence_refs: evidenceFor(section.source_refs).map((item) => item.ref),
       }],
     }));

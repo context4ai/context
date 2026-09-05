@@ -34,6 +34,7 @@ import {
   createContextWorkflowFacts,
 } from "./workflowFacts.js";
 import { planForResolvedCommandPlan } from "./workflowHostPlans.js";
+import { measureContextDebugOperation } from "../debugTrace.js";
 
 let providerPromise: Promise<LoadedProvider> | undefined;
 
@@ -457,13 +458,7 @@ async function resolveContextRoute(
     );
   }
   const resolutionPlan = optionalActionPlan(resolutionAction, observation);
-  const inspectionCommands = route.gate?.id === "knowledge-review" &&
-      route.gate.resolution === "session-authority"
-    ? inspectionPlan.commands.map((item) => ({
-        ...item,
-        command: item.command.replace(/ --open(?:\s|$)/u, " --format json ").trim(),
-      }))
-    : inspectionPlan.commands;
+  const inspectionCommands = inspectionPlan.commands;
   const resolutionAvailability: ContextWorkflowCommand["availability"] =
     route.availability === "requires-user"
       ? "after-human-confirmation"
@@ -617,7 +612,11 @@ export async function evaluateContextWorkflow(input: {
 }): Promise<ContextWorkflowSnapshot> {
   const provider = await loadContextWorkflowProvider();
   const facts = createContextWorkflowFacts(input.observation, input.authorities);
-  const evaluated = evaluateGraph(
+  const evaluated = await measureContextDebugOperation({
+    projectRoot: input.observation.projectRoot,
+    operation: "agent-graph.evaluate",
+    counters: { graph_evaluate_count: 1 },
+  }, async () => evaluateGraph(
     provider,
     CONTEXT_WORKFLOW_GRAPH_ID,
     CONTEXT_WORKFLOW_ENTRY,
@@ -629,7 +628,7 @@ export async function evaluateContextWorkflow(input: {
         ? {}
         : { resourceReceipts: input.resourceReceipts }),
     },
-  );
+  ));
   const root = await attachDiagnosticResources(
     provider,
     rootDiagnostics(input.observation),

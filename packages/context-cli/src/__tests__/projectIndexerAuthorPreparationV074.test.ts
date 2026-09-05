@@ -31,7 +31,7 @@ import {
 import { resolveProjectIndexerMainSourceBinding } from
   "../project/indexerMainSourceAdapter.js";
 import { projectIndexerPrimaryCarrierQuestionTargetRefs } from
-  "../project/indexerCurrentAuthorPreparation.js";
+  "../project/indexerAuthorQuestionTargets.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from
   "../project/indexerWorksetViewMaterialization.js";
 import {

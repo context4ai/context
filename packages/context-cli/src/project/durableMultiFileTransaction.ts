@@ -10,6 +10,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
 
 const TRANSACTION_ROOT = join(".tmp", "context-runtime", "transactions");
 const TRANSACTION_DIR = /^sha256-[a-f0-9]{64}$/u;
@@ -300,7 +301,7 @@ export async function recoverDurableMultiFileTransactions(
   return receipts;
 }
 
-export async function runDurableMultiFileTransaction(input: {
+async function runDurableMultiFileTransactionInternal(input: {
   projectRoot: string;
   kind: string;
   proposal_digest: string;
@@ -338,4 +339,22 @@ export async function runDurableMultiFileTransaction(input: {
     ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
   });
   return receipt(journal, false);
+}
+
+export async function runDurableMultiFileTransaction(input: {
+  projectRoot: string;
+  kind: string;
+  proposal_digest: string;
+  targets: readonly IndexerProjectFileTarget[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}): Promise<DurableMultiFileTransactionReceipt> {
+  return measureContextDebugOperation({
+    projectRoot: input.projectRoot,
+    operation: "durable-transaction.commit",
+    counters: {
+      durable_transaction_count: 1,
+      durable_transaction_target_count: input.targets.length,
+    },
+    data: { transaction_kind: input.kind, transaction_shape: "multi-file" },
+  }, () => runDurableMultiFileTransactionInternal(input));
 }

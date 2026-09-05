@@ -357,22 +357,18 @@ describe("CLI error handling", () => {
       expect(readme).toContain("`.tmp/agent-payloads/`: optional Agent-owned command inputs");
       expect(readme).toContain("Initialization creates it");
       expect(readme).toContain("`.tmp/context-runtime/`: disposable runtime files");
-      expect(agents).toContain("Treat `workflow.current` as the current-step authority");
-      expect(agents).toContain("Read every `resources.required` item");
-      expect(agents).toContain("do not run another status command");
-      expect(agents).toContain(
-        "Fully managed mode applies only when the user explicitly requests it in the current conversation",
-      );
-      expect(agents).toContain("use `context status --managed --format json` for every status evaluation");
-      expect(agents).toContain("never store or reuse that authority");
-      expect(agents).toContain("Managed approval still uses only the atomic command returned by managed status");
-      expect(agents).toContain("exact phrase `强制批准`");
-      expect(agents).toContain("Prefer `.tmp/agent-payloads/` for Agent-authored transient command inputs");
-      expect(agents).toContain("Initialization creates the directory");
-      expect(agents).toContain("not a CLI requirement");
+      expect(agents).toContain("Treat `workflow.current` and its selected resources and commands as the only current-step authority");
+      expect(agents).toContain("Do not reconstruct the lifecycle from this file");
+      expect(agents).toContain("Use Context CLI for every lifecycle write");
+      expect(agents).toContain("Customize `src/package-templates/kb/wikis/index.md`");
+      expect(agents).not.toContain("resources.after_read.command");
+      expect(agents).not.toContain("--managed");
+      expect(agents).not.toContain("execution.target");
+      expect(agents).not.toContain("强制批准");
+      expect(agents).not.toContain(".tmp/agent-payloads");
       expect(readme).not.toContain("bun run context -- status");
       expect(agents).toContain("context status");
-      expect(agents).toContain("context plugin install");
+      expect(agents).not.toContain("context plugin install");
       expect(agents).not.toContain("## State Boundaries");
     } finally {
       rmSync(cwd, { recursive: true, force: true });

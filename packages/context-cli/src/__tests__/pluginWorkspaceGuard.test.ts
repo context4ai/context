@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderAgents } from "../project/workspaceGuidanceTemplates.js";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -21,6 +22,36 @@ async function listMarkdown(dir: string): Promise<string[]> {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) files.push(...await listMarkdown(path));
     else if (entry.isFile() && entry.name.endsWith(".md")) files.push(path);
+  }
+  return files;
+}
+
+const PUBLISHABLE_TEXT_EXTENSIONS = new Set([
+  ".js",
+  ".json",
+  ".md",
+  ".mjs",
+  ".ts",
+  ".tsx",
+  ".yaml",
+  ".yml",
+]);
+
+async function listPublishableText(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    if ([".tmp", "dist", "node_modules"].includes(entry.name)) continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listPublishableText(path));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const extension = entry.name.includes(".")
+      ? `.${entry.name.split(".").at(-1)}`
+      : "";
+    if (PUBLISHABLE_TEXT_EXTENSIONS.has(extension)) files.push(path);
   }
   return files;
 }
@@ -76,17 +107,10 @@ describe("plugin and workflow workspace guard", () => {
   });
 
   test("managed mode is explicit, current-conversation-only, and bounded", async () => {
-    const boundedEntryFiles = [
-      ENTRY_PATH,
-      join(PACKAGE_ROOT, "src", "project", "workspaceGuidanceTemplates.ts"),
-    ];
-    for (const file of boundedEntryFiles) {
-      const text = await readFile(file, "utf8");
-      expect(text, file).toContain("--managed");
-      expect(text, file).toMatch(/(?:current|this) conversation|current-conversation/iu);
-      expect(text, file).toMatch(/never|only|unless/iu);
-    }
-    const continuation = await readFile(boundedEntryFiles[0]!, "utf8");
+    const continuation = await readFile(ENTRY_PATH, "utf8");
+    expect(continuation).toContain("--managed");
+    expect(continuation).toMatch(/(?:current|this) conversation|current-conversation/iu);
+    expect(continuation).toMatch(/never|only|unless/iu);
     expect(continuation).toContain("never");
     expect(continuation).toContain("repo sources");
     const review = await readFile(
@@ -94,24 +118,23 @@ describe("plugin and workflow workspace guard", () => {
       "utf8",
     );
     expect(review).toContain("explicit session-managed authority");
-    expect(review).toContain("current\nconversation");
+    expect(review).toMatch(/current\s+conversation/u);
     expect(review).toMatch(/complete\s+current scope atomically/u);
   });
 
   test("generated workspace guidance stays concise and graph-led", async () => {
-    const source = await readFile(
-      join(PACKAGE_ROOT, "src", "project", "workspaceGuidanceTemplates.ts"),
-      "utf8",
-    );
-    expect(source).toContain("Treat `workflow.current` as the current-step authority");
-    expect(source).toContain("Read every `resources.required` item");
-    expect(source).toContain("do not run another status command");
-    expect(source).toContain("preserve revision/authority flags exactly");
-    expect(source).toContain("Fully managed mode applies only when the user explicitly requests it");
-    expect(source).toContain("use `context status --managed --format json` for every status evaluation");
-    expect(source).toContain("stop using it when the conversation ends or the user revokes it");
-    expect(source).toContain("`execution.target: agent-host`");
-    expect(source).not.toContain("Execute safe mechanical `next:` steps");
+    const generated = [renderAgents("sample", "en"), renderAgents("sample", "zh-CN")].join("\n");
+    expect(generated).toContain("Treat `workflow.current` and its selected resources and commands as the only current-step authority");
+    expect(generated).toContain("Do not reconstruct the lifecycle from this file");
+    expect(generated).toContain("When the Route returns `configuration`, edit only the named project files");
+    expect(generated).toContain("Use Context CLI for every lifecycle write");
+    expect(generated).toContain("Customize `src/package-templates/kb/wikis/index.md`");
+    expect(generated).toContain("将 `workflow.current` 及其选择的资源和命令视为当前步骤的唯一权威");
+    expect(generated).not.toContain("resources.after_read.command");
+    expect(generated).not.toContain("context run --managed");
+    expect(generated).not.toContain("`execution.target: agent-host`");
+    expect(generated).not.toContain("exact phrase `强制批准`");
+    expect(generated).not.toContain("Execute safe mechanical `next:` steps");
     const continuation = await readFile(ENTRY_PATH, "utf8");
     expect(continuation).toContain("`execution.target` is `agent-host`");
     expect(continuation).toMatch(/not inside a restricted child\s+sandbox/u);
@@ -173,6 +196,33 @@ describe("plugin and workflow workspace guard", () => {
       const text = await readFile(file, "utf8");
       expect(text, file).not.toMatch(/draft wiki candidates|approved wiki pages?|wiki section/iu);
       expect(text, file).not.toMatch(PRODUCTION_VERSION_PHRASE_PATTERN);
+    }
+  });
+
+  test("community source and plugin truth contain no project or company Provider material", async () => {
+    const roots = [
+      CONTEXT_PACKAGE_ROOT,
+      PACKAGE_ROOT,
+      PLUGIN_ROOT,
+    ];
+    const forbidden = [
+      /\bbytedance\b/iu,
+      /\btiktok\b/iu,
+      /\bcontext-code-indexer-bytedance\b/iu,
+      /\btux(?:-web)?\b/iu,
+      /\bttls(?:[-_ ]?(?:web|backend))?\b/iu,
+      /\blive[-_ ]?agency\b/iu,
+      /\bvmok\b/iu,
+      /\bttastra\b/iu,
+      /\bedenx\b/iu,
+    ];
+    const currentFile = fileURLToPath(import.meta.url);
+    const files = (await Promise.all(roots.map(listPublishableText)))
+      .flat()
+      .filter((file) => file !== currentFile);
+    for (const file of files) {
+      const text = await readFile(file, "utf8");
+      for (const pattern of forbidden) expect(text, file).not.toMatch(pattern);
     }
   });
 

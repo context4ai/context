@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import YAML from "yaml";
 import { INDEXER_CURRENT_FINALIZATION_PATH } from
   "../project/indexerCurrentFinalization.js";
@@ -11,6 +11,13 @@ import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js
 import type { ContextResolvedWorkflowRoute } from
   "../project/workflow/workflowTypes.js";
 import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
+import { prepareIndexerReaderPaths } from "../project/indexerLayoutPathResolution.js";
+import { readerLayoutProposal } from "./projectIndexerReaderPathsV075.fixture.js";
+
+const roots: string[] = [];
+afterEach(async () => {
+  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 function outerIndexerRoute(): ContextResolvedWorkflowRoute {
   return {
@@ -27,8 +34,10 @@ function outerIndexerRoute(): ContextResolvedWorkflowRoute {
 }
 
 describe("current Indexer layout Gate", () => {
-  test("keeps destructive layout confirmation human-only in managed mode", async () => {
+  for (const collision of [false, true]) {
+  test(`keeps ${collision ? "new page collision" : "destructive layout"} confirmation human-only in managed mode`, async () => {
     const root = await mkdtemp(join(tmpdir(), "context-indexer-layout-gate-"));
+    roots.push(root);
     const revision = `sha256:${"b".repeat(64)}`;
     const bundle = (await listCliBundledIndexers()).bundles.find((candidate) =>
       candidate.skill === "context-markdown-indexer"
@@ -74,6 +83,10 @@ describe("current Indexer layout Gate", () => {
     await writeFile(path, `${JSON.stringify({
       state: "layout-confirmation-required",
       revision,
+      ...(collision ? { path_preparation: prepareIndexerReaderPaths({
+        proposals: [readerLayoutProposal("guide/a"), readerLayoutProposal("guide-a")],
+        base_projections: [], occupied_paths: [],
+      }) } : {}),
       layout_transition: {
         change_reports: [{
           requires_confirmation: true,
@@ -90,17 +103,40 @@ describe("current Indexer layout Gate", () => {
       managed: true,
     });
     expect(route).toMatchObject({
-      node: "confirm-indexer-layout-change",
+      node: "confirm-current-indexer-layout",
       availability: "requires-user",
       gate: {
-        authority: "human",
         delegatable: false,
         resolution: "user",
+        resolution_action: {
+          id: "resolve-current-indexer-gate",
+          runner: "agent",
+          effect: "write",
+          input: {
+            stage: "layout-confirmation",
+          },
+          output_schema: {
+            id: "schema.resolve-current-indexer-gate.output",
+          },
+        },
       },
       commands: [{
         availability: "after-human-confirmation",
         managed_execution: "agent-required",
       }],
     });
+    expect(route?.action).toBeUndefined();
+    if (collision) {
+      expect(route?.gate?.resolution_action?.input).toMatchObject({
+        path_conflicts: [{
+          output_path: "knowledge/codeindex/anonymous-package/shared-guide.md",
+          occupied_by_approved_page: false,
+        }],
+      });
+    }
+    expect(route?.gate?.resolution_action?.skill?.path).toContain(
+      "skills/resolve-current-indexer-gate/SKILL.md",
+    );
   });
+  }
 });

@@ -131,6 +131,30 @@ export async function persistCurrentIndexerProviderSelection(input: {
   );
 }
 
+function matchesRegistry(state: CurrentIndexerProviderSelection, registry: IndexerRegistry): boolean {
+  const digests = indexerRegistryDigests(registry);
+  return state.registry_digest === digests.registryDigest &&
+    state.indexer_selection_digest === digests.indexerSelectionDigest &&
+    state.final_report.indexer_selection_digest === digests.indexerSelectionDigest &&
+    state.final_report.requirement_set_digest === digests.requirementSetDigest;
+}
+
+/** Check only the saved selection identity; routing must not rescan staged bundles. */
+export async function currentIndexerProviderSelectionNeedsRefresh(input: {
+  projectRoot: string;
+  registry: IndexerRegistry;
+}): Promise<boolean> {
+  let raw: string;
+  try {
+    raw = await readFile(join(input.projectRoot, CURRENT_PROVIDER_SELECTION_PATH), "utf8");
+  } catch (error) {
+    // A finalized, directly configured bundled registry need not have a setup snapshot.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
+  }
+  return !matchesRegistry(parseState(JSON.parse(raw) as unknown), input.registry);
+}
+
 export async function loadCurrentIndexerProviderSelection(input: {
   projectRoot: string;
   registry: IndexerRegistry;
@@ -140,13 +164,7 @@ export async function loadCurrentIndexerProviderSelection(input: {
     "utf8",
   );
   const state = parseState(JSON.parse(raw) as unknown);
-  const digests = indexerRegistryDigests(input.registry);
-  if (
-    state.registry_digest !== digests.registryDigest ||
-    state.indexer_selection_digest !== digests.indexerSelectionDigest ||
-    state.final_report.indexer_selection_digest !== digests.indexerSelectionDigest ||
-    state.final_report.requirement_set_digest !== digests.requirementSetDigest
-  ) {
+  if (!matchesRegistry(state, input.registry)) {
     throw new TypeError("current Indexer Provider selection is stale");
   }
   if (!state.final_report.report_digest ||

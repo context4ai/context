@@ -96,6 +96,15 @@ content Review. There is no answer-only operation or evidence-specific Review.
 A blocking gap closes only through current source or an explicit non-delegable
 requirement change.
 
+## Bounded execution
+
+Each captured document remains an independently recoverable Partition input,
+but Context may transport several documents in one bounded Agent step. Return
+one result for every supplied task key and let global convergence merge
+documents that establish the same Subject. Batch order, filename order and
+heading order never create Subject identity. Author and Review use the same
+bounded transport rule without adding intermediate user approvals.
+
 ## Markdown author fixture checklist
 
 Release fixtures should cover:

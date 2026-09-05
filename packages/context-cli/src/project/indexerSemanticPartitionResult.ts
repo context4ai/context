@@ -92,6 +92,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     canonical_inventory_members: readonly IndexerInventoryMember[];
     authorized_source_refs: readonly string[];
     subject_key_contract: unknown;
+    partition_unit_type: string;
     required_question_target_refs?: readonly string[];
   };
 }): IndexerMainRunResult {
@@ -204,8 +205,8 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     },
     strategy_ref: attempt.strategy_ref,
     strategy_digest: attempt.strategy_digest,
-    unit_type: input.semantic.unit_type,
-    partition_axis: input.semantic.partition_axis,
+    unit_type: input.validation.partition_unit_type,
+    partition_axis: attempt.strategy_ref.strategy_id,
     reader_question_refs: [...workset.reader_question_refs],
     groups,
     member_dispositions: dispositions,
