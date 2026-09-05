@@ -8,6 +8,7 @@ import {
   validateAndRecordIndexerMainRun,
   validateIndexerAuthorDependencyView,
   validateIndexerSubjectKeyForContract,
+  validateIndexerMainRunRequest,
 } from "@c4a/context";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
@@ -16,6 +17,7 @@ import {
   resolveProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import { indexerParserTaskSelection } from "./indexerParserTaskSelection.js";
 import {
   array,
   assertCurrentRequirement,
@@ -34,8 +36,8 @@ export async function validateProjectIndexerMainRun(input: {
     "context.indexer.main-run-validation-input/v1",
     "main Indexer run validation input",
   );
-  const request = record(value.request, "main Indexer run request");
-  const workset = record(request.workset, "main Indexer run workset");
+  const request = validateIndexerMainRunRequest(value.request);
+  const workset = request.workset;
   const validation = record(value.validation, "main Indexer run validation");
   const binding = await resolveProjectIndexerMainSourceBinding({
     projectRoot: input.projectRoot,
@@ -43,6 +45,9 @@ export async function validateProjectIndexerMainRun(input: {
     source_ref: workset.source_ref,
     module_ref: workset.module_ref,
     profile_contract_digest: workset.profile_contract_digest,
+    parser_selection: indexerParserTaskSelection({
+      stage: workset.stage, source_ref: workset.source_ref, module_ref: workset.module_ref, validation,
+    }),
   });
   assertProjectIndexerMainSourceBinding({
     workset,

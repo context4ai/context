@@ -1,14 +1,19 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { dirname, join, resolve } from "node:path";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { ExecutionScope } from "./workflow/executionScope.js";
-import { recordWorkflowExecutionScope } from "./debugTrace.js";
+import {
+  recordContextDebugPerformance,
+  recordWorkflowExecutionScope,
+} from "./debugTrace.js";
 
 const LOCK_ROOT = join(".tmp", "context-runtime", "locks");
 const PROJECT_WRITE_LOCK = "project-write.lock";
 const PROJECT_WRITE_LOCK_OWNER = "owner.json";
+const activeProjectWriteLocks = new AsyncLocalStorage<ReadonlySet<string>>();
 
 interface ProjectWriteLockOwner {
   protocol: "context.project-write-lock.v1";
@@ -76,15 +81,32 @@ export async function withProjectWriteLock<T>(
   action: () => Promise<T>,
 ): Promise<T> {
   const relPath = join(LOCK_ROOT, PROJECT_WRITE_LOCK);
-  const lockPath = join(projectRoot, relPath);
+  const lockPath = resolve(projectRoot, relPath);
+  const inheritedLocks = activeProjectWriteLocks.getStore();
+  if (inheritedLocks?.has(lockPath) === true) {
+    // Nested store operations belong to the already serialized outer action.
+    // Reuse that lock without weakening process-level exclusion.
+    return action();
+  }
   await mkdir(dirname(lockPath), { recursive: true });
+  const lockStarted = performance.now();
+  let acquiredAt = lockStarted;
 
   try {
     await mkdir(lockPath);
+    acquiredAt = performance.now();
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "EEXIST") {
       const owner = await readLockOwner(lockPath);
       const processState = ownerProcessState(owner);
+      await recordContextDebugPerformance({
+        projectRoot,
+        operation: "project-write-lock",
+        durationMs: performance.now() - lockStarted,
+        outcome: "error",
+        counters: { write_lock_attempt_count: 1, write_lock_acquired_count: 0 },
+        data: { requested_operation: name, lock_outcome: "contended" },
+      });
       throw new ContextError(ExitCode.WorkspaceStateError, `context project write lock is already held: ${relPath}`, {
         category: ErrorCategory.WorkspaceStateInvalid,
         reason_code: "project-write-in-progress",
@@ -117,6 +139,18 @@ export async function withProjectWriteLock<T>(
     } satisfies ProjectWriteLockOwner, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   } catch (error) {
     await scope.close();
+    await recordContextDebugPerformance({
+      projectRoot,
+      operation: "project-write-lock",
+      durationMs: performance.now() - lockStarted,
+      outcome: "error",
+      counters: { write_lock_attempt_count: 1, write_lock_acquired_count: 1 },
+      data: {
+        requested_operation: name,
+        lock_outcome: "owner-metadata-failed",
+        acquire_duration_ms: acquiredAt - lockStarted,
+      },
+    });
     throw error;
   }
   await recordWorkflowExecutionScope({
@@ -129,7 +163,10 @@ export async function withProjectWriteLock<T>(
   try {
     // The scope owns only the lock. Durable mutations inside the action retain
     // their existing revision checks and atomic commit semantics.
-    result = await action();
+    result = await activeProjectWriteLocks.run(
+      new Set([...(inheritedLocks ?? []), lockPath]),
+      action,
+    );
   } catch (error) {
     actionError = error;
   }
@@ -142,6 +179,19 @@ export async function withProjectWriteLock<T>(
       operation: name,
       resources: receipt.resources,
       release_errors: receipt.releaseErrors,
+    },
+  });
+  await recordContextDebugPerformance({
+    projectRoot,
+    operation: "project-write-lock",
+    durationMs: performance.now() - lockStarted,
+    outcome: actionError === undefined && receipt.releaseErrors === 0 ? "success" : "error",
+    counters: { write_lock_attempt_count: 1, write_lock_acquired_count: 1 },
+    data: {
+      requested_operation: name,
+      lock_outcome: receipt.releaseErrors === 0 ? "released" : "release-failed",
+      acquire_duration_ms: acquiredAt - lockStarted,
+      hold_duration_ms: performance.now() - acquiredAt,
     },
   });
   if (actionError !== undefined) throw actionError;

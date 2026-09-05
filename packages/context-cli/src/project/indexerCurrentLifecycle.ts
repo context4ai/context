@@ -11,6 +11,7 @@ import {
   retryFailedIndexerMainRunStore,
   startIndexerMainRunStore,
 } from "./indexerMainRunStore.js";
+import { prepareAndStartNextIndexerBatch } from "./indexerCurrentBatch.js";
 import {
   currentLedger,
   currentSpec,
@@ -27,6 +28,8 @@ import {
   prepareCurrentIndexerAuthorStage,
   prepareCurrentIndexerStructurePlan,
 } from "./indexerStructureReview.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { hasChangedIndexerWorksetAuthority } from "./indexerCurrentRegistryFreshness.js";
 
 async function applyCatalogFallbackIfRequired(projectRoot: string): Promise<boolean> {
   const ledger = await currentLedger(projectRoot);
@@ -97,13 +100,13 @@ async function preparePartitionStage(projectRoot: string) {
 }
 
 /** Advance deterministic setup only and stop before Agent semantics or Gates. */
-export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promise<{
+async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Promise<{
   advanced: boolean;
   state: "agent-required" | "gate-required" | "complete" | "failed";
 }> {
   let ledger = await currentLedger(projectRoot);
   let advanced = false;
-  if (ledger === undefined) {
+  if (ledger === undefined || await hasChangedIndexerWorksetAuthority(projectRoot, ledger)) {
     ledger = await preparePartitionStage(projectRoot);
     advanced = true;
   }
@@ -122,16 +125,13 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
   );
   if (next !== undefined) {
     if (await applyCatalogFallbackIfRequired(projectRoot)) {
-      return advanceCurrentIndexerLifecycle(projectRoot);
+      return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
     const structure = await currentIndexerStructureReview(projectRoot);
     if (next.stage === "author" && structure?.approved !== true) {
       return { advanced, state: "gate-required" };
     }
-    await startIndexerMainRunStore({
-      projectRoot,
-      workset_digest: next.workset_digest,
-    });
+    await prepareAndStartNextIndexerBatch(projectRoot);
     return { advanced: true, state: "agent-required" };
   }
   if (
@@ -146,12 +146,12 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
       throw new TypeError("Indexer lifecycle lost its reconciled Partition ledger");
     }
     if (ledger.entries.some((entry) => entry.state !== "accepted")) {
-      return advanceCurrentIndexerLifecycle(projectRoot);
+      return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
     const structure = await prepareCurrentIndexerStructurePlan(projectRoot);
     await prepareCurrentIndexerAuthorStage(projectRoot);
     if (structure.approved) {
-      return advanceCurrentIndexerLifecycle(projectRoot);
+      return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
     return { advanced: true, state: "gate-required" };
   }
@@ -172,7 +172,7 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
       if (next.state === "failed") {
         await retryFailedIndexerMainRunStore(projectRoot);
       }
-      return advanceCurrentIndexerLifecycle(projectRoot);
+      return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
     const finalization = await advanceCurrentIndexerFinalization(projectRoot);
     return {
@@ -185,4 +185,15 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
     };
   }
   return { advanced, state: "gate-required" };
+}
+
+export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promise<{
+  advanced: boolean;
+  state: "agent-required" | "gate-required" | "complete" | "failed";
+}> {
+  return measureContextDebugOperation({
+    projectRoot,
+    operation: "indexer.next-prepare",
+    counters: { next_preparation_count: 1 },
+  }, () => advanceCurrentIndexerLifecycleInternal(projectRoot));
 }

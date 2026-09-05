@@ -161,6 +161,16 @@ function viewRef(currentArtifactRef: string, collection: KnowledgeCollection): s
 }
 
 function readerPathSlug(value: string): string {
+  const identity = value.trim();
+  if (
+    /^(?:artifact|evidence|node|section|view):/iu.test(identity) ||
+    /(?:^|[:/_-])sha256(?::|$)/iu.test(identity) ||
+    /^[a-f\d]{32,}$/iu.test(identity) ||
+    /^\d{8,14}$/u.test(identity) ||
+    /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/iu.test(identity)
+  ) {
+    throw new TypeError("layout resolver rejects machine identity in a reader-facing path");
+  }
   const slug = value
     .normalize("NFC")
     .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, "$1-$2")
@@ -176,15 +186,21 @@ function readerPathSlug(value: string): string {
 
 function outputPath(input: {
   collection: KnowledgeCollection;
-  module_ref: string | null;
   subject_key: IndexerSubjectKey;
-  artifact_id: string;
+  artifact: { artifact_id: string; artifact_kind: string };
+  primary: boolean;
+  duplicate_kind: boolean;
 }): string {
-  const moduleIdentity = input.module_ref?.replace(/^module:/u, "") ??
-    input.subject_key.namespace;
-  return `knowledge/${input.collection}/${readerPathSlug(moduleIdentity)}/${
-    readerPathSlug(input.artifact_id)
-  }.md`;
+  const namespace = readerPathSlug(input.subject_key.namespace);
+  const subject = readerPathSlug(input.subject_key.local_key);
+  const suffix = input.primary
+    ? ""
+    : input.duplicate_kind
+      ? `-${readerPathSlug(input.artifact.artifact_kind)}-${readerPathSlug(
+          input.artifact.artifact_id,
+        )}`
+      : `-${readerPathSlug(input.artifact.artifact_kind)}`;
+  return `knowledge/${input.collection}/${namespace}/${subject}${suffix}.md`;
 }
 
 interface MaterializedSection {
@@ -346,6 +362,16 @@ export function resolveIndexerLayout(input: {
   ) {
     throw new TypeError("layout resolver requires one Artifact Bundle entry per Artifact");
   }
+  const requiredArtifactIds = new Set((artifactBundle?.artifacts ?? [])
+    .filter((artifact) => artifact.purpose === "required")
+    .map((artifact) => artifact.artifact_id));
+  const artifactKindCounts = new Map<string, number>();
+  for (const artifact of effective.artifacts) {
+    artifactKindCounts.set(
+      artifact.artifact_kind,
+      (artifactKindCounts.get(artifact.artifact_kind) ?? 0) + 1,
+    );
+  }
   const artifacts = effective.artifacts.map((artifact) => {
     const bundleEntry = bundleById.get(artifact.artifact_id);
     if (bundleEntry === undefined || bundleEntry.artifact_kind !== artifact.artifact_kind) {
@@ -395,9 +421,11 @@ export function resolveIndexerLayout(input: {
       collection,
       output_path: outputPath({
         collection,
-        module_ref: result.module_ref,
         subject_key: result.logical_unit.subject_key,
-        artifact_id: artifact.artifact_id,
+        artifact,
+        primary: effective.artifacts.length === 1 ||
+          (requiredArtifactIds.size === 1 && requiredArtifactIds.has(artifact.artifact_id)),
+        duplicate_kind: (artifactKindCounts.get(artifact.artifact_kind) ?? 0) > 1,
       }),
       shared_artifact_fingerprint_digest: sharedFingerprint.fingerprint_digest,
       purpose: bundleEntry.purpose,

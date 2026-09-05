@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: finalize-current-indexer-provider-selection
+runner: command
+effect: write
+command: context run --format json

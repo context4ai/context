@@ -274,16 +274,16 @@ async function writeTarget(input: {
   };
 }
 
-export async function persistPostAuthorState(input: {
-  projectRoot: string;
-  operation: IndexerPostAuthorStoreReceipt["operation"];
-  transaction_kind: string;
+interface PostAuthorStatePersistenceInput {
   state: PostAuthorRuntimeState;
   immutable_records?: readonly { path: string; value: unknown }[];
   envelope_record?: PostAuthorEnvelopeRecord;
   clear_envelope?: boolean;
-  inject_failure?: DurableMultiFileFailureInjector;
-}): Promise<IndexerPostAuthorStoreReceipt> {
+}
+
+async function postAuthorStateTargets(input: {
+  projectRoot: string;
+} & PostAuthorStatePersistenceInput): Promise<IndexerProjectFileTarget[]> {
   const authorWorksetDigest = input.state.spec.plan.workset_set.author_workset_digest;
   const writes = [
     ...(input.immutable_records ?? []).map((record) => writeTarget({
@@ -332,28 +332,86 @@ export async function persistPostAuthorState(input: {
       remove: true,
     }));
   }
-  const targets = (await Promise.all(writes)).filter(
+  return (await Promise.all(writes)).filter(
     (target): target is IndexerProjectFileTarget => target !== undefined,
-  ).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
-  const transaction = targets.length === 0
-    ? null
-    : await runDurableMultiFileTransaction({
-        projectRoot: input.projectRoot,
-        kind: input.transaction_kind,
-        proposal_digest: indexerProtocolDigest({
-          protocol: "context.indexer.post-author-store-proposal/v1",
-          operation: input.operation,
-          state_digest: input.state.state_digest,
-          targets: targets.map((target) => ({
-            path: target.path,
-            target_digest: target.target_digest,
-          })),
-        }),
-        targets,
-        ...(input.inject_failure === undefined
-          ? {}
-          : { inject_failure: input.inject_failure }),
-      });
+  );
+}
+
+function canonicalTargets(values: readonly IndexerProjectFileTarget[]) {
+  const targets = new Map<string, IndexerProjectFileTarget>();
+  for (const value of values) {
+    const previous = targets.get(value.path);
+    if (previous !== undefined && indexerProtocolDigest(previous) !== indexerProtocolDigest(value)) {
+      throw new TypeError(`post-author batch produced conflicting target ${value.path}`);
+    }
+    targets.set(value.path, value);
+  }
+  return [...targets.values()].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0
+  );
+}
+
+export async function persistPostAuthorStates(input: {
+  projectRoot: string;
+  operation: IndexerPostAuthorStoreReceipt["operation"];
+  transaction_kind: string;
+  states: readonly PostAuthorStatePersistenceInput[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}): Promise<DurableMultiFileTransactionReceipt | null> {
+  if (input.states.length === 0) return null;
+  const targets = canonicalTargets((await Promise.all(input.states.map((state) =>
+    postAuthorStateTargets({ projectRoot: input.projectRoot, ...state })
+  ))).flat());
+  if (targets.length === 0) return null;
+  return runDurableMultiFileTransaction({
+    projectRoot: input.projectRoot,
+    kind: input.transaction_kind,
+    proposal_digest: indexerProtocolDigest({
+      protocol: "context.indexer.post-author-store-proposal/v1",
+      operation: input.operation,
+      state_digests: input.states.map((state) => state.state.state_digest).sort(),
+      targets: targets.map((target) => ({
+        path: target.path,
+        target_digest: target.target_digest,
+      })),
+    }),
+    targets,
+    ...(input.inject_failure === undefined
+      ? {}
+      : { inject_failure: input.inject_failure }),
+  });
+}
+
+export async function persistPostAuthorState(input: {
+  projectRoot: string;
+  operation: IndexerPostAuthorStoreReceipt["operation"];
+  transaction_kind: string;
+  state: PostAuthorRuntimeState;
+  immutable_records?: readonly { path: string; value: unknown }[];
+  envelope_record?: PostAuthorEnvelopeRecord;
+  clear_envelope?: boolean;
+  inject_failure?: DurableMultiFileFailureInjector;
+}): Promise<IndexerPostAuthorStoreReceipt> {
+  const transaction = await persistPostAuthorStates({
+    projectRoot: input.projectRoot,
+    operation: input.operation,
+    transaction_kind: input.transaction_kind,
+    states: [{
+      state: input.state,
+      ...(input.immutable_records === undefined
+        ? {}
+        : { immutable_records: input.immutable_records }),
+      ...(input.envelope_record === undefined
+        ? {}
+        : { envelope_record: input.envelope_record }),
+      ...(input.clear_envelope === undefined
+        ? {}
+        : { clear_envelope: input.clear_envelope }),
+    }],
+    ...(input.inject_failure === undefined
+      ? {}
+      : { inject_failure: input.inject_failure }),
+  });
   return {
     protocol: "context.indexer.post-author-store-receipt/v1",
     operation: input.operation,

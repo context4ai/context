@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "context.indexer.materialize-request/v1",
+  "$id": "context.indexer.materialize-request/v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,9 +12,7 @@
     "provider_fingerprint",
     "provider_integrity",
     "manifest_digest",
-    "requirement_set_digest",
-    "workset_ref",
-    "workset_digest",
+    "stage",
     "profile",
     "composer_id",
     "instruction_set_digest",
@@ -22,7 +20,7 @@
     "request_digest"
   ],
   "properties": {
-    "protocol": { "const": "context.indexer.materialize-request/v1" },
+    "protocol": { "const": "context.indexer.materialize-request/v2" },
     "handler": { "const": "context.materialize-indexer-instructions/v1" },
     "resource_id": { "const": "resolved-indexer-instructions" },
     "indexer_id": { "type": "string", "minLength": 1 },
@@ -30,9 +28,7 @@
     "provider_fingerprint": { "$ref": "#/$defs/digest" },
     "provider_integrity": { "$ref": "#/$defs/digest" },
     "manifest_digest": { "$ref": "#/$defs/digest" },
-    "requirement_set_digest": { "$ref": "#/$defs/digest" },
-    "workset_ref": { "type": "string", "minLength": 1 },
-    "workset_digest": { "$ref": "#/$defs/digest" },
+    "stage": { "enum": ["partition", "author", "post-author"] },
     "profile": { "type": "string", "minLength": 1 },
     "composer_id": {
       "oneOf": [

@@ -220,7 +220,7 @@ export interface ContextResolvedWorkflowRoute {
     input?: JsonValue;
   };
   configuration?: {
-    file: "src/index.ts";
+    file: "src/index.ts" | "src/indexers.yaml";
     action: string;
     contract?: {
       target: "package-output";
@@ -264,6 +264,7 @@ export interface ContextResolvedWorkflowRoute {
       skill?: ContextWorkflowResource;
       input_schema?: ContextWorkflowResource;
       output_schema?: ContextWorkflowResource;
+      input?: JsonValue;
     };
   };
   after_action: {

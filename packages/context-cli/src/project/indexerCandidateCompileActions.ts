@@ -12,19 +12,23 @@ import {
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
 import {
+  CANDIDATE_LEDGER_FILE,
+  candidateRecordsContent,
   indexerCandidateId,
   parseCandidateRecord,
   readCandidateRecords,
-  writeCandidateRecords,
   type CandidateRecord,
 } from "./candidateLedger.js";
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
 import {
   durableContentDigest,
-  recoverDurableSingleFileTransaction,
-  runDurableSingleFileTransaction,
 } from "./durableSingleFileTransaction.js";
+import {
+  recoverDurableMultiFileTransactions,
+  runDurableMultiFileTransaction,
+  type DurableMultiFileFailureInjector,
+} from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import {
   readApprovedKnowledgeMetadataIndex,
@@ -639,54 +643,86 @@ async function projectIndexerCandidates(input: {
 export async function compileProjectIndexerCandidates(input: {
   projectRoot: string;
   value: unknown;
+  inject_failure?: DurableMultiFileFailureInjector;
 }) {
-  const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
-  const authority = await currentContractAuthority({
-    projectRoot: input.projectRoot,
-    records: currentRecords,
-  });
-  const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
-  const compile = buildProjectIndexerCandidateCompileFromRecords({
-    value: input.value,
-    records,
-    operator_contract: authority.operator_contract,
-    profile_contract: authority.profile_contract,
-  });
-  const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
   const persisted = await withProjectWriteLock(
     input.projectRoot,
     COMPILE_TRANSACTION,
     async () => {
-      await recoverDurableSingleFileTransaction({
+      await recoverDurableMultiFileTransactions(input.projectRoot);
+      const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+      const authority = await currentContractAuthority({
         projectRoot: input.projectRoot,
-        kind: COMPILE_TRANSACTION,
-        expected_target_path: INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
+        records: currentRecords,
       });
-      const current = await readMaybe(join(
-        input.projectRoot,
-        INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-      ));
-      const transaction = await runDurableSingleFileTransaction({
-        projectRoot: input.projectRoot,
-        kind: COMPILE_TRANSACTION,
-        target_path: INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-        expected_base_digest: current === undefined ? null : durableContentDigest(current),
-        target_content: content,
+      const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
+      const compile = buildProjectIndexerCandidateCompileFromRecords({
+        value: input.value,
+        records,
+        operator_contract: authority.operator_contract,
+        profile_contract: authority.profile_contract,
       });
+      const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
       const candidates = await projectIndexerCandidates({
         projectRoot: input.projectRoot,
         compile,
         existing: await readCandidateRecords(input.projectRoot),
       });
-      await writeCandidateRecords(input.projectRoot, candidates);
-      return { transaction, candidate_count: compile.files.length };
+      const candidateContent = candidateRecordsContent(candidates);
+      const current = await readMaybe(join(
+        input.projectRoot,
+        INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
+      ));
+      const currentCandidateLedger = await readMaybe(join(
+        input.projectRoot,
+        CANDIDATE_LEDGER_FILE,
+      ));
+      const targets = [{
+        path: INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
+        operation: "write" as const,
+        base_digest: current === undefined ? null : durableContentDigest(current),
+        target_digest: durableContentDigest(content),
+        content,
+      }, candidateContent === undefined
+        ? {
+            path: CANDIDATE_LEDGER_FILE,
+            operation: "delete" as const,
+            base_digest: currentCandidateLedger === undefined
+              ? null
+              : durableContentDigest(currentCandidateLedger),
+            target_digest: null,
+          }
+        : {
+            path: CANDIDATE_LEDGER_FILE,
+            operation: "write" as const,
+            base_digest: currentCandidateLedger === undefined
+              ? null
+              : durableContentDigest(currentCandidateLedger),
+            target_digest: durableContentDigest(candidateContent),
+            content: candidateContent,
+          }].sort((left, right) => left.path.localeCompare(right.path));
+      const transaction = await runDurableMultiFileTransaction({
+        projectRoot: input.projectRoot,
+        kind: COMPILE_TRANSACTION,
+        proposal_digest: indexerProtocolDigest({
+          compile_digest: compile.compile_digest,
+          candidate_content_digest: candidateContent === undefined
+            ? null
+            : durableContentDigest(candidateContent),
+        }),
+        targets,
+        ...(input.inject_failure === undefined
+          ? {}
+          : { inject_failure: input.inject_failure }),
+      });
+      return { transaction, candidate_count: compile.files.length, compile };
     },
   );
   const payload = {
     protocol: "context.indexer.candidate-compile-action/v1" as const,
     outcome: "indexer-candidates-compiled" as const,
     graph_outcome: "completed" as const,
-    compile,
+    compile: persisted.compile,
     transaction: persisted.transaction,
     candidate_count: persisted.candidate_count,
   };

@@ -40,11 +40,20 @@ Skill identities and semantic Indexer entries, and let the CLI perform routing,
 resolution, staging, validation, and atomic registry apply. External resolver
 results and non-allowlisted program decisions resume through subsequent
 `complete-current` Routes; do not invoke the low-level Provider commands.
-For Partition, Author, and Composer steps, read the Route-selected instructions
-and Authorized Workset View, return only the compact semantic value requested
-by the current schema, and submit it with the Route's single
-`context action complete-current` command. Do not create a helper script or
-construct internal Result, digest, receipt, Fact, or evidence-binding objects.
+For Partition and Author steps, one Route may contain several independent
+`tasks`. Read the shared instructions once, read each task's Authorized Workset
+View, and return one `results[]` item for every task key in that batch. Submit
+the whole batch with the Route's single `context action complete-current`
+command; a successful completion already carries the next prepared batch or
+the next lifecycle boundary. Do not materialize instructions or Views with
+separate commands, create a helper script, or construct internal Result,
+digest, receipt, Fact, or evidence-binding objects.
+
+The batch is only a transport boundary. Keep every task's semantic answer,
+failure and retry independent, and do not combine unrelated Subjects merely
+because they arrived together. Partition Views intentionally emphasize public
+anchors and compact file context; Author Views add the source-backed supporting
+facts needed for reader content.
 
 Parser packages are Provider internals. Do not expose parser choice as an
 extra user workflow unless it changes coverage or requires executable code the
@@ -68,6 +77,7 @@ outline after all Partition shards converge; the second checks the final
 reader-facing Candidate set. Ordinary mode presents both to the user. Fully
 managed mode lets the Agent resolve both with current-conversation authority.
 A destructive or ambiguous layout change is separate and always human-only.
+Intermediate execution batches never create additional user approvals.
 
 ## Quality bar
 

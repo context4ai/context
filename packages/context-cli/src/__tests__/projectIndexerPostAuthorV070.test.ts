@@ -17,9 +17,11 @@ import {
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 import {
   composeIndexerPostAuthorEnvelopeStore,
+  completeIndexerPostAuthorRunsStore,
   postAuthorCurrentEnvelopePath,
   postAuthorCurrentStatePath,
   prepareIndexerPostAuthorRunStore,
+  startIndexerPostAuthorRunsStore,
 } from "../project/indexerPostAuthorRunStore.js";
 import { readPostAuthorCurrentState } from
   "../project/indexerPostAuthorStorePersistence.js";
@@ -376,5 +378,90 @@ describe("project post-author composer lifecycle", () => {
     expect((await readPostAuthorCurrentState(root, digest("6")))?.state_digest).toBe(
       second.receipt.state_digest,
     );
+  });
+
+  test("starts and accepts independent Composer tasks in one durable batch transaction", async () => {
+    const { root, requirementDigest } = await project();
+    const effective = await runInput(root, "resolve-effective-composers", {
+      protocol: "context.indexer.effective-composer-resolution-input/v1",
+      requirement_set_digest: requirementDigest,
+      selections: [{
+        id: "examples",
+        provider: "sample-extension",
+        composer_selection_entry_digest: digest("6"),
+      }],
+      manifest_layers: [{
+        provider: "sample-extension",
+        layer_ref: "provider:sample-extension#layer:supporting",
+        layer_integrity: digest("7"),
+        bundle_digest: digest("8"),
+        composers: [{ id: "examples", supported_profiles: ["component-library"] }],
+      }],
+      current_profiles: ["component-library"],
+    });
+    const first = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+      authorWorksetDigest: digest("1"),
+      primaryResultDigest: digest("2"),
+    });
+    const second = await prepare({
+      root,
+      requirementDigest,
+      effectiveComposerSet: effective,
+      authorWorksetDigest: digest("9"),
+      primaryResultDigest: digest("b"),
+    });
+    if (first.plan.state !== "pending" || second.plan.state !== "pending") {
+      throw new Error("expected two pending Composer plans");
+    }
+    const started = await startIndexerPostAuthorRunsStore({
+      projectRoot: root,
+      runs: [first, second].map((item) => ({
+        plan: item.plan,
+        ledger: item.ledger,
+        composer_ref: item.plan.worksets[0]!.composer_ref,
+      })),
+    });
+    expect(started.tasks).toHaveLength(2);
+    expect(started.transaction?.target_digests.filter((target) =>
+      target.path.includes("/current/")
+    )).toHaveLength(2);
+    const completed = await completeIndexerPostAuthorRunsStore({
+      projectRoot: root,
+      runs: started.tasks.map((task, index) => {
+        const resultPayload = {
+          protocol: "context.indexer.layer-fragment-result/v1" as const,
+          request_digest: task.request.request_digest,
+          composer_ref: task.request.composer_ref,
+          consumed_primary_result_view_digest:
+            task.request.primary_result_view.view_digest,
+          fragments: [],
+        };
+        return {
+          plan: index === 0 ? first.plan : second.plan,
+          ledger: task.ledger,
+          composer_ref: task.request.composer_ref,
+          outcome: "accept" as const,
+          result: {
+            ...resultPayload,
+            result_digest: indexerProtocolDigest(resultPayload),
+          },
+          validator_contract_digest: digest("3"),
+        };
+      }),
+    });
+    expect(completed.outcomes).toEqual([
+      expect.objectContaining({ outcome: "accepted", committed: true }),
+      expect.objectContaining({ outcome: "accepted", committed: true }),
+    ]);
+    expect(completed.transaction?.target_digests.filter((target) =>
+      target.path.includes("/current/")
+    )).toHaveLength(2);
+    expect((await readPostAuthorCurrentState(root, digest("1")))?.ledger.entries[0]?.state)
+      .toBe("accepted");
+    expect((await readPostAuthorCurrentState(root, digest("9")))?.ledger.entries[0]?.state)
+      .toBe("accepted");
   });
 });

@@ -3,11 +3,12 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  rm,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import {
   hostActionInputDigest,
   type HostActionResult,
@@ -57,10 +58,18 @@ import {
 } from "../project/indexerWorksetViewMaterialization.js";
 
 const REQUIREMENT_DIGEST = `sha256:${"a".repeat(64)}`;
-const WORKSET_DIGEST = `sha256:${"b".repeat(64)}`;
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
+const temporaryRoots: string[] = [];
+let distributionRoot: string | undefined;
+let sharedDistribution: Awaited<ReturnType<typeof setupDistribution>> | undefined;
+
+async function temporaryRoot(prefix: string): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), prefix));
+  temporaryRoots.push(root);
+  return root;
+}
 
 async function setupDistribution(root: string) {
   const assetsRoot = join(root, "assets");
@@ -78,6 +87,30 @@ async function setupDistribution(root: string) {
     distribution: selected.distribution,
   };
   return { assetsRoot, release, selected, expected };
+}
+
+beforeAll(async () => {
+  distributionRoot = await mkdtemp(join(tmpdir(), "context-indexer-instruction-distribution-"));
+  sharedDistribution = await setupDistribution(distributionRoot);
+}, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
+
+afterEach(async () => {
+  await Promise.all(temporaryRoots.splice(0).map((root) =>
+    rm(root, { recursive: true, force: true })
+  ));
+});
+
+afterAll(async () => {
+  if (distributionRoot !== undefined) {
+    await rm(distributionRoot, { recursive: true, force: true });
+  }
+});
+
+function distributionFixture(): Awaited<ReturnType<typeof setupDistribution>> {
+  if (sharedDistribution === undefined) {
+    throw new Error("bundled Indexer distribution fixture is not initialized");
+  }
+  return sharedDistribution;
 }
 
 function registryEntry(input: {
@@ -142,8 +175,6 @@ async function buildRequest(input: {
   bundle: Awaited<ReturnType<typeof resolveCliBundledIndexerProvider>>;
   staged: Awaited<ReturnType<typeof stageIndexerProviderBundle>>;
   customization?: "extend";
-  requirementSetDigest?: string;
-  worksetDigest?: string;
   composerId?: string;
 }) {
   const manifest = await loadIndexerProviderManifest(input.staged.stage_path);
@@ -182,9 +213,7 @@ async function buildRequest(input: {
     customization,
     indexerId: input.expected.indexerId,
     providerId: input.expected.providerId,
-    requirementSetDigest: input.requirementSetDigest ?? REQUIREMENT_DIGEST,
-    worksetRef: "main-workset:sample",
-    worksetDigest: input.worksetDigest ?? WORKSET_DIGEST,
+    stage: input.composerId === undefined ? "partition" : "post-author",
     profile: "component-library",
     ...(input.composerId === undefined ? {} : { composerId: input.composerId }),
   });
@@ -198,9 +227,7 @@ function materializationAuthority(
     resource_id: request.resource_id,
     indexer_id: request.indexer_id,
     provider_id: request.provider_id,
-    requirement_set_digest: request.requirement_set_digest,
-    workset_ref: request.workset_ref,
-    workset_digest: request.workset_digest,
+    stage: request.stage,
     instruction_set_digest: request.instruction_set_digest,
   };
 }
@@ -377,8 +404,8 @@ function parserFactView() {
 
 describe("resolved-indexer-instructions materialization", () => {
   test("binds exact Provider, requirement, workset, resource set, payload, and Context receipt", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-instructions-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-instructions-");
+    const distribution = distributionFixture();
     const { bundle, staged } = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -415,8 +442,8 @@ describe("resolved-indexer-instructions materialization", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("adds only the selected composer instruction to a post-author request", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-composer-instructions-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-composer-instructions-");
+    const distribution = distributionFixture();
     const resolved = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -447,8 +474,8 @@ describe("resolved-indexer-instructions materialization", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("keeps semantic request/payload stable across transports while receipts remain delivery-specific", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-instruction-stability-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-instruction-stability-");
+    const distribution = distributionFixture();
     const firstRoot = join(root, "first");
     const secondRoot = join(root, "second");
     const first = await resolveAndStage({
@@ -489,8 +516,8 @@ describe("resolved-indexer-instructions materialization", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("appends only the declared local instructions and changes the resource-set identity", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-instruction-custom-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-instruction-custom-");
+    const distribution = distributionFixture();
     const resolved = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -501,7 +528,7 @@ describe("resolved-indexer-instructions materialization", () => {
     const localRoot = join(root, "src", "indexer", distribution.expected.indexerId);
     await mkdir(localRoot, { recursive: true });
     await writeFile(join(localRoot, "instructions.md"), [
-      "<!-- @context-indexer-origin context-code-indexer@1.1.1 profile=component-library -->",
+      "<!-- @context-indexer-origin context-code-indexer@1.1.2 profile=component-library -->",
       "Require public examples to use stable source refs.",
       "",
     ].join("\n"));
@@ -529,8 +556,8 @@ describe("resolved-indexer-instructions materialization", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects stale request, changed stage bytes, and forged output payload", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-instruction-invalid-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-instruction-invalid-");
+    const distribution = distributionFixture();
     const resolved = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -538,7 +565,7 @@ describe("resolved-indexer-instructions materialization", () => {
       expected: distribution.expected,
     });
     const input = await buildRequest({ root, expected: distribution.expected, ...resolved });
-    const stale = { ...input.request, workset_digest: `sha256:${"c".repeat(64)}` };
+    const stale = { ...input.request, stage: "author" as const };
     await expect(materializeIndexerInstructions({
       request: stale,
       currentAuthority: materializationAuthority(input.request),
@@ -553,10 +580,7 @@ describe("resolved-indexer-instructions materialization", () => {
       provider_id: "other-provider",
     }, {
       ...authority,
-      requirement_set_digest: digest("c"),
-    }, {
-      ...authority,
-      workset_digest: digest("c"),
+      stage: "author" as const,
     }, {
       ...authority,
       instruction_set_digest: digest("c"),
@@ -580,7 +604,7 @@ describe("resolved-indexer-instructions materialization", () => {
       workspaceRoot: root,
     })).rejects.toThrow("staged Provider changed");
 
-    const freshRoot = await mkdtemp(join(tmpdir(), "context-indexer-instruction-forged-"));
+    const freshRoot = await temporaryRoot("context-indexer-instruction-forged-");
     const fresh = await resolveAndStage({
       root: freshRoot,
       assetsRoot: distribution.assetsRoot,
@@ -602,8 +626,8 @@ describe("resolved-indexer-instructions materialization", () => {
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("round-trips inline and managed instruction output through the Host-action ABI", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-instruction-host-"));
-    const distribution = await setupDistribution(root);
+    const root = await temporaryRoot("context-indexer-instruction-host-");
+    const distribution = distributionFixture();
     const resolved = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -656,9 +680,9 @@ describe("resolved-indexer-instructions materialization", () => {
     })).rejects.toThrow();
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("projects the static thin Agent Action with a runtime-bound instruction Resource", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-agent-route-"));
-    const distribution = await setupDistribution(root);
+  test("projects the static thin Agent Action with ready instruction and View files", async () => {
+    const root = await temporaryRoot("context-indexer-agent-route-");
+    const distribution = distributionFixture();
     const resolved = await resolveAndStage({
       root,
       assetsRoot: distribution.assetsRoot,
@@ -670,10 +694,8 @@ describe("resolved-indexer-instructions materialization", () => {
       root,
       expected: distribution.expected,
       ...resolved,
-      requirementSetDigest: runRequest.workset.requirement_set_digest,
-      worksetDigest: runRequest.workset.workset_digest,
     });
-    await materializeIndexerInstructionHostAction({
+    const instructionHost = await materializeIndexerInstructionHostAction({
       request: input.request,
       currentAuthority: materializationAuthority(input.request),
       ...resolved,
@@ -684,6 +706,7 @@ describe("resolved-indexer-instructions materialization", () => {
     });
     const worksetView = prepareIndexerWorksetViewMaterialization({
       run_request: runRequest,
+      resource_id: "authorized-indexer-workset-view/task-001",
       projection_sources: buildIndexerMainRunWorksetViewSources({
         request: runRequest,
         source_projection_sources: buildIndexerParserWorksetViewSource({
@@ -716,9 +739,18 @@ describe("resolved-indexer-instructions materialization", () => {
       },
     });
     const initial = await buildIndexerAgentStepRoute({
-      run_request: runRequest,
+      run_requests: [runRequest],
       instruction_request: input.request,
-      workset_view_request: worksetView.request,
+      workset_view_requests: [worksetView.request],
+      ready_instruction: {
+        path: join(root, "ready-instructions.json"),
+        digest: instructionHost.materialized.payload_digest,
+      },
+      ready_workset_views: [{
+        resource_id: worksetView.request.resource_id,
+        path: worksetViewHost.managed_output.file_path,
+        digest: worksetView.request.payload_digest,
+      }],
       workspaceRoot: root,
     });
     expect(initial.route.action).toMatchObject({
@@ -734,25 +766,24 @@ describe("resolved-indexer-instructions materialization", () => {
     );
     expect(instructions).toMatchObject({
       read_state: "read-required",
-      materialize: {
-        handler: "context.materialize-indexer-instructions/v1",
-        input: { value: input.request },
-        output_schema: "context.indexer.materialized-resource/v1",
-      },
+      path: join(root, "ready-instructions.json"),
+      digest: instructionHost.materialized.payload_digest,
     });
+    expect(instructions?.command).toBeUndefined();
+    expect(instructions?.materialize).toBeUndefined();
     expect(JSON.stringify(initial.route)).not.toContain("__runtime__");
     expect(JSON.stringify(initial.route)).not.toContain(resolved.staged.stage_path);
 
     expect(initial.route.resources.required.find((resource) =>
-      resource.id === "authorized-indexer-workset-view"
+      resource.id === "authorized-indexer-workset-view/task-001"
     )).toMatchObject({
       read_state: "read-required",
-      materialize: {
-        handler: "context.materialize-indexer-workset-view/v1",
-        input: { value: worksetView.request },
-        output_schema: "context.indexer.authorized-workset-view/v1",
-      },
+      path: worksetViewHost.managed_output.file_path,
+      digest: worksetView.request.payload_digest,
     });
+    expect(initial.route.resources.required.some((resource) =>
+      resource.command?.includes("resource materialize") === true
+    )).toBe(false);
 
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

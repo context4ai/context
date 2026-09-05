@@ -614,6 +614,9 @@ export async function addRepoSourceUnlocked(input: AddRepoSourceInput): Promise<
   const existing = index === -1 ? undefined : registry.repos[index];
   const next = await normalizeAddInput(input, existing);
   const source = index === -1 ? next : { ...registry.repos[index], ...next };
+  // Normalization owns the complete local scope, including an absent root subpath.
+  // An omitted --local preserves the previous scope inside normalizeAddInput.
+  if (next.subpath === undefined) delete source.subpath;
   if (index === -1) registry.repos.push(source);
   else registry.repos[index] = source;
   await writeRepoRegistry(input.projectRoot, registry);

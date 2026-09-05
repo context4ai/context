@@ -26,8 +26,7 @@ import { createPhaseRunId, writePhaseRunLog } from "./runLog.js";
 import { findContextProjectRoot, loadContextProjectModule } from "./workspace.js";
 import { bindWorkflowExecutionContext } from "./workflow/workflowExecutionContext.js";
 import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
-import { advanceCurrentIndexerLifecycle } from "./indexerCurrentLifecycle.js";
-import { collectProjectStatus } from "./status.js";
+import { runCurrentIndexerLifecycle } from "./indexerLifecycleRun.js";
 
 export interface ProjectPhaseRunPlan {
   projectRoot: string;
@@ -276,9 +275,9 @@ export async function runProjectPhaseCommand(input: {
     });
   }
 
-  const loaded = await loadContextProjectModule(found.projectRoot);
   const format = input.format ?? "text";
   if (input.list === true) {
+    const loaded = await loadContextProjectModule(found.projectRoot);
     const phaseEntries = await normalizeRunPhasesForList({
       projectRoot: found.projectRoot,
       phases: loaded.project.phases,
@@ -287,30 +286,29 @@ export async function runProjectPhaseCommand(input: {
     return;
   }
   if (input.phaseId === undefined) {
-    const advanced = await advanceCurrentIndexerLifecycle(found.projectRoot);
-    const status = await collectProjectStatus(found.projectRoot, {
+    const result = await runCurrentIndexerLifecycle({
+      projectRoot: found.projectRoot,
       managed: input.managed === true,
       authorities: input.authorities ?? [],
+      ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
     });
     if (format === "json") {
-      process.stdout.write(`${JSON.stringify({
-        protocol: "context.indexer.lifecycle-advance/v1",
-        ...advanced,
-        workflow: status.workflow,
-      }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }
     process.stdout.write(formatFeedback({
       symbol: "✓",
-      action: advanced.advanced ? "advanced" : "observed",
+      action: result.advanced ? "advanced" : "observed",
       subject: "Indexer lifecycle",
-      headline: advanced.state,
-      next: status.workflow.current?.commands[0]?.command ??
-        "context status --format json",
+      headline: result.state,
+      next: result.workflow.current?.configuration === undefined
+        ? result.workflow.current?.commands[0]?.command ?? "context status --format json"
+        : `Update ${result.workflow.current.configuration.file}: ${result.workflow.current.configuration.action}`,
     }));
     return;
   }
 
+  const loaded = await loadContextProjectModule(found.projectRoot);
   const phase = await findPhaseForRun({
     projectRoot: found.projectRoot,
     phases: loaded.project.phases,

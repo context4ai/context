@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { compositionFactDependencies } from "./indexerCompositionFactDependencies.js";
 import {
   indexerEvidenceTargetAllows,
   type IndexerArtifactResult,
@@ -209,6 +210,7 @@ export function buildIndexerArtifactDependencySet(input: {
   workset: IndexerMainAuthorWorkset;
   run_envelope: unknown;
   dependency_view: unknown;
+  composition_input?: unknown;
   authorized_evidence_targets?: readonly IndexerAuthorizedEvidenceTarget[];
 }): IndexerArtifactDependencySet {
   const runEnvelope = validateIndexerRunEnvelope(input.run_envelope);
@@ -270,9 +272,15 @@ export function buildIndexerArtifactDependencySet(input: {
     return [evidence.evidence_ref, versionedPositive(node)] as const;
   }));
 
-  const factNodes = dependencyView.positive_nodes.filter((node) =>
-    node.kind === "selected-fact"
-  );
+  const factNodes = [
+    ...dependencyView.positive_nodes.filter((node) => node.kind === "selected-fact"),
+    ...(input.composition_input === undefined ? [] : compositionFactDependencies({
+      composition_input: input.composition_input,
+      workset: input.workset,
+      dependency_view: dependencyView,
+      result: input.result,
+    })),
+  ];
   const factNodeByRef = new Map(factNodes.map((node) => [node.fact_ref, node]));
   const factByRef = new Map(input.result.facts.map((fact) => {
     const node = factNodeByRef.get(fact.fact_ref);
@@ -399,6 +407,7 @@ export function validateIndexerArtifactDependencySet(input: {
   workset: IndexerMainAuthorWorkset;
   run_envelope: unknown;
   dependency_view: unknown;
+  composition_input?: unknown;
   authorized_evidence_targets?: readonly IndexerAuthorizedEvidenceTarget[];
 }): IndexerArtifactDependencySet {
   const value = indexerArtifactDependencySetSchema.parse(input.value);
@@ -413,6 +422,7 @@ export function validateIndexerArtifactDependencySet(input: {
     workset: input.workset,
     run_envelope: input.run_envelope,
     dependency_view: input.dependency_view,
+    ...(input.composition_input === undefined ? {} : { composition_input: input.composition_input }),
     ...(input.authorized_evidence_targets === undefined
       ? {}
       : { authorized_evidence_targets: input.authorized_evidence_targets }),

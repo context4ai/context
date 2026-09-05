@@ -41,6 +41,8 @@ export const ErrorCategory = {
   MountMatrixViolation: "mount-matrix-violation",
   /** Frontmatter / schema validation failed against the contract. */
   SchemaInvalid: "schema-invalid",
+  /** An exact Provider version/integrity requested by the registry is absent from this CLI release. */
+  ProviderIdentityMismatch: "provider-identity-mismatch",
   /** Subprocess (lark-cli, git, …) exited non-zero or unavailable. */
   ExternalToolFailed: "external-tool-failed",
   /** Multi-step operation completed N of M steps before failing. */

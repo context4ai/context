@@ -549,12 +549,18 @@ describe("main Indexer run protocol", () => {
     const workset = partitionWorkset();
     const currentRequest = request(workset);
     const stepInput = buildIndexerAgentStepInput({
-      run_request: currentRequest,
+      run_requests: [currentRequest],
       instruction_request_digest: digest("e"),
+      workset_view_requests: [{
+        resource_id: "authorized-indexer-workset-view/task-001",
+        workset_digest: workset.workset_digest,
+        request_digest: digest("f"),
+      }],
     });
-    expect(stepInput.run_request.execution_request_digest).toBe(
+    expect(stepInput.tasks[0]?.execution_request_digest).toBe(
       currentRequest.execution_request_digest,
     );
+    expect(stepInput.transport.worksets).toEqual([workset]);
     expect(stepInput.instruction_request_digest).toBe(digest("e"));
   });
 });

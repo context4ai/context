@@ -34,11 +34,17 @@ import { buildProjectIndexerQuestionTargetInventory } from
   "./indexerQuestionTargetInventoryActions.js";
 import { readCurrentIndexerPostAuthorEnvelopeForResult } from
   "./indexerPostAuthorRunStore.js";
-import { resolveCurrentIndexerComposerContext } from "./indexerCurrentComposer.js";
+import { resolveCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { loadCurrentIndexerProviderSelection } from
   "./indexerCurrentProviderSelection.js";
+import {
+  prepareIndexerReaderPaths,
+  resolveIndexerReaderPaths,
+  type IndexerReaderPathChoice,
+  type IndexerReaderPathPreparation,
+} from "./indexerLayoutPathResolution.js";
 
 export const INDEXER_CURRENT_FINALIZATION_PATH = join(
   ".tmp",
@@ -60,6 +66,8 @@ export interface CurrentIndexerFinalizationState {
   layout_transition?: ReturnType<typeof buildIndexerLayoutTransition>;
   confirmations?: IndexerLayoutChangeConfirmation[];
   compile_digest?: string;
+  path_preparation?: IndexerReaderPathPreparation;
+  path_resolution?: { input_digest: string; paths: IndexerReaderPathChoice[] };
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
@@ -136,11 +144,14 @@ function approvedBaseProjection(input: {
     const collection = text(view.collection);
     if (path === undefined || collection === undefined) return [];
     const outputPath = path.startsWith("knowledge/") ? path : `knowledge/${path}`;
+    const identity = input.proposal.artifacts.find((artifact) =>
+      artifact.internal_view_ref === view.view_ref
+    );
     const exact = input.proposal.artifacts.find((artifact) => artifact.output_path === outputPath);
     const byName = input.proposal.artifacts.filter((artifact) =>
       readableId(artifact.artifact_id) === readableId(basename(path))
     );
-    const proposed = exact ?? (byName.length === 1 ? byName[0] : undefined) ??
+    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined) ??
       (views.length === 1 && input.proposal.artifacts.length === 1
         ? input.proposal.artifacts[0]
         : undefined);
@@ -250,22 +261,106 @@ export async function confirmCurrentIndexerLayout(input: {
   projectRoot: string;
   revision: string;
   actor_ref: string;
+  paths?: readonly IndexerReaderPathChoice[];
 }): Promise<void> {
   const current = await readCurrentIndexerFinalization(input.projectRoot);
   if (
     current?.state !== "layout-confirmation-required" ||
-    current.revision !== input.revision ||
-    current.layout_transition === undefined
+    current.revision !== input.revision
   ) {
     throw new TypeError("layout confirmation targets a stale transition");
   }
-  const confirmations = current.layout_transition.change_reports
+  const resolvingPaths = current.path_preparation !== undefined &&
+    current.revision === current.path_preparation.input_digest &&
+    current.path_preparation.conflicts.length > 0;
+  const layoutSet = resolvingPaths
+    ? resolveIndexerReaderPaths({ preparation: current.path_preparation!, paths: input.paths ?? [] })
+    : current.layout_proposal_set;
+  if (!resolvingPaths && input.paths !== undefined) {
+    throw new TypeError("this layout confirmation does not request new output paths");
+  }
+  const transition = resolvingPaths
+    ? buildIndexerLayoutTransition({
+        layout_proposal_set: layoutSet!,
+        base_projections: current.path_preparation!.base_projections,
+      })
+    : current.layout_transition;
+  if (transition === undefined) throw new TypeError("layout confirmation has no current transition");
+  // Choosing names is not approval of unrelated changes to existing pages.
+  // If the resolved layout also moves/removes old content, present that Gate next.
+  const confirmations = (resolvingPaths ? [] : transition.change_reports)
     .filter((report) => report.requires_confirmation)
     .map((report) => buildIndexerLayoutChangeConfirmation({
       report,
       actor_ref: input.actor_ref,
     }));
-  await writeState(input.projectRoot, { ...current, confirmations });
+  const { path_preparation: _preparation, ...state } = current;
+  void _preparation;
+  await writeState(input.projectRoot, {
+    ...state,
+    revision: transition.transition_digest,
+    ...(layoutSet === undefined ? {} : { layout_proposal_set: layoutSet }),
+    layout_transition: transition,
+    confirmations,
+    ...(resolvingPaths ? { path_resolution: {
+      input_digest: current.path_preparation!.input_digest,
+      paths: [...input.paths!],
+    } } : {}),
+  });
+}
+
+export async function prepareCurrentIndexerLayout(input: {
+  projectRoot: string;
+  proposals: readonly IndexerLayoutProposal[];
+}) {
+  const metadata = await readApprovedKnowledgeMetadataIndex(input.projectRoot);
+  const bases = input.proposals.flatMap((proposal) => {
+    const base = approvedBaseProjection({ proposal, structure: metadata.structure });
+    return base === undefined ? [] : [base];
+  });
+  const preparation = prepareIndexerReaderPaths({
+    proposals: input.proposals,
+    base_projections: bases,
+    occupied_paths: [...metadata.byPath.keys()].map((path) =>
+      path.startsWith("knowledge/") ? path : `knowledge/${path}`
+    ),
+  });
+  const previous = await readCurrentIndexerFinalization(input.projectRoot);
+  const choices = previous?.path_resolution?.input_digest === preparation.input_digest
+    ? previous.path_resolution.paths
+    : undefined;
+  if (preparation.conflicts.length > 0 && choices === undefined) {
+    return { pending: true as const, state: await writeState(input.projectRoot, {
+      state: "layout-confirmation-required",
+      revision: preparation.input_digest,
+      path_preparation: preparation,
+    }) };
+  }
+  const layoutSet = resolveIndexerReaderPaths({ preparation, paths: choices ?? [] });
+  const transition = buildIndexerLayoutTransition({
+    layout_proposal_set: layoutSet,
+    base_projections: bases,
+  });
+  const confirmations = previous?.layout_transition?.transition_digest === transition.transition_digest
+    ? previous.confirmations ?? []
+    : [];
+  const layout = {
+    layout_proposal_set: layoutSet,
+    layout_transition: transition,
+    confirmations,
+    ...(choices === undefined ? {} : { path_resolution: {
+      input_digest: preparation.input_digest,
+      paths: choices,
+    } }),
+  };
+  if (transition.requires_confirmation && confirmations.length === 0) {
+    return { pending: true as const, state: await writeState(input.projectRoot, {
+      state: "layout-confirmation-required",
+      revision: transition.transition_digest,
+      ...layout,
+    }) };
+  }
+  return { pending: false as const, layout };
 }
 
 export async function advanceCurrentIndexerFinalization(
@@ -277,12 +372,12 @@ export async function advanceCurrentIndexerFinalization(
     ledger.entries.some((entry) => entry.stage !== "author" || entry.state !== "accepted")
   ) return undefined;
 
-  const composer = await resolveCurrentIndexerComposerContext(projectRoot);
-  if (composer !== undefined) {
+  const composerBatch = await resolveCurrentIndexerComposerBatch(projectRoot);
+  if (composerBatch !== undefined) {
     return writeState(projectRoot, {
       state: "composer-required",
-      revision: composer.request.request_digest,
-      diagnostic: `Composer ${composer.request.composer_ref} is ready for the current Author Result.`,
+      revision: composerBatch.batch_digest,
+      diagnostic: `${composerBatch.tasks.length} Composer task(s) are ready.`,
     });
   }
   const loaded = await loadIndexerRegistry(projectRoot);
@@ -420,29 +515,9 @@ export async function advanceCurrentIndexerFinalization(
       shared_artifact_fingerprint: record.run_envelope.shared_artifact_fingerprint,
     }));
   }
-  const layoutSet = buildIndexerLayoutProposalSet(proposals);
-  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
-  const bases = proposals.flatMap((proposal) => {
-    const base = approvedBaseProjection({ proposal, structure: metadata.structure });
-    return base === undefined ? [] : [base];
-  });
-  const transition = buildIndexerLayoutTransition({
-    layout_proposal_set: layoutSet,
-    base_projections: bases,
-  });
-  const previous = await readCurrentIndexerFinalization(projectRoot);
-  const confirmations = previous?.revision === transition.transition_digest
-    ? previous.confirmations ?? []
-    : [];
-  if (transition.requires_confirmation && confirmations.length === 0) {
-    return writeState(projectRoot, {
-      state: "layout-confirmation-required",
-      revision: transition.transition_digest,
-      layout_proposal_set: layoutSet,
-      layout_transition: transition,
-      confirmations: [],
-    });
-  }
+  const prepared = await prepareCurrentIndexerLayout({ projectRoot, proposals });
+  if (prepared.pending) return prepared.state;
+  const { layout_proposal_set: layoutSet, layout_transition: transition, confirmations } = prepared.layout;
   const compiled = await compileProjectIndexerCandidates({
     projectRoot,
     value: {
@@ -477,9 +552,7 @@ export async function advanceCurrentIndexerFinalization(
   return writeState(projectRoot, {
     state: "ready",
     revision: readinessDigest,
-    layout_proposal_set: layoutSet,
-    layout_transition: transition,
-    confirmations,
+    ...prepared.layout,
     compile_digest: compiled.compile.compile_digest,
   });
 }

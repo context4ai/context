@@ -196,6 +196,7 @@ nodes:
     inspectionAction: actions/inspect-review.yaml
     resolutionAction: actions/apply-forced-review.yaml
     delegated:
+      inspection: skip
       resolutionAction: actions/apply-managed-review.yaml
       resources:
         required:

@@ -105,6 +105,20 @@ rules, metric operators and thresholds.
     instructions append → one template override → program extension →
     restricted replace. Document the proof and exit condition at every step;
     see [Provider selection and customization](./indexer-provider-and-customization.md).
+24. **Batch neutrality.** Write instructions for one semantic task and accept
+    that Context may transport several independent tasks in one Agent step.
+    Never derive identity, ordering, ownership or evidence scope from a task
+    key or batch position. Partition should decide consumer-facing ownership
+    from public anchors and unresolved material; detailed supporting Facts are
+    consumed in the bounded Author View rather than copied into every
+    Partition decision.
+
+For behavioral explanations, the Author View also supplies `source-text`
+items with the authorized source lines. Each merged range links to existing
+source-span dependency nodes through `source_span_refs`; use those nodes for
+evidence bindings. These process-local snippets are reading material, not new
+Facts or reader-page metadata. Do not reopen the repository or infer behavior
+from a locator alone when the supplied lines do not establish it.
 
 ## Result and composition rules
 

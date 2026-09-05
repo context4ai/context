@@ -4,4 +4,3 @@ description: Continue the unique registry-and-Provider Indexer lifecycle until c
 runner: agent
 effect: write
 skill: skills/run-indexer-lifecycle/SKILL.md
-outputSchema: schemas/indexer-lifecycle-continuation.schema.json

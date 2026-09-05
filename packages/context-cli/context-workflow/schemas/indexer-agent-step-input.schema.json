@@ -1,30 +1,80 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "context.indexer.agent-step-input/v1",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["protocol", "run_request", "instruction_request_digest", "input_digest"],
-  "properties": {
-    "protocol": { "const": "context.indexer.agent-step-input/v1" },
-    "run_request": {
-      "type": "object",
-      "required": ["protocol", "operation", "workset", "composition_input", "final_authority", "execution_request_digest"],
-      "properties": {
-        "protocol": { "const": "context.indexer.run-request/v2" },
-        "operation": { "const": "main-index" },
-        "workset": { "type": "object" },
-        "composition_input": { "type": "object" },
-        "final_authority": { "type": "object" },
-        "execution_request_digest": { "$ref": "#/$defs/digest" }
-      }
-    },
-    "instruction_request_digest": { "$ref": "#/$defs/digest" },
-    "input_digest": { "$ref": "#/$defs/digest" }
-  },
+  "$id": "context.indexer.agent-step-input/v2",
+  "oneOf": [
+    { "$ref": "#/$defs/main" },
+    { "$ref": "#/$defs/postAuthor" }
+  ],
   "$defs": {
     "digest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "main": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "stage", "transport", "instruction_request_digest", "tasks", "input_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.agent-step-input/v2" },
+        "stage": { "enum": ["partition", "author"] },
+        "transport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "worksets"],
+          "properties": {
+            "protocol": { "const": "context.indexer.main-transport-batch/v2" },
+            "worksets": { "type": "array", "minItems": 1, "items": { "type": "object" } }
+          }
+        },
+        "instruction_request_digest": { "$ref": "#/$defs/digest" },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/mainTask" }
+        },
+        "input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "mainTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_key", "workset_digest", "execution_request_digest", "consumed_input_view_digest", "workset_view_resource_id", "workset_view_request_digest"],
+      "properties": {
+        "task_key": { "type": "string", "pattern": "^task-[0-9]{3}$" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "execution_request_digest": { "$ref": "#/$defs/digest" },
+        "consumed_input_view_digest": { "$ref": "#/$defs/digest" },
+        "workset_view_resource_id": { "type": "string", "pattern": "^authorized-indexer-workset-view/task-[0-9]{3}$" },
+        "workset_view_request_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "postAuthor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "stage", "instruction_request_digest", "tasks", "input_digest"],
+      "properties": {
+        "protocol": { "const": "context.indexer.agent-step-input/v2" },
+        "stage": { "const": "post-author" },
+        "instruction_request_digest": { "$ref": "#/$defs/digest" },
+        "tasks": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/postAuthorTask" }
+        },
+        "input_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "postAuthorTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_key", "workset_digest", "request_digest", "primary_result_view_digest", "workset_view_resource_id"],
+      "properties": {
+        "task_key": { "type": "string", "pattern": "^task-[0-9]{3}$" },
+        "workset_digest": { "$ref": "#/$defs/digest" },
+        "request_digest": { "$ref": "#/$defs/digest" },
+        "primary_result_view_digest": { "$ref": "#/$defs/digest" },
+        "workset_view_resource_id": { "type": "string", "pattern": "^authorized-indexer-workset-view/task-[0-9]{3}$" }
+      }
     }
   }
 }

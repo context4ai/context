@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
+import { isRuntimeOnlyKnowledgeMetadataField } from "./knowledgeMetadataPolicy.js";
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
 const CONTEXT_METADATA_BLOCK_RE = /<!--\s*context:(summary|source_refs|audit)\b[\s\S]*?\/context:\1\s*-->[ \t]*(?:\r?\n){0,2}/giu;
@@ -37,7 +38,6 @@ const PACKAGE_INVENTORY_FIELDS = [
   "generated",
   "visibility",
   "code_symbols",
-  "candidate_fingerprint",
 ] as const;
 const COMPILER_ONLY_TAGS = new Set(["docs", "prose", "parent-index"]);
 
@@ -162,6 +162,9 @@ export function packageKnowledgeFrontmatter(
 ): Record<string, unknown> {
   const projected = { ...frontmatter };
   for (const field of PACKAGE_OMITTED_FIELDS) delete projected[field];
+  for (const field of Object.keys(projected)) {
+    if (isRuntimeOnlyKnowledgeMetadataField(field)) delete projected[field];
+  }
   const description = packageKnowledgeDescription(projected.description);
   if (description === undefined) delete projected.description;
   else projected.description = description;
@@ -176,7 +179,10 @@ export function packageKnowledgeMetadata(
 ): Record<string, unknown> | undefined {
   const metadata: Record<string, unknown> = {};
   for (const field of PACKAGE_INVENTORY_FIELDS) {
-    if (frontmatter[field] !== undefined) metadata[field] = frontmatter[field];
+    if (
+      frontmatter[field] !== undefined &&
+      !isRuntimeOnlyKnowledgeMetadataField(field)
+    ) metadata[field] = frontmatter[field];
   }
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }

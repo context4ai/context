@@ -58,6 +58,7 @@ import {
   persistCurrentIndexerProviderSetup,
 } from "./indexerCurrentProviderState.js";
 import { readPackageVersion } from "../lib/packageVersion.js";
+import { currentIndexerProviderSelectionNeedsRefresh } from "./indexerCurrentProviderSelection.js";
 
 const INDEXER_GRAPH_ID = "indexer";
 const PROVIDER_SELECTION_ENTRY = "provider-selection";
@@ -84,13 +85,15 @@ function registrySnapshot(content: string) {
   };
 }
 
-export function indexerRegistryNeedsProviderSelection(registry: IndexerRegistry): boolean {
+export async function indexerRegistryNeedsProviderSelection(
+  projectRoot: string, registry: IndexerRegistry,
+): Promise<boolean> {
   try {
     validateFinalizedIndexerRegistry(registry);
-    return false;
   } catch {
     return true;
   }
+  return currentIndexerProviderSelectionNeedsRefresh({ projectRoot, registry });
 }
 
 export async function buildCurrentIndexerProviderSelectionRoute(input: {
@@ -122,11 +125,12 @@ export async function buildCurrentIndexerProviderSelectionRoute(input: {
   }
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) throw new TypeError("Context Indexer graph digest is unavailable");
-  const requirementSetDigest = indexerRegistryDigests(input.registry).requirementSetDigest;
+  const digests = indexerRegistryDigests(input.registry);
   const revision = indexerProtocolDigest({
     protocol: "context.indexer.current-provider-selection-revision/v1",
     graph_digest: graphDigest,
-    requirement_set_digest: requirementSetDigest,
+    requirement_set_digest: digests.requirementSetDigest,
+    indexer_selection_digest: digests.indexerSelectionDigest,
     bundled_catalog: catalog,
   });
   const actionSource: ContextWorkflowRouteActionSource = {

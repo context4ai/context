@@ -1,8 +1,7 @@
 import { type IndexerPartitionValidationInput } from "@c4a/context";
-import {
-  parseProjectIndexerTargetResolutionViewBindings,
-  prepareCurrentProjectIndexerAuthorRuns,
-} from "./indexerCurrentAuthorPreparation.js";
+import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
+import { prepareCurrentProjectIndexerAuthorRuns } from "./indexerCurrentAuthorPreparation.js";
+import { parseProjectIndexerTargetResolutionViewBindings } from "./indexerAuthorQuestionTargets.js";
 import {
   array,
   assertCurrentRequirement,
@@ -16,6 +15,12 @@ import { buildProjectIndexerQuestionTargetInventory } from
 export async function buildProjectIndexerMainAuthorWorksets(input: {
   projectRoot: string;
   value: unknown;
+  source_partitions?: readonly IndexerPartitionValidationInput[];
+  source_projections?: ReadonlyMap<string, IndexerConsumerWorksetProjection>;
+  origins_by_group_ref?: ReadonlyMap<string, readonly {
+    partition_workset_digest: string;
+    group_key: string;
+  }[]>;
 }) {
   const value = record(input.value, "author workset input");
   protocol(
@@ -75,6 +80,13 @@ export async function buildProjectIndexerMainAuthorWorksets(input: {
     partitions,
     question_target_inventory: questionTargets,
     target_resolution_views: targetResolutionViews,
+    ...(input.source_projections === undefined ? {} : { source_projections: input.source_projections }),
+    ...(input.source_partitions === undefined
+      ? {}
+      : { source_partitions: input.source_partitions }),
+    ...(input.origins_by_group_ref === undefined
+      ? {}
+      : { origins_by_group_ref: input.origins_by_group_ref }),
   });
   return {
     protocol: "context.indexer.main-author-workset-build/v1" as const,

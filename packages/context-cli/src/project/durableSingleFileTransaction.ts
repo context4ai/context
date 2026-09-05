@@ -7,6 +7,7 @@ import {
   rm,
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { measureContextDebugOperation } from "./debugTrace.js";
 
 const TRANSACTION_ROOT = join(".tmp", "context-runtime", "transactions");
 const SAFE_KIND = /^[a-z][a-z0-9-]*$/u;
@@ -238,7 +239,7 @@ export async function recoverDurableSingleFileTransaction(input: {
   };
 }
 
-export async function runDurableSingleFileTransaction(input: {
+async function runDurableSingleFileTransactionInternal(input: {
   projectRoot: string;
   kind: string;
   target_path: string;
@@ -289,4 +290,23 @@ export async function runDurableSingleFileTransaction(input: {
     target_digest: journal.target_digest,
     recovered: false,
   };
+}
+
+export async function runDurableSingleFileTransaction(input: {
+  projectRoot: string;
+  kind: string;
+  target_path: string;
+  expected_base_digest: string | null;
+  target_content: string;
+  inject_failure?: DurableTransactionFailureInjector;
+}): Promise<DurableSingleFileTransactionReceipt> {
+  return measureContextDebugOperation({
+    projectRoot: input.projectRoot,
+    operation: "durable-transaction.commit",
+    counters: {
+      durable_transaction_count: 1,
+      durable_transaction_target_count: 1,
+    },
+    data: { transaction_kind: input.kind, transaction_shape: "single-file" },
+  }, () => runDurableSingleFileTransactionInternal(input));
 }

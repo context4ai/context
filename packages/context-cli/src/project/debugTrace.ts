@@ -23,6 +23,7 @@ type DebugEventKind =
   | "workflow.scope-opened"
   | "workflow.scope-closed"
   | "workflow.stopped"
+  | "performance.measurement"
   | "runtime.telemetry";
 
 interface DebugInvocationContext {
@@ -339,6 +340,52 @@ export async function recordRuntimeTelemetryDelivery(input: {
 
 export async function recordWorkflowStop(projectRoot: string, data: Record<string, unknown>): Promise<void> {
   await appendEvent(projectRoot, "workflow.stopped", data);
+}
+
+export async function recordContextDebugPerformance(input: {
+  projectRoot: string;
+  operation: string;
+  durationMs: number;
+  outcome: "success" | "error";
+  counters?: Readonly<Record<string, number>>;
+  data?: Readonly<Record<string, unknown>>;
+}): Promise<void> {
+  await appendEvent(input.projectRoot, "performance.measurement", {
+    operation: input.operation,
+    duration_ms: Math.max(0, Math.round(input.durationMs * 1_000) / 1_000),
+    outcome: input.outcome,
+    ...(input.counters === undefined ? {} : { counters: input.counters }),
+    ...(input.data === undefined ? {} : { detail: input.data }),
+  });
+}
+
+export async function measureContextDebugOperation<T>(input: {
+  projectRoot: string;
+  operation: string;
+  counters?: Readonly<Record<string, number>>;
+  data?: Readonly<Record<string, unknown>>;
+}, action: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  try {
+    const result = await action();
+    await recordContextDebugPerformance({
+      ...input,
+      durationMs: performance.now() - started,
+      outcome: "success",
+    });
+    return result;
+  } catch (error) {
+    await recordContextDebugPerformance({
+      ...input,
+      durationMs: performance.now() - started,
+      outcome: "error",
+      data: {
+        ...input.data,
+        error_name: error instanceof Error ? error.name : "unknown",
+      },
+    });
+    throw error;
+  }
 }
 
 async function readEvents(projectRoot: string): Promise<ContextDebugEvent[]> {

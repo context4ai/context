@@ -138,14 +138,8 @@ export async function materializeBundledIndexerDistribution(input: {
       `root plugin Skill directory set is missing CLI base contract entries: ${missingCommunityEntries.join(", ")}`,
     );
   }
-  for (const entry of sourceEntries.filter((name) => !communityEntries.includes(
-    name as typeof communityEntries[number],
-  ))) {
-    const provider = await loadIndexerProviderManifest(join(sourceRoot, entry));
-    if (provider.id !== entry) {
-      throw new TypeError(`additional lifecycle Provider directory does not match its manifest id: ${entry}`);
-    }
-  }
+  const providerEntries = sourceEntries.filter((name) => name !== "context")
+    .sort(compareIndexerCanonicalText);
 
   const operators = bundledIndexerOperatorContract();
   const profiles = bundledIndexerProfileContract(operators);
@@ -163,53 +157,58 @@ export async function materializeBundledIndexerDistribution(input: {
     `${JSON.stringify(profiles, null, 2)}\n`,
     "utf8",
   );
-  for (const expected of EXPECTED_BUNDLES) {
-    const source = join(sourceRoot, expected.id);
+  // Every Provider shipped with this CLI is resolved through the same release
+  // catalog. Community-specific fixture checks are not a distribution allowlist.
+  for (const id of providerEntries) {
+    const expected = EXPECTED_BUNDLES.find((bundle) => bundle.id === id);
+    const source = join(sourceRoot, id);
     const copiedQuestionContracts = await inspectCanonicalQuestionPayloadsInBundle({
       repositoryRoot: sourceRoot,
-      bundlePath: expected.id,
+      bundlePath: id,
     });
     if (copiedQuestionContracts.length > 0) {
       throw new TypeError(
-        `${expected.id} duplicates canonical question contract payload: ` +
+        `${id} duplicates canonical question contract payload: ` +
         copiedQuestionContracts.map((finding) => finding.path).join(", "),
       );
     }
     const manifest = await loadIndexerProviderManifest(source);
-    if (manifest.id !== expected.id) {
-      throw new TypeError(`bundled Indexer ${expected.id} manifest id does not match its directory`);
+    if (manifest.id !== id) {
+      throw new TypeError(`bundled Indexer ${id} manifest id does not match its directory`);
     }
-    assertExactSet(manifest.provides.profiles, expected.profiles, `${expected.id} profiles`);
     validateIndexerProviderContractReferences({
       manifest,
-      selected_profiles: expected.profiles,
+      selected_profiles: manifest.provides.profiles,
       profile_contract: profiles,
       operator_contract: operators,
     });
-    if (expected.templateCoverage === "all-profiles") {
+    if (expected !== undefined) {
+      assertExactSet(manifest.provides.profiles, expected.profiles, `${id} profiles`);
+      await validateBundledIndexerComposers({
+        source,
+        bundleId: id,
+        manifest,
+        expected: expected.composers,
+      });
+      await validateBundledIndexerAuthoringFixtures({
+        source,
+        bundleId: id,
+        fixtureFile: expected.fixtureFile,
+        coverage: expected.fixtureCoverage,
+        expectedProfiles: expected.profiles,
+        manifest,
+        profileContract: profiles,
+        operatorContract: operators,
+      });
+    }
+    if (expected?.templateCoverage === "all-profiles") {
       validateBundledIndexerProfileTemplates({
         bundleId: expected.id,
         expectedProfiles: expected.profiles,
         manifest,
       });
     }
-    await validateBundledIndexerComposers({
-      source,
-      bundleId: expected.id,
-      manifest,
-      expected: expected.composers,
-    });
-    await validateBundledIndexerAuthoringFixtures({
-      source,
-      bundleId: expected.id,
-      fixtureFile: expected.fixtureFile,
-      coverage: expected.fixtureCoverage,
-      expectedProfiles: expected.profiles,
-      manifest,
-      profileContract: profiles,
-      operatorContract: operators,
-    });
-    if (expected.codeAuthoring) {
+    if (expected?.codeAuthoring) {
       await validateBundledIndexerCodeChapterFixtures({
         source,
         expectedProfiles: expected.profiles,
@@ -233,7 +232,7 @@ export async function materializeBundledIndexerDistribution(input: {
         expectedMetricIds: BUNDLED_INDEXER_METRIC_IDS,
       });
     }
-    if (expected.markdownAuthoring) {
+    if (expected?.markdownAuthoring) {
       await validateBundledIndexerMarkdownRoutingFixtures({
         source,
         expectedProfiles: expected.profiles,
@@ -253,15 +252,15 @@ export async function materializeBundledIndexerDistribution(input: {
       });
     }
     const files = await collectIndexerBundleFiles(source);
-    if (expected.codeAuthoring) {
+    if (expected?.codeAuthoring) {
       await validateBundledIndexerPortableVocabulary({
         source,
         paths: files.map((file) => file.path),
       });
     }
     const manifestFile = files.find((file) => file.path === "context-indexer.yaml");
-    if (manifestFile === undefined) throw new TypeError(`${expected.id} has no Provider manifest`);
-    const destination = join(input.outputRoot, "bundles", expected.id);
+    if (manifestFile === undefined) throw new TypeError(`${id} has no Provider manifest`);
+    const destination = join(input.outputRoot, "bundles", id);
     await mkdir(destination, { recursive: true });
     await cp(source, destination, { recursive: true, force: true });
     bundles.push({

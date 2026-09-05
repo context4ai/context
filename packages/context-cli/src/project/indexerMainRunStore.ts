@@ -11,6 +11,7 @@ import {
   retryIndexerMainPartitionRun,
   retryFailedIndexerMainRuns,
   startIndexerMainRun,
+  startIndexerMainRuns,
   validateAndRecordIndexerMainRun,
   validateIndexerMainWorksetSet,
   type IndexerMainRunLedger,
@@ -44,6 +45,10 @@ export {
   INDEXER_MAIN_RUN_STORE_ROOT,
 } from "./indexerMainRunStoreRecords.js";
 export type { IndexerMainRunStoreReceipt } from "./indexerMainRunStoreRecords.js";
+export {
+  acceptIndexerMainAuthorRunsStore,
+  acceptIndexerMainPartitionRunsStore,
+} from "./indexerMainRunBatchStore.js";
 
 const PREPARE_TRANSACTION = "prepare-main-index-run-ledger";
 const START_TRANSACTION = "start-main-index-run";
@@ -227,6 +232,45 @@ export async function startIndexerMainRunStore(input: {
   });
 }
 
+export async function startIndexerMainRunsStore(input: {
+  projectRoot: string;
+  workset_digests: readonly string[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}) {
+  return withProjectWriteLock(input.projectRoot, START_TRANSACTION, async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const current = await currentLedger(input.projectRoot);
+    if (current === undefined) throw new TypeError("main run ledger is not prepared");
+    const requestByWorkset = new Map<string, MainRunSpec["request"]>();
+    for (const worksetDigest of input.workset_digests) {
+      const entry = current.entries.find((item) => item.workset_digest === worksetDigest);
+      if (entry === undefined) throw new TypeError("main run ledger has no requested workset");
+      const spec = await currentSpec({
+        projectRoot: input.projectRoot,
+        request_digest: entry.execution_request_digest,
+      });
+      requestByWorkset.set(worksetDigest, spec.request);
+    }
+    const ledger = startIndexerMainRuns({
+      ledger: current,
+      workset_digests: input.workset_digests,
+    });
+    const receipt = await persistLedger({
+      projectRoot: input.projectRoot,
+      operation: "start",
+      transaction_kind: START_TRANSACTION,
+      ledger,
+      ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
+    });
+    return {
+      ledger,
+      requests: input.workset_digests.map((digest) => requestByWorkset.get(digest)!),
+      status: observeIndexerMainRunLedger(ledger),
+      receipt,
+    };
+  });
+}
+
 export async function acceptIndexerMainRunStore(input: {
   projectRoot: string;
   workset_digest: string;
@@ -291,65 +335,6 @@ export async function acceptIndexerMainRunStore(input: {
           }),
       ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
     });
-  });
-}
-
-export async function acceptIndexerMainAuthorRunsStore(input: {
-  projectRoot: string;
-  runs: readonly {
-    workset_digest: string;
-    result: unknown;
-  }[];
-  inject_failure?: DurableMultiFileFailureInjector;
-}) {
-  if (input.runs.length === 0) {
-    throw new TypeError("main author batch acceptance requires at least one run");
-  }
-  if (new Set(input.runs.map((run) => run.workset_digest)).size !== input.runs.length) {
-    throw new TypeError("main author batch acceptance contains duplicate worksets");
-  }
-  return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
-    await recoverDurableMultiFileTransactions(input.projectRoot);
-    let ledger = await currentLedger(input.projectRoot);
-    if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
-    const immutableRecords: Array<{ path: string; value: unknown }> = [];
-    for (const run of input.runs) {
-      const entry = ledger.entries.find((item) => item.workset_digest === run.workset_digest);
-      if (entry?.state !== "running") {
-        throw new TypeError("main author batch result requires running persisted ledger entries");
-      }
-      const spec = await currentSpec({
-        projectRoot: input.projectRoot,
-        request_digest: entry.execution_request_digest,
-      });
-      if (spec.request.workset.stage !== "author") {
-        throw new TypeError("main author batch acceptance cannot consume partition worksets");
-      }
-      const validated = validateAndRecordIndexerMainRun({
-        request: spec.request,
-        result: run.result,
-        validation: spec.validation as unknown as Parameters<
-          typeof validateAndRecordIndexerMainRun
-        >[0]["validation"],
-      });
-      ledger = acceptIndexerMainRun({
-        ledger,
-        accepted_record: validated.accepted_record,
-      });
-      immutableRecords.push({
-        path: acceptedCachePath(validated.request.execution_request_digest),
-        value: acceptedCacheRecord({ validated }),
-      });
-    }
-    const receipt = await persistLedger({
-      projectRoot: input.projectRoot,
-      operation: "accept",
-      transaction_kind: ACCEPT_TRANSACTION,
-      ledger,
-      immutable_records: immutableRecords,
-      ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
-    });
-    return { ledger, status: observeIndexerMainRunLedger(ledger), receipt };
   });
 }
 

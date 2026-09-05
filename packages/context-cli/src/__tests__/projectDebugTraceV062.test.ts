@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ProjectStatus } from "../project/statusTypes.js";
 import { runWorkflowUntilBlockedOrComplete } from "../project/workflow/workflowRun.js";
+import { measureContextDebugOperation } from "../project/debugTrace.js";
 
 const CLI_MODULE = resolve(import.meta.dir, "..", "cli.ts");
 
@@ -30,6 +31,39 @@ function events(projectRoot: string): Array<Record<string, unknown>> {
 }
 
 describe("Context observational debug trace", () => {
+  test("records local performance measurements without changing action results", async () => {
+    const root = mkdtempSync(join(tmpdir(), "context-debug-performance-"));
+    try {
+      await Bun.write(join(root, "package.json"), `${JSON.stringify({
+        name: "debug-performance-fixture",
+        private: true,
+        context: { project: true, entry: "src/index.ts", debug: true },
+      }, null, 2)}\n`);
+      const result = await measureContextDebugOperation({
+        projectRoot: root,
+        operation: "fixture.operation",
+        counters: { fixture_count: 1 },
+        data: { phase: "warm" },
+      }, async () => "unchanged-result");
+
+      expect(result).toBe("unchanged-result");
+      const measurement = events(root).find((event) =>
+        event.kind === "performance.measurement"
+      );
+      expect(measurement?.data).toMatchObject({
+        operation: "fixture.operation",
+        outcome: "success",
+        counters: { fixture_count: 1 },
+        detail: { phase: "warm" },
+      });
+      expect(
+        (measurement?.data as { duration_ms?: number } | undefined)?.duration_ms,
+      ).toBeGreaterThanOrEqual(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("stays disabled by default and does not create trace files", async () => {
     const root = mkdtempSync(join(tmpdir(), "context-debug-default-"));
     try {

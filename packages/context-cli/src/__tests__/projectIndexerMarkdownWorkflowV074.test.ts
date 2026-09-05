@@ -20,6 +20,7 @@ import { readCandidateRecords } from "../project/candidateLedger.js";
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 import { collectProjectStatusSnapshot } from "../project/status.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import type { ContextResolvedWorkflowRoute } from
   "../project/workflow/workflowTypes.js";
 
@@ -185,15 +186,49 @@ describe("0.7.4 Markdown current workflow", () => {
 
     while (true) {
       const current = await resolveCurrentIndexerAgentContext(projectRoot);
-      if (current === undefined || current.spec.request.workset.stage !== "partition") break;
-      const workset = current.spec.request.workset;
-      const validation = current.spec.validation as {
-        canonical_inventory_members: IndexerInventoryMember[];
-        required_question_target_refs?: string[];
-      };
-      expect(current.worksetView.projection.view.items.some((item) =>
-        item.category === "document"
-      )).toBe(true);
+      if (current === undefined || current.descriptor.stage !== "partition") break;
+      const results = [];
+      for (const descriptor of current.descriptor.tasks) {
+        const task = await loadCurrentIndexerBatchTask({
+          projectRoot,
+          descriptor: current.descriptor,
+          taskKey: descriptor.task_key,
+        });
+        const workset = task.spec.request.workset;
+        if (workset.stage !== "partition") throw new Error("expected Partition task");
+        const validation = task.spec.validation as {
+          canonical_inventory_members: IndexerInventoryMember[];
+          required_question_target_refs?: string[];
+        };
+        expect(task.view.items.some((item) => item.category === "document")).toBe(true);
+        results.push({
+          task_key: descriptor.task_key,
+          result: {
+            stage: "partition" as const,
+            outcome: "complete" as const,
+            groups: [{
+              key: `deployment-guide-${descriptor.task_key}`,
+              title: "Deployment guide",
+              reader_task: "Deploy and recover the service.",
+              subject: {
+                namespace: workset.partition_subject_key.namespace,
+                kind: workset.partition_subject_key.kind,
+                local_key: `deployment-guide-${descriptor.task_key}`,
+              },
+              subject_intent: "primary" as const,
+              members: validation.canonical_inventory_members.map((member) => member.member_id),
+              questions: [...workset.reader_question_refs],
+              question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
+                target,
+                role: "primary-carrier" as const,
+              })),
+              outline: ["Deployment", "Recovery"],
+            }],
+            excluded: [],
+            unsupported: [],
+          },
+        });
+      }
       const route = await currentRoute(projectRoot);
       expect(route.commands).toEqual([expect.objectContaining({
         command: expect.stringContaining("action complete-current"),
@@ -205,36 +240,14 @@ describe("0.7.4 Markdown current workflow", () => {
         authorities,
         value: {
           stage: "partition",
-          outcome: "complete",
-          unit_type: "document-topic",
-          partition_axis: "reader-task",
-          groups: [{
-            key: "deployment-guide",
-            title: "Deployment guide",
-            reader_task: "Deploy and recover the service.",
-            subject: {
-              namespace: workset.partition_subject_key.namespace,
-              kind: workset.partition_subject_key.kind,
-              local_key: "deployment-guide",
-            },
-            subject_intent: "primary",
-            members: validation.canonical_inventory_members.map((member) => member.member_id),
-            questions: [...workset.reader_question_refs],
-            question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
-              target,
-              role: "primary-carrier",
-            })),
-            outline: ["Deployment", "Recovery"],
-          }],
-          excluded: [],
-          unsupported: [],
+          results,
         },
       });
     }
 
     const structureRoute = await currentRoute(projectRoot);
     expect(structureRoute).toMatchObject({
-      node: "review-indexer-semantic-structure",
+      node: "review-current-indexer-structure",
       availability: "immediate",
     });
     expect((await currentIndexerStructureReview(projectRoot))?.preview.topics[0]?.target)
@@ -249,32 +262,84 @@ describe("0.7.4 Markdown current workflow", () => {
 
     while (true) {
       const current = await resolveCurrentIndexerAgentContext(projectRoot);
-      if (current === undefined || current.spec.request.workset.stage !== "author") break;
-      const workset = current.spec.request.workset;
-      const validation = current.spec.validation as {
-        dependency_view: {
-          positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
+      if (current === undefined || current.descriptor.stage !== "author") break;
+      const results = [];
+      for (const descriptor of current.descriptor.tasks) {
+        const task = await loadCurrentIndexerBatchTask({
+          projectRoot,
+          descriptor: current.descriptor,
+          taskKey: descriptor.task_key,
+        });
+        const workset = task.spec.request.workset;
+        if (workset.stage !== "author") throw new Error("expected Author task");
+        const validation = task.spec.validation as {
+          dependency_view: {
+            positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
+          };
+          artifact_policy_eligibility: { eligible_variants: Array<{ id: string }> };
+          allowed_artifact_intents: Array<{
+            source_role: string;
+            document_kind: string;
+            reader_goal: string;
+            artifact_kind: string;
+          }>;
+          canonical_inventory_members: IndexerInventoryMember[];
+          allowed_question_targets: Array<{
+            question_target_key: string;
+            question_ref: string;
+          }>;
         };
-        artifact_policy_eligibility: { eligible_variants: Array<{ id: string }> };
-        allowed_artifact_intents: Array<{
-          source_role: string;
-          document_kind: string;
-          reader_goal: string;
-          artifact_kind: string;
-        }>;
-        canonical_inventory_members: IndexerInventoryMember[];
-        allowed_question_targets: Array<{
-          question_target_key: string;
-          question_ref: string;
-        }>;
-      };
-      const evidence = validation.dependency_view.positive_nodes.find((node) =>
-        node.kind === "source-span" && node.evidence_ref !== undefined
-      )?.evidence_ref;
-      const intent = validation.allowed_artifact_intents[0];
-      const policy = validation.artifact_policy_eligibility.eligible_variants[0];
-      if (evidence === undefined || intent === undefined || policy === undefined) {
-        throw new Error("Markdown Author lacks current source or policy");
+        const evidence = validation.dependency_view.positive_nodes.find((node) =>
+          node.kind === "source-span" && node.evidence_ref !== undefined
+        )?.evidence_ref;
+        const intent = validation.allowed_artifact_intents[0];
+        const policy = validation.artifact_policy_eligibility.eligible_variants[0];
+        if (evidence === undefined || intent === undefined || policy === undefined) {
+          throw new Error("Markdown Author lacks current source or policy");
+        }
+        results.push({
+          task_key: descriptor.task_key,
+          result: {
+            stage: "author" as const,
+            group_key: workset.group_key,
+            outcome: "publish" as const,
+            artifact_intent: [
+              intent.source_role,
+              intent.document_kind,
+              intent.reader_goal,
+              intent.artifact_kind,
+            ].join("/"),
+            policy: policy.id,
+            target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
+              target: entry.query_ref,
+              disposition: entry.state === "resolved"
+                ? "reuse-existing" as const
+                : "create-independent" as const,
+            })),
+            title: "Deployment and recovery guide",
+            summary: "How to publish the service and recover a failed release.",
+            sections: [{
+              key: "workflow",
+              heading: "Deployment and recovery",
+              markdown: [
+                "Run the release command to publish the service.",
+                "If configuration fails, fix it and rerun the same command.",
+              ].join("\n\n"),
+              source_items: [evidence],
+              facts: [],
+              answers: validation.allowed_question_targets.map((target) =>
+                target.question_target_key
+              ),
+            }],
+            member_dispositions: validation.canonical_inventory_members.map((member) => ({
+              item: member.member_id,
+              state: "covered" as const,
+              section: "workflow",
+            })),
+            material_gaps: [],
+            diagnostics: [],
+          },
+        });
       }
       const route = await currentRoute(projectRoot);
       await completeCurrentIndexerAction({
@@ -284,43 +349,7 @@ describe("0.7.4 Markdown current workflow", () => {
         authorities,
         value: {
           stage: "author",
-          group_key: workset.group_key,
-          outcome: "publish",
-          artifact_intent: [
-            intent.source_role,
-            intent.document_kind,
-            intent.reader_goal,
-            intent.artifact_kind,
-          ].join("/"),
-          policy: policy.id,
-          target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
-            target: entry.query_ref,
-            disposition: entry.state === "resolved"
-              ? "reuse-existing"
-              : "create-independent",
-          })),
-          title: "Deployment and recovery guide",
-          summary: "How to publish the service and recover a failed release.",
-          sections: [{
-            key: "workflow",
-            heading: "Deployment and recovery",
-            markdown: [
-              "Run the release command to publish the service.",
-              "If configuration fails, fix it and rerun the same command.",
-            ].join("\n\n"),
-            source_items: [evidence],
-            facts: [],
-            answers: validation.allowed_question_targets.map((target) =>
-              target.question_target_key
-            ),
-          }],
-          member_dispositions: validation.canonical_inventory_members.map((member) => ({
-            item: member.member_id,
-            state: "covered",
-            section: "workflow",
-          })),
-          material_gaps: [],
-          diagnostics: [],
+          results,
         },
       });
     }
@@ -332,8 +361,12 @@ describe("0.7.4 Markdown current workflow", () => {
 
     const approved = JSON.parse(await runCliInDir(projectRoot, [
       "review", "approve-all", "--all", "--managed", "--format", "json",
-    ])) as { approved: number; materialized: number };
-    expect(approved).toMatchObject({ approved: 1, materialized: 1 });
+    ])) as { approved: number; materialized: number; decision_source: string };
+    expect(approved).toMatchObject({
+      approved: 1,
+      materialized: 1,
+      decision_source: "managed-session",
+    });
 
     const closed = JSON.parse(await runCliInDir(projectRoot, [
       "close", "--format", "json",
@@ -365,12 +398,35 @@ describe("0.7.4 Markdown current workflow", () => {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const current = await resolveCurrentIndexerAgentContext(projectRoot);
       if (current === undefined) break;
-      expect(current.spec.request.workset.stage).toBe("partition");
-      const strategy = current.spec.request.partition_strategy_attempt?.strategy_ref.strategy_id;
-      if (strategy !== undefined) exposedStrategies.push(strategy);
-      const validation = current.spec.validation as {
-        canonical_inventory_members: IndexerInventoryMember[];
-      };
+      expect(current.descriptor.stage).toBe("partition");
+      const results = [];
+      for (const descriptor of current.descriptor.tasks) {
+        const task = await loadCurrentIndexerBatchTask({
+          projectRoot,
+          descriptor: current.descriptor,
+          taskKey: descriptor.task_key,
+        });
+        const strategy = task.spec.request.partition_strategy_attempt?.strategy_ref.strategy_id;
+        if (strategy !== undefined) exposedStrategies.push(strategy);
+        const validation = task.spec.validation as {
+          canonical_inventory_members: IndexerInventoryMember[];
+        };
+        results.push({
+          task_key: descriptor.task_key,
+          result: {
+            stage: "partition" as const,
+            outcome: "failed" as const,
+            groups: [],
+            excluded: [],
+            unsupported: [],
+            failure: {
+              code: "strategy-failed" as const,
+              message: "No stable semantic split was found.",
+              unassigned: validation.canonical_inventory_members.map((member) => member.member_id),
+            },
+          },
+        });
+      }
       const route = await currentRoute(projectRoot);
       await completeCurrentIndexerAction({
         cwd: projectRoot,
@@ -379,23 +435,13 @@ describe("0.7.4 Markdown current workflow", () => {
         authorities,
         value: {
           stage: "partition",
-          outcome: "failed",
-          unit_type: "document-topic",
-          partition_axis: "reader-task",
-          groups: [],
-          excluded: [],
-          unsupported: [],
-          failure: {
-            code: "strategy-failed",
-            message: "No stable semantic split was found.",
-            unassigned: validation.canonical_inventory_members.map((member) => member.member_id),
-          },
+          results,
         },
       });
     }
     expect(exposedStrategies).not.toContain(INDEXER_CATALOG_FALLBACK_STRATEGY_ID);
     expect(await currentRoute(projectRoot)).toMatchObject({
-      node: "review-indexer-semantic-structure",
+      node: "review-current-indexer-structure",
     });
   }, 30_000);
 });

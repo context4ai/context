@@ -375,10 +375,15 @@ describe("Markdown Provider Route", () => {
       managed: false,
     });
     expect(currentRoute).toMatchObject({
-      node: "resolve-indexer-provider",
+      node: "resolve-current-indexer-provider",
       action: {
-        runner: "host",
-        handler: "context.resolve-indexer-provider/v1",
+        id: "resolve-current-indexer-provider",
+        runner: "agent",
+        effect: "external",
+        input: { stage: "provider-resolution" },
+        output_schema: {
+          id: "schema.resolve-current-indexer-provider.output",
+        },
       },
       resources: {
         required: [{

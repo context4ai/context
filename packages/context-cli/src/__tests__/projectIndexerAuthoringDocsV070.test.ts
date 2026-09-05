@@ -151,7 +151,7 @@ describe("0.7.0 Indexer authoring documentation", () => {
       expect(agentSkill).toContain(exactProjectionRule);
     }
     expect(agentSkill).toMatch(
-      /existing dependency, schema,\s+owner, scope, and workset validation/u,
+      /performs dependency, schema,\s+owner, scope, and per-workset validation/u,
     );
   });
 });

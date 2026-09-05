@@ -21,6 +21,7 @@ import {
   buildPostAuthorRuntimeState,
   normalizePostAuthorRunSpec,
   persistPostAuthorState,
+  persistPostAuthorStates,
   postAuthorAcceptedPath,
   postAuthorReceiptPath,
   postAuthorResultPath,
@@ -264,6 +265,59 @@ export async function startIndexerPostAuthorRunStore(input: {
   });
 }
 
+export async function startIndexerPostAuthorRunsStore(input: {
+  projectRoot: string;
+  runs: readonly {
+    plan: IndexerPostAuthorPlan;
+    ledger: unknown;
+    composer_ref: string;
+  }[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}) {
+  if (input.runs.length === 0) {
+    throw new TypeError("post-author batch start requires at least one run");
+  }
+  const authorDigests = input.runs.map((run) => authorWorksetDigest(run.plan));
+  if (new Set(authorDigests).size !== authorDigests.length) {
+    throw new TypeError("post-author batch start contains duplicate Author worksets");
+  }
+  return withProjectWriteLock(input.projectRoot, START_TRANSACTION, async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const tasks = [];
+    const states = [];
+    for (const run of input.runs) {
+      const current = await readPostAuthorCurrentState(
+        input.projectRoot,
+        authorWorksetDigest(run.plan),
+      );
+      if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
+      assertExpected({ state: current, plan: run.plan, ledger: run.ledger });
+      const started = startIndexerPostAuthorRun({
+        plan: current.spec.plan,
+        ledger: current.ledger,
+        composer_ref: run.composer_ref,
+      });
+      const state = buildPostAuthorRuntimeState({
+        spec: current.spec,
+        ledger: started.ledger,
+      });
+      states.push({ state });
+      tasks.push({
+        author_workset_digest: authorWorksetDigest(run.plan),
+        ...started,
+      });
+    }
+    const transaction = await persistPostAuthorStates({
+      projectRoot: input.projectRoot,
+      operation: "start",
+      transaction_kind: START_TRANSACTION,
+      states,
+      ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
+    });
+    return { tasks, transaction };
+  });
+}
+
 export async function acceptIndexerPostAuthorRunStore(input: {
   projectRoot: string;
   plan: IndexerPostAuthorPlan;
@@ -322,6 +376,139 @@ export async function acceptIndexerPostAuthorRunStore(input: {
       ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
     });
     return { ledger, receipt };
+  });
+}
+
+type PostAuthorBatchCompletion = {
+  plan: IndexerPostAuthorPlan;
+  ledger: unknown;
+  composer_ref: string;
+} & ({
+  outcome: "accept";
+  result: unknown;
+  validator_contract_digest: string;
+} | {
+  outcome: "fail";
+  reason_code: string;
+  dependency_digests: readonly string[];
+});
+
+export async function completeIndexerPostAuthorRunsStore(input: {
+  projectRoot: string;
+  runs: readonly PostAuthorBatchCompletion[];
+  inject_failure?: DurableMultiFileFailureInjector;
+}) {
+  if (input.runs.length === 0) {
+    throw new TypeError("post-author batch completion requires at least one run");
+  }
+  const authorDigests = input.runs.map((run) => authorWorksetDigest(run.plan));
+  if (new Set(authorDigests).size !== authorDigests.length) {
+    throw new TypeError("post-author batch completion contains duplicate Author worksets");
+  }
+  return withProjectWriteLock(input.projectRoot, ACCEPT_TRANSACTION, async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    const states: Array<{
+      state: PostAuthorRuntimeState;
+      immutable_records?: readonly { path: string; value: unknown }[];
+    }> = [];
+    const outcomes: Array<{
+      author_workset_digest: string;
+      composer_ref: string;
+      outcome: "accepted" | "failed";
+      committed: boolean;
+      ledger?: unknown;
+      message?: string;
+    }> = [];
+    for (const run of input.runs) {
+      const authorDigest = authorWorksetDigest(run.plan);
+      try {
+        const current = await readPostAuthorCurrentState(input.projectRoot, authorDigest);
+        if (current === undefined) throw new TypeError("post-author run ledger is not prepared");
+        assertExpected({ state: current, plan: run.plan, ledger: run.ledger });
+        if (run.outcome === "fail") {
+          const ledger = failIndexerPostAuthorRun({
+            plan: current.spec.plan,
+            ledger: current.ledger,
+            composer_ref: run.composer_ref,
+            reason_code: run.reason_code,
+            dependency_digests: run.dependency_digests,
+          });
+          states.push({
+            state: buildPostAuthorRuntimeState({ spec: current.spec, ledger }),
+          });
+          outcomes.push({
+            author_workset_digest: authorDigest,
+            composer_ref: run.composer_ref,
+            outcome: "failed",
+            committed: true,
+            ledger,
+          });
+          continue;
+        }
+        if (run.validator_contract_digest !== current.spec.validator_contract_digest) {
+          throw new TypeError("post-author validator contract is stale");
+        }
+        const ledger = acceptIndexerPostAuthorRun({
+          plan: current.spec.plan,
+          ledger: current.ledger,
+          composer_ref: run.composer_ref,
+          result: run.result,
+          validator_contract_digest: current.spec.validator_contract_digest,
+        });
+        const accepted = ledger.entries.find((entry) =>
+          entry.composer_ref === run.composer_ref
+        );
+        if (accepted?.state !== "accepted") {
+          throw new TypeError("post-author result was not accepted");
+        }
+        const cachePayload = {
+          protocol: "context.indexer.post-author-accepted-cache-record/v1" as const,
+          composer_ref: accepted.composer_ref,
+          workset_digest: accepted.workset_digest,
+          request_digest: accepted.request_digest,
+          result: accepted.result,
+          receipt: accepted.receipt,
+          fragments: accepted.fragments,
+        };
+        const cache = { ...cachePayload, cache_digest: indexerProtocolDigest(cachePayload) };
+        states.push({
+          state: buildPostAuthorRuntimeState({ spec: current.spec, ledger }),
+          immutable_records: [{
+            path: postAuthorAcceptedPath(accepted.request_digest),
+            value: cache,
+          }, {
+            path: postAuthorResultPath(accepted.result.result_digest),
+            value: accepted.result,
+          }, {
+            path: postAuthorReceiptPath(indexerProtocolDigest(accepted.receipt)),
+            value: accepted.receipt,
+          }],
+        });
+        outcomes.push({
+          author_workset_digest: authorDigest,
+          composer_ref: run.composer_ref,
+          outcome: "accepted",
+          committed: true,
+          ledger,
+        });
+      } catch (error) {
+        outcomes.push({
+          author_workset_digest: authorDigest,
+          composer_ref: run.composer_ref,
+          outcome: "failed",
+          committed: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    const transaction = await persistPostAuthorStates({
+      projectRoot: input.projectRoot,
+      operation: "accept",
+      transaction_kind: ACCEPT_TRANSACTION,
+      states,
+      ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
+    });
+    return { outcomes, transaction };
   });
 }
 

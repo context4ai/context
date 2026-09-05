@@ -17,7 +17,7 @@ const DIGEST_RE = /^sha256:[a-f0-9]{64}$/u;
 export const MAX_INSTRUCTION_BYTES = 1024 * 1024;
 
 export interface IndexerInstructionMaterializationRequest {
-  protocol: "context.indexer.materialize-request/v1";
+  protocol: "context.indexer.materialize-request/v2";
   handler: "context.materialize-indexer-instructions/v1";
   resource_id: "resolved-indexer-instructions";
   indexer_id: string;
@@ -25,9 +25,7 @@ export interface IndexerInstructionMaterializationRequest {
   provider_fingerprint: string;
   provider_integrity: string;
   manifest_digest: string;
-  requirement_set_digest: string;
-  workset_ref: string;
-  workset_digest: string;
+  stage: "partition" | "author" | "post-author";
   profile: string;
   composer_id: string | null;
   instruction_set_digest: string;
@@ -39,9 +37,7 @@ export interface IndexerInstructionMaterializationAuthority {
   resource_id: "resolved-indexer-instructions";
   indexer_id: string;
   provider_id: string;
-  requirement_set_digest: string;
-  workset_ref: string;
-  workset_digest: string;
+  stage: "partition" | "author" | "post-author";
   instruction_set_digest: string;
 }
 
@@ -94,9 +90,7 @@ export function requestDigest(
     provider_fingerprint: value.provider_fingerprint,
     provider_integrity: value.provider_integrity,
     manifest_digest: value.manifest_digest,
-    requirement_set_digest: value.requirement_set_digest,
-    workset_ref: value.workset_ref,
-    workset_digest: value.workset_digest,
+    stage: value.stage,
     profile: value.profile,
     composer_id: value.composer_id,
     instruction_set_digest: value.instruction_set_digest,
@@ -112,7 +106,7 @@ export function validateIndexerInstructionMaterializationRequest(
   }
   const request = value as Partial<IndexerInstructionMaterializationRequest>;
   if (
-    request.protocol !== "context.indexer.materialize-request/v1" ||
+    request.protocol !== "context.indexer.materialize-request/v2" ||
     request.handler !== "context.materialize-indexer-instructions/v1" ||
     request.resource_id !== "resolved-indexer-instructions"
   ) {
@@ -122,8 +116,6 @@ export function validateIndexerInstructionMaterializationRequest(
     provider_fingerprint: request.provider_fingerprint,
     provider_integrity: request.provider_integrity,
     manifest_digest: request.manifest_digest,
-    requirement_set_digest: request.requirement_set_digest,
-    workset_digest: request.workset_digest,
     instruction_set_digest: request.instruction_set_digest,
     customization_fingerprint: request.customization_fingerprint,
     request_digest: request.request_digest,
@@ -140,10 +132,16 @@ export function validateIndexerInstructionMaterializationRequest(
   ) {
     throw new TypeError("Indexer instruction materialization request composer_id is invalid");
   }
+  if (
+    request.stage !== "partition" &&
+    request.stage !== "author" &&
+    request.stage !== "post-author"
+  ) {
+    throw new TypeError("Indexer instruction materialization request stage is invalid");
+  }
   for (const [field, candidate] of Object.entries({
     indexer_id: request.indexer_id,
     provider_id: request.provider_id,
-    workset_ref: request.workset_ref,
     profile: request.profile,
   })) {
     if (typeof candidate !== "string" || candidate.length === 0 || candidate.includes("\0")) {
@@ -165,9 +163,7 @@ export function assertCurrentMaterializationAuthority(input: {
     "resource_id",
     "indexer_id",
     "provider_id",
-    "requirement_set_digest",
-    "workset_ref",
-    "workset_digest",
+    "stage",
     "instruction_set_digest",
   ] as const;
   const stale = fields.filter((field) =>
@@ -367,9 +363,7 @@ export async function buildIndexerInstructionMaterializationRequest(input: {
   customization: IndexerCustomizationView;
   indexerId: string;
   providerId: string;
-  requirementSetDigest: string;
-  worksetRef: string;
-  worksetDigest: string;
+  stage: "partition" | "author" | "post-author";
   profile: string;
   composerId?: string;
 }): Promise<IndexerInstructionMaterializationRequest> {
@@ -381,10 +375,6 @@ export async function buildIndexerInstructionMaterializationRequest(input: {
   ) {
     throw new TypeError("instruction customization does not match the Provider request");
   }
-  for (const value of [input.requirementSetDigest, input.worksetDigest]) {
-    if (!DIGEST_RE.test(value)) throw new TypeError("instruction request requires canonical digests");
-  }
-  if (input.worksetRef.length === 0) throw new TypeError("instruction request requires a workset ref");
   const descriptors = await instructionDescriptors({
     staged: input.staged,
     profile: input.profile,
@@ -392,7 +382,7 @@ export async function buildIndexerInstructionMaterializationRequest(input: {
     customization: input.customization,
   });
   const base: Omit<IndexerInstructionMaterializationRequest, "request_digest"> = {
-    protocol: "context.indexer.materialize-request/v1",
+    protocol: "context.indexer.materialize-request/v2",
     handler: "context.materialize-indexer-instructions/v1",
     resource_id: "resolved-indexer-instructions",
     indexer_id: input.indexerId,
@@ -400,9 +390,7 @@ export async function buildIndexerInstructionMaterializationRequest(input: {
     provider_fingerprint: input.staged.provider_fingerprint,
     provider_integrity: input.staged.bundle_integrity,
     manifest_digest: input.staged.manifest_digest,
-    requirement_set_digest: input.requirementSetDigest,
-    workset_ref: input.worksetRef,
-    workset_digest: input.worksetDigest,
+    stage: input.stage,
     profile: input.profile,
     composer_id: input.composerId ?? null,
     instruction_set_digest: indexerProtocolDigest(descriptors.map((descriptor) => ({

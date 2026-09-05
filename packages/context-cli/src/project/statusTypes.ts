@@ -5,6 +5,7 @@ import type { PackageFreshness } from "./packageBuilder.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
 import type { RepoSourceStatus } from "./repoSources.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
+import type { IndexerCurrentProgress } from "./indexerCurrentProgress.js";
 
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
 export type EvidenceStatus =
@@ -36,10 +37,7 @@ export interface ProjectRouting {
   };
   commands_available: boolean;
   command_plan: ProjectRoutingCommand[];
-  configuration?: {
-    file: "src/index.ts";
-    action: string;
-  };
+  configuration?: NonNullable<ContextWorkflowStatus["current"]>["configuration"];
   downstream_impact: string;
   do_not: string[];
 }
@@ -101,6 +99,7 @@ export interface ProjectStatus {
   indexerCandidateCompile: {
     state: "missing" | "current" | "stale" | "invalid";
   };
+  indexerProgress?: IndexerCurrentProgress;
   pendingReview?: {
     scope: "collection" | "all";
     collections: KnowledgeCollection[];

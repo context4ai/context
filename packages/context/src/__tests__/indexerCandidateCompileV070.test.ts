@@ -105,10 +105,10 @@ describe("explicit IndexerResult Candidate compile", () => {
       output_path: file.output_path,
     }))).toEqual([{
       artifact_kind: "examples",
-      output_path: "knowledge/codeindex/components/toggle-examples.md",
+      output_path: "knowledge/codeindex/anonymous-package/toggle-examples.md",
     }, {
       artifact_kind: "overview",
-      output_path: "knowledge/codeindex/components/toggle-overview.md",
+      output_path: "knowledge/codeindex/anonymous-package/toggle.md",
     }]);
     expect(result.files[0]!.markdown).toContain("Use the public Toggle capability.");
 

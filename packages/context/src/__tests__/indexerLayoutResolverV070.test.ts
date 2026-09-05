@@ -75,6 +75,7 @@ function artifactResult(
     document_kind: string;
     reader_goal: string;
   }> = [],
+  subject: IndexerSubjectKey = SUBJECT,
 ): IndexerArtifactResult {
   const evidencePayload = {
     evidence_ref: "evidence:anonymous-component-source",
@@ -121,21 +122,21 @@ function artifactResult(
     source_role: "authoritative-source",
     logical_unit: {
       group_key: "component:button",
-      subject_key: SUBJECT,
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      subject_key: subject,
+      logical_unit_ref: canonicalIndexerNodeRef(subject),
       target_resolution_dispositions: [],
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: canonicalIndexerNodeRef(subject),
       member_ids: ["member:button"],
       capability_groups: [],
     }),
     inventory_dispositions: buildIndexerInventoryDispositionSet({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: canonicalIndexerNodeRef(subject),
       dispositions: [{
         member_id: "member:button",
         member_kind: "component",
@@ -158,7 +159,7 @@ function artifactResult(
       sections,
     }],
     artifact_bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: canonicalIndexerNodeRef(subject),
       artifact_policy_variant: "standard",
       artifacts: [{
         artifact_id: "button-overview",
@@ -274,8 +275,11 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       sections: [{ section_key: "summary", state: "structured" }],
     });
     expect(proposal.artifacts[0]!.output_path).toBe(
-      "knowledge/codeindex/components/button-overview.md",
+      "knowledge/codeindex/anonymous-package/button.md",
     );
+    expect(proposal.artifacts[0]!.output_path).not.toContain("anonymous@revision");
+    expect(proposal.artifacts[0]!.output_path).not.toContain("module:components");
+    expect(proposal.artifacts[0]!.output_path).not.toMatch(/[a-f\d]{32,}/u);
     expect(proposal.artifacts[0]!.internal_view_ref).toStartWith("view:artifact:");
     expect(validateIndexerLayoutProposal({
       proposal,
@@ -285,6 +289,21 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
     })).toEqual(proposal);
     expect(proposal).not.toHaveProperty("align");
+  });
+
+  test("rejects machine identity from a reader-facing path", () => {
+    const { operators, profiles } = artifactPolicyContractsFixture();
+    const result = artifactResult([], {
+      ...SUBJECT,
+      local_key: "a".repeat(64),
+    });
+    expect(() => resolveIndexerLayout({
+      artifact_result: result,
+      profile: "component-library",
+      profile_contract: profiles,
+      operator_contract: operators,
+      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+    })).toThrow(/machine identity/u);
   });
 
   test("keeps catalog-only accepted results in the layout set without creating a knowledge file", () => {

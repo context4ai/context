@@ -36,11 +36,13 @@ import {
 } from "../project/indexerMainRunStore.js";
 import {
   acceptedCachePath,
+  currentLedger,
   currentSpec,
   readJsonMaybe,
   validateAcceptedCache,
   type MainRunSpec,
 } from "../project/indexerMainRunStoreRecords.js";
+import { prepareAndStartNextIndexerBatch } from "../project/indexerCurrentBatch.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
@@ -321,68 +323,109 @@ describe("project Author result reuse", () => {
         projectRoot: root,
         value: { protocol: "context.indexer.main-partition-workset-build-input/v1", question_target_inventory: questionTargetInventory },
       });
-      const workset = partition.worksets[0]!;
-      const partitionRunSpec = partition.run_specs[0]!;
-      if (partitionRunSpec.validation.stage !== "partition") throw new Error("expected a partition validation spec");
-      const memberA = capturedDocumentIndexerRef({ source_ref: workset.source_ref, path: "guide-a.md" });
-      const memberB = capturedDocumentIndexerRef({ source_ref: workset.source_ref, path: "guide-b.md" });
-      const partitionValidation = partitionRunSpec.validation as typeof partitionRunSpec.validation & {
-        canonical_inventory_members: readonly IndexerInventoryMember[];
-        authorized_source_refs: string[];
-        authorized_strategies: Array<{ strategy_ref: Extract<IndexerPartitionPlan, { status: "complete" }>['strategy_ref']; strategy_digest: string }>;
-        required_question_target_refs: string[];
-      };
+      const firstWorkset = partition.worksets[0];
+      if (firstWorkset === undefined) throw new Error("expected partition worksets");
+      const memberA = capturedDocumentIndexerRef({
+        source_ref: firstWorkset.source_ref,
+        path: "guide-a.md",
+      });
+      const memberB = capturedDocumentIndexerRef({
+        source_ref: firstWorkset.source_ref,
+        path: "guide-b.md",
+      });
       type CompletePlan = Extract<IndexerPartitionPlan, { status: "complete" }>;
-      const planPayload: Omit<CompletePlan, "canonical_hash"> = {
-        protocol: "context.indexer.partition-plan/v1",
-        status: "complete",
-        binding: {
-          partition_workset_digest: workset.workset_digest,
-          indexer_id: workset.indexer_id,
-          indexer_fingerprint: workset.primary_execution_fingerprint,
-          requirement_digest: requirementDigest,
-          subject_key_schema_digest: workset.subject_key_schema_digest,
-          source_scope_digest: workset.source_scope_digest,
-          source_refs: [workset.source_ref],
-          module_ref: workset.module_ref,
-          partition_subject_key: workset.partition_subject_key,
-          parent_scope_ref: workset.source_ref,
-          inventory_digest: workset.partition_inventory_digest,
-          question_target_inventory_digest: workset.question_target_inventory_digest,
-        },
-        strategy_ref: partitionValidation.authorized_strategies[0]!.strategy_ref,
-        strategy_digest: partitionValidation.authorized_strategies[0]!.strategy_digest,
-        unit_type: "reader-subject",
-        partition_axis: "reader-subject",
-        reader_question_refs: workset.reader_question_refs,
-        groups: [{
-          group_key: "reader-subject:guide-a",
-          subject_key: { ...workset.partition_subject_key, local_key: "guide-a" },
-          subject_intent: "primary",
-          logical_unit_ref: canonicalIndexerNodeRef({ ...workset.partition_subject_key, local_key: "guide-a" }),
-          label: "Guide A",
+      const partitions = partition.worksets.map((workset) => {
+        const partitionRunSpec = partition.run_specs.find((candidate) =>
+          candidate.request.workset.workset_digest === workset.workset_digest
+        );
+        if (partitionRunSpec?.validation.stage !== "partition") {
+          throw new Error("expected a matching partition validation spec");
+        }
+        const partitionValidation = partitionRunSpec.validation as
+          typeof partitionRunSpec.validation & {
+            canonical_inventory_members: readonly IndexerInventoryMember[];
+            authorized_source_refs: string[];
+            authorized_strategies: Array<{
+              strategy_ref: CompletePlan["strategy_ref"];
+              strategy_digest: string;
+            }>;
+            required_question_target_refs: string[];
+          };
+        const member = partitionValidation.canonical_inventory_members[0];
+        if (partitionValidation.canonical_inventory_members.length !== 1 || member === undefined) {
+          throw new Error("expected one recoverable document per partition workset");
+        }
+        const localKey = member.member_id === memberA
+          ? "guide-a"
+          : member.member_id === memberB
+          ? "guide-b"
+          : null;
+        if (localKey === null) throw new Error("unexpected document inventory member");
+        const groupKey = `reader-subject:${localKey}`;
+        const subjectKey = { ...workset.partition_subject_key, local_key: localKey };
+        const planPayload: Omit<CompletePlan, "canonical_hash"> = {
+          protocol: "context.indexer.partition-plan/v1",
+          status: "complete",
+          binding: {
+            partition_workset_digest: workset.workset_digest,
+            indexer_id: workset.indexer_id,
+            indexer_fingerprint: workset.primary_execution_fingerprint,
+            requirement_digest: requirementDigest,
+            subject_key_schema_digest: workset.subject_key_schema_digest,
+            source_scope_digest: workset.source_scope_digest,
+            source_refs: [workset.source_ref],
+            module_ref: workset.module_ref,
+            partition_subject_key: workset.partition_subject_key,
+            parent_scope_ref: workset.source_ref,
+            inventory_digest: workset.partition_inventory_digest,
+            question_target_inventory_digest: workset.question_target_inventory_digest,
+          },
+          strategy_ref: partitionValidation.authorized_strategies[0]!.strategy_ref,
+          strategy_digest: partitionValidation.authorized_strategies[0]!.strategy_digest,
+          unit_type: "reader-subject",
+          partition_axis: "reader-subject",
           reader_question_refs: workset.reader_question_refs,
-          question_target_bindings: workset.allowed_question_target_refs.map((targetRef) => ({ target_ref: targetRef, role: "primary-carrier" as const })),
-          member_ids: [memberA],
-        }, {
-          group_key: "reader-subject:guide-b",
-          subject_key: { ...workset.partition_subject_key, local_key: "guide-b" },
-          subject_intent: "primary",
-          logical_unit_ref: canonicalIndexerNodeRef({ ...workset.partition_subject_key, local_key: "guide-b" }),
-          label: "Guide B",
-          reader_question_refs: workset.reader_question_refs,
-          question_target_bindings: [],
-          member_ids: [memberB],
-        }],
-        member_dispositions: [{ member_id: memberA, member_kind: "document", inventory_disposition: "owned", group_key: "reader-subject:guide-a" }, { member_id: memberB, member_kind: "document", inventory_disposition: "owned", group_key: "reader-subject:guide-b" }],
-        failure: null,
-      };
-      const plan: CompletePlan = { ...planPayload, canonical_hash: indexerPartitionPlanCanonicalHash(planPayload) };
+          groups: [{
+            group_key: groupKey,
+            subject_key: subjectKey,
+            subject_intent: "primary",
+            logical_unit_ref: canonicalIndexerNodeRef(subjectKey),
+            label: localKey === "guide-a" ? "Guide A" : "Guide B",
+            reader_question_refs: workset.reader_question_refs,
+            question_target_bindings: localKey === "guide-a"
+              ? workset.allowed_question_target_refs.map((targetRef) => ({
+                  target_ref: targetRef,
+                  role: "primary-carrier" as const,
+                }))
+              : [],
+            member_ids: [member.member_id],
+          }],
+          member_dispositions: [{
+            member_id: member.member_id,
+            member_kind: member.member_kind,
+            inventory_disposition: "owned",
+            group_key: groupKey,
+          }],
+          failure: null,
+        };
+        const plan: CompletePlan = {
+          ...planPayload,
+          canonical_hash: indexerPartitionPlanCanonicalHash(planPayload),
+        };
+        return {
+          plan,
+          workset,
+          canonical_inventory_members: partitionValidation.canonical_inventory_members,
+          authorized_source_refs: partitionValidation.authorized_source_refs,
+          authorized_strategies: partitionValidation.authorized_strategies,
+          required_question_target_refs: partitionValidation.required_question_target_refs,
+        };
+      });
       const author = await buildProjectIndexerMainAuthorWorksets({
         projectRoot: root,
         value: {
           protocol: "context.indexer.main-author-workset-build-input/v1",
-          partitions: [{ plan, workset, canonical_inventory_members: partitionValidation.canonical_inventory_members, authorized_source_refs: partitionValidation.authorized_source_refs, authorized_strategies: partitionValidation.authorized_strategies, required_question_target_refs: partitionValidation.required_question_target_refs }],
+          partitions,
           target_resolution_views: [],
         },
       });
@@ -423,5 +466,17 @@ describe("project Author result reuse", () => {
     expect((reused.operation_result as IndexerArtifactResult).output_digest).toBe((previousB.artifact_result as IndexerArtifactResult).output_digest);
     expect(reused.artifact_dependency_set.artifacts[0]!.dependency_digest).toBe(previousB.artifact_dependency_set.artifacts[0]!.dependency_digest);
     expect(reused.artifact_dependency_set.artifacts[0]!.sections[0]!.dependency_digest).toBe(previousB.artifact_dependency_set.artifacts[0]!.sections[0]!.dependency_digest);
+
+    const batch = await prepareAndStartNextIndexerBatch(root);
+    expect(batch.tasks.map((task) => task.workset_digest)).toEqual([
+      currentA.request.workset.workset_digest,
+    ]);
+    const started = await currentLedger(root);
+    expect(started?.entries.find((entry) =>
+      entry.workset_digest === currentA.request.workset.workset_digest
+    )?.state).toBe("running");
+    expect(started?.entries.find((entry) =>
+      entry.workset_digest === currentB.request.workset.workset_digest
+    )?.state).toBe("accepted");
   });
 });

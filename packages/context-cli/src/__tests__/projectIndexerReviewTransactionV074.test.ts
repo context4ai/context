@@ -16,6 +16,7 @@ import { readRejectedDecisions, REVIEW_DECISIONS_FILE } from
   "../project/reviewDecisions.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import {
+  approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
   ensureApprovedKnowledgePresentation,
 } from "../project/approvedKnowledgeMetadata.js";
@@ -102,6 +103,30 @@ describe("Indexer Review durable transaction", () => {
     const untitled = legacy.replace(/^# Sample\n\n/mu, "");
     expect(ensureApprovedKnowledgePresentation(untitled).match(/^# Sample$/gmu))
       .toHaveLength(1);
+  });
+
+  test("keeps runtime recovery and audit identities out of knowledge and structure", () => {
+    const rendered = renderApprovedIndexerMarkdown({
+      record: candidate(),
+      timestamp: "2026-09-03T00:00:00.000Z",
+    });
+    for (const token of [
+      "candidate_fingerprint",
+      "indexer_compile_digest",
+      "evidence_bindings",
+      "benchmark",
+      "batch_digest",
+    ]) expect(rendered).not.toContain(token);
+
+    expect(approvedViewMachineMetadata({
+      node_ref: `node:subject:${DIGEST}`,
+      view_ref: `view:artifact:${DIGEST}`,
+      sources: ["repo:sample"],
+      candidate_fingerprint: DIGEST,
+      current_batch_digest: DIGEST,
+      evidence_bindings: [],
+      benchmark_summary: { duration_ms: 1 },
+    })).toBeUndefined();
   });
 
   test("recovers rejection ledger and durable decision together after interruption", async () => {

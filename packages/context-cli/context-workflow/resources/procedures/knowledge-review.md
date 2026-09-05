@@ -34,14 +34,17 @@ Use it only after the user cannot use the report and explicitly replies with
 the exact phrase `强制批准` in the current conversation. It approves the complete
 current scope atomically; no candidate-specific decisions are inferred.
 
-With explicit session-managed authority, first run the read-only Review HTML
-command, then read the complete generated report and every reader-facing
-Candidate in its current scope. Only after deciding that the whole batch is
-publishable may the Agent run the managed atomic approval command. If any page
-needs repair, do not approve the batch; reopen the owning Author or Composer
-through the current repair route. The authority exists only in the current
-conversation. It does not bypass source permission, validation, close, or
-verify, and it is not proof that the report was read.
+With explicit session-managed authority, materialize the required
+`context.review-current` Markdown Resource once. Read its index and every
+reader-facing batch file listed there. Each Candidate appears in exactly one
+bounded batch; keep the decisions in the current Agent context and do not write
+a Review ledger. Only after every batch is publishable may the Agent run the
+single managed atomic approval command. Do not generate, open, or parse the
+ordinary HTML report. If any page needs repair, do not approve any batch;
+reopen the owning Author or Composer through the current repair route. The
+authority exists only in the current conversation. It does not bypass source
+permission, validation, close, or verify, and it is not proof that the files
+were read.
 
 After apply, re-evaluate. Do not infer that close or package output is current.
 Do not persist a duplicate review-report ledger in the workspace.

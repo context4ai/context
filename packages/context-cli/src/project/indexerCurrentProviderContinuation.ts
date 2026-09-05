@@ -1,4 +1,10 @@
-import type { HostActionResult, JsonValue } from "@c4a/agent-graph";
+import {
+  evaluateGraph,
+  resolveRoute,
+  type HostActionResult,
+  type JsonValue,
+  type Route,
+} from "@c4a/agent-graph";
 import {
   buildIndexerDependencyIntentSet,
   deriveIndexerProgramExecutionPolicy,
@@ -9,7 +15,6 @@ import {
   dispatchProjectIndexerProviderResolution,
 } from "./indexerProviderProjectFlow.js";
 import {
-  INDEXER_PROVIDER_RESOLVER_HANDLER,
   indexerProviderResolutionHostLocation,
   type IndexerProviderHostManagedOutput,
 } from "./indexerProviderDispatcher.js";
@@ -31,7 +36,9 @@ import {
 import { validateProjectIndexerSelectionProposal } from "./indexerSelectionProposal.js";
 import {
   authorityCommandOptions,
+  loadContextWorkflowProvider,
   projectWorkflowResourceLocation,
+  projectWorkflowRouteAction,
 } from "./workflow/workflowProvider.js";
 import type {
   ContextResolvedWorkflowRoute,
@@ -39,6 +46,44 @@ import type {
 } from "./workflow/workflowTypes.js";
 import { readPackageVersion } from "../lib/packageVersion.js";
 import { CONTEXT_WORKFLOW_AUTHORITIES } from "./workflow/workflowTypes.js";
+
+const INDEXER_GRAPH_ID = "indexer";
+const PROVIDER_RESOLUTION_ENTRY = "current-provider-resolution";
+const PROVIDER_PROGRAM_AUTHORIZATION_ENTRY =
+  "current-provider-program-authorization";
+const PROVIDER_FINALIZATION_ENTRY = "current-provider-finalization";
+
+async function resolveProviderContinuationGraphRoute(input: {
+  projectRoot: string;
+  authorities: readonly ContextWorkflowAuthority[];
+  entry: string;
+}): Promise<Route> {
+  const provider = await loadContextWorkflowProvider();
+  const context = {
+    authorities: [...input.authorities],
+    workspace: input.projectRoot,
+  };
+  const evaluated = evaluateGraph(
+    provider,
+    INDEXER_GRAPH_ID,
+    input.entry,
+    context,
+  );
+  const primary = evaluated.evaluation.primaryRoute;
+  if (primary === undefined) {
+    throw new TypeError(
+      `Context Indexer Provider continuation ${input.entry} is unavailable`,
+    );
+  }
+  return resolveRoute(
+    provider,
+    INDEXER_GRAPH_ID,
+    input.entry,
+    primary.routeId,
+    context,
+    evaluated.evaluation.revision,
+  );
+}
 
 function selectionKey(indexerId: string, providerId: string): string {
   return `${indexerId}\u0000${providerId}`;
@@ -125,45 +170,92 @@ export async function buildCurrentIndexerProviderContinuationRoute(input: {
   if (current === undefined) return undefined;
   if (current.pendingProgramAuthorization !== undefined) {
     const pending = current.pendingProgramAuthorization;
+    const resolved = await resolveProviderContinuationGraphRoute({
+      ...input,
+      entry: PROVIDER_PROGRAM_AUTHORIZATION_ENTRY,
+    });
+    const gate = resolved.gate;
+    const source = gate?.resolutionAction?.action;
+    if (
+      gate === undefined ||
+      source === undefined ||
+      source.runner !== "agent" ||
+      source.effect !== "external" ||
+      source.skill === undefined ||
+      source.outputSchema === undefined
+    ) {
+      throw new TypeError(
+        "Context current Provider program authorization Gate contract is incomplete",
+      );
+    }
     const revision = indexerProtocolDigest({
       protocol: "context.indexer.current-provider-program-authorization-revision/v1",
       state_digest: current.state.state_digest,
       report_digest: pending.report.report_digest,
       authority_scope_digest: pending.authorityScopeDigest,
     });
-    return {
-      protocol: "context.workflow.route.v1",
-      id: "authorize-indexer-provider-program",
-      revision,
-      node: "authorize-indexer-provider-program",
-      reason_code: "route.indexer.program-execution-authorization",
-      availability: input.managed ? "immediate" : "requires-user",
-      commands: [{
-        command: completionCommand({ ...input, revision }),
-        effect: "external",
-        availability: input.managed ? "immediate" : "after-human-confirmation",
-        managed_execution: "agent-required",
-      }],
+    const resolutionAction = projectWorkflowRouteAction({
       action: {
-        id: "authorize-indexer-provider-program",
-        runner: "agent",
-        effect: "external",
+        ...source,
         input: {
           stage: "provider-program-authorization",
           report: pending.report,
         } as unknown as JsonValue,
       },
+      revision,
+      authorities: input.authorities,
+    });
+    if (resolutionAction === undefined || resolutionAction.effect === "read") {
+      throw new TypeError(
+        "Context current Provider program authorization resolution is unavailable",
+      );
+    }
+    return {
+      protocol: "context.workflow.route.v1",
+      id: resolved.routeId,
+      revision,
+      node: resolved.node,
+      reason_code: resolved.reasonCode,
+      availability: resolved.availability,
+      commands: [{
+        command: completionCommand({ ...input, revision }),
+        effect: "external",
+        availability: gate.resolution === "session-authority"
+          ? "immediate"
+          : "after-human-confirmation",
+        managed_execution: "agent-required",
+      }],
       resources: { required: [], recommended: [] },
       gate: {
-        id: "authorize-indexer-program-execution",
-        authority: CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution,
-        delegatable: true,
-        resolution: input.managed ? "session-authority" : "user",
+        id: gate.id,
+        ...(gate.authority === undefined
+          ? {}
+          : { authority: gate.authority }),
+        delegatable: gate.delegatable === true,
+        resolution: gate.resolution,
+        resolution_action: {
+          ...resolutionAction,
+          effect: source.effect,
+        },
       },
       after_action: { evaluate: true },
     };
   }
   if (current.nextRequest === undefined) {
+    const resolved = await resolveProviderContinuationGraphRoute({
+      ...input,
+      entry: PROVIDER_FINALIZATION_ENTRY,
+    });
+    if (
+      resolved.action?.runner !== "command" ||
+      resolved.action.effect !== "write" ||
+      resolved.action.skill !== undefined ||
+      resolved.action.outputSchema !== undefined
+    ) {
+      throw new TypeError(
+        "Context current Provider finalization Action contract is incomplete",
+      );
+    }
     const revision = indexerProtocolDigest({
       protocol: "context.indexer.current-provider-finalization-revision/v1",
       state_digest: current.state.state_digest,
@@ -171,23 +263,17 @@ export async function buildCurrentIndexerProviderContinuationRoute(input: {
     });
     return {
       protocol: "context.workflow.route.v1",
-      id: "finalize-indexer-provider-selection",
+      id: resolved.routeId,
       revision,
-      node: "finalize-indexer-provider-selection",
-      reason_code: "route.indexer.provider-finalization-required",
-      availability: "immediate",
+      node: resolved.node,
+      reason_code: resolved.reasonCode,
+      availability: resolved.availability,
       commands: [{
-        command: completionCommand({ ...input, revision }),
+        command: `context --workflow-revision '${revision}'${authorityCommandOptions(input.authorities, "workflow")} run${input.managed ? " --managed" : ""} --format json`,
         effect: "write",
         availability: "immediate",
-        managed_execution: "agent-required",
+        managed_execution: "automatic",
       }],
-      action: {
-        id: "finalize-indexer-provider-selection",
-        runner: "agent",
-        effect: "write",
-        input: { stage: "provider-finalization" },
-      },
       resources: { required: [], recommended: [] },
       after_action: { evaluate: true },
     };
@@ -208,26 +294,48 @@ export async function buildCurrentIndexerProviderContinuationRoute(input: {
     input_digest: dispatch.input_digest,
   });
   const location = indexerProviderResolutionHostLocation(dispatch.request);
+  const resolved = await resolveProviderContinuationGraphRoute({
+    ...input,
+    entry: PROVIDER_RESOLUTION_ENTRY,
+  });
+  if (
+    resolved.action?.runner !== "agent" ||
+    resolved.action.effect !== "external" ||
+    resolved.action.skill === undefined ||
+    resolved.action.outputSchema === undefined
+  ) {
+    throw new TypeError(
+      "Context current Provider Host resolution Action contract is incomplete",
+    );
+  }
+  const action = projectWorkflowRouteAction({
+    action: {
+      ...resolved.action,
+      input: {
+        stage: "provider-resolution",
+        request: dispatch.request,
+      } as unknown as JsonValue,
+    },
+    revision,
+    authorities: input.authorities,
+  });
+  if (action === undefined) {
+    throw new TypeError("Context current Provider Host resolution Action is unavailable");
+  }
   return {
     protocol: "context.workflow.route.v1",
-    id: "resolve-indexer-provider",
+    id: resolved.routeId,
     revision,
-    node: "resolve-indexer-provider",
-    reason_code: "route.indexer.provider-host-resolution-required",
-    availability: "immediate",
+    node: resolved.node,
+    reason_code: resolved.reasonCode,
+    availability: resolved.availability,
     commands: [{
       command: completionCommand({ ...input, revision }),
       effect: "write",
       availability: "immediate",
       managed_execution: "agent-required",
     }],
-    action: {
-      id: "resolve-indexer-provider",
-      runner: "host",
-      effect: "external",
-      handler: INDEXER_PROVIDER_RESOLVER_HANDLER,
-      input: dispatch.request as unknown as JsonValue,
-    },
+    action,
     resources: {
       required: [projectWorkflowResourceLocation(
         location,
@@ -395,17 +503,20 @@ export async function completeCurrentIndexerProviderProgramAuthorization(input: 
   });
 }
 
-export async function completeCurrentIndexerProviderFinalization(
+export async function advanceCurrentIndexerProviderFinalizationIfReady(
   projectRoot: string,
-): Promise<void> {
+): Promise<boolean> {
   const current = await currentSetup(projectRoot);
-  if (current === undefined || current.nextRequest !== undefined) {
-    throw new TypeError("current Indexer Provider finalization is stale or unavailable");
-  }
+  if (
+    current === undefined ||
+    current.nextRequest !== undefined ||
+    current.pendingProgramAuthorization !== undefined
+  ) return false;
   await finalizeCurrentIndexerProviderSetup({
     projectRoot,
     proposal: current.validation.proposal,
     staticReport: current.validation.static_report,
     resolved: current.state.resolved,
   });
+  return true;
 }

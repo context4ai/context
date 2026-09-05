@@ -284,7 +284,7 @@ describe("Indexer install and resolver modes", () => {
       join(staged.staged.stage_path, "context-indexer.yaml"),
       "utf8",
     );
-    expect(stagedManifest).toContain("version: 1.1.1");
+    expect(stagedManifest).toContain("version: 1.1.2");
     expect(stagedManifest).not.toContain("decoy-host-skill");
     expect(staged.staged.files).toEqual(bundled.files);
     for (const pluginManifest of [

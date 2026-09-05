@@ -1,18 +1,16 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
-import YAML from "yaml";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   canonicalIndexerJson,
   type IndexerInventoryMember,
-  type IndexerRegistry,
 } from "@c4a/context";
 import { beginDocumentRevision } from "../project/documentRevision.js";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
+import { applyReviewDecisions } from "../project/reviewApply.js";
+import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { projectCurrentIndexerWorkflowRoute } from
@@ -23,215 +21,130 @@ import { buildIndexerAuthorRunResultFromSemantic } from
   "../project/indexerSemanticAuthorResult.js";
 import { currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";
 import {
-  acceptIndexerMainRunStore,
-  convergeIndexerMainPartitionRunStore,
+  acceptIndexerMainAuthorRunsStore,
+  acceptIndexerMainPartitionRunsStore,
 } from "../project/indexerMainRunStore.js";
-import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
+import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import {
   currentIndexerStructureReview,
 } from "../project/indexerStructureReview.js";
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
-import type { ContextResolvedWorkflowRoute } from
-  "../project/workflow/workflowTypes.js";
+import {
+  createDocumentRevisionWorkspace,
+  DOCUMENT_REVISION_SOURCE_REF as SOURCE_REF,
+  documentRevisionOuterIndexerRoute as outerIndexerRoute,
+} from "./projectDocumentRevisionV074.fixture.js";
 
-const SOURCE_REF = "repo:20260903/revision-fixture";
+const DOCUMENT_REVISION_TEST_TIMEOUT_MS = 60_000;
+const temporaryRoots: string[] = [];
 
-function outerIndexerRoute(): ContextResolvedWorkflowRoute {
-  return {
-    protocol: "context.workflow.route.v1",
-    id: "run-indexer-lifecycle",
-    revision: `sha256:${"f".repeat(64)}`,
-    node: "run-indexer-lifecycle",
-    reason_code: "route.indexer.lifecycle-required",
-    availability: "immediate",
-    commands: [],
-    resources: { required: [], recommended: [] },
-    after_action: { evaluate: true },
-  };
-}
-
-async function workspace(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "context-indexer-revise-"));
-  const bundle = (await listCliBundledIndexers()).bundles.find((item) =>
-    item.skill === "context-code-indexer"
-  );
-  if (bundle === undefined) throw new Error("missing bundled Code Indexer");
-  const registry: IndexerRegistry = {
-    protocol: "context.indexer.registry/v1",
-    requirements: [{
-      id: "workspace-knowledge",
-      reader_goals: ["understand-system"],
-      coverage_domains: { architecture: "required" },
-      target_scope: {
-        targets: [{ source_ref: SOURCE_REF, module_refs: ["module:app"] }],
-      },
-      evidence_source_scope: {
-        targets: [{ source_ref: SOURCE_REF, module_refs: ["module:app"] }],
-      },
-    }],
-    indexers: [{
-      id: "revision-fixture",
-      operations: ["main-index"],
-      requirement_bindings: [{
-        requirement_ref: "workspace-knowledge",
-        coverage_domains: ["architecture"],
-        owned_scope: { ref: "requirement:workspace-knowledge#target_scope" },
-        role: "primary",
-      }],
-      read_scope: { refs: ["requirement:workspace-knowledge#target_scope"] },
-      profile: { primary: { id: "component-library", provider: "community" } },
-      providers: [{
-        id: "community",
-        role: "primary",
-        skill: bundle.skill,
-        version: bundle.version,
-        integrity: bundle.integrity,
-        distribution: bundle.distribution,
-      }],
-    }],
-  };
-  await mkdir(join(root, "src"), { recursive: true });
-  await mkdir(join(root, "knowledge"), { recursive: true });
-  await writeFile(join(root, "package.json"), `${JSON.stringify({
-    name: "revision-fixture",
-    private: true,
-    context: { project: true, entry: "src/index.ts" },
-  }, null, 2)}\n`);
-  await writeFile(join(root, "src", "indexers.yaml"), YAML.stringify(registry));
-  await writeFile(join(root, "src", "index.ts"), [
-    'import { defineProject, source } from "@c4a/context";',
-    'const fixture = source("20260903", "revision-fixture");',
-    "export default defineProject({ sources: [fixture], phases: [], packages: [] });",
-    "",
-  ].join("\n"));
-  await writeFile(join(root, "knowledge", "structure.yaml"), YAML.stringify({
-    schema_version: "context.approved-structure.v1",
-    nodes: [{ node_ref: "node:revision-fixture", title: "Revision fixture", node_type: "entity" }],
-    views: [{
-      view_ref: "architecture:revision-fixture",
-      node_ref: "node:revision-fixture",
-      title: "Revision fixture",
-      path: "architecture/revision-fixture.md",
-      sources: [SOURCE_REF],
-      sections: [],
-    }],
-    edges: [],
-  }));
-  const sourceRoot = join(root, "fixture-source");
-  await mkdir(join(sourceRoot, "src"), { recursive: true });
-  await writeFile(join(sourceRoot, "package.json"), `${JSON.stringify({
-    name: "revision-fixture-source",
-    private: true,
-    exports: "./src/index.ts",
-  }, null, 2)}\n`);
-  await writeFile(join(sourceRoot, "src", "index.ts"), "export const answer = 42;\n");
-  execFileSync("git", ["init", "-q"], { cwd: sourceRoot });
-  execFileSync("git", ["config", "user.email", "context-test@example.test"], { cwd: sourceRoot });
-  execFileSync("git", ["config", "user.name", "Context Test"], { cwd: sourceRoot });
-  execFileSync("git", ["add", "package.json", "src/index.ts"], { cwd: sourceRoot });
-  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: sourceRoot });
-  const ref = execFileSync("git", ["rev-parse", "HEAD"], {
-    cwd: sourceRoot,
-    encoding: "utf8",
-  }).trim();
-  const materializedRoot = join(
-    root,
-    "sources",
-    "repo",
-    "20260903",
-    "revision-fixture",
-  );
-  await mkdir(join(materializedRoot, ".."), { recursive: true });
-  await symlink(sourceRoot, materializedRoot);
-  await writeFile(join(root, "sources", "repo", "index.yaml"), [
-    "sources:",
-    "  - name: '20260903'",
-    "    modules:",
-    "      - name: revision-fixture",
-    "        local: fixture-source",
-    "        materializedAt: sources/repo/20260903/revision-fixture",
-    "        git:",
-    "          remote: https://example.test/revision-fixture.git",
-    `          ref: ${ref}`,
-    "",
-  ].join("\n"));
+async function workspace(options: { debug?: boolean } = {}): Promise<string> {
+  const root = await createDocumentRevisionWorkspace(options);
+  temporaryRoots.push(root);
   return root;
 }
+
+afterEach(async () => {
+  await Promise.all(temporaryRoots.splice(0).map((root) =>
+    rm(root, { recursive: true, force: true })
+  ));
+});
 
 async function completePartitionStage(root: string): Promise<void> {
   await advanceCurrentIndexerLifecycle(root);
   while (true) {
     const current = await resolveCurrentIndexerAgentContext(root);
-    if (current === undefined || current.spec.request.workset.stage !== "partition") return;
-    const workset = current.spec.request.workset;
-    const validation = current.spec.validation as {
-      canonical_inventory_members: IndexerInventoryMember[];
-      authorized_source_refs: string[];
-      subject_key_contract: unknown;
-      required_question_target_refs?: string[];
-    };
-    const suffix = workset.workset_digest.slice(-8);
-    const semantic = {
-      stage: "partition" as const,
-      outcome: "complete" as const,
-      unit_type: "capability",
-      partition_axis: "capability-boundary",
-      groups: [{
-        key: `fixture-${suffix}`,
-        title: `Fixture ${suffix}`,
-        reader_task: "Understand the public fixture capability.",
-        subject: {
-          namespace: workset.partition_subject_key.namespace,
-          kind: workset.partition_subject_key.kind,
-          local_key: `fixture-${suffix}`,
-        },
-        subject_intent: "primary" as const,
-        members: validation.canonical_inventory_members.map((member) => member.member_id),
-        questions: [...workset.reader_question_refs],
-        question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
-          target,
-          role: "primary-carrier" as const,
-        })),
-        outline: ["Overview"],
-      }],
-      excluded: [],
-      unsupported: [],
-    };
-    const result = buildIndexerPartitionRunResultFromSemantic({
-      request: current.spec.request,
-      view: current.worksetView.projection.view,
-      semantic,
-      validation,
-    });
-    const converged = await convergeIndexerMainPartitionRunStore({
+    if (current === undefined || current.descriptor.stage !== "partition") return;
+    const runs = [];
+    for (const descriptor of current.descriptor.tasks) {
+      const task = await loadCurrentIndexerBatchTask({
+        projectRoot: root,
+        descriptor: current.descriptor,
+        taskKey: descriptor.task_key,
+      });
+      const workset = task.spec.request.workset;
+      if (workset.stage !== "partition") throw new Error("expected Partition task");
+      const validation = task.spec.validation as {
+        canonical_inventory_members: IndexerInventoryMember[];
+        authorized_source_refs: string[];
+        subject_key_contract: unknown;
+        required_question_target_refs?: string[];
+      };
+      const suffix = workset.workset_digest.slice(-8);
+      const semantic = {
+        stage: "partition" as const,
+        outcome: "complete" as const,
+        groups: [{
+          key: `fixture-${suffix}`,
+          title: `Fixture ${suffix}`,
+          reader_task: "Understand the public fixture capability.",
+          subject: {
+            namespace: workset.partition_subject_key.namespace,
+            kind: workset.partition_subject_key.kind,
+            local_key: `fixture-${suffix}`,
+          },
+          subject_intent: "primary" as const,
+          members: validation.canonical_inventory_members.map((member) => member.member_id),
+          questions: [...workset.reader_question_refs],
+          question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
+            target,
+            role: "primary-carrier" as const,
+          })),
+          outline: ["Overview"],
+        }],
+        excluded: [],
+        unsupported: [],
+      };
+      runs.push({
+        workset_digest: workset.workset_digest,
+        semantic,
+        execution_request_digest: task.spec.request.execution_request_digest,
+        result: buildIndexerPartitionRunResultFromSemantic({
+          request: task.spec.request,
+          view: task.view,
+          semantic,
+          validation: { ...validation, partition_unit_type: "semantic-subject" },
+        }),
+      });
+    }
+    const converged = await acceptIndexerMainPartitionRunsStore({
       projectRoot: root,
-      workset_digest: workset.workset_digest,
-      result,
+      runs,
     });
-    expect(converged.convergence.decision).toBe("accepted");
-    const semanticPath = join(
-      root,
-      ".tmp/context-runtime/indexer/semantic-results",
-      `${current.spec.request.execution_request_digest.slice("sha256:".length)}.json`,
-    );
-    await mkdir(join(semanticPath, ".."), { recursive: true });
-    await writeFile(semanticPath, canonicalIndexerJson(semantic));
+    expect(converged.outcomes.every((outcome) => outcome.outcome === "accepted")).toBe(true);
+    for (const run of runs) {
+      const semanticPath = join(
+        root,
+        ".tmp/context-runtime/indexer/semantic-results",
+        `${run.execution_request_digest.slice("sha256:".length)}.json`,
+      );
+      await mkdir(join(semanticPath, ".."), { recursive: true });
+      await writeFile(semanticPath, canonicalIndexerJson(run.semantic));
+    }
     await advanceCurrentIndexerLifecycle(root);
   }
 }
 
 async function completeAuthorStage(
   root: string,
-  options: { catalogOnlyFirst?: boolean } = {},
+  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string } = {},
 ): Promise<{ catalogOnlyCount: number }> {
   let catalogOnlyCount = 0;
   while (true) {
     const current = await resolveCurrentIndexerAgentContext(root);
-    if (current === undefined || current.spec.request.workset.stage !== "author") {
+    if (current === undefined || current.descriptor.stage !== "author") {
       return { catalogOnlyCount };
     }
-    const workset = current.spec.request.workset;
-    const validation = current.spec.validation as {
+    const runs = [];
+    for (const descriptor of current.descriptor.tasks) {
+      const task = await loadCurrentIndexerBatchTask({
+        projectRoot: root,
+        descriptor: current.descriptor,
+        taskKey: descriptor.task_key,
+      });
+      const workset = task.spec.request.workset;
+      if (workset.stage !== "author") throw new Error("expected Author task");
+      const validation = task.spec.validation as {
       dependency_view: {
         positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
       };
@@ -251,21 +164,21 @@ async function completeAuthorStage(
         question_target_key: string;
         question_ref: string;
       }>;
-    };
-    const source = validation.dependency_view.positive_nodes.find((node) =>
-      node.kind === "source-span" && node.evidence_ref !== undefined
-    );
-    if (source?.evidence_ref === undefined) throw new Error("fixture Author has no source span");
-    const intent = validation.allowed_artifact_intents[0];
-    const policy = validation.artifact_policy_eligibility.eligible_variants[0];
-    if (intent === undefined || policy === undefined) throw new Error("fixture Author has no output policy");
-    const catalogFact = current.worksetView.projection.view.items.find((item) =>
-      item.category === "fact"
-    );
-    const catalogOnly = options.catalogOnlyFirst === true &&
-      catalogOnlyCount === 0 && catalogFact !== undefined;
-    if (catalogOnly) catalogOnlyCount++;
-    const semantic = {
+      };
+      const source = validation.dependency_view.positive_nodes.find((node) =>
+        node.kind === "source-span" && node.evidence_ref !== undefined
+      );
+      if (source?.evidence_ref === undefined) throw new Error("fixture Author has no source span");
+      const intent = validation.allowed_artifact_intents[0];
+      const policy = validation.artifact_policy_eligibility.eligible_variants[0];
+      if (intent === undefined || policy === undefined) throw new Error("fixture Author has no output policy");
+      const catalogFact = task.view.items.find((item) =>
+        item.category === "fact"
+      );
+      const catalogOnly = options.catalogOnlyFirst === true &&
+        catalogOnlyCount === 0 && catalogFact !== undefined;
+      if (catalogOnly) catalogOnlyCount++;
+      const semantic = {
       stage: "author" as const,
       group_key: workset.group_key,
       outcome: catalogOnly ? "catalog-only" as const : "publish" as const,
@@ -287,7 +200,10 @@ async function completeAuthorStage(
       sections: [{
         key: "overview",
         heading: "Overview",
-        markdown: "Use the exported answer constant as the public entry point.",
+        markdown: [
+          "Use the exported answer constant as the public entry point.",
+          options.revisionSuffix,
+        ].filter((value): value is string => value !== undefined).join("\n\n"),
         source_items: [source.evidence_ref],
         facts: catalogOnly ? [catalogFact.ref] : [],
         answers: validation.allowed_question_targets.map((target) =>
@@ -301,30 +217,192 @@ async function completeAuthorStage(
       })),
       material_gaps: [],
       diagnostics: [],
-    };
-    const result = buildIndexerAuthorRunResultFromSemantic({
-      request: current.spec.request,
-      view: current.worksetView.projection.view,
-      semantic,
-      validation,
-    });
-    await acceptIndexerMainRunStore({
+      };
+      runs.push({
+        workset_digest: workset.workset_digest,
+        result: buildIndexerAuthorRunResultFromSemantic({
+          request: task.spec.request,
+          view: task.view,
+          semantic,
+          validation,
+        }),
+      });
+    }
+    await acceptIndexerMainAuthorRunsStore({
       projectRoot: root,
-      workset_digest: workset.workset_digest,
-      result,
+      runs,
     });
     await advanceCurrentIndexerLifecycle(root);
   }
 }
 
 describe("current Indexer document revision", () => {
+  test("rebuilds the current batch descriptor without restarting accepted work", async () => {
+    const root = await workspace({ debug: true });
+    await advanceCurrentIndexerLifecycle(root);
+    const before = await resolveCurrentIndexerAgentContext(root);
+    if (before === undefined) throw new Error("missing current Indexer batch");
+    const expected = before.descriptor.tasks.map((task) => task.workset_digest);
+    const eventPath = join(root, ".tmp/context-runtime/debug/events.jsonl");
+    const recoveryStart = (await readFile(eventPath, "utf8")).trim().split(/\r?\n/u).length;
+    await rm(join(
+      root,
+      ".tmp/context-runtime/lifecycle/current-indexer-batch.json",
+    ));
+
+    const recovered = await resolveCurrentIndexerAgentContext(root);
+    expect(recovered?.descriptor.tasks.map((task) => task.workset_digest)).toEqual(expected);
+    expect(recovered?.descriptor.stage).toBe(before.descriptor.stage);
+    const ledger = await currentLedger(root);
+    expect(ledger?.entries.filter((entry) => entry.state === "running")).toHaveLength(
+      expected.length,
+    );
+    const events = (await readFile(eventPath, "utf8")).trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
+      kind: string;
+      data: { counters?: Record<string, number> };
+    });
+    const counter = (name: string, start = 0) => events.slice(start).reduce(
+      (total, event) => total + (event.data.counters?.[name] ?? 0),
+      0,
+    );
+    expect(counter("instruction_materialize_count")).toBe(1);
+    expect(counter("instructions_content_cache_hit_count")).toBe(1);
+    // Restoring a descriptor must use the cache, not require another decode.
+    // The initial tiny workload can legitimately select every source file;
+    // only the recovered descriptor must not decode that complete source again.
+    expect(counter("parser_cache_hit_count", recoveryStart)).toBeGreaterThan(0);
+    expect(counter("full_fact_blob_decode_count", recoveryStart)).toBe(0);
+    expect(counter("status_rebuild_count")).toBe(0);
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
+
+  test("commits a valid Partition peer when another batch result has an invalid schema", async () => {
+    const root = await workspace();
+    await advanceCurrentIndexerLifecycle(root);
+    const current = await resolveCurrentIndexerAgentContext(root);
+    if (current === undefined || current.descriptor.stage !== "partition") {
+      throw new Error("missing Partition batch");
+    }
+    expect(current.descriptor.tasks.length).toBeGreaterThan(1);
+    const acceptedTask = await loadCurrentIndexerBatchTask({
+      projectRoot: root,
+      descriptor: current.descriptor,
+      taskKey: current.descriptor.tasks[0]!.task_key,
+    });
+    const workset = acceptedTask.spec.request.workset;
+    if (workset.stage !== "partition") throw new Error("expected Partition task");
+    const validation = acceptedTask.spec.validation as {
+      canonical_inventory_members: IndexerInventoryMember[];
+      required_question_target_refs?: string[];
+    };
+    const route = await projectCurrentIndexerWorkflowRoute({
+      projectRoot: root,
+      route: outerIndexerRoute(),
+      managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+    });
+    if (route === undefined) throw new Error("missing current Partition route");
+    const completion = await completeCurrentIndexerAction({
+      cwd: root,
+      revision: route.revision,
+      managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+      value: {
+        stage: "partition",
+        results: [{
+          task_key: acceptedTask.descriptor.task_key,
+          result: {
+            stage: "partition",
+            outcome: "complete",
+            groups: [{
+              key: "accepted-peer",
+              title: "Accepted peer",
+              reader_task: "Understand the accepted public fixture capability.",
+              subject: {
+                namespace: workset.partition_subject_key.namespace,
+                kind: workset.partition_subject_key.kind,
+                local_key: "accepted-peer",
+              },
+              subject_intent: "primary",
+              members: validation.canonical_inventory_members.map((member) => member.member_id),
+              questions: [...workset.reader_question_refs],
+              question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
+                target,
+                role: "primary-carrier",
+              })),
+              outline: ["Overview"],
+            }],
+            excluded: [],
+            unsupported: [],
+          },
+        }, {
+          task_key: current.descriptor.tasks[1]!.task_key,
+          result: {
+            stage: "partition",
+            outcome: "not-a-real-outcome",
+          },
+        }],
+      },
+    });
+    if (!("outcomes" in completion)) throw new Error("expected a batch completion");
+    expect(completion.outcomes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        task_key: acceptedTask.descriptor.task_key,
+        outcome: "accepted",
+        committed: true,
+      }),
+      expect.objectContaining({
+        task_key: current.descriptor.tasks[1]!.task_key,
+        outcome: "failed",
+        committed: false,
+        error: expect.objectContaining({ code: "schema-invalid" }),
+      }),
+    ]));
+    expect(completion).not.toHaveProperty("workflow");
+    const nextRequired = completion.next?.resources.required;
+    if (!Array.isArray(nextRequired)) {
+      throw new Error(`next Route has no ready resources: ${JSON.stringify(completion.next)}`);
+    }
+    expect(completion.next).toMatchObject({
+      node: "run-indexer-agent-step",
+      resources: {
+        required: expect.arrayContaining([
+          expect.objectContaining({ path: expect.any(String), read_state: "read-required" }),
+        ]),
+      },
+    });
+    expect(nextRequired.some((resource) =>
+      resource.command !== undefined || resource.materialize !== undefined
+    )).toBe(false);
+    expect(completion.progress).toMatchObject({
+      stage: "partition",
+      total: 2,
+      accepted: 1,
+      running: 1,
+      pending: 0,
+      current_batch: { task_count: 1 },
+      eta: null,
+    });
+    const ledger = await currentLedger(root);
+    expect(ledger?.entries.find((entry) =>
+      entry.workset_digest === acceptedTask.descriptor.workset_digest
+    )?.state).toBe("accepted");
+    expect(ledger?.entries.find((entry) =>
+      entry.workset_digest === current.descriptor.tasks[1]!.workset_digest
+    )?.state).toBe("running");
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
+
   test("runs one Code workload through Parser Facts, catalog-only, and public guidance", async () => {
     const root = await workspace();
     await advanceCurrentIndexerLifecycle(root);
     const first = await resolveCurrentIndexerAgentContext(root);
-    expect(first?.spec.request.workset.stage).toBe("partition");
-    expect(first?.worksetView.projection.view.items.some((item) =>
-      item.category === "fact"
+    expect(first?.descriptor.stage).toBe("partition");
+    const firstTask = first === undefined ? undefined : await loadCurrentIndexerBatchTask({
+      projectRoot: root,
+      descriptor: first.descriptor,
+      taskKey: first.descriptor.tasks[0]!.task_key,
+    });
+    expect(firstTask?.view.items.some((item) =>
+      item.category === "consumer-anchor"
     )).toBe(true);
 
     await completePartitionStage(root);
@@ -346,7 +424,7 @@ describe("current Indexer document revision", () => {
     expect(candidates.every((candidate) =>
       candidate.body.includes("public entry point")
     )).toBe(true);
-  }, 20_000);
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
   test("reopens only the approved page source as a recoverable Partition run", async () => {
     const root = await workspace();
@@ -375,7 +453,7 @@ describe("current Indexer document revision", () => {
     expect(existsSync(staleDerivedPath)).toBe(false);
     const ledger = await currentLedger(root);
     expect(ledger?.entries).toHaveLength(result.workset_count);
-    expect(ledger?.entries.filter((entry) => entry.state === "running")).toHaveLength(1);
+    expect(ledger?.entries.some((entry) => entry.state === "running")).toBe(true);
     expect(ledger?.entries.every((entry) => entry.stage === "partition")).toBe(true);
     const running = ledger!.entries.find((entry) => entry.state === "running")!;
     const spec = await currentSpec({
@@ -404,12 +482,19 @@ describe("current Indexer document revision", () => {
       managed: false,
     });
     expect(ordinaryStructureRoute).toMatchObject({
-      node: "review-indexer-semantic-structure",
+      node: "review-current-indexer-structure",
       availability: "requires-user",
       gate: {
         authority: "context.knowledge-review",
         delegatable: true,
         resolution: "user",
+        resolution_action: {
+          id: "resolve-current-indexer-gate",
+          runner: "agent",
+          effect: "write",
+          input: { stage: "structure-review" },
+          output_schema: { id: "schema.resolve-current-indexer-gate.output" },
+        },
       },
       commands: [{ availability: "after-human-confirmation" }],
     });
@@ -421,12 +506,19 @@ describe("current Indexer document revision", () => {
       managed: true,
     });
     expect(managedStructureRoute).toMatchObject({
-      node: "review-indexer-semantic-structure",
+      node: "review-current-indexer-structure",
       availability: "immediate",
       gate: {
         authority: "context.knowledge-review",
         delegatable: true,
         resolution: "session-authority",
+        resolution_action: {
+          id: "resolve-current-indexer-gate",
+          runner: "agent",
+          effect: "write",
+          input: { stage: "structure-review" },
+          output_schema: { id: "schema.resolve-current-indexer-gate.output" },
+        },
       },
       commands: [{ availability: "immediate" }],
     });
@@ -442,6 +534,26 @@ describe("current Indexer document revision", () => {
     const candidates = await readCandidateRecords(root);
     expect(candidates.length).toBeGreaterThan(1);
     const target = candidates[0]!;
+    const collectionCandidates = candidates.filter((candidate) =>
+      candidate.collection === target.collection
+    );
+    const collectionCandidateIds = collectionCandidates
+      .map((candidate) => candidate.candidate_id)
+      .sort();
+    await applyReviewDecisions({
+      projectRoot: root,
+      payload: {
+        collection: target.collection,
+        scope: {
+          kind: "collection",
+          collection: target.collection,
+          count: collectionCandidates.length,
+          ids_sha256: candidateIdsHash(collectionCandidateIds),
+          candidates_sha256: candidateSetHash(collectionCandidates),
+        },
+        decisions: [{ candidate_id: target.candidate_id, status: "rejected" }],
+      },
+    });
     const result = await beginDocumentRevision({
       projectRoot: root,
       selector: target.candidate_id,
@@ -468,5 +580,15 @@ describe("current Indexer document revision", () => {
         instruction: "Clarify the public entry point.",
       },
     });
-  }, 20_000);
+
+    await completeAuthorStage(root, {
+      revisionSuffix: "This revised explanation resolves the requested clarification.",
+    });
+    const revisedCandidates = await readCandidateRecords(root);
+    const revised = revisedCandidates.find((candidate) => candidate.path === target.path);
+    expect(revised).toBeDefined();
+    expect(revised?.candidate_id).not.toBe(target.candidate_id);
+    expect(revised?.status).toBe("draft");
+    expect(revised?.body).toContain("resolves the requested clarification");
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 });

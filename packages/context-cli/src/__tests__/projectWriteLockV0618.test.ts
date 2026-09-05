@@ -8,6 +8,25 @@ import { withProjectWriteLock } from "../project/writeLock.js";
 const lockPath = (root: string) => join(root, ".tmp", "context-runtime", "locks", "project-write.lock");
 
 describe("project write lock owner diagnostics", () => {
+  test("reuses the outer lock for nested project store operations", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-write-lock-nested-"));
+    try {
+      const operations: string[] = [];
+      await withProjectWriteLock(root, "outer", async () => {
+        operations.push("outer-open");
+        await withProjectWriteLock(root, "inner", async () => {
+          operations.push("inner");
+        });
+        operations.push("outer-close");
+      });
+      expect(operations).toEqual(["outer-open", "inner", "outer-close"]);
+      await expect(readFile(join(lockPath(root), "owner.json"), "utf8"))
+        .rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("reports the active owner and releases its metadata with the lock", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-write-lock-owner-"));
     let releaseOwner!: () => void;

@@ -406,6 +406,9 @@ describe("path-free plugin source audit", () => {
     }
 
     expect(findings.filter((finding) => finding.rule === "unclassified-source-path-field")).toEqual([]);
+    // Author resolves this registered source root inside the local reader; it
+    // is not a new path-bearing field in Agent or published knowledge output.
+    expect(PATH_FIELD_INVENTORY.find((entry) => entry.field === "source_root")?.policy).toBe("internal-only");
     for (const requiredField of ["cache_path", "cache_root", "payload.path", "relative_path", "snapshot_file", "body_ref"]) {
       expect(CLASSIFIED_SOURCE_PATH_FIELDS, requiredField).toContain(requiredField);
     }

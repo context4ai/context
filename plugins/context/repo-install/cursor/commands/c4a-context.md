@@ -121,7 +121,7 @@ and do not create a retry ledger or override Gate. If a legacy workspace returns
 `route.extract.codeindex-migration-required`, execute only its migration
 command; do not rename `codegraph` paths manually.
 
-### Discover Indexer Providers before selection
+### Select Indexer Providers
 
 For `indexer-provider-required`, `indexer-provider-unavailable`,
 `indexer-customization-required`, `indexer-customization-invalid`, or
@@ -134,30 +134,20 @@ remembered or host-specific workflow.
 
 When the current Route starts a new Code or Markdown indexing task, its
 `configure-indexer-providers` Action input already contains the exact applied
-requirements and CLI-bundled Provider catalog. Report those bundled entries
-together with every other Indexer Skill already visible through the current
-host. The conversational report must
-include each Skill name, readable exact version when available, and source type
-(CLI-bundled community, workspace, installed plugin, or authorized marketplace
-result). When the host already exposes an exact Skill root or `SKILL.md` path,
-read only its YAML frontmatter and sibling `context-indexer.yaml` during
-discovery. The manifest version is authoritative;
-`metadata.context-provider-version` is a readable copy that must match it. Do
-not load the Provider body or other guidance until the Route selects it. If the
-host exposes no readable root or exact version, report the version as
-unavailable rather than guessing it.
+requirements and CLI-bundled Provider catalog. Select applicable Providers from
+the Skills already visible to the Host and that supplied catalog. Do not add a
+catalog command, installation preflight, discovery report, or discovery-only
+confirmation to the normal workflow. The main entry being visible is not proof
+that every Provider is available; the CLI checks the selected distribution
+when it is used and returns any missing/version-conflict recovery.
 
-Group observations with the same Skill name and exact version into one
-conversational item and list all observed source types on that item. An
-installed projection of an identical CLI-bundled identity is not a second
-Provider. Keep different versions separate; never use source count or discovery order as
-selection precedence. Do not search arbitrary directories, infer host cache
-paths, install a plugin, or query a marketplace unless the user separately
-authorizes it. Keep this discovery report only in the conversation: do not
-write it to `src/`, `package.json`, lifecycle state, receipts, audit output, or
-`dist/`. Do not repeat it during an unchanged task resume; repeat it only for a
-new indexing task, a changed host-visible Skill set, or an explicit diagnostic
-request.
+Use the supplied CLI-bundled identity for a selected shipped Provider, including
+when the same Skill/version is also visible as an installed projection. Do not
+resolve that copy through the Host or re-read its installed metadata. For a
+relevant external Skill, read only the exact Host-exposed frontmatter and
+sibling `context-indexer.yaml` needed for selection; do not guess a version or
+scan caches. Different versions remain distinct. Read Provider guidance only
+when selected. Discovery is not a durable workspace artifact.
 
 Return only `stage: provider-selection`, the non-CLI
 `host_visible_skills`, and the selected semantic `indexers` through the exact

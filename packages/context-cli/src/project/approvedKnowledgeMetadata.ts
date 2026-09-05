@@ -5,6 +5,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
 import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
+import { isRuntimeOnlyKnowledgeMetadataField } from "./knowledgeMetadataPolicy.js";
 
 const STRUCTURE_PATH = join("knowledge", "structure.yaml");
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u;
@@ -32,19 +33,6 @@ const STRUCTURED_FIELDS = new Set([
   "evidence_status",
   "code_edges",
 ]);
-// Candidate/Result digests are runtime data. Currentness is recovered from the
-// approved page's exact identity and Section content, so none of these fields
-// need to persist in Git-backed knowledge or structure.
-const CLOSE_TRANSIENT_FIELDS = new Set([
-  "candidate_fingerprint",
-  "indexer_compile_digest",
-  "indexer_file_digest",
-  "indexer_artifact_ref",
-  "indexer_section_refs",
-  "indexer_source_ref",
-  "context_optimization",
-]);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -71,7 +59,7 @@ function machineMetadata(frontmatter: Record<string, unknown>): Record<string, u
   const metadata = Object.fromEntries(Object.entries(frontmatter).filter(([field]) =>
     !COMPACT_FIELDS.has(field) &&
     !STRUCTURED_FIELDS.has(field) &&
-    !CLOSE_TRANSIENT_FIELDS.has(field)
+    !isRuntimeOnlyKnowledgeMetadataField(field)
   ));
   const symbols = stringList(metadata.code_symbols);
   if (symbols.length > 0) {

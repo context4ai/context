@@ -10,7 +10,13 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import YAML from "yaml";
+import { indexerProviderSelectionSemanticInputSchema, parseIndexerRegistry } from "@c4a/context";
 import { invokeCliInDir, runCliInDir } from "./projectBuildVerifyV060Helpers.js";
+import {
+  buildCurrentIndexerProviderSelectionRoute,
+  completeCurrentIndexerProviderSelection,
+} from "../project/indexerCurrentProviderSetup.js";
+import type { CliBundledIndexerCatalogEntry } from "../project/indexerCliBundledProvider.js";
 
 const INTEGRITY = `sha256:${"a".repeat(64)}`;
 const REPOSITORY_ROOT = resolve(import.meta.dir, "../../../..");
@@ -153,19 +159,35 @@ describe("0.7.0 Indexer discovery and static Provider selection", () => {
       .toEqual([]);
   });
 
-  test("canonical Context Skill requires conversational discovery before selection", () => {
-    const skill = readFileSync(
-      join(REPOSITORY_ROOT, "plugins", "context", "skills", "context", "SKILL.md"),
-      "utf8",
-    );
-    expect(skill).toContain("Action input already contains the exact applied\nrequirements and CLI-bundled Provider catalog");
-    expect(skill).toMatch(/together with every other Indexer\s+Skill already visible/u);
-    expect(skill).toContain("read only its YAML frontmatter and sibling `context-indexer.yaml`");
-    expect(skill).toContain("Group observations with the same Skill name and exact version");
-    expect(skill).toMatch(/is not a second\s+Provider/u);
-    expect(skill).toContain("Keep this discovery report only in the conversation");
-    expect(skill).toContain("Do not call their low-level commands as a\nsecond production workflow");
-  });
+  test("selects a shipped Provider in one completion without a Host discovery inventory", async () => {
+    const root = project();
+    const registryPath = join(root, "src", "indexers.yaml");
+    const currentRegistry = parseIndexerRegistry(readFileSync(registryPath, "utf8"));
+    const route = await buildCurrentIndexerProviderSelectionRoute({
+      projectRoot: root, registry: currentRegistry, authorities: [], managed: false,
+    });
+    const input = route.action?.input as unknown as {
+      cli_bundled_providers: CliBundledIndexerCatalogEntry[];
+    };
+    const bundle = input.cli_bundled_providers.find((entry) => entry.skill === "context-code-indexer")!;
+    expect(bundle.distribution.kind).toBe("cli-bundled");
+    expect(route.commands).toHaveLength(1);
+    expect(route.commands[0]?.command).toContain("action complete-current");
+    const selected = selectionInput().registry.indexers[0]!;
+    selected.profile.primary.id = "component-library";
+    Object.assign(selected.providers[0]!, {
+      version: bundle.version, integrity: bundle.integrity, distribution: bundle.distribution,
+    });
+    const semantic = indexerProviderSelectionSemanticInputSchema.parse({
+      stage: "provider-selection", indexers: [selected],
+    });
+    expect(semantic.host_visible_skills).toEqual([]);
+    expect(await completeCurrentIndexerProviderSelection({
+      projectRoot: root, currentRegistry, semantic,
+    })).toBe("selection-applied");
+    expect(parseIndexerRegistry(readFileSync(registryPath, "utf8")).indexers[0]?.providers[0])
+      .toMatchObject({ skill: bundle.skill, distribution: bundle.distribution });
+  }, 20_000);
 
   test("publishes a readable Provider version that matches the manifest authority", () => {
     for (const name of ["context-code-indexer", "context-markdown-indexer"]) {

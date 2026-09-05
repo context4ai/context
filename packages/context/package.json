@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context",
   "description": "Declarative SDK for Context knowledge sources, workflows, review, and package outputs",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "type": "module",
   "license": "MIT",
   "engines": {

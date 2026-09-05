@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   authorizeIndexerDependencies,
   indexerProtocolDigest,
+  validateIndexerParserFactView,
   type IndexerParserCoordinateMapping,
 } from "@c4a/context";
-import { atomicWriteFile } from "../lib/atomicWrite.js";
 import {
   buildProjectIndexerParserDependencyIntentsAction,
   buildProjectIndexerParserPlanAction,
@@ -19,41 +19,38 @@ import {
 } from "./indexerParserRuntimeImport.js";
 import {
   type IndexerParserRuntimeExecutionReceipt,
+  type IndexerParserRuntimeSourceSlice,
+  validateIndexerParserRuntimeExecutionReceipt,
+  validateIndexerParserRuntimeSourceSlice,
 } from "./indexerParserRuntimeExecution.js";
 import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
 import {
   inspectProjectIndexerParserSourceAuthority,
   materializeProjectIndexerParserFiles,
 } from "./indexerParserSourceMaterialization.js";
+import { recordContextDebugPerformance } from "./debugTrace.js";
+import {
+  readIndexerParserRuntimeExecution,
+  readIndexerParserRuntimeIndexManifest,
+  readIndexerParserRuntimeSourceSlice,
+  readIndexerParserRuntimeSourceMetadata,
+  writeIndexerParserRuntimeIndex,
+  type IndexerParserRuntimeIndexManifest,
+  type IndexerParserSourceSelection,
+} from "./indexerParserRuntimeIndex.js";
+import { parserRuntimeReadCounters } from "./indexerParserRuntimeChunk.js";
 
 const CACHE_ROOT = join(LIFECYCLE_ROOT, "indexer-parser-executions");
-const CACHE_FORMAT = 2 as const;
 const inFlight = new Map<string, Promise<IndexerParserRuntimeExecutionReceipt>>();
 
-function cachePath(projectRoot: string, indexerId: string): string {
+function legacyCachePath(projectRoot: string, indexerId: string): string {
   const identity = createHash("sha256").update(indexerId).digest("hex");
   return join(projectRoot, CACHE_ROOT, `${identity}.json`);
 }
 
-function cacheMetadataPath(projectRoot: string, indexerId: string): string {
+function legacyCacheMetadataPath(projectRoot: string, indexerId: string): string {
   const identity = createHash("sha256").update(indexerId).digest("hex");
   return join(projectRoot, CACHE_ROOT, `${identity}.meta.json`);
-}
-
-interface IndexerParserExecutionCacheMetadata {
-  cache_format: typeof CACHE_FORMAT;
-  indexer_digest: string;
-  source_registry_digest: string;
-  profile_contract_digest: string;
-  execution_plan_digest: string;
-  execution_digest: string;
-  execution_content_digest: string;
-  parser_packages: InstalledIndexerParserPackage[];
-  parser_package_set_digest: string;
-}
-
-function contentDigest(value: Uint8Array): string {
-  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
 function parserPackageSetDigest(packages: readonly InstalledIndexerParserPackage[]): string {
@@ -62,32 +59,63 @@ function parserPackageSetDigest(packages: readonly InstalledIndexerParserPackage
   ));
 }
 
-function parseCacheMetadata(value: unknown): IndexerParserExecutionCacheMetadata {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("parser execution cache metadata must be an object");
+async function readAuthorizedIndex(input: {
+  projectRoot: string;
+  indexer_id: string;
+  profile_contract_digest: string;
+  require_current_sources?: boolean;
+}): Promise<IndexerParserRuntimeIndexManifest | undefined> {
+  try {
+    const manifest = await readIndexerParserRuntimeIndexManifest(input);
+    if (manifest.indexer_id !== input.indexer_id) return undefined;
+    const authority = await inspectProjectIndexerParserSourceAuthority({
+      projectRoot: input.projectRoot,
+      indexer_id: input.indexer_id,
+    });
+    if (
+      manifest.indexer_digest !== authority.indexer_digest ||
+      (input.require_current_sources !== false &&
+        manifest.source_registry_digest !== authority.source_registry_digest) ||
+      manifest.profile_contract_digest !== input.profile_contract_digest
+    ) return undefined;
+    const currentPackages = await Promise.all(manifest.parser_packages.map((candidate) =>
+      inspectInstalledIndexerParserPackage({
+        package: candidate.package,
+        version: candidate.version,
+      })
+    ));
+    if (
+      parserPackageSetDigest(currentPackages) !== manifest.parser_package_set_digest ||
+      parserPackageSetDigest(manifest.parser_packages) !== manifest.parser_package_set_digest
+    ) return undefined;
+    return manifest;
+  } catch {
+    return undefined;
   }
-  const candidate = value as Record<string, unknown>;
-  if (candidate.cache_format !== CACHE_FORMAT) {
-    throw new TypeError("parser execution cache metadata format is stale");
+}
+
+async function readReusableExecution(input: {
+  projectRoot: string;
+  indexer_id: string;
+  profile_contract_digest: string;
+  parser_packages: readonly InstalledIndexerParserPackage[];
+}): Promise<IndexerParserRuntimeExecutionReceipt | undefined> {
+  const manifest = await readAuthorizedIndex({
+    ...input,
+    require_current_sources: false,
+  });
+  if (
+    manifest === undefined ||
+    parserPackageSetDigest(input.parser_packages) !== manifest.parser_package_set_digest
+  ) return undefined;
+  try {
+    const execution = validateIndexerParserRuntimeExecutionReceipt(
+      await readIndexerParserRuntimeExecution({ ...input, manifest }),
+    );
+    return execution.execution_digest === manifest.execution_digest ? execution : undefined;
+  } catch {
+    return undefined;
   }
-  const requiredDigests = [
-    "indexer_digest",
-    "source_registry_digest",
-    "profile_contract_digest",
-    "execution_plan_digest",
-    "execution_digest",
-    "execution_content_digest",
-    "parser_package_set_digest",
-  ] as const;
-  for (const field of requiredDigests) {
-    if (typeof candidate[field] !== "string") {
-      throw new TypeError(`parser execution cache metadata ${field} is invalid`);
-    }
-  }
-  if (!Array.isArray(candidate.parser_packages)) {
-    throw new TypeError("parser execution cache metadata parser_packages is invalid");
-  }
-  return candidate as unknown as IndexerParserExecutionCacheMetadata;
 }
 
 async function readCachedExecution(input: {
@@ -95,45 +123,116 @@ async function readCachedExecution(input: {
   indexer_id: string;
   profile_contract_digest: string;
 }): Promise<IndexerParserRuntimeExecutionReceipt | undefined> {
-  try {
-    const metadata = parseCacheMetadata(JSON.parse(await readFile(
-      cacheMetadataPath(input.projectRoot, input.indexer_id),
-      "utf8",
-    )));
-    const authority = await inspectProjectIndexerParserSourceAuthority({
+  const started = performance.now();
+  const counters = parserRuntimeReadCounters();
+  const manifest = await readAuthorizedIndex(input);
+  if (manifest === undefined) {
+    await recordContextDebugPerformance({
       projectRoot: input.projectRoot,
-      indexer_id: input.indexer_id,
+      operation: "parser.cache-access",
+      durationMs: performance.now() - started,
+      outcome: "success",
+      counters: {
+        parser_cache_read_count: 1,
+        parser_cache_hit_count: 0,
+        full_fact_blob_decode_count: 0,
+      },
+      data: { cache_outcome: "miss", read_mode: "full-execution" },
     });
+    return undefined;
+  }
+  try {
+    const execution = validateIndexerParserRuntimeExecutionReceipt(
+      await readIndexerParserRuntimeExecution({ ...input, manifest, counters }),
+    );
+    if (execution.execution_digest !== manifest.execution_digest) return undefined;
+    await recordContextDebugPerformance({
+      projectRoot: input.projectRoot,
+      operation: "parser.cache-access",
+      durationMs: performance.now() - started,
+      outcome: "success",
+      counters: {
+        parser_cache_read_count: 1,
+        parser_cache_hit_count: 1,
+        ...counters,
+      },
+      data: { cache_outcome: "hit", read_mode: "full-execution" },
+    });
+    return execution;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readCachedSourceSlice(input: {
+  projectRoot: string;
+  indexer_id: string;
+  profile_contract_digest: string;
+  source_ref: string;
+  module_ref: string | null;
+  selection?: IndexerParserSourceSelection;
+}): Promise<IndexerParserRuntimeSourceSlice | undefined> {
+  const started = performance.now();
+  const counters = parserRuntimeReadCounters();
+  const manifest = await readAuthorizedIndex(input);
+  if (manifest === undefined) {
+    await recordContextDebugPerformance({
+      projectRoot: input.projectRoot,
+      operation: "parser.cache-access",
+      durationMs: performance.now() - started,
+      outcome: "success",
+      counters: {
+        parser_cache_read_count: 1,
+        parser_cache_hit_count: 0,
+        parser_source_chunk_decode_count: 0,
+        full_fact_blob_decode_count: 0,
+      },
+      data: { cache_outcome: "miss", read_mode: "source-slice" },
+    });
+    return undefined;
+  }
+  try {
+    const slice = await readIndexerParserRuntimeSourceSlice({ ...input, manifest, counters });
+    const indexed = manifest.sources.find((source) =>
+      source.source_ref === input.source_ref && source.module_ref === input.module_ref
+    );
     if (
-      metadata.indexer_digest !== authority.indexer_digest ||
-      metadata.source_registry_digest !== authority.source_registry_digest ||
-      metadata.profile_contract_digest !== input.profile_contract_digest
+      indexed === undefined ||
+      indexed.binding_digest !== slice.source_binding.binding_digest ||
+      (input.selection === undefined && indexed.fact_view_digest !== slice.fact_view.view_digest)
     ) return undefined;
-    const currentPackages = await Promise.all(metadata.parser_packages.map((candidate) =>
-      inspectInstalledIndexerParserPackage({
-        package: candidate.package,
-        version: candidate.version,
-      })
-    ));
-    if (
-      parserPackageSetDigest(currentPackages) !== metadata.parser_package_set_digest ||
-      parserPackageSetDigest(metadata.parser_packages) !== metadata.parser_package_set_digest
-    ) return undefined;
-    const bytes = await readFile(cachePath(input.projectRoot, input.indexer_id));
-    if (contentDigest(bytes) !== metadata.execution_content_digest) return undefined;
-    const value = JSON.parse(bytes.toString("utf8")) as IndexerParserRuntimeExecutionReceipt;
-    if (
-      value.protocol !== "context.indexer.parser-runtime-execution/v1" ||
-      value.execution_plan_digest !== metadata.execution_plan_digest ||
-      value.profile_contract_digest !== metadata.profile_contract_digest ||
-      value.execution_digest !== metadata.execution_digest
-    ) return undefined;
-    return value;
+    // Source metadata is committed by the manifest/chunk digest. Validate only the
+    // selected payload here, not the complete source identity inventory per task.
+    validateIndexerParserFactView(slice.fact_view);
+    await recordContextDebugPerformance({
+      projectRoot: input.projectRoot,
+      operation: "parser.cache-access",
+      durationMs: performance.now() - started,
+      outcome: "success",
+      counters: {
+        parser_cache_read_count: 1,
+        parser_cache_hit_count: 1,
+        parser_source_chunk_decode_count: counters.parser_source_metadata_decode_count,
+        ...counters,
+      },
+      data: { cache_outcome: "hit", read_mode: "source-slice" },
+    });
+    return slice;
   } catch (error) {
-    if (
-      error !== null && typeof error === "object" && "code" in error &&
-      error.code === "ENOENT"
-    ) return undefined;
+    if (error instanceof RangeError) throw error;
+    await recordContextDebugPerformance({
+      projectRoot: input.projectRoot,
+      operation: "parser.cache-access",
+      durationMs: performance.now() - started,
+      outcome: "error",
+      counters: {
+        parser_cache_read_count: 1,
+        parser_cache_hit_count: 0,
+        parser_source_chunk_decode_count: 0,
+        ...counters,
+      },
+      data: { cache_outcome: "corrupt", read_mode: "source-slice" },
+    });
     return undefined;
   }
 }
@@ -190,6 +289,12 @@ async function executeCurrent(input: {
   const resolutions = await Promise.all(
     uniquePackageCoordinates(preview.mappings).map(inspectInstalledIndexerParserPackage),
   );
+  const previousExecution = await readReusableExecution({
+    projectRoot: input.projectRoot,
+    indexer_id: input.indexer_id,
+    profile_contract_digest: profileContract.contract_digest,
+    parser_packages: resolutions,
+  });
   const authorization = authorizeIndexerDependencies({
     dependencies: preview.dependencies,
     resolutions,
@@ -215,6 +320,7 @@ async function executeCurrent(input: {
       parser_locks: locked.locks,
     },
     materialized,
+    ...(previousExecution === undefined ? {} : { previous_execution: previousExecution }),
   });
   const execution = await executeProjectIndexerParserPlanAction({
     projectRoot: input.projectRoot,
@@ -228,30 +334,22 @@ async function executeCurrent(input: {
     },
     materialized,
   });
-  const executionText = `${JSON.stringify(execution)}\n`;
-  const executionBytes = Buffer.from(executionText);
-  await atomicWriteFile(
-    cachePath(input.projectRoot, input.indexer_id),
-    executionText,
-  );
   const parserPackages = [...resolutions].sort((left, right) =>
     left.package.localeCompare(right.package)
   );
-  const metadata: IndexerParserExecutionCacheMetadata = {
-    cache_format: CACHE_FORMAT,
+  await writeIndexerParserRuntimeIndex({
+    projectRoot: input.projectRoot,
+    indexer_id: input.indexer_id,
     indexer_digest: indexerProtocolDigest(materialized.indexer),
     source_registry_digest: plan.source_registry_digest,
-    profile_contract_digest: plan.profile_contract_digest,
-    execution_plan_digest: plan.plan_digest,
-    execution_digest: execution.execution_digest,
-    execution_content_digest: contentDigest(executionBytes),
     parser_packages: parserPackages,
     parser_package_set_digest: parserPackageSetDigest(parserPackages),
-  };
-  await atomicWriteFile(
-    cacheMetadataPath(input.projectRoot, input.indexer_id),
-    `${JSON.stringify(metadata)}\n`,
-  );
+    execution,
+  });
+  await Promise.all([
+    rm(legacyCachePath(input.projectRoot, input.indexer_id), { force: true }),
+    rm(legacyCacheMetadataPath(input.projectRoot, input.indexer_id), { force: true }),
+  ]);
   return execution;
 }
 
@@ -265,4 +363,72 @@ export async function ensureCurrentProjectIndexerParserExecution(input: {
   const next = executeCurrent(input).finally(() => inFlight.delete(key));
   inFlight.set(key, next);
   return next;
+}
+
+export async function ensureCurrentProjectIndexerParserSourceSlice(input: {
+  projectRoot: string;
+  indexer_id: string;
+  source_ref: string;
+  module_ref: string | null;
+  profile_contract_digest: string;
+  selection?: IndexerParserSourceSelection;
+}): Promise<IndexerParserRuntimeSourceSlice> {
+  const cached = await readCachedSourceSlice(input);
+  if (cached !== undefined) return cached;
+  const execution = await ensureCurrentProjectIndexerParserExecution({
+    projectRoot: input.projectRoot,
+    indexer_id: input.indexer_id,
+  });
+  if (input.selection !== undefined) {
+    const manifest = await readIndexerParserRuntimeIndexManifest(input);
+    return readIndexerParserRuntimeSourceSlice({ ...input, manifest });
+  }
+  const sourceBinding = execution.source_bindings.find((binding) =>
+    binding.source_ref === input.source_ref && binding.module_ref === input.module_ref
+  );
+  const expectedModules = input.module_ref === null ? [] : [input.module_ref];
+  const factView = execution.fact_views.find((view) =>
+    view.authorized_scope.source_ref === input.source_ref &&
+    view.authorized_scope.module_refs.length === expectedModules.length &&
+    view.authorized_scope.module_refs.every((value, index) =>
+      value === expectedModules[index]
+    )
+  );
+  if (sourceBinding === undefined || factView === undefined) {
+    throw new TypeError("parser runtime execution has no exact source slice");
+  }
+  return validateIndexerParserRuntimeSourceSlice({
+    source_binding: sourceBinding,
+    fact_view: factView,
+  });
+}
+
+export async function ensureCurrentProjectIndexerParserSourceIdentity(input: {
+  projectRoot: string;
+  indexer_id: string;
+  source_ref: string;
+  module_ref: string | null;
+  profile_contract_digest: string;
+}) {
+  const started = performance.now();
+  const counters = parserRuntimeReadCounters();
+  let manifest = await readAuthorizedIndex(input);
+  if (manifest !== undefined) {
+    try {
+      const metadata = await readIndexerParserRuntimeSourceMetadata({ ...input, manifest, counters });
+      await recordContextDebugPerformance({
+        projectRoot: input.projectRoot, operation: "parser.cache-access",
+        durationMs: performance.now() - started, outcome: "success",
+        counters: { ...counters, parser_cache_read_count: 1, parser_cache_hit_count: 1 },
+        data: { cache_outcome: "hit", read_mode: "source-identity" },
+      });
+      return metadata.source_binding.source_identity_inventory;
+    } catch {
+      // A corrupt identity chunk must be rebuilt from the current source authority.
+    }
+  }
+  await ensureCurrentProjectIndexerParserExecution(input);
+  manifest = await readIndexerParserRuntimeIndexManifest(input);
+  const metadata = await readIndexerParserRuntimeSourceMetadata({ ...input, manifest, counters });
+  return metadata.source_binding.source_identity_inventory;
 }

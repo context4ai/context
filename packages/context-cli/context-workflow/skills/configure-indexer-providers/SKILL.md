@@ -18,20 +18,19 @@ the guide's `indexer-provider-unavailable` handling instead of substituting a
 different version or cache.
 
 The current Action input already contains the exact requirements and
-CLI-bundled catalog. Report those bundled entries together with other Indexer
-entry Skills already visible in this conversation. For an exact Skill root
-already exposed by the Host, read only `SKILL.md` frontmatter and the sibling
-`context-indexer.yaml`: the manifest version is authoritative and
-`metadata.context-provider-version` must match it. Do not load Provider guidance
-until selection. Group the same Skill name and exact version into one
-conversation item with all observed source types; an installed copy of the
-same CLI-bundled identity is not another Provider. Keep different versions
-separate, never use source count or discovery order as precedence, and do not
-scan plugin caches or persist this discovery list.
+CLI-bundled catalog. Select applicable Providers using that input and the Skills
+already visible in this conversation. Do not run a separate catalog command,
+enumerate every installed Skill, or require a discovery report/confirmation.
+For a selected shipped Provider, copy its exact version, integrity and
+cli-bundled distribution from the supplied catalog. The same Skill/version
+visible in the Host is a projection, not another Provider or a reason for Host
+resolution. If selecting a relevant external Skill, read only its exact
+Host-exposed frontmatter and sibling `context-indexer.yaml` needed to identify
+it; manifest version is authoritative. Do not guess missing versions, substitute
+a different version, or scan caches. Read Provider guidance only when selected.
 
 When the Graph enters through `markdown-provider`, first require the completed
-capture report and report the visible `context-markdown-indexer*` Skills before
-building the route input. Treat only the report's exact `source_inputs` as
+capture report. Treat only the report's exact `source_inputs` as
 current evidence. Do not infer semantic ownership from filenames, titles, or
 headings, and do not persist the discovery list. Capture proves byte/currentness
 only; the selected Markdown Provider remains responsible for semantic indexing.
@@ -45,8 +44,10 @@ indexers:
   - <one complete selected Indexer registry entry>
 ```
 
-`host_visible_skills` contains only non-CLI observations already visible to
-the Host. `indexers` contains the semantic registry entries selected for the
+`host_visible_skills` contains only relevant non-CLI observations already
+visible to the Host; leave it empty for a CLI-bundled selection without external
+observations. It is not an inventory of installed Skills. `indexers` contains
+the semantic registry entries selected for the
 unchanged requirements in the Action input. Select portable distribution
 locators and exact versions and integrities. Each required
 requirement/domain/source/module owner cell needs one primary Indexer;

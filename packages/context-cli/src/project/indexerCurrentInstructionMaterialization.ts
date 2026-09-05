@@ -6,6 +6,9 @@ import {
   loadIndexerProviderManifest,
 } from "@c4a/context";
 import type { IndexerCustomizationView } from "./indexerCustomization.js";
+import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { LIFECYCLE_ROOT } from "./lifecyclePaths.js";
+import { recordContextDebugPerformance } from "./debugTrace.js";
 import {
   MAX_INSTRUCTION_BYTES,
   materializationReceiptDigest,
@@ -23,6 +26,16 @@ interface CurrentInstructionDescriptor {
   resource_ref: string;
   bundle_root?: string;
 }
+
+interface CurrentInstructionContentCache {
+  cache_format: 1;
+  identity_digest: string;
+  instruction_set_digest: string;
+  resources: MaterializedIndexerInstructions["resources"];
+  cache_digest: string;
+}
+
+const INSTRUCTION_CACHE_ROOT = join(LIFECYCLE_ROOT, "indexer-instruction-content");
 
 export interface CurrentCliInstructionAuthority {
   bundle_root: string;
@@ -182,11 +195,189 @@ function currentCliInstructionDescriptors(input: {
   return descriptors.sort((left, right) => left.resource_ref.localeCompare(right.resource_ref));
 }
 
+function instructionContentIdentity(input: {
+  request: IndexerInstructionMaterializationRequest;
+  descriptors: readonly CurrentInstructionDescriptor[];
+}): string {
+  return indexerProtocolDigest({
+    provider_fingerprint: input.request.provider_fingerprint,
+    provider_integrity: input.request.provider_integrity,
+    manifest_digest: input.request.manifest_digest,
+    profile: input.request.profile,
+    composer_id: input.request.composer_id,
+    instruction_set_digest: input.request.instruction_set_digest,
+    customization_fingerprint: input.request.customization_fingerprint,
+    resources: input.descriptors.map((descriptor) => ({
+      kind: descriptor.kind,
+      resource_ref: descriptor.resource_ref,
+      digest: descriptor.digest,
+    })),
+  });
+}
+
+function instructionCachePath(workspaceRoot: string, identityDigest: string): string {
+  return join(
+    workspaceRoot,
+    INSTRUCTION_CACHE_ROOT,
+    `${identityDigest.slice("sha256:".length)}.json`,
+  );
+}
+
+function instructionCachePayload(
+  value: CurrentInstructionContentCache,
+): Omit<CurrentInstructionContentCache, "cache_digest"> {
+  const { cache_digest: _digest, ...payload } = value;
+  void _digest;
+  return payload;
+}
+
+function validateInstructionContentCache(input: {
+  value: unknown;
+  identityDigest: string;
+  instructionSetDigest: string;
+  descriptors: readonly CurrentInstructionDescriptor[];
+}): CurrentInstructionContentCache {
+  if (input.value === null || typeof input.value !== "object" || Array.isArray(input.value)) {
+    throw new TypeError("Indexer instruction content cache must be an object");
+  }
+  const value = input.value as CurrentInstructionContentCache;
+  if (
+    value.cache_format !== 1 ||
+    value.identity_digest !== input.identityDigest ||
+    value.instruction_set_digest !== input.instructionSetDigest ||
+    !Array.isArray(value.resources) ||
+    typeof value.cache_digest !== "string" ||
+    indexerProtocolDigest(instructionCachePayload(value)) !== value.cache_digest
+  ) {
+    throw new TypeError("Indexer instruction content cache is stale or invalid");
+  }
+  const expected = input.descriptors.map((descriptor) => ({
+    kind: descriptor.kind,
+    resource_ref: descriptor.resource_ref,
+    digest: descriptor.digest,
+  }));
+  const actual = value.resources.map((resource) => ({
+    kind: resource.kind,
+    resource_ref: resource.resource_ref,
+    digest: resource.digest,
+  }));
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new TypeError("Indexer instruction content cache resource set is stale");
+  }
+  return value;
+}
+
+async function readInstructionContentCache(input: {
+  workspaceRoot: string;
+  identityDigest: string;
+  instructionSetDigest: string;
+  descriptors: readonly CurrentInstructionDescriptor[];
+}): Promise<CurrentInstructionContentCache | undefined> {
+  try {
+    const text = await readFile(
+      instructionCachePath(input.workspaceRoot, input.identityDigest),
+      "utf8",
+    );
+    return validateInstructionContentCache({
+      value: JSON.parse(text),
+      identityDigest: input.identityDigest,
+      instructionSetDigest: input.instructionSetDigest,
+      descriptors: input.descriptors,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+async function materializeInstructionContents(input: {
+  request: IndexerInstructionMaterializationRequest;
+  authority: CurrentCliInstructionAuthority;
+  workspaceRoot: string;
+  descriptors: readonly CurrentInstructionDescriptor[];
+}): Promise<MaterializedIndexerInstructions["resources"]> {
+  const started = performance.now();
+  const identityDigest = instructionContentIdentity({
+    request: input.request,
+    descriptors: input.descriptors,
+  });
+  const cached = await readInstructionContentCache({
+    workspaceRoot: input.workspaceRoot,
+    identityDigest,
+    instructionSetDigest: input.request.instruction_set_digest,
+    descriptors: input.descriptors,
+  });
+  if (cached !== undefined) {
+    await recordContextDebugPerformance({
+      projectRoot: input.workspaceRoot,
+      operation: "instructions.content-cache",
+      durationMs: performance.now() - started,
+      outcome: "success",
+      counters: {
+        instructions_content_cache_read_count: 1,
+        instructions_content_cache_hit_count: 1,
+        instruction_materialize_count: 0,
+        distinct_instruction_digest_count: 0,
+      },
+      data: { identity_digest: identityDigest },
+    });
+    return cached.resources;
+  }
+  const resources: MaterializedIndexerInstructions["resources"] = [];
+  let totalBytes = 0;
+  for (const descriptor of input.descriptors) {
+    const absolute = descriptor.location === "staged"
+      ? join(descriptor.bundle_root ?? input.authority.bundle_root, descriptor.path)
+      : join(input.workspaceRoot, "src", "indexer", input.request.indexer_id, descriptor.path);
+    const bytes = await readFile(absolute);
+    totalBytes += bytes.byteLength;
+    if (totalBytes > MAX_INSTRUCTION_BYTES) {
+      throw new TypeError("materialized Indexer instructions exceed the fixed byte budget");
+    }
+    const actualDigest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+    if (actualDigest !== descriptor.digest) {
+      throw new TypeError(`Indexer instruction ${descriptor.resource_ref} changed after validation`);
+    }
+    resources.push({
+      kind: descriptor.kind,
+      resource_ref: descriptor.resource_ref,
+      digest: descriptor.digest,
+      content: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+    });
+  }
+  const payload = {
+    cache_format: 1 as const,
+    identity_digest: identityDigest,
+    instruction_set_digest: input.request.instruction_set_digest,
+    resources,
+  };
+  const cache: CurrentInstructionContentCache = {
+    ...payload,
+    cache_digest: indexerProtocolDigest(payload),
+  };
+  await atomicWriteFile(
+    instructionCachePath(input.workspaceRoot, identityDigest),
+    `${JSON.stringify(cache)}\n`,
+  );
+  await recordContextDebugPerformance({
+    projectRoot: input.workspaceRoot,
+    operation: "instructions.content-cache",
+    durationMs: performance.now() - started,
+    outcome: "success",
+    counters: {
+      instructions_content_cache_read_count: 1,
+      instructions_content_cache_hit_count: 0,
+      instruction_materialize_count: 1,
+      distinct_instruction_digest_count: 1,
+    },
+    data: { identity_digest: identityDigest },
+  });
+  return resources;
+}
+
 export function buildCurrentIndexerInstructionMaterializationRequest(input: {
   authority: CurrentCliInstructionAuthority;
   customization: IndexerCustomizationView;
-  requirementSetDigest: string;
-  worksetDigest: string;
+  stage: "partition" | "author" | "post-author";
   composerId?: string;
 }): IndexerInstructionMaterializationRequest {
   const descriptors = currentCliInstructionDescriptors({
@@ -195,7 +386,7 @@ export function buildCurrentIndexerInstructionMaterializationRequest(input: {
     customization: input.customization,
   });
   const base: Omit<IndexerInstructionMaterializationRequest, "request_digest"> = {
-    protocol: "context.indexer.materialize-request/v1",
+    protocol: "context.indexer.materialize-request/v2",
     handler: "context.materialize-indexer-instructions/v1",
     resource_id: "resolved-indexer-instructions",
     indexer_id: input.authority.indexer.id,
@@ -204,9 +395,7 @@ export function buildCurrentIndexerInstructionMaterializationRequest(input: {
       input.authority.primary_execution.primary_execution_fingerprint,
     provider_integrity: input.authority.provider.integrity,
     manifest_digest: input.authority.release_bundle.manifest_digest,
-    requirement_set_digest: input.requirementSetDigest,
-    workset_ref: `workset:${input.worksetDigest}`,
-    workset_digest: input.worksetDigest,
+    stage: input.stage,
     profile: input.authority.profile.id,
     composer_id: input.composerId ?? null,
     instruction_set_digest: indexerProtocolDigest(descriptors.map((descriptor) => ({
@@ -229,8 +418,7 @@ export async function materializeCurrentIndexerInstructions(input: {
   const expected = buildCurrentIndexerInstructionMaterializationRequest({
     authority: input.authority,
     customization: input.customization,
-    requirementSetDigest: request.requirement_set_digest,
-    worksetDigest: request.workset_digest,
+    stage: request.stage,
     ...(request.composer_id === null ? {} : { composerId: request.composer_id }),
   });
   if (expected.request_digest !== request.request_digest) {
@@ -241,28 +429,12 @@ export async function materializeCurrentIndexerInstructions(input: {
     composerId: request.composer_id,
     customization: input.customization,
   });
-  const resources: MaterializedIndexerInstructions["resources"] = [];
-  let totalBytes = 0;
-  for (const descriptor of descriptors) {
-    const absolute = descriptor.location === "staged"
-      ? join(descriptor.bundle_root ?? input.authority.bundle_root, descriptor.path)
-      : join(input.workspaceRoot, "src", "indexer", request.indexer_id, descriptor.path);
-    const bytes = await readFile(absolute);
-    totalBytes += bytes.byteLength;
-    if (totalBytes > MAX_INSTRUCTION_BYTES) {
-      throw new TypeError("materialized Indexer instructions exceed the fixed byte budget");
-    }
-    const actualDigest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-    if (actualDigest !== descriptor.digest) {
-      throw new TypeError(`Indexer instruction ${descriptor.resource_ref} changed after validation`);
-    }
-    resources.push({
-      kind: descriptor.kind,
-      resource_ref: descriptor.resource_ref,
-      digest: descriptor.digest,
-      content: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-    });
-  }
+  const resources = await materializeInstructionContents({
+    request,
+    authority: input.authority,
+    workspaceRoot: input.workspaceRoot,
+    descriptors,
+  });
   const payloadDigest = indexerProtocolDigest({
     protocol: "context.indexer.materialized-instructions-payload/v1",
     request_digest: request.request_digest,

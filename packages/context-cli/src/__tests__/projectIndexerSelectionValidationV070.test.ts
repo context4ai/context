@@ -46,6 +46,7 @@ import {
 import { persistCurrentIndexerProviderSetup } from
   "../project/indexerCurrentProviderState.js";
 import {
+  advanceCurrentIndexerProviderFinalizationIfReady,
   buildCurrentIndexerProviderContinuationRoute,
   completeCurrentIndexerProviderProgramAuthorization,
 } from "../project/indexerCurrentProviderContinuation.js";
@@ -288,17 +289,24 @@ describe("two-stage Indexer selection validation", () => {
       managed: false,
     });
     expect(route).toMatchObject({
-      node: "authorize-indexer-provider-program",
+      node: "authorize-current-indexer-provider-program",
       availability: "requires-user",
       gate: {
         id: "authorize-indexer-program-execution",
         authority: CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution,
         resolution: "user",
-      },
-      action: {
-        input: { stage: "provider-program-authorization" },
+        resolution_action: {
+          id: "authorize-current-indexer-provider-program",
+          runner: "agent",
+          effect: "external",
+          input: { stage: "provider-program-authorization" },
+          output_schema: {
+            id: "schema.authorize-current-indexer-provider-program.output",
+          },
+        },
       },
     });
+    expect(route?.action).toBeUndefined();
     expect(route?.commands[0]?.command).toContain("action complete-current");
 
     expect(await completeCurrentIndexerProviderProgramAuthorization({
@@ -310,6 +318,54 @@ describe("two-stage Indexer selection validation", () => {
       authorities: [],
       managed: false,
     })).toBeUndefined();
+  });
+
+  test("projects completed Provider setup as deterministic Graph finalization", async () => {
+    const sample = await fixture();
+    await mkdir(join(sample.workspace, "src"), { recursive: true });
+    await writeFile(join(sample.workspace, "src", "indexers.yaml"), YAML.stringify({
+      ...sample.registry,
+      indexers: [],
+    }), "utf8");
+    const proposal = buildIndexerProviderSelectionProposal({
+      protocol: "context.indexer.selection-proposal-input/v1",
+      project_ref: "project:sample",
+      registry: sample.registry,
+    });
+    await persistCurrentIndexerProviderSetup({
+      projectRoot: sample.workspace,
+      proposal,
+      resolved: [sample.resolved],
+    });
+
+    const route = await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: sample.workspace,
+      authorities: [],
+      managed: true,
+    });
+    expect(route).toMatchObject({
+      node: "finalize-current-indexer-provider-selection",
+      availability: "immediate",
+      commands: [{
+        command: expect.stringContaining(" run --managed --format json"),
+        effect: "write",
+        managed_execution: "automatic",
+      }],
+    });
+    expect(route?.action).toBeUndefined();
+    expect(route?.gate).toBeUndefined();
+    expect(await advanceCurrentIndexerProviderFinalizationIfReady(
+      sample.workspace,
+    )).toBe(true);
+    expect(await buildCurrentIndexerProviderContinuationRoute({
+      projectRoot: sample.workspace,
+      authorities: [],
+      managed: true,
+    })).toBeUndefined();
+    expect(parseIndexerRegistry(await readFile(
+      join(sample.workspace, "src", "indexers.yaml"),
+      "utf8",
+    )).indexers).toHaveLength(1);
   });
 
   test("keeps static validation pure and finalizes an exact staged Provider", async () => {

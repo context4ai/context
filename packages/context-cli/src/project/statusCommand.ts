@@ -28,8 +28,37 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
     ),
   ].sort();
   const completedCollections = [...status.approvedCollections].sort();
+  const current = status.workflow.current;
+  const compactWorkflow = {
+    protocol: status.workflow.protocol,
+    revision: status.workflow.revision,
+    status: status.workflow.status,
+    ...(current === undefined
+      ? {}
+      : {
+          current: {
+            id: current.id,
+            revision: current.revision,
+            node: current.node,
+            reason_code: current.reason_code,
+            availability: current.availability,
+            commands: current.commands,
+            resources: {
+              required: current.resources.required.map((resource) => ({
+                id: resource.id,
+                kind: resource.kind,
+                media_type: resource.media_type,
+                ...(resource.digest === undefined ? {} : { digest: resource.digest }),
+                ...(resource.path === undefined ? {} : { path: resource.path }),
+                read_state: resource.read_state,
+              })),
+            },
+          },
+        }),
+    diagnostics: status.workflow.diagnostics,
+  };
   return {
-    workflow: status.workflow,
+    workflow: compactWorkflow,
     ...(status.executionMode !== undefined
       ? { executionMode: status.executionMode }
       : {}),
@@ -56,6 +85,9 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
       indexerRegistry: status.indexerRegistry.state,
       indexerCandidateCompile: status.indexerCandidateCompile.state,
       legacyCodeIndexMigrationRequired: status.codeIndexMigrationRequired,
+      ...(status.indexerProgress === undefined
+        ? {}
+        : { indexer: status.indexerProgress }),
     },
     counts: {
       sources: status.sourceSummary,

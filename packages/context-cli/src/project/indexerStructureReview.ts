@@ -9,6 +9,7 @@ import {
   type IndexerAuthorizedWorksetViewSource,
   type IndexerPartitionSemanticInput,
   type IndexerPartitionPlan,
+  type IndexerPartitionValidationInput,
   type IndexerMainPartitionWorkset,
 } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -28,7 +29,10 @@ import {
   readJsonMaybe,
 } from "./indexerMainRunStoreRecords.js";
 import type { ProjectIndexerTargetResolutionViewBinding } from
-  "./indexerCurrentAuthorPreparation.js";
+  "./indexerAuthorQuestionTargets.js";
+import { convergeIndexerPartitionSubjects } from
+  "./indexerPartitionSubjectConvergence.js";
+import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
 
 const STRUCTURE_ROOT = join(".tmp", "context-runtime", "indexer", "structure-review");
 const DECISION_PATH = join(STRUCTURE_ROOT, "current.json");
@@ -165,34 +169,64 @@ export async function prepareCurrentIndexerStructurePlan(
   if (semantic.some((entry) => entry !== undefined && entry.outcome !== "complete")) {
     throw new TypeError("failed partition cannot enter structure review");
   }
-  const partitions = records.map((record) => {
+  const partitions: IndexerPartitionValidationInput[] = records.map((record) => {
     if (record.request.workset.stage !== "partition") {
       throw new TypeError("semantic structure requires Partition worksets");
     }
     return {
       plan: record.artifact_result as IndexerPartitionPlan,
       workset: record.request.workset,
-      canonical_inventory_members: record.validation.canonical_inventory_members,
-      authorized_source_refs: record.validation.authorized_source_refs,
-      authorized_strategies: record.validation.authorized_strategies,
-      required_question_target_refs: record.validation.required_question_target_refs,
+      canonical_inventory_members: record.validation.canonical_inventory_members as
+        IndexerPartitionValidationInput["canonical_inventory_members"],
+      authorized_source_refs: record.validation.authorized_source_refs as
+        IndexerPartitionValidationInput["authorized_source_refs"],
+      authorized_strategies: record.validation.authorized_strategies as
+        IndexerPartitionValidationInput["authorized_strategies"],
+      ...(record.validation.required_question_target_refs === undefined
+        ? {}
+        : {
+            required_question_target_refs:
+              record.validation.required_question_target_refs as string[],
+          }),
     };
   });
-  const prepared = await prepareAuthorPlan(projectRoot, partitions);
+  const converged = convergeIndexerPartitionSubjects(partitions);
+  const prepared = await prepareAuthorPlan(
+    projectRoot,
+    converged.partitions,
+    partitions,
+    converged.origins_by_group_ref,
+    new Map(records.flatMap((record) => record.validation.partition_projection === undefined
+      ? []
+      : [[record.request.workset.workset_digest,
+          record.validation.partition_projection as IndexerConsumerWorksetProjection] as const])),
+  );
   const targetByGroup = new Map(prepared.targets.map((target) => [target.group_ref, target]));
+  const authoredByOrigin = new Map(records.flatMap((partition, entryIndex) => {
+    const result = semantic[entryIndex];
+    return result?.outcome === "complete"
+      ? result.groups.map((group) => [
+          `${partition.request.workset.workset_digest}\u0000${group.key}`,
+          group,
+        ] as const)
+      : [];
+  }));
   const payload = {
     protocol: "context.indexer.semantic-structure-preview/v1" as const,
-    topics: records.flatMap((partition, entryIndex) => {
-      const plan = partition.artifact_result as IndexerPartitionPlan;
-      const semanticEntry = semantic[entryIndex];
+    topics: converged.partitions.flatMap((partition) => {
+      const plan = partition.plan as IndexerPartitionPlan;
       return plan.status === "complete" ? plan.groups.map((group) => {
-        const authored = semanticEntry?.outcome === "complete"
-          ? semanticEntry.groups.find((item) => item.key === group.group_key)
-          : undefined;
         const groupRef = indexerPartitionGroupRef({
-          partition_workset_digest: partition.request.workset.workset_digest,
+          partition_workset_digest: partition.workset.workset_digest,
           group_key: group.group_key,
         });
+        // Convergence chooses the primary owner. Supplementary material must not
+        // replace its reader plan merely because its digest sorts first. If the
+        // owner has no semantic payload, fall back to the owner's plan label.
+        const owner = converged.origins_by_group_ref.get(groupRef)?.[0];
+        const authored = owner === undefined ? undefined : authoredByOrigin.get(
+          `${owner.partition_workset_digest}\u0000${owner.group_key}`,
+        );
         const target = targetByGroup.get(groupRef);
         if (target === undefined) {
           throw new TypeError(`semantic structure target is missing for ${groupRef}`);
@@ -202,8 +236,8 @@ export async function prepareCurrentIndexerStructurePlan(
           title: authored?.title ?? group.label,
           reader_task: authored?.reader_task ?? `Browse ${group.label}.`,
           outline: authored?.outline ?? [group.label],
-          members: authored?.members ?? group.member_ids,
-          questions: authored?.questions ?? group.reader_question_refs,
+          members: group.member_ids,
+          questions: group.reader_question_refs,
           target: { mode: target.mode, node_ref: target.node_ref },
         };
       }) : [];
@@ -303,8 +337,14 @@ async function prepareAuthorPlan(
     canonical_inventory_members: unknown;
     authorized_source_refs: unknown;
     authorized_strategies: unknown;
-    required_question_target_refs: unknown;
+    required_question_target_refs?: unknown;
   }>,
+  sourcePartitions: readonly IndexerPartitionValidationInput[],
+  originsByGroupRef: ReadonlyMap<string, readonly {
+    partition_workset_digest: string;
+    group_key: string;
+  }[]>,
+  sourceProjections: ReadonlyMap<string, IndexerConsumerWorksetProjection>,
 ) {
   const targetResolutionViews: ProjectIndexerTargetResolutionViewBinding[] = [];
   const targets: Array<{
@@ -394,6 +434,9 @@ async function prepareAuthorPlan(
   }
   const author = await buildProjectIndexerMainAuthorWorksets({
     projectRoot,
+    source_partitions: sourcePartitions,
+    source_projections: sourceProjections,
+    origins_by_group_ref: originsByGroupRef,
     value: {
       protocol: "context.indexer.main-author-workset-build-input/v1",
       partitions,

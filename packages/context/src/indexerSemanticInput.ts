@@ -32,10 +32,6 @@ export const indexerProviderResolutionSemanticInputSchema = z.object({
   }).strict().optional(),
 }).strict();
 
-export const indexerProviderFinalizationSemanticInputSchema = z.object({
-  stage: z.literal("provider-finalization"),
-}).strict();
-
 export const indexerProviderProgramAuthorizationSemanticInputSchema = z.object({
   stage: z.literal("provider-program-authorization"),
   decision: z.enum(["approved", "rejected"]),
@@ -78,8 +74,6 @@ const partitionUnsupportedSchema = z.object({
 const completePartitionInputSchema = z.object({
   stage: z.literal("partition"),
   outcome: z.literal("complete"),
-  unit_type: z.string().min(1),
-  partition_axis: z.string().min(1),
   groups: z.array(partitionGroupSchema),
   excluded: z.array(partitionDispositionSchema).default([]),
   unsupported: z.array(partitionUnsupportedSchema).default([]),
@@ -88,8 +82,6 @@ const completePartitionInputSchema = z.object({
 const failedPartitionInputSchema = z.object({
   stage: z.literal("partition"),
   outcome: z.literal("failed"),
-  unit_type: z.string().min(1),
-  partition_axis: z.string().min(1),
   groups: z.array(partitionGroupSchema).default([]),
   excluded: z.array(partitionDispositionSchema).default([]),
   unsupported: z.array(partitionUnsupportedSchema).default([]),
@@ -193,6 +185,57 @@ export const indexerAuthorSemanticInputSchema = z.object({
 
 export type IndexerAuthorSemanticInput = z.infer<typeof indexerAuthorSemanticInputSchema>;
 
+const indexerPartitionBatchSemanticInputSchema = z.object({
+  stage: z.literal("partition"),
+  results: z.array(z.object({
+    task_key: z.string().regex(/^task-[0-9]{3}$/u),
+    result: indexerPartitionSemanticInputSchema,
+  }).strict()).min(1),
+}).strict().superRefine((value, context) => {
+  const keys = value.results.map((result) => result.task_key);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["results"],
+      message: "partition batch task keys must be unique",
+    });
+  }
+});
+
+const indexerAuthorBatchSemanticInputSchema = z.object({
+  stage: z.literal("author"),
+  results: z.array(z.object({
+    task_key: z.string().regex(/^task-[0-9]{3}$/u),
+    result: indexerAuthorSemanticInputSchema,
+  }).strict()).min(1),
+}).strict().superRefine((value, context) => {
+  const keys = value.results.map((result) => result.task_key);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["results"],
+      message: "author batch task keys must be unique",
+    });
+  }
+});
+
+export type IndexerMainBatchSemanticInput = z.infer<
+  typeof indexerPartitionBatchSemanticInputSchema |
+  typeof indexerAuthorBatchSemanticInputSchema
+>;
+
+const indexerMainBatchSubmissionEnvelopeSchema = z.object({
+  stage: z.enum(["partition", "author", "post-author"]),
+  results: z.array(z.object({
+    task_key: z.string(),
+    result: z.unknown(),
+  }).strict()).min(1),
+}).strict();
+
+export type IndexerMainBatchSubmissionEnvelope = z.infer<
+  typeof indexerMainBatchSubmissionEnvelopeSchema
+>;
+
 const postAuthorSectionSchema = z.object({
   key: z.string().min(1),
   heading: z.string().min(1),
@@ -225,6 +268,23 @@ export type IndexerPostAuthorSemanticInput = z.infer<
   typeof indexerPostAuthorSemanticInputSchema
 >;
 
+const indexerPostAuthorBatchSemanticInputSchema = z.object({
+  stage: z.literal("post-author"),
+  results: z.array(z.object({
+    task_key: z.string().regex(/^task-[0-9]{3}$/u),
+    result: indexerPostAuthorSemanticInputSchema,
+  }).strict()).min(1),
+}).strict().superRefine((value, context) => {
+  const keys = value.results.map((result) => result.task_key);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["results"],
+      message: "post-author batch task keys must be unique",
+    });
+  }
+});
+
 export const indexerStructureReviewInputSchema = z.object({
   stage: z.literal("structure-review"),
   decision: z.enum(["approved", "request-adjustment"]),
@@ -243,6 +303,10 @@ export const indexerLayoutConfirmationInputSchema = z.object({
   stage: z.literal("layout-confirmation"),
   decision: z.enum(["approved", "rejected"]),
   feedback: z.string().min(1).optional(),
+  paths: z.array(z.object({
+    artifact_ref: z.string().min(1),
+    output_path: z.string().min(1),
+  }).strict()).min(1).optional(),
 }).strict().superRefine((value, context) => {
   if (value.decision === "rejected" && value.feedback === undefined) {
     context.addIssue({
@@ -251,16 +315,22 @@ export const indexerLayoutConfirmationInputSchema = z.object({
       message: "rejected layout confirmation requires feedback",
     });
   }
+  if (value.decision === "rejected" && value.paths !== undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["paths"],
+      message: "only an approved layout can select output paths",
+    });
+  }
 });
 
 export const indexerCurrentActionInputSchema = z.union([
   indexerProviderSelectionSemanticInputSchema,
   indexerProviderResolutionSemanticInputSchema,
   indexerProviderProgramAuthorizationSemanticInputSchema,
-  indexerProviderFinalizationSemanticInputSchema,
-  indexerPartitionSemanticInputSchema,
-  indexerAuthorSemanticInputSchema,
-  indexerPostAuthorSemanticInputSchema,
+  indexerPartitionBatchSemanticInputSchema,
+  indexerAuthorBatchSemanticInputSchema,
+  indexerPostAuthorBatchSemanticInputSchema,
   indexerStructureReviewInputSchema,
   indexerLayoutConfirmationInputSchema,
 ]);
@@ -269,4 +339,25 @@ export type IndexerCurrentActionInput = z.infer<typeof indexerCurrentActionInput
 
 export function validateIndexerCurrentActionInput(value: unknown): IndexerCurrentActionInput {
   return indexerCurrentActionInputSchema.parse(value);
+}
+
+/**
+ * Parses the current Action envelope without rejecting valid peer results when
+ * one Partition, Author, or post-author task has an invalid nested result. Callers must
+ * validate each nested result with its stage schema before committing it.
+ */
+export function parseIndexerCurrentActionSubmission(
+  value: unknown,
+): IndexerCurrentActionInput | IndexerMainBatchSubmissionEnvelope {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (Reflect.get(value, "stage") === "partition" ||
+      Reflect.get(value, "stage") === "author" ||
+      Reflect.get(value, "stage") === "post-author")
+  ) {
+    return indexerMainBatchSubmissionEnvelopeSchema.parse(value);
+  }
+  return validateIndexerCurrentActionInput(value);
 }

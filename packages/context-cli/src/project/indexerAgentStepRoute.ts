@@ -6,6 +6,7 @@ import {
 } from "@c4a/agent-graph";
 import {
   buildIndexerAgentStepInput,
+  buildIndexerPostAuthorAgentStepInput,
   indexerProtocolDigest,
   validateIndexerPostAuthorFragmentRequest,
   validateIndexerProgramRunRequest,
@@ -45,8 +46,7 @@ function assertInstructionRunBinding(input: {
 }): void {
   const workset = input.runRequest.workset;
   if (
-    workset.workset_digest !== input.request.workset_digest ||
-    workset.requirement_set_digest !== input.request.requirement_set_digest ||
+    workset.stage !== input.request.stage ||
     input.runRequest.final_authority.integrity !== input.request.provider_integrity
   ) {
     throw new TypeError("Indexer Agent step request does not match its instructions/workset authority");
@@ -72,38 +72,59 @@ export interface IndexerAgentStepRoute {
   route: ContextResolvedWorkflowRoute;
   step_input: IndexerAgentStepInput;
   instruction_location: HostActionResourceLocation;
-  workset_view_location: HostActionResourceLocation;
+  workset_view_locations: readonly HostActionResourceLocation[];
   stable_fingerprint: string;
 }
 
 export interface IndexerPostAuthorAgentStepRoute {
   route: ContextResolvedWorkflowRoute;
-  step_input: IndexerPostAuthorFragmentRequest;
+  step_input: Extract<IndexerAgentStepInput, { stage: "post-author" }>;
   instruction_location: HostActionResourceLocation;
-  workset_view_location: HostActionResourceLocation;
+  workset_view_locations: readonly HostActionResourceLocation[];
   stable_fingerprint: string;
 }
 
 export async function buildIndexerAgentStepRoute(input: {
-  run_request: unknown;
+  run_requests: readonly unknown[];
   instruction_request: unknown;
-  workset_view_request: unknown;
+  workset_view_requests: readonly unknown[];
+  ready_instruction: { path: string; digest: string };
+  ready_workset_views: readonly {
+    resource_id: string;
+    path: string;
+    digest: string;
+  }[];
   workspaceRoot: string;
   authorities?: readonly import("./workflow/workflowTypes.js").ContextWorkflowAuthority[];
   managed?: boolean;
 }): Promise<IndexerAgentStepRoute> {
-  const runRequest = validateIndexerProgramRunRequest(input.run_request);
+  const runRequests = input.run_requests.map(validateIndexerProgramRunRequest);
+  if (runRequests.length === 0) {
+    throw new TypeError("Context Indexer Agent Route requires at least one run request");
+  }
   const instructionRequest = validateIndexerInstructionMaterializationRequest(
     input.instruction_request,
   );
-  assertInstructionRunBinding({ request: instructionRequest, runRequest });
-  const worksetViewRequest = validateIndexerWorksetViewMaterializationRequest(
-    input.workset_view_request,
+  const worksetViewRequests = input.workset_view_requests.map(
+    validateIndexerWorksetViewMaterializationRequest,
   );
-  assertWorksetViewRunBinding({ request: worksetViewRequest, runRequest });
+  if (worksetViewRequests.length !== runRequests.length) {
+    throw new TypeError("Context Indexer Agent Route requires one View per run request");
+  }
+  if (input.ready_workset_views.length !== worksetViewRequests.length) {
+    throw new TypeError("Context Indexer Agent Route requires one ready View per run request");
+  }
+  runRequests.forEach((runRequest, index) => {
+    assertInstructionRunBinding({ request: instructionRequest, runRequest });
+    assertWorksetViewRunBinding({
+      request: worksetViewRequests[index]!,
+      runRequest,
+    });
+  });
   const stepInput = buildIndexerAgentStepInput({
-    run_request: runRequest,
+    run_requests: runRequests,
     instruction_request_digest: instructionRequest.request_digest,
+    workset_view_requests: worksetViewRequests,
   });
   const provider = await loadContextWorkflowProvider();
   const evaluated = evaluateGraph(provider, INDEXER_GRAPH_ID, INDEXER_GRAPH_ENTRY);
@@ -137,7 +158,7 @@ export async function buildIndexerAgentStepRoute(input: {
   const dynamicLocation = indexerInstructionHostLocation(instructionRequest);
   dynamicLocation.readState = "read-required";
   const templateWorksetViewLocation = resolved.resources.required.find((resource) =>
-    resource.id === worksetViewRequest.resource_id
+    resource.id === "authorized-indexer-workset-view"
   );
   if (
     templateWorksetViewLocation?.schema !==
@@ -145,8 +166,27 @@ export async function buildIndexerAgentStepRoute(input: {
   ) {
     throw new TypeError("Context Indexer graph has no authorized workset View Resource");
   }
-  const worksetViewLocation = indexerWorksetViewHostLocation(worksetViewRequest);
-  worksetViewLocation.readState = "read-required";
+  const worksetViewLocations = worksetViewRequests.map((request) => {
+    const location = indexerWorksetViewHostLocation(request);
+    location.readState = "read-required";
+    return location;
+  });
+  const readyResources = new Map([
+    [instructionRequest.resource_id, input.ready_instruction] as const,
+    ...input.ready_workset_views.map((resource) => [
+      resource.resource_id,
+      { path: resource.path, digest: resource.digest },
+    ] as const),
+  ]);
+  for (const [index, request] of worksetViewRequests.entries()) {
+    const ready = input.ready_workset_views[index];
+    if (
+      ready?.resource_id !== request.resource_id ||
+      ready.digest !== request.payload_digest
+    ) {
+      throw new TypeError("Context Indexer Agent Route ready View does not match its request");
+    }
+  }
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -156,7 +196,9 @@ export async function buildIndexerAgentStepRoute(input: {
     provider_graph_digest: graphDigest,
     step_input_digest: stepInput.input_digest,
     instruction_request_digest: instructionRequest.request_digest,
-    workset_view_request_digest: worksetViewRequest.request_digest,
+    workset_view_request_digests: worksetViewRequests.map((request) =>
+      request.request_digest
+    ),
   });
   const actionSource: ContextWorkflowRouteActionSource = {
     ...resolved.action,
@@ -167,17 +209,34 @@ export async function buildIndexerAgentStepRoute(input: {
     revision: stableFingerprint,
     authorities: input.authorities ?? [],
   });
-  const required = resolved.resources.required.map((resource) =>
-    projectWorkflowResourceLocation(
-      resource.id === dynamicLocation.id
-        ? dynamicLocation
-        : resource.id === worksetViewLocation.id
-        ? worksetViewLocation
-        : resource,
-      stableFingerprint,
-      input.authorities ?? [],
-    )
-  );
+  const required = resolved.resources.required.flatMap((resource) => {
+    const locations = resource.id === dynamicLocation.id
+      ? [dynamicLocation]
+      : resource.id === "authorized-indexer-workset-view"
+      ? worksetViewLocations
+      : [resource];
+    return locations.map((location) => {
+      const projected = projectWorkflowResourceLocation(
+        location,
+        stableFingerprint,
+        input.authorities ?? [],
+      );
+      const ready = readyResources.get(location.id);
+      return ready === undefined
+        ? projected
+        : {
+            id: projected.id,
+            kind: projected.kind,
+            media_type: projected.media_type,
+            digest: ready.digest,
+            path: ready.path,
+            ...(projected.revision === undefined
+              ? {}
+              : { revision: projected.revision }),
+            read_state: "read-required" as const,
+          };
+    });
+  });
   const recommended = resolved.resources.recommended.map((resource) =>
     projectWorkflowResourceLocation(
       resource,
@@ -210,7 +269,7 @@ export async function buildIndexerAgentStepRoute(input: {
     route,
     step_input: stepInput,
     instruction_location: dynamicLocation,
-    workset_view_location: worksetViewLocation,
+    workset_view_locations: worksetViewLocations,
     stable_fingerprint: stableFingerprint,
   };
 }
@@ -229,7 +288,7 @@ function assertPostAuthorInstructionBinding(input: {
   const composerId = composerIdFromRef(input.request.composer_ref);
   if (
     input.instructionRequest.composer_id !== composerId ||
-    input.instructionRequest.workset_digest !== input.request.workset.workset_digest ||
+    input.instructionRequest.stage !== "post-author" ||
     !input.request.composer_ref.startsWith(`${input.request.target_layer_ref}#composer:`) ||
     !input.request.target_layer_ref.startsWith(
       `provider:${input.instructionRequest.provider_id}#`,
@@ -242,22 +301,38 @@ function assertPostAuthorInstructionBinding(input: {
 }
 
 export async function buildIndexerPostAuthorAgentStepRoute(input: {
-  fragment_request: unknown;
+  fragment_requests: readonly unknown[];
   instruction_request: unknown;
+  ready_instruction: { path: string; digest: string };
+  ready_workset_views: readonly {
+    resource_id: string;
+    path: string;
+    digest: string;
+  }[];
   workspaceRoot: string;
   authorities?: readonly import("./workflow/workflowTypes.js").ContextWorkflowAuthority[];
   managed?: boolean;
 }): Promise<IndexerPostAuthorAgentStepRoute> {
-  const fragmentRequest = validateIndexerPostAuthorFragmentRequest(
-    input.fragment_request,
+  const fragmentRequests = input.fragment_requests.map(
+    validateIndexerPostAuthorFragmentRequest,
   );
+  if (fragmentRequests.length === 0) {
+    throw new TypeError("Context post-author Agent Route requires at least one request");
+  }
   const instructionRequest = validateIndexerInstructionMaterializationRequest(
     input.instruction_request,
   );
-  assertPostAuthorInstructionBinding({
-    request: fragmentRequest,
+  fragmentRequests.forEach((request) => assertPostAuthorInstructionBinding({
+    request,
     instructionRequest,
+  }));
+  const stepInput = buildIndexerPostAuthorAgentStepInput({
+    fragment_requests: fragmentRequests,
+    instruction_request_digest: instructionRequest.request_digest,
   });
+  if (input.ready_workset_views.length !== fragmentRequests.length) {
+    throw new TypeError("Context post-author Agent Route requires one ready View per task");
+  }
   const provider = await loadContextWorkflowProvider();
   const evaluated = evaluateGraph(
     provider,
@@ -295,22 +370,36 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
   }
   const instructionLocation = indexerInstructionHostLocation(instructionRequest);
   instructionLocation.readState = "read-required";
-  const worksetViewLocation: HostActionResourceLocation = {
-    schema: "agent-graph.resource-location.host-action.v1",
-    id: "authorized-indexer-workset-view",
-    kind: "procedure",
-    mediaType: "application/json",
-    revision: fragmentRequest.primary_result_view.view_digest,
-    materialize: {
-      handler: "context.materialize-indexer-workset-view/v1",
-      input: {
-        schema: "context.indexer.layer-fragment-request/v1",
-        value: fragmentRequest as unknown as JsonValue,
+  const worksetViewLocations = fragmentRequests.map((request, index) => {
+    const taskKey = `task-${String(index + 1).padStart(3, "0")}`;
+    const location: HostActionResourceLocation = {
+      schema: "agent-graph.resource-location.host-action.v1",
+      id: `authorized-indexer-workset-view/${taskKey}`,
+      kind: "procedure",
+      mediaType: "application/json",
+      revision: request.primary_result_view.view_digest,
+      materialize: {
+        handler: "context.materialize-indexer-workset-view/v1",
+        input: {
+          schema: "context.indexer.layer-fragment-request/v1",
+          value: request as unknown as JsonValue,
+        },
+        output_schema: "context.indexer.primary-result-view/v1",
       },
-      output_schema: "context.indexer.primary-result-view/v1",
-    },
-  };
-  worksetViewLocation.readState = "read-required";
+    };
+    location.readState = "read-required";
+    return location;
+  });
+  for (const [index, request] of fragmentRequests.entries()) {
+    const ready = input.ready_workset_views[index];
+    const location = worksetViewLocations[index]!;
+    if (
+      ready?.resource_id !== location.id ||
+      ready.digest !== request.primary_result_view.view_digest
+    ) {
+      throw new TypeError("Context post-author Agent Route ready View does not match its task");
+    }
+  }
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -319,29 +408,56 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
     protocol: "context.indexer.agent-step-route-fingerprint/v1",
     phase: "post-author",
     provider_graph_digest: graphDigest,
-    step_input_digest: fragmentRequest.request_digest,
+    step_input_digest: stepInput.input_digest,
     instruction_request_digest: instructionRequest.request_digest,
-    primary_result_view_digest: fragmentRequest.primary_result_view.view_digest,
+    primary_result_view_digests: fragmentRequests.map((request) =>
+      request.primary_result_view.view_digest
+    ),
   });
   const action = projectWorkflowRouteAction({
     action: {
       ...resolved.action,
-      input: fragmentRequest as unknown as JsonValue,
+      input: stepInput as unknown as JsonValue,
     },
     revision: stableFingerprint,
     authorities: input.authorities ?? [],
   });
-  const required = [...resolved.resources.required.map((resource) =>
-    projectWorkflowResourceLocation(
-      resource.id === instructionLocation.id ? instructionLocation : resource,
+  const required = resolved.resources.required.map((resource) => {
+    const location = resource.id === instructionLocation.id ? instructionLocation : resource;
+    const projected = projectWorkflowResourceLocation(
+      location,
       stableFingerprint,
       input.authorities ?? [],
-    )
-  ), projectWorkflowResourceLocation(
-    worksetViewLocation,
-    stableFingerprint,
-    input.authorities ?? [],
-  )];
+    );
+    return location.id !== instructionLocation.id
+      ? projected
+      : {
+          id: projected.id,
+          kind: projected.kind,
+          media_type: projected.media_type,
+          digest: input.ready_instruction.digest,
+          path: input.ready_instruction.path,
+          ...(projected.revision === undefined ? {} : { revision: projected.revision }),
+          read_state: "read-required" as const,
+        };
+  });
+  required.push(...worksetViewLocations.map((location, index) => {
+    const projected = projectWorkflowResourceLocation(
+      location,
+      stableFingerprint,
+      input.authorities ?? [],
+    );
+    const ready = input.ready_workset_views[index]!;
+    return {
+      id: projected.id,
+      kind: projected.kind,
+      media_type: projected.media_type,
+      digest: ready.digest,
+      path: ready.path,
+      ...(projected.revision === undefined ? {} : { revision: projected.revision }),
+      read_state: "read-required" as const,
+    };
+  }));
   const recommended = resolved.resources.recommended.map((resource) =>
     projectWorkflowResourceLocation(resource, stableFingerprint, input.authorities ?? [])
   );
@@ -364,9 +480,9 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       resources: { required, recommended },
       after_action: { evaluate: true },
     },
-    step_input: fragmentRequest,
+    step_input: stepInput as Extract<IndexerAgentStepInput, { stage: "post-author" }>,
     instruction_location: instructionLocation,
-    workset_view_location: worksetViewLocation,
+    workset_view_locations: worksetViewLocations,
     stable_fingerprint: stableFingerprint,
   };
 }
