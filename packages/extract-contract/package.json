@@ -31,6 +31,6 @@
   "dependencies": {
     "@c4a/core": "workspace:*",
     "graphql": "^16.14.2",
-    "yaml": "^2.8.2"
+    "yaml": "^2.9.0"
   }
 }
