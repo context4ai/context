@@ -527,6 +527,13 @@ describe("project current Author preparation", () => {
       graph_outcome: "completed",
     });
 
+    // The source lookup is CLI-derived. Reconstruct it instead of asking an
+    // Agent to repair an obsolete inventory fingerprint after an upgrade.
+    const metadataDrift = structuredClone(validationInput);
+    metadataDrift.validation.source_identity_inventory = { inventory_digest: digest("f") };
+    await expect(validateProjectIndexerMainRun({ projectRoot: root, value: metadataDrift }))
+      .resolves.toMatchObject({ graph_outcome: "completed" });
+
     const staleInput = structuredClone(validationInput);
     const staleValidation = staleInput.validation as Record<string, unknown>;
     const currentDependencyView = staleValidation.dependency_view as {

@@ -11,6 +11,7 @@ import {
   type IndexerPartitionSemanticInput,
   type IndexerSubjectKey,
 } from "@c4a/context";
+import { qualifyIndexerPartitionEntrySubject } from "./indexerPartitionEntrySubject.js";
 
 function uniqueSorted(values: readonly string[], label: string): string[] {
   const sorted = [...new Set(values)].sort(compareIndexerCanonicalText);
@@ -140,7 +141,12 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       left.target_ref,
       right.target_ref,
     ));
-    const subject = subjectKey(group.subject, workset.partition_subject_key);
+    const subject = qualifyIndexerPartitionEntrySubject({
+      subject: subjectKey(group.subject, workset.partition_subject_key),
+      explicit_subject: typeof group.subject !== "string",
+      members: resolvedMembers,
+      view: input.view,
+    });
     validateIndexerSubjectKeyForContract(
       subject,
       input.validation.subject_key_contract,

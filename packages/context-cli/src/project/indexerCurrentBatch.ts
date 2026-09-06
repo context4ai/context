@@ -22,7 +22,9 @@ import {
   INDEXER_BATCH_POLICY_VERSION,
   indexerBatchStagePolicy,
   planIndexerCurrentBatch,
+  restoreIndexerCurrentBatch,
   type PlannedIndexerCurrentBatch,
+  type IndexerBatchReadingMeasure,
 } from "./indexerCurrentBatchPlanner.js";
 import {
   startIndexerMainRunsStore,
@@ -41,6 +43,8 @@ import {
 import { LIFECYCLE_ROOT } from "./lifecyclePaths.js";
 import { readPendingIndexerStructureFeedback } from "./indexerStructureReview.js";
 import { observeIndexerBatchStarted } from "./indexerBatchTiming.js";
+import { buildIndexerTaskReading, renderIndexerInstructionsReading, renderIndexerWorksetReading } from "./indexerAgentReading.js";
+import { renderIndexerBatchReading } from "./indexerBatchReading.js";
 
 const CURRENT_BATCH_DESCRIPTOR = join(
   LIFECYCLE_ROOT,
@@ -61,7 +65,7 @@ export interface CurrentIndexerBatchTaskDescriptor {
 }
 
 export interface CurrentIndexerBatchDescriptor {
-  cache_format: 2;
+  cache_format: 5;
   ledger_digest: string;
   stage: "partition" | "author";
   policy_version: typeof INDEXER_BATCH_POLICY_VERSION;
@@ -96,7 +100,7 @@ function validateDescriptorShape(value: unknown): CurrentIndexerBatchDescriptor 
   }
   const descriptor = value as CurrentIndexerBatchDescriptor;
   if (
-    descriptor.cache_format !== 2 ||
+    descriptor.cache_format !== 5 ||
     descriptor.policy_version !== INDEXER_BATCH_POLICY_VERSION ||
     (descriptor.stage !== "partition" && descriptor.stage !== "author") ||
     !Array.isArray(descriptor.tasks) ||
@@ -150,11 +154,11 @@ function estimateOutputReserve(spec: MainRunSpec): number {
     ? spec.validation.canonical_inventory_members.length
     : 0;
   return spec.request.workset.stage === "partition"
-    ? 16 * 1024 + members * 2 * 1024
-    : 48 * 1024 + members * 8 * 1024;
+    ? 2 * 1024 + members * 256
+    : 16 * 1024 + members * 1024;
 }
 
-async function sharedBatchAuthority(input: {
+async function currentBatchInstructions(input: {
   projectRoot: string;
   spec: MainRunSpec;
 }) {
@@ -176,16 +180,23 @@ async function sharedBatchAuthority(input: {
     customization,
     stage: input.spec.request.workset.stage,
   });
+  return { authority, customization, instructionRequest };
+}
+
+async function sharedBatchAuthority(input: {
+  projectRoot: string;
+  spec: MainRunSpec;
+  current?: Awaited<ReturnType<typeof currentBatchInstructions>>;
+}) {
+  const { authority, customization, instructionRequest } = input.current ??
+    await currentBatchInstructions(input);
   const instructions = await materializeCurrentIndexerInstructions({
     request: instructionRequest,
     authority,
     customization,
     workspaceRoot: input.projectRoot,
   });
-  const instructionBytes = instructions.resources.reduce(
-    (total, resource) => total + Buffer.byteLength(resource.content, "utf8"),
-    0,
-  );
+  const instructionBytes = Buffer.byteLength(renderIndexerInstructionsReading(instructions), "utf8");
   const instructionPath = join(
     input.projectRoot,
     ".tmp",
@@ -228,21 +239,36 @@ async function prepareCandidates(input: {
         ? {}
         : { additional_projection_sources: [structureFeedback] }),
     });
-    const viewText = canonicalIndexerJson(worksetView.projection.view);
+    const readingInput = {
+      view: worksetView.projection.view, workset: spec.request.workset, task_key: taskKey,
+    };
+    const reading = spec.request.workset.stage === "author" ? buildIndexerTaskReading(readingInput) : undefined;
+    const measured = reading === undefined ? {
+      input_bytes: Buffer.byteLength(renderIndexerWorksetReading(readingInput), "utf8"),
+      view_item_count: worksetView.projection.view.items.length,
+    } : renderIndexerBatchReading([reading]);
     prepared.push({
       spec,
       taskKey,
       worksetView,
+      reading,
       candidate: {
         workset: spec.request.workset,
         instruction_identity: input.instructionRequest.request_digest,
-        input_bytes: Buffer.byteLength(viewText, "utf8"),
+        input_bytes: measured.input_bytes,
         output_reserve_bytes: estimateOutputReserve(spec),
-        view_item_count: worksetView.projection.view.items.length,
+        view_item_count: measured.view_item_count,
       },
     });
   }
   return prepared;
+}
+
+function batchReadingMeasure(prepared: Awaited<ReturnType<typeof prepareCandidates>>): IndexerBatchReadingMeasure | undefined {
+  if (prepared[0]?.reading === undefined) return undefined;
+  const readings = new Map(prepared.map((item) => [item.candidate.workset.workset_digest, item.reading!]));
+  return (candidates) => renderIndexerBatchReading(candidates.map((candidate) =>
+    readings.get(candidate.workset.workset_digest)!));
 }
 
 async function persistPlannedBatch(input: {
@@ -280,7 +306,7 @@ async function persistPlannedBatch(input: {
     });
   }
   const descriptor = await writeDescriptor(input.projectRoot, {
-    cache_format: 2,
+    cache_format: 5,
     ledger_digest: input.ledgerDigest,
     stage: input.planned.stage,
     policy_version: input.planned.policy_version,
@@ -336,12 +362,8 @@ export async function prepareAndStartNextIndexerBatch(
   const planned = planIndexerCurrentBatch({
     candidates: prepared.map((candidate) => candidate.candidate),
     shared_instruction_bytes: shared.instructionBytes,
+    measure_reading: batchReadingMeasure(prepared),
   });
-  if (planned.oversized_single_task) {
-    throw new TypeError(
-      `current Indexer workset exceeds ${planned.policy_version} without a declared semantic split`,
-    );
-  }
   const started = await startIndexerMainRunsStore({
     projectRoot,
     workset_digests: planned.candidates.map((candidate) =>
@@ -390,7 +412,31 @@ export async function ensureCurrentIndexerBatchDescriptor(
   projectRoot: string,
 ): Promise<CurrentIndexerBatchDescriptor | undefined> {
   const cached = await readCurrentIndexerBatchDescriptor(projectRoot);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    const spec = await currentSpec({
+      projectRoot, request_digest: cached.tasks[0]!.execution_request_digest,
+    });
+    const current = await currentBatchInstructions({ projectRoot, spec });
+    if (current.instructionRequest.request_digest === cached.instruction_request.request_digest) {
+      return cached;
+    }
+    // Update only the delivery of instructions. Existing task keys, Views,
+    // accepted records and source snapshots do not need to be regenerated.
+    const shared = await sharedBatchAuthority({ projectRoot, spec, current });
+    const readingBytes = cached.stage === "author"
+      ? renderIndexerBatchReading(await Promise.all(cached.tasks.map(async (task) => {
+        const loaded = await loadCurrentIndexerBatchTask({ projectRoot, descriptor: cached, taskKey: task.task_key });
+        return buildIndexerTaskReading({ view: loaded.view, workset: loaded.spec.request.workset, task_key: task.task_key });
+      }))).input_bytes
+      : cached.tasks.reduce((total, task) => total + task.input_bytes, 0);
+    return writeDescriptor(projectRoot, {
+      ...descriptorPayload(cached),
+      instruction_request: shared.instructionRequest,
+      instruction_path: shared.instructionPath,
+      instruction_payload_digest: shared.instructionPayloadDigest,
+      input_bytes: readingBytes + shared.instructionBytes,
+    });
+  }
   const ledger = await currentLedger(projectRoot);
   if (ledger === undefined) return undefined;
   const running = ledger.entries.filter((entry) => entry.state === "running");
@@ -408,13 +454,11 @@ export async function ensureCurrentIndexerBatchDescriptor(
     specs,
     instructionRequest: shared.instructionRequest,
   });
-  const planned = planIndexerCurrentBatch({
+  const planned = restoreIndexerCurrentBatch({
     candidates: prepared.map((candidate) => candidate.candidate),
     shared_instruction_bytes: shared.instructionBytes,
+    measure_reading: batchReadingMeasure(prepared),
   });
-  if (planned.candidates.length !== prepared.length || planned.oversized_single_task) {
-    throw new TypeError("persisted running Indexer batch no longer satisfies its batch policy");
-  }
   return persistPlannedBatch({
     projectRoot,
     planned,

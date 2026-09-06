@@ -45,15 +45,6 @@ export interface CurrentIndexerProviderLayerAuthority {
   staged?: StagedIndexerProviderBundle | undefined;
 }
 
-function bundledProviderIdentity(input: {
-  skill: string;
-  version: string;
-  integrity: string;
-  distribution: { kind: string; locator: string };
-}): string {
-  return `${input.skill}@${input.version} (integrity ${input.integrity}; ${input.distribution.kind} ${input.distribution.locator})`;
-}
-
 async function resolveBundledPrimary(input: {
   indexer: IndexerRegistryEntry;
   provider: IndexerRegistryEntry["providers"][number];
@@ -66,37 +57,26 @@ async function resolveBundledPrimary(input: {
   ]);
   const selected = catalog.bundles.find((candidate) =>
     candidate.skill === input.provider.skill &&
-    candidate.version === input.provider.version &&
-    candidate.integrity === input.provider.integrity &&
     candidate.distribution.locator === input.provider.distribution.locator
   );
   const releaseBundles = release.bundles.filter((candidate) =>
     candidate.skill === input.provider.skill &&
-    candidate.version === input.provider.version &&
-    candidate.integrity === input.provider.integrity &&
     candidate.distribution.kind === input.provider.distribution.kind &&
     candidate.distribution.locator === input.provider.distribution.locator
   );
   const releaseBundle = releaseBundles[0];
   if (selected === undefined || releaseBundle === undefined || releaseBundles.length !== 1) {
-    const available = catalog.bundles
-      .filter((candidate) => candidate.skill === input.provider.skill)
-      .map(bundledProviderIdentity);
-    const reason = selected === undefined
-      ? "the bundle catalog has no exact identity match"
-      : `the release manifest has ${releaseBundles.length} exact identity matches`;
     throw new ContextError(
       ExitCode.WorkspaceStateError,
-      `Indexer ${input.indexer.id} requires exact primary Provider ${bundledProviderIdentity(input.provider)}, ` +
-        `but the current CLI provides ${available.length === 0 ? `no ${input.provider.skill} bundle` : available.join(", ")}; ${reason}`,
+      `Indexer ${input.indexer.id} requires Provider ${input.provider.skill}, which is unavailable in this CLI installation.`,
       {
-        category: ErrorCategory.ProviderIdentityMismatch,
+        category: ErrorCategory.ProviderUnavailable,
         indexer_id: input.indexer.id,
         required_provider: input.provider,
         available_providers: catalog.bundles.filter((candidate) =>
           candidate.skill === input.provider.skill
         ),
-        next: "Use the exact CLI release pinned by the current registry, or start a new lifecycle after updating the registry through Provider selection.",
+        next_action: { command: "context status --format json", message: "Use the current Provider selection route. Captured sources and completed knowledge are retained." },
       },
     );
   }
@@ -108,7 +88,7 @@ async function resolveBundledPrimary(input: {
   const manifest = await loadIndexerProviderManifest(bundleRoot);
   return {
     layers: [{
-      layer: input.provider,
+      layer: { ...input.provider, version: selected.version, integrity: selected.integrity },
       manifest,
       manifest_digest: releaseBundle.manifest_digest,
       bundle_root: bundleRoot,
@@ -138,6 +118,12 @@ async function resolveSelectedLayers(input: {
     throw new TypeError(`Indexer ${input.indexer.id} Provider selection is incomplete`);
   }
   const layers = await Promise.all(input.indexer.providers.map(async (layer) => {
+    // Instruction-only bundled primaries follow the installed CLI even when
+    // the selection also contains staged extension/customization layers.
+    if (layer.role === "primary" && layer.distribution.kind === "cli-bundled") {
+      const installed = await resolveBundledPrimary({ indexer: input.indexer, provider: layer });
+      if (installed.layers[0]!.manifest.provider.program === undefined) return installed.layers[0]!;
+    }
     const selected = resolved.find((item) => item.provider_id === layer.id);
     if (selected === undefined) {
       throw new TypeError(`Indexer ${input.indexer.id} Provider layer ${layer.id} is unavailable`);
@@ -207,7 +193,6 @@ export async function resolveCurrentProjectIndexerPrimaryAuthority(input: {
   }
   if (
     primaryLayer.manifest.id !== provider.skill ||
-    primaryLayer.manifest.version !== provider.version ||
     !primaryLayer.manifest.provides.profiles.includes(indexer.profile.primary.id)
   ) {
     throw new TypeError(`Indexer ${indexer.id} primary Provider manifest is incompatible`);
@@ -288,8 +273,8 @@ export async function resolveCurrentProjectIndexerPrimaryAuthority(input: {
       layer_ref: `provider:${provider.id}#layer:${provider.role}`,
       id: primaryLayer.manifest.id,
       version: primaryLayer.manifest.version,
-      integrity: provider.integrity,
-      bundle_digest: provider.integrity,
+      integrity: primaryLayer.layer.integrity,
+      bundle_digest: primaryLayer.layer.integrity,
       manifest_digest: primaryLayer.manifest_digest,
       manifest: primaryLayer.manifest,
     },
@@ -298,7 +283,7 @@ export async function resolveCurrentProjectIndexerPrimaryAuthority(input: {
   });
   return {
     indexer,
-    provider,
+    provider: primaryLayer.layer,
     manifest: primaryLayer.manifest,
     profile,
     operator_contract: selected.operatorContract,

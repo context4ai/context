@@ -8,6 +8,7 @@ import {
   loadProvider,
   type LoadedProvider,
 } from "@c4a/agent-graph";
+import { syncIndexerActionSchema } from "./indexerActionSchema.js";
 
 const CURRENT_ACTION_SCHEMA = "schemas/indexer-agent-step-result.schema.json";
 const CURRENT_ACTION_SCHEMA_ID = "context.indexer.current-action-input/v2";
@@ -22,8 +23,10 @@ async function assertCurrentIndexerWorkflowContract(
     throw new Error("Context workflow Provider has no indexer Graph");
   }
   const semanticNodes = [
+    { id: "configure-indexer-providers", contract: "action", effect: "write" },
     { id: "run-current-indexer-agent", contract: "action", effect: "write" },
     { id: "review-current-indexer-structure", contract: "resolution", effect: "write" },
+    { id: "confirm-current-indexer-obsolete-scope", contract: "resolution", effect: "write" },
     { id: "run-current-indexer-composer", contract: "action", effect: "write" },
     { id: "confirm-current-indexer-layout", contract: "resolution", effect: "write" },
     { id: "resolve-current-indexer-provider", contract: "action", effect: "external" },
@@ -99,6 +102,7 @@ const packageJson = JSON.parse(
 ) as { version: string };
 const providerPath = resolve(packageRoot, "context-workflow", "provider.yaml");
 const outputPath = resolve(packageRoot, "dist", "providers", "context");
+await syncIndexerActionSchema(resolve(packageRoot, "context-workflow", CURRENT_ACTION_SCHEMA));
 const provider = await loadProvider(providerPath);
 await assertCurrentIndexerWorkflowContract(provider);
 

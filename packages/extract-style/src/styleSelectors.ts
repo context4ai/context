@@ -18,7 +18,7 @@ const GENERIC_MODULE_NAMES = new Set(["global", "index", "style", "styles", "the
 const DYNAMIC_SELECTOR_TOKEN = "c4a_dynamic_";
 
 function locator(path: string, rule: Rule, qualifiedItemPath: string): StyleLocator {
-  return { path, line: rule.source?.start?.line ?? 1, column: rule.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
+  return { path, line: rule.source?.start?.line ?? 1, end_line: rule.source?.end?.line ?? rule.source?.start?.line ?? 1, column: rule.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
 }
 
 function sorted(values: Set<string>): string[] {

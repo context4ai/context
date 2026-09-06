@@ -20,6 +20,7 @@ import type { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { capturedDocumentIndexerRef } from "./indexerWorksetEvidenceProjection.js";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
+import { selectIndexerAuthorFiles } from "./indexerAuthorFileSelection.js";
 
 type CompletePartitionPlan = Extract<IndexerPartitionPlan, { status: "complete" }>;
 type PartitionGroup = CompletePartitionPlan["groups"][number];
@@ -93,8 +94,11 @@ function factLines(input: {
   binding: ProjectIndexerParserFactsSourceBinding;
 }): { start_line: number; end_line: number } {
   const payload = jsonObject(input.fact.payload);
-  const start = positiveInteger(payload.line) ?? positiveInteger(payload.start_line);
-  const explicitEnd = positiveInteger(payload.endLine) ?? positiveInteger(payload.end_line);
+  const locator = jsonObject(payload.locator);
+  const start = positiveInteger(payload.line) ?? positiveInteger(payload.start_line) ??
+    positiveInteger(locator.line) ?? positiveInteger(locator.start_line);
+  const explicitEnd = positiveInteger(payload.endLine) ?? positiveInteger(payload.end_line) ??
+    positiveInteger(locator.endLine) ?? positiveInteger(locator.end_line);
   if (start !== null) {
     return {
       start_line: start,
@@ -170,12 +174,18 @@ function parserDependencyView(input: {
     throw new TypeError("Author dependency view requires its Partition consumer projection");
   }
   const projectedFactRefs = new Set(input.parser_projection.fact_items.map((item) => item.fact_ref));
+  const materialPaths = selectIndexerAuthorFiles({
+    files: input.binding.parser_fact_view.files,
+    member_ids: ownedMemberIds,
+  });
   for (const factRef of projectedFactRefs) {
     const projected = input.binding.parser_fact_index.get(factRef)?.fact;
     if (projected === undefined) {
       throw new TypeError(`author group references unknown projected Fact ${factRef}`);
     }
-    selectedFacts.set(projected.fact_ref, projected);
+    if (materialPaths.has(projected.locator.normalized_path)) {
+      selectedFacts.set(projected.fact_ref, projected);
+    }
   }
   for (const member of input.members) {
     const direct = input.binding.parser_fact_index.get(member.member_id)?.fact;

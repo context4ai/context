@@ -1,12 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { IndexerProviderManifest } from "@c4a/context";
-import {
-  analyzeDocumentEditorialSignals,
-  DOCUMENT_EDITORIAL_SIGNAL_CODES,
-  type DocumentEditorialSignalCode,
-} from "./documentEditorialSignals.js";
 import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
+
+// These labels describe authored review examples, not executable content rules.
+const DOCUMENT_EDITORIAL_SIGNAL_CODES = [
+  "unanswered-question-set", "answered-question-set", "empty-table-row",
+  "placeholder-content", "wide-table", "long-table-cell", "raw-or-unlabeled-link",
+  "adjacent-links", "volatile-query-url", "strikethrough-only-block",
+  "brainstorm-without-decision", "duplicate-fragment", "unstable-owner-reference",
+  "sensitive-value-candidate", "heading-hierarchy-invalid", "heading-content-overloaded",
+  "markdown-syntax-damaged", "conversion-artifact", "mixed-facts-and-draft",
+] as const;
+type DocumentEditorialSignalCode = typeof DOCUMENT_EDITORIAL_SIGNAL_CODES[number];
 
 const SIGNAL_CONFIDENCES = ["high", "review"] as const;
 const RECOMMENDED_ACTIONS = ["repair", "reshape", "omit", "request-input"] as const;
@@ -131,72 +137,11 @@ function parseFixtureCase(value: unknown): EditorialFixtureCase {
 }
 
 function validateFixtureDecision(fixture: EditorialFixtureCase): void {
-  const signal = fixture.expected_signal;
   if (sensitiveSourceLiteralCandidates(fixture.source_markdown).length > 0) {
     throw new TypeError(`editorial fixture ${fixture.id} must not reproduce a sensitive literal`);
   }
-  if (signal === null) {
-    if (
-      fixture.selected_outcome !== "keep"
-      || fixture.assessment !== null
-      || fixture.detection_scope !== "section"
-    ) {
-      throw new TypeError("a no-signal editorial fixture must be a plain Section keep");
-    }
-    if (analyzeDocumentEditorialSignals(fixture.source_markdown).length > 0) {
-      throw new TypeError(`no-signal editorial fixture ${fixture.id} produced a runtime signal`);
-    }
-    return;
-  }
-  if (fixture.selected_outcome === "keep") {
-    if (
-      signal.confidence !== "review"
-      || fixture.assessment === null
-      || !fixture.assessment.includes(signal.code)
-      || !/(?:false-positive|source fidelity)/iu.test(fixture.assessment)
-    ) {
-      throw new TypeError("a signaled keep requires one Section-specific review assessment");
-    }
-    if (/(?:time|cost|effort|workload|batch size|deadline|progress)/iu.test(fixture.assessment)) {
-      throw new TypeError("an editorial assessment cannot use delivery effort as quality evidence");
-    }
-  } else {
-    if (fixture.selected_outcome !== signal.recommended_action || fixture.assessment !== null) {
-      throw new TypeError("an editorial fixture outcome must follow its signal or justify a review keep");
-    }
-    if (fixture.selected_outcome === "omit" && signal.omission_reason === null) {
-      throw new TypeError("an editorial omission fixture requires an exact omission reason");
-    }
-  }
-  validateRuntimeSignal(fixture, signal);
-}
-
-function validateRuntimeSignal(
-  fixture: EditorialFixtureCase,
-  expected: EditorialExpectedSignal,
-): void {
-  if (fixture.detection_scope === "cross-section") {
-    if (expected.code !== "duplicate-fragment") {
-      throw new TypeError("only duplicate-fragment may use cross-section fixture detection");
-    }
-    return;
-  }
-  if (fixture.detection_scope === "safety-baseline") {
-    if (expected.code !== "sensitive-value-candidate") {
-      throw new TypeError("only a redacted sensitive-value fixture may use safety-baseline detection");
-    }
-    return;
-  }
-  const actual = analyzeDocumentEditorialSignals(fixture.source_markdown)
-    .find((signal) => signal.code === expected.code);
-  if (
-    actual === undefined
-    || actual.confidence !== expected.confidence
-    || actual.recommended_action !== expected.recommended_action
-    || (actual.omission_reason ?? null) !== expected.omission_reason
-  ) {
-    throw new TypeError(`editorial fixture ${fixture.id} drifted from runtime signal ${expected.code}`);
-  }
+  // Fixture shape and safe distribution are mechanical; the example's content
+  // assessment belongs to its author, not keyword or sentence-pattern checks.
 }
 
 function assertExactCoverage(
@@ -232,7 +177,6 @@ async function validateEditorialInstruction(input: {
   for (const anchor of [
     ...SELECTED_OUTCOMES,
     "Section-specific",
-    "false positive",
     "source fidelity",
   ]) {
     if (!content.includes(anchor)) {

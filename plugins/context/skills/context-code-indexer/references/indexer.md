@@ -17,9 +17,34 @@ Read only the templates materialized for the selected profiles. Combine their qu
 
 ## Partition and identity
 
+Public API coverage does not imply one page per exported symbol. Group simple
+helpers, related types and aliases under their caller-facing capability while
+retaining useful inputs, outputs and edge cases. Give an API its own page when
+it has an independent integration contract or reader task. Tests, fixtures and
+stories support those contracts; they are not reader targets merely because
+they are present in the inventory.
+
+Same names from different public entrypoints or incompatible current/deprecated
+contracts are different subjects. Qualify their semantic subject and title by
+entrypoint or lifecycle; do not merge them by name or let a legacy title describe
+a current API. An explicit migration/comparison page may relate both, but must
+explain which contract belongs to each entrypoint. Preserve already accepted
+subjects during continuation; do not repartition them for cosmetic grouping.
+
+When substantial obsolete material is discovered, explain its scale and the
+consequences of including or excluding it before authoring it. Follow Context's
+scope-confirmation Gate; managed execution is not permission to choose obsolete
+scope for the user. Explicit deprecation is evidence; an old version number,
+directory named legacy, or a passing mention of deprecation alone is not.
+
 For partition work, close every inventory member as owned, excluded, or unsupported and use stable semantic subjects. Each member has exactly one primary owner; extension layers may enrich but cannot claim final authority. Do not create ordinal batches or infer identity from display titles, filenames, headings, or traversal order. If no defensible semantic grouping exists, return the protocol failure that permits the CLI-owned catalog fallback.
 
-Use only the ordered partition strategy materialized by Context for the current workset. The order is project-first and authority-bound; do not skip to a CLI builtin, substitute another strategy id, or recalculate an implementation digest. A strategy may group only the canonical members and profiles supplied with that workset.
+Apply the grouping principles below and the selected-profile guidance already
+present in `resolved-indexer-instructions` to the current View. Context owns
+strategy selection, ordering, retry, and catalog fallback; strategy identifiers
+and digests are internal bookkeeping, not additional material to retrieve or
+fields to submit. Return semantic groups and member dispositions only within
+the supplied inventory and subject contract.
 
 Group related identities by a capability, entrypoint, protocol boundary, lifecycle stage, state owner, or handoff. A granular catalog is appropriate only when the selected profile and reader goal require a public API, protocol, command, or registry reference. A cross-module chain requires an explicit trigger, source-backed joins on both sides of every boundary, transformations or state handoffs, and a terminal outcome; imports or similar names do not prove execution order.
 
@@ -59,6 +84,23 @@ operations or variants. Naming an internal validator, mapper, hook, or generic
 "validation" step does not explain the contract. Omit details that current facts
 cannot prove rather than inferring them from an implementation name.
 
+## Declaration, implementation and test boundaries
+
+Distinguish the declared API from the implementation reached through the actual
+entrypoint. Inherited properties, comments and names do not prove forwarding,
+defaults or behavior. Tests support only what their assertions and non-mocked
+dependencies exercise; DOM presence alone does not prove visibility, focus or
+accessibility. Separate source-confirmed behavior from runtime hypotheses that
+need execution, and keep different platforms and deprecated entrypoints distinct.
+
+Knowledge production is not an exhaustive defect audit. Explain a discovered
+limitation when it changes how the reader calls, integrates or migrates the
+capability; retain the normal usage and responsibility as the page's focus.
+Request missing material only when it is needed for that reader task. A supported
+implementation limitation is useful knowledge, not a Context tool failure or a
+reason to pause the workflow. Do not expand into browser testing, source fixes
+or a separate issue per suspected defect unless that work was requested.
+
 ## Author Result and evidence
 
 For author work, produce exactly one Result for the supplied logical unit. Keep deterministic catalogs separate from explanatory prose, bind every declaration and Section to current evidence, and select only an Artifact policy variant listed in the workset. Missing material must become a canonical question disposition; never invent an answer or emit placeholder knowledge.
@@ -72,7 +114,7 @@ return to requirement/registry planning when required coverage lacks authority.
 
 An inventory group with no reader-authorizing public export, contract, runtime registration, approved Subject, or Partition Subject is catalog-only. Close its inventory dispositions and return no reader Artifact; do not publish a page that merely says the unit exists. Conversely, when the workset supplies current contract facts such as public signatures, properties, events, defaults, variants, examples, or source roles, consume each applicable fact in the matching template question or give it an explicit legal disposition. A generic directory summary is not a substitute for supplied contract facts.
 
-For every Section, select the exact `document_kind`, `reader_goal`, and `artifact_kind` tuple declared by the current profile's unique layout mapping. Do not invent a tuple or return a collection name; Context resolves the collection mechanically from that mapping.
+Select `artifact_intent` from the current Author authority's allowed tuples. Context applies that tuple to the published sections and resolves the collection; do not submit per-section layout metadata or invent a collection name.
 
 When the same Authorized Workset View contains CLI-authorized captured documents or tool snapshots, treat them as ordinary input evidence for the current logical unit. Use that material to answer a supplied question only when its evidence contract permits; otherwise keep the canonical material-gap disposition. Do not create a second answer flow or inspect registered sources outside the View.
 
@@ -102,7 +144,7 @@ Explain stable responsibility, inputs, outputs, state and failure boundaries, th
 
 For a post-author workset, use only the effective composer named by Context and the matching composer instruction materialized beside this contract. Consume the complete workset-scoped `PrimaryResultView`; do not reopen discovery, expand scope, change Subject identity or ownership, or return another complete main Result. A composer may emit only the declared `derived-artifact-proposal` kind and Artifact policy.
 
-If a declared primary fact or Artifact requirement is absent, or the view does not support an independent reader question, return the ordinary `context.indexer.layer-fragment-result/v1` with `fragments: []` and the exact consumed view digest. This is a successful structured empty invocation, not a license to inspect temporary files or infer missing content.
+If a declared primary fact or Artifact requirement is absent, or the view does not support an independent reader question, return the current task's semantic result with `stage: post-author`, `outcome: complete`, `proposals: []`, and `diagnostics: []` in the usual `results[]` envelope. Context constructs internal fragments and digests. Do not inspect temporary files or infer missing content.
 
 ## Mechanical audit and revision
 
@@ -116,6 +158,11 @@ Profile metrics are authoring guidance, not a second readiness protocol. Use
 not alter wording, Markdown syntax, sentence counts, or partitions merely to
 influence a counter. Context does not accept an Agent-supplied score as proof
 that a Result is ready.
+
+Context does not judge prose quality or scan wording, JSX, comments or template
+syntax for rejection. Unfilled authoring placeholders can be noted during the
+existing content Review, but do not create a CLI failure or another gate. Do not
+rewrite a legitimate explanation solely to remove a marker or advisory.
 
 ## Two classes of evidence in a template Evidence pass
 

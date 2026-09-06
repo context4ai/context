@@ -1,6 +1,7 @@
 import { EdgeSource, EdgeType, Grounding, SymbolKind, Visibility } from "@c4a/core";
 import type { ExtractionDiagnostic, ExtractionResult, RelationInfo, SymbolInfo } from "@c4a/extract";
 import type Parser from "web-tree-sitter";
+import { referencedTypeNames } from "./typeReferences.js";
 
 export type SyntaxNode = Parser.SyntaxNode;
 export type PackageInfo = ExtractionResult["package"];
@@ -22,30 +23,6 @@ export const DECLARATION_TYPES = new Set([
   "type_alias_declaration",
   "enum_declaration",
   "lexical_declaration",
-]);
-
-const BUILTIN_TYPES = new Set([
-  "Array",
-  "Boolean",
-  "Date",
-  "Error",
-  "Map",
-  "Number",
-  "Object",
-  "Promise",
-  "ReadonlyArray",
-  "Record",
-  "Set",
-  "String",
-  "unknown",
-  "void",
-  "string",
-  "number",
-  "boolean",
-  "null",
-  "undefined",
-  "never",
-  "any",
 ]);
 
 export const countLines = (source: string) => {
@@ -122,10 +99,14 @@ export const getCallableFromInitializer = (node: SyntaxNode | null): SyntaxNode 
   return null;
 };
 
-export const getInitializerTypeAnnotation = (node: SyntaxNode | null) => {
+export const getInitializerTypeAnnotation = (node: SyntaxNode | null, options: { referencesOnly?: boolean } = {}) => {
   if (!node || node.type !== "call_expression") return null;
   const typeArguments = node.namedChildren.find((child) => child.type === "type_arguments") ?? null;
   if (!typeArguments) return null;
+  if (options.referencesOnly) {
+    // The callee is a value, not a type (e.g. a generic factory or forwardRef).
+    return `[${typeArguments.namedChildren.filter((child) => child.type !== "comment").map((child) => child.text).join(", ")}]`;
+  }
   const callee = node.namedChildren.find((child) => child.type !== "type_arguments" && child.type !== "arguments") ?? null;
   const calleeText = callee?.text?.trim();
   return calleeText ? `${calleeText}${typeArguments.text}` : typeArguments.text;
@@ -149,12 +130,6 @@ export const containsJsx = (node: SyntaxNode): boolean => {
   return node.namedChildren.some(containsJsx);
 };
 
-const getTypeNames = (typeText: string | null | undefined) => {
-  if (!typeText) return [];
-  const matches = typeText.match(/\b[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\b/g) ?? [];
-  return [...new Set(matches)].filter((match) => !BUILTIN_TYPES.has(match));
-};
-
 export const resolveTypeBinding = (
   typeName: string,
   importBindings: Map<string, ImportBinding>,
@@ -176,7 +151,7 @@ export const appendTypeRelations = (
   declarations: Map<string, DeclarationRecord>,
   line: number,
 ) => {
-  for (const typeName of getTypeNames(typeText)) {
+  for (const typeName of referencedTypeNames(typeText)) {
     relations.push(
       createRelation(
         relationType,

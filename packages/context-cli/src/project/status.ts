@@ -38,14 +38,12 @@ import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateComp
 import {
   pendingDocumentCaptureCommands,
   readIndexerWorkflowRegistryStatus,
-  resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
 import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
 import { currentIndexerProgress } from "./indexerCurrentProgress.js";
 
 export {
   pendingDocumentCaptureCommands,
-  resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
 
 export type {
@@ -136,11 +134,9 @@ async function collectProjectStatusSnapshotInternal(
   const verifyStatus = draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(projectRoot)
     : { issues: [], diagnostics: [] };
-  const resourceRepair = resourcePlaceholderRepairTargets(verifyStatus.issues);
   const pendingCapture = pendingDocumentCaptureCommands({
     phases,
     documentSources,
-    recaptureSourceKeys: resourceRepair.sourceKeys,
   });
   const packageFreshnessStatus = phaseStatus.projectEntryValid
     ? await readPackageFreshnessStatus(projectRoot, packages)

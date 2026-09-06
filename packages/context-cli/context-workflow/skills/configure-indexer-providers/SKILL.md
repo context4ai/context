@@ -17,9 +17,17 @@ completion conditions. This Action is the entry for
 the guide's `indexer-provider-unavailable` handling instead of substituting a
 different version or cache.
 
+The current output schema defines each accepted Indexer entry. Use the guide's
+Provider selection example with the current requirements and catalog values;
+the requirements-only bootstrap schema is not this Action's result schema.
+
 The current Action input already contains the exact requirements and
 CLI-bundled catalog. Select applicable Providers using that input and the Skills
-already visible in this conversation. Do not run a separate catalog command,
+already visible in this conversation. Each bundled entry includes compact
+`capabilities` and exact `guidance.skill_path` / `guidance.manifest_path` for
+the shipped release. Read those files only for a Provider you intend to select
+when its guidance is not already available; resolve its relative references
+against that supplied bundle, not an arbitrary installed copy. Do not run a separate catalog command,
 enumerate every installed Skill, or require a discovery report/confirmation.
 For a selected shipped Provider, copy its exact version, integrity and
 cli-bundled distribution from the supplied catalog. The same Skill/version
@@ -54,6 +62,9 @@ requirement/domain/source/module owner cell needs one primary Indexer;
 overlapping read scope is allowed for enrichers. One Indexer may combine a
 primary layer, supporting profiles, extension layers, and composers, but
 Provider array order is not precedence.
+
+Keep catalog capabilities and guidance paths out of the submitted entries;
+they are selection help, not registry fields.
 
 Choose the applicable CLI-bundled community profile directly when no visible
 specialized Provider is required. The CLI constructs the full route input,

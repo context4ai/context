@@ -132,6 +132,7 @@ async function resolveCurrentIndexerGraphNode(input: {
       advance_complete: !advanceRequired,
       agent_complete: runningEntries.length === 0,
       structure_review_complete: !structureReviewRequired,
+      obsolete_scope_confirmed: !structureReviewRequired || structure?.preview.obsolete_scope?.requires_confirmation !== true,
       composer_complete: composer === undefined,
       blockers_clear: !blocked,
       layout_confirmed: !layoutRequired,
@@ -255,7 +256,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         ...input.route,
         configuration: {
           file: "src/indexers.yaml",
-          action: "Declare the confirmed knowledge requirements for the registered sources, with indexers: []. Then re-evaluate the workflow for Provider selection.",
+          action: "Read node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md and the required context.indexer.registry-bootstrap schema resource. Write the confirmed requirements using the initial registry example, the registered source boundaries, and indexers: []. Then re-evaluate the workflow for Provider selection; this file is not a complete-current payload.",
         },
       };
     }
@@ -364,7 +365,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         after_action: { evaluate: true },
       };
   }
-  if (selected.node === "review-current-indexer-structure") {
+  if (selected.node === "review-current-indexer-structure" || selected.node === "confirm-current-indexer-obsolete-scope") {
       const structure = selected.structure;
       const resolved = selected.resolved;
       if (structure === undefined || structure.approved || resolved === undefined) {

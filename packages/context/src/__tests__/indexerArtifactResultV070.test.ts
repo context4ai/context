@@ -3,7 +3,6 @@ import {
   buildIndexerArtifactDependencySet,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
-  buildIndexerGeneratedAuthoringAudit,
   buildIndexerRunEnvelope,
   buildIndexerSourceIdentityInventory,
   buildIndexerStructuredDeclarationSet,
@@ -13,7 +12,6 @@ import {
   indexerEvidenceBindingDigest,
   indexerSectionEvidenceCarrierRef,
   validateIndexerArtifactDependencySet,
-  validateIndexerGeneratedAuthoringAudit,
 } from "../index.js";
 import {
   MEMBER_REF,
@@ -198,25 +196,6 @@ describe("ArtifactResult ABI", () => {
     rehash(result);
     expect(validate(result)).toEqual(result);
 
-    const audit = buildIndexerGeneratedAuthoringAudit(result);
-    expect(validateIndexerGeneratedAuthoringAudit(audit)).toMatchObject({
-      protocol: "context.indexer.generated-authoring-audit/v1",
-      hard_findings: [],
-      structured_claim_count: 1,
-      evidence_covered_structured_claim_count: 1,
-      agent_review_required: true,
-      semantic_prose_review_targets: [{
-        artifact_id: "button-overview",
-        section_key: "summary",
-        content_ref: "block:summary-block",
-        advisory_code: "semantic-prose-agent-review-required",
-      }],
-    });
-    expect(() => validateIndexerGeneratedAuthoringAudit({
-      ...audit,
-      audit_digest: digest("0"),
-    })).toThrow(/audit digest is invalid/);
-
     const outsideOwnerEvidence = structuredClone(result);
     const secondEvidencePayload = {
       evidence_ref: "evidence:button-test",
@@ -267,63 +246,41 @@ describe("ArtifactResult ABI", () => {
     expect(() => validate(unauthorizedSubject)).toThrow(/unauthorized subject/);
   });
 
-  test("hard-fails controlled placeholders even inside structurally rich output", () => {
-    const placeholder = artifactResult();
-    const placeholderArtifact = placeholder.artifacts[0]!;
-    if (placeholderArtifact.representation !== "sections") throw new Error("expected sections");
-    const placeholderBlock = placeholderArtifact.sections[0]!.blocks[0]!;
-    if (placeholderBlock.layer !== "semantic-prose") throw new Error("expected semantic prose");
-    placeholderBlock.markdown = [
-      "## Capability summary",
-      "",
-      "The component exposes a documented workflow with several apparent details.",
-      "",
-      "| Stage | Responsibility |",
-      "| --- | --- |",
-      "| Input | Validate the request |",
-      "| Output | Return a normalized response |",
-      "",
-      "### Runtime platform",
-      "",
-      "[TODO]",
-    ].join("\n");
-    rehash(placeholder);
-    expect(() => validate(placeholder)).toThrow(/generated-placeholder/);
+  test.each([
+    "style={{ opacity }} is the documented JSX object syntax.",
+    "<!-- A maintained source annotation -->",
+    "## Summary",
+    "### Placeholder\\n\\nThe placeholder reserves layout space.",
+    "TODO",
+    "[TODO]",
+    "{{variable:summary}}",
+    "Coming soon",
+  ])("leaves authored prose and template values to Review: %s", (markdown) => {
+    const result = artifactResult();
+    const artifact = result.artifacts[0]!;
+    if (artifact.representation !== "sections") throw new Error("expected sections");
+    const block = artifact.sections[0]!.blocks[0]!;
+    if (block.layer !== "semantic-prose") throw new Error("expected semantic prose");
+    block.markdown = markdown;
+    rehash(result);
+    expect(validate(result)).toEqual(result);
 
-    const empty = artifactResult();
-    const emptyArtifact = empty.artifacts[0]!;
-    if (emptyArtifact.representation !== "sections") throw new Error("expected sections");
-    const emptyBlock = emptyArtifact.sections[0]!.blocks[0]!;
-    if (emptyBlock.layer !== "semantic-prose") throw new Error("expected semantic prose");
-    emptyBlock.markdown = "## Summary";
-    rehash(empty);
-    expect(() => validate(empty)).toThrow(/empty-required-section/);
-
-    const unresolvedVariable = artifactResult();
-    const evidenceRef = unresolvedVariable.evidence_bindings[0]!.evidence_ref;
-    unresolvedVariable.artifacts = [{
+    result.artifacts = [{
       artifact_id: "button-overview",
       artifact_kind: "overview",
       artifact_policy_variant: "standard",
       representation: "template",
       template_id: "component-guide",
       variables: {
-        summary: {
-          value: "{{variable:summary}}",
-          fact_refs: [],
-          evidence_refs: [evidenceRef],
-        },
+        summary: { value: markdown, fact_refs: [], evidence_refs: [result.evidence_bindings[0]!.evidence_ref] },
       },
       section_projections: [{
-        section_key: "summary",
-        owner_indexer_id: unresolvedVariable.indexer_id,
-        document_kind: "reference",
-        reader_goal: "understand-capability",
-        artifact_kind: "overview",
+        section_key: "summary", owner_indexer_id: result.indexer_id,
+        document_kind: "reference", reader_goal: "understand-capability", artifact_kind: "overview",
       }],
     }];
-    rehash(unresolvedVariable);
-    expect(() => validate(unresolvedVariable)).toThrow(/generated-placeholder/);
+    rehash(result);
+    expect(validate(result)).toEqual(result);
   });
 
   test("does not treat template-like syntax inside code examples as authoring residue", () => {
@@ -349,7 +306,7 @@ describe("ArtifactResult ABI", () => {
     expect(() => validate(result)).not.toThrow();
   });
 
-  test("routes structurally rich speculative prose to Agent Review", () => {
+  test("does not treat speculative wording as a mechanical failure", () => {
     const result = artifactResult();
     const artifact = result.artifacts[0]!;
     if (artifact.representation !== "sections") throw new Error("expected sections");
@@ -367,13 +324,7 @@ describe("ArtifactResult ABI", () => {
     ].join("\n");
     rehash(result);
     expect(validate(result)).toEqual(result);
-    expect(buildIndexerGeneratedAuthoringAudit(result)).toMatchObject({
-      hard_findings: [],
-      agent_review_required: true,
-      semantic_prose_review_targets: [{
-        advisory_code: "semantic-prose-agent-review-required",
-      }],
-    });
+
   });
 
   test("binds deterministic blocks to canonical Facts instead of arbitrary block values", () => {
@@ -507,7 +458,7 @@ describe("ArtifactResult ABI", () => {
     expect(() => validate(outputDrift)).toThrow(/output digest/);
 
     const providerDrift = artifactResult();
-    providerDrift.provider_integrity = digest("e");
+    providerDrift.provider_layer_ref = "provider:other#layer:primary";
     rehash(providerDrift);
     expect(() => validate(providerDrift)).toThrow(/authority\/workset/);
 

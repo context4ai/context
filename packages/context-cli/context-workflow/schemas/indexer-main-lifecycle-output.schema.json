@@ -43,13 +43,12 @@
     },
     {
       "type": "object",
-      "required": ["protocol", "request", "result", "operation_result", "authoring_audit", "accepted_record", "graph_outcome"],
+      "required": ["protocol", "request", "result", "operation_result", "accepted_record", "graph_outcome"],
       "properties": {
         "protocol": { "const": "context.indexer.main-run-validation/v1" },
         "request": { "type": "object" },
         "result": { "type": "object" },
         "operation_result": { "type": "object" },
-        "authoring_audit": { "type": ["object", "null"] },
         "accepted_record": { "type": "object" },
         "graph_outcome": { "const": "completed" }
       },

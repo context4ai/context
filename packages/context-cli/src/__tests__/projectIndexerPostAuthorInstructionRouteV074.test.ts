@@ -1,7 +1,7 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   buildIndexerPostAuthorFragmentRequest,
   canonicalIndexerNodeRef,
@@ -13,6 +13,8 @@ import { buildIndexerPostAuthorAgentStepRoute } from "../project/indexerAgentSte
 import type { IndexerInstructionMaterializationRequest } from "../project/indexerInstructionMaterialization.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
+const roots: string[] = [];
+afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 const SUBJECT_KEY = {
   protocol: "context.subject-key/v1" as const,
   namespace: "sample-package",
@@ -106,9 +108,12 @@ function instructionRequest(): IndexerInstructionMaterializationRequest {
 describe("project Indexer post-author instruction Route", () => {
   test("gives the selected composer instruction and the same PrimaryResultView to the Agent", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-indexer-post-author-route-"));
+    roots.push(root);
     const first = postAuthorRequest();
     const second = postAuthorRequest("f");
     const instructions = instructionRequest();
+    await writeFile(join(root, "instructions.json"), JSON.stringify({ payload_digest: digest("b"), resources: [{ content: "Use the selected public-contract composer." }] }));
+    await Promise.all([first, second].map((item, index) => writeFile(join(root, `view-${index + 1}.json`), JSON.stringify(item.primaryResultView))));
     const route = await buildIndexerPostAuthorAgentStepRoute({
       fragment_requests: [first.request, second.request],
       instruction_request: instructions,
@@ -144,9 +149,10 @@ describe("project Indexer post-author instruction Route", () => {
       resource.id === "resolved-indexer-instructions"
     )).toMatchObject({
       read_state: "read-required",
-      path: join(root, "instructions.json"),
-      digest: digest("b"),
+      media_type: "text/markdown",
     });
+    const reading = route.route.resources.required.find((resource) => resource.id === "resolved-indexer-instructions")!;
+    expect(await readFile(reading.path!, "utf8")).toContain("Use the selected public-contract composer.");
     expect(route.instruction_location.materialize.input.value).toEqual(
       instructions as unknown as import("@c4a/agent-graph").JsonValue,
     );

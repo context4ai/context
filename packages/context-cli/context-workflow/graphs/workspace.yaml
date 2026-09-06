@@ -186,6 +186,10 @@ nodes:
     kind: action
     reasonCode: route.indexer.lifecycle-required
     action: actions/run-indexer-lifecycle.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-registry-bootstrap.yaml
+        - resources/views/source-boundary.yaml
     satisfiedBy:
       - path: indexer.lifecycle_current
         equals: true

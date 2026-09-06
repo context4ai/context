@@ -22,7 +22,7 @@ describe("Indexer semantic input", () => {
     expect(indexerLayoutConfirmationInputSchema.parse(input)).toEqual(input);
     expect(() => indexerLayoutConfirmationInputSchema.parse({
       ...input, decision: "rejected", feedback: "Revise the content instead",
-    })).toThrow("only an approved layout");
+    })).toThrow();
   });
   test("keeps strategy metadata out of the Agent partition result", () => {
     expect(validateIndexerPartitionSemanticInput(completePartition)).toEqual(

@@ -142,7 +142,7 @@ const authorDiagnosticSchema = z.object({
   target: z.string().min(1).optional(),
 }).strict();
 
-export const indexerAuthorSemanticInputSchema = z.object({
+const authorInputBaseSchema = z.object({
   stage: z.literal("author"),
   group_key: z.string().min(1),
   outcome: z.enum(["publish", "catalog-only", "request-material", "unsupported"]),
@@ -159,29 +159,21 @@ export const indexerAuthorSemanticInputSchema = z.object({
   member_dispositions: z.array(authorMemberDispositionSchema),
   material_gaps: z.array(authorMaterialGapSchema).default([]),
   diagnostics: z.array(authorDiagnosticSchema).default([]),
-}).strict().superRefine((value, context) => {
-  if (value.outcome === "publish" && value.sections.length === 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["sections"],
-      message: "publish requires at least one reader-facing section",
-    });
-  }
-  if (value.outcome === "publish" && value.title === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["title"],
-      message: "publish requires a reader-facing title",
-    });
-  }
-  if (value.outcome === "publish" && value.summary === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["summary"],
-      message: "publish requires a reader-facing summary",
-    });
-  }
-});
+}).strict();
+
+// Keep conditional input requirements structural so the delivered JSON Schema
+// and the runtime parser describe the same submission, including defaults.
+export const indexerAuthorSemanticInputSchema = z.discriminatedUnion("outcome", [
+  authorInputBaseSchema.extend({
+    outcome: z.literal("publish"),
+    title: z.string().min(1),
+    summary: z.string().min(1),
+    sections: z.array(authorSectionSchema).min(1),
+  }),
+  authorInputBaseSchema.extend({ outcome: z.literal("catalog-only") }),
+  authorInputBaseSchema.extend({ outcome: z.literal("request-material") }),
+  authorInputBaseSchema.extend({ outcome: z.literal("unsupported") }),
+]);
 
 export type IndexerAuthorSemanticInput = z.infer<typeof indexerAuthorSemanticInputSchema>;
 
@@ -243,7 +235,7 @@ const postAuthorSectionSchema = z.object({
   source_refs: z.array(z.string().min(1)).min(1),
 }).strict();
 
-export const indexerPostAuthorSemanticInputSchema = z.object({
+const postAuthorInputBaseSchema = z.object({
   stage: z.literal("post-author"),
   outcome: z.enum(["complete", "failed"]),
   proposals: z.array(z.object({
@@ -254,15 +246,15 @@ export const indexerPostAuthorSemanticInputSchema = z.object({
     sections: z.array(postAuthorSectionSchema).min(1),
   }).strict()).default([]),
   diagnostics: z.array(authorDiagnosticSchema).default([]),
-}).strict().superRefine((value, context) => {
-  if (value.outcome === "failed" && value.diagnostics.length === 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["diagnostics"],
-      message: "failed post-author composition requires a diagnostic",
-    });
-  }
-});
+}).strict();
+
+export const indexerPostAuthorSemanticInputSchema = z.discriminatedUnion("outcome", [
+  postAuthorInputBaseSchema.extend({ outcome: z.literal("complete") }),
+  postAuthorInputBaseSchema.extend({
+    outcome: z.literal("failed"),
+    diagnostics: z.array(authorDiagnosticSchema).min(1),
+  }),
+]);
 
 export type IndexerPostAuthorSemanticInput = z.infer<
   typeof indexerPostAuthorSemanticInputSchema
@@ -285,21 +277,21 @@ const indexerPostAuthorBatchSemanticInputSchema = z.object({
   }
 });
 
-export const indexerStructureReviewInputSchema = z.object({
+const structureReviewBaseSchema = z.object({
   stage: z.literal("structure-review"),
   decision: z.enum(["approved", "request-adjustment"]),
   feedback: z.string().min(1).optional(),
-}).strict().superRefine((value, context) => {
-  if (value.decision === "request-adjustment" && value.feedback === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["feedback"],
-      message: "request-adjustment requires feedback",
-    });
-  }
-});
+}).strict();
 
-export const indexerLayoutConfirmationInputSchema = z.object({
+export const indexerStructureReviewInputSchema = z.discriminatedUnion("decision", [
+  structureReviewBaseSchema.extend({ decision: z.literal("approved") }),
+  structureReviewBaseSchema.extend({
+    decision: z.literal("request-adjustment"),
+    feedback: z.string().min(1),
+  }),
+]);
+
+const layoutConfirmationBaseSchema = z.object({
   stage: z.literal("layout-confirmation"),
   decision: z.enum(["approved", "rejected"]),
   feedback: z.string().min(1).optional(),
@@ -307,22 +299,27 @@ export const indexerLayoutConfirmationInputSchema = z.object({
     artifact_ref: z.string().min(1),
     output_path: z.string().min(1),
   }).strict()).min(1).optional(),
-}).strict().superRefine((value, context) => {
-  if (value.decision === "rejected" && value.feedback === undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["feedback"],
-      message: "rejected layout confirmation requires feedback",
-    });
-  }
-  if (value.decision === "rejected" && value.paths !== undefined) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["paths"],
-      message: "only an approved layout can select output paths",
-    });
-  }
-});
+}).strict();
+
+export const indexerLayoutConfirmationInputSchema = z.discriminatedUnion("decision", [
+  layoutConfirmationBaseSchema.extend({ decision: z.literal("approved") }),
+  layoutConfirmationBaseSchema.omit({ paths: true }).extend({
+    decision: z.literal("rejected"),
+    feedback: z.string().min(1),
+  }),
+]);
+
+/** Build-time input schema sources; the CLI exports these into its existing contract. */
+export const indexerCurrentActionInputDefinitions = {
+  providerSelection: indexerProviderSelectionSemanticInputSchema,
+  providerResolution: indexerProviderResolutionSemanticInputSchema,
+  providerProgramAuthorization: indexerProviderProgramAuthorizationSemanticInputSchema,
+  partitionBatch: indexerPartitionBatchSemanticInputSchema,
+  authorBatch: indexerAuthorBatchSemanticInputSchema,
+  postAuthor: indexerPostAuthorBatchSemanticInputSchema,
+  structureReview: indexerStructureReviewInputSchema,
+  layoutConfirmation: indexerLayoutConfirmationInputSchema,
+};
 
 export const indexerCurrentActionInputSchema = z.union([
   indexerProviderSelectionSemanticInputSchema,

@@ -384,7 +384,7 @@ describe("project main Indexer lifecycle Actions", () => {
     )).toBe(true);
     expect(graph?.edges.some((edge) =>
       edge.from === "run-current-indexer-agent" &&
-      edge.to === "review-current-indexer-structure"
+      edge.to === "confirm-current-indexer-obsolete-scope"
     )).toBe(true);
     expect(graph?.edges.some((edge) =>
       edge.from === "run-current-indexer-composer" &&

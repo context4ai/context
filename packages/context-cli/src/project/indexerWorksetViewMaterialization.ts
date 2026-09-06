@@ -325,6 +325,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           },
           value: {
             base_subject_key: request.workset.partition_subject_key,
+            subject_entry_guidance: "Use distinct subjects for different public entrypoints or incompatible current/deprecated contracts. Short subjects owned entirely by a deprecated directory receive a deprecated- prefix. Use an explicit SubjectKey for an intentional cross-entry migration or comparison page. Public API coverage does not require one page per symbol.",
             ...(spec.validation.subject_key_contract === undefined
               ? {}
               : {

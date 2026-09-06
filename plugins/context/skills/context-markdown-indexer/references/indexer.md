@@ -10,7 +10,7 @@ stale/collision recovery behavior. It adapts the useful semantic gates from the
 former align path to the current Result ABI; it does not authorize legacy align
 commands or `context.structure.v1`.
 
-Use `editorial-policy.md` for scenario editorial signals, recommended outcomes, Section-specific assessments, omission eligibility, and anonymous decision examples. Context still owns signal spans, protected values, revision CAS/storage, rescans, and final validation.
+Use `editorial-policy.md` for editorial review hints and anonymous decision examples. Content assessment belongs to the Agent and user; hints do not trigger a CLI prose rescan, rejection, or additional gate. Context owns source references, protected values, revision CAS/storage, and structural validation.
 
 Preserve exact commands, identifiers, links, attachments, tables, and code blocks when they are evidence-bearing. Separate deterministic catalogs from explanation. Do not publish unsupported claims, conversion annotations, placeholders, or unresolved requests as knowledge.
 

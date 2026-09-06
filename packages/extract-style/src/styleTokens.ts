@@ -4,7 +4,7 @@ import valueParser, { type Node as ValueNode } from "postcss-value-parser";
 import type { StyleLocator, StyleToken, StyleTokenReference } from "./styleTypes.js";
 
 function locator(path: string, node: Declaration | AtRule, qualifiedItemPath: string): StyleLocator {
-  return { path, line: node.source?.start?.line ?? 1, column: node.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
+  return { path, line: node.source?.start?.line ?? 1, end_line: node.source?.end?.line ?? node.source?.start?.line ?? 1, column: node.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
 }
 
 function firstWord(nodes: readonly ValueNode[]): string | null {

@@ -77,10 +77,12 @@ collection-wide recomputation.
 
 Editorial instructions may guide clarity, consolidation, ordering and
 reader-facing terminology. They cannot alter facts, evidence, source role,
-requirement scope, protected values, revision identity, collection authority or
-hard metrics. Deterministic blocks render only registered facts; semantic prose
-must cite consumed evidence. Placeholders, speculation, fabricated transitions
-and “content unavailable” pages are invalid even when the structure looks rich.
+requirement scope, protected values, revision identity or collection authority.
+Deterministic blocks render only registered facts; semantic prose cites consumed
+evidence. The Agent or user assesses missing explanations, speculation and
+unfilled placeholders in the existing content Review. Context does not scan
+words, braces, comments or headings to reject content, and an editorial hint
+does not create another gate or require a signal-clearing receipt.
 
 ## Missing material
 

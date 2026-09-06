@@ -112,8 +112,10 @@ describe("0.7.0 Indexer authoring documentation", () => {
     };
     for (const definition of [
       "providerSelection",
-      "partition",
-      "author",
+      "providerResolution",
+      "providerProgramAuthorization",
+      "partitionBatch",
+      "authorBatch",
       "postAuthor",
       "structureReview",
       "layoutConfirmation",
@@ -142,13 +144,15 @@ describe("0.7.0 Indexer authoring documentation", () => {
       WORKFLOW_ROOT,
       "skills/run-indexer-agent-step/SKILL.md",
     ));
-    for (const exactProjectionRule of [
-      "`fact_ref` = the `fact` item's `value.fact_ref`",
-      "`fact_kind` = the `fact` item's `value.kind`",
-      "`value` = the `fact` item's `value.payload` exactly",
-      "matching `selected-fact`",
+    for (const referenceInputRule of [
+      "both are arrays of references, not objects",
+      "Copy `source_items` from the",
+      "task's Source material, not inventory or repository identifiers",
+      "Context constructs the internal",
+      "Facts and EvidenceBindings",
+      "do not copy internal digests into the semantic result",
     ]) {
-      expect(agentSkill).toContain(exactProjectionRule);
+      expect(agentSkill).toContain(referenceInputRule);
     }
     expect(agentSkill).toMatch(
       /performs dependency, schema,\s+owner, scope, and per-workset validation/u,

@@ -333,8 +333,13 @@ export async function loadIndexerCustomization(input: {
   customizationPlan?: IndexerCustomizationPlan;
 }): Promise<IndexerCustomizationView> {
   if (!isAbsolute(input.workspaceRoot)) throw new TypeError("workspace root must be absolute");
-  const primary = input.indexer.providers.find((provider) => provider.role === "primary");
-  if (primary === undefined) throw new TypeError("Indexer has no primary Provider");
+  const registered = input.indexer.providers.find((provider) => provider.role === "primary");
+  if (registered === undefined) throw new TypeError("Indexer has no primary Provider");
+  // A CLI-bundled Provider follows the installed release. Registry pins describe
+  // the original selection, not a ban on resuming after a tool update.
+  const primary = registered.distribution.kind === "cli-bundled"
+    ? { ...registered, version: input.manifest.version, integrity: input.providerIntegrity }
+    : registered;
   if (
     primary.skill !== input.manifest.id ||
     primary.version !== input.manifest.version ||

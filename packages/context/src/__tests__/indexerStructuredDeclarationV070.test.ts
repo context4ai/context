@@ -207,10 +207,11 @@ function declarations(): IndexerStructuredDeclarationPayload[] {
   }];
 }
 
-function validate(values: readonly IndexerStructuredDeclarationPayload[] = declarations()) {
+function validate(values: readonly IndexerStructuredDeclarationPayload[] = declarations(),
+  recordedInventoryDigest = inventory.inventory_digest) {
   return validateIndexerStructuredDeclarationSet({
     value: buildIndexerStructuredDeclarationSet({
-      source_identity_inventory_digest: inventory.inventory_digest,
+      source_identity_inventory_digest: recordedInventoryDigest,
       declarations: values,
     }),
     source_identity_inventory: inventory,
@@ -293,6 +294,14 @@ describe("structured source declaration existence", () => {
     ]);
   });
 
+  test("lookup metadata drift does not make a still-present source item disappear", () => {
+    const values = declarations();
+    const method = values[2]!;
+    if (method.target.target_type !== "item") throw new Error("expected item target");
+    values[2] = { ...method, target: { ...method.target, signature_digest: digest("f") } };
+    expect(validate(values, digest("e")).declarations).toHaveLength(6);
+  });
+
   test("rejects missing or stale directories, files, and exact source items", () => {
     const missingDirectory = declarations();
     missingDirectory[0] = {
@@ -318,7 +327,7 @@ describe("structured source declaration existence", () => {
     if (method.target.target_type !== "item") throw new Error("expected item target");
     missingItem[2] = {
       ...method,
-      target: { ...method.target, signature_digest: digest("f") },
+      target: { ...method.target, source_fact_ref: "source-fact:missing" },
     };
     expect(() => validate(missingItem)).toThrow(/source item does not exist/);
 

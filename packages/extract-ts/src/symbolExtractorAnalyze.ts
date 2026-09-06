@@ -146,7 +146,9 @@ const analyzeLexicalDeclaration = (
       );
     }
     appendTypeRelations(relations, EdgeType.ReturnType, nameNode.text, returnType, importBindings, declarations, getLine(declarator));
-    appendTypeRelations(relations, EdgeType.OfType, nameNode.text, typeAnnotation, importBindings, declarations, getLine(declarator));
+    appendTypeRelations(relations, EdgeType.OfType, nameNode.text,
+      extractTypeAnnotation(typeNode) ?? getInitializerTypeAnnotation(initializer, { referencesOnly: true }),
+      importBindings, declarations, getLine(declarator));
   }
 };
 

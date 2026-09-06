@@ -1,5 +1,7 @@
 import {
   buildIndexerMainAuthorWorksets,
+  buildIndexerMainWorkset,
+  buildIndexerMainWorksetSet,
   canonicalIndexerInventoryMembers,
   indexerPartitionGroupBindingDigest,
   indexerPartitionGroupRef,
@@ -17,12 +19,14 @@ import {
 } from "./indexerMainSourceAdapter.js";
 import { createIndexerAuthorSourceResolver, mergeIndexerAuthorSourceBindings } from "./indexerAuthorSources.js";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
+import { currentExecutionWorksetFields, reuseCurrentIndexerRuns } from "./indexerRunContinuation.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { buildCurrentProjectIndexerAuthorRunSpec } from
   "./indexerCurrentMainRunSpec.js";
 import { materializeCurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
 import { buildProjectIndexerAuthorDependencyView } from "./indexerAuthorDependencyView.js";
+import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
 import {
   resolveProjectIndexerAuthorQuestionTargets,
   takeProjectIndexerGroupTargetView,
@@ -329,11 +333,17 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
   if (preparationByGroup.size !== preparations.length) {
     throw new TypeError("author preparation contains duplicate group identities");
   }
-  const runSpecs = await Promise.all(built.worksets.map(async (workset) => {
-    const prepared = preparationByGroup.get(groupIdentity(workset));
+  const runSpecs = await Promise.all(built.worksets.map(async (partitionWorkset) => {
+    const prepared = preparationByGroup.get(groupIdentity(partitionWorkset));
     if (prepared === undefined) {
-      throw new TypeError(`author run preparation is missing ${workset.group_key}`);
+      throw new TypeError(`author run preparation is missing ${partitionWorkset.group_key}`);
     }
+    // The accepted grouping stays intact. A newly prepared Author request uses
+    // current instructions without pretending its parent used the same bundle.
+    const workset = buildIndexerMainWorkset(currentExecutionWorksetFields({
+      workset: partitionWorkset, execution: prepared.authority.primary_execution,
+    }));
+    if (workset.stage !== "author") throw new TypeError("expected author workset");
     const selectedFactRefs = prepared.dependency_view.positive_nodes.flatMap((node) =>
       node.kind === "selected-fact" && prepared.binding.adapter === "parser-facts" &&
           prepared.binding.parser_fact_index.has(node.fact_ref)
@@ -373,9 +383,24 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       supplementary_sources: prepared.supplementary_sources,
     });
   }));
+  const currentRuns = await reuseCurrentIndexerRuns({ projectRoot: input.projectRoot, specs: runSpecs });
+  const currentWorksets = currentRuns.map((spec) => {
+    if (spec.request.workset.stage !== "author") throw new TypeError("expected author workset");
+    return spec.request.workset;
+  });
   return {
     requirement_set_digest: inventory.requirement_set_digest,
-    ...built,
-    run_specs: runSpecs,
+    obsolete_scope: summarizeIndexerObsoleteScope(currentRuns, {
+      titles: new Map(preparations.map((item) => [item.group.group_key, item.group.label])),
+      deprecated_member_ids: new Set(preparations.flatMap((item) => item.members.flatMap((member) => {
+        if (item.binding.adapter !== "parser-facts") return [];
+        const payload = item.binding.parser_fact_index.get(member.member_id)?.fact.payload;
+        return payload !== null && typeof payload === "object" && !Array.isArray(payload) && payload.deprecated === true
+          ? [member.member_id] : [];
+      }))),
+    }),
+    worksets: currentWorksets,
+    workset_set: buildIndexerMainWorksetSet(currentWorksets),
+    run_specs: currentRuns,
   };
 }

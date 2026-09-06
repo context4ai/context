@@ -76,6 +76,15 @@ config against the Bundle's closed data-only schema, binds the project-local
 customization fingerprint and requires a policy digest for executable
 resources. Missing, duplicate, stale or extra inputs fail closed.
 
+Selection validation is not an upgrade gate on an instruction-only bundled
+Provider. On resume, the CLI resolves that Provider by Skill and portable
+distribution from the current installation, checks the required capabilities,
+and refreshes instruction delivery without comparing it to the registry's
+historical version/integrity. Compatible persisted tasks keep their original
+request/result identities. The current Route revision still prevents stale
+submissions. This does not change staged program execution authorization or
+allow results to be reused across changed source, config or result contracts.
+
 The final stable report excludes transport paths, delivery timestamps and
 runtime receipt digests. Those values remain in a separate runtime receipt
 projection, so rematerializing identical content does not make the selection
@@ -374,6 +383,19 @@ only the old or new registry snapshot; it never reconstructs authority from a
 temporary Provider path.
 
 ## Controlled invocation
+
+Author result acceptance checks the actual task, source/module, subject and
+Provider layer. Provider integrity, bundle/config/customization fingerprints
+remain recorded metadata, not byte-equality gates between a resumed request and
+its result. Selected Facts are resolved by their supplied identity and source
+references; their current values are recorded without comparing a previous
+parser payload digest. Source-span line ranges may expand within the same file
+content. Structured declarations resolve actual file/item identities, not a
+previous inventory or signature fingerprint. Source file content checks,
+unknown-reference rejection and atomic write protection remain in force.
+
+These continuation rules do not relax executable program authorization or allow
+an Agent to select undeclared sources.
 
 `context.indexer.controlled-invocation/v1` binds:
 
@@ -713,12 +735,13 @@ or sufficient evidence is absent from the rendered Candidate. A required
 Section in the same state becomes the already-declared material-question
 transition and makes `review_ready` false.
 
-Before a Candidate can enter Review, Context rejects unknown directives,
-unresolved variables, template comments, example placeholders, standalone or
-bracketed `TODO`/`TBD`/`待补充`/`待生成` markers, title-only Sections and budget
-overflow. A source-backed sentence that discusses a known TODO is not treated
-as a placeholder merely because it contains that token; it remains semantic
-prose and therefore requires Agent Review. The rendered
+Context validates template-program directives, declared variable types and
+expansion limits before rendering. Supplied variable values and Section prose
+are content, not template programs: JSX, braces, comments, TODOs, headings and
+example placeholders do not cause a content-validation failure. Missing or
+invalid structured input is distinct from an author's choice of words.
+Unfilled authoring placeholders can be mentioned during the existing Agent or
+user Review, but are not an additional CLI gate. The rendered
 Section content, ordered content-layer ledger and evidence receive stable
 digests. Deterministic blocks contribute catalog completeness but never
 semantic-prose density. Later `build` projects this approved body; it does not
@@ -732,10 +755,9 @@ unit, one of its CLI-owned inventory members, or an authorized target-resolution
 identity. Missing owners, outside subjects, unknown evidence and evidence that
 is known globally but absent from the owner Section all fail Result validation.
 
-Main-run validation derives
-`context.indexer.generated-authoring-audit/v1`. It reports controlled generated
-placeholder and empty emitted-Section hard findings, proves that every emitted
-structured claim passed owner-local evidence coverage, and lists every
-semantic-prose block or direct authored template variable as
-`semantic-prose-agent-review-required`. It does not scan free prose to claim
-that unsupported natural-language assertions were mechanically detected.
+Main-run validation does not produce a prose-quality audit. Content usefulness,
+completeness and faithfulness belong to the existing Agent or user Review.
+Structured owner/source checks still run, but no keyword, punctuation, heading
+or sentence-pattern scan can reject an otherwise valid Result. Physical output
+checks distinguish a missing or blank body from an authored body; they do not
+decide whether headings, comments or short prose are sufficient knowledge.

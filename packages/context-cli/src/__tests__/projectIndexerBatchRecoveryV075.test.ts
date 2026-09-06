@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { IndexerInventoryMember } from "@c4a/context";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
+import * as reading from "../project/indexerAgentReading.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
 import {
@@ -63,6 +64,13 @@ describe("current Indexer batch recovery", () => {
     const root = await createDocumentRevisionWorkspace();
     const { current, task, result } = await currentPartitionTask(root);
     expect(current.descriptor.tasks.length).toBeGreaterThan(1);
+    // Delivery can grow after tasks start (e.g. installed instruction changes).
+    // Recovery must preserve all uncommitted ledger tasks, not repack and reject.
+    const render = reading.renderIndexerWorksetReading;
+    const renderSpy = spyOn(reading, "renderIndexerWorksetReading").mockImplementation((...args) =>
+      `${render(...args)}\n${"delivery ".repeat(33_000)}`
+    );
+    try {
     const route = await projectCurrentIndexerWorkflowRoute({
       projectRoot: root,
       route: documentRevisionOuterIndexerRoute(),
@@ -106,6 +114,41 @@ describe("current Indexer batch recovery", () => {
       candidate.workset_digest === task.descriptor.workset_digest
     )).toBe(false);
     expect(resumed?.descriptor.tasks).toHaveLength(current.descriptor.tasks.length - 1);
+    } finally {
+      renderSpy.mockRestore();
+    }
+  }, 20_000);
+
+  test("starts an over-target workset alone and prepares the next one after accepting it", async () => {
+    const root = await createDocumentRevisionWorkspace();
+    const render = reading.renderIndexerWorksetReading;
+    const renderSpy = spyOn(reading, "renderIndexerWorksetReading").mockImplementation((...args) =>
+      `${render(...args)}\n${"delivery ".repeat(33_000)}`
+    );
+    try {
+      const { current, task, result } = await currentPartitionTask(root);
+      expect(current.descriptor.tasks).toHaveLength(1);
+      expect(current.descriptor.input_bytes).toBeGreaterThan(256 * 1024);
+      const route = await projectCurrentIndexerWorkflowRoute({
+        projectRoot: root, route: documentRevisionOuterIndexerRoute(), managed: true,
+        authorities: contextWorkflowAuthorities({ managed: true }),
+      });
+      if (!route) throw new Error("missing current route");
+      const completion = await completeCurrentIndexerAction({
+        cwd: root, revision: route.revision, managed: true,
+        authorities: contextWorkflowAuthorities({ managed: true }),
+        value: { stage: "partition", results: [{ task_key: task.descriptor.task_key, result }] },
+      });
+      if (!("outcomes" in completion)) throw new Error("expected batch completion");
+      expect(completion.outcomes[0]).toMatchObject({ outcome: "accepted", committed: true });
+      expect(completion.next).not.toBeNull();
+      expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "accepted")).toHaveLength(1);
+      const next = await resolveCurrentIndexerAgentContext(root);
+      expect(next?.descriptor.tasks).toHaveLength(1);
+      expect(next?.descriptor.tasks[0]!.workset_digest).not.toBe(task.descriptor.workset_digest);
+    } finally {
+      renderSpy.mockRestore();
+    }
   }, 20_000);
 
   test("isolates duplicate, foreign, missing, and stale batch submissions", async () => {

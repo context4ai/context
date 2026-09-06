@@ -3,9 +3,7 @@ import {
   validateFinalizedIndexerRegistry,
   type PhaseDefinition,
 } from "@c4a/context";
-import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
 import type { DocumentSourceStatus } from "./statusTypes.js";
-import type { ProjectVerifyIssue } from "./verifyTypes.js";
 
 export function resolutionErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -39,32 +37,12 @@ export async function readIndexerWorkflowRegistryStatus(projectRoot: string): Pr
   }
 }
 
-export function resourcePlaceholderRepairTargets(
-  issues: readonly ProjectVerifyIssue[],
-): { sourceKeys: string[]; viewRefs: string[] } {
-  const relevant = issues.filter((issue) =>
-    issue.severity === "error" && issue.code === "approved-resource-placeholder-unresolved"
-  );
-  return {
-    sourceKeys: [...new Set(relevant.flatMap((issue) => issue.source_keys ?? []))].sort(),
-    viewRefs: [...new Set(relevant.flatMap((issue) =>
-      issue.view_ref === undefined ? [] : [issue.view_ref]
-    ))].sort(),
-  };
-}
-
 export function pendingDocumentCaptureCommands(input: {
   phases: readonly PhaseDefinition[];
   documentSources: readonly DocumentSourceStatus[];
-  recaptureSourceKeys?: readonly string[];
 }): { phaseIds: string[]; commands: string[]; missingSources: DocumentSourceStatus[] } {
-  const recaptureSourceKeys = new Set(input.recaptureSourceKeys ?? []);
   const pendingSources = input.documentSources.filter((source) =>
-    !source.snapshotReady || (
-      recaptureSourceKeys.has(`${source.type}:${source.name}`) &&
-      source.type === "lark" &&
-      source.normalizerVersion !== LARK_DOCUMENT_NORMALIZER_VERSION
-    )
+    !source.snapshotReady
   );
   const phaseIds: string[] = [];
   const missingSources: DocumentSourceStatus[] = [];

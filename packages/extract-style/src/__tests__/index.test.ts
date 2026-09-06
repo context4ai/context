@@ -3,6 +3,7 @@ import { indexerEvidenceAdapterProtocolDigest } from "@c4a/core";
 import {
   parseStyleSources,
   styleSourcesToEvidenceAdapterResult,
+  styleSourcesToEvidenceAdapterMaterialization,
   type StyleEvidenceAdapterInvocation,
 } from "../index.js";
 
@@ -50,6 +51,19 @@ function invocation(sourceFiles: Readonly<Record<string, string>> = files): Styl
 }
 
 describe("CSS and SCSS lightweight evidence", () => {
+  test("retains complete physical source extents for Author reading", () => {
+    const source = '$color: red;\n\n.theme {\n  color: $color;\n}\n';
+    const input = { "theme.scss": source };
+    const document = parseStyleSources(input)[0]!;
+    expect(document.lines).toBe(6);
+    expect(document.tokens[0]!.locator).toMatchObject({ line: 1, end_line: 1 });
+    expect(document.selectors[0]!.locator).toMatchObject({ line: 3, end_line: 5 });
+    const result = styleSourcesToEvidenceAdapterMaterialization(input, invocation(input));
+    const fact = result.result.files[0]!.facts.find((fact) => fact.kind === "source-file")!;
+    expect(result.fact_payloads.find((item) => item.fact_ref === fact.fact_ref)?.payload)
+      .toMatchObject({ lines: 6 });
+  });
+
   test("catalogs registered imports, tokens, selectors, states, variants, and component candidates", () => {
     const documents = parseStyleSources(files);
     const button = documents.find((document) => document.path === "components/Button/Button.module.scss")!;

@@ -41,6 +41,17 @@ nodes:
       required:
         - resources/views/resolved-indexer-instructions.yaml
         - resources/views/authorized-indexer-workset-view.yaml
+  - id: confirm-current-indexer-obsolete-scope
+    kind: gate
+    reasonCode: route.indexer.obsolete-scope-confirmation
+    resolutionAction: actions/resolve-current-indexer-gate.yaml
+    gate:
+      id: indexer-obsolete-scope-confirmation
+      prompt: Explain the obsolete scope page/file counts and mixed-current pages from the structure preview, then ask whether to include or exclude them. Include approves the structure; exclude requests adjustment using the supplied feedback. Explain both consequences. Explicit user choice is required even in managed mode.
+      delegatable: false
+    satisfiedBy:
+      - path: indexer_current.obsolete_scope_confirmed
+        equals: true
   - id: review-current-indexer-structure
     kind: gate
     reasonCode: route.indexer.semantic-structure-review
@@ -375,7 +386,8 @@ nodes:
     terminalOutcome: completed
 edges:
   - { from: advance-current-indexer-lifecycle, to: run-current-indexer-agent }
-  - { from: run-current-indexer-agent, to: review-current-indexer-structure }
+  - { from: run-current-indexer-agent, to: confirm-current-indexer-obsolete-scope }
+  - { from: confirm-current-indexer-obsolete-scope, to: review-current-indexer-structure, kind: gatedBy }
   - { from: review-current-indexer-structure, to: run-current-indexer-composer, kind: gatedBy }
   - { from: run-current-indexer-composer, to: resolve-current-indexer-block }
   - { from: resolve-current-indexer-block, to: confirm-current-indexer-layout, kind: gatedBy }

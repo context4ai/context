@@ -46,6 +46,7 @@ import {
   buildCurrentIndexerProviderSelectionRoute,
   completeCurrentIndexerProviderSelection,
   indexerRegistryNeedsProviderSelection,
+  IndexerProviderSelectionError,
 } from "./indexerCurrentProviderSetup.js";
 import {
   completeCurrentIndexerProviderProgramAuthorization,
@@ -65,6 +66,8 @@ import {
 } from "./indexerCurrentActionShared.js";
 import { completeCurrentIndexerPostAuthorAction } from
   "./indexerCurrentPostAuthorAction.js";
+import { prepareIndexerAuthorMaterial } from "./indexerAuthorMaterial.js";
+import { applyIndexerAuthorMaterials, type PreparedAuthorMaterial } from "./indexerAuthorMaterialStore.js";
 
 async function assertCurrentIndexerBatchRevision(input: {
   projectRoot: string;
@@ -213,6 +216,18 @@ export async function completeCurrentIndexerAction(input: {
       projectRoot: found.projectRoot,
       currentRegistry: loaded.registry,
       semantic,
+    }).catch((error: unknown) => {
+      if (!(error instanceof IndexerProviderSelectionError)) throw error;
+      throw new ContextError(error.code, error.message, {
+        ...error.detail,
+        revision_advanced: false,
+        current_revision: currentRoute.revision,
+        next_action: {
+          command: currentRoute.commands[0],
+          output_schema: currentRoute.action?.output_schema,
+          instruction: "Correct the reported selection gaps and resubmit with this revision. Do not repeat capture or Provider discovery; if no available Provider can cover a required capability, explain that gap instead of guessing.",
+        },
+      });
     });
     if (outcome === "selection-applied") {
       await advanceCurrentIndexerLifecycle(found.projectRoot);
@@ -423,6 +438,7 @@ export async function completeCurrentIndexerAction(input: {
   }
   if (semantic.stage === "author") {
     const accepted = [];
+    const materials: Array<{ task_key: string; material: PreparedAuthorMaterial }> = [];
     const outcomes: IndexerTaskCompletionOutcome[] = [];
     const keyCounts = new Map<string, number>();
     for (const submitted of semantic.results) {
@@ -456,6 +472,14 @@ export async function completeCurrentIndexerAction(input: {
           descriptor: current.descriptor,
           taskKey: submitted.task_key,
         });
+        if (parsed.data.outcome === "request-material") {
+          const material = await prepareIndexerAuthorMaterial({
+            projectRoot: found.projectRoot, spec: task.spec, group_key: parsed.data.group_key,
+            source_hints: parsed.data.material_gaps.flatMap((gap) => gap.source_hints),
+          });
+          materials.push({ task_key: submitted.task_key, material });
+          continue;
+        }
         const validation = task.spec.validation as unknown as {
           dependency_view: unknown;
           expected_subject_key: unknown;
@@ -528,6 +552,18 @@ export async function completeCurrentIndexerAction(input: {
           requestDigest: item.task.spec.request.execution_request_digest,
           semantic: item.semantic,
         });
+      }
+    }
+    if (materials.length > 0) {
+      try {
+        await applyIndexerAuthorMaterials({ projectRoot: found.projectRoot, materials: materials.map((item) => item.material) });
+        outcomes.push(...materials.map(({ task_key, material }) => ({
+          task_key, outcome: "material-expanded", committed: false,
+          message: `Added complete source bodies: ${material.paths.join(", ")}. Continue Author using the returned task and preserve your existing draft.${material.missing_paths.length ? ` Unavailable paths: ${material.missing_paths.join(", ")}.` : ""}`,
+        })));
+      } catch (error) {
+        outcomes.push(...materials.map(({ task_key }) => ({ task_key, outcome: "failed", committed: false,
+          message: error instanceof Error ? error.message : String(error) })));
       }
     }
     const continuation = await advanceAfterBatch({

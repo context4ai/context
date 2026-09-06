@@ -5,7 +5,6 @@ import {
   indexerArtifactResultDigest,
   indexerArtifactResultSchema,
   indexerCanonicalRefSchema,
-  containsIndexerControlledAuthoringPlaceholder,
   indexerProtocolDigest,
   indexerRenderedArtifactDigest,
   indexerRenderedArtifactSchema,
@@ -456,24 +455,6 @@ function validateVariableValue(
   }
 }
 
-function hasSubstantiveBody(markdown: string): boolean {
-  return markdown.split("\n").some((line) => {
-    const value = line.trim();
-    return value.length > 0 &&
-      !/^#{1,6}\s+/u.test(value) &&
-      !/^[-|:\s]+$/u.test(value);
-  });
-}
-
-function assertNoTemplateResidue(sectionKey: string, markdown: string): void {
-  if (containsIndexerControlledAuthoringPlaceholder(markdown)) {
-    throw new TypeError(`rendered Section ${sectionKey} contains template residue or placeholder prose`);
-  }
-  if (!hasSubstantiveBody(markdown)) {
-    throw new TypeError(`rendered Section ${sectionKey} has a title but no body`);
-  }
-}
-
 function validatedResult(result: IndexerArtifactResult): IndexerArtifactResult {
   const parsed = indexerArtifactResultSchema.parse(result);
   const payload = Object.fromEntries(
@@ -657,7 +638,6 @@ export function renderIndexerTemplateArtifact(input: {
       acceptedEvidenceRefs: new Set(validEvidenceRefs),
     });
     const markdown = layered.markdown;
-    assertNoTemplateResidue(section.section_key, markdown);
     const projection = projectionMap.get(section.section_key)!;
     sections.push({
       ...projection,

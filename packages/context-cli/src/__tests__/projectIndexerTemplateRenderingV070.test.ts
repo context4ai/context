@@ -538,7 +538,7 @@ describe("Indexer template materialization and rendering", () => {
     })).toThrow("material question transition");
   });
 
-  test("hard-fails unresolved directives, placeholder prose, wrong types, and expansion overflow", async () => {
+  test("rejects malformed template programs and unsafe expansion but preserves authored content", async () => {
     await expect(setup(templateSource("# {{unknown:title}}"))).rejects.toThrow(
       "unsupported directive",
     );
@@ -573,13 +573,17 @@ describe("Indexer template materialization and rendering", () => {
       applicabilityConditionRefs: CONDITIONS,
     })).toThrow("Provider/Artifact/condition identity");
 
-    expect(() => renderIndexerTemplateArtifact({
-      artifactResult: boundArtifactResult(setupValue.materialized, { summary: "TODO" }),
-      artifactId: "button-guide",
-      template: setupValue.materialized,
-      questionBindings: QUESTION_BINDINGS,
-      applicabilityConditionRefs: CONDITIONS,
-    })).toThrow("template residue");
+    for (const summary of ["TODO", "[TODO]", "style={{ opacity }}", "<!-- annotation -->", "# Summary", "{{variable:example}}"]) {
+      const rendered = renderIndexerTemplateArtifact({
+        artifactResult: boundArtifactResult(setupValue.materialized, { summary }),
+        artifactId: "button-guide",
+        template: setupValue.materialized,
+        questionBindings: QUESTION_BINDINGS,
+        applicabilityConditionRefs: CONDITIONS,
+      });
+      expect(rendered.sections[0]!.markdown).toContain(summary);
+      expect(rendered.review_ready).toBe(true);
+    }
 
     expect(renderIndexerTemplateArtifact({
       artifactResult: boundArtifactResult(setupValue.materialized, {

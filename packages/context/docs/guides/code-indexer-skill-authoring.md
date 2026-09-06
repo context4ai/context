@@ -31,6 +31,11 @@ rules, metric operators and thresholds.
 3. **Resource composition.** Combine only declared programs, profile-bound
    instructions, templates and optional detector/inspector resources. Omitted
    capabilities remain unsupported; natural language cannot add them.
+   Put any Agent-executed grouping rules in those declared instructions or
+   templates so Context delivers them with the current View. A partition
+   strategy id or digest is not an instruction resource. Context selects and
+   records strategy attempts; the Agent returns semantic groups and dispositions,
+   without discovering strategy implementations or managing fallback order.
 4. **Activation and profiles.** Declare strong/supporting/negative signals.
    Dependency names are candidates, not runtime proof. One module may combine
    one primary profile with supporting/extensions and selected composers.
@@ -113,12 +118,22 @@ rules, metric operators and thresholds.
     consumed in the bounded Author View rather than copied into every
     Partition decision.
 
-For behavioral explanations, the Author View also supplies `source-text`
-items with the authorized source lines. Each merged range links to existing
-source-span dependency nodes through `source_span_refs`; use those nodes for
-evidence bindings. These process-local snippets are reading material, not new
-Facts or reader-page metadata. Do not reopen the repository or infer behavior
-from a locator alone when the supplied lines do not establish it.
+The current Route delivers readable task material with goals and constraints
+first, followed by the authorized sources and facts. For behavioral explanations,
+read the complete source excerpts. Copy the displayed `source_items` into the
+section's `source_items`; use Fact references in `facts`, not as source items.
+Context resolves a text item's authorized source spans internally. Inventory
+identities and a repository reference do not identify section source material.
+These process-local excerpts are not new Facts or reader-page metadata. Do not
+reopen the repository or infer behavior from a locator alone when the supplied
+lines do not establish it. Batch size does not define a knowledge page boundary.
+
+Author task resources may point to one shared batch reading file. Read that path
+once, use shared material only for its listed task keys, and consider each task's
+own goals and source excerpts. Context shares identical material, not conclusions:
+prepare a separate result for each task and submit the `results[]` together through
+the current completion command. A retry includes the remaining tasks' material in
+full; no earlier batch file or additional reading command is required.
 
 ## Result and composition rules
 

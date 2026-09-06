@@ -10,10 +10,12 @@ Context reports one root diagnostic with counts and keeps derived findings in a
 separate detail view. Codes are stable machine identifiers; this document gives
 the shared recovery boundary.
 
-Content or provenance failures require a new source-bound candidate or an
-explicit evidence-maintenance decision. Projection-only failures can be
-repaired by deterministic close. A warning does not become success by being
-omitted from output.
+Broken source references or invalid stored structure require a corrected
+candidate or an explicit evidence-maintenance decision. Projection-only
+failures can be repaired by deterministic close. Content-quality suggestions,
+including suspected unfilled placeholders, are advisory: they do not change a
+successful CLI outcome or add a gate. The existing Agent or user Review decides
+whether the content needs revision.
 
 `approved-source-orphaned` is a persistent warning produced only after an
 explicit `keep-orphaned` decision. It records that the page remains usable by

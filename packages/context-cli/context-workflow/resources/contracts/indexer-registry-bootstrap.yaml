@@ -1,0 +1,6 @@
+schema: agent-graph.resource.file.v1
+id: context.indexer.registry-bootstrap
+kind: schema
+mediaType: application/schema+json
+path: schemas/indexer-registry-bootstrap.schema.json
+description: Initial src/indexers.yaml requirements before Provider selection; not an Action Result.

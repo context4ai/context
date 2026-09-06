@@ -201,7 +201,7 @@ describe("CLI bundled Indexer release validation", () => {
     })).toThrow(/must use its own canonical template/);
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("rejects Markdown editorial fixture drift before release materialization", async () => {
+  test("does not rescore authored Markdown examples with content heuristics", async () => {
     const root = await createTemporaryRoot("context-cli-editorial-invalid-");
     const sourceRoot = join(root, "skills");
     await cp(resolve(PACKAGE_ROOT, "../..", "plugins/context/skills"), sourceRoot, {
@@ -222,8 +222,8 @@ describe("CLI bundled Indexer release validation", () => {
     await expect(materializeBundledIndexerDistribution({
       packageRoot: PACKAGE_ROOT,
       sourceRoot,
-      outputRoot: join(root, "invalid-editorial-output"),
-    })).rejects.toThrow(/drifted from runtime signal/);
+      outputRoot: join(root, "editorial-output"),
+    })).resolves.toBeDefined();
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects Markdown migration-equivalence authority drift before release", async () => {

@@ -484,6 +484,9 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
       sources.push(await buildProjectIndexerAuthorSourceText({
         projectRoot: input.projectRoot, request, indexer_id: request.workset.indexer_id,
         registry: input.registry, binding, dependency_view: dependencyView,
+        ...(input.author_inventory_members === undefined ? {} : {
+          author_member_ids: input.author_inventory_members.map((member) => member.member_id),
+        }),
       }));
     }
     if (dependencyView !== null && input.supplementary !== true) {

@@ -9,10 +9,6 @@ import {
   type IndexerArtifactDependencySet,
 } from "./indexerArtifactDependencies.js";
 import {
-  buildIndexerGeneratedAuthoringAudit,
-  type IndexerGeneratedAuthoringAudit,
-} from "./indexerGeneratedAuthoringAudit.js";
-import {
   indexerLayerCompositionInputSchema,
   validateIndexerLayerCompositionInput,
 } from "./indexerLayerComposition.js";
@@ -200,7 +196,6 @@ export function validateIndexerMainRunResult(input: {
   request: IndexerMainRunRequest;
   result: IndexerMainRunResult;
   operation_result: IndexerPartitionPlan | IndexerArtifactResult;
-  authoring_audit: IndexerGeneratedAuthoringAudit | null;
   artifact_dependency_set: IndexerArtifactDependencySet | null;
   run_envelope: IndexerRunEnvelope;
 } {
@@ -216,7 +211,6 @@ export function validateIndexerMainRunResult(input: {
     throw new TypeError("main run Result does not match its request/stage/input view");
   }
   let operationResult: IndexerPartitionPlan | IndexerArtifactResult;
-  let authoringAudit: IndexerGeneratedAuthoringAudit | null = null;
   let artifactDependencySet: IndexerArtifactDependencySet | null = null;
   const runEnvelope = buildIndexerRunEnvelope({
     workset: request.workset,
@@ -287,7 +281,6 @@ export function validateIndexerMainRunResult(input: {
     if (operationResult.source_role !== request.run_environment.source_role) {
       throw new TypeError("author Result source role does not match the run environment");
     }
-    authoringAudit = buildIndexerGeneratedAuthoringAudit(operationResult);
     artifactDependencySet = buildIndexerArtifactDependencySet({
       result: operationResult,
       workset: request.workset as IndexerMainAuthorWorkset,
@@ -308,7 +301,6 @@ export function validateIndexerMainRunResult(input: {
     request,
     result,
     operation_result: operationResult,
-    authoring_audit: authoringAudit,
     artifact_dependency_set: artifactDependencySet,
     run_envelope: runEnvelope,
   };

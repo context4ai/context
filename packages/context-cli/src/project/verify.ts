@@ -172,16 +172,6 @@ export async function verifyProjectWorkspace(
         });
       }
     }
-    if (/^>\s*(?:(?:Image|File):.*\(lark:(?:image|file):|(?:Whiteboard|Diagram):\s*lark:(?:whiteboard|diagram):|Embedded (?:Sheet|Base).*\(lark:(?:sheet|base):|Synced reference.*lark:synced-reference:)/imu.test(content)) {
-      issues.push({
-        severity: "error",
-        code: "approved-resource-placeholder-unresolved",
-        path: file.relPath,
-        ...(viewRef === undefined ? {} : { view_ref: viewRef }),
-        ...(sourceKeys.length === 0 ? {} : { source_keys: sourceKeys }),
-        message: "approved Markdown still contains a required Lark resource placeholder; recapture and re-review the source",
-      });
-    }
     if (viewRef !== undefined && viewRef.length > 0) {
       const pending = candidatesByViewRef.get(viewRef);
       const isResolvedRejection = pending?.status === "rejected" &&

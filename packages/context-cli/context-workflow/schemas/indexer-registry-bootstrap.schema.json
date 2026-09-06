@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "context.indexer.registry/v1",
+  "title": "Initial Indexer registry before Provider selection",
+  "description": "The requirements-only src/indexers.yaml configuration. This is not an Action Result. The Provider selection Route supplies indexers after this file is configured. Runtime validation also checks duplicate ids, source boundaries and contract references.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "requirements", "indexers"],
+  "properties": {
+    "protocol": { "const": "context.indexer.registry/v1" },
+    "requirements": { "$ref": "#/$defs/requirements" },
+    "indexers": { "type": "array", "maxItems": 0 }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/-]*$",
+      "description": "Slash-separated segments cannot be empty or equal to '.' or '..'."
+    },
+    "ref": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#-]*$"
+    },
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ref"],
+      "properties": {
+        "source_ref": { "$ref": "#/$defs/ref" },
+        "module_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ref" },
+          "uniqueItems": true,
+          "default": [],
+          "description": "Omit to cover the full registered source boundary. Use only known module references to narrow it."
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targets"],
+      "properties": {
+        "targets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/target" } }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "authority", "contract_version", "contract_digest"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "ref", "digest"],
+          "properties": {
+            "kind": { "enum": ["cli-base-contract", "verified-contract-overlay"] },
+            "ref": { "$ref": "#/$defs/ref" },
+            "digest": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "contract_version": { "type": "integer", "minimum": 1 },
+        "contract_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scope", "reason"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reader_goals", "coverage_domains", "target_scope", "evidence_source_scope"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "reader_goals": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "coverage_domains": {
+          "type": "object", "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/id" },
+          "additionalProperties": { "enum": ["required", "optional", "out-of-scope"] }
+        },
+        "target_scope": { "$ref": "#/$defs/scope" },
+        "evidence_source_scope": { "$ref": "#/$defs/scope" },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/question" } },
+        "exclusions": { "type": "array", "items": { "$ref": "#/$defs/exclusion" } }
+      }
+    },
+    "requirements": {
+      "type": "array", "minItems": 1,
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "requirementSet": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "requirements"],
+      "properties": {
+        "protocol": { "const": "context.indexer.requirement-set/v1" },
+        "requirements": { "$ref": "#/$defs/requirements" }
+      }
+    }
+  }
+}

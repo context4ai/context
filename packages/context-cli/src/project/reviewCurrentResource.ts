@@ -37,7 +37,7 @@ const SEMANTIC_REVIEW_CHECKLIST = [
   "For code knowledge, verify an external consumer can find the responsibility, public entry or interface, important constraints, and the next owning module without reading an internal symbol dump.",
   "Verify behavior and ownership claims are attributed to the module that actually implements or guarantees them; supporting tests, styles, examples, and helpers must not be presented as independent public contracts.",
   "For document knowledge, preserve the useful rules, conditions, examples, compatibility notes, and uncertainty needed by the stated reader task.",
-  "Reject placeholder prose, unexpanded template instructions, generic directory summaries, and pages that only point the reader back to source material.",
+  "Consider unfilled authoring placeholders and missing explanations as review hints, not automatic rejection reasons. Judge the reader's actual need; placeholder features, TODO documentation, JSX, template syntax and comments can be legitimate knowledge. Context does not scan prose to determine content quality.",
 ] as const;
 
 function candidateOrder(

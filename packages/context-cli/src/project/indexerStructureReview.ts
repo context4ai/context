@@ -22,7 +22,6 @@ import {
   INDEXER_MAIN_RUN_STORE_ROOT,
   prepareIndexerMainRunStore,
   readAcceptedIndexerMainPartitionResultRecords,
-  startIndexerMainRunStore,
 } from "./indexerMainRunStore.js";
 import {
   currentLedger,
@@ -33,6 +32,8 @@ import type { ProjectIndexerTargetResolutionViewBinding } from
 import { convergeIndexerPartitionSubjects } from
   "./indexerPartitionSubjectConvergence.js";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
+import { prepareAndStartNextIndexerBatch } from "./indexerCurrentBatch.js";
+import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
 
 const STRUCTURE_ROOT = join(".tmp", "context-runtime", "indexer", "structure-review");
 const DECISION_PATH = join(STRUCTURE_ROOT, "current.json");
@@ -69,6 +70,7 @@ export interface IndexerSemanticStructurePreview {
   }>;
   excluded: Array<{ item: string; reason_code: string }>;
   unsupported: Array<{ item: string; missing_capabilities: string[] }>;
+  obsolete_scope?: ReturnType<typeof summarizeIndexerObsoleteScope>;
   preview_digest: string;
 }
 
@@ -213,6 +215,7 @@ export async function prepareCurrentIndexerStructurePlan(
   }));
   const payload = {
     protocol: "context.indexer.semantic-structure-preview/v1" as const,
+    obsolete_scope: prepared.author.obsolete_scope,
     topics: converged.partitions.flatMap((partition) => {
       const plan = partition.plan as IndexerPartitionPlan;
       return plan.status === "complete" ? plan.groups.map((group) => {
@@ -486,10 +489,7 @@ export async function completeCurrentIndexerStructureReview(input: {
       entry.stage === "author" && (entry.state === "pending" || entry.state === "stale")
     );
     if (first !== undefined) {
-      await startIndexerMainRunStore({
-        projectRoot: input.projectRoot,
-        workset_digest: first.workset_digest,
-      });
+      await prepareAndStartNextIndexerBatch(input.projectRoot);
     }
     return "author";
   }

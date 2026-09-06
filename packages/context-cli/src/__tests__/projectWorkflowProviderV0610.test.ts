@@ -259,7 +259,9 @@ describe("Context workflow Provider", () => {
       },
     });
     expect(snapshot.route?.resources.required.map((resource) => resource.id))
-      .toEqual(["skill.context-run-indexer-lifecycle"]);
+      .toEqual(expect.arrayContaining([
+        "skill.context-run-indexer-lifecycle", "context.source-boundary", "context.indexer.registry-bootstrap",
+      ]));
     expect(snapshot.route?.action?.output_schema).toBeUndefined();
   });
 

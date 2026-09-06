@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   canonicalIndexerJson,
+  indexerAuthorSemanticInputSchema,
   type IndexerInventoryMember,
 } from "@c4a/context";
 import { beginDocumentRevision } from "../project/documentRevision.js";
@@ -195,9 +196,11 @@ async function completeAuthorStage(
           ? "reuse-existing" as const
           : "create-independent" as const,
       })),
-      title: `Fixture ${workset.group_key}`,
-      summary: "A focused guide to the fixture's public entry point.",
-      sections: [{
+      ...(catalogOnly ? {} : {
+        title: `Fixture ${workset.group_key}`,
+        summary: "A focused guide to the fixture's public entry point.",
+      }),
+      sections: catalogOnly ? [] : [{
         key: "overview",
         heading: "Overview",
         markdown: [
@@ -205,7 +208,7 @@ async function completeAuthorStage(
           options.revisionSuffix,
         ].filter((value): value is string => value !== undefined).join("\n\n"),
         source_items: [source.evidence_ref],
-        facts: catalogOnly ? [catalogFact.ref] : [],
+        facts: [],
         answers: validation.allowed_question_targets.map((target) =>
           target.question_target_key
         ),
@@ -218,14 +221,30 @@ async function completeAuthorStage(
       material_gaps: [],
       diagnostics: [],
       };
-      runs.push({
-        workset_digest: workset.workset_digest,
-        result: buildIndexerAuthorRunResultFromSemantic({
+      const result = buildIndexerAuthorRunResultFromSemantic({
           request: task.spec.request,
           view: task.view,
-          semantic,
+          semantic: indexerAuthorSemanticInputSchema.parse(semantic),
           validation,
-        }),
+        });
+      if (catalogOnly) {
+        const output = result.result.result;
+        if (output.protocol !== "context.indexer.artifact-result/v1") throw new Error("expected Artifact Result");
+        expect(output.artifacts).toEqual([]);
+        for (const disposition of output.inventory_dispositions.dispositions) {
+          if (disposition.inventory_disposition !== "owned" || disposition.projection_disposition !== "catalog-only") {
+            throw new Error("expected catalog-only disposition");
+          }
+          expect(disposition.fact_refs.length).toBeGreaterThan(0);
+          for (const ref of disposition.fact_refs) {
+            expect(task.view.items.some((item) => item.ref === ref &&
+              (ref === disposition.member_id || item.provenance.container_ref === disposition.member_id))).toBe(true);
+          }
+        }
+      }
+      runs.push({
+        workset_digest: workset.workset_digest,
+        result,
       });
     }
     await acceptIndexerMainAuthorRunsStore({

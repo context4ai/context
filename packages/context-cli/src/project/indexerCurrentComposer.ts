@@ -385,6 +385,7 @@ async function materializeComposerBatch(input: {
 async function selectComposerBatch(input: {
   projectRoot: string;
   contexts: readonly CurrentIndexerComposerContext[];
+  resume?: boolean;
 }) {
   const first = input.contexts[0];
   if (first === undefined) return undefined;
@@ -409,23 +410,15 @@ async function selectComposerBatch(input: {
       inputBytes + cost.input_bytes <= policy.max_input_bytes &&
       outputBytes + cost.output_reserve_bytes <= policy.max_output_reserve_bytes &&
       viewItems + cost.view_item_count <= policy.max_view_items;
-    if (selected.length > 0 && !fits) break;
+    if (!input.resume && selected.length > 0 && !fits) break;
     selected.push(context);
     inputBytes += cost.input_bytes;
     outputBytes += cost.output_reserve_bytes;
     viewItems += cost.view_item_count;
-    if (!fits) break;
+    if (!input.resume && !fits) break;
   }
-  if (
-    selected.length === 1 &&
-    (inputBytes > policy.max_input_bytes ||
-      outputBytes > policy.max_output_reserve_bytes ||
-      viewItems > policy.max_view_items)
-  ) {
-    throw new TypeError(
-      `current Composer workset exceeds ${INDEXER_BATCH_POLICY_VERSION} without a semantic split`,
-    );
-  }
+  // The first task runs alone when it exceeds packing targets. Existing running
+  // tasks retain their ledger identity even if delivery costs have changed.
   return { contexts: selected, instruction: firstInstruction };
 }
 
@@ -457,6 +450,7 @@ export async function resolveCurrentIndexerComposerBatch(
     const selectedRunning = await selectComposerBatch({
       projectRoot,
       contexts: alreadyRunning,
+      resume: true,
     });
     if (
       selectedRunning === undefined ||
@@ -523,7 +517,7 @@ export async function readCurrentIndexerComposerBatch(
     });
     if (current !== undefined) running.push(current);
   }
-  const selected = await selectComposerBatch({ projectRoot, contexts: running });
+  const selected = await selectComposerBatch({ projectRoot, contexts: running, resume: true });
   if (selected === undefined) return undefined;
   if (selected.contexts.length !== running.length) {
     throw new TypeError("running Composer tasks do not form one authorized batch");

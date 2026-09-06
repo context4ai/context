@@ -411,7 +411,7 @@
           "source_anchors": ["Edge Gate", "relation type is in the current closed set", "relation is stronger than a vague", "source sentence states the relation with uncertainty"],
           "disposition": "rewrite-equivalent",
           "authority": "community-instructions",
-          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerGeneratedAuthoringAudit.ts"],
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerStructuredClaims.ts"],
           "target_anchors": ["Relation and structured-claim gate", "vague “related” mention", "structured claim"],
           "preserves": ["applicability", "positive-example", "negative-example", "gate-semantics", "recovery-guidance"]
         },
@@ -420,7 +420,7 @@
           "source_anchors": ["Inference Sources", "inferred-from-span", "Each source must include `rationale`"],
           "disposition": "rewrite-equivalent",
           "authority": "community-instructions",
-          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerGeneratedAuthoringAudit.ts"],
+          "targets": ["plugins/context/skills/context-markdown-indexer/references/semantic-planning.md", "packages/context/src/indexerStructuredClaims.ts"],
           "target_anchors": ["cited evidence in that same Section", "evidence_refs"],
           "preserves": ["applicability", "gate-semantics"]
         },
@@ -526,7 +526,7 @@
           "disposition": "merge-into",
           "authority": "context-revision",
           "targets": ["packages/context-cli/src/project/documentOptimization.ts", "plugins/context/skills/context-markdown-indexer/references/editorial-policy.md"],
-          "target_anchors": ["stale", "analyzeDocumentEditorialSignals", "Section-specific"],
+          "target_anchors": ["stale", "no CLI post-revision prose rescan", "Section-specific"],
           "preserves": ["gate-semantics", "recovery-guidance"]
         },
         {
