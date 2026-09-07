@@ -124,6 +124,7 @@ export interface ContextWorkflowObservation {
     diagnostic?: string;
   };
   indexerCandidateCompile: {
+    delivery_pending?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };
 }

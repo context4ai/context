@@ -1,3 +1,5 @@
+import { prepareIndexerDelivery, previewIndexerDelivery, resetIndexerDeliveryProjection } from "./indexerDelivery.js";
+import { resolveCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import {
   INDEXER_CATALOG_FALLBACK_STRATEGY_ID,
 } from "@c4a/context";
@@ -78,6 +80,7 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
   let ledger = await currentLedger(projectRoot);
   let advanced = false;
   if (ledger === undefined || await hasChangedIndexerWorksetAuthority(projectRoot, ledger)) {
+    await resetIndexerDeliveryProjection(projectRoot);
     ledger = await preparePartitionStage(projectRoot);
     advanced = true;
   }
@@ -90,6 +93,18 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
   }
   if (ledger.entries.some((entry) => entry.state === "running")) {
     return { advanced, state: "agent-required" };
+  }
+  if (ledger.entries.some((entry) => entry.stage === "author" && entry.state === "accepted")) {
+    const delivery = await previewIndexerDelivery(projectRoot);
+    if (delivery !== undefined && await resolveCurrentIndexerComposerBatch(projectRoot,
+      new Set(delivery.current.map((page) => page.workset_digest)))) {
+      return { advanced: true, state: "agent-required" };
+    }
+    if (await prepareIndexerDelivery(projectRoot)) {
+      const finalization = await advanceCurrentIndexerFinalization(projectRoot);
+      return { advanced: true, state: finalization?.state === "ready" ? "complete"
+        : finalization?.state === "composer-required" ? "agent-required" : "gate-required" };
+    }
   }
   const next = ledger.entries.find((entry) =>
     entry.state === "pending" || entry.state === "stale"

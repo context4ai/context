@@ -1,3 +1,4 @@
+import type { IndexerPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerMainRunRequest,
   buildIndexerRunEnvironment,
@@ -289,6 +290,10 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
     request,
     validation: {
       stage: "partition",
+      available_artifact_intents: authority.profile.layout_mappings.flatMap((mapping) =>
+        mapping.artifact_kinds.map((kind) => [request.run_environment.source_role, mapping.document_kind, mapping.reader_goal, kind].join("/"))
+      ),
+      available_templates: (authority.manifest.provider.templates ?? []).filter((template) => template.profile === authority.profile.id),
       canonical_inventory_members: canonicalInventory,
       authorized_source_refs: [workset.source_ref],
       authorized_strategies: strategies,
@@ -317,6 +322,15 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   }[];
   enrichment?: CurrentIndexerExtensionFacts;
   supplementary_sources?: readonly AuthorSupplementarySource[];
+  page_template?: IndexerPageTemplate | undefined;
+  page_plan?: {
+    reader_task?: string;
+    outline?: string[];
+    artifact_intent?: string;
+    template_id?: string;
+    priority?: number;
+    delivery_boundary?: boolean;
+  };
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
   if (workset.stage !== "author") {
@@ -411,6 +425,9 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     request,
     validation: {
       stage: "author",
+      ...(input.page_template === undefined ? {} : { page_template: input.page_template }),
+      ...(input.page_plan === undefined ? {} : { page_plan: input.page_plan }),
+      available_templates: (input.authority.manifest.provider.templates ?? []).filter((template) => template.profile === input.authority.profile.id),
       dependency_view: dependencyView,
       canonical_inventory_members: canonicalInventory,
       expected_subject_key: input.expected_subject_key,

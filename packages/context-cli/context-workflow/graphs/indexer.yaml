@@ -41,6 +41,9 @@ nodes:
       required:
         - resources/views/resolved-indexer-instructions.yaml
         - resources/views/authorized-indexer-workset-view.yaml
+      recommended:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
   - id: confirm-current-indexer-obsolete-scope
     kind: gate
     reasonCode: route.indexer.obsolete-scope-confirmation
@@ -102,6 +105,10 @@ nodes:
     kind: action
     reasonCode: route.indexer.provider-configuration
     action: actions/configure-indexer-providers.yaml
+    resources:
+      recommended:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
   - id: resolve-current-indexer-provider
     kind: action
     reasonCode: route.indexer.provider-host-resolution-required
@@ -250,6 +257,9 @@ nodes:
       required:
         - resources/views/resolved-indexer-instructions.yaml
         - resources/views/authorized-indexer-workset-view.yaml
+      recommended:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
   - id: propose-overlay-question-amendment
     kind: action
     reasonCode: route.indexer.overlay-question-proposal

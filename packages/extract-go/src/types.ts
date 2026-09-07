@@ -22,6 +22,9 @@ export interface GoSymbol {
   receiver?: string;
   exported: boolean;
   signature: string;
+  fields?: Array<{ name: string; type: string; tag?: string; embedded: boolean; location: GoSourceLocation }>;
+  parameters?: Array<{ name: string; type: string; optional: boolean; rest: boolean }>;
+  results?: Array<{ name: string; type: string }>;
   doc?: string;
   location: GoSourceLocation;
 }

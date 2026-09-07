@@ -90,7 +90,7 @@ describe("managed Review batching", () => {
       const result = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
       expect(result.batch_count).toBe(2);
       const index = await readFile(result.path, "utf8");
-      expect(index).toContain("external consumer");
+      expect(index).toContain("bound reader purpose");
       expect(index).toContain("actually implements or guarantees");
       expect(index).toContain("reuse the review of unchanged pages");
       expect(index).toContain("no per-batch read receipts");

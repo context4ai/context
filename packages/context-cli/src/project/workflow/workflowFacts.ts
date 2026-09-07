@@ -118,7 +118,7 @@ export function createContextWorkflowFacts(
     indexerRegistryCoversSources(observation) &&
     (
       observation.indexerCandidateCompile.state === "current" ||
-      observation.close.state === "ready"
+      (observation.close.state === "ready" && !observation.indexerCandidateCompile.delivery_pending)
     )
   );
   const evidenceClear = evidenceMaintenanceClear(observation);

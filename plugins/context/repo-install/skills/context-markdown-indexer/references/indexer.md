@@ -2,6 +2,18 @@
 
 Classify and author at the source-backed Section level using only the current Authorized Workset View. A document profile describes reader intent; it is not an output directory. Mixed documents may contain Sections with different reader goals, but every Section must retain one stable subject, owner, source authority, and projection intent.
 
+Keep the requirement's `purpose` and open `reader_goals` visible in Partition,
+Author and Review. Select a supported page intent and template for that reader's
+task, save the outline and delivery boundary, and reuse those choices on retry.
+A how-to guide, FAQ and design explanation retain their distinct purposes;
+shared code evidence does not turn every document into a maintenance audit.
+If the purpose is already clear, do not ask it again because a field is absent.
+Managed execution does not authorize deciding a truly ambiguous purpose.
+
+Context delivers an initial readable sample and subsequent page batches through
+the current Review, close and build routes. Continue the remaining accepted plan
+after each build; preserve already delivered pages and source-grounded prose.
+
 Use `classification.md` as the semantic source for `document_kind`, `reader_goal`, and current `artifact_kind` selection. Use `structure-and-artifacts.md` for mixed-document routing, Section-versus-Artifact promotion, density, duplicate/conflict handling, and target candidate resolution. The CLI-supplied profile contract remains the only authority for collection and path projection.
 
 Use `semantic-planning.md` for evidence authority, SubjectKey/target-resolution
@@ -22,7 +34,7 @@ source-backed. It is a display title for outline and final Candidate Review,
 not a SubjectKey, ownership signal, or identity fallback. Later Sections in the
 same Artifact must not add another level-one heading.
 
-When current source material cannot answer a required canonical question, return the exact material-question disposition for the supplied target. A later run may consume newly captured Markdown as ordinary source and update the same knowledge candidate. Context owns layout, collection mapping, runtime material-gap state, quality thresholds, the single final content Review, and close.
+When current source material cannot answer a required canonical question, return the exact material-question disposition for the supplied target. A later run may consume newly captured Markdown as ordinary source and update the same knowledge candidate. Context owns layout, collection mapping, runtime material-gap state, each delivery's content Review, and close.
 
 Return only the current `main-index` `IndexerResult`/`ArtifactResult` contract. Context derives the source dependencies needed for stale detection and recovery from that result. Do not emit a separate answer body, answer-only result, future Artifact/Section landing, or post-layout actualization.
 

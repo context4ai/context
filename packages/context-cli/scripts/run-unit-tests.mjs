@@ -31,7 +31,8 @@ function selectedTest(name) {
 }
 
 async function runChunk(files, index, total, forwardedArgs) {
-  process.stdout.write(`Context CLI unit-test chunk ${index}/${total} (${files.length} files)\n`);
+  const started = performance.now();
+  process.stdout.write(`Context CLI test chunk ${index}/${total} (${files.length} files)\n`);
   await new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [
       "test",
@@ -44,6 +45,10 @@ async function runChunk(files, index, total, forwardedArgs) {
     });
     child.once("error", reject);
     child.once("exit", (code, signal) => {
+      process.stdout.write(
+        `Context CLI test chunk ${index}/${total}: ${(performance.now() - started).toFixed(0)}ms` +
+        ` · exit ${String(code)}${signal === null ? "" : ` · signal ${signal}`}\n`,
+      );
       if (code === 0) {
         resolve();
         return;

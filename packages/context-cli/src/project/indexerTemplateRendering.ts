@@ -175,7 +175,7 @@ async function readTemplateSource(input: {
   return source;
 }
 
-function splitFrontmatter(source: string): { metadata: unknown; body: string } {
+export function splitFrontmatter(source: string): { metadata: unknown; body: string } {
   const normalized = source.replaceAll("\r\n", "\n");
   if (!normalized.startsWith("---\n")) {
     throw new TypeError("Indexer template must start with YAML frontmatter");
@@ -194,7 +194,7 @@ function splitFrontmatter(source: string): { metadata: unknown; body: string } {
   return { metadata: document.toJS({ maxAliasCount: 0 }), body: normalized.slice(end + 5) };
 }
 
-function parseSectionBodies(body: string): Record<string, string> {
+export function parseSectionBodies(body: string): Record<string, string> {
   const sections: Record<string, string> = {};
   const outside: string[] = [];
   let current: { key: string; lines: string[] } | undefined;
@@ -224,7 +224,7 @@ function parseSectionBodies(body: string): Record<string, string> {
   return sections;
 }
 
-function validateTemplateBody(
+export function validateTemplateBody(
   contract: IndexerTemplateContract,
   sectionBodies: Readonly<Record<string, string>>,
 ): void {

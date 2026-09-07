@@ -1,10 +1,11 @@
+import { thriftFields, type ThriftField } from "./thriftFields.js";
 import { posix } from "node:path";
 import { lexThrift, ThriftSyntaxError, type ThriftToken } from "./thriftLexer.js";
 
 export interface ThriftLocator { path: string; line: number; column: number }
 export interface ThriftImport { path: string; resolved_path: string; locator: ThriftLocator }
-export interface ThriftType { kind: "typedef" | "enum" | "struct" | "union" | "exception"; name: string; locator: ThriftLocator }
-export interface ThriftMethod { name: string; return_type: string; oneway: boolean; locator: ThriftLocator }
+export interface ThriftType { kind: "typedef" | "enum" | "struct" | "union" | "exception"; name: string; fields?: ThriftField[]; locator: ThriftLocator }
+export interface ThriftMethod { name: string; return_type: string; oneway: boolean; fields?: ThriftField[]; throws?: ThriftField[]; locator: ThriftLocator }
 export interface ThriftService { name: string; extends: string | null; methods: ThriftMethod[]; locator: ThriftLocator }
 export interface ThriftAnnotation { owner: string; name: string; locator: ThriftLocator }
 export interface ThriftDocument {
@@ -103,11 +104,14 @@ function parseMethods(path: string, serviceName: string, tokens: readonly Thrift
       name: nameToken.value,
       return_type: tokenText(returnTokens),
       oneway,
+      fields: thriftFields(tokens.slice(open + 1, matching(tokens, open, "(", ")"))),
       locator: { path, line: nameToken.line, column: nameToken.column },
     });
     index = matching(tokens, open, "(", ")") + 1;
     if (tokens[index]?.value === "throws" && tokens[index + 1]?.value === "(") {
-      index = matching(tokens, index + 1, "(", ")") + 1;
+      const end = matching(tokens, index + 1, "(", ")");
+      methods.at(-1)!.throws = thriftFields(tokens.slice(index + 2, end));
+      index = end + 1;
     }
     if (tokens[index]?.value === "(") {
       const parsed = parseAnnotationGroup(`service:${serviceName}:method:${nameToken.value}`, path, tokens, index);
@@ -169,7 +173,8 @@ export function parseThriftSources(files: Readonly<Record<string, string>>): Thr
           if (name?.kind !== "identifier") throw new ThriftSyntaxError(`${token.value} name is missing`, token.line, token.column);
           const open = tokens.findIndex((candidate, candidateIndex) => candidateIndex > index && candidate.value === "{");
           if (open < 0) throw new ThriftSyntaxError(`${token.value} body is missing`, token.line, token.column);
-          document.types.push({ kind: token.value as ThriftType["kind"], name: name.value, locator: { path, line: name.line, column: name.column } });
+          document.types.push({ kind: token.value as ThriftType["kind"], name: name.value,
+            fields: thriftFields(tokens.slice(open + 1, matching(tokens, open, "{", "}"))), locator: { path, line: name.line, column: name.column } });
           index = matching(tokens, open, "{", "}") + 1;
           if (tokens[index]?.value === "(") {
             const parsed = parseAnnotationGroup(`type:${name.value}`, path, tokens, index);

@@ -97,6 +97,7 @@ export interface ProjectStatus {
     state: "missing" | "pending" | "current" | "invalid";
   };
   indexerCandidateCompile: {
+    delivery_pending?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };
   indexerProgress?: IndexerCurrentProgress;

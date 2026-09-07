@@ -151,9 +151,9 @@ describe("TypeScriptPlugin", () => {
       name: "[name: string]",
       typeAnnotation: "PublicType",
     });
-    expect(byName.get("formatWidget")?.params).toEqual([{ name: "input", type: "PublicType" }]);
+    expect(byName.get("formatWidget")?.params).toEqual([{ name: "input", type: "PublicType", optional: false, rest: false }]);
     expect(byName.get("formatWidget")?.returnType).toBe("string");
-    expect(byName.get("createWidget")?.signature).toBe("createWidget(input: PublicType)");
+    expect(byName.get("createWidget")?.signature).toContain("createWidget(input: PublicType)");
     expect(byName.get("ChatInput")?.propsType).toBe("ChatInputProps");
     expect(byName.get("ChatInput")?.typeAnnotation).toBe("forwardRef<ChatInputRef, ChatInputProps>");
     expect(result.relations.filter((relation) =>

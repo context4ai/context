@@ -521,12 +521,12 @@ async function readAcceptedMainResultRecordsUnlocked(
   if (ledger.entries.some((entry) => entry.stage !== stage)) {
     throw new TypeError(`current main run ledger is not the ${stage} stage`);
   }
-  if (ledger.entries.some((entry) => entry.state !== "accepted")) {
+  if (stage === "partition" && ledger.entries.some((entry) => entry.state !== "accepted")) {
     throw new TypeError(`main ${stage} results require every run to be accepted`);
   }
   return reuseCommandFileRead({
     key: `accepted-main-results:${stage}`,
-    paths: [INDEXER_MAIN_RUN_CURRENT_PATH, ...ledger.entries.flatMap((entry) => [
+    paths: [INDEXER_MAIN_RUN_CURRENT_PATH, ...ledger.entries.filter((entry) => entry.state === "accepted").flatMap((entry) => [
       runSpecPath(entry.execution_request_digest), acceptedCachePath(entry.execution_request_digest),
     ])].map((path) => join(projectRoot, path)),
     read: async () => {

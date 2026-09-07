@@ -1,13 +1,21 @@
+import {
+  approveCandidates,
+  completeAuthorStage,
+  completePartitionStage,
+} from "./projectDocumentRevisionStages.fixture.js";
+import { materializeCurrentReviewBatchSet } from "../project/reviewCurrentResource.js";
+import { readIndexerDelivery } from "../project/indexerDelivery.js";
+import { INDEXER_CURRENT_FINALIZATION_PATH, readCurrentIndexerFinalization } from "../project/indexerCurrentFinalization.js";
+import { readCurrentIndexerComposerBatch } from "../project/indexerCurrentComposer.js";
+import { closeProjectWorkspace } from "../project/close.js";
+import { buildProjectPackages } from "../project/packageBuilder.js";
+import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { afterEach, describe, expect, test } from "bun:test";
-import {
-  canonicalIndexerJson,
-  indexerAuthorSemanticInputSchema,
-  type IndexerInventoryMember,
-} from "@c4a/context";
+import type { IndexerInventoryMember } from "@c4a/context";
 import { beginDocumentRevision } from "../project/documentRevision.js";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
@@ -17,18 +25,10 @@ import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecyc
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { projectCurrentIndexerWorkflowRoute } from
   "../project/indexerCurrentWorkflowRoute.js";
-import { buildIndexerPartitionRunResultFromSemantic } from
-  "../project/indexerSemanticPartitionResult.js";
-import { buildIndexerAuthorRunResultFromSemantic } from
-  "../project/indexerSemanticAuthorResult.js";
 import { currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";
 import { readProjectIndexerCandidateCompileStatus } from "../project/indexerCandidateCompileActions.js";
 import { matchesAcceptedCompileResults } from "../project/indexerCandidateCompileFreshness.js";
 import { postAuthorCurrentStatePath } from "../project/indexerPostAuthorStorePersistence.js";
-import {
-  acceptIndexerMainAuthorRunsStore,
-  acceptIndexerMainPartitionRunsStore,
-} from "../project/indexerMainRunStore.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import {
   currentIndexerStructureReview,
@@ -43,7 +43,7 @@ import {
 const DOCUMENT_REVISION_TEST_TIMEOUT_MS = 60_000;
 const temporaryRoots: string[] = [];
 
-async function workspace(options: { debug?: boolean } = {}): Promise<string> {
+async function workspace(options: { debug?: boolean; sourceCount?: number; purpose?: string } = {}): Promise<string> {
   const root = await createDocumentRevisionWorkspace(options);
   temporaryRoots.push(root);
   return root;
@@ -55,211 +55,114 @@ afterEach(async () => {
   ));
 });
 
-async function completePartitionStage(root: string): Promise<void> {
-  await advanceCurrentIndexerLifecycle(root);
-  while (true) {
-    const current = await resolveCurrentIndexerAgentContext(root);
-    if (current === undefined || current.descriptor.stage !== "partition") return;
-    const runs = [];
-    for (const descriptor of current.descriptor.tasks) {
-      const task = await loadCurrentIndexerBatchTask({
-        projectRoot: root,
-        descriptor: current.descriptor,
-        taskKey: descriptor.task_key,
-      });
-      const workset = task.spec.request.workset;
-      if (workset.stage !== "partition") throw new Error("expected Partition task");
-      const validation = task.spec.validation as {
-        canonical_inventory_members: IndexerInventoryMember[];
-        authorized_source_refs: string[];
-        subject_key_contract: unknown;
-        required_question_target_refs?: string[];
-      };
-      const suffix = workset.workset_digest.slice(-8);
-      const semantic = {
-        stage: "partition" as const,
-        outcome: "complete" as const,
-        groups: [{
-          key: `fixture-${suffix}`,
-          title: `Fixture ${suffix}`,
-          reader_task: "Understand the public fixture capability.",
-          subject: {
-            namespace: workset.partition_subject_key.namespace,
-            kind: workset.partition_subject_key.kind,
-            local_key: `fixture-${suffix}`,
-          },
-          subject_intent: "primary" as const,
-          members: validation.canonical_inventory_members.map((member) => member.member_id),
-          questions: [...workset.reader_question_refs],
-          question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
-            target,
-            role: "primary-carrier" as const,
-          })),
-          outline: ["Overview"],
-        }],
-        excluded: [],
-        unsupported: [],
-      };
-      runs.push({
-        workset_digest: workset.workset_digest,
-        semantic,
-        execution_request_digest: task.spec.request.execution_request_digest,
-        result: buildIndexerPartitionRunResultFromSemantic({
-          request: task.spec.request,
-          view: task.view,
-          semantic,
-          validation: { ...validation, partition_unit_type: "semantic-subject" },
-        }),
-      });
-    }
-    const converged = await acceptIndexerMainPartitionRunsStore({
-      projectRoot: root,
-      runs,
-    });
-    expect(converged.outcomes.every((outcome) => outcome.outcome === "accepted")).toBe(true);
-    for (const run of runs) {
-      const semanticPath = join(
-        root,
-        ".tmp/context-runtime/indexer/semantic-results",
-        `${run.execution_request_digest.slice("sha256:".length)}.json`,
-      );
-      await mkdir(join(semanticPath, ".."), { recursive: true });
-      await writeFile(semanticPath, canonicalIndexerJson(run.semantic));
-    }
-    await advanceCurrentIndexerLifecycle(root);
-  }
-}
-
-async function completeAuthorStage(
-  root: string,
-  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string } = {},
-): Promise<{ catalogOnlyCount: number }> {
-  let catalogOnlyCount = 0;
-  while (true) {
-    const current = await resolveCurrentIndexerAgentContext(root);
-    if (current === undefined || current.descriptor.stage !== "author") {
-      return { catalogOnlyCount };
-    }
-    const runs = [];
-    for (const descriptor of current.descriptor.tasks) {
-      const task = await loadCurrentIndexerBatchTask({
-        projectRoot: root,
-        descriptor: current.descriptor,
-        taskKey: descriptor.task_key,
-      });
-      const workset = task.spec.request.workset;
-      if (workset.stage !== "author") throw new Error("expected Author task");
-      const validation = task.spec.validation as {
-      dependency_view: {
-        positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
-      };
-      expected_subject_key: unknown;
-      artifact_policy_eligibility: {
-        eligible_variants: Array<{ id: string }>;
-      };
-      allowed_source_roles: string[];
-      allowed_artifact_intents: Array<{
-        source_role: string;
-        document_kind: string;
-        reader_goal: string;
-        artifact_kind: string;
-      }>;
-      canonical_inventory_members: IndexerInventoryMember[];
-      allowed_question_targets: Array<{
-        question_target_key: string;
-        question_ref: string;
-      }>;
-      };
-      const source = validation.dependency_view.positive_nodes.find((node) =>
-        node.kind === "source-span" && node.evidence_ref !== undefined
-      );
-      if (source?.evidence_ref === undefined) throw new Error("fixture Author has no source span");
-      const intent = validation.allowed_artifact_intents[0];
-      const policy = validation.artifact_policy_eligibility.eligible_variants[0];
-      if (intent === undefined || policy === undefined) throw new Error("fixture Author has no output policy");
-      const catalogFact = task.view.items.find((item) =>
-        item.category === "fact"
-      );
-      const catalogOnly = options.catalogOnlyFirst === true &&
-        catalogOnlyCount === 0 && catalogFact !== undefined;
-      if (catalogOnly) catalogOnlyCount++;
-      const semantic = {
-      stage: "author" as const,
-      group_key: workset.group_key,
-      outcome: catalogOnly ? "catalog-only" as const : "publish" as const,
-      artifact_intent: [
-        intent.source_role,
-        intent.document_kind,
-        intent.reader_goal,
-        intent.artifact_kind,
-      ].join("/"),
-      policy: policy.id,
-      target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
-        target: entry.query_ref,
-        disposition: entry.state === "resolved"
-          ? "reuse-existing" as const
-          : "create-independent" as const,
-      })),
-      ...(catalogOnly ? {} : {
-        title: `Fixture ${workset.group_key}`,
-        summary: "A focused guide to the fixture's public entry point.",
-      }),
-      sections: catalogOnly ? [] : [{
-        key: "overview",
-        heading: "Overview",
-        markdown: [
-          "Use the exported answer constant as the public entry point.",
-          options.revisionSuffix,
-        ].filter((value): value is string => value !== undefined).join("\n\n"),
-        source_items: [source.evidence_ref],
-        facts: [],
-        answers: validation.allowed_question_targets.map((target) =>
-          target.question_target_key
-        ),
-      }],
-      member_dispositions: validation.canonical_inventory_members.map((member) => ({
-        item: member.member_id,
-        state: catalogOnly ? "catalog-only" as const : "covered" as const,
-        ...(catalogOnly ? {} : { section: "overview" }),
-      })),
-      material_gaps: [],
-      diagnostics: [],
-      };
-      const result = buildIndexerAuthorRunResultFromSemantic({
-          request: task.spec.request,
-          view: task.view,
-          semantic: indexerAuthorSemanticInputSchema.parse(semantic),
-          validation,
-        });
-      if (catalogOnly) {
-        const output = result.result.result;
-        if (output.protocol !== "context.indexer.artifact-result/v1") throw new Error("expected Artifact Result");
-        expect(output.artifacts).toEqual([]);
-        for (const disposition of output.inventory_dispositions.dispositions) {
-          if (disposition.inventory_disposition !== "owned" || disposition.projection_disposition !== "catalog-only") {
-            throw new Error("expected catalog-only disposition");
-          }
-          expect(disposition.fact_refs.length).toBeGreaterThan(0);
-          for (const ref of disposition.fact_refs) {
-            expect(task.view.items.some((item) => item.ref === ref &&
-              (ref === disposition.member_id || item.provenance.container_ref === disposition.member_id))).toBe(true);
-          }
-        }
-      }
-      runs.push({
-        workset_digest: workset.workset_digest,
-        result,
-      });
-    }
-    await acceptIndexerMainAuthorRunsStore({
-      projectRoot: root,
-      runs,
-    });
-    await advanceCurrentIndexerLifecycle(root);
-  }
-}
-
 describe("current Indexer document revision", () => {
+  test("a delivery Composer starts with its matching route state while Author peers remain pending", async () => {
+    const root = await workspace({ sourceCount: 8 });
+    const path = join(root, "src/indexers.yaml");
+    const registry = YAML.parse(await readFile(path, "utf8"));
+    registry.indexers[0].profile.composers = [{ id: "public-contract", provider: "community" }];
+    await writeFile(path, YAML.stringify(registry));
+    await completePartitionStage(root, true);
+    const structure = await currentIndexerStructureReview(root);
+    if (structure === undefined) throw new Error("missing structure review");
+    await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
+      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }) });
+    await completeAuthorStage(root);
+    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending")).toBe(true);
+    const composer = await readCurrentIndexerComposerBatch(root);
+    expect(composer).toBeDefined();
+    // Exercise the actual next route, including its exact batch/state guard.
+    const route = await projectCurrentIndexerWorkflowRoute({ projectRoot: root,
+      route: outerIndexerRoute(), managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }) });
+    expect(route?.action?.input).toMatchObject({ stage: "post-author" });
+    expect(await readCurrentIndexerFinalization(root)).toMatchObject({
+      state: "composer-required", revision: composer!.batch_digest,
+    });
+    // A workspace produced by the old startup path must recover without restarting tasks.
+    await rm(join(root, INDEXER_CURRENT_FINALIZATION_PATH));
+    await advanceCurrentIndexerLifecycle(root);
+    expect((await readCurrentIndexerComposerBatch(root))?.batch_digest).toBe(composer!.batch_digest);
+    expect(await readCurrentIndexerFinalization(root)).toMatchObject({
+      state: "composer-required", revision: composer!.batch_digest,
+    });
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
+
+  test("delivers a small readable batch while Author peers remain pending, then resumes after build", async () => {
+    const root = await workspace({ sourceCount: 8, purpose: "Help a developer integrate the public constants." });
+    await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
+      join(root, "src/package-templates/kb"), { recursive: true });
+    const entryPath = join(root, "src/index.ts");
+    const entry = await readFile(entryPath, "utf8");
+    await writeFile(entryPath, entry.replace("defineProject, source", "defineProject, kbPackage, source")
+      .replace("packages: []", 'packages: [kbPackage({ name: "delivery-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
+    await completePartitionStage(root, true);
+    const structure = await currentIndexerStructureReview(root);
+    if (structure === undefined) throw new Error("missing structure review");
+    await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
+      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }) });
+    const future = (await currentLedger(root))!.entries.find((entry) => entry.state === "pending")!;
+    const futureSpec = await currentSpec({ projectRoot: root, request_digest: future.execution_request_digest });
+    const futureSubject = futureSpec.validation.expected_subject_key as { local_key: string };
+    const relatedPage = `./${futureSubject.local_key}.md`;
+    await completeAuthorStage(root, { relatedPage });
+    const before = await currentLedger(root);
+    expect(before?.entries.some((entry) => entry.state === "pending")).toBe(true);
+    const candidates = await readCandidateRecords(root);
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.length).toBeLessThanOrEqual(3);
+    expect(candidates[0]?.body).toContain("## API");
+    expect(candidates[0]?.body).toContain("export entry");
+    expect(candidates[0]?.body).toContain("Related API");
+    expect(candidates[0]?.body).not.toContain(`[Related API](${relatedPage})`);
+    const review = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates: candidates.map((record) => {
+      if (record.candidate_type !== "indexer-artifact") throw new Error("unexpected candidate kind");
+      return { record, snapshot: undefined };
+    }) });
+    expect(await readFile(review.path, "utf8")).toContain("Help a developer integrate the public constants.");
+    await approveCandidates(root, candidates);
+    await closeProjectWorkspace(root);
+    expect(await currentLedger(root)).toEqual(before);
+    expect((await readIndexerDelivery(root))?.closed).toBe(true);
+    // Invalid package configuration must not consume the active batch.
+    const configured = await readFile(entryPath, "utf8");
+    await writeFile(entryPath, configured.replace("src/package-templates/kb", "src/missing-template"));
+    await expect(buildProjectPackages(root)).rejects.toThrow();
+    expect((await readIndexerDelivery(root))?.current).toHaveLength(candidates.length);
+    await writeFile(entryPath, configured);
+    await acceptStarterPackageTemplates({ projectRoot: root });
+    const built = await buildProjectPackages(root);
+    expect(built.packages[0]?.files).toBeGreaterThan(0);
+    expect(await currentLedger(root)).toEqual(before);
+    expect((await readIndexerDelivery(root))?.current).toEqual([]);
+    for (const candidate of candidates) expect(await readFile(join(root, "knowledge", candidate.path), "utf8")).toContain("#");
+    await advanceCurrentIndexerLifecycle(root);
+    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "running")).toBe(true);
+    await completeAuthorStage(root, { relatedPage });
+    const tail = await readCandidateRecords(root);
+    expect(tail.length).toBeGreaterThan(0);
+    expect(tail.some((page) => candidates.some((first) => first.path === page.path))).toBe(false);
+    await approveCandidates(root, tail);
+    await closeProjectWorkspace(root);
+    expect(await currentLedger(root)).not.toBeUndefined();
+    await buildProjectPackages(root);
+    expect(await currentLedger(root)).not.toBeUndefined();
+    await advanceCurrentIndexerLifecycle(root);
+    const relinked = await readCandidateRecords(root);
+    expect(relinked.map((page) => page.path)).toEqual(candidates.map((page) => page.path));
+    expect(relinked[0]?.body).toContain(`[Related API](${relatedPage})`);
+    await approveCandidates(root, relinked);
+    await closeProjectWorkspace(root);
+    await buildProjectPackages(root);
+    expect(await currentLedger(root)).toBeUndefined();
+    expect(await readIndexerDelivery(root)).toBeUndefined();
+    for (const candidate of [...candidates, ...tail]) {
+      expect(await readFile(join(root, "knowledge", candidate.path), "utf8")).toContain("## API");
+    }
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
+
   test("rebuilds the current batch descriptor without restarting accepted work", async () => {
     const root = await workspace({ debug: true });
     await advanceCurrentIndexerLifecycle(root);
@@ -459,14 +362,14 @@ describe("current Indexer document revision", () => {
     expect(status.state).toBe("current");
     const bindings = status.compile!.result_bindings;
     const ledger = await currentLedger(root);
-    expect(matchesAcceptedCompileResults(ledger, [...bindings].reverse())).toBe(true);
-    expect(matchesAcceptedCompileResults(ledger, bindings.slice(1))).toBe(false);
-    expect(matchesAcceptedCompileResults(ledger, [...bindings, bindings[0]!])).toBe(false);
+    expect(matchesAcceptedCompileResults(ledger, [...bindings].reverse(), true)).toBe(true);
+    expect(matchesAcceptedCompileResults(ledger, bindings.slice(1), true)).toBe(false);
+    expect(matchesAcceptedCompileResults(ledger, [...bindings, bindings[0]!], true)).toBe(false);
     for (const field of ["acceptance_digest", "indexer_result_digest", "workset_digest", "indexer_id"] as const) {
       const changed = bindings.map((binding, index) => index === 0
         ? { ...binding, [field]: "changed" }
         : binding);
-      expect(matchesAcceptedCompileResults(ledger, changed)).toBe(false);
+      expect(matchesAcceptedCompileResults(ledger, changed, true)).toBe(false);
     }
     const readEvents = (await readFile(eventPath, "utf8")).slice(previousEvents)
       .trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {

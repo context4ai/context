@@ -25,6 +25,8 @@ import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } fr
 import { readingItems, readingObjects } from "./indexerReading.fixture.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
 import { LIFECYCLE_ROOT } from "../project/lifecyclePaths.js";
+import { readIndexerDelivery } from "../project/indexerDelivery.js";
+import { readCandidateRecords } from "../project/candidateLedger.js";
 
 const packageRoot = resolve(import.meta.dir, "../..");
 const roots: string[] = [];
@@ -294,9 +296,10 @@ describe("installed Provider upgrades preserve useful work", () => {
       if (managed) {
         expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "accepted")).toHaveLength(1);
         const next = await resolveCurrentIndexerAgentContext(root);
-        expect(next?.descriptor.stage).toBe("author");
-        expect(next?.descriptor.tasks).toHaveLength(1);
-        expect(next?.descriptor.tasks[0]!.workset_digest).not.toBe(context.descriptor.tasks[0]!.workset_digest);
+        expect(next).toBeUndefined();
+        expect((await readIndexerDelivery(root))?.current).toHaveLength(1);
+        expect(await readCandidateRecords(root)).toHaveLength(1);
+        expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "pending")).toHaveLength(1);
       }
       expect(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).toBe(sourcesBefore);
       expect((YAML.parse(await readFile(registryPath, "utf8")) as IndexerRegistry).indexers[0]!.providers[0]!.integrity)

@@ -16,7 +16,7 @@ import {
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { packageNavigation } from "./packageNavigation.js";
 import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
-import { projectPackageKnowledgeMarkdown } from "./packageKnowledgeProjection.js";
+import { cachedPackageKnowledgeMarkdown } from "./packageRenderCache.js";
 import {
   projectPackageKnowledgeAssets,
   type PackageAssetFile,
@@ -160,7 +160,8 @@ export async function packageKnowledgeBundle(
     const distPath = packageKnowledgeOutputPath(pkg, file.relPath);
     const lines = [`# ${distPath}`, ""];
     if (file.relPath !== distPath) lines.push(`<!-- approved_path: ${file.relPath} -->`, "");
-    lines.push(projectPackageKnowledgeMarkdown(content).trim());
+    lines.push((await cachedPackageKnowledgeMarkdown({ projectRoot,
+      key: `${pkg.name}/bundle/${file.relPath}`, content })).trim());
     return lines.join("\n");
   }));
   return projected.join("\n\n---\n\n");
@@ -266,7 +267,9 @@ export async function writeSelectedPackageKnowledge(input: {
       return undefined;
     });
     await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, projectPackageKnowledgeMarkdown(rewritten), "utf8");
+    const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
+      key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: rewritten });
+    await writeFile(outputPath, markdown, "utf8");
   }
   const deliveredAssets = new Map(delivered.assets.map((asset) => [asset.packageRelPath, asset]));
   for (const asset of deliveredAssets.values()) {

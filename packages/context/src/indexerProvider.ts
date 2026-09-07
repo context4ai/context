@@ -266,6 +266,7 @@ const instructionResourceSchema = z.object({
 });
 
 const templateResourceSchema = z.object({
+  kind: z.enum(["procedure", "page-program"]).optional(),
   id: indexerIdSchema,
   profile: indexerIdSchema,
   path: portableIndexerPathSchema,

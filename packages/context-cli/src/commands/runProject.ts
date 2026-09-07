@@ -93,6 +93,7 @@ function projectPhaseRunInput(input: {
     cwd: input.cwd,
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
+    ...(input.options.deliver === true ? { deliver: true } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
     ...(input.managed ? { managed: true } : {}),
     ...(input.workflowRevision === undefined
@@ -193,6 +194,7 @@ export function registerProjectRunCommand(
     .command("run [phase-id]")
     .description("Inspect or run a declared project phase")
     .option("--list", "list declared phases")
+    .option("--deliver", "request an early page delivery after current Author work finishes")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
@@ -208,6 +210,9 @@ export function registerProjectRunCommand(
       phaseId: string | undefined,
       options: Record<string, unknown>,
     ) => {
+      if (options.deliver === true && (phaseId !== undefined || options.until !== undefined || options.list === true)) {
+        throw new ContextError(ExitCode.UserError, "--deliver applies to the current Indexer lifecycle; use context run --deliver.");
+      }
       const format = projectRunFormat(options.format);
       const rootOptions = program.opts() as Record<string, unknown>;
       const managed = options.managed === true ||

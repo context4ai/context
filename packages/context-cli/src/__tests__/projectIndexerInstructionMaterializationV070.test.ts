@@ -738,6 +738,7 @@ describe("resolved-indexer-instructions materialization", () => {
         digest: worksetViewHost.managed_output.digest,
       },
     });
+    await writeFile(join(root, "ready-instructions.json"), JSON.stringify(instructionHost.materialized));
     const initial = await buildIndexerAgentStepRoute({
       run_requests: [runRequest],
       instruction_request: input.request,
@@ -766,9 +767,11 @@ describe("resolved-indexer-instructions materialization", () => {
     );
     expect(instructions).toMatchObject({
       read_state: "read-required",
-      path: join(root, "ready-instructions.json"),
-      digest: instructionHost.materialized.payload_digest,
+      media_type: "text/markdown",
     });
+    const reading = await readFile(instructions!.path!, "utf8");
+    expect(reading).toContain("#");
+    expect(instructions?.digest).toBe(`sha256:${createHash("sha256").update(reading).digest("hex")}`);
     expect(instructions?.command).toBeUndefined();
     expect(instructions?.materialize).toBeUndefined();
     expect(JSON.stringify(initial.route)).not.toContain("__runtime__");
@@ -778,8 +781,7 @@ describe("resolved-indexer-instructions materialization", () => {
       resource.id === "authorized-indexer-workset-view/task-001"
     )).toMatchObject({
       read_state: "read-required",
-      path: worksetViewHost.managed_output.file_path,
-      digest: worksetView.request.payload_digest,
+      media_type: "text/markdown",
     });
     expect(initial.route.resources.required.some((resource) =>
       resource.command?.includes("resource materialize") === true

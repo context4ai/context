@@ -1,3 +1,5 @@
+import { readIndexerDelivery, recordIndexerDeliveryLinks } from "./indexerDelivery.js";
+import { createDeliveryLinkProjection } from "./indexerDeliveryLinks.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -8,6 +10,7 @@ import {
   indexerArtifactResultSchema,
   indexerProtocolDigest,
   loadIndexerRegistry,
+  validateIndexerLayoutProposalSet,
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
 import {
@@ -187,6 +190,7 @@ function renderedByResult(value: unknown): Map<string, unknown[]> {
 }
 
 export function buildProjectIndexerCandidateCompileFromRecords(input: {
+  markdown_projection?: Parameters<typeof buildIndexerCandidateCompile>[0]["markdown_projection"];
   value: unknown;
   records: readonly AcceptedAuthorRecord[];
   operator_contract: unknown;
@@ -219,6 +223,7 @@ export function buildProjectIndexerCandidateCompileFromRecords(input: {
     throw new TypeError("Candidate compile contains rendered output for an unaccepted Result");
   }
   return buildIndexerCandidateCompile({
+    markdown_projection: input.markdown_projection,
     layout_proposal_set: value.layout_proposal_set,
     layout_transition: value.layout_transition,
     layout_change_confirmations: array(
@@ -566,18 +571,33 @@ export async function compileProjectIndexerCandidates(input: {
     COMPILE_TRANSACTION,
     async () => {
       await recoverDurableMultiFileTransactions(input.projectRoot);
-      const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+      const delivery = await readIndexerDelivery(input.projectRoot);
+      const allRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+      const currentRecords = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
+        (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
       const authority = await currentContractAuthority({
         projectRoot: input.projectRoot,
         records: currentRecords,
       });
       const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
+      const layout = validateIndexerLayoutProposalSet(record(input.value, "Candidate compile input").layout_proposal_set);
+      const currentPaths = new Set(layout.proposals.flatMap((proposal) => proposal.artifacts.map((artifact) => artifact.output_path)));
+      const links = delivery?.current.length ? createDeliveryLinkProjection(input.projectRoot, currentPaths) : undefined;
       const compile = buildProjectIndexerCandidateCompileFromRecords({
         value: input.value,
         records,
         operator_contract: authority.operator_contract,
         profile_contract: authority.profile_contract,
+        markdown_projection: links?.project,
       });
+      if (delivery?.current.length) {
+        const expected = new Set(delivery.current.map((page) => page.ref));
+        const actual = new Set(compile.files.map((file) => file.artifact_ref));
+        if (expected.size !== actual.size || [...expected].some((ref) => !actual.has(ref))) {
+          throw new TypeError("Candidate compile must contain exactly the active delivery pages");
+        }
+      }
+      if (links !== undefined) await recordIndexerDeliveryLinks(input.projectRoot, links.targets, currentPaths);
       const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
       const candidates = await projectIndexerCandidates({
         projectRoot: input.projectRoot,

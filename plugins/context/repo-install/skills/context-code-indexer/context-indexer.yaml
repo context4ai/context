@@ -1,6 +1,6 @@
 protocol: context.indexer.provider/v1
 id: context-code-indexer
-version: 1.1.2
+version: 1.2.0
 domains: [code]
 
 activation:
@@ -203,8 +203,48 @@ provider:
     - { id: adapter-integration, profile: adapter-integration, path: templates/adapter-integration.md }
     - { id: contract-source, profile: contract-source, path: templates/contract-source.md }
     - { id: derived-generated-source, profile: derived-generated-source, path: templates/derived-generated-source.md }
+    - { id: monorepo-container-usage-guide, profile: monorepo-container, path: templates/monorepo-container-usage-guide.md, kind: page-program }
+    - { id: monorepo-container-maintenance-guide, profile: monorepo-container, path: templates/monorepo-container-maintenance-guide.md, kind: page-program }
+    - { id: component-library-usage-guide, profile: component-library, path: templates/component-library-usage-guide.md, kind: page-program }
+    - { id: component-library-public-api-reference, profile: component-library, path: templates/component-library-public-api-reference.md, kind: page-program }
+    - { id: component-library-maintenance-guide, profile: component-library, path: templates/component-library-maintenance-guide.md, kind: page-program }
+    - { id: sdk-library-usage-guide, profile: sdk-library, path: templates/sdk-library-usage-guide.md, kind: page-program }
+    - { id: sdk-library-public-api-reference, profile: sdk-library, path: templates/sdk-library-public-api-reference.md, kind: page-program }
+    - { id: sdk-library-maintenance-guide, profile: sdk-library, path: templates/sdk-library-maintenance-guide.md, kind: page-program }
+    - { id: web-application-page-task-guide, profile: web-application, path: templates/web-application-page-task-guide.md, kind: page-program }
+    - { id: web-application-federation-guide, profile: web-application, path: templates/web-application-federation-guide.md, kind: page-program }
+    - { id: web-application-maintenance-guide, profile: web-application, path: templates/web-application-maintenance-guide.md, kind: page-program }
+    - { id: cli-tool-usage-guide, profile: cli-tool, path: templates/cli-tool-usage-guide.md, kind: page-program }
+    - { id: cli-tool-public-api-reference, profile: cli-tool, path: templates/cli-tool-public-api-reference.md, kind: page-program }
+    - { id: cli-tool-maintenance-guide, profile: cli-tool, path: templates/cli-tool-maintenance-guide.md, kind: page-program }
+    - { id: plugin-extension-usage-guide, profile: plugin-extension, path: templates/plugin-extension-usage-guide.md, kind: page-program }
+    - { id: plugin-extension-public-api-reference, profile: plugin-extension, path: templates/plugin-extension-public-api-reference.md, kind: page-program }
+    - { id: plugin-extension-maintenance-guide, profile: plugin-extension, path: templates/plugin-extension-maintenance-guide.md, kind: page-program }
+    - { id: api-service-public-api-reference, profile: api-service, path: templates/api-service-public-api-reference.md, kind: page-program }
+    - { id: api-service-maintenance-guide, profile: api-service, path: templates/api-service-maintenance-guide.md, kind: page-program }
+    - { id: gateway-facade-public-api-reference, profile: gateway-facade, path: templates/gateway-facade-public-api-reference.md, kind: page-program }
+    - { id: gateway-facade-request-adaptation-guide, profile: gateway-facade, path: templates/gateway-facade-request-adaptation-guide.md, kind: page-program }
+    - { id: gateway-facade-maintenance-guide, profile: gateway-facade, path: templates/gateway-facade-maintenance-guide.md, kind: page-program }
+    - { id: domain-service-public-api-reference, profile: domain-service, path: templates/domain-service-public-api-reference.md, kind: page-program }
+    - { id: domain-service-maintenance-guide, profile: domain-service, path: templates/domain-service-maintenance-guide.md, kind: page-program }
+    - { id: background-runtime-task-runtime-guide, profile: background-runtime, path: templates/background-runtime-task-runtime-guide.md, kind: page-program }
+    - { id: background-runtime-maintenance-guide, profile: background-runtime, path: templates/background-runtime-maintenance-guide.md, kind: page-program }
+    - { id: event-consumer-task-runtime-guide, profile: event-consumer, path: templates/event-consumer-task-runtime-guide.md, kind: page-program }
+    - { id: event-consumer-maintenance-guide, profile: event-consumer, path: templates/event-consumer-maintenance-guide.md, kind: page-program }
+    - { id: data-sync-reconciliation-task-runtime-guide, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation-task-runtime-guide.md, kind: page-program }
+    - { id: data-sync-reconciliation-maintenance-guide, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation-maintenance-guide.md, kind: page-program }
+    - { id: storage-repository-public-api-reference, profile: storage-repository, path: templates/storage-repository-public-api-reference.md, kind: page-program }
+    - { id: storage-repository-maintenance-guide, profile: storage-repository, path: templates/storage-repository-maintenance-guide.md, kind: page-program }
+    - { id: adapter-integration-usage-guide, profile: adapter-integration, path: templates/adapter-integration-usage-guide.md, kind: page-program }
+    - { id: adapter-integration-request-adaptation-guide, profile: adapter-integration, path: templates/adapter-integration-request-adaptation-guide.md, kind: page-program }
+    - { id: adapter-integration-maintenance-guide, profile: adapter-integration, path: templates/adapter-integration-maintenance-guide.md, kind: page-program }
+    - { id: contract-source-public-api-reference, profile: contract-source, path: templates/contract-source-public-api-reference.md, kind: page-program }
+    - { id: contract-source-usage-guide, profile: contract-source, path: templates/contract-source-usage-guide.md, kind: page-program }
+    - { id: derived-generated-source-public-api-reference, profile: derived-generated-source, path: templates/derived-generated-source-public-api-reference.md, kind: page-program }
+    - { id: derived-generated-source-usage-guide, profile: derived-generated-source, path: templates/derived-generated-source-usage-guide.md, kind: page-program }
   forbidden_fallbacks: [one-page-per-symbol, ordinal-batch-pages, inferred-runtime-chain]
   completion_checks: [inventory-disposition-closure, subject-owner-closure, source-coverage]
+
 
 customization:
   supports: [config, instructions-append, template-override, program-extend]

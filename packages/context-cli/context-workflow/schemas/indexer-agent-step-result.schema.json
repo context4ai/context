@@ -582,6 +582,21 @@
                               "type": "string",
                               "minLength": 1
                             },
+                            "artifact_intent": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "template_id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "priority": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "delivery_boundary": {
+                              "type": "boolean"
+                            },
                             "subject": {
                               "anyOf": [
                                 {
@@ -879,6 +894,12 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "template_variables": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "policy": {
                         "type": "string",
                         "minLength": 1
@@ -1085,6 +1106,9 @@
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
                       },
+                      "template_variables": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
                       },
@@ -1140,6 +1164,9 @@
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
                       },
+                      "template_variables": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
                       },
@@ -1188,6 +1215,9 @@
                       },
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
+                      },
+                      "template_variables": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
                       },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"

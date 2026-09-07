@@ -62,9 +62,9 @@ function validateProposalDigest(value: unknown): IndexerLayoutProposal {
         artifact.split_of_artifact_ref === null ||
         artifact.split_boundary === null ||
         artifact.split_of_artifact_ref === artifact.artifact_ref ||
-        parent === undefined ||
-        parent.purpose === "semantic-split" ||
-        parent.artifact_kind !== artifact.artifact_kind ||
+        (parent === undefined && proposal.delivery_artifact_ids === undefined) ||
+        (parent !== undefined && (parent.purpose === "semantic-split" ||
+          parent.artifact_kind !== artifact.artifact_kind)) ||
         compareIndexerCanonicalText(
           artifact.split_boundary.start_key,
           artifact.split_boundary.end_key,

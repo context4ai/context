@@ -342,11 +342,15 @@ export async function prepareAndStartNextIndexerBatch(
   const policy = indexerBatchStagePolicy(pending[0]!.stage);
   const candidateLimit = pending[0]!.stage === "author" ? policy.max_tasks * 3 : policy.max_tasks;
   const specs: MainRunSpec[] = [];
-  for (const entry of pending) {
-    const spec = await currentSpec({
-      projectRoot,
-      request_digest: entry.execution_request_digest,
-    });
+  const pendingSpecs = await Promise.all((pending[0]!.stage === "author" ? pending : [])
+    .map((entry) => currentSpec({ projectRoot, request_digest: entry.execution_request_digest })));
+  const priority = (spec: MainRunSpec): number => {
+    const plan = spec.validation.page_plan as { priority?: number } | undefined;
+    return plan?.priority ?? Number.MAX_SAFE_INTEGER;
+  };
+  pendingSpecs.sort((left, right) => priority(left) - priority(right));
+  for (const [index, entry] of pending.entries()) {
+    const spec = pendingSpecs[index] ?? await currentSpec({ projectRoot, request_digest: entry.execution_request_digest });
     if (
       specs.length > 0 &&
       (spec.request.workset.stage !== specs[0]!.request.workset.stage ||

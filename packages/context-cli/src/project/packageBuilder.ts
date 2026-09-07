@@ -1,3 +1,5 @@
+import { withStagedPackageOutput } from "./packageBuildStage.js";
+import { completeIndexerDelivery } from "./indexerDelivery.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -102,7 +104,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v19-current-indexer";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v20-incremental-delivery";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -485,6 +487,19 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       templateFiles,
     });
     const previousManifest = await readPackageManifest(projectRoot, pkg);
+    if (previousManifest?.builderProtocol === PACKAGE_BUILDER_PROTOCOL_VERSION &&
+        previousManifest.fingerprint === fingerprint && previousManifest.assetDelivery !== undefined) {
+      const existingOutput = await packageOutputFingerprint(projectRoot, pkg);
+      if (existingOutput.fingerprint === previousManifest.outputFingerprint) {
+        summaries.push({ name: pkg.name, kind: packageKind(pkg), outDir: pkg.outDir,
+          inputs: selected.length, files: existingOutput.files, state: "unchanged",
+          changes: { added: [], updated: [], removed: [] }, resources: {
+            files: previousManifest.assetDelivery.outputFiles, bytes: previousManifest.assetDelivery.outputBytes,
+            delivery: previousManifest.assetDelivery,
+          } });
+        continue;
+      }
+    }
     const knowledgeGroups = knowledgeOutputGroups(pkg, selected);
     const previousOutput = await packageOutputSnapshot(
       projectRoot,
@@ -512,40 +527,40 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       files: selected,
       ...(assetProcessor === undefined ? {} : { assetProcessor }),
     });
-    await rm(join(projectRoot, pkg.outDir), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-    await mkdir(join(projectRoot, pkg.outDir), { recursive: true });
-    const rendered = await writeRenderedPackageTemplate({
-      projectRoot,
-      pkg,
-      files: templateFiles,
-      bundle,
-      knowledgeTimestamp,
-      selected,
-      buildInventory,
-      knowledgeStructure: structure.parsed,
+    const writtenKnowledge = await withStagedPackageOutput(projectRoot, pkg, async (stagedPkg) => {
+      const rendered = await writeRenderedPackageTemplate({
+        projectRoot,
+        pkg: stagedPkg,
+        files: templateFiles,
+        bundle,
+        knowledgeTimestamp,
+        selected,
+        buildInventory,
+        knowledgeStructure: structure.parsed,
+      });
+      const writtenKnowledge = await writeSelectedPackageKnowledge({
+        projectRoot,
+        pkg: stagedPkg,
+        files: selected,
+        ...(assetProcessor === undefined ? {} : { assetProcessor }),
+        prepared: preparedKnowledge,
+      });
+      await writeKnowledgeDirectoryIndexes({
+        projectRoot,
+        pkg: stagedPkg,
+        selected,
+        knowledgeTimestamp,
+      });
+      await writePackageBuildInventory({ projectRoot, pkg: stagedPkg, inventory: buildInventory });
+      await appendLlmsKnowledge({
+        projectRoot,
+        pkg: stagedPkg,
+        bundle,
+        knowledgeCount: selected.length,
+        templateConsumesKnowledge: rendered.consumesKnowledge,
+      });
+      return writtenKnowledge;
     });
-    const writtenKnowledge = await writeSelectedPackageKnowledge({
-      projectRoot,
-      pkg,
-      files: selected,
-      ...(assetProcessor === undefined ? {} : { assetProcessor }),
-      prepared: preparedKnowledge,
-    });
-    await writeKnowledgeDirectoryIndexes({
-      projectRoot,
-      pkg,
-      selected,
-      knowledgeTimestamp,
-    });
-    await writePackageBuildInventory({ projectRoot, pkg, inventory: buildInventory });
-    await appendLlmsKnowledge({
-      projectRoot,
-      pkg,
-      bundle,
-      knowledgeCount: selected.length,
-      templateConsumesKnowledge: rendered.consumesKnowledge,
-    });
-    await validatePackageIndexLinks({ projectRoot, pkg });
     const output = await packageOutputFingerprint(projectRoot, pkg);
     const currentOutput = await packageOutputSnapshot(projectRoot, pkg, knowledgeGroups);
     const changes = packageBuildChanges(previousOutput, currentOutput);
@@ -574,6 +589,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       changes,
     });
   }
+  if (summaries.length > 0) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
   return { projectRoot, packages: summaries, agent_hints: agentHints };
 }
 

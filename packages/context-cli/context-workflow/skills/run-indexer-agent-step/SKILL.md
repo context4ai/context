@@ -29,6 +29,15 @@ still uses the same array shape. Prepare distinct results together and submit th
 do not turn it into a separate CLI round trip for each page. Copy dynamic authority values only from the Route input or that
 task's authorized View.
 
+At the start of Partition, preserve the settled purpose/scope decisions in the
+work-start report when this substantial task warrants one and the earlier setup
+did not already cover it. The current Route exposes `procedure.work-start-report`
+and `template.work-start-report` for that handoff, including the scratch write
+boundary. Reuse an applicable report on continuation; do not recreate it for each
+workset. Report text is context, not evidence or authority. Author follows the
+accepted page plan and does not reread these resources or rewrite the report
+unless a material task decision changes.
+
 For Partition, apply the grouping rules in `resolved-indexer-instructions` to each
 task's View. Context handles strategy selection and retries; do not look up a separate
 strategy definition or submit strategy metadata. Report missing source material or
@@ -92,3 +101,17 @@ accepted peers are not repeated. Never report success merely because the envelop
 If `next` is null and `next_preparation` reports failure, the committed outcomes
 are still saved: run its recovery command, not the previous submission. A stage's
 `progress.stop=complete` does not mean Review, close or package build is finished.
+
+## Reader purpose and saved page plans
+
+Use the bound requirement's `purpose` and open `reader_goals` throughout planning,
+authoring and review. During Partition, select `artifact_intent` and `template_id`
+from the current partition authority, retain `reader_task` and `outline`, and use
+`priority` (lower first) and `delivery_boundary` to identify a complete reader task.
+Choose a first representative module of roughly one to three pages. Do not group
+unrelated types because they share a file, or treat every export as a page.
+Author uses the saved choice; do not change it on retries or Provider refresh.
+Integration and maintenance purposes may share contracts without duplicating prose.
+Identify actual module roles from registrations and consumption: a client is not
+a server, a runtime is not a module role, and an application component is not
+a published component library. Preserve behavior needed for the reader's task.

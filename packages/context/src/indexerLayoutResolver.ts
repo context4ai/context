@@ -92,6 +92,7 @@ const layoutProposalPayloadSchema = z.object({
     subject_key: indexerSubjectKeySchema,
   }).strict(),
   artifacts: z.array(layoutArtifactSchema),
+  delivery_artifact_ids: z.array(z.string().min(1)).min(1).optional(),
 }).strict();
 
 export const indexerLayoutProposalSchema = layoutProposalPayloadSchema.extend({
@@ -308,6 +309,7 @@ export function resolveIndexerLayout(input: {
   subject_key_schema_set: unknown;
   shared_artifact_fingerprint: unknown;
   rendered_artifacts?: readonly IndexerRenderedArtifact[];
+  delivery_artifact_ids?: readonly string[] | undefined;
 }): IndexerLayoutProposal {
   const result = validateArtifactResultIdentity(input.artifact_result);
   const effective = materializeIndexerEffectiveArtifactSet({
@@ -465,6 +467,14 @@ export function resolveIndexerLayout(input: {
   if (new Set(sectionIdentities).size !== sectionIdentities.length) {
     throw new TypeError("layout resolver produced colliding logical Section identities");
   }
+  if (input.delivery_artifact_ids !== undefined) {
+    const selected = new Set(input.delivery_artifact_ids);
+    const available = new Set(artifacts.map((artifact) => artifact.artifact_id));
+    if (selected.size !== input.delivery_artifact_ids.length || selected.size === 0 ||
+        [...selected].some((id) => !available.has(id))) {
+      throw new TypeError("delivery layout requires unique, available Artifact identities");
+    }
+  }
   const payload = layoutProposalPayloadSchema.parse({
     protocol: "context.indexer.layout-proposal/v1",
     indexer_id: result.indexer_id,
@@ -480,7 +490,11 @@ export function resolveIndexerLayout(input: {
       node_ref: nodeRef,
       subject_key: result.logical_unit.subject_key,
     },
-    artifacts,
+    artifacts: input.delivery_artifact_ids === undefined ? artifacts
+      : artifacts.filter((artifact) => input.delivery_artifact_ids!.includes(artifact.artifact_id)),
+    ...(input.delivery_artifact_ids === undefined ? {} : {
+      delivery_artifact_ids: [...input.delivery_artifact_ids].sort(compareIndexerCanonicalText),
+    }),
   });
   return indexerLayoutProposalSchema.parse({
     ...payload,
@@ -506,6 +520,7 @@ export function validateIndexerLayoutProposal(input: {
     operator_contract: input.operator_contract,
     subject_key_schema_set: input.subject_key_schema_set,
     shared_artifact_fingerprint: proposal.shared_artifact_fingerprint,
+    delivery_artifact_ids: proposal.delivery_artifact_ids,
     ...(input.rendered_artifacts === undefined
       ? {}
       : { rendered_artifacts: input.rendered_artifacts }),

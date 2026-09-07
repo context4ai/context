@@ -1,3 +1,6 @@
+import { indexerArtifactResultSchema } from "@c4a/context";
+import { readIndexerDelivery } from "./indexerDelivery.js";
+import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import type { ContextResolvedWorkflowRoute } from "./workflow/workflowTypes.js";
 import { readCurrentIndexerBatchDescriptor } from "./indexerCurrentBatch.js";
 import { estimateCurrentIndexerStageEta } from "./indexerBatchTiming.js";
@@ -5,6 +8,7 @@ import { currentLedger } from "./indexerMainRunStoreRecords.js";
 
 export interface IndexerCurrentProgress {
   stage: "partition" | "author";
+  pages?: { authored: number; delivered: number; current_batch: number; remaining_authored: number; preview_paths: string[] };
   total: number;
   accepted: number;
   running: number;
@@ -36,7 +40,7 @@ function stopType(
   if (pending > 0 || stale > 0 || route?.node === "advance-current-indexer-lifecycle") {
     return "mechanical";
   }
-  return "complete";
+  return route === undefined ? "complete" : "mechanical";
 }
 
 export async function currentIndexerProgress(input: {
@@ -67,7 +71,13 @@ export async function currentIndexerProgress(input: {
         descriptor,
         remainingTasks: remaining,
       });
+  const delivery = await readIndexerDelivery(input.projectRoot);
+  const authored = stage === "author" ? (await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot))
+    .reduce((sum, record) => sum + indexerArtifactResultSchema.parse(record.artifact_result).artifacts.length, 0) : 0;
+  const delivered = Object.keys(delivery?.delivered ?? {}).length;
   return {
+    ...(stage === "author" ? { pages: { authored, delivered, current_batch: delivery?.current.length ?? 0,
+      remaining_authored: Math.max(0, authored - delivered), preview_paths: delivery?.paths ?? [] } } : {}),
     stage,
     total: ledger.entries.length,
     accepted,

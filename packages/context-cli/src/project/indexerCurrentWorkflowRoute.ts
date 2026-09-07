@@ -114,7 +114,7 @@ async function resolveCurrentIndexerGraphNode(input: {
     readProjectIndexerCandidateCompileStatus(input.projectRoot),
   ]);
   const runningEntries = ledger?.entries.filter((entry) => entry.state === "running") ?? [];
-  const composer = finalization?.state === "composer-required"
+  const composer = ledger?.entries.some((entry) => entry.stage === "author" && entry.state === "accepted")
     ? await readCurrentIndexerComposerBatch(input.projectRoot)
     : undefined;
   const failedEntry = ledger?.entries.find((entry) => entry.state === "failed");

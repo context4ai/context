@@ -124,7 +124,9 @@ describe("CLI bundled Indexer release", () => {
         );
         expect(provider.provides.composers?.map((composer) => composer.contract))
           .toEqual(BUNDLED_CODE_COMPOSER_SPECS.map((composer) => composer.contract));
-        const templates = provider.provider.templates ?? [];
+        const allTemplates = provider.provider.templates ?? [];
+        const templates = allTemplates.filter((template) => template.kind !== "page-program");
+        expect(allTemplates.some((template) => template.kind === "page-program")).toBe(true);
         expect(templates.map((template) => template.profile)).toEqual(
           BUNDLED_CODE_PROFILE_IDS,
         );
@@ -368,7 +370,8 @@ describe("CLI bundled Indexer release", () => {
         ...(bundle.skill === "context-markdown-indexer"
           ? ["references/structure-and-artifacts.md"]
           : []),
-        ...templates,
+        ...[...templates, ...(provider.provider.templates ?? []).filter((template) => template.kind === "page-program")
+          .map((template) => template.path)].sort(),
         ...(bundle.skill === "context-code-indexer"
           ? ["tests/fixtures/chapters.json", "tests/fixtures/composers.json"]
           : []),

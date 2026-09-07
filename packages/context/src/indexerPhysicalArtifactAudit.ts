@@ -118,7 +118,7 @@ function logicalUnitRegistrations(input: {
       throw new TypeError(`layout Node ${proposal.node.node_ref} lacks an Artifact Bundle`);
     }
     const entries = bundleEntryById(bundle);
-    if (entries.size !== proposal.artifacts.length || entries.size !== bundle.artifacts.length) {
+    if ((proposal.delivery_artifact_ids === undefined && entries.size !== proposal.artifacts.length) || entries.size !== bundle.artifacts.length) {
       throw new TypeError(`Artifact Bundle ${bundle.bundle_digest} does not close its layout Artifact set`);
     }
     return proposal.artifacts.map((artifact): IndexerPhysicalArtifactRegistration => {

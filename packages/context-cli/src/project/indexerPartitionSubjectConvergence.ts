@@ -173,6 +173,9 @@ function convergeSubjectGroup(
   });
   const groupKey = `subject:${indexerProtocolDigest({ subject_key: owner.group.subject_key })}`;
   const groups = [{
+    // The primary owner's accepted page plan remains authoritative when
+    // supplementary evidence is merged into the same Subject.
+    ...owner.group,
     group_key: groupKey,
     subject_key: owner.group.subject_key,
     subject_intent: owner.group.subject_intent,

@@ -1,3 +1,4 @@
+import { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
 import { z } from "zod";
 import {
   canonicalIndexerJson,
@@ -32,6 +33,8 @@ export const indexerArtifactFactSchema = z.object({
 export const indexerDeterministicBlockRendererSchema = z.enum([
   "bullet-list",
   "key-value-table",
+  "multi-column-table",
+  "public-contract-table",
   "json-code-block",
 ]);
 
@@ -108,6 +111,26 @@ export function renderIndexerDeterministicFacts(input: {
     compareIndexerCanonicalText(left.fact_ref, right.fact_ref)
   );
   const value = projectIndexerFactValue(facts);
+  if (input.renderer === "public-contract-table") {
+    const tables = facts.flatMap((fact) => {
+      const table = projectIndexerPublicContractTable(fact);
+      return table === undefined ? [] : [table];
+    });
+    if (tables.length === 0) throw new TypeError("public-contract-table requires declared public contracts");
+    return renderIndexerDeterministicFacts({ renderer: "multi-column-table", facts: [{
+      ...facts[0]!, value: { columns: tables[0]!.columns, rows: tables.flatMap((table) => table.rows) },
+    }] });
+  }
+  if (input.renderer === "multi-column-table") {
+    const table = z.object({ columns: z.array(z.string()).min(1), rows: z.array(z.array(z.string())) }).strict().parse(value);
+    if (table.rows.some((row) => row.length !== table.columns.length)) {
+      throw new TypeError("multi-column-table rows must match the declared columns");
+    }
+    const cell = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;").replaceAll("|", "&#124;").replace(/\r?\n/gu, "<br>");
+    return [table.columns, table.columns.map(() => "---"), ...table.rows]
+      .map((row) => `| ${row.map(cell).join(" | ")} |`).join("\n");
+  }
   if (input.renderer === "bullet-list") {
     if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
       throw new TypeError("bullet-list deterministic block requires a string-list Fact projection");

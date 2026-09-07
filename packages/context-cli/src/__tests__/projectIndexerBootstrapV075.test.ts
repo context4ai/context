@@ -21,6 +21,18 @@ import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js
 import { ContextError } from "../lib/errors.js";
 
 const roots: string[] = [];
+async function expectWorkStartResources(route: {
+  resources: { recommended: Array<{ id: string; path?: string }> };
+}) {
+  for (const id of ["procedure.work-start-report", "template.work-start-report"]) {
+    const resource = route.resources.recommended.find((entry) => entry.id === id);
+    expect(resource?.path).toBeDefined();
+    const text = await readFile(resource!.path!, "utf8");
+    const metadata = YAML.parse(text.split("---")[1]!);
+    expect(metadata.id).toBe(id);
+  }
+}
+
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
@@ -56,6 +68,7 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
         configuration: { file: "src/indexers.yaml", action: expect.stringContaining("indexers: []") },
       });
       expect(await currentLedger(root)).toBeUndefined();
+      await expectWorkStartResources(output.workflow.current);
     });
 
     test(`requirements without owners stop at Provider selection (managed=${managed})`, async () => {
@@ -70,6 +83,7 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
         action: { input: { stage: "provider-selection", requirements: registry.requirements } },
       });
       expect(await currentLedger(root)).toBeUndefined();
+      await expectWorkStartResources(output.workflow.current!);
     });
 
     test(`Route contracts and examples continue from bootstrap through Provider selection (managed=${managed})`, async () => {

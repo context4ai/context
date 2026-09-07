@@ -1,3 +1,4 @@
+import type { ComposerBatchFinalization } from "./indexerComposerFinalization.js";
 import {
   acceptIndexerPostAuthorRun,
   buildIndexerPostAuthorFragmentRequest,
@@ -301,6 +302,7 @@ export async function startIndexerPostAuthorRunsStore(input: {
     ledger: unknown;
     composer_ref: string;
   }[];
+  composer_batch?: ComposerBatchFinalization;
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   if (input.runs.length === 0) {
@@ -341,6 +343,7 @@ export async function startIndexerPostAuthorRunsStore(input: {
       operation: "start",
       transaction_kind: START_TRANSACTION,
       states,
+      ...(input.composer_batch === undefined ? {} : { composer_batch: input.composer_batch }),
       ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
     });
     return { tasks, transaction };
@@ -686,6 +689,7 @@ interface AcceptedPostAuthorResultRef {
 export async function readCurrentIndexerPostAuthorEnvelopesForResults(input: {
   projectRoot: string;
   results: readonly AcceptedPostAuthorResultRef[];
+  allow_pending?: boolean;
 }) {
   return withProjectWriteLock(
     input.projectRoot,
@@ -697,6 +701,7 @@ export async function readCurrentIndexerPostAuthorEnvelopesForResults(input: {
         envelopes.push(await readPostAuthorEnvelopeForResultUnlocked({
           projectRoot: input.projectRoot,
           ...result,
+          allow_pending: input.allow_pending,
         }));
       }
       return envelopes;
@@ -714,13 +719,14 @@ export async function readCurrentIndexerPostAuthorEnvelopeForResult(
 }
 
 async function readPostAuthorEnvelopeForResultUnlocked(
-  input: AcceptedPostAuthorResultRef & { projectRoot: string },
+  input: AcceptedPostAuthorResultRef & { projectRoot: string; allow_pending?: boolean | undefined },
 ) {
   const state = await readPostAuthorCurrentState(
     input.projectRoot,
     input.author_workset_digest,
   );
   if (state === undefined) {
+    if (input.allow_pending) return null;
     throw new TypeError("post-author state is missing for an accepted author Result");
   }
   if (
@@ -728,6 +734,7 @@ async function readPostAuthorEnvelopeForResultUnlocked(
       input.author_workset_digest ||
     state.spec.plan.workset_set.primary_result_digest !== input.primary_result_digest
   ) {
+    if (input.allow_pending) return null;
     throw new TypeError("post-author state is stale for the accepted author Result");
   }
   const envelopeRecord = state.spec.plan.state === "not-required"
@@ -738,6 +745,7 @@ async function readPostAuthorEnvelopeForResultUnlocked(
       );
   const observed = observation(state, envelopeRecord);
   if (!observed.status.can_reconcile) {
+    if (input.allow_pending) return null;
     throw new TypeError("post-author state is pending, failed, stale, or incomplete");
   }
   if (state.spec.plan.state === "not-required") return null;

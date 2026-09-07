@@ -73,6 +73,7 @@ const requirementExclusionSchema = z.object({
 
 export const indexRequirementSchema = z.object({
   id: indexerIdSchema,
+  purpose: z.string().trim().min(1).optional(),
   reader_goals: z.array(indexerIdSchema).min(1),
   coverage_domains: z.record(
     indexerIdSchema,

@@ -372,6 +372,7 @@ function candidateFiles(input: {
   accepted: ValidatedAcceptedAuthorResult;
   proposal: IndexerLayoutProposal;
   binding: z.infer<typeof compileResultBindingSchema>;
+  markdown_projection?: ((input: { markdown: string; output_path: string; artifact_ref: string }) => string) | undefined;
 }) {
   const layoutById = new Map(input.proposal.artifacts.map((artifact) => [
     artifact.artifact_id,
@@ -381,7 +382,9 @@ function candidateFiles(input: {
     artifact.artifact_id,
     artifact,
   ]));
-  return input.accepted.effectiveArtifacts.map((artifact) => {
+  return input.accepted.effectiveArtifacts.filter((artifact) =>
+    input.proposal.delivery_artifact_ids === undefined || input.proposal.delivery_artifact_ids.includes(artifact.artifact_id)
+  ).map((artifact) => {
     const layout = layoutById.get(artifact.artifact_id);
     if (layout === undefined) {
       throw new TypeError(`Candidate compile Result Artifact ${artifact.artifact_id} has no layout`);
@@ -405,6 +408,14 @@ function candidateFiles(input: {
             rendered,
           });
         })();
+    for (const section of sections) {
+      if (input.markdown_projection === undefined) continue;
+      section.markdown = input.markdown_projection({ markdown: section.markdown,
+        output_path: layout.output_path, artifact_ref: layout.artifact_ref });
+      section.markdown_digest = indexerProtocolDigest({
+        protocol: "context.indexer.physical-section-markdown/v1", markdown: section.markdown,
+      });
+    }
     const markdown = sections.map((section) => section.markdown).join("\n\n");
     const evidenceRefs = new Set(layout.sections.flatMap((section) =>
       section.evidence_refs
@@ -491,6 +502,9 @@ function assertTransitionAuthority(input: {
 }
 
 export function buildIndexerCandidateCompile(input: {
+  /** Host presentation only, after source/section integrity checks. The Host
+   * may defer links to pages outside this delivery; accepted Results stay intact. */
+  markdown_projection?: ((input: { markdown: string; output_path: string; artifact_ref: string }) => string) | undefined;
   layout_proposal_set: unknown;
   layout_transition: unknown;
   layout_change_confirmations?: readonly unknown[];
@@ -560,7 +574,7 @@ export function buildIndexerCandidateCompile(input: {
       accepted: item,
       proposal,
       binding,
-      files: candidateFiles({ accepted: item, proposal, binding }),
+      files: candidateFiles({ accepted: item, proposal, binding, markdown_projection: input.markdown_projection }),
     };
   }).sort((left, right) => compareIndexerCanonicalText(
     left.binding.artifact_result_digest,

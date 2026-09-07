@@ -17,11 +17,12 @@ import {
   type BundledIndexerProfileSpec,
 } from "./indexerBaseContractCatalog.js";
 import { bundledCodeReaderQuestionContracts } from "./indexerBaseCodeAuthoringCatalog.js";
+import { CODE_PROFILE_PROJECTIONS } from "./indexerCodePageProjections.js";
 import { bundledMarkdownReaderQuestionContracts } from
   "./indexerBaseMarkdownAuthoringCatalog.js";
 
 const BASE_CONTRACT_VERSION = "1.1.0";
-export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.5";
+export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.6";
 const BUNDLED_PARSER_REQUIREMENTS = buildIndexerParserCapabilityRequirements(
   BUNDLED_INDEXER_PARSER_PACKAGE_VERSION,
 );
@@ -151,13 +152,13 @@ function profileLayoutMappings(
   spec: BundledIndexerProfileSpec,
 ): IndexerProfileContractEntry["layout_mappings"] {
   if (spec.domain === "code") {
-    return [{
+    return CODE_PROFILE_PROJECTIONS[spec.id]!.map((projection) => ({
       source_roles: CODE_SOURCE_ROLES,
-      document_kind: "code-reference",
-      reader_goal: "understand-capability",
+      document_kind: projection.documentKind,
+      reader_goal: projection.readerGoal,
       artifact_kinds: ["content", "contract", "examples"],
       collection: "codeindex",
-    }];
+    }));
   }
   const projections = MARKDOWN_PROFILE_PROJECTIONS[spec.id];
   if (projections === undefined) throw new TypeError(`missing layout mapping for ${spec.id}`);

@@ -1,3 +1,4 @@
+import { closeIndexerDelivery } from "./indexerDelivery.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -501,7 +502,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
-    await clearCompletedLifecycle(projectRoot);
+    if (!await closeIndexerDelivery(projectRoot)) await clearCompletedLifecycle(projectRoot);
     return {
       action: "closed",
       projectRoot,

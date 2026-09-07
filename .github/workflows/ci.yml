@@ -55,5 +55,24 @@ jobs:
           .claude-plugin/marketplace.json
           .cursor-plugin/marketplace.json
 
-      - name: Verify
-        run: bun run verify:full
+      # The workspace checks run in Bun, not in the selected Node runtime.
+      # Run them once; exercise actual Node consumers on both matrix entries.
+      - name: Verify workspace
+        if: matrix.node-version == '20'
+        run: bun run verify
+
+      - name: Verify Node consumers
+        run: |
+          bun run test:dist
+          node packages/context-cli/dist/cli.js --version
+          node packages/context-cli/dist/cli.js --help
+          node --input-type=module -e 'import { defineProject } from "./packages/context/dist/index.js"; import assert from "node:assert/strict"; assert.equal(typeof defineProject, "function");'
+
+      # These Bun test harnesses spawn Node. Node 20 already ran them above;
+      # keep the Node 24 coverage without repeating the whole Bun suite.
+      - name: Verify Node-backed integration tests
+        if: matrix.node-version == '24'
+        run: >-
+          bun test
+          packages/context-cli/src/__tests__/projectKnowledgeSearchScript.test.ts
+          packages/dev-cli/src/__tests__/contextCliDistribution.integration.test.ts

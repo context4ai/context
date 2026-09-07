@@ -1,3 +1,4 @@
+import { applySelectedPageTemplate, type IndexerPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerArtifactBundle,
   buildIndexerCapabilityGroupEvidence,
@@ -20,6 +21,8 @@ import { renderMarkdownSection } from "./markdownPageTitle.js";
 import { buildIndexerAuthorSourceItems, resolveIndexerAuthorSourceItems } from "./indexerAuthorSourceItems.js";
 
 type AuthorValidation = {
+  page_template?: IndexerPageTemplate;
+  page_plan?: { artifact_intent?: string; template_id?: string };
   dependency_view: unknown;
   expected_subject_key: unknown;
   artifact_policy_eligibility: unknown;
@@ -165,8 +168,11 @@ function chooseIntent(input: {
     ].join("/"),
     aliases: [`intent:${intent.artifact_kind}`, intent.artifact_kind],
   })));
-  const requested = input.semantic.artifact_intent;
-  const selected = input.semantic.artifact_intent === undefined
+  const requested = input.semantic.artifact_intent ?? input.validation.page_plan?.artifact_intent;
+  if (input.validation.page_plan?.artifact_intent !== undefined && requested !== input.validation.page_plan.artifact_intent) {
+    throw new TypeError("author intent differs from the accepted page plan; revise the affected plan before changing its purpose");
+  }
+  const selected = requested === undefined
     ? choices.length === 1 ? choices[0] : undefined
     : choices.find((intent) => [
         intent.source_role,
@@ -273,7 +279,7 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
     ...usedFacts.flatMap((ref) => facts.facts.get(ref)!.evidence_refs),
   ])].sort(compareIndexerCanonicalText);
   const bindings = usedEvidence.map((ref) => evidence.bindings.get(ref)!);
-  const artifactId = slug(input.semantic.title ?? workset.group_key);
+  const artifactId = slug(`${subjectKey.namespace}-${subjectKey.local_key}`);
   const eligibility = validateIndexerArtifactPolicyEligibilityReport(
     input.validation.artifact_policy_eligibility,
   );
@@ -312,6 +318,23 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
       }],
     })),
   }];
+  const pageMembers = new Set(input.semantic.member_dispositions.filter((entry) => entry.state === "covered")
+    .map((entry) => resolveAlias(memberAliases, entry.item, "member disposition")));
+  const templateFacts = input.validation.page_template === undefined || artifacts[0]?.representation !== "sections"
+    ? [] : applySelectedPageTemplate({ artifact: artifacts[0], template: input.validation.page_template,
+      semanticVariables: input.semantic.template_variables,
+      facts: [...facts.facts.values()].filter((fact) => input.validation.canonical_inventory_members.some((member) =>
+        pageMembers.has(member.member_id) && facts.memberFacts.get(member.member_id)?.has(fact.fact_ref))),
+    });
+  for (const fact of templateFacts) {
+    facts.facts.set(fact.fact_ref, fact);
+    if (!usedFacts.includes(fact.fact_ref)) usedFacts.push(fact.fact_ref);
+    for (const ref of fact.evidence_refs) if (!usedEvidence.includes(ref)) {
+      usedEvidence.push(ref); bindings.push(evidence.bindings.get(ref)!);
+    }
+  }
+  usedFacts.sort(compareIndexerCanonicalText);
+  usedEvidence.sort(compareIndexerCanonicalText);
   const memberDispositions = input.semantic.member_dispositions.map((entry) => {
     const memberId = resolveAlias(memberAliases, entry.item, "member disposition");
     const memberKind = memberKinds.get(memberId)!;

@@ -167,7 +167,8 @@ const analyzeFunctionDeclaration = (
   const params = collectParams(paramsNode);
   const returnType = getReturnType(node);
   const funcDoc = extractJSDoc(node);
-  const signature = `${name}(${params.map((param) => `${param.name}${param.type ? `: ${param.type}` : ""}`).join(", ")})`;
+  const body = node.childForFieldName("body");
+  const signature = body === null ? node.text : node.text.slice(0, body.startIndex - node.startIndex).trimEnd();
   declarations.set(name, {
     info: {
       name,

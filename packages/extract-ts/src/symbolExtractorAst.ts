@@ -196,6 +196,9 @@ export const collectParams = (node: SyntaxNode | null) => {
     return {
       name: nameNode.text,
       type: extractTypeAnnotation(typeNode),
+      optional: wrapper.type === "optional_parameter" || wrapper.children.some((child) => child.text === "?"),
+      rest: wrapper.text.trimStart().startsWith("..."),
+      ...(wrapper.childForFieldName("value") === null ? {} : { defaultValue: wrapper.childForFieldName("value")!.text }),
     };
   });
 };
@@ -231,6 +234,8 @@ export const collectMembers = (
         file: "",
         line: getLine(child),
         endLine: getEndLine(child),
+        optional: child.children.some((token) => token.text === "?"),
+        readonly: child.children.some((token) => token.text === "readonly"),
         ...(typeAnnotation ? { typeAnnotation } : {}),
         ...(propDoc ? { doc: propDoc } : {}),
       });

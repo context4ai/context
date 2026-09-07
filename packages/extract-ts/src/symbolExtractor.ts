@@ -1,8 +1,9 @@
-import { EdgeType, Visibility } from "@c4a/core";
+import { Visibility } from "@c4a/core";
 import type { EntryFile, ExtractionResult, FileSystem, RelationInfo } from "@c4a/extract";
+import { enrichPublicContracts } from "./publicContracts.js";
 import { traceExports } from "./exportTracer.js";
 import { analyzeFile } from "./symbolExtractorAnalyze.js";
-import { createRelation, type FileAnalysis, type PackageInfo } from "./symbolExtractorAst.js";
+import { type FileAnalysis, type PackageInfo } from "./symbolExtractorAst.js";
 import {
   ecmaScriptLanguage,
   EXTRACT_TS_CAPABILITIES,
@@ -70,13 +71,19 @@ export const extractSymbols = async (
       if (!declaration) continue;
       const declKey = `${tracedExport.declarationFile}::${tracedExport.localName}`;
       const exportKey = `${declKey}::${tracedExport.exportedName}`;
-      if (exportedDeclarationKeys.has(exportKey)) continue;
+      if (exportedDeclarationKeys.has(exportKey)) {
+        const existing = exportedSymbols.find((symbol) => symbol.file === tracedExport.declarationFile &&
+          symbol.name === tracedExport.exportedName);
+        if (existing !== undefined) existing.publicEntrypoints = [...new Set([...existing.publicEntrypoints, entry.path])].sort();
+        continue;
+      }
       exportedDeclarationKeys.add(declKey);
       exportedDeclarationKeys.add(exportKey);
       exportedSymbols.push({
         ...declaration.info,
         name: tracedExport.exportedName,
         visibility: Visibility.Exported,
+        publicEntrypoints: [entry.path],
       });
     }
   }
@@ -100,39 +107,7 @@ export const extractSymbols = async (
   }
 
   const symbols = [...exportedSymbols, ...internalSymbols];
-  const typeDeclarations = new Map<string, string>();
-  for (const analysis of analyses.values()) {
-    for (const [name, decl] of analysis.declarations) {
-      if (decl.info.kind === "interface" || decl.info.kind === "type") {
-        typeDeclarations.set(name, decl.info.file);
-      }
-    }
-  }
-  for (const sym of symbols) {
-    if (sym.kind !== "component") continue;
-
-    let propsTypeName: string | undefined;
-    if (sym.typeAnnotation) {
-      const genericBody = /<(.+)>/u.exec(sym.typeAnnotation)?.[1];
-      const genericNames = genericBody?.match(/\b[A-Z][A-Za-z0-9_]*\b/gu) ?? [];
-      propsTypeName = genericNames.filter((name) => typeDeclarations.has(name)).at(-1);
-    }
-
-    if (!propsTypeName) {
-      const conventionName = `${sym.name}Props`;
-      if (typeDeclarations.has(conventionName)) {
-        propsTypeName = conventionName;
-      }
-    }
-
-    if (propsTypeName) {
-      sym.propsType = propsTypeName;
-      relations.push({
-        ...createRelation(EdgeType.OfType, sym.name, propsTypeName, false, sym.line),
-        file: sym.file,
-      });
-    }
-  }
+  await enrichPublicContracts({ symbols, paths: [...analyses.keys()], fs, resolver, relations });
   const deduplicatedRelations = uniqueRelations(relations);
 
   const files = [...filePaths]

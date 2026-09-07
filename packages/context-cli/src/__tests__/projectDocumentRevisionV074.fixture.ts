@@ -25,7 +25,7 @@ export function documentRevisionOuterIndexerRoute(): ContextResolvedWorkflowRout
 }
 
 export async function createDocumentRevisionWorkspace(
-  options: { debug?: boolean } = {},
+  options: { debug?: boolean; sourceCount?: number; purpose?: string } = {},
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "context-indexer-revise-"));
   const bundle = (await listCliBundledIndexers()).bundles.find((item) =>
@@ -36,6 +36,7 @@ export async function createDocumentRevisionWorkspace(
     protocol: "context.indexer.registry/v1",
     requirements: [{
       id: "workspace-knowledge",
+      ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
       reader_goals: ["understand-system"],
       coverage_domains: { architecture: "required" },
       target_scope: {
@@ -115,6 +116,8 @@ export async function createDocumentRevisionWorkspace(
     exports: {
       ".": "./src/index.ts",
       "./secondary": "./src/secondary.ts",
+      ...Object.fromEntries(Array.from({ length: Math.max(0, (options.sourceCount ?? 2) - 2) }, (_, index) =>
+        [`./extra${index}`, `./src/extra${index}.ts`])),
     },
   }, null, 2)}\n`);
   await writeFile(join(sourceRoot, "src", "index.ts"), "export const answer = 42;\n");
@@ -122,12 +125,15 @@ export async function createDocumentRevisionWorkspace(
     join(sourceRoot, "src", "secondary.ts"),
     "export const secondaryAnswer = 84;\n",
   );
+  for (let index = 0; index < (options.sourceCount ?? 2) - 2; index++) {
+    await writeFile(join(sourceRoot, "src", `extra${index}.ts`), `export const extra${index} = ${index};\n`);
+  }
   execFileSync("git", ["init", "-q"], { cwd: sourceRoot });
   execFileSync("git", ["config", "user.email", "context-test@example.test"], {
     cwd: sourceRoot,
   });
   execFileSync("git", ["config", "user.name", "Context Test"], { cwd: sourceRoot });
-  execFileSync("git", ["add", "package.json", "src/index.ts", "src/secondary.ts"], {
+  execFileSync("git", ["add", "package.json", "src"], {
     cwd: sourceRoot,
   });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: sourceRoot });

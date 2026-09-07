@@ -89,11 +89,11 @@ describe("0.6.0 project init and source ensure", () => {
       expect(knowledgeQueryTemplate).toContain("Evidence Contract");
       expect(knowledgeQueryTemplate).toContain("Route By Intent");
       expect(knowledgeQueryTemplate).toContain("Search Fallback");
-      expect(knowledgeQueryTemplate).toContain("context:section");
+      expect(knowledgeQueryTemplate).toContain("heading");
       expect(knowledgeQueryTemplate).toContain("Treat every hit as a lead");
       expect(knowledgeQueryTemplate).toContain("Do not infer a relationship from page co-occurrence");
       expect(knowledgeQueryTemplate).toContain("Gap: this package does not contain evidence");
-      expect(knowledgeQueryTemplate).toContain("Template Author Recommendation");
+      expect(knowledgeQueryTemplate).toContain("Template author guidance");
       expect(knowledgeQueryTemplate).not.toContain("C4A");
       expect(knowledgeQueryTemplate).toContain("Search only when indexes and page structure");
       expect(existsSync(join(project, "sources", "repo", "index.yaml"))).toBe(true);
@@ -170,7 +170,7 @@ describe("0.6.0 project init and source ensure", () => {
       expect(readme).toContain('TMPDIR="$PWD/.tmp/install" bun install');
       expect(readme).toContain("`.tmp/install/`");
       expect(skill).toContain("# 知识查询");
-      expect(skill).toContain("## 模板作者建议");
+      expect(skill).toContain("模板作者建议（不进入分发的查询 Skill）");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

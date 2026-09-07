@@ -1,3 +1,4 @@
+import { readIndexerDelivery } from "./indexerDelivery.js";
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
 import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
@@ -154,6 +155,7 @@ async function collectProjectStatusSnapshotInternal(
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
   const indexerRegistry = await readIndexerWorkflowRegistryStatus(projectRoot);
   const indexerCandidateCompile = await readProjectIndexerCandidateCompileStatus(projectRoot);
+  const indexerDelivery = await readIndexerDelivery(projectRoot);
   const indexerDrafts = indexerCandidateCompile.state === "current"
     ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "draft")
     : [];
@@ -201,7 +203,8 @@ async function collectProjectStatusSnapshotInternal(
     approvedPages,
     close: closeStatus,
     indexerRegistry,
-    indexerCandidateCompile: { state: indexerCandidateCompile.state },
+    indexerCandidateCompile: { state: indexerCandidateCompile.state,
+      ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
   };
   const workflowSnapshot = await evaluateContextWorkflow({
     observation,
@@ -265,7 +268,8 @@ async function collectProjectStatusSnapshotInternal(
     close: closeStatus,
     codeIndexMigrationRequired,
     indexerRegistry: { state: indexerRegistry.state },
-    indexerCandidateCompile: { state: indexerCandidateCompile.state },
+    indexerCandidateCompile: { state: indexerCandidateCompile.state,
+      ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
     ...(indexerProgress === undefined ? {} : { indexerProgress }),
     packageCount: packages.length,
     verifyErrors,

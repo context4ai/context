@@ -160,6 +160,7 @@ reader goals and coverage domains with the agreed project requirements:
 protocol: context.indexer.registry/v1
 requirements:
   - id: component-guide
+    purpose: Help application developers integrate components and look up their public API.
     reader_goals: [understand-components, integrate-components]
     coverage_domains:
       component-usage: required
@@ -178,6 +179,7 @@ indexers: []
 | `protocol` | Exactly `context.indexer.registry/v1` for the file. |
 | `requirements` | One or more knowledge goals, grouped by reader need; not one entry per file or symbol. |
 | `id` | A unique, readable identifier for this requirement. |
+| `purpose` | Optional short natural-language reader and task purpose; reuse explicit existing goals when absent. |
 | `reader_goals` | One or more readable goal identifiers, such as `integrate-components`. These are not Provider names. |
 | `coverage_domains` | A nonempty map of intended information categories to `required`, `optional` or `out-of-scope`. Provider selection must cover the required categories. |
 | `target_scope.targets` | Sources whose subjects the knowledge should describe. At least one target is required. |
@@ -334,3 +336,40 @@ Selection/customization is complete only when all of these are true:
 
 For the complete manifest and execution surface, see
 [Indexer Provider protocol](../reference/indexer-provider-protocol.md).
+
+## Purpose, page selection, and delivery
+
+`purpose` is an optional short description of the intended reader and task.
+Existing `reader_goals` remain valid when it is absent. Context passes this
+requirement through Partition, Author, and Review; it does not classify free
+text against a fixed vocabulary.
+
+After representative reading and necessary scope discussion, substantial new work
+can preserve the decisions in `.tmp/work-start-report.md` before Partition.
+The current workflow supplies `procedure.work-start-report` and
+`template.work-start-report`: a readable report with its existing requirement
+reference, use scenarios, scope choices, proposed classifications, first delivery
+and actual execution settings. Lightweight edits keep a short summary. The report
+is scratch context, not a published Artifact, a new approval or a condition for
+advancing the workflow. Reuse it when continuing the same task.
+
+Partition may select `artifact_intent` and `template_id` from the current
+Provider catalog, along with `reader_task`, `outline`, `priority`, and
+`delivery_boundary`. These choices are saved in the existing page plan and
+reused by Author retries. Program templates declare `kind: page-program` in the
+Provider's template resources. Only the selected program is included in the
+Author View; procedure templates remain shared instructions. Workspace template
+overrides retain priority over the bundled default.
+
+Selected Code page programs append a deterministic public-contract table to the
+same Candidate as its semantic explanation. Declarations provide field types,
+requiredness, explicit defaults, signatures, and supported registration facts.
+Missing declarations remain explicit; reference tables do not substitute for
+source-backed examples, behavior, or change guidance.
+
+The first readable delivery normally contains one to three pages. Subsequent
+batches contain 30–50 pages, or a smaller final tail. Context retains accepted
+Results across Review, close, and build, then continues the remaining pages.
+`context run --deliver --format json` requests an earlier checkpoint. It keeps
+the current approval rules. Status reports page counts and built preview paths;
+Author task counts are reported separately.

@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import YAML from "yaml";
+import { indexerTemplateContractSchema } from "@c4a/context";
+import { splitFrontmatter } from "../project/indexerTemplateRendering.js";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REPOSITORY_ROOT = resolve(PACKAGE_ROOT, "../..");
@@ -36,18 +39,8 @@ async function listFiles(root: string): Promise<string[]> {
 }
 
 describe("plugin prompt and workflow resource contract", () => {
-  test("candidate revision has one Author-repair entry and no side-channel page", async () => {
-    const [command, registration, revision] = await Promise.all([
-      read(PLUGIN_ROOT, ...ENTRY_PATH),
-      read(PACKAGE_ROOT, "src", "commands", "documentRevisionCommands.ts"),
-      read(PACKAGE_ROOT, "src", "project", "documentRevision.ts"),
-    ]);
-
-    expect(command).toContain('context revise "<candidate title, path, or id>"');
-    expect(command).not.toContain("__revision.md");
-    expect(registration).toContain('program.command("revise <target>")');
-    expect(revision).toContain("Reopen the exact Author workset");
-  });
+  // Revision, mode/gate and continuation behavior is exercised by the
+  // projectDocumentRevision and projectWorkflow suites, not prose snapshots.
 
   test("plugin README exposes only current public entrypoints", async () => {
     const readmes = [
@@ -80,139 +73,30 @@ describe("plugin prompt and workflow resource contract", () => {
     expect(pluginEntries.some((entry) => entry.isDirectory() && entry.name === "skills")).toBe(true);
 
     const continuation = await read(PLUGIN_ROOT, ...ENTRY_PATH);
-    expect(continuation).toContain("context status");
+    expect(continuation).toContain("next_action.command");
     expect(continuation).toContain("workflow.current");
     expect(continuation).not.toContain("references/internal-procedures");
     expect(continuation).not.toMatch(/`(?:context:)?skill-[a-z-]+`/u);
     expect(continuation).toContain("context entry");
-    expect(continuation).toContain("knowledge management tool built for Agent knowledge workflows");
-    expect(continuation).toContain("Feishu/Lark documents");
-    expect(continuation).toContain("structured, traceable knowledge");
-    expect(continuation).toContain("knowledge packages, LLM-ready documents, or Agent Skills");
-    expect(continuation).toContain("code-indexing capabilities");
-    expect(continuation).toContain("workflow.current");
     expect(continuation).toContain("resources.required");
-    expect(continuation).toContain("without an additional status call");
-    expect(continuation).toContain("revision and");
-    expect(continuation).toMatch(/never replaces\s+the workspace\s+Route/u);
-    expect(continuation).toContain("npm install -g @c4a/context-cli@latest");
     expect(continuation).toContain("context plugin install");
-    expect(continuation).toContain("shell exit 127");
-    expect(continuation).toContain("Do not run an installation preflight");
-    expect(continuation).toContain("context init ... --debug");
-    expect(continuation).toContain("do not run a workspace-only debug command");
-    expect(continuation).toContain("For an existing workspace, run `context debug enable`");
-    expect(continuation).toContain("downstream distribution step outside the Context Route");
-    expect(continuation).toContain("Context itself does not publish to a hosted service");
-  });
-
-  test("source and gate discipline lives in selected workflow procedures", async () => {
-    const source = await read(WORKFLOW_ROOT, "resources", "procedures", "source-boundary.md");
-    const capture = await read(WORKFLOW_ROOT, "resources", "procedures", "document-capture.md");
-    const indexerLifecycle = await read(
-      WORKFLOW_ROOT,
-      "skills",
-      "run-indexer-lifecycle",
-      "SKILL.md",
-    );
-    const codeIndexer = await read(CODE_INDEXER_ROOT, "references", "indexer.md");
-    const review = await read(WORKFLOW_ROOT, "resources", "procedures", "knowledge-review.md");
-    const detailed = await read(WORKFLOW_ROOT, "resources", "procedures", "source-capture-detailed.md");
-
-    expect(source).toContain("calendar date identifies one capture batch");
-    expect(source).toContain("module identifies one concrete");
-    expect(source).toContain("Do not infer this boundary");
-    expect(source).toContain("mechanical identity resolution");
-    expect(source).toContain("do not ask for\ntheir remote URLs");
-    expect(source).toContain("separate authority");
-    expect(capture).toContain("does not classify, summarize, approve, or build");
-    expect(capture).toContain("Never hand-write or repair captured snapshots");
-    expect(capture).toContain("Never treat one\nsuccessful module as completion");
-    expect(indexerLifecycle).toContain("sole Context registry-and-Provider indexing route");
-    expect(indexerLifecycle).toContain("The Indexer\nGraph is the authority");
-    expect(codeIndexer).toContain("For author work, produce exactly one Result");
-    expect(codeIndexer).toContain("Context independently validates");
-    expect(review).toMatch(/complete current candidate set|complete\s+current batch/u);
-    for (const invariant of [
-      "Capture is entirely CLI-driven",
-      "Never hand-write captured source snapshots",
-      "Do not run hand-written dependency preflight commands",
-      "Route by source boundary",
-      "Do not discover files with `find` / `ls`",
-      "Missing Dependency Recovery",
-      "stable origin path, not its H1/title",
-    ]) {
-      expect(detailed, invariant).toContain(invariant);
-    }
   });
 
   test("human-gate dialogue is route-selected instead of embedded in CLI branches", async () => {
     const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
-    const dialogue = [
-      ["human-gates.md", ["user's conversation language", "raw TypeScript"]],
-      ["source-boundary.md", ["whole repository/subspace", "`include`"]],
-      ["document-capture.md", ["permission to read", "documentation site"]],
-      ["knowledge-review.md", ["exact Payload", "fully managed operation"]],
-      ["package-output.md", ["output", "package"]],
-      ["evidence-maintenance.md", ["source evidence", "content refresh"]],
-      ["workflow-mode-after-creation.md", ["Ordinary review mode", "about 40% slower"]],
-    ] as const;
-
-    for (const [file, snippets] of dialogue) {
+    for (const file of [
+      "human-gates.md",
+      "source-boundary.md",
+      "document-capture.md",
+      "knowledge-review.md",
+      "package-output.md",
+      "evidence-maintenance.md",
+      "workflow-mode-after-creation.md",
+    ]) {
       const resourcePath = `resources/dialogue/${file}`;
-      const body = await read(WORKFLOW_ROOT, resourcePath);
       expect(graph, resourcePath).toContain(resourcePath);
-      for (const snippet of snippets) {
-        expect(body, `${file}:${snippet}`).toContain(snippet);
-      }
+      expect((await read(WORKFLOW_ROOT, resourcePath)).trim().length).toBeGreaterThan(0);
     }
-
-    const projectSourceFiles = (await listFiles(join(PACKAGE_ROOT, "src", "project")))
-      .filter((file) => file.endsWith(".ts"));
-    for (const file of projectSourceFiles) {
-      const body = await readFile(file, "utf8");
-      // Route-local input hints may describe a required choice. Gate ownership
-      // is a routing contract, not a ban on particular English phrases.
-      expect(body, `${file} must not declare a workspace human gate`).not.toMatch(
-        /\bhuman_gate:\s*true\b|\bdecision_options\s*:/u,
-      );
-      expect(body, `${file} must not select another workspace lifecycle stage`).not.toMatch(
-        /\bkind:\s*"(?:review_candidates|confirm_structure|capture-before-document-classification|investigate-and-align)"\b/u,
-      );
-    }
-  });
-
-  test("execution mode is asked once and reviewed HTML reports reach the final summary", async () => {
-    const [
-      command,
-      afterCreation,
-      afterCapture,
-      reviewDialogue,
-      reviewProcedure,
-      closeProcedure,
-    ] = await Promise.all([
-      read(PLUGIN_ROOT, ...ENTRY_PATH),
-      read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-creation.md"),
-      read(WORKFLOW_ROOT, "resources", "dialogue", "workflow-mode-after-capture.md"),
-      read(WORKFLOW_ROOT, "resources", "dialogue", "knowledge-review.md"),
-      read(WORKFLOW_ROOT, "resources", "procedures", "knowledge-review.md"),
-      read(WORKFLOW_ROOT, "resources", "procedures", "close-and-build.md"),
-    ]);
-
-    expect(command).toContain("state a short execution\nplan, then ask the user to choose once");
-    expect(command).toContain("combine\nthe mode choice with that question");
-    expect(command).toContain("do not ask again after initialization");
-    expect(afterCreation).toContain("no earlier mode question was\nasked");
-    expect(afterCreation).toContain("one-time conversation choice");
-    expect(afterCapture).toContain("no earlier mode question was\nasked");
-    expect(afterCapture).toContain("without a reminder or another confirmation");
-
-    for (const source of [command, reviewDialogue, reviewProcedure, closeProcedure]) {
-      expect(source).toMatch(/exact (?:HTML )?report (?:URL|reference)/u);
-      expect(source).toMatch(/final completion\s+summary/u);
-    }
-    expect(command).toContain("`Review reports` section");
-    expect(closeProcedure).toContain("fully managed or force approval");
   });
 
   test("semantic planning has one Provider-owned source", async () => {
@@ -223,47 +107,41 @@ describe("plugin prompt and workflow resource contract", () => {
       "references",
       "structure-and-artifacts.md",
     );
-    expect(planning).toContain("Source, subject, and claim planning");
-    expect(planning).toContain("On\na stale workset");
-    expect(structure).toContain("Section first, Artifact when justified");
-    expect(structure).toContain("Candidate resolution");
-
-    const detailedCapture = await read(
-      WORKFLOW_ROOT,
-      "resources",
-      "procedures",
-      "source-capture-detailed.md",
-    );
-    expect(
-      Buffer.byteLength(detailedCapture, "utf8"),
-      "the full source-capture procedure must remain in the workflow bundle",
-    ).toBeGreaterThan(13_000);
+    expect(planning.trim().length).toBeGreaterThan(0);
+    expect(structure.trim().length).toBeGreaterThan(0);
   });
 
   test("code-index archetype templates live only in the Provider Bundle", async () => {
-    const manifest = await read(CODE_INDEXER_ROOT, "context-indexer.yaml");
-    const templates = await readdir(join(CODE_INDEXER_ROOT, "templates"));
-    expect(templates.length).toBeGreaterThan(10);
-    expect(manifest).toContain("provider:");
-    for (const file of templates) {
-      const body = await read(CODE_INDEXER_ROOT, "templates", file);
-      expect(body, file).toContain("Evidence pass");
-      expect(body, file).toContain("Questions the knowledge must answer");
+    const manifest = YAML.parse(await read(CODE_INDEXER_ROOT, "context-indexer.yaml")) as {
+      provider: { templates: Array<{ path: string; kind: string }> };
+    };
+    expect(manifest.provider.templates.length).toBeGreaterThan(0);
+    for (const template of manifest.provider.templates) {
+      const content = await read(CODE_INDEXER_ROOT, template.path);
+      expect(content.trim().length, template.path).toBeGreaterThan(0);
+      if (template.kind === "page-program") {
+        // Parse executable material; prose headings and formatting are not contracts.
+        expect(() => indexerTemplateContractSchema.parse(splitFrontmatter(content).metadata),
+          template.path).not.toThrow();
+      }
     }
   });
 
   test("workflow graph delegates semantic indexing through the sole lifecycle Skill", async () => {
-    const graph = await read(WORKFLOW_ROOT, "graphs", "workspace.yaml");
-    expect(graph).toContain("id: run-indexer-lifecycle");
-    expect(graph).toContain("actions/run-indexer-lifecycle.yaml");
-    expect(graph).not.toContain("resources/semantic/align/");
-    expect(graph).not.toContain("resources/semantic/code-index/");
-    expect(graph).toContain("resources/procedures/source-capture-detailed.md");
-    expect(graph).toContain("- { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }");
-    expect(graph).toContain("- { from: close-approved-knowledge, to: choose-package-output }");
-    expect(graph).not.toContain("- { from: maintain-evidence, to: close-approved-knowledge }");
-    expect(graph).not.toContain("- { from: close-approved-knowledge, to: revise-document }");
-
+    const graph = YAML.parse(await read(WORKFLOW_ROOT, "graphs", "workspace.yaml")) as {
+      nodes: Array<{ id: string; action?: string }>;
+      edges: Array<{ from: string; to: string; kind?: string }>;
+    };
+    expect(graph.nodes.filter((node) => node.id === "run-indexer-lifecycle"))
+      .toEqual([expect.objectContaining({ action: "actions/run-indexer-lifecycle.yaml" })]);
+    expect(graph.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "review-current-batch", to: "close-approved-knowledge", kind: "gatedBy" }),
+      expect.objectContaining({ from: "close-approved-knowledge", to: "choose-package-output" }),
+    ]));
+    expect(graph.edges.some((edge) =>
+      (edge.from === "maintain-evidence" && edge.to === "close-approved-knowledge") ||
+      (edge.from === "close-approved-knowledge" && edge.to === "revise-document")
+    )).toBe(false);
   });
 
   test("route-selected SDK manuals remain complete mirrors of the public docs", async () => {

@@ -23,7 +23,7 @@ function renderSemanticVariable(value: IndexerJson): string {
 }
 
 function referencedFacts(input: {
-  result: IndexerArtifactResult;
+  result: Pick<IndexerArtifactResult, "facts">;
   factRefs: readonly string[];
   variableId: string;
 }) {
@@ -118,7 +118,7 @@ function trimOuterContentBlocks(
 export function renderIndexerTemplateSectionLayers(input: {
   body: string;
   section: IndexerTemplateContract["sections"][number];
-  result: IndexerArtifactResult;
+  result: Pick<IndexerArtifactResult, "facts">;
   artifact: TemplateArtifact;
   contract: IndexerTemplateContract;
   acceptedEvidenceRefs: ReadonlySet<string>;

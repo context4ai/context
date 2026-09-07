@@ -50,6 +50,10 @@ const partitionGroupSchema = z.object({
   key: z.string().min(1),
   title: z.string().min(1),
   reader_task: z.string().min(1),
+  artifact_intent: z.string().min(1).optional(),
+  template_id: z.string().min(1).optional(),
+  priority: z.number().int().nonnegative().optional(),
+  delivery_boundary: z.boolean().optional(),
   subject: subjectChoiceSchema,
   subject_intent: z.enum(["primary", "enrich-or-independent"]),
   members: z.array(z.string().min(1)).min(1),
@@ -147,6 +151,7 @@ const authorInputBaseSchema = z.object({
   group_key: z.string().min(1),
   outcome: z.enum(["publish", "catalog-only", "request-material", "unsupported"]),
   artifact_intent: z.string().min(1).optional(),
+  template_variables: z.record(z.string()).optional(),
   policy: z.string().min(1).optional(),
   target_resolutions: z.array(z.object({
     target: z.string().min(1),

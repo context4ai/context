@@ -2,10 +2,11 @@
 
 Consume only the current workset authority and the single Authorized Workset View supplied by Context. Normalized parser facts, verified layer fragments, document evidence, and tool observations all arrive through that View; do not open source-specific evidence channels or manage their pagination and receipts.
 
-The reader is outside the indexed module. Give that reader a reliable route to
-the module's responsibility, supported entrypoints and interfaces, downstream
-handoffs, and the core state, failure, operation, ownership, and source-of-truth
-facts needed to use or attribute the capability correctly. Judge coverage by
+Use the bound requirement's `purpose` and open `reader_goals` to identify the
+reader's task. Integration guides prioritize imports, normal use, interfaces
+and relevant limitations. Maintenance guides retain implementation handoffs,
+identity and field transformations, actual failure handling, state and success
+conditions when these serve the requested task. Judge coverage by
 whether supported profile questions and stable capability boundaries are
 actually explained, never by symbol, file, relation, or evidence counts.
 
@@ -14,6 +15,28 @@ actually explained, never by symbol, file, relation, or evidence counts.
 Classify each requested module from current manifests, stable entries, public contracts, runtime registration, maintained documentation, and source-backed boundary evidence. Select one primary profile and only the additional profiles supplied by the current workset. A directory name, framework dependency, class suffix, or generated file is not sufficient classification evidence.
 
 Read only the templates materialized for the selected profiles. Combine their questions into one deduplicated plan for the reader-visible capability; a template is guidance, not a source of facts, page counts, output paths, thresholds, or authority. Keep a repository container, public contract, runtime boundary, event flow, persistence boundary, adapter, generated-source provenance, and cross-module handoff separate when they answer different reader questions. Do not copy a template outline when source evidence does not support its sections.
+
+Partition selects `artifact_intent` and `template_id` from the current Provider
+catalog and saves `reader_task`, `outline`, `priority` and a natural
+`delivery_boundary`. Author reuses that accepted page plan. A selected page
+program renders declared API fields from current Facts in the same Artifact as
+the semantic prose. Do not transcribe its table or manufacture missing defaults.
+Optional `template_variables` supply only the program's declared semantic slots;
+write the remaining supported guidance as normal Sections.
+
+For websites, organize around page tasks and data boundaries; distinguish host
+and remote declarations from verified loading behavior. For services and BFFs,
+identify actual inbound registration or IDL before describing a remote API;
+an outbound client is not a server. For events and scheduled tasks, explain the
+registered trigger and source-confirmed completion, retry and failure behavior.
+No dedicated behavior Fact is required when authorized captured source answers
+the question. Ask for additional material only when that source is insufficient
+for the core reader task; do not block other complete pages on local uncertainty.
+
+Reuse accepted plans and Results across deliveries. Context publishes a first
+readable sample, then batches of 30–50 pages through the current Review, close
+and build routes. Continue pending work after build; a readable first batch does
+not mean the whole source is finished.
 
 ## Partition and identity
 

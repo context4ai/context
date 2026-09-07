@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
@@ -6,9 +6,9 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { mkdtemp } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import {
   hostActionInputDigest,
   type HostActionResult,
@@ -26,7 +26,7 @@ import {
   stageProjectIndexerProviderResolution,
 } from "../project/indexerProviderProjectFlow.js";
 import { indexerProviderResolutionHostLocation } from "../project/indexerProviderDispatcher.js";
-import { materializeBundledIndexerDistribution } from "../project/indexerDistributionBuild.js";
+import { indexerDistributionFixtures } from "./projectIndexerCliBundledV070.fixture.js";
 import { validateProjectIndexerSelectionProposal } from "../project/indexerSelectionProposal.js";
 import { loadIndexerCustomization } from "../project/indexerCustomization.js";
 import {
@@ -36,9 +36,12 @@ import {
 import { validateIndexerSelectionFinal } from "../project/indexerSelectionValidation.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
-const PACKAGE_ROOT = resolve(import.meta.dir, "../..");
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
+const projectRoots: string[] = [];
+afterEach(async () => {
+  await Promise.all(projectRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
+});
 
 function requirement() {
   return {
@@ -56,6 +59,7 @@ function requirement() {
 
 function project(): string {
   const root = mkdtempSync(join(tmpdir(), "context-indexer-dispatch-v070-"));
+  projectRoots.push(root);
   mkdirSync(join(root, "src"), { recursive: true });
   writeFileSync(join(root, "package.json"), `${JSON.stringify({
     name: "indexer-dispatch-fixture",
@@ -108,20 +112,14 @@ function selection(input: {
   };
 }
 
-async function fixture() {
-  const buildRoot = await mkdtemp(join(tmpdir(), "context-indexer-dispatch-assets-"));
-  const assetsRoot = join(buildRoot, "indexers");
-  const manifest = await materializeBundledIndexerDistribution({
-    packageRoot: PACKAGE_ROOT,
-    outputRoot: assetsRoot,
-  });
-  const provider = manifest.bundles.find((entry) =>
-    entry.skill === "context-code-indexer"
-  )!;
-  return { assetsRoot, provider };
-}
-
 describe("0.7.0 two-stage Provider dispatcher", () => {
+  const { buildFixture } = indexerDistributionFixtures();
+  async function fixture() {
+    const { assetsRoot, manifest } = await buildFixture();
+    const provider = manifest.bundles.find((entry) => entry.skill === "context-code-indexer")!;
+    return { assetsRoot, provider };
+  }
+
   test("exposes static, resolve, and stage as one guarded CLI chain", async () => {
     const root = project();
     const catalog = JSON.parse(await runCliInDir(root, [

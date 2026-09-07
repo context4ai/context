@@ -1,3 +1,4 @@
+import { requestIndexerEarlyDelivery } from "./indexerDelivery.js";
 import { advanceCurrentIndexerLifecycle } from "./indexerCurrentLifecycle.js";
 import { advanceCurrentIndexerProviderFinalizationIfReady } from
   "./indexerCurrentProviderContinuation.js";
@@ -22,7 +23,9 @@ export async function runCurrentIndexerLifecycle(input: {
   managed: boolean;
   authorities: readonly ContextWorkflowAuthority[];
   dryRun?: boolean;
+  deliver?: boolean;
 }) {
+  if (input.deliver === true && input.dryRun !== true) await requestIndexerEarlyDelivery(input.projectRoot);
   let status = await collectProjectStatus(input.projectRoot, input);
   const route = status.workflow.current;
   let advanced = false;

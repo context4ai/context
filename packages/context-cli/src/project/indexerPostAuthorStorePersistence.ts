@@ -1,3 +1,5 @@
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState,
+  type ComposerBatchFinalization } from "./indexerComposerFinalization.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -356,12 +358,22 @@ export async function persistPostAuthorStates(input: {
   operation: IndexerPostAuthorStoreReceipt["operation"];
   transaction_kind: string;
   states: readonly PostAuthorStatePersistenceInput[];
+  composer_batch?: ComposerBatchFinalization;
   inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<DurableMultiFileTransactionReceipt | null> {
   if (input.states.length === 0) return null;
-  const targets = canonicalTargets((await Promise.all(input.states.map((state) =>
+  const stateTargets = (await Promise.all(input.states.map((state) =>
     postAuthorStateTargets({ projectRoot: input.projectRoot, ...state })
-  ))).flat());
+  ))).flat();
+  if (input.composer_batch !== undefined) {
+    const target = await writeTarget({
+      projectRoot: input.projectRoot,
+      path: INDEXER_CURRENT_FINALIZATION_PATH,
+      value: composerFinalizationState(input.composer_batch),
+    });
+    if (target !== undefined) stateTargets.push(target);
+  }
+  const targets = canonicalTargets(stateTargets);
   if (targets.length === 0) return null;
   return runDurableMultiFileTransaction({
     projectRoot: input.projectRoot,

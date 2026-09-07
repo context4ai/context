@@ -1,3 +1,4 @@
+import { readIndexerDelivery } from "./indexerDelivery.js";
 import { basename, join } from "node:path";
 import {
   buildIndexerLayoutChangeConfirmation,
@@ -46,13 +47,9 @@ import {
   type IndexerReaderPathPreparation,
 } from "./indexerLayoutPathResolution.js";
 
-export const INDEXER_CURRENT_FINALIZATION_PATH = join(
-  ".tmp",
-  "context-runtime",
-  "indexer",
-  "finalization",
-  "current.json",
-);
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
+  "./indexerComposerFinalization.js";
+export { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerComposerFinalization.js";
 
 type AcceptedAuthorRecord = Awaited<ReturnType<
   typeof readAcceptedIndexerMainAuthorResultRecords
@@ -133,7 +130,7 @@ function oldSections(input: {
     .sort((left, right) => left.section_identity_ref.localeCompare(right.section_identity_ref));
 }
 
-function approvedBaseProjection(input: {
+export function approvedBaseProjection(input: {
   proposal: IndexerLayoutProposal;
   structure: Record<string, unknown> | undefined;
 }): IndexerApprovedLayoutProjection | undefined {
@@ -151,10 +148,8 @@ function approvedBaseProjection(input: {
     const byName = input.proposal.artifacts.filter((artifact) =>
       readableId(artifact.artifact_id) === readableId(basename(path))
     );
-    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined) ??
-      (views.length === 1 && input.proposal.artifacts.length === 1
-        ? input.proposal.artifacts[0]
-        : undefined);
+    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined);
+    if (input.proposal.delivery_artifact_ids !== undefined && proposed === undefined) return [];
     const firstSection = Array.isArray(view.sections)
       ? object(view.sections[0])
       : undefined;
@@ -367,21 +362,25 @@ export async function advanceCurrentIndexerFinalization(
   projectRoot: string,
 ): Promise<CurrentIndexerFinalizationState | undefined> {
   const ledger = await currentLedger(projectRoot);
+  const delivery = await readIndexerDelivery(projectRoot);
   if (
     ledger === undefined || ledger.entries.length === 0 ||
-    ledger.entries.some((entry) => entry.stage !== "author" || entry.state !== "accepted")
+    ledger.entries.some((entry) => entry.stage !== "author") ||
+    (!delivery?.current.length && ledger.entries.some((entry) => entry.state !== "accepted"))
   ) return undefined;
 
-  const composerBatch = await resolveCurrentIndexerComposerBatch(projectRoot);
+  const composerBatch = await resolveCurrentIndexerComposerBatch(projectRoot,
+    delivery?.current.length ? new Set(delivery.current.map((page) => page.workset_digest)) : undefined);
   if (composerBatch !== undefined) {
-    return writeState(projectRoot, {
-      state: "composer-required",
-      revision: composerBatch.batch_digest,
-      diagnostic: `${composerBatch.tasks.length} Composer task(s) are ready.`,
+    return composerFinalizationState({
+      batch_digest: composerBatch.batch_digest,
+      task_count: composerBatch.tasks.length,
     });
   }
   const loaded = await loadIndexerRegistry(projectRoot);
-  const records = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+  const allRecords = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+  const records = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
+    (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
   const results = records.map((item) => indexerArtifactResultSchema.parse(item.artifact_result));
   const authorities = await Promise.all(loaded.registry.indexers.map((indexer) =>
     resolveCurrentProjectIndexerPrimaryAuthority({
@@ -458,10 +457,10 @@ export async function advanceCurrentIndexerFinalization(
     resolved_questions: resolvedQuestions,
     target_facts: targetFacts,
     allowed_selector_fact_paths: allowedFactPaths,
-    author_results: results,
-    registered_material_sources: registeredSources(results),
+    author_results: allRecords.map((record) => indexerArtifactResultSchema.parse(record.artifact_result)),
+    registered_material_sources: registeredSources(allRecords.map((record) => indexerArtifactResultSchema.parse(record.artifact_result))),
   });
-  if (!reconciliation.can_report_complete) {
+  if (ledger.entries.every((entry) => entry.state === "accepted") && !reconciliation.can_report_complete) {
     return writeState(projectRoot, {
       state: "blocked",
       revision: reconciliation.report_digest,
@@ -509,6 +508,8 @@ export async function advanceCurrentIndexerFinalization(
     const postAuthor = postAuthorEnvelopes[index]!;
     proposals.push(resolveIndexerLayout({
       artifact_result: result,
+      ...(delivery?.current.length ? { delivery_artifact_ids: delivery.current.filter(
+        (page) => page.result_digest === result.output_digest).map((page) => page.artifact_id) } : {}),
       ...(postAuthor === null ? {} : { post_author_envelope: postAuthor }),
       profile: indexer.profile.primary.id,
       profile_contract: contracts.profile_contract,

@@ -258,6 +258,7 @@ function customPhaseContext(input: {
 export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
+  deliver?: boolean;
   list?: boolean;
   dryRun?: boolean;
   managed?: boolean;
@@ -291,6 +292,7 @@ export async function runProjectPhaseCommand(input: {
       managed: input.managed === true,
       authorities: input.authorities ?? [],
       ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
+      ...(input.deliver === undefined ? {} : { deliver: input.deliver }),
     });
     if (format === "json") {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

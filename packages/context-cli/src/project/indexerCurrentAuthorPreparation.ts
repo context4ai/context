@@ -1,3 +1,4 @@
+import { loadSelectedPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerMainAuthorWorksets,
   buildIndexerMainWorkset,
@@ -377,6 +378,15 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       dependency_view: prepared.dependency_view,
       canonical_inventory_members: prepared.members,
       expected_subject_key: prepared.group.subject_key,
+      page_template: await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.group.template_id }),
+      page_plan: Object.fromEntries(Object.entries({
+        reader_task: prepared.group.reader_task,
+        outline: prepared.group.outline,
+        artifact_intent: prepared.group.artifact_intent,
+        template_id: prepared.group.template_id,
+        priority: prepared.group.priority,
+        delivery_boundary: prepared.group.delivery_boundary,
+      }).filter(([, value]) => value !== undefined)),
       artifact_policy_eligibility: prepared.eligibility,
       allowed_question_targets: prepared.allowed_question_targets,
       ...(enrichment === undefined ? {} : { enrichment }),

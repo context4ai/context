@@ -101,6 +101,34 @@ function symbolId(filePath: string, kind: GoSymbolKind, qualifiedName: string): 
   return `go:${filePath}#${kind}:${qualifiedName}`;
 }
 
+function declaredParameters(node: SyntaxNode | null): NonNullable<GoSymbol["parameters"]> {
+  if (node === null) return [];
+  if (node.type !== "parameter_list") return [{ name: "", type: node.text, optional: false, rest: false }];
+  return node.namedChildren.flatMap((parameter) => {
+    const type = parameter.childForFieldName("type");
+    if (type === null) return [];
+    const names = parameter.namedChildren.filter((child) => child.type === "identifier" && child.id !== type.id);
+    const rest = parameter.type === "variadic_parameter_declaration";
+    return (names.length === 0 ? [""] : names.map((name) => name.text)).map((name) => ({
+      name, type: type.text, optional: rest, rest,
+    }));
+  });
+}
+
+function declaredFields(node: SyntaxNode, filePath: string): NonNullable<GoSymbol["fields"]> {
+  const list = node.namedChildren.find((child) => child.type === "field_declaration_list");
+  return (list?.namedChildren ?? []).flatMap((field) => {
+    if (field.type !== "field_declaration") return [];
+    const type = field.childForFieldName("type");
+    if (type === null) return [];
+    const names = field.namedChildren.filter((child) => child.type === "field_identifier");
+    const tag = field.childForFieldName("tag")?.text;
+    return (names.length === 0 ? [type.text] : names.map((name) => name.text)).map((name) => ({
+      name, type: type.text, embedded: names.length === 0, location: locationFor(filePath, field), ...(tag === undefined ? {} : { tag }),
+    }));
+  });
+}
+
 function extractSymbols(root: SyntaxNode, filePath: string, packageName: string, exportedOnly: boolean): GoSymbol[] {
   const symbols: GoSymbol[] = [];
   for (const node of root.namedChildren) {
@@ -120,6 +148,8 @@ function extractSymbols(root: SyntaxNode, filePath: string, packageName: string,
         ...(receiver ? { receiver } : {}),
         exported: isExported(name),
         signature: functionSignature(node),
+        parameters: declaredParameters(node.childForFieldName("parameters")),
+        results: declaredParameters(node.childForFieldName("result")),
         ...(doc ? { doc } : {}),
         location: locationFor(filePath, node),
       });
@@ -140,6 +170,7 @@ function extractSymbols(root: SyntaxNode, filePath: string, packageName: string,
           package: packageName,
           exported: isExported(name),
           signature: compact(`type ${name} ${typeNode.text}`),
+          ...(kind === "struct" ? { fields: declaredFields(typeNode, filePath) } : {}),
           ...(doc ? { doc } : {}),
           location: locationFor(filePath, spec),
         });

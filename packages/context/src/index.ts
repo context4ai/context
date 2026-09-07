@@ -724,3 +724,5 @@ export const llmsPackage = (definition: {
   kind: "package.llms",
   ...createPackageDefinitionBase("llms", definition),
 });
+
+export { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";

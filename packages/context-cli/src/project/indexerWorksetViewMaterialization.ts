@@ -64,6 +64,9 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
     allowed_artifact_intents: spec.validation.allowed_artifact_intents,
+    ...(spec.validation.page_plan === undefined ? {} : { page_plan: spec.validation.page_plan }),
+    ...(spec.validation.page_template === undefined ? {} : { page_template: spec.validation.page_template }),
+    ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates }),
     allowed_question_targets: (spec.validation.allowed_question_targets as Array<{
       question_target_key: string;
       question_ref: string;
@@ -281,6 +284,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       },
       value: {
         id: requirement.id,
+        ...(requirement.purpose === undefined ? {} : { purpose: requirement.purpose }),
         reader_goals: requirement.reader_goals,
         coverage_domains: requirement.coverage_domains,
         target_scope: requirement.target_scope,
@@ -325,6 +329,8 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           },
           value: {
             base_subject_key: request.workset.partition_subject_key,
+            ...(spec.validation.available_artifact_intents === undefined ? {} : { available_artifact_intents: spec.validation.available_artifact_intents as IndexerJson }),
+            ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates as IndexerJson }),
             subject_entry_guidance: "Use distinct subjects for different public entrypoints or incompatible current/deprecated contracts. Short subjects owned entirely by a deprecated directory receive a deprecated- prefix. Use an explicit SubjectKey for an intentional cross-entry migration or comparison page. Public API coverage does not require one page per symbol.",
             ...(spec.validation.subject_key_contract === undefined
               ? {}

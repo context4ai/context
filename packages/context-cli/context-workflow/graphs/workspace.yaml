@@ -189,6 +189,9 @@ nodes:
       required:
         - resources/contracts/indexer-registry-bootstrap.yaml
         - resources/views/source-boundary.yaml
+      recommended:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
     satisfiedBy:
       - path: indexer.lifecycle_current
         equals: true

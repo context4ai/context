@@ -113,6 +113,20 @@ export async function cmdBumpVersion(args: string[], ctx: BumpVersionContext): P
     updated.push(`context workflow Provider -> ${targetVersion}`);
   }
 
+  const contractsPath = join(ctx.projectRoot, "packages/context-cli/src/project/indexerBaseContracts.ts");
+  try {
+    const contracts = await readFile(contractsPath, "utf8");
+    const pattern = /export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "[^"]+";/u;
+    if (!pattern.test(contracts)) throw new Error("Missing bundled parser version declaration");
+    const next = contracts.replace(pattern, `export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "${targetVersion}";`);
+    if (next !== contracts) {
+      await writeFile(contractsPath, next, "utf8");
+      updated.push(`bundled parser coordinates -> ${targetVersion}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
   if (updated.length > 0) {
     ctx.success(`Updated ${updated.length} packages to ${targetVersion}:`);
     for (const item of updated) {

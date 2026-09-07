@@ -4,7 +4,7 @@ description: Context-managed Provider for source-grounded code knowledge. Use on
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.1.2"
+  context-provider-version: "1.2.0"
 ---
 
 # Context Code Indexer

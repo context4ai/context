@@ -1,3 +1,6 @@
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
+  "./indexerComposerFinalization.js";
+import { withProjectWriteLock } from "./writeLock.js";
 import { Buffer } from "node:buffer";
 import { join } from "node:path";
 import {
@@ -421,14 +424,15 @@ async function selectComposerBatch(input: {
   return { contexts: selected, instruction: firstInstruction };
 }
 
-export async function resolveCurrentIndexerComposerBatch(
+async function resolveCurrentIndexerComposerBatchInternal(
   projectRoot: string,
+  authorWorksets?: ReadonlySet<string>,
 ): Promise<CurrentIndexerComposerBatchContext | undefined> {
   const [loaded, records] = await Promise.all([
     loadIndexerRegistry(projectRoot),
     readAcceptedIndexerMainAuthorResultRecords(projectRoot),
   ]);
-  const ordered = [...records].sort((left, right) =>
+  const ordered = records.filter((record) => authorWorksets === undefined || authorWorksets.has(record.accepted_record.workset_digest)).sort((left, right) =>
     left.accepted_record.workset_digest.localeCompare(right.accepted_record.workset_digest)
   );
   const candidates: CurrentIndexerComposerContext[] = [];
@@ -473,16 +477,26 @@ export async function resolveCurrentIndexerComposerBatch(
     ) {
       throw new TypeError("running Composer tasks do not form one authorized batch");
     }
-    return materializeComposerBatch({
+    const batch = await materializeComposerBatch({
       projectRoot,
       contexts: selectedRunning.contexts,
       instruction: selectedRunning.instruction,
     });
+    // Resume also repairs workspaces started before batch/state publication was paired.
+    await atomicWriteFile(join(projectRoot, INDEXER_CURRENT_FINALIZATION_PATH),
+      JSON.stringify(composerFinalizationState({
+        batch_digest: batch.batch_digest, task_count: batch.tasks.length,
+      }), null, 2) + "\n");
+    return batch;
   }
   const selected = await selectComposerBatch({ projectRoot, contexts: candidates });
   if (selected === undefined) return undefined;
+  // The digest uses requests and instructions, not mutable ledger states. Prepare
+  // resources first so starting tasks and publishing their route share one transaction.
+  const batch = await materializeComposerBatch({ projectRoot, ...selected });
   const started = await startIndexerPostAuthorRunsStore({
     projectRoot,
+    composer_batch: { batch_digest: batch.batch_digest, task_count: batch.tasks.length },
     runs: selected.contexts.map((context) => ({
       plan: context.plan,
       ledger: context.ledger,
@@ -506,11 +520,17 @@ export async function resolveCurrentIndexerComposerBatch(
       ledger: startedTask.ledger,
     };
   });
-  return materializeComposerBatch({
-    projectRoot,
-    contexts,
-    instruction: selected.instruction,
-  });
+  return { ...batch, tasks: batch.tasks.map((task, index) => ({
+    ...task, context: contexts[index]!,
+  })) };
+}
+
+export async function resolveCurrentIndexerComposerBatch(
+  projectRoot: string,
+  authorWorksets?: ReadonlySet<string>,
+): Promise<CurrentIndexerComposerBatchContext | undefined> {
+  return withProjectWriteLock(projectRoot, "resolve-current-composer-batch", () =>
+    resolveCurrentIndexerComposerBatchInternal(projectRoot, authorWorksets));
 }
 
 export async function readCurrentIndexerComposerBatch(

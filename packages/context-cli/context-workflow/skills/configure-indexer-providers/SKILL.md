@@ -43,6 +43,14 @@ current evidence. Do not infer semantic ownership from filenames, titles, or
 headings, and do not persist the discovery list. Capture proves byte/currentness
 only; the selected Markdown Provider remains responsible for semantic indexing.
 
+Once purpose and scope are settled and the applicable Provider capabilities are
+known, use `procedure.work-start-report` and `template.work-start-report` from the
+current Route when the work warrants a report. This is the last planning handoff
+before Partition: write or update `.tmp/work-start-report.md` with the Host file
+tool and give the user its path, then submit the normal Provider selection below.
+A useful report already formed during requirement setup should be reused; do not
+restart discussion or add report fields to the selection Result.
+
 Return only the compact current-Action result:
 
 ```yaml

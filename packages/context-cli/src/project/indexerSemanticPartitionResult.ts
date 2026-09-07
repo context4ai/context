@@ -119,6 +119,8 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     subject_key_contract: unknown;
     partition_unit_type: string;
     required_question_target_refs?: readonly string[];
+    available_artifact_intents?: readonly string[];
+    available_templates?: readonly { id: string }[];
   };
 }): IndexerMainRunResult {
   if (input.request.workset.stage !== "partition") {
@@ -173,6 +175,12 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     "question targets",
   );
   const groups = input.semantic.groups.map((group) => {
+    if (group.artifact_intent !== undefined && !input.validation.available_artifact_intents?.includes(group.artifact_intent)) {
+      throw new TypeError(`unknown page intent ${group.artifact_intent}; choose from the current partition authority`);
+    }
+    if (group.template_id !== undefined && !input.validation.available_templates?.some((template) => template.id === group.template_id)) {
+      throw new TypeError(`unknown template ${group.template_id}; choose from the current partition authority`);
+    }
     const resolvedMembers = allowContainerMemberAliases
       ? deduplicatedSorted(group.members.map((member) =>
         resolveMember(member, "partition member")
@@ -207,6 +215,12 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       subject_intent: group.subject_intent,
       logical_unit_ref: canonicalIndexerNodeRef(subject),
       label: group.title,
+      reader_task: group.reader_task,
+      outline: group.outline,
+      ...(group.artifact_intent === undefined ? {} : { artifact_intent: group.artifact_intent }),
+      ...(group.template_id === undefined ? {} : { template_id: group.template_id }),
+      ...(group.priority === undefined ? {} : { priority: group.priority }),
+      ...(group.delivery_boundary === undefined ? {} : { delivery_boundary: group.delivery_boundary }),
       reader_question_refs: resolvedQuestions,
       question_target_bindings: resolvedTargets,
       member_ids: resolvedMembers,

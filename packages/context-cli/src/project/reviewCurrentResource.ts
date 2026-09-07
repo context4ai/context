@@ -2,6 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { digestText } from "@c4a/agent-graph";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { loadIndexerRegistry } from "@c4a/context";
 import type { ReviewCandidateView } from "./reviewShared.js";
 
 const REVIEW_BATCH_MAX_CANDIDATES = 6;
@@ -12,6 +13,19 @@ export interface CurrentReviewBatchDocument {
   candidate_count: number;
   content: string;
   digest: string;
+}
+
+async function readerPurposes(projectRoot: string, owners: ReadonlySet<string>): Promise<string[]> {
+  try {
+    const loaded = await loadIndexerRegistry(projectRoot);
+    const required = new Set(loaded.registry.indexers.filter((indexer) => owners.has(indexer.id))
+      .flatMap((indexer) => indexer.requirement_bindings.map((binding) => binding.requirement_ref)));
+    return loaded.registry.requirements.filter((requirement) => required.has(requirement.id)).map((requirement) =>
+      `- ${requirement.id}: ${requirement.purpose ?? requirement.reader_goals.join(", ")}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 function renderReviewCandidate(candidate: ReviewCandidateView, index: number): string {
@@ -35,7 +49,7 @@ function renderReviewCandidate(candidate: ReviewCandidateView, index: number): s
 }
 
 const SEMANTIC_REVIEW_CHECKLIST = [
-  "For code knowledge, verify an external consumer can find the responsibility, public entry or interface, important constraints, and the next owning module without reading an internal symbol dump.",
+  "Use the bound reader purpose: integration pages explain imports, usage and contracts; maintenance pages explain relevant state, failure and change boundaries. Public interface tables are useful reference material. Do not turn all knowledge into implementation audits or omit behavior needed by maintainers.",
   "Verify behavior and ownership claims are attributed to the module that actually implements or guarantees them; supporting tests, styles, examples, and helpers must not be presented as independent public contracts.",
   "For document knowledge, preserve the useful rules, conditions, examples, compatibility notes, and uncertainty needed by the stated reader task.",
   "Check that page paths and directory names identify the reader subject, not opaque capture IDs or repeated directory/basename tokens. A readable title alone does not make a path readable. Naming is a review judgement, not a content hard gate.",
@@ -127,6 +141,10 @@ export async function materializeCurrentReviewBatchSet(input: {
   }
   const content = [
     "# Current knowledge Review",
+    "",
+    "## Reader purposes",
+    "",
+    ...await readerPurposes(input.projectRoot, new Set(input.candidates.map((candidate) => candidate.record.module))),
     "",
     `Candidates: ${input.candidates.length}`,
     `Reader-facing batches: ${entries.length}`,

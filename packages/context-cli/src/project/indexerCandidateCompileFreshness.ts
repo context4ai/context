@@ -1,3 +1,4 @@
+import { readIndexerDelivery } from "./indexerDelivery.js";
 import type { IndexerCandidateCompile, IndexerMainRunLedger } from "@c4a/context";
 import { currentLedger } from "./indexerMainRunStoreRecords.js";
 import { hasChangedIndexerWorksetAuthority } from "./indexerCurrentRegistryFreshness.js";
@@ -11,13 +12,15 @@ import { withProjectWriteLock } from "./writeLock.js";
 export function matchesAcceptedCompileResults(
   ledger: IndexerMainRunLedger | undefined,
   bindings: IndexerCandidateCompile["result_bindings"],
+  partial = false,
 ): boolean {
-  if (ledger === undefined || ledger.entries.length !== bindings.length) return false;
+  if ((partial && bindings.length === 0) || ledger === undefined || (!partial && ledger.entries.length !== bindings.length)) return false;
   const byRequest = new Map(bindings.map((binding) => [binding.execution_request_digest, binding]));
   if (byRequest.size !== bindings.length) return false;
-  return ledger.entries.every((entry) => {
+  return bindings.every((binding) => {
+    const entry = ledger.entries.find((item) => item.execution_request_digest === binding.execution_request_digest);
+    if (entry === undefined) return false;
     if (entry.stage !== "author" || entry.state !== "accepted") return false;
-    const binding = byRequest.get(entry.execution_request_digest);
     return binding !== undefined &&
       binding.indexer_id === entry.indexer_id &&
       binding.workset_digest === entry.workset_digest &&
@@ -34,8 +37,16 @@ export async function readIndexerCandidateCompileStaleDiagnostic(
     // Interrupted commits still recover before observing the committed ledger.
     await recoverDurableMultiFileTransactions(projectRoot);
     const ledger = await currentLedger(projectRoot);
-    if (!matchesAcceptedCompileResults(ledger, compile.result_bindings)) {
+    const delivery = await readIndexerDelivery(projectRoot);
+    if (delivery !== undefined && delivery.current.length === 0) return "Previous delivery was built; the next page batch is pending.";
+    if (!matchesAcceptedCompileResults(ledger, compile.result_bindings, !!delivery?.current.length)) {
       return "Candidate compile does not bind the exact current accepted author Result set.";
+    }
+    if (delivery?.current.length) {
+      const refs = new Set(compile.files.map((file) => file.artifact_ref));
+      if (refs.size !== delivery.current.length || delivery.current.some((page) => !refs.has(page.ref))) {
+        return "Candidate compile does not bind the active delivery page set.";
+      }
     }
     try {
       // Registry identity is shared by an Indexer's pages. Read one request per

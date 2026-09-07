@@ -1,3 +1,6 @@
+import { recoverDurableMultiFileTransactions } from "../project/durableMultiFileTransaction.js";
+import { INDEXER_CURRENT_FINALIZATION_PATH, readCurrentIndexerFinalization } from
+  "../project/indexerCurrentFinalization.js";
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -398,7 +401,7 @@ describe("project post-author composer lifecycle", () => {
     expect(revised.observations[1]!.state_digest).toBe(second.receipt.state_digest);
   });
 
-  test("starts and accepts independent Composer tasks in one durable batch transaction", async () => {
+  test.each([false, true])("starts Composer tasks and their route in one recoverable transaction (crash: %s)", async (crash) => {
     const { root, requirementDigest } = await project();
     const effective = await runInput(root, "resolve-effective-composers", {
       protocol: "context.indexer.effective-composer-resolution-input/v1",
@@ -434,13 +437,37 @@ describe("project post-author composer lifecycle", () => {
     if (first.plan.state !== "pending" || second.plan.state !== "pending") {
       throw new Error("expected two pending Composer plans");
     }
-    const started = await startIndexerPostAuthorRunsStore({
+    const startInput = {
       projectRoot: root,
+      composer_batch: { batch_digest: digest("c"), task_count: 2 },
       runs: [first, second].map((item) => ({
         plan: item.plan,
         ledger: item.ledger,
         composer_ref: item.plan.worksets[0]!.composer_ref,
       })),
+    };
+    if (crash) {
+      await expect(startIndexerPostAuthorRunsStore({
+        ...startInput,
+        inject_failure: (point) => {
+          if (point.startsWith("after-target-rename:")) throw new Error("interrupted Composer start");
+        },
+      })).rejects.toThrow("interrupted Composer start");
+      await recoverDurableMultiFileTransactions(root);
+      expect((await readPostAuthorCurrentState(root, digest("1")))?.ledger.entries[0]?.state)
+        .toBe("running");
+      expect((await readPostAuthorCurrentState(root, digest("9")))?.ledger.entries[0]?.state)
+        .toBe("running");
+      expect(await readCurrentIndexerFinalization(root)).toMatchObject({
+        state: "composer-required", revision: digest("c"),
+      });
+      return;
+    }
+    const started = await startIndexerPostAuthorRunsStore(startInput);
+    expect(started.transaction?.target_digests.some((target) =>
+      target.path === INDEXER_CURRENT_FINALIZATION_PATH)).toBe(true);
+    expect(await readCurrentIndexerFinalization(root)).toMatchObject({
+      state: "composer-required", revision: digest("c"),
     });
     expect(started.tasks).toHaveLength(2);
     expect(started.transaction?.target_digests.filter((target) =>

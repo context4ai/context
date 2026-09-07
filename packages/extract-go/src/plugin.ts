@@ -28,6 +28,13 @@ function symbolInfo(filePath: string, symbol: ReturnType<typeof indexGoSource>["
     line: symbol.location.startLine,
     endLine: symbol.location.endLine,
     signature: symbol.signature,
+    ...(symbol.parameters === undefined ? {} : { params: symbol.parameters }),
+    ...(symbol.results === undefined ? {} : { returnType: symbol.results.map((item) => item.type).join(", ") || null }),
+    ...(symbol.fields === undefined ? {} : { members: symbol.fields.map((field) => ({
+      name: field.name, kind: SymbolKind.Prop, visibility: /^[A-Z]/u.test(field.name) ? Visibility.Exported : Visibility.Internal,
+      file: filePath, line: field.location.startLine, endLine: field.location.endLine,
+      typeAnnotation: field.type, ...(field.tag === undefined ? {} : { doc: field.tag }),
+    })) }),
     ...(symbol.doc ? { doc: symbol.doc } : {}),
   };
 }
@@ -116,6 +123,8 @@ export class GoPlugin implements ExtractionPlugin {
           line: route.location.startLine,
           endLine: route.location.endLine,
           signature: `${route.method} ${route.path} -> ${route.handler}`,
+          registration: { kind: "http", method: route.method, key: route.path,
+            handler: route.handler, middleware: route.middleware },
         });
       }
     }

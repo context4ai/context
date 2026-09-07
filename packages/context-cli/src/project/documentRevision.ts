@@ -1,3 +1,4 @@
+import { resetIndexerDeliveryProjection } from "./indexerDelivery.js";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -95,6 +96,7 @@ async function clearDerivedCurrentState(
   projectRoot: string,
   revisedWorksets: readonly string[] = [],
 ): Promise<void> {
+  await resetIndexerDeliveryProjection(projectRoot);
   // Whole-batch projections must be regenerated. Per-page Composer results
   // remain reusable: their requests already bind the Author input. Invalidate
   // only the revised pages' current pointers; close cleans temporary history.
