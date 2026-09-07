@@ -32,7 +32,7 @@ import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStor
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 import { buildProjectIndexerQuestionTargetInventory } from
   "./indexerQuestionTargetInventoryActions.js";
-import { readCurrentIndexerPostAuthorEnvelopeForResult } from
+import { readCurrentIndexerPostAuthorEnvelopesForResults } from
   "./indexerPostAuthorRunStore.js";
 import { resolveCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
@@ -494,17 +494,19 @@ export async function advanceCurrentIndexerFinalization(
         set_digest: selectionState.final_report.subject_key_schema_set_digest,
       };
   const indexerById = new Map(loaded.registry.indexers.map((indexer) => [indexer.id, indexer]));
+  const postAuthorEnvelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({
+    projectRoot,
+    results: records.map((record) => ({
+      author_workset_digest: String(record.accepted_record.workset_digest),
+      primary_result_digest: String(record.accepted_record.result_digest),
+    })),
+  });
   const proposals: IndexerLayoutProposal[] = [];
   for (const [index, record] of records.entries()) {
-    const accepted = object(record.accepted_record)!;
     const result = results[index]!;
     const indexer = indexerById.get(result.indexer_id);
     if (indexer === undefined) throw new TypeError(`unknown accepted Indexer ${result.indexer_id}`);
-    const postAuthor = await readCurrentIndexerPostAuthorEnvelopeForResult({
-      projectRoot,
-      author_workset_digest: String(accepted.workset_digest),
-      primary_result_digest: String(accepted.result_digest),
-    });
+    const postAuthor = postAuthorEnvelopes[index]!;
     proposals.push(resolveIndexerLayout({
       artifact_result: result,
       ...(postAuthor === null ? {} : { post_author_envelope: postAuthor }),

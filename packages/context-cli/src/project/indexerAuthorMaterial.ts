@@ -39,9 +39,11 @@ export function authorSourceIdentityForView(input: {
 function expandedSpec(spec: MainRunSpec, nodes: SourceSpan[], inventory: IndexerSourceIdentityInventory): MainRunSpec {
   if (spec.request.workset.stage !== "author") throw new TypeError("Material expansion requires an Author task");
   const previous = validateIndexerAuthorDependencyView(spec.validation.dependency_view);
+  const replacedEvidence = new Set(nodes.map((node) => node.evidence_ref));
   const view = buildIndexerAuthorDependencyView({
     ...previous,
-    positive_nodes: [...previous.positive_nodes, ...nodes].map(withoutNodeRef),
+    positive_nodes: [...previous.positive_nodes.filter((node) =>
+      node.kind !== "source-span" || !replacedEvidence.has(node.evidence_ref)), ...nodes].map(withoutNodeRef),
     negative_nodes: previous.negative_nodes.map(withoutNodeRef),
   });
   const { workset_digest: _worksetDigest, ...payload } = spec.request.workset;
@@ -139,24 +141,23 @@ export async function prepareIndexerAuthorMaterial(input: {
     const alreadyComplete = view.positive_nodes.some((node) => node.kind === "source-span" &&
       node.source_ref === workset.source_ref && node.module_ref === workset.module_ref &&
       node.locator.path === file.normalized_path && node.content_digest === file.content_digest &&
-      node.locator.start_line === 1 && node.locator.end_line >= end);
+      node.locator.start_line === 1 && node.locator.end_line >= end && node.targets.length > 0);
+    // An unselected Parser span is not a delivered body. Explicit requests
+    // must survive both the source-text and readable-View selectors.
+    expanded.push(file.normalized_path);
     if (alreadyComplete) continue;
     const previous = oldIdentity.files.find((item) => item.normalized_path === file.normalized_path);
     if (previous !== undefined && previous.content_digest !== file.content_digest) {
       throw new TypeError(`Source ${file.normalized_path} changed during Author. Refresh this source before requesting more material; existing completed pages are retained.`);
     }
     nodes.push({ ...probe, locator: { ...probe.locator, end_line: end } });
-    expanded.push(file.normalized_path);
-  }
-  if (nodes.length === 0) {
-    throw new TypeError(`Requested source bodies are already complete in the current task: ${files.map((file) => file.normalized_path).join(", ")}. Read the current source material and submit content or describe the precise remaining gap; repeating these paths will not expand them.${missing.length ? ` Unavailable paths: ${missing.join(", ")}.` : ""}`);
   }
   // Preserve existing selected facts; additional bodies do not acquire page ownership.
   const identities = new Map(oldIdentity.files.map((file) => [file.normalized_path, file]));
   for (const file of files) if (!identities.has(file.normalized_path)) identities.set(file.normalized_path, { ...file, facts: [] });
   return {
     previous_request_digest: input.spec.request.execution_request_digest,
-    spec: expandedSpec(input.spec, nodes, buildIndexerSourceIdentityInventory({ ...inventory, files: [...identities.values()] })),
+    spec: nodes.length === 0 ? input.spec : expandedSpec(input.spec, nodes, buildIndexerSourceIdentityInventory({ ...inventory, files: [...identities.values()] })),
     paths: expanded, missing_paths: missing,
   };
 }

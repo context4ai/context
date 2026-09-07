@@ -32,8 +32,10 @@ import {
   buildProjectIndexerQuestionTargetInventory,
 } from "./indexerMainLifecycleActions.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
-import { INDEXER_POST_AUTHOR_RUN_STORE_ROOT } from
-  "./indexerPostAuthorStorePersistence.js";
+import {
+  postAuthorCurrentEnvelopePath,
+  postAuthorCurrentStatePath,
+} from "./indexerPostAuthorStorePersistence.js";
 
 function normalizedSelector(value: string): string {
   return value.normalize("NFC").replace(/^knowledge\//u, "").replace(/^\.\//u, "");
@@ -89,12 +91,21 @@ function resolveCandidate(
   });
 }
 
-async function clearDerivedCurrentState(projectRoot: string): Promise<void> {
+async function clearDerivedCurrentState(
+  projectRoot: string,
+  revisedWorksets: readonly string[] = [],
+): Promise<void> {
+  // Whole-batch projections must be regenerated. Per-page Composer results
+  // remain reusable: their requests already bind the Author input. Invalidate
+  // only the revised pages' current pointers; close cleans temporary history.
   await Promise.all([
     INDEXER_CURRENT_FINALIZATION_PATH,
     INDEXER_CURRENT_READINESS_PATH,
     INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-    INDEXER_POST_AUTHOR_RUN_STORE_ROOT,
+    ...revisedWorksets.flatMap((digest) => [
+      postAuthorCurrentStatePath(digest),
+      postAuthorCurrentEnvelopePath(digest),
+    ]),
   ].map((path) => rm(join(projectRoot, path), { recursive: true, force: true })));
 }
 
@@ -160,7 +171,7 @@ export async function reopenCurrentAuthorWorksets(input: {
   if (repairedCount !== selected.size) {
     throw new TypeError("Author repair references a workset outside the current ledger");
   }
-  await clearDerivedCurrentState(input.projectRoot);
+  await clearDerivedCurrentState(input.projectRoot, [...selected]);
   await prepareIndexerMainRunStore({
     projectRoot: input.projectRoot,
     workset_set: buildIndexerMainWorksetSet(specs.map((spec) => spec.request.workset)),

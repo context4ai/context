@@ -116,19 +116,16 @@ async function collectProjectStatusSnapshotInternal(
   const capturedDocumentSources = documentSources.filter((source) => source.snapshotReady).length;
   const readySources = readyRepoSources + capturedDocumentSources;
   const draftStatus = await readDraftCandidateStatus(projectRoot);
+  const collectionsWithPages = new Set<string>();
   const approvedPages = await countFiles(
     join(projectRoot, "knowledge"),
-    (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
+    (rel) => {
+      if (!isApprovedKnowledgeMarkdownPath(rel) || rel.startsWith("assets/")) return false;
+      collectionsWithPages.add(rel.split("/")[0]!);
+      return true;
+    },
   );
-  const approvedCollections = (await Promise.all(
-    KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
-      collection,
-      count: await countFiles(
-        join(projectRoot, "knowledge", collection),
-        (rel) => isApprovedKnowledgeMarkdownPath(rel),
-      ),
-    })),
-  )).filter((item) => item.count > 0).map((item) => item.collection);
+  const approvedCollections = KNOWLEDGE_COLLECTIONS.filter((collection) => collectionsWithPages.has(collection));
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const verifyStatus = draftStatus.diagnostics.length === 0

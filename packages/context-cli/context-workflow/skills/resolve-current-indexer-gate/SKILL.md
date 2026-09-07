@@ -14,13 +14,14 @@ Use this Skill only when the current Indexer Route exposes it as
 schema before deciding.
 
 For `stage: structure-review`, inspect the complete semantic structure Resource
-and return either `approved` or `request-adjustment`. Include specific feedback
+and return `approved`, `exclude-obsolete`, or `request-adjustment`. Include specific feedback
 when requesting adjustment.
 
 If the preview requires obsolete-scope confirmation, explain its affected page
 and file counts, mixed-current pages, and both consequences. Ask the user even
 in managed mode. Include uses the supplied approval action; exclude uses the
-supplied adjustment feedback so current APIs remain covered. Do not delete
+supplied exclusion action, which retains accepted current-API groups without
+asking for full repartitioning. Do not delete
 sources or accepted knowledge. A non-delegatable Gate cannot be approved on the
 user's behalf.
 If exclusion leaves no current pages, explain that there is nothing left to

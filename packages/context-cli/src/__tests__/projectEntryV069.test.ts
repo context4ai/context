@@ -6,6 +6,25 @@ import { resolveContextEntry } from "../project/entryCommand.js";
 import { initContextProject } from "../project/workspace.js";
 
 describe("single Context agent entry", () => {
+  test("resolves an existing VS Code workspace file to its containing directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-entry-workspace-file-"));
+    try {
+      const workspaceFile = join(root, "sample.code-workspace");
+      await writeFile(workspaceFile, "{}\n", "utf8");
+      const entry = resolveContextEntry({
+        cwd: root,
+        projectDir: workspaceFile,
+        language: "zh-CN",
+        dev: true,
+        debug: true,
+      });
+      expect(entry.workspace.root).toBe(root);
+      expect(entry.next_action.command).toContain(`context init ${workspaceFile}`);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("plans default initialization outside a workspace", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-entry-init-"));
     try {

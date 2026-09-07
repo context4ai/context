@@ -16,9 +16,8 @@ import {
   authorityCommandOptions,
   loadContextWorkflowProvider,
   projectWorkflowRouteAction,
-  projectWorkflowResourceLocation,
 } from "./workflow/workflowProvider.js";
-import { currentIndexerStructureReview } from "./indexerStructureReview.js";
+import { currentIndexerStructureReview, materializeCurrentIndexerStructurePreview } from "./indexerStructureReview.js";
 import type {
   ContextResolvedWorkflowRoute,
   ContextWorkflowAuthority,
@@ -373,21 +372,16 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       }
       const authorityOptions = authorityCommandOptions(input.authorities, "workflow");
       const completion = `context${authorityOptions} action complete-current --revision '${structure.revision}'${input.managed ? " --managed" : ""} --input - --format json`;
-      const location = projectWorkflowResourceLocation({
-        schema: "agent-graph.resource-location.host-action.v1",
+      const readyPreview = await materializeCurrentIndexerStructurePreview({
+        projectRoot: input.projectRoot, expectedRevision: structure.revision,
+      });
+      const location: ContextResolvedWorkflowRoute["resources"]["required"][number] = {
         id: "indexer-semantic-structure-preview",
         kind: "procedure",
-        mediaType: "application/json",
+        media_type: "application/json",
         revision: structure.revision,
-        materialize: {
-          handler: "context.materialize-indexer-structure-preview/v1",
-          input: {
-            schema: "context.indexer.semantic-structure-preview-request/v1",
-            value: { revision: structure.revision },
-          },
-          output_schema: "context.indexer.semantic-structure-preview/v1",
-        },
-      }, structure.revision, input.authorities);
+        path: readyPreview.path, digest: readyPreview.digest, read_state: "read-required",
+      };
       const resolutionAction = projectCurrentIndexerGateResolution({
         resolved,
         revision: structure.revision,

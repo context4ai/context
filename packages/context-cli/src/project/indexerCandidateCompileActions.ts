@@ -7,7 +7,6 @@ import {
   indexerCandidateCompileSchema,
   indexerArtifactResultSchema,
   indexerProtocolDigest,
-  indexerRegistryDigests,
   loadIndexerRegistry,
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
@@ -20,7 +19,8 @@ import {
   type CandidateRecord,
 } from "./candidateLedger.js";
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
-import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
+import { readCurrentIndexerPostAuthorEnvelopesForResults } from "./indexerPostAuthorRunStore.js";
+import { readIndexerCandidateCompileStaleDiagnostic } from "./indexerCandidateCompileFreshness.js";
 import {
   durableContentDigest,
 } from "./durableSingleFileTransaction.js";
@@ -66,46 +66,6 @@ interface AcceptedAuthorRecord {
   post_author_envelope?: unknown | null;
 }
 
-async function currentRegistryStaleDiagnostic(
-  projectRoot: string,
-  records: readonly AcceptedAuthorRecord[],
-): Promise<string | undefined> {
-  let loaded: Awaited<ReturnType<typeof loadIndexerRegistry>>;
-  try {
-    loaded = await loadIndexerRegistry(projectRoot);
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-  const requirementSetDigest = indexerRegistryDigests(loaded.registry).requirementSetDigest;
-  for (const item of records) {
-    const request = record(item.request, "accepted author request");
-    const workset = record(request.workset, "accepted author request workset");
-    if (workset.requirement_set_digest !== requirementSetDigest) {
-      return "Accepted author Results do not bind the current requirement set.";
-    }
-    if (typeof workset.indexer_id !== "string") {
-      return "Accepted author Result is missing its Indexer identity.";
-    }
-    let currentProjection;
-    try {
-      currentProjection = (await resolveCurrentProjectIndexerPrimaryAuthority({
-        projectRoot,
-        registry: loaded.registry,
-        indexer_id: workset.indexer_id,
-      })).primary_registry;
-    } catch {
-      return `Accepted author Result references inactive Indexer ${workset.indexer_id}.`;
-    }
-    if (workset.primary_registry_projection_digest !== currentProjection.projection_digest) {
-      return `Accepted author Results for ${workset.indexer_id} do not bind its current registry selection.`;
-    }
-  }
-  return undefined;
-}
-
 function record(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -133,19 +93,21 @@ async function withCurrentPostAuthorEnvelopes(
   projectRoot: string,
   records: readonly AcceptedAuthorRecord[],
 ): Promise<AcceptedAuthorRecord[]> {
-  const resolved: AcceptedAuthorRecord[] = [];
-  for (const item of records) {
-    const accepted = record(item.accepted_record, "accepted author record");
-    resolved.push({
-      ...item,
-      post_author_envelope: await readCurrentIndexerPostAuthorEnvelopeForResult({
-        projectRoot,
+  const envelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({
+    projectRoot,
+    results: records.map((item) => {
+      const accepted = record(item.accepted_record, "accepted author record");
+      return {
         author_workset_digest: String(accepted.workset_digest ?? ""),
         primary_result_digest: String(accepted.result_digest ?? ""),
-      }),
-    });
-  }
-  return resolved;
+      };
+    }),
+  });
+  return records.map((item, index) => ({
+    request: item.request, run_result: item.run_result, accepted_record: item.accepted_record,
+    artifact_result: item.artifact_result, run_envelope: item.run_envelope,
+    post_author_envelope: envelopes[index],
+  }));
 }
 
 async function currentContractAuthority(input: {
@@ -416,59 +378,13 @@ export async function readProjectIndexerCandidateCompileStatus(
         diagnostic: "Candidate compile has not completed the current mechanical readiness checks.",
       };
     }
-    const accepted = await withCurrentPostAuthorEnvelopes(
-      projectRoot,
-      await readAcceptedIndexerMainAuthorResultRecords(projectRoot),
-    );
-    const registryDiagnostic = await currentRegistryStaleDiagnostic(projectRoot, accepted);
-    if (registryDiagnostic !== undefined) {
+    const staleDiagnostic = await readIndexerCandidateCompileStaleDiagnostic(projectRoot, compile);
+    if (staleDiagnostic !== undefined) {
       return {
         state: "stale",
         compile,
         candidates: [],
-        diagnostic: registryDiagnostic,
-      };
-    }
-    const currentRefs = accepted.map(currentResultRef)
-      .sort((left, right) => canonicalIndexerJson(left).localeCompare(canonicalIndexerJson(right)));
-    const compileRefs = compile.result_bindings.map((binding) => ({
-      workset_digest: binding.workset_digest,
-      execution_request_digest: binding.execution_request_digest,
-      acceptance_digest: binding.acceptance_digest,
-      artifact_result_digest: binding.artifact_result_digest,
-    })).sort((left, right) => canonicalIndexerJson(left).localeCompare(canonicalIndexerJson(right)));
-    if (canonicalIndexerJson(currentRefs) !== canonicalIndexerJson(compileRefs)) {
-      return {
-        state: "stale",
-        compile,
-        candidates: [],
-        diagnostic: "Candidate compile does not bind the exact current accepted author Result set.",
-      };
-    }
-    const currentCompositions = accepted.map((item) => ({
-      artifact_result_digest: indexerArtifactResultSchema.parse(item.artifact_result)
-        .output_digest,
-      post_author_composition_fingerprint: item.post_author_envelope === null ||
-          item.post_author_envelope === undefined
-        ? null
-        : String(record(item.post_author_envelope, "post-author envelope")
-          .composition_fingerprint ?? ""),
-    })).sort((left, right) => left.artifact_result_digest.localeCompare(
-      right.artifact_result_digest,
-    ));
-    const compileCompositions = compile.result_bindings.map((binding) => ({
-      artifact_result_digest: binding.artifact_result_digest,
-      post_author_composition_fingerprint:
-        binding.post_author_composition_fingerprint,
-    })).sort((left, right) => left.artifact_result_digest.localeCompare(
-      right.artifact_result_digest,
-    ));
-    if (canonicalIndexerJson(currentCompositions) !== canonicalIndexerJson(compileCompositions)) {
-      return {
-        state: "stale",
-        compile,
-        candidates: [],
-        diagnostic: "Candidate compile does not bind the current post-author composition.",
+        diagnostic: staleDiagnostic,
       };
     }
     const rows = (await readCandidateRecords(projectRoot))

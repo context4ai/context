@@ -430,7 +430,10 @@ export const analyzeFile = async (
   return {
     declarations,
     importBindings,
-    relations,
+    // Preserve the physical source file for every relation. `from` may be a
+    // local identifier shared by many files, so downstream adapters must not
+    // infer provenance from the identifier alone.
+    relations: relations.map((relation) => ({ ...relation, file: filePath })),
     lines: countLines(source),
     disposition: "analyzed",
     diagnostics: [],

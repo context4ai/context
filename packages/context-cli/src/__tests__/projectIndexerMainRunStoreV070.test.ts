@@ -15,6 +15,7 @@ import {
   indexerPartitionPlanCanonicalHash,
   indexerPartitionStrategySetDigest,
   indexerInventoryMembersDigest,
+  validateAndRecordIndexerMainRun,
   type IndexerMainPartitionWorkset,
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
@@ -28,7 +29,10 @@ import {
   convergeIndexerMainPartitionRunStore,
   prepareIndexerMainRunStore,
   startIndexerMainRunStore,
+  readAcceptedIndexerMainPartitionResultRecords,
 } from "../project/indexerMainRunStore.js";
+import { acceptedCacheRecord, normalizeRunSpec, readAcceptedCache } from "../project/indexerMainRunStoreRecords.js";
+import { withCommandReadCache } from "../project/commandReadCache.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -221,6 +225,21 @@ function fixture(requirementSetDigest = digest("2")) {
 }
 
 describe("project main Indexer runtime store", () => {
+  test("reads accepted results without replaying submission policy", () => {
+    const current = fixture();
+    const spec = normalizeRunSpec(current.spec);
+    const validated = validateAndRecordIndexerMainRun({ request: spec.request, result: current.result,
+      validation: spec.validation as unknown as Parameters<typeof validateAndRecordIndexerMainRun>[0]["validation"] });
+    const cache = acceptedCacheRecord({ validated });
+    const read = readAcceptedCache({ cache, spec: { ...spec, validation: {
+      ...spec.validation, canonical_inventory_members: [], authorized_strategies: [],
+    } } });
+    expect(read.operation_result).toEqual(validated.operation_result);
+    expect(read.accepted_record).toEqual(validated.accepted_record);
+    expect(read.run_envelope).toEqual(validated.run_envelope);
+    expect(read.artifact_dependency_set).toBeNull();
+    expect(() => readAcceptedCache({ cache: { ...cache, result: {} }, spec })).toThrow();
+  });
   test("atomically recovers accepted Result/receipt and never reruns a legal cached result", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "context-main-run-store-"));
     const current = fixture();
@@ -267,6 +286,10 @@ describe("project main Indexer runtime store", () => {
     expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "ledgers"))).toBe(false);
     expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "results"))).toBe(false);
     expect(existsSync(join(projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "receipts"))).toBe(false);
+    await withCommandReadCache(async () => {
+      const first = await readAcceptedIndexerMainPartitionResultRecords(projectRoot);
+      expect(await readAcceptedIndexerMainPartitionResultRecords(projectRoot)).toBe(first);
+    });
   });
 
   test("does not report completion after the local accepted cache is removed", async () => {

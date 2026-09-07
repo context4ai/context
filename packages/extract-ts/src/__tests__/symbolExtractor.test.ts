@@ -120,6 +120,7 @@ describe("TypeScriptPlugin", () => {
     const result = await plugin.extractSymbols(entryResult.entries, fs);
 
     expect(result.relations.length).toBeGreaterThan(0);
+    expect(result.relations.every((relation) => result.files.some((file) => file.path === relation.file))).toBe(true);
     expect(
       result.relations.every(
         (relation) =>

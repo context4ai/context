@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { digestText } from "@c4a/agent-graph";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -21,6 +21,7 @@ function renderReviewCandidate(candidate: ReviewCandidateView, index: number): s
     "",
     `Collection: ${record.collection}`,
     `Module: ${record.module}`,
+    `Page: ${record.path}`,
     "",
     record.review.behavior_summary ?? record.review.summary,
     "",
@@ -37,6 +38,7 @@ const SEMANTIC_REVIEW_CHECKLIST = [
   "For code knowledge, verify an external consumer can find the responsibility, public entry or interface, important constraints, and the next owning module without reading an internal symbol dump.",
   "Verify behavior and ownership claims are attributed to the module that actually implements or guarantees them; supporting tests, styles, examples, and helpers must not be presented as independent public contracts.",
   "For document knowledge, preserve the useful rules, conditions, examples, compatibility notes, and uncertainty needed by the stated reader task.",
+  "Check that page paths and directory names identify the reader subject, not opaque capture IDs or repeated directory/basename tokens. A readable title alone does not make a path readable. Naming is a review judgement, not a content hard gate.",
   "Consider unfilled authoring placeholders and missing explanations as review hints, not automatic rejection reasons. Judge the reader's actual need; placeholder features, TODO documentation, JSX, template syntax and comments can be legitimate knowledge. Context does not scan prose to determine content quality.",
 ] as const;
 
@@ -76,14 +78,6 @@ export function buildCurrentReviewBatchDocuments(
     const content = [
       `# Current knowledge candidates — batch ${index + 1} of ${batches.length}`,
       "",
-      "Read every candidate below as reader-facing knowledge.",
-      "Judge content usefulness, correctness, scope, and readability; technical evidence identifiers are intentionally omitted.",
-      "Do not approve the overall Review until every listed batch has been read.",
-      "",
-      "## Semantic Review checklist",
-      "",
-      ...SEMANTIC_REVIEW_CHECKLIST.map((item) => `- ${item}`),
-      "",
       ...items,
       "",
     ].join("\n");
@@ -119,9 +113,17 @@ export async function materializeCurrentReviewBatchSet(input: {
   await mkdir(root, { recursive: true });
   const entries = [];
   for (const batch of batches) {
-    const path = join(root, `${batch.task_key}.md`);
-    await atomicWriteFile(path, batch.content);
-    entries.push({ ...batch, path });
+    // Unchanged reading retains its file address across preview revisions.
+    // File existence means previously delivered material, not reviewed content.
+    const path = join(input.projectRoot, ".tmp", "context-runtime", "review",
+      `${batch.task_key}-${batch.digest.slice("sha256:".length)}.md`);
+    const existing = await readFile(path, "utf8").catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
+    });
+    const unchanged = existing === batch.content;
+    if (!unchanged) await atomicWriteFile(path, batch.content);
+    entries.push({ ...batch, path, unchanged });
   }
   const content = [
     "# Current knowledge Review",
@@ -129,15 +131,23 @@ export async function materializeCurrentReviewBatchSet(input: {
     `Candidates: ${input.candidates.length}`,
     `Reader-facing batches: ${entries.length}`,
     "",
-    "Read every batch file below. Keep decisions in the current Agent context.",
-    "Only after every batch is acceptable, run the single approval command returned by the Route.",
+    "Review every candidate for usefulness, correctness, scope, and readability. Keep decisions in the current Agent context.",
+    "On the first review, read all batch files below. After a revision, recheck changed pages and any conclusions affected by them; reuse the review of unchanged pages when it is still available in this conversation. If that review context was lost, read those pages again.",
+    "Batch files are reading material, not separate CLI steps. They need no per-batch read receipts or approval commands.",
+    "The material note below only compares delivered previews, not approval or reading history. Reuse an unchanged batch only if its content review is still in this conversation; a new reviewer must read it.",
+    "Only after every candidate is acceptable, run the single approval command returned by the Route.",
     "If any Candidate needs repair, do not approve any batch; reopen its owning Author or Composer.",
+    "",
+    "## Semantic Review checklist",
+    "",
+    ...SEMANTIC_REVIEW_CHECKLIST.map((item) => `- ${item}`),
     "",
     ...entries.flatMap((entry) => [
       `## ${entry.task_key}`,
       "",
       `- Candidates: ${entry.candidate_count}`,
       `- File: ${entry.path}`,
+      `- Material: ${entry.unchanged ? "unchanged from an earlier preview" : "new or changed preview"}`,
       "",
     ]),
   ].join("\n");

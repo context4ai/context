@@ -69,9 +69,13 @@ describe("authorized Author source text", () => {
       .rejects.toThrow("changed since Parser");
   });
 
-  test("does not truncate oversized material or silently clamp invalid ranges", async () => {
+  test("repairs stale line ranges without blocking source delivery", async () => {
     const input = await fixture("export const count = 1;\n", [[1, 4]]);
-    await expect(readIndexerAuthorSourceText(input)).rejects.toThrow("outside its pinned file");
+    await expect(readIndexerAuthorSourceText(input)).resolves.toMatchObject({
+      spans: [{ start_line: 1, end_line: 2, text: "export const count = 1;\n" }],
+    });
+    const omitted = await readIndexerAuthorSourceText(await fixture("export const count = 1;\n", [[4, 4]]));
+    expect(omitted.spans).toEqual([]);
     const valid = await fixture("export const count = 1;\n", [[1, 1]]);
     await expect(readIndexerAuthorSourceText({ ...valid, max_bytes: 5 })).rejects.toThrow("source memory safety limit");
   });

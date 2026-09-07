@@ -279,12 +279,13 @@ const indexerPostAuthorBatchSemanticInputSchema = z.object({
 
 const structureReviewBaseSchema = z.object({
   stage: z.literal("structure-review"),
-  decision: z.enum(["approved", "request-adjustment"]),
+  decision: z.enum(["approved", "exclude-obsolete", "request-adjustment"]),
   feedback: z.string().min(1).optional(),
 }).strict();
 
 export const indexerStructureReviewInputSchema = z.discriminatedUnion("decision", [
   structureReviewBaseSchema.extend({ decision: z.literal("approved") }),
+  structureReviewBaseSchema.extend({ decision: z.literal("exclude-obsolete") }),
   structureReviewBaseSchema.extend({
     decision: z.literal("request-adjustment"),
     feedback: z.string().min(1),

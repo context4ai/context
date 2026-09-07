@@ -46,7 +46,7 @@ was not selected into this package.
 | Architecture, procedure, FAQ, decision, or incident | Start from `{{guidesRoot}}/index.md`. |
 | Standard, constraint, acceptance, or test question | Start from `{{rulesRoot}}/index.md`. |
 | Relationship or impact | Inspect typed edges, then read both endpoint pages. |
-| Detail inside a known page | Read the relevant `context:section` block. |
+| Detail inside a known page | Read the relevant Markdown heading and its body. |
 | Coverage, gap, or inventory | Inspect the root indexes and `context-build-inventory.json`. |
 
 ## Evidence Contract
@@ -56,15 +56,20 @@ Use each opened page or package artifact as an evidence card:
 | Evidence | Valid use |
 |---|---|
 | Page path | Page identity and citation handle. |
-| Frontmatter title, description, stable node identity, and tags | Navigation and scope selection only. |
-| `context:section` id, kind, and `source_ref` | Section identity, citation, and source boundary. |
+| Frontmatter title, description, and tags | Navigation and scope selection only. |
+| Markdown headings | Locate and cite a section within its page. |
 | Reader-visible section body | Primary support for factual claims. |
 | `context-build-inventory.json` edge records | Typed relationship evidence. |
 | Root indexes and build inventory | Package scope and coverage evidence. |
 
-Do not infer a relationship from page co-occurrence. If a `source_ref` points to
-source material that is not bundled, cite the approved section that reviewed it
-and do not expand beyond its visible content.
+Do not infer a relationship from page co-occurrence. Published pages do not need
+production identifiers or source bookkeeping to be usable. Cite their readable
+paths and headings; do not search for missing technical metadata or ask users
+to supply it. Open the build inventory only for relationship or coverage questions,
+or when a maintainer needs to locate the original approved page via
+`dist_path` → `approved_path`. Original source attribution belongs to that
+workspace's `knowledge/`, not to the published page. If the original material is
+not bundled, answer only from the visible approved content and state its limits.
 
 ## Search Fallback
 
@@ -96,8 +101,7 @@ Use compact citations tied to claims:
 
 ```text
 Page:         <claim> [<root>/path/page.md]
-Section:      <claim> [<root>/path/page.md#section-id]
-Source-bound: <claim> [<root>/path/page.md#section-id, source_ref]
+Section:      <claim> [<root>/path/page.md, heading: <visible heading>]
 Relationship: <claim> [context-build-inventory.json#structure.edge_records edge:<type>]
 Coverage:     <claim> [context-build-inventory.json]
 ```
@@ -107,7 +111,7 @@ When evidence is missing, return:
 ```text
 Gap: this package does not contain evidence for <missing point>.
 Checked: <indexes, pages, or artifacts>.
-Next useful source: <source, page, or source_ref if known>.
+Next useful source: <source document or page if known>.
 ```
 
 Distinguish “not evidenced by this package” from “not true.” Do not fill gaps
@@ -123,7 +127,7 @@ from memory, previous conversations, or source files outside the package.
 
 Approved knowledge files: `{{knowledgeCount}}`
 
-## Template Author Recommendation
+{{!-- Template author guidance (not part of the published query Skill):
 
 This is a complete generic query Skill, but package authors should replace or
 edit it before publishing when the package has project-specific terminology,
@@ -131,3 +135,4 @@ common user intents, preferred entry pages, known limits, or task workflows.
 Update the description, routing table, and package-boundary guidance to match
 the actual package. If the generic behavior is intentionally sufficient,
 explicitly accept the unchanged default during Context package-template review.
+--}}

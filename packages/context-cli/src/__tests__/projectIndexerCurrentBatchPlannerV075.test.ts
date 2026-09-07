@@ -116,7 +116,7 @@ describe("0.7.5 current Indexer batch planner", () => {
     expect(second).toEqual(first);
   });
 
-  test("stops at the first budget boundary without truncating a task", () => {
+  test("skips a non-fitting later task while preserving the oldest task and complete bodies", () => {
     const planned = planIndexerCurrentBatch({
       candidates: [
         candidate(0, { input_bytes: indexerBatchStagePolicy("partition").max_input_bytes / 2 }),
@@ -126,8 +126,9 @@ describe("0.7.5 current Indexer batch planner", () => {
       shared_instruction_bytes: 1024,
     });
 
-    expect(planned.candidates).toHaveLength(1);
+    expect(planned.candidates).toHaveLength(2);
     expect(planned.candidates[0]?.workset.workset_digest).toBe(workset(0).workset_digest);
+    expect(planned.candidates[1]?.workset.workset_digest).toBe(workset(2).workset_digest);
   });
 
   test("delivers an oversized semantic task alone without clipping it", () => {

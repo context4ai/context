@@ -60,8 +60,18 @@ describe("Agent task reading and Author source references", () => {
       .toThrow("Use source_items from the current task");
     expect(() => resolveIndexerAuthorSourceItems(index, ["fact:config"], "usage.source_items"))
       .toThrow("not authorized");
-    expect(() => resolveIndexerAuthorSourceItems(index, ["src/main.ts"], "usage.source_items"))
-      .toThrow("not authorized");
+    expect(resolveIndexerAuthorSourceItems(index, ["src/main.ts"], "usage.source_items"))
+      .toEqual(["evidence:range-1", "evidence:range-3"]);
+  });
+
+  test("same path from different sources still requires an explicit source item", () => {
+    const { view, dependency } = fixture();
+    const original = dependency.positive_nodes.find((node) => node.kind === "source-span")!;
+    const foreign = { ...original, node_ref: "foreign-span", evidence_ref: "evidence:foreign", source_ref: "repo:other" };
+    const index = buildIndexerAuthorSourceItems({ view, nodes: [...dependency.positive_nodes, foreign] });
+    expect(() => resolveIndexerAuthorSourceItems(index, ["src/main.ts"], "usage.source_items")).toThrow("not authorized");
+    expect(resolveIndexerAuthorSourceItems(index, ["source-text:main"], "usage.source_items"))
+      .toEqual(["evidence:range-1", "evidence:range-3"]);
   });
 
   test("rejects a source-text carrier that points outside its authorized file or range", () => {

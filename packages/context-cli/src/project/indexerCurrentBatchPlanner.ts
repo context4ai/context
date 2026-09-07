@@ -118,6 +118,7 @@ export function planIndexerCurrentBatch(input: {
   let outputReserveBytes = 0;
   let viewItemCount = 0;
   for (const candidate of eligible) {
+    if (selected.length === policy.max_tasks) break;
     const reading = input.measure_reading?.([...selected, candidate]);
     const nextInputBytes = reading === undefined ? inputBytes + candidate.input_bytes
       : input.shared_instruction_bytes + reading.input_bytes;
@@ -127,7 +128,10 @@ export function planIndexerCurrentBatch(input: {
       nextInputBytes <= policy.max_input_bytes &&
       nextOutputReserveBytes <= policy.max_output_reserve_bytes &&
       nextViewItemCount <= policy.max_view_items;
-    if (selected.length > 0 && !fits) break;
+    // Keep the oldest task first, but do not let a large later task prevent
+    // smaller independent tasks from using the remaining reading budget.
+    // The skipped task stays pending and becomes first in a later batch.
+    if (selected.length > 0 && !fits) continue;
     selected.push(candidate);
     inputBytes = nextInputBytes;
     outputReserveBytes = nextOutputReserveBytes;

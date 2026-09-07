@@ -3,6 +3,7 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerProtocolDigest } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { LIFECYCLE_ROOT } from "./lifecyclePaths.js";
 import type { InstalledIndexerParserPackage } from "./indexerParserRuntimeImport.js";
 import type {
@@ -213,11 +214,10 @@ export async function readIndexerParserRuntimeIndexManifest(input: {
   projectRoot: string;
   indexer_id: string;
 }): Promise<IndexerParserRuntimeIndexManifest> {
-  const text = await readFile(
-    indexerParserRuntimeManifestPath(input.projectRoot, input.indexer_id),
-    "utf8",
-  );
-  return validateIndexerParserRuntimeIndexManifest(JSON.parse(text));
+  const path = indexerParserRuntimeManifestPath(input.projectRoot, input.indexer_id);
+  return reuseCommandFileRead({ key: "parser-runtime-manifest", paths: [path],
+    read: async () => validateIndexerParserRuntimeIndexManifest(JSON.parse(await readFile(path, "utf8"))),
+  });
 }
 
 export async function readIndexerParserRuntimeSourceMetadata(input: {

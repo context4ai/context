@@ -51,6 +51,30 @@ function resolveAlias(
   return resolved;
 }
 
+function containerAliases(input: {
+  view: IndexerAuthorizedWorksetView;
+  inventory: readonly IndexerInventoryMember[];
+}): Map<string, string> {
+  const knownMembers = new Set(input.inventory.map((item) => item.member_id));
+  const aliases = new Map<string, string>();
+  for (const item of input.view.items) {
+    if (
+      item.category !== "supporting-fact" &&
+      item.category !== "fact" &&
+      item.category !== "consumer-anchor"
+    ) continue;
+    const container = item.provenance.container_ref;
+    if (container !== undefined && knownMembers.has(container)) {
+      aliases.set(item.ref, container);
+    }
+  }
+  return aliases;
+}
+
+function deduplicatedSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort(compareIndexerCanonicalText);
+}
+
 function inventoryAliases(input: {
   view: IndexerAuthorizedWorksetView;
   inventory: readonly IndexerInventoryMember[];
@@ -114,6 +138,27 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     view: input.view,
     inventory: input.validation.canonical_inventory_members,
   });
+  // An unresolved projection intentionally exposes supporting facts without
+  // promoting any of them to reader targets. If an Agent uses one of those
+  // facts as a group member, recover the authorized file member from its
+  // explicit container instead of making it retry a mechanical alias error.
+  // Once consumer anchors exist, keep the normal exact inventory contract.
+  const allowContainerMemberAliases = !input.view.items.some((item) =>
+    item.category === "consumer-anchor"
+  );
+  const factContainers = allowContainerMemberAliases
+    ? containerAliases({
+      view: input.view,
+      inventory: input.validation.canonical_inventory_members,
+    })
+    : new Map<string, string>();
+  const resolveMember = (value: string, label: string): string => {
+    const direct = members.get(value);
+    if (direct !== undefined) return direct;
+    const container = factContainers.get(value);
+    if (container !== undefined) return container;
+    throw new TypeError(`${label} is not authorized: ${value}`);
+  };
   const memberKinds = new Map(input.validation.canonical_inventory_members.map((item) => [
     item.member_id,
     item.member_kind,
@@ -128,9 +173,13 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     "question targets",
   );
   const groups = input.semantic.groups.map((group) => {
-    const resolvedMembers = uniqueSorted(group.members.map((member) =>
-      resolveAlias(members, member, "partition member")
-    ), `${group.key}.members`);
+    const resolvedMembers = allowContainerMemberAliases
+      ? deduplicatedSorted(group.members.map((member) =>
+        resolveMember(member, "partition member")
+      ))
+      : uniqueSorted(group.members.map((member) =>
+        resolveMember(member, "partition member")
+      ), `${group.key}.members`);
     const resolvedQuestions = uniqueSorted(group.questions.map((question) =>
       resolveAlias(questions, question, "reader question")
     ), `${group.key}.questions`);
@@ -171,7 +220,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       group_key: group.group_key,
     }))),
     ...input.semantic.excluded.map((entry) => {
-      const memberId = resolveAlias(members, entry.item, "excluded partition member");
+      const memberId = resolveMember(entry.item, "excluded partition member");
       return {
         member_id: memberId,
         member_kind: memberKinds.get(memberId)!,
@@ -180,7 +229,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       };
     }),
     ...input.semantic.unsupported.map((entry) => {
-      const memberId = resolveAlias(members, entry.item, "unsupported partition member");
+      const memberId = resolveMember(entry.item, "unsupported partition member");
       return {
         member_id: memberId,
         member_kind: memberKinds.get(memberId)!,

@@ -155,7 +155,10 @@ function estimateOutputReserve(spec: MainRunSpec): number {
     : 0;
   return spec.request.workset.stage === "partition"
     ? 2 * 1024 + members * 256
-    : 16 * 1024 + members * 1024;
+    // Author writes a page, not one paragraph per AST fact/member. Reserve a
+    // page-sized output independently of parser granularity; this is a packing
+    // estimate, never a limit on an accepted result's size.
+    : 32 * 1024;
 }
 
 async function currentBatchInstructions(input: {
@@ -221,10 +224,11 @@ async function prepareCandidates(input: {
   projectRoot: string;
   specs: readonly MainRunSpec[];
   instructionRequest: IndexerInstructionMaterializationRequest;
+  task_offset?: number;
 }) {
   const prepared = [];
   for (const [index, spec] of input.specs.entries()) {
-    const taskKey = `task-${String(index + 1).padStart(3, "0")}`;
+    const taskKey = `task-${String(index + 1 + (input.task_offset ?? 0)).padStart(3, "0")}`;
     const structureFeedback = spec.request.workset.stage === "partition"
       ? await readPendingIndexerStructureFeedback({
           projectRoot: input.projectRoot,
@@ -293,7 +297,7 @@ async function persistPlannedBatch(input: {
       prepared: candidate.worksetView,
     });
     tasks.push({
-      task_key: candidate.taskKey,
+      task_key: `task-${String(tasks.length + 1).padStart(3, "0")}`,
       indexer_id: candidate.spec.request.workset.indexer_id,
       source_ref: candidate.spec.request.workset.source_ref,
       workset_digest: candidate.spec.request.workset.workset_digest,
@@ -335,7 +339,8 @@ export async function prepareAndStartNextIndexerBatch(
     entry.state === "pending" || entry.state === "stale"
   );
   if (pending.length === 0) throw new TypeError("current Indexer stage has no pending work");
-  const candidateLimit = indexerBatchStagePolicy(pending[0]!.stage).max_tasks;
+  const policy = indexerBatchStagePolicy(pending[0]!.stage);
+  const candidateLimit = pending[0]!.stage === "author" ? policy.max_tasks * 3 : policy.max_tasks;
   const specs: MainRunSpec[] = [];
   for (const entry of pending) {
     const spec = await currentSpec({
@@ -356,14 +361,24 @@ export async function prepareAndStartNextIndexerBatch(
   const shared = await sharedBatchAuthority({ projectRoot, spec: specs[0]! });
   const prepared = await prepareCandidates({
     projectRoot,
-    specs,
+    specs: specs.slice(0, policy.max_tasks),
     instructionRequest: shared.instructionRequest,
   });
-  const planned = planIndexerCurrentBatch({
+  let planned = planIndexerCurrentBatch({
     candidates: prepared.map((candidate) => candidate.candidate),
     shared_instruction_bytes: shared.instructionBytes,
     measure_reading: batchReadingMeasure(prepared),
   });
+  // Look ahead only while there is usable capacity. Do not materialize the
+  // entire queue (or even the lookahead) for an already full/oversized batch.
+  for (let index = prepared.length; index < specs.length; index += 1) {
+    if (planned.candidates.length >= policy.max_tasks || planned.input_bytes >= policy.max_input_bytes ||
+        planned.output_reserve_bytes >= policy.max_output_reserve_bytes || planned.view_item_count >= policy.max_view_items) break;
+    prepared.push(...await prepareCandidates({ projectRoot, specs: [specs[index]!],
+      instructionRequest: shared.instructionRequest, task_offset: index }));
+    planned = planIndexerCurrentBatch({ candidates: prepared.map((candidate) => candidate.candidate),
+      shared_instruction_bytes: shared.instructionBytes, measure_reading: batchReadingMeasure(prepared) });
+  }
   const started = await startIndexerMainRunsStore({
     projectRoot,
     workset_digests: planned.candidates.map((candidate) =>

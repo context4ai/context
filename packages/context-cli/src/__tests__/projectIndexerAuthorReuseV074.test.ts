@@ -39,7 +39,7 @@ import {
   currentLedger,
   currentSpec,
   readJsonMaybe,
-  validateAcceptedCache,
+  readAcceptedCache,
   type MainRunSpec,
 } from "../project/indexerMainRunStoreRecords.js";
 import { prepareAndStartNextIndexerBatch } from "../project/indexerCurrentBatch.js";
@@ -461,7 +461,7 @@ describe("project Author result reuse", () => {
     expect(recovered.ledger.entries.find((entry) => entry.workset_digest === currentA.request.workset.workset_digest)?.state).toBe("stale");
     expect(recovered.ledger.entries.find((entry) => entry.workset_digest === currentB.request.workset.workset_digest)?.state).toBe("accepted");
     const cached = await readJsonMaybe(root, acceptedCachePath(currentB.request.execution_request_digest));
-    const reused = validateAcceptedCache({ cache: cached, spec: await currentSpec({ projectRoot: root, request_digest: currentB.request.execution_request_digest }) });
+    const reused = readAcceptedCache({ cache: cached, spec: await currentSpec({ projectRoot: root, request_digest: currentB.request.execution_request_digest }) });
     if (reused.artifact_dependency_set === null) throw new Error("reused Guide B result lacks Artifact dependencies");
     expect((reused.operation_result as IndexerArtifactResult).output_digest).toBe((previousB.artifact_result as IndexerArtifactResult).output_digest);
     expect(reused.artifact_dependency_set.artifacts[0]!.dependency_digest).toBe(previousB.artifact_dependency_set.artifacts[0]!.dependency_digest);

@@ -96,7 +96,8 @@ describe("current Indexer batch recovery", () => {
       next: null,
       next_preparation: {
         outcome: "failed",
-        message: "injected next preparation failure",
+        message: expect.stringContaining("Do not resubmit committed outcomes"),
+        command: "context run --managed --format json",
       },
     });
     expect(completion.outcomes).toContainEqual(expect.objectContaining({

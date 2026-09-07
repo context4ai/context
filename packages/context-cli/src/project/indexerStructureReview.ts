@@ -11,6 +11,7 @@ import {
   type IndexerPartitionPlan,
   type IndexerPartitionValidationInput,
   type IndexerMainPartitionWorkset,
+  type IndexerSubjectKey,
 } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import {
@@ -34,11 +35,18 @@ import { convergeIndexerPartitionSubjects } from
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
 import { prepareAndStartNextIndexerBatch } from "./indexerCurrentBatch.js";
 import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
+import { excludeIndexerPartitionMembers } from "./indexerPartitionScope.js";
+import { preparePartitionStage } from "./indexerPartitionStage.js";
 
 const STRUCTURE_ROOT = join(".tmp", "context-runtime", "indexer", "structure-review");
 const DECISION_PATH = join(STRUCTURE_ROOT, "current.json");
 const PLAN_PATH = join(STRUCTURE_ROOT, "author-plan.json");
 const FEEDBACK_PATH = join(STRUCTURE_ROOT, "feedback.json");
+
+type ObsoleteScope = ReturnType<typeof summarizeIndexerObsoleteScope>;
+type ReadableObsoleteScope = Omit<ObsoleteScope, "affected"> & {
+  affected: Array<Omit<ObsoleteScope["affected"][number], "member_ids">>;
+};
 
 function record(value: object): Record<string, unknown> {
   return value as Record<string, unknown>;
@@ -61,6 +69,7 @@ export interface IndexerSemanticStructurePreview {
     title: string;
     reader_task: string;
     outline: string[];
+    subject_key?: IndexerSubjectKey;
     members: string[];
     questions: string[];
     target: {
@@ -70,7 +79,7 @@ export interface IndexerSemanticStructurePreview {
   }>;
   excluded: Array<{ item: string; reason_code: string }>;
   unsupported: Array<{ item: string; missing_capabilities: string[] }>;
-  obsolete_scope?: ReturnType<typeof summarizeIndexerObsoleteScope>;
+  obsolete_scope?: ReadableObsoleteScope;
   preview_digest: string;
 }
 
@@ -85,6 +94,7 @@ interface PreparedIndexerStructurePlan {
   preview: IndexerSemanticStructurePreview;
   workset_set: unknown;
   run_specs: unknown[];
+  obsolete_member_ids?: string[];
   plan_digest: string;
 }
 
@@ -114,6 +124,7 @@ function preparedPlan(value: unknown): PreparedIndexerStructurePlan | undefined 
     preview: candidate.preview,
     workset_set: candidate.workset_set,
     run_specs: candidate.run_specs,
+    ...(candidate.obsolete_member_ids === undefined ? {} : { obsolete_member_ids: candidate.obsolete_member_ids }),
   };
   if (indexerProtocolDigest(payload) !== candidate.plan_digest) {
     throw new TypeError("prepared semantic structure plan failed integrity validation");
@@ -171,7 +182,10 @@ export async function prepareCurrentIndexerStructurePlan(
   if (semantic.some((entry) => entry !== undefined && entry.outcome !== "complete")) {
     throw new TypeError("failed partition cannot enter structure review");
   }
-  const partitions: IndexerPartitionValidationInput[] = records.map((record) => {
+  const scopeFeedback = await readJsonMaybe(projectRoot, FEEDBACK_PATH) as
+    { excluded_member_ids?: string[] } | undefined;
+  const excluded = new Set(scopeFeedback?.excluded_member_ids ?? []);
+  const partitions = excludeIndexerPartitionMembers(records.map((record): IndexerPartitionValidationInput => {
     if (record.request.workset.stage !== "partition") {
       throw new TypeError("semantic structure requires Partition worksets");
     }
@@ -191,7 +205,7 @@ export async function prepareCurrentIndexerStructurePlan(
               record.validation.required_question_target_refs as string[],
           }),
     };
-  });
+  }), excluded);
   const converged = convergeIndexerPartitionSubjects(partitions);
   const prepared = await prepareAuthorPlan(
     projectRoot,
@@ -215,7 +229,12 @@ export async function prepareCurrentIndexerStructurePlan(
   }));
   const payload = {
     protocol: "context.indexer.semantic-structure-preview/v1" as const,
-    obsolete_scope: prepared.author.obsolete_scope,
+    obsolete_scope: {
+      ...prepared.author.obsolete_scope,
+      affected: prepared.author.obsolete_scope.affected.map((item) => ({
+        title: item.title, paths: item.paths, mixed_current_content: item.mixed_current_content,
+      })),
+    },
     topics: converged.partitions.flatMap((partition) => {
       const plan = partition.plan as IndexerPartitionPlan;
       return plan.status === "complete" ? plan.groups.map((group) => {
@@ -239,13 +258,14 @@ export async function prepareCurrentIndexerStructurePlan(
           title: authored?.title ?? group.label,
           reader_task: authored?.reader_task ?? `Browse ${group.label}.`,
           outline: authored?.outline ?? [group.label],
+          subject_key: group.subject_key,
           members: group.member_ids,
           questions: group.reader_question_refs,
           target: { mode: target.mode, node_ref: target.node_ref },
         };
       }) : [];
     }).sort((left, right) => left.key.localeCompare(right.key)),
-    excluded: records.flatMap((partition, entryIndex) => {
+    excluded: [...excluded].map((item) => ({ item, reason_code: "user-excluded-obsolete" })).concat(records.flatMap((partition, entryIndex) => {
       const authored = semantic[entryIndex];
       if (authored !== undefined) return authored.excluded;
       const plan = partition.artifact_result as IndexerPartitionPlan;
@@ -254,7 +274,7 @@ export async function prepareCurrentIndexerStructurePlan(
           ? [{ item: item.member_id, reason_code: item.reason_code }]
           : []
       );
-    })
+    }).filter((item) => !excluded.has(item.item)))
       .sort((left, right) => left.item.localeCompare(right.item)),
     unsupported: records.flatMap((partition, entryIndex) => {
       const authored = semantic[entryIndex];
@@ -282,6 +302,7 @@ export async function prepareCurrentIndexerStructurePlan(
     preview,
     workset_set: prepared.author.workset_set,
     run_specs: prepared.author.run_specs,
+    obsolete_member_ids: [...new Set(prepared.author.obsolete_scope.affected.flatMap((item) => item.member_ids))].sort(),
   };
   await atomicWriteFile(
     join(projectRoot, PLAN_PATH),
@@ -302,7 +323,10 @@ export async function materializeCurrentIndexerStructurePreview(input: {
     throw new TypeError("semantic structure preview is stale");
   }
   const path = join(input.projectRoot, STRUCTURE_ROOT, "preview.json");
-  await atomicWriteFile(path, `${JSON.stringify(current.preview, null, 2)}\n`);
+  const existing = await readJsonMaybe(input.projectRoot, join(STRUCTURE_ROOT, "preview.json"));
+  if (JSON.stringify(existing) !== JSON.stringify(current.preview)) {
+    await atomicWriteFile(path, `${JSON.stringify(current.preview, null, 2)}\n`);
+  }
   return { path, digest: current.preview.preview_digest };
 }
 
@@ -467,19 +491,54 @@ export async function prepareCurrentIndexerAuthorStage(projectRoot: string): Pro
 export async function completeCurrentIndexerStructureReview(input: {
   projectRoot: string;
   revision: string;
-  decision: "approved" | "request-adjustment";
+  decision: "approved" | "exclude-obsolete" | "request-adjustment";
   feedback?: string;
 }): Promise<"author" | "partition"> {
-  const current = await currentIndexerStructureReview(input.projectRoot);
+  let current = await currentIndexerStructureReview(input.projectRoot);
   if (current === undefined || current.revision !== input.revision) {
     throw new TypeError("semantic structure review revision is stale");
   }
-  if (input.decision === "approved") {
+  if (input.decision === "exclude-obsolete") {
+    const scope = current.preview.obsolete_scope;
+    if (scope === undefined || scope.exclusion_leaves_no_current_pages) {
+      throw new TypeError("obsolete scope exclusion has no remaining current pages; choose a different scope");
+    }
+    const prior = await readJsonMaybe(input.projectRoot, FEEDBACK_PATH) as
+      { excluded_member_ids?: string[] } | undefined;
+    const prepared = await readPreparedPlan(input.projectRoot);
+    const obsoleteMembers = prepared?.obsolete_member_ids;
+    if (obsoleteMembers === undefined) {
+      // Older previews contain readable paths only. Rebuild from the accepted
+      // cache to resolve identities, rather than guessing from page names.
+      const ledger = await preparePartitionStage(input.projectRoot);
+      if (ledger?.entries.some((entry) => entry.state !== "accepted")) return "partition";
+      const refreshed = await prepareCurrentIndexerStructurePlan(input.projectRoot);
+      return completeCurrentIndexerStructureReview({ ...input, revision: refreshed.revision });
+    }
+    await atomicWriteFile(join(input.projectRoot, FEEDBACK_PATH), canonicalIndexerJson({
+      excluded_member_ids: [...new Set([
+        ...(prior?.excluded_member_ids ?? []),
+        ...obsoleteMembers,
+      ])].sort(),
+    }));
+    // Switching ledgers reuses accepted Partition records. Only the derived
+    // Author plan changes; no captured sources or accepted cache is deleted.
+    const partitionLedger = await preparePartitionStage(input.projectRoot);
+    if (partitionLedger?.entries.some((entry) => entry.state !== "accepted")) {
+      return "partition";
+    }
+    current = await prepareCurrentIndexerStructurePlan(input.projectRoot);
+  }
+  if (input.decision === "approved" || input.decision === "exclude-obsolete") {
     await atomicWriteFile(join(input.projectRoot, DECISION_PATH), canonicalIndexerJson({
       revision: current.revision,
       decision: "approved",
     }));
-    await rm(join(input.projectRoot, FEEDBACK_PATH), { force: true });
+    const feedback = await readJsonMaybe(input.projectRoot, FEEDBACK_PATH) as
+      { excluded_member_ids?: string[] } | undefined;
+    if (feedback?.excluded_member_ids === undefined) {
+      await rm(join(input.projectRoot, FEEDBACK_PATH), { force: true });
+    }
     const ledger = await currentLedger(input.projectRoot);
     if (ledger?.entries.every((entry) => entry.stage === "partition") === true) {
       await prepareCurrentIndexerAuthorStage(input.projectRoot);

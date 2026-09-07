@@ -23,7 +23,12 @@ Build runs only after close and verification are current. It writes declared
 packages under `dist/` and records an inventory receipt with added, updated,
 removed, and index changes.
 
-Run only the current route command, then evaluate again. A successful build
+Follow the returned continuation. Automatic execution runs mechanical close and
+build steps and re-evaluates the Graph after each step. Recommended diagnostic
+resources are optional; do not materialize or acknowledge them merely to run an
+immediate repair command. While a command is running, wait for its result using
+the existing process handle; inspect logs only to diagnose an actual failure or
+suspected stall, not as a routine prerequisite for progress. A successful build
 means the currently declared scope is current; newly captured or newly declared
 targets can reopen earlier graph nodes.
 

@@ -54,7 +54,7 @@ export interface WorkflowRunResult {
   protocol: "context.workflow.run.v1";
   state: "complete" | "blocked" | "planned" | "failed" | "max-steps";
   projectRoot: string;
-  managed: true;
+  managed: boolean;
   steps: WorkflowAutomaticStep[];
   stop: WorkflowRunStop;
   workflow: ProjectStatus["workflow"];
@@ -105,27 +105,19 @@ export function selectAutomaticWorkflowCommand(
       ),
     };
   }
-  const blockingDiagnostic = status.workflow.diagnostics.find(
-    (diagnostic) => diagnostic.severity === "error",
-  );
-  if (blockingDiagnostic !== undefined) {
-    return {
-      state: "blocked",
-      stop: blockedStop(
-        status,
-        "workflow.until.diagnostic",
-        `${blockingDiagnostic.code}: ${blockingDiagnostic.message}`,
-      ),
-    };
-  }
+  // Diagnostics describe the observed state; the Graph decides how to repair
+  // it. Do not veto its immediate repair action with a second routing policy.
   const route = status.workflow.current;
   if (route === undefined) {
+    const diagnostic = status.workflow.diagnostics.find((item) => item.severity === "error");
     return {
       state: "blocked",
       stop: blockedStop(
         status,
-        "workflow.until.no-route",
-        "No legal workflow route is available.",
+        diagnostic === undefined ? "workflow.until.no-route" : "workflow.until.diagnostic",
+        diagnostic === undefined
+          ? "No legal workflow route is available."
+          : `${diagnostic.code}: ${diagnostic.message}`,
       ),
     };
   }
@@ -243,6 +235,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
   execute: WorkflowRunExecutor;
   maxSteps: number;
   dryRun: boolean;
+  managed?: boolean;
 }): Promise<WorkflowRunResult> {
   const steps: WorkflowAutomaticStep[] = [];
   const seen = new Set<string>();
@@ -254,7 +247,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: selected.state,
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: selected.stop,
         workflow: status.workflow,
@@ -267,7 +260,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "blocked",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -295,7 +288,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "planned",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps: [step],
         stop: blockedStop(
           status,
@@ -311,7 +304,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "max-steps",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -361,7 +354,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -395,7 +388,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -421,7 +414,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,

@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerAgentStepInputSchema, type IndexerInventoryMember } from "@c4a/context";
+import { buildIndexerAuthorDependencyView, validateIndexerAuthorDependencyView, indexerAgentStepInputSchema, type IndexerInventoryMember } from "@c4a/context";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { projectCurrentIndexerWorkflowRoute, resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
-import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
+import { currentLedger, runSpecPath } from "../project/indexerMainRunStoreRecords.js";
+import { applyIndexerAuthorMaterials } from "../project/indexerAuthorMaterialStore.js";
 import { prepareIndexerAuthorMaterial } from "../project/indexerAuthorMaterial.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
 import { validateProjectIndexerMainRun } from "../project/indexerMainRunValidationActions.js";
@@ -14,6 +15,7 @@ import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js
 import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } from "./projectDocumentRevisionV074.fixture.js";
 import { readingObjects } from "./indexerReading.fixture.js";
 import { renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
+import { prepareProjectIndexerWorksetViewMaterialization } from "../project/indexerWorksetViewMaterialization.js";
 
 const roots: string[] = [];
 const authorities = contextWorkflowAuthorities({ managed: true });
@@ -105,6 +107,28 @@ async function publish(root: string, task: Task) {
 }
 
 describe("Author requests already captured dependency bodies", () => {
+  test("material expansion and no-op delivery do not read or restart a peer request", async () => {
+    const { root, tasks } = await authorFixture();
+    const task = tasks[0]!;
+    const peer = tasks[1]!;
+    const before = await currentLedger(root);
+    const peerPath = join(root, runSpecPath(peer.spec.request.execution_request_digest));
+    await rename(peerPath, `${peerPath}.held`);
+    try {
+      const material = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: task.spec,
+        group_key: materialRequest(task, []).result.group_key, source_hints: ["src"] });
+      await applyIndexerAuthorMaterials({ projectRoot: root, materials: [material] });
+      const expanded = await currentLedger(root);
+      expect(expanded!.entries.find((entry) => entry.execution_request_digest === peer.spec.request.execution_request_digest))
+        .toEqual(before!.entries.find((entry) => entry.execution_request_digest === peer.spec.request.execution_request_digest));
+      expect(expanded!.entries.every((entry) => entry.state === "running")).toBe(true);
+      const noOp = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: material.spec,
+        group_key: materialRequest(task, []).result.group_key, source_hints: ["src"] });
+      expect(noOp.spec.request.execution_request_digest).toBe(material.spec.request.execution_request_digest);
+      await applyIndexerAuthorMaterials({ projectRoot: root, materials: [noOp] });
+      expect(await currentLedger(root)).toEqual(expanded);
+    } finally { await rename(`${peerPath}.held`, peerPath); }
+  }, 30_000);
   test("expands the current task, preserves an accepted peer, and accepts source-only dependency citations", async () => {
     const { root, tasks } = await authorFixture();
     expect(tasks).toHaveLength(2);
@@ -136,13 +160,19 @@ describe("Author requests already captured dependency bodies", () => {
     expect(JSON.stringify(texts)).toContain("export const secondaryAnswer = 84");
     const identity = updated.spec.validation.source_identity_inventory as { files: Array<{ normalized_path: string; facts: unknown[] }> };
     expect(identity.files.find((file) => file.normalized_path === missingPath)?.facts).toEqual([]);
-    await expect(prepareIndexerAuthorMaterial({ projectRoot: root, spec: updated.spec,
-      group_key: materialRequest(updated, []).result.group_key, source_hints: [missingPath] })).rejects.toThrow("already complete");
+    const repeated = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: updated.spec,
+      group_key: materialRequest(updated, []).result.group_key, source_hints: [missingPath] });
+    expect(repeated.spec).toEqual(updated.spec);
+    expect(repeated.paths).toEqual([missingPath]);
     for (const hint of ["../outside.ts", "/etc/passwd", "src/not-captured.ts"]) {
       await expect(prepareIndexerAuthorMaterial({ projectRoot: root, spec: updated.spec,
         group_key: materialRequest(updated, []).result.group_key, source_hints: [hint] })).rejects.toThrow();
     }
     expect(await currentLedger(root)).toEqual(ledger);
+    const repeatResult = await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
+      managed: true, authorities, value: { stage: "author", results: [materialRequest(updated, [missingPath])] } });
+    if (!("outcomes" in repeatResult)) throw new Error("missing outcomes");
+    expect(repeatResult.outcomes[0]?.outcome).toBe("material-expanded");
     const submission = await publish(root, updated);
     const runResult = buildIndexerAuthorRunResultFromSemantic({ request: updated.spec.request, view: updated.view,
       semantic: submission.result, validation: updated.spec.validation } as unknown as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]);
@@ -157,5 +187,55 @@ describe("Author requests already captured dependency bodies", () => {
     expect((await currentLedger(root))?.entries.every((entry) => entry.state === "accepted")).toBe(true);
     expect(await readFile(join(root, "src/indexers.yaml"), "utf8")).toBe(registryBefore);
     expect(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).toBe(sourcesBefore);
+  }, 30_000);
+
+  test("a full internal span without delivery targets does not suppress the requested body", async () => {
+    const { root, tasks } = await authorFixture();
+    const task = tasks[0]!;
+    const group_key = materialRequest(task, []).result.group_key;
+    const expanded = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: task.spec, group_key, source_hints: ["src"] });
+    const view = validateIndexerAuthorDependencyView(expanded.spec.validation.dependency_view);
+    const hidden = buildIndexerAuthorDependencyView({ ...view,
+      positive_nodes: view.positive_nodes.map(({ node_ref: _ref, ...node }) => {
+        void _ref;
+        return node.kind === "source-span" ? { ...node, targets: [] } : node;
+      }),
+      negative_nodes: view.negative_nodes.map(({ node_ref: _ref, ...node }) => { void _ref; return node; }),
+    });
+    const old = { ...expanded.spec, validation: { ...expanded.spec.validation, dependency_view: hidden } };
+    const repaired = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: old, group_key, source_hints: ["src"] });
+    expect(repaired.paths).toEqual(expanded.paths);
+    const prepared = await prepareProjectIndexerWorksetViewMaterialization({ projectRoot: root, run_spec: repaired.spec });
+    const reading = renderIndexerWorksetReading({ workset: repaired.spec.request.workset, task_key: "task-001", view: prepared.projection.view });
+    expect(reading).toContain("export const answer = 42");
+    expect(reading).toContain("export const secondaryAnswer = 84");
+    const access = prepared.projection.view.items.find((item) => item.category === "source-access")!.value as { captured_root: string; paths: string[] };
+    for (const path of repaired.paths) {
+      expect(access.paths).toContain(path);
+      expect(reading).toContain(await readFile(join(access.captured_root, path), "utf8"));
+    }
+  }, 30_000);
+
+  test("direct captured file citations are associated and accepted in the same completion", async () => {
+    const { root, tasks } = await authorFixture();
+    const task = tasks[0]!;
+    const submission = await publish(root, task);
+    submission.result.sections[0]!.source_items = ["src/index.ts", "src/secondary.ts"];
+    const result = await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
+      managed: true, authorities, value: { stage: "author", results: [submission, await publish(root, tasks[1]!)] } });
+    if (!("outcomes" in result)) throw new Error("missing outcomes");
+    expect(result.outcomes.map((item) => [item.outcome, item.message])).toEqual([["accepted", undefined], ["accepted", undefined]]);
+    expect((await currentLedger(root))?.entries.every((entry) => entry.state === "accepted")).toBe(true);
+  }, 30_000);
+
+  test("invalid direct file paths fail only that task without accepting or resetting peers", async () => {
+    const { root, tasks } = await authorFixture();
+    const bad = await publish(root, tasks[0]!);
+    bad.result.sections[0]!.source_items = ["../outside.ts"];
+    const result = await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
+      managed: true, authorities, value: { stage: "author", results: [bad, await publish(root, tasks[1]!)] } });
+    if (!("outcomes" in result)) throw new Error("missing outcomes");
+    expect(result.outcomes.map((item) => item.outcome)).toEqual(["failed", "accepted"]);
+    expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "accepted")).toHaveLength(1);
   }, 30_000);
 });

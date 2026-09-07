@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CandidateRecord } from "../project/candidateLedger.js";
-import { buildCurrentReviewBatchDocuments } from
+import { buildCurrentReviewBatchDocuments, materializeCurrentReviewBatchSet } from
   "../project/reviewCurrentResource.js";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;
@@ -68,11 +71,44 @@ describe("managed Review batching", () => {
     }
     expect(batches.every((batch) => !batch.content.includes("sha256:"))).toBe(true);
     expect(batches.every((batch) => !batch.content.includes("evidence_ref"))).toBe(true);
-    expect(batches.every((batch) =>
-      batch.content.includes("external consumer") &&
-      batch.content.includes("important constraints") &&
-      batch.content.includes("actually implements or guarantees") &&
-      batch.content.includes("unexpanded template instructions")
-    )).toBe(true);
+    expect(batches.every((batch) => !batch.content.includes("## Semantic Review checklist"))).toBe(true);
+    expect(batches[0]!.content).toContain("Page: architecture/module-01.md");
+    const revised = candidates.map((view) => view.record.module === "module-01"
+      ? { ...view, record: { ...view.record, indexer_candidate: { ...view.record.indexer_candidate,
+          sections: view.record.indexer_candidate.sections.map((section) => ({ ...section, markdown: "Revised guidance." })),
+        } } }
+      : view);
+    const afterRevision = buildCurrentReviewBatchDocuments(revised);
+    expect(afterRevision[0]!.digest).not.toBe(batches[0]!.digest);
+    expect(afterRevision.slice(1)).toEqual(batches.slice(1));
+  });
+
+  test("materializes shared review guidance once and keeps every page readable", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-review-reading-"));
+    try {
+      const candidates = Array.from({ length: 7 }, (_, index) => ({ record: candidate(index + 1), snapshot: undefined }));
+      const result = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
+      expect(result.batch_count).toBe(2);
+      const index = await readFile(result.path, "utf8");
+      expect(index).toContain("external consumer");
+      expect(index).toContain("actually implements or guarantees");
+      expect(index).toContain("reuse the review of unchanged pages");
+      expect(index).toContain("no per-batch read receipts");
+      const paths = [...index.matchAll(/^- File: (.+)$/gmu)].map((match) => match[1]!);
+      expect(paths).toHaveLength(2);
+      const contents = await Promise.all(paths.map((path) => readFile(path, "utf8")));
+      expect(contents.join("\n")).not.toContain("## Semantic Review checklist");
+      for (const view of candidates) expect(contents.join("\n")).toContain(view.record.path);
+      candidates[0]!.record.indexer_candidate.sections[0]!.markdown = "Revised reader guidance.";
+      const revised = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
+      const newPaths = [...revised.content.matchAll(/^- File: (.+)$/gmu)].map((match) => match[1]!);
+      expect(newPaths[0]).not.toBe(paths[0]);
+      expect(newPaths[1]).toBe(paths[1]);
+      expect(revised.content).toContain("Material: unchanged from an earlier preview");
+      expect(revised.content).toContain("Material: new or changed preview");
+      expect(revised.content).toContain("not approval or reading history");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

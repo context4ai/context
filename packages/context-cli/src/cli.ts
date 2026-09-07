@@ -5,6 +5,7 @@ import { Command, Option } from "commander";
 import { redactIndexerOutput, redactIndexerOutputText } from "@c4a/core";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
+import { continueAfterProjectReview } from "./project/workflow/workflowContinuation.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
 import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
@@ -37,6 +38,7 @@ import {
   workflowAuthorities,
 } from "./project/workflow/workflowCommandOptions.js";
 import { withDebugCliInvocation } from "./project/debugTrace.js";
+import { withCommandReadCache } from "./project/commandReadCache.js";
 import { withContextRuntimeEventDelivery } from "./runtimeEvents.js";
 import {
   registerProjectCloseAndBuildCommands,
@@ -294,6 +296,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         payloadInput,
         format: options.format === "json" ? "json" : "text",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
       });
     });
 
@@ -319,6 +325,10 @@ export function createCliProgram(): Command {
         force: options.force === true,
         verbose: options.verbose === true,
         format: options.format === "json" ? "json" : "text",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: options.managed === true || program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: options.managed === true || program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
       });
     });
 
@@ -338,6 +348,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         id,
         status: "approved",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
         ...(typeof options.collection === "string" ? { collection: options.collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         format: options.format === "json" ? "json" : "text",
@@ -360,6 +374,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         id,
         status: "rejected",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
         ...(typeof options.collection === "string" ? { collection: options.collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         format: options.format === "json" ? "json" : "text",
@@ -473,13 +491,13 @@ export function createCliProgram(): Command {
 }
 
 export async function cli_main(argv: string[] = process.argv): Promise<void> {
-  await withDebugCliInvocation(argv, async () => {
+  await withCommandReadCache(() => withDebugCliInvocation(argv, async () => {
     await withContextRuntimeEventDelivery(async () => {
       assertKnownTopLevelCommand(argv);
       const program = createCliProgram();
       await program.parseAsync(argv);
     });
-  });
+  }));
 }
 
 export function isDirectCliInvocation(metaUrl: string, argv1: string | undefined): boolean {

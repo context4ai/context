@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { DebugPerformanceSummary, type DebugPerformanceInput } from "./debugPerformanceSummary.js";
 
 export const CONTEXT_DEBUG_EVENT_SCHEMA = "context.debug.event.v1";
 export const CONTEXT_DEBUG_REPLAY_SCHEMA = "context.debug.replay.v1";
@@ -30,6 +31,7 @@ interface DebugInvocationContext {
   invocationId: string;
   parentInvocationId?: string;
   projectRoot: string;
+  performance: DebugPerformanceSummary;
 }
 
 interface DebugGraphState {
@@ -257,6 +259,7 @@ export async function withDebugCliInvocation<T>(
   const invocation: DebugInvocationContext = {
     invocationId: randomUUID(),
     projectRoot,
+    performance: new DebugPerformanceSummary(),
     ...(process.env.CONTEXT_DEBUG_PARENT_INVOCATION_ID === undefined
       ? {}
       : { parentInvocationId: process.env.CONTEXT_DEBUG_PARENT_INVOCATION_ID }),
@@ -271,12 +274,14 @@ export async function withDebugCliInvocation<T>(
       await appendEvent(projectRoot, "cli.completed", {
         duration_ms: Date.now() - started,
         outcome: "success",
+        performance: invocation.performance.snapshot(),
       }, { force: true });
       return result;
     } catch (error) {
       await appendEvent(projectRoot, "cli.completed", {
         duration_ms: Date.now() - started,
         outcome: "error",
+        performance: invocation.performance.snapshot(),
         error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
       }, { force: true });
       throw error;
@@ -324,6 +329,10 @@ export async function recordWorkflowExecutionScope(input: {
   phase: "opened" | "closed";
   data: Record<string, unknown>;
 }): Promise<void> {
+  // The lock already records duration and failures. Its normal open/close pair
+  // carries no additional diagnostic information.
+  if (input.data.executor === "project-write" &&
+      !(typeof input.data.release_errors === "number" && input.data.release_errors > 0)) return;
   await appendEvent(
     input.projectRoot,
     input.phase === "opened" ? "workflow.scope-opened" : "workflow.scope-closed",
@@ -342,14 +351,9 @@ export async function recordWorkflowStop(projectRoot: string, data: Record<strin
   await appendEvent(projectRoot, "workflow.stopped", data);
 }
 
-export async function recordContextDebugPerformance(input: {
-  projectRoot: string;
-  operation: string;
-  durationMs: number;
-  outcome: "success" | "error";
-  counters?: Readonly<Record<string, number>>;
-  data?: Readonly<Record<string, unknown>>;
-}): Promise<void> {
+export async function recordContextDebugPerformance(input: DebugPerformanceInput): Promise<void> {
+  const invocation = invocationStorage.getStore();
+  if (invocation?.projectRoot === resolve(input.projectRoot) && invocation.performance.add(input)) return;
   await appendEvent(input.projectRoot, "performance.measurement", {
     operation: input.operation,
     duration_ms: Math.max(0, Math.round(input.durationMs * 1_000) / 1_000),

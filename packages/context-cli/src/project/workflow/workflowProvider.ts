@@ -35,6 +35,7 @@ import {
 } from "./workflowFacts.js";
 import { planForResolvedCommandPlan } from "./workflowHostPlans.js";
 import { measureContextDebugOperation } from "../debugTrace.js";
+import { verifyErrorsAreCloseRepairable } from "./verifyFacts.js";
 
 let providerPromise: Promise<LoadedProvider> | undefined;
 
@@ -91,15 +92,18 @@ function rootDiagnostics(
       count: observation.stateDiagnostics.length,
     });
   }
-  if (observation.projectionRefreshIssues > 0) {
+  const closeRepairable = verifyErrorsAreCloseRepairable(observation.verifyIssues);
+  if (observation.projectionRefreshIssues > 0 || closeRepairable) {
     diagnostics.push({
       code: "diagnostic.projection-stale",
       severity: "info",
       message:
-        "Approved knowledge changed and its deterministic structure projection must be refreshed.",
-      count: observation.projectionRefreshIssues,
+        "Approved knowledge changed and its deterministic structure or asset projection must be refreshed.",
+      count: closeRepairable ? observation.verifyErrors : observation.projectionRefreshIssues,
     });
-  } else if (
+  }
+  if (
+    !closeRepairable &&
     observation.verifyErrors > 0 &&
     observation.capturedDocumentSources === observation.documentSources.length
   ) {

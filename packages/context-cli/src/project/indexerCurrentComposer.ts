@@ -20,7 +20,7 @@ import { resolveCurrentProjectIndexerPrimaryAuthority } from
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import {
   composeIndexerPostAuthorEnvelopeStore,
-  prepareIndexerPostAuthorRunStore,
+  prepareIndexerPostAuthorRunsStore,
   retryFailedIndexerPostAuthorRunStore,
   startIndexerPostAuthorRunsStore,
 } from "./indexerPostAuthorRunStore.js";
@@ -82,15 +82,19 @@ async function describeRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
   registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  authorities: Map<string, Promise<CurrentIndexerComposerContext["authority"]>>;
 }) {
   const result = indexerArtifactResultSchema.parse(input.record.artifact_result);
   const indexer = input.registry.indexers.find((item) => item.id === result.indexer_id);
   if (indexer === undefined) throw new TypeError(`unknown accepted Indexer ${result.indexer_id}`);
-  const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
-    projectRoot: input.projectRoot,
-    registry: input.registry,
-    indexer_id: indexer.id,
-  });
+  let pendingAuthority = input.authorities.get(indexer.id);
+  if (pendingAuthority === undefined) {
+    pendingAuthority = resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot, registry: input.registry, indexer_id: indexer.id,
+    });
+    input.authorities.set(indexer.id, pendingAuthority);
+  }
+  const authority = await pendingAuthority;
   const selected = indexer.profile.composers ?? [];
   const effective = resolveEffectiveIndexerComposers({
     selections: selected.map((composer) => ({
@@ -155,9 +159,9 @@ function acceptedIdentity(record: AcceptedAuthorRecord): {
 async function prepareRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
-  registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  described: Awaited<ReturnType<typeof describeRecord>>;
+  observed: Awaited<ReturnType<typeof prepareIndexerPostAuthorRunsStore>>["observations"][number];
 }): Promise<CurrentIndexerComposerContext | undefined> {
-  const described = await describeRecord(input);
   const {
     authority,
     effective,
@@ -165,17 +169,11 @@ async function prepareRecord(input: {
     validatorContractDigest,
     acceptedInputViewDigest,
     requirementSetDigest,
-  } = described;
-  const observed = await prepareIndexerPostAuthorRunStore({
-    projectRoot: input.projectRoot,
-    requirement_set_digest: requirementSetDigest,
-    plan,
-    effective_composer_set: effective,
-    validator_contract_digest: validatorContractDigest,
-    accepted_input_view_digest: acceptedInputViewDigest,
-  });
+  } = input.described;
+  const observed = input.observed;
   if (plan.state === "not-required") return undefined;
-  if (observed.status.can_reconcile) {
+  if (observed.status.post_author_envelope.state === "current") return undefined;
+  if (observed.expected_envelope !== null) {
     await composeIndexerPostAuthorEnvelopeStore({
       projectRoot: input.projectRoot,
       plan,
@@ -238,6 +236,7 @@ async function readRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
   registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  authorities: Map<string, Promise<CurrentIndexerComposerContext["authority"]>>;
 }): Promise<CurrentIndexerComposerContext | undefined> {
   const described = await describeRecord(input);
   if (described.plan.state === "not-required") return undefined;
@@ -433,11 +432,27 @@ export async function resolveCurrentIndexerComposerBatch(
     left.accepted_record.workset_digest.localeCompare(right.accepted_record.workset_digest)
   );
   const candidates: CurrentIndexerComposerContext[] = [];
-  for (const record of ordered) {
+  const authorities = new Map<string, Promise<CurrentIndexerComposerContext["authority"]>>();
+  const descriptions = [];
+  for (const record of ordered) descriptions.push(await describeRecord({
+    projectRoot, record, registry: loaded.registry, authorities,
+  }));
+  const prepared = await prepareIndexerPostAuthorRunsStore({
+    projectRoot,
+    runs: descriptions.map((item) => ({
+      requirement_set_digest: item.requirementSetDigest,
+      plan: item.plan,
+      effective_composer_set: item.effective,
+      validator_contract_digest: item.validatorContractDigest,
+      accepted_input_view_digest: item.acceptedInputViewDigest,
+    })),
+  });
+  for (const [index, record] of ordered.entries()) {
     const current = await prepareRecord({
       projectRoot,
       record,
-      registry: loaded.registry,
+      described: descriptions[index]!,
+      observed: prepared.observations[index]!,
     });
     if (current !== undefined) candidates.push(current);
   }
@@ -509,11 +524,13 @@ export async function readCurrentIndexerComposerBatch(
     left.accepted_record.workset_digest.localeCompare(right.accepted_record.workset_digest)
   );
   const running: CurrentIndexerComposerContext[] = [];
+  const authorities = new Map<string, Promise<CurrentIndexerComposerContext["authority"]>>();
   for (const record of ordered) {
     const current = await readRecord({
       projectRoot,
       record,
       registry: loaded.registry,
+      authorities,
     });
     if (current !== undefined) running.push(current);
   }

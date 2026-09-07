@@ -12,6 +12,7 @@ import { readCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import { advanceCurrentIndexerFinalization } from "./indexerCurrentFinalization.js";
 import { currentIndexerProgress } from "./indexerCurrentProgress.js";
 import { resolveCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
+import { collectProjectStatus } from "./status.js";
 import {
   persistIndexerSemanticResult,
   schemaFailure,
@@ -197,10 +198,18 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
       projectRoot: input.projectRoot,
       ...(next === undefined ? {} : { route: next }),
     });
+    if (next === undefined) {
+      const status = await collectProjectStatus(input.projectRoot, {
+        managed: input.managed, authorities: input.authorities,
+      });
+      next = status.workflow.current;
+      revisionAfter = status.workflow.revision;
+      progress = status.indexerProgress ?? null;
+    }
   } catch (error) {
     nextPreparation = {
       outcome: "failed",
-      message: error instanceof Error ? error.message : String(error),
+      message: `${outcomes.filter((outcome) => outcome.committed).length} task(s) were saved. Do not resubmit committed outcomes. Only preparation of the next step failed: ${error instanceof Error ? error.message : String(error)}. Run the recovery command to continue; stage progress is not workspace completion.`,
       command: `context run${input.managed ? " --managed" : ""} --format json`,
     };
     progress = await currentIndexerProgress({ projectRoot: input.projectRoot });

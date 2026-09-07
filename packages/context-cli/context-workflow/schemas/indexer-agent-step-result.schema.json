@@ -1449,6 +1449,26 @@
             },
             "decision": {
               "type": "string",
+              "const": "exclude-obsolete"
+            },
+            "feedback": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/feedback"
+            }
+          },
+          "required": [
+            "stage",
+            "decision"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/stage"
+            },
+            "decision": {
+              "type": "string",
               "const": "request-adjustment"
             },
             "feedback": {

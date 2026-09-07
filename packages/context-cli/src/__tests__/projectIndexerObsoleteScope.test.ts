@@ -44,6 +44,8 @@ describe("obsolete scope confirmation", () => {
     expect(summary.include_consequence).toContain("maintenance");
     expect(() => validateIndexerCurrentActionInput(summary.include_action)).not.toThrow();
     expect(() => validateIndexerCurrentActionInput(summary.exclude_action)).not.toThrow();
+    expect(summary.exclude_action).toEqual({ stage: "structure-review", decision: "exclude-obsolete" });
+    expect(summary.affected[0]?.member_ids).toEqual(["symbol:deprecated/old-0.ts"]);
   });
   test("does not infer deprecation from a legacy name, or count repeated facts as files", () => {
     expect(summarizeIndexerObsoleteScope([spec(["legacy/v1.ts"]), spec(["src/deprecatedBehavior.ts"])])).toMatchObject({ requires_confirmation: false, affected_file_count: 0 });

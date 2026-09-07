@@ -177,11 +177,13 @@ Treat `workflow.current` as the current-step authority:
    the Route's immediate completion command; do not create or submit a read
    receipt. Other workflow resources may still require the returned receipt
    command. Materializing a resource is not reading it. Keep those receipts only
-   in this conversation and submit them with
-   the exact returned `context status --resource-receipts @<file>` command. Use
-   `after_read_receipts` only after the full resource has been read. The exact
-   `resources.after_read.command` already returns the re-evaluated
-   `workflow.current`; continue from it without an additional status call.
+   in this conversation. After materialization, read the returned file and any
+   required direct files named in its reading instructions, then use its latest
+   `next_action.command`. It carries the combined reading context; do not reuse
+   an older Route's `after_read` command or assemble receipts yourself. When only
+   direct files are pending, `resources.after_read.command` acknowledges them
+   together and returns the re-evaluated `workflow.current`; no extra status call
+   is needed.
 2. At a Gate, keep inspection and resolution phase-local. Read an
    `inspection_action` resource only while inspecting the decision, and read a
    `resolution_action` resource only after the user confirms the Gate. Neither
@@ -207,9 +209,15 @@ Treat `workflow.current` as the current-step authority:
    extraction Gate must stop even in fully managed mode.
 4. If `configuration` is present, edit only the named project file and use the
    selected resources as its contract.
-5. After every action or configuration change, run status again. The managed
-   loop performs this re-evaluation internally. A phase-local `next_action` can
-   continue that operation but never replaces the workspace Route.
+5. Continue from the workspace Route returned by the action (`next`,
+   `continuation.next`, or `workflow.current`). Do not call status again when
+   that Route is present. Refresh status only after editing configuration or
+   when no workspace Route was returned. A phase-local `next_action` is not a
+   workspace Route. Both modes may use `context run --until blocked-or-complete`
+   for consecutive mechanical steps; only explicit managed authority delegates gates.
+   If `next_preparation` fails after committed outcomes, run its recovery
+   command without resubmitting saved work. A stage's completed count is not
+   workspace completion; Review, close and package build follow their Routes.
 
 Explain, ask, confirm, and summarize in the user's current conversation
 language. Keep commands, flags, paths, ids, status values, JSONL keys,

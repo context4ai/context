@@ -48,9 +48,17 @@ export function buildIndexerAuthorSourceItems(input: {
     bindings.set(node.evidence_ref, { ...payload, binding_digest: indexerEvidenceBindingDigest(payload) });
     register(node.evidence_ref, [node]);
     register(node.node_ref, [node]);
-    // Bare paths are accepted only when they identify one exact source span.
-    register(node.locator.path, [node]);
   }
+  // A file citation denotes all of that file's spans, not one arbitrary span.
+  // Identical paths from different sources must still be disambiguated.
+  const files = new Map<string, SourceSpan[]>();
+  for (const node of spans) {
+    const key = JSON.stringify([node.source_ref, node.module_ref, node.locator.path]);
+    const file = files.get(key) ?? [];
+    file.push(node);
+    files.set(key, file);
+  }
+  for (const file of files.values()) register(file[0]!.locator.path, file);
   const covered = new Set<string>();
   for (const item of input.view.items) {
     if (item.category !== "source-text" && item.category !== "document") continue;

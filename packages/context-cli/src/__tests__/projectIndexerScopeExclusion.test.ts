@@ -1,0 +1,91 @@
+import { afterEach, expect, test } from "bun:test";
+import { readFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { loadIndexerRegistry, validateIndexerPartitionInputs } from "@c4a/context";
+import { project } from "./projectIndexerMainLifecycleV070.fixture.js";
+import { preparePartitionStage } from "../project/indexerPartitionStage.js";
+import { currentLedger, currentSpec, acceptedCachePath } from "../project/indexerMainRunStoreRecords.js";
+import { startIndexerMainRunStore, acceptIndexerMainRunStore } from "../project/indexerMainRunStore.js";
+import { prepareProjectIndexerWorksetViewMaterialization } from "../project/indexerWorksetViewMaterialization.js";
+import { buildIndexerPartitionRunResultFromSemantic } from "../project/indexerSemanticPartitionResult.js";
+import { resolveCurrentProjectIndexerPrimaryAuthority } from "../project/indexerCurrentPrimaryAuthority.js";
+import { persistIndexerSemanticResult } from "../project/indexerCurrentActionShared.js";
+import { completeCurrentIndexerStructureReview, prepareCurrentIndexerStructurePlan,
+  prepareCurrentIndexerAuthorStage } from "../project/indexerStructureReview.js";
+import { excludeIndexerPartitionMembers } from "../project/indexerPartitionScope.js";
+import type { IndexerConsumerWorksetProjection } from "../project/indexerConsumerWorksetPlanner.js";
+import type { IndexerPartitionValidationInput } from "@c4a/context";
+
+const roots: string[] = [];
+afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+
+test("explicit obsolete exclusion keeps accepted partitions and starts only current Author work", async () => {
+  const { root } = await project({ rankedCodeInventory: true, deprecatedEntry: true });
+  roots.push(root);
+  const oldPath = join(root, "sources/repo/20260902/sample/src/deprecated/index.ts");
+  const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
+    projectRoot: root, registry: (await loadIndexerRegistry(root)).registry, indexer_id: "component-library",
+  });
+  const unit = authority.manifest.provides.logical_units!.find((item) => item.artifacts !== undefined)!;
+  const ledger = await preparePartitionStage(root);
+  const cached = new Map<string, string>();
+  const partitions: IndexerPartitionValidationInput[] = [];
+  for (const entry of ledger!.entries) {
+    const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
+    const workset = spec.request.workset;
+    if (workset.stage !== "partition") throw new Error("expected Partition");
+    const projection = spec.validation.partition_projection as IndexerConsumerWorksetProjection;
+    const validation = spec.validation as Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["validation"];
+    const prepared = await prepareProjectIndexerWorksetViewMaterialization({ projectRoot: root, run_spec: spec });
+    const semantic: Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["semantic"] = {
+      stage: "partition", outcome: "complete", groups: projection.unresolved ? [] : [{
+        key: workset.workset_digest, title: "Public entry", reader_task: "Locate the public API.",
+        subject: { namespace: workset.partition_subject_key.namespace, kind: workset.partition_subject_key.kind,
+          local_key: workset.workset_digest }, subject_intent: "primary",
+        members: validation.canonical_inventory_members.map((member) => member.member_id),
+        questions: [...workset.reader_question_refs],
+        question_targets: (validation.required_question_target_refs ?? []).map((target) => ({ target, role: "primary-carrier" })),
+        outline: ["Exports"],
+      }], excluded: projection.unresolved ? validation.canonical_inventory_members.map((member) => ({
+        item: member.member_id, reason_code: "no-public-api",
+      })) : [], unsupported: [],
+    };
+    const result = buildIndexerPartitionRunResultFromSemantic({ request: spec.request, view: prepared.projection.view,
+      validation: { ...validation, partition_unit_type: unit.id }, semantic });
+    await startIndexerMainRunStore({ projectRoot: root, workset_digest: workset.workset_digest });
+    await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: workset.workset_digest, result });
+    await persistIndexerSemanticResult({ projectRoot: root, requestDigest: spec.request.execution_request_digest, semantic });
+    const path = join(root, acceptedCachePath(spec.request.execution_request_digest));
+    cached.set(path, await readFile(path, "utf8"));
+    partitions.push({ ...spec.validation, plan: result.result.result, workset } as unknown as IndexerPartitionValidationInput);
+  }
+  const review = await prepareCurrentIndexerStructurePlan(root);
+  expect(review.preview.obsolete_scope?.affected_page_count).toBe(1);
+  const storedPlan = JSON.parse(await readFile(join(root, ".tmp/context-runtime/indexer/structure-review/author-plan.json"), "utf8"));
+  const excluded = new Set<string>(storedPlan.obsolete_member_ids);
+  expect(JSON.stringify(review.preview.obsolete_scope)).not.toContain("member_ids");
+  const scoped = excludeIndexerPartitionMembers(partitions, excluded);
+  expect(() => validateIndexerPartitionInputs(scoped)).not.toThrow();
+  expect(scoped.flatMap((item) => (item.plan as { groups: unknown[] }).groups)).toHaveLength(review.preview.topics.length - 1);
+  // Also exercise a partial (mixed-page) scope change, retaining its siblings.
+  const mixed = partitions.find((item) => (item.plan as { groups: { member_ids: string[] }[] }).groups.some((group) => group.member_ids.length > 1))!;
+  const members = (mixed.plan as { groups: { member_ids: string[] }[] }).groups[0]!.member_ids;
+  const narrowed = excludeIndexerPartitionMembers([mixed], new Set([members[0]!]));
+  expect(() => validateIndexerPartitionInputs(narrowed)).not.toThrow();
+  expect((narrowed[0]!.plan as { groups: { member_ids: string[] }[] }).groups[0]!.member_ids).toEqual(members.slice(1));
+  await prepareCurrentIndexerAuthorStage(root);
+  expect(await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision,
+    decision: "exclude-obsolete" })).toBe("author");
+  const after = await currentLedger(root);
+  expect(after!.entries).toHaveLength(review.preview.topics.length - 1);
+  expect(after!.entries.every((entry) => entry.stage === "author")).toBe(true);
+  for (const [path, content] of cached) expect(await readFile(path, "utf8")).toBe(content);
+  expect(await readFile(oldPath, "utf8")).toContain("@deprecated");
+  // Repreparation must not reintroduce the explicitly excluded targets.
+  const restored = await preparePartitionStage(root);
+  expect(restored!.entries.every((entry) => entry.state === "accepted")).toBe(true);
+  const repeated = await prepareCurrentIndexerStructurePlan(root);
+  expect(repeated.preview.topics).toHaveLength(after!.entries.length);
+  expect(repeated.preview.obsolete_scope?.affected_page_count).toBe(0);
+  expect(repeated.approved).toBe(true);
+}, 60_000);

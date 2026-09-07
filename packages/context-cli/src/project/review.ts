@@ -31,6 +31,7 @@ import {
 import { readCandidateRecords } from "./candidateLedger.js";
 import { htmlReportReference, openLocalFile } from "./localHtmlReport.js";
 import { findContextProjectRoot } from "./workspace.js";
+import type { ReviewContinuation } from "./workflow/workflowContinuation.js";
 
 export { applyReviewDecisions } from "./reviewApply.js";
 export { collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
@@ -215,7 +216,7 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
   return parseReviewPayloadText(raw);
 }
 
-function formatApplyResult(result: ApplyReviewDecisionsResult, format: ReviewFormat): string {
+function formatApplyResult(result: ApplyReviewDecisionsResult & { continuation?: Awaited<ReturnType<ReviewContinuation>> }, format: ReviewFormat): string {
   if (format === "json") return `${JSON.stringify(result, null, 2)}\n`;
   return formatFeedback({
     symbol: "✓",
@@ -230,6 +231,7 @@ function formatApplyResult(result: ApplyReviewDecisionsResult, format: ReviewFor
       `unchanged: ${result.unchanged}`,
       `candidate file: ${result.candidateFileUpdated ? "updated" : "unchanged"}`,
       ...result.pages.map((page) => `page: ${page}`),
+      ...(result.continuation === undefined ? [] : [`workflow: ${result.continuation.state}`, result.continuation.stop.message]),
     ],
   });
 }
@@ -426,12 +428,14 @@ export async function runReviewApplyCommand(input: {
   cwd: string;
   payloadInput: string;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   const projectRoot = projectRootFromCwd(input.cwd);
   const payloadPath = isAbsolute(input.payloadInput) ? input.payloadInput : resolve(input.cwd, input.payloadInput);
   const payload = await readReviewPayloadFile(payloadPath);
   const result = await applyReviewDecisions({ projectRoot, payload });
-  process.stdout.write(formatApplyResult(result, input.format ?? "text"));
+  const continuation = await input.afterApply?.(projectRoot);
+  process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
 
 export async function runReviewApproveAllCommand(input: {
@@ -442,6 +446,7 @@ export async function runReviewApproveAllCommand(input: {
   force?: boolean;
   verbose?: boolean;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   if (input.managed === true && input.force === true) {
     throw new ContextError(ExitCode.UserError, "review approve-all accepts either --managed or --force, not both", {
@@ -478,6 +483,7 @@ export async function runReviewApproveAllCommand(input: {
       scope: scoped.scope,
     },
   });
+  const continuation = await input.afterApply?.(projectRoot);
   if ((input.format ?? "text") === "json") {
     const { visible_candidate_ids: visibleCandidateIds, ...compactScope } = scoped.scope;
     process.stdout.write(`${JSON.stringify({
@@ -491,6 +497,7 @@ export async function runReviewApproveAllCommand(input: {
       unchanged: result.unchanged,
       removed: result.removed,
       candidate_file_updated: result.candidateFileUpdated,
+      ...(continuation === undefined ? {} : { continuation }),
       details: input.verbose === true
         ? {
             visible_candidate_ids: visibleCandidateIds ?? [],
@@ -515,6 +522,7 @@ export async function runReviewApproveAllCommand(input: {
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,
+      ...(continuation === undefined ? [] : [`workflow: ${continuation.state}`, continuation.stop.message]),
     ],
   }));
 }
@@ -526,6 +534,7 @@ export async function runReviewMarkCommand(input: {
   collection?: string;
   all?: boolean;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   const projectRoot = projectRootFromCwd(input.cwd);
   const scope = await reviewCommandScope({
@@ -541,7 +550,8 @@ export async function runReviewMarkCommand(input: {
       scope: scope.scope,
     },
   });
-  process.stdout.write(formatApplyResult(result, input.format ?? "text"));
+  const continuation = await input.afterApply?.(projectRoot);
+  process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
 
 export async function runReviewRePinCommand(input: {

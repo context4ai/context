@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import YAML from "yaml";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   canonicalIndexerJson,
@@ -21,6 +22,9 @@ import { buildIndexerPartitionRunResultFromSemantic } from
 import { buildIndexerAuthorRunResultFromSemantic } from
   "../project/indexerSemanticAuthorResult.js";
 import { currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";
+import { readProjectIndexerCandidateCompileStatus } from "../project/indexerCandidateCompileActions.js";
+import { matchesAcceptedCompileResults } from "../project/indexerCandidateCompileFreshness.js";
+import { postAuthorCurrentStatePath } from "../project/indexerPostAuthorStorePersistence.js";
 import {
   acceptIndexerMainAuthorRunsStore,
   acceptIndexerMainPartitionRunsStore,
@@ -411,7 +415,7 @@ describe("current Indexer document revision", () => {
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
   test("runs one Code workload through Parser Facts, catalog-only, and public guidance", async () => {
-    const root = await workspace();
+    const root = await workspace({ debug: true });
     await advanceCurrentIndexerLifecycle(root);
     const first = await resolveCurrentIndexerAgentContext(root);
     expect(first?.descriptor.stage).toBe("partition");
@@ -443,6 +447,47 @@ describe("current Indexer document revision", () => {
     expect(candidates.every((candidate) =>
       candidate.body.includes("public entry point")
     )).toBe(true);
+
+    const eventPath = join(root, ".tmp/context-runtime/debug/events.jsonl");
+    const previousEvents = (await readFile(eventPath, "utf8")).length;
+    const acceptedPath = join(root, ".tmp/context-runtime/indexer/main-index/accepted");
+    // Review uses the committed compile and ledger, not Author execution caches.
+    // Keep the cache for later compile/recovery, but make it unavailable to this read.
+    await rename(acceptedPath, `${acceptedPath}-saved`);
+    const status = await readProjectIndexerCandidateCompileStatus(root);
+    await rename(`${acceptedPath}-saved`, acceptedPath);
+    expect(status.state).toBe("current");
+    const bindings = status.compile!.result_bindings;
+    const ledger = await currentLedger(root);
+    expect(matchesAcceptedCompileResults(ledger, [...bindings].reverse())).toBe(true);
+    expect(matchesAcceptedCompileResults(ledger, bindings.slice(1))).toBe(false);
+    expect(matchesAcceptedCompileResults(ledger, [...bindings, bindings[0]!])).toBe(false);
+    for (const field of ["acceptance_digest", "indexer_result_digest", "workset_digest", "indexer_id"] as const) {
+      const changed = bindings.map((binding, index) => index === 0
+        ? { ...binding, [field]: "changed" }
+        : binding);
+      expect(matchesAcceptedCompileResults(ledger, changed)).toBe(false);
+    }
+    const readEvents = (await readFile(eventPath, "utf8")).slice(previousEvents)
+      .trim().split(/\r?\n/u).map((line) => JSON.parse(line) as {
+        kind: string;
+        data: { operation?: string; detail?: { requested_operation?: string } };
+      });
+    const operations = readEvents.filter((event) => event.kind === "performance.measurement")
+      .map((event) => event.data.detail?.requested_operation);
+    expect(operations).not.toContain("read-accepted-main-author-result-records");
+    expect(operations.filter((operation) => operation !== undefined))
+      .toEqual(["observe-indexer-candidate-compile"]);
+
+    // A new invocation must see configuration changes; no TTL or process cache.
+    const registryPath = join(root, "src/indexers.yaml");
+    const registryRaw = await readFile(registryPath, "utf8");
+    const changedRegistry = YAML.parse(registryRaw);
+    changedRegistry.requirements[0].reader_goals = ["integrate-module"];
+    await writeFile(registryPath, YAML.stringify(changedRegistry));
+    expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("stale");
+    await writeFile(registryPath, registryRaw);
+    expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
   test("reopens only the approved page source as a recoverable Partition run", async () => {
@@ -549,6 +594,7 @@ describe("current Indexer document revision", () => {
       authorities: managedAuthorities,
     });
     await completeAuthorStage(root);
+    expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
 
     const candidates = await readCandidateRecords(root);
     expect(candidates.length).toBeGreaterThan(1);
@@ -573,6 +619,11 @@ describe("current Indexer document revision", () => {
         decisions: [{ candidate_id: target.candidate_id, status: "rejected" }],
       },
     });
+    const beforeRevision = await currentLedger(root);
+    const postAuthorStates = new Map(await Promise.all(beforeRevision!.entries.map(async (entry) => [
+      entry.workset_digest,
+      await readFile(join(root, postAuthorCurrentStatePath(entry.workset_digest)), "utf8"),
+    ] as const)));
     const result = await beginDocumentRevision({
       projectRoot: root,
       selector: target.candidate_id,
@@ -582,12 +633,22 @@ describe("current Indexer document revision", () => {
       status: "author-reopened",
       candidate_id: target.candidate_id,
     });
+    expect((await readProjectIndexerCandidateCompileStatus(root)).state).not.toBe("current");
     const ledger = await currentLedger(root);
     expect(ledger?.entries.filter((entry) => entry.state === "running")).toHaveLength(1);
     expect(ledger?.entries.filter((entry) => entry.state === "accepted")).toHaveLength(
       candidates.length - 1,
     );
     const running = ledger!.entries.find((entry) => entry.state === "running")!;
+    const peers = ledger!.entries.filter((entry) => entry.state === "accepted");
+    for (const peer of peers) {
+      expect(await readFile(join(root, postAuthorCurrentStatePath(peer.workset_digest)), "utf8"))
+        .toBe(postAuthorStates.get(peer.workset_digest)!);
+    }
+    const oldOwner = beforeRevision!.entries.find((entry) =>
+      !peers.some((peer) => peer.workset_digest === entry.workset_digest)
+    )!;
+    expect(existsSync(join(root, postAuthorCurrentStatePath(oldOwner.workset_digest)))).toBe(false);
     const spec = await currentSpec({
       projectRoot: root,
       request_digest: running.execution_request_digest,
@@ -609,5 +670,14 @@ describe("current Indexer document revision", () => {
     expect(revised?.candidate_id).not.toBe(target.candidate_id);
     expect(revised?.status).toBe("draft");
     expect(revised?.body).toContain("resolves the requested clarification");
+    for (const peer of peers) {
+      expect(await readFile(join(root, postAuthorCurrentStatePath(peer.workset_digest)), "utf8"))
+        .toBe(postAuthorStates.get(peer.workset_digest)!);
+    }
+    for (const original of candidates.filter((candidate) => candidate.path !== target.path)) {
+      const unchanged = revisedCandidates.find((candidate) => candidate.path === original.path)!;
+      expect(unchanged.candidate_id).toBe(original.candidate_id);
+      expect(unchanged.body).toBe(original.body);
+    }
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 });

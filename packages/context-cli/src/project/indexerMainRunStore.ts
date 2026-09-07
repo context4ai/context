@@ -21,12 +21,14 @@ import {
   type DurableMultiFileFailureInjector,
 } from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import {
   convergeStoredIndexerPartition,
   readStoredIndexerPartitionConvergence,
 } from "./indexerPartitionConvergenceStore.js";
 import {
   INDEXER_MAIN_RUN_STORE_ROOT,
+  INDEXER_MAIN_RUN_CURRENT_PATH,
   acceptedCachePath,
   acceptedCacheRecord,
   currentLedger,
@@ -36,7 +38,7 @@ import {
   persistLedger,
   readJsonMaybe,
   runSpecPath,
-  validateAcceptedCache,
+  readAcceptedCache,
   validateAcceptedCacheEnvelope,
   type MainRunSpec,
 } from "./indexerMainRunStoreRecords.js";
@@ -513,46 +515,45 @@ async function readAcceptedMainResultRecordsUnlocked(
   projectRoot: string,
   stage: "partition" | "author",
 ) {
-    await recoverDurableMultiFileTransactions(projectRoot);
-    const ledger = await currentLedger(projectRoot);
-    if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
-    if (ledger.entries.some((entry) => entry.stage !== stage)) {
-      throw new TypeError(`current main run ledger is not the ${stage} stage`);
-    }
-    if (ledger.entries.some((entry) => entry.state !== "accepted")) {
-      throw new TypeError(`main ${stage} results require every run to be accepted`);
-    }
-    const records = [];
-    for (const entry of ledger.entries) {
-      if (entry.state !== "accepted") continue;
-      const spec = await currentSpec({
-        projectRoot,
-        request_digest: entry.execution_request_digest,
-      });
-      const cached = await readJsonMaybe(
-        projectRoot,
-        acceptedCachePath(entry.execution_request_digest),
-      );
-      if (cached === undefined) {
-        throw new TypeError(`accepted main ${stage} result cache is missing`);
+  await recoverDurableMultiFileTransactions(projectRoot);
+  const ledger = await currentLedger(projectRoot);
+  if (ledger === undefined) throw new TypeError("main run ledger is not prepared");
+  if (ledger.entries.some((entry) => entry.stage !== stage)) {
+    throw new TypeError(`current main run ledger is not the ${stage} stage`);
+  }
+  if (ledger.entries.some((entry) => entry.state !== "accepted")) {
+    throw new TypeError(`main ${stage} results require every run to be accepted`);
+  }
+  return reuseCommandFileRead({
+    key: `accepted-main-results:${stage}`,
+    paths: [INDEXER_MAIN_RUN_CURRENT_PATH, ...ledger.entries.flatMap((entry) => [
+      runSpecPath(entry.execution_request_digest), acceptedCachePath(entry.execution_request_digest),
+    ])].map((path) => join(projectRoot, path)),
+    read: async () => {
+      const records = [];
+      for (const entry of ledger.entries) {
+        if (entry.state !== "accepted") continue;
+        const spec = await currentSpec({ projectRoot, request_digest: entry.execution_request_digest });
+        const cached = await readJsonMaybe(projectRoot, acceptedCachePath(entry.execution_request_digest));
+        if (cached === undefined) throw new TypeError(`accepted main ${stage} result cache is missing`);
+        const accepted = readAcceptedCache({ cache: cached, spec });
+        if (canonicalIndexerJson(accepted.accepted_record) !== canonicalIndexerJson(entry.accepted_record)) {
+          throw new TypeError(`accepted main ${stage} cache does not match the current ledger`);
+        }
+        records.push({
+          request: spec.request,
+          run_result: accepted.result,
+          accepted_record: accepted.accepted_record,
+          artifact_result: accepted.operation_result,
+          run_envelope: accepted.run_envelope,
+          dependency_view: spec.validation.dependency_view,
+          get artifact_dependency_set() { return accepted.artifact_dependency_set; },
+          validation: spec.validation,
+        });
       }
-      const validated = validateAcceptedCache({ cache: cached, spec });
-      if (canonicalIndexerJson(validated.accepted_record) !==
-        canonicalIndexerJson(entry.accepted_record)) {
-        throw new TypeError(`accepted main ${stage} cache does not match the current ledger`);
-      }
-      records.push({
-        request: spec.request,
-        run_result: validated.result,
-        accepted_record: validated.accepted_record,
-        artifact_result: validated.operation_result,
-        run_envelope: validated.run_envelope,
-        dependency_view: spec.validation.dependency_view,
-        artifact_dependency_set: validated.artifact_dependency_set,
-        validation: spec.validation,
-      });
-    }
-    return records;
+      return records;
+    },
+  });
 }
 
 export async function readAcceptedIndexerMainPartitionResultRecords(projectRoot: string) {

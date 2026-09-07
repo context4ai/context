@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { createRequire } from "node:module";
 import { dirname, join, parse } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -49,7 +50,8 @@ async function packageManifestForEntry(
   while (directory !== root) {
     const path = join(directory, "package.json");
     try {
-      const parsed = JSON.parse(await readFile(path, "utf8")) as PackageManifest;
+      const parsed = await reuseCommandFileRead({ key: "parser-package-manifest", paths: [path],
+        read: async () => JSON.parse(await readFile(path, "utf8")) as PackageManifest });
       if (parsed.name === expectedPackage) {
         if (typeof parsed.version !== "string") {
           throw new TypeError(`installed parser ${expectedPackage} has no package version`);
@@ -93,7 +95,8 @@ async function resolveInstalledParserPackage(input: {
   }
   return {
     entry_path: entryPath,
-    entry_content: await readFile(entryPath),
+    entry_content: await reuseCommandFileRead({ key: "parser-package-entry", paths: [entryPath],
+      read: () => readFile(entryPath) }),
     manifest: manifest.value,
   };
 }
@@ -103,13 +106,14 @@ export async function inspectInstalledIndexerParserPackage(input: {
   version: string;
 }): Promise<InstalledIndexerParserPackage> {
   const installed = await resolveInstalledParserPackage(input);
-  return {
+  return reuseCommandFileRead({ key: `parser-package-identity:${input.package}:${input.version}`,
+    paths: [installed.entry_path], read: async () => ({
     package: installed.manifest.name,
     version: installed.manifest.version,
     lock_integrity: `sha512-${createHash("sha512").update(installed.entry_content).digest("base64")}`,
     resolved_digest:
       `sha256:${createHash("sha256").update(installed.entry_content).digest("hex")}`,
-  };
+  }) });
 }
 
 function receiptDigest(

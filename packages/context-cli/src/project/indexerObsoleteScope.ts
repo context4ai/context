@@ -18,7 +18,7 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
   titles?: ReadonlyMap<string, string>;
 } = {}) {
   const files = new Set<string>();
-  const affected: { title: string; paths: string[]; mixed_current_content: boolean }[] = [];
+  const affected: { title: string; paths: string[]; mixed_current_content: boolean; member_ids: string[] }[] = [];
   for (const raw of runSpecs) {
     const spec = record(raw);
     const validation = record(spec.validation);
@@ -37,8 +37,8 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
       const ownedFacts = facts.map(record).filter((fact) => members.includes(fact.fact_ref));
       const path = file.normalized_path;
       return [
-        ...(members.includes(fileRef) ? [{ path, deprecated: isExplicitDeprecatedPath(path) }] : []),
-        ...ownedFacts.map((fact) => ({ path, deprecated: isExplicitDeprecatedPath(path) ||
+        ...(members.includes(fileRef) ? [{ path, member_id: String(fileRef), deprecated: isExplicitDeprecatedPath(path) }] : []),
+        ...ownedFacts.map((fact) => ({ path, member_id: String(fact.fact_ref), deprecated: isExplicitDeprecatedPath(path) ||
           options.deprecated_member_ids?.has(String(fact.fact_ref)) === true })),
       ];
     });
@@ -49,6 +49,7 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
     paths.forEach((path) => files.add(`${String(source)}:${path}`));
     const subject = record(validation.expected_subject_key);
     affected.push({ title: options.titles?.get(String(workset.group_key)) ?? String(subject.local_key ?? "Untitled target"), paths,
+      member_ids: [...new Set(owned.filter((member) => member.deprecated).map((member) => member.member_id))].sort(),
       mixed_current_content: owned.some((member) => !member.deprecated) });
   }
   const exclusionLeavesNoCurrentPages = runSpecs.length > 0 && affected.length === runSpecs.length &&
@@ -66,7 +67,6 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
     exclude_consequence: "Do not generate outdated API pages. Old integration and migration questions will not be covered. Keep current APIs in mixed pages; captured sources and already accepted knowledge are not deleted." +
       (exclusionLeavesNoCurrentPages ? " No current pages remain: stop this indexing request without submitting another Partition or Author result. Resume only after the user supplies a different scope." : ""),
     include_action: { stage: "structure-review", decision: "approved" },
-    exclude_action: exclusionLeavesNoCurrentPages ? null : { stage: "structure-review", decision: "request-adjustment",
-      feedback: "The user excludes deprecated API subjects. Replan the structure without deprecated-only pages or deprecated members of mixed pages; retain current public APIs, and keep deprecated code only as supporting material when needed to explain a current contract. Do not delete captured sources or accepted knowledge." },
+    exclude_action: exclusionLeavesNoCurrentPages ? null : { stage: "structure-review", decision: "exclude-obsolete" },
   };
 }

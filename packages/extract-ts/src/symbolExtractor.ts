@@ -18,6 +18,7 @@ const relationIdentity = (relation: RelationInfo): string => JSON.stringify([
   relation.grounding,
   relation.confidence,
   relation.source,
+  relation.file ?? null,
   relation.line ?? null,
 ]);
 
@@ -126,7 +127,10 @@ export const extractSymbols = async (
 
     if (propsTypeName) {
       sym.propsType = propsTypeName;
-      relations.push(createRelation(EdgeType.OfType, sym.name, propsTypeName, false, sym.line));
+      relations.push({
+        ...createRelation(EdgeType.OfType, sym.name, propsTypeName, false, sym.line),
+        file: sym.file,
+      });
     }
   }
   const deduplicatedRelations = uniqueRelations(relations);

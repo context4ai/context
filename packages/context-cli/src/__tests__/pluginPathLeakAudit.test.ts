@@ -47,6 +47,10 @@ const SOURCE_PATH_FIELD_ALLOWED_FIELDS = new Set([
   // workspace storage locator. projectIndexerSelectionCatalog.test.ts verifies
   // it against the release manifest; Agents must not infer sibling paths.
   "skill_path",
+  // Author exposes registered captured source files for explicit read-only
+  // access, not arbitrary workspace state probing. Material integration tests
+  // verify real readable paths and scoped source_items submission.
+  "captured_root", "read_path",
   // Internal boolean controlling selected-source read extent, not a path value
   // or an Agent-facing output field.
   "whole_file",

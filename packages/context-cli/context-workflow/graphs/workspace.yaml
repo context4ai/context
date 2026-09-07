@@ -82,10 +82,9 @@ nodes:
       - path: close.current
         equals: true
     resources:
-      required:
+      recommended:
         - resources/procedures/close-and-build.md
         - resources/views/verification-current.yaml
-      recommended:
         - resources/diagnostics/projection-stale.md
 
   - id: choose-source-boundary
@@ -292,7 +291,7 @@ nodes:
       - path: packages.current
         equals: true
     resources:
-      required:
+      recommended:
         - resources/procedures/close-and-build.md
         - resources/views/package-current.yaml
 

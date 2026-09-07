@@ -109,7 +109,7 @@ function projectPhaseRunInput(input: {
   };
 }
 
-async function runManagedUntil(input: {
+async function runProjectUntil(input: {
   cwd: string;
   cliModuleUrl: string;
   phaseId?: string;
@@ -127,18 +127,11 @@ async function runManagedUntil(input: {
       { category: ErrorCategory.UserInputInvalid },
     );
   }
-  if (!input.managed) {
-    throw new ContextError(
-      ExitCode.UserError,
-      "--until blocked-or-complete requires explicit --managed authority in the current conversation",
-      { category: ErrorCategory.UserInputInvalid },
-    );
-  }
   const found = findContextProjectRoot(input.cwd);
   if (found === null) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
-      "managed workflow execution requires a context project",
+      "workflow execution requires a context project",
       { category: ErrorCategory.WorkspaceNotFound },
     );
   }
@@ -158,7 +151,7 @@ async function runManagedUntil(input: {
     result = await runWorkflowUntilBlockedOrComplete({
       observe: () =>
         collectProjectStatus(found.projectRoot, {
-          managed: true,
+          managed: input.managed,
           authorities: input.authorities,
           ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
           ...(input.resourceReceiptsReference === undefined
@@ -171,6 +164,7 @@ async function runManagedUntil(input: {
         max: 100,
       }),
       dryRun: input.options.dryRun === true,
+      managed: input.managed,
     });
   } finally {
     await runtime.close();
@@ -206,7 +200,7 @@ export function registerProjectRunCommand(
         .argParser(collectWorkflowAuthorityOption)
         .default([]),
     )
-    .option("--until <condition>", "with --managed and no phase id, execute deterministic routes until blocked-or-complete")
+    .option("--until <condition>", "with no phase id, execute deterministic routes until blocked-or-complete; --managed only delegates authorized gates")
     .option("--max-steps <n>", "maximum deterministic routes for --until", "25")
     .option("--verbose", "include phase contracts and repeated source metadata in JSON output")
     .option("--format <format>", "output format: text | json", "text")
@@ -227,7 +221,7 @@ export function registerProjectRunCommand(
         : undefined;
       const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       if (options.until !== undefined) {
-        await runManagedUntil({
+        await runProjectUntil({
           cwd,
           cliModuleUrl,
           ...(phaseId === undefined ? {} : { phaseId }),

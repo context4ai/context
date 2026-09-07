@@ -73,6 +73,10 @@ export const relationInfoSchema = z.object({
   type: relationTypeSchema,
   from: z.string().min(1),
   to: z.string().min(1),
+  // The parser knows which file produced a relation even when `from` is a
+  // local variable name (or a module-level call). Keep that provenance on
+  // the relation instead of making consumers guess from a symbol name.
+  file: z.string().min(1).optional(),
   isExternal: z.boolean(),
   grounding: groundingSchema,
   confidence: z.number().min(0).max(1),

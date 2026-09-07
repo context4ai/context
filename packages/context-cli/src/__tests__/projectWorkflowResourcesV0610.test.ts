@@ -181,7 +181,7 @@ describe("Context workflow resources", () => {
       const receiptPath = receiptPathFromCommand(result.next_action.command);
       expect(isAbsolute(receiptPath)).toBe(true);
       expect(receiptPath).toStartWith(join(initialized.projectRoot, ".tmp", "context-runtime", "workflow", "read-receipts"));
-      expect(result.next_action.command).toStartWith(`cd '${initialized.projectRoot}' && context status`);
+      expect(result.next_action.command).toStartWith("context resource acknowledge-current");
       const receipts = JSON.parse(await readFile(
         receiptPath,
         "utf8",
@@ -215,7 +215,7 @@ describe("Context workflow resources", () => {
     }
   });
 
-  test("managed materialization continues through the deterministic host loop after reading", async () => {
+  test("materialized and direct required readings are acknowledged together without loss", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-workflow-managed-resource-"));
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -226,9 +226,19 @@ describe("Context workflow resources", () => {
         revision: status.workflow.revision,
         managed: true,
       });
-      expect(result.next_action.command).toContain("--workflow-resource-receipts");
-      expect(result.next_action.command).toContain("run --managed --until blocked-or-complete --format json");
+      expect(result.next_action.command).toContain("--resource-receipts");
+      expect(result.next_action.command).toContain("resource acknowledge-current");
       expect(result.next_action.command).not.toContain("context status");
+      const reference = `@${receiptPathFromCommand(result.next_action.command)}`;
+      const receipts = await parseWorkflowResourceReceipts(reference, initialized.projectRoot);
+      const acknowledged = await acknowledgeCurrentWorkflowResources({
+        cwd: initialized.projectRoot, revision: status.workflow.revision, managed: true,
+        resourceReceipts: receipts, resourceReceiptsReference: reference,
+      });
+      expect(acknowledged.workflow.current?.resources.required.find((item) => item.id === result.id)?.read_state)
+        .toBe("current");
+      expect(acknowledged.workflow.current?.resources.required.filter((item) => item.path !== undefined)
+        .every((item) => item.read_state === "current")).toBe(true);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

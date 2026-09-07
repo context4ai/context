@@ -21,6 +21,17 @@ the complete authorized document text together with maintained title,
 `source_path`, route, audience, and reader-task evidence. These fields are
 evidence for the decision; none is sufficient by itself.
 
+Choose readable, durable subject names during Partition. Context's main-page
+path uses the subject namespace as the directory and local key as the basename;
+the group's key and authored title do not rename it. When the default namespace
+is a capture ID or opaque source token, use the existing explicit subject object
+with a source-supported product/platform namespace and topic key, such as
+`sample-web` / `faq`, under a permitted kind. Do not repeat the source token in
+both path segments or use random/hash suffixes to resolve collisions. Keep an
+existing subject and its approved path on updates; a title edit alone does not
+create a new identity. Review the proposed subject and final reader path, not
+only the page title. Context handles path normalization and layout confirmation.
+
 One group may contain multiple documents when they jointly explain the same
 reader subject. Split platform or runtime variants only when their supported
 contract, behavior, lifecycle, or reader task is materially different. Keep

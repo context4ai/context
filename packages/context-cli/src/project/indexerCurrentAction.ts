@@ -25,8 +25,7 @@ import {
 } from "./indexerMainRunStore.js";
 import { buildIndexerPartitionRunResultFromSemantic } from
   "./indexerSemanticPartitionResult.js";
-import { buildIndexerAuthorRunResultFromSemantic } from
-  "./indexerSemanticAuthorResult.js";
+import { prepareIndexerAuthorSubmission } from "./indexerAuthorSubmission.js";
 import { contextWorkflowAuthorities } from "./workflow/workflowFacts.js";
 import {
   CONTEXT_WORKFLOW_AUTHORITIES,
@@ -144,7 +143,7 @@ async function advanceAfterBatch(input: {
       progress: await currentIndexerProgress({ projectRoot: input.projectRoot }),
       next_preparation: {
         outcome: "failed" as const,
-        message: error instanceof Error ? error.message : String(error),
+        message: `${input.committedTaskCount} task(s) were saved. Do not resubmit committed outcomes. Only preparation of the next step failed: ${error instanceof Error ? error.message : String(error)}. Run the recovery command to continue; stage progress is not workspace completion.`,
         command: `context run${input.managed ? " --managed" : ""} --format json`,
       },
     };
@@ -480,33 +479,9 @@ export async function completeCurrentIndexerAction(input: {
           materials.push({ task_key: submitted.task_key, material });
           continue;
         }
-        const validation = task.spec.validation as unknown as {
-          dependency_view: unknown;
-          expected_subject_key: unknown;
-          artifact_policy_eligibility: unknown;
-          allowed_source_roles: readonly string[];
-          allowed_artifact_intents: readonly {
-            source_role: string;
-            document_kind: string;
-            reader_goal: string;
-            artifact_kind: string;
-          }[];
-          canonical_inventory_members: readonly IndexerInventoryMember[];
-          allowed_question_targets: readonly {
-            question_target_key: string;
-            question_ref: string;
-          }[];
-        };
-        accepted.push({
-          task,
-          semantic: parsed.data,
-          result: buildIndexerAuthorRunResultFromSemantic({
-            request: task.spec.request,
-            view: task.view,
-            semantic: parsed.data,
-            validation,
-          }),
-        });
+        accepted.push(await prepareIndexerAuthorSubmission({
+          projectRoot: found.projectRoot, task, semantic: parsed.data,
+        }));
       } catch (error) {
         outcomes.push({
           task_key: submitted.task_key,
@@ -559,7 +534,7 @@ export async function completeCurrentIndexerAction(input: {
         await applyIndexerAuthorMaterials({ projectRoot: found.projectRoot, materials: materials.map((item) => item.material) });
         outcomes.push(...materials.map(({ task_key, material }) => ({
           task_key, outcome: "material-expanded", committed: false,
-          message: `Added complete source bodies: ${material.paths.join(", ")}. Continue Author using the returned task and preserve your existing draft.${material.missing_paths.length ? ` Unavailable paths: ${material.missing_paths.join(", ")}.` : ""}`,
+          message: `Complete source bodies available: ${material.paths.join(", ")}. Read the returned task's Source material or captured file paths and continue the preserved draft.${material.missing_paths.length ? ` Unavailable paths: ${material.missing_paths.join(", ")}.` : ""}`,
         })));
       } catch (error) {
         outcomes.push(...materials.map(({ task_key }) => ({ task_key, outcome: "failed", committed: false,

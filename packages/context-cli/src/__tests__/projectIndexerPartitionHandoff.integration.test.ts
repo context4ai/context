@@ -16,6 +16,7 @@ import {
   documentRevisionOuterIndexerRoute,
 } from "./projectDocumentRevisionV074.fixture.js";
 import { readingItems } from "./indexerReading.fixture.js";
+import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -79,7 +80,10 @@ describe("Partition handoff uses only Agent-visible materials", () => {
             key: `public-constants-${task.task_key}`,
             title: "Public constants",
             reader_task: "Find the public constant exports and their declared values.",
-            subject: `public-constants-${task.task_key}`,
+            subject: {
+              namespace: "sample-library", kind: workset.partition_subject_key.kind,
+              local_key: `public-constants-${task.task_key}`,
+            },
             subject_intent: "primary",
             members,
             questions: [...workset.reader_question_refs],
@@ -104,6 +108,12 @@ describe("Partition handoff uses only Agent-visible materials", () => {
         entry.outcome === "accepted" && entry.committed
       )).toBe(true);
       expect(completion.next).not.toBeNull();
+      const structure = await currentIndexerStructureReview(root);
+      expect(structure?.preview.topics).toHaveLength(results.length);
+      expect(structure?.preview.topics.every((topic) =>
+        topic.subject_key?.namespace === "sample-library" &&
+        topic.subject_key.local_key.startsWith("public-constants-")
+      )).toBe(true);
 
       // Inspect internals only AFTER submission to verify the CLI supplied them.
       for (const task of input.tasks) {

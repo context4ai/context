@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   canonicalIndexerJson,
+  buildIndexerRunEnvelope,
+  buildIndexerArtifactDependencySet,
   indexerProtocolDigest,
   validateAndRecordIndexerMainRun,
   validateIndexerMainAcceptedRecord,
@@ -10,6 +12,7 @@ import {
   type IndexerMainAcceptedRecord,
   type IndexerMainRunLedger,
   type IndexerMainRunRequest,
+  type IndexerMainRunResult,
   type IndexerProjectFileTarget,
 } from "@c4a/context";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
@@ -166,25 +169,36 @@ export function validateAcceptedCacheEnvelope(input: {
   return { ...payload, cache_digest: cacheDigest };
 }
 
-export function validateAcceptedCache(input: {
+export function readAcceptedCache(input: {
   cache: unknown;
   spec: MainRunSpec;
 }): ReturnType<typeof validateAndRecordIndexerMainRun> {
   const cached = validateAcceptedCacheEnvelope(input);
-  const validated = validateAndRecordIndexerMainRun({
-    request: input.spec.request,
-    result: cached.result,
-    validation: input.spec.validation as unknown as Parameters<
-      typeof validateAndRecordIndexerMainRun
-    >[0]["validation"],
-  });
-  if (
-    canonicalIndexerJson(validated.accepted_record) !==
-      canonicalIndexerJson(cached.accepted_record)
-  ) {
-    throw new TypeError("main accepted cache record does not match its validated result");
-  }
-  return validated;
+  // Submission already validated this immutable result. Reading it must not
+  // rerun content/contract acceptance against a newer CLI implementation.
+  const request = input.spec.request;
+  const result = cached.result as IndexerMainRunResult;
+  const runEnvelope = buildIndexerRunEnvelope(request);
+  let dependencies: ReturnType<typeof buildIndexerArtifactDependencySet> | null | undefined;
+  return {
+    request, result, operation_result: result.result.result,
+    accepted_record: cached.accepted_record, run_envelope: runEnvelope,
+    // Only incremental-impact consumers need this derived graph.
+    get artifact_dependency_set() {
+      if (dependencies !== undefined) return dependencies;
+      dependencies = request.workset.stage === "author" && result.result.stage === "author"
+        ? buildIndexerArtifactDependencySet({ result: result.result.result, workset: request.workset,
+            run_envelope: runEnvelope, dependency_view: input.spec.validation.dependency_view,
+            composition_input: request.composition_input,
+            ...(input.spec.validation.authorized_evidence_targets === undefined ? {} : {
+              authorized_evidence_targets: input.spec.validation.authorized_evidence_targets as
+                NonNullable<Parameters<typeof buildIndexerArtifactDependencySet>[0]["authorized_evidence_targets"]>,
+            }),
+          })
+        : null;
+      return dependencies;
+    },
+  };
 }
 
 export async function currentLedger(

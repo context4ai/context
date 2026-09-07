@@ -155,6 +155,41 @@ describe("ExtractionResult Evidence ABI adapter", () => {
       .toBe(false);
   });
 
+  test("uses relation provenance when local names collide across files", () => {
+    const current = extraction();
+    const secondPath = "src/other.ts";
+    current.files = [...current.files, { path: secondPath, language: "typescript", lines: 4 }];
+    current.symbols = [...current.symbols, {
+      name: "content",
+      kind: SymbolKind.Variable,
+      visibility: Visibility.Internal,
+      file: secondPath,
+      line: 1,
+      endLine: 2,
+    }];
+    current.coverage!.files.push({ path: secondPath, disposition: "analyzed", diagnosticCodes: [] });
+    current.relations = [{
+      from: "content",
+      to: "fs.readFileSync",
+      type: EdgeType.Calls,
+      isExternal: true,
+      grounding: Grounding.Code,
+      confidence: 1,
+      source: EdgeSource.Ast,
+      file: secondPath,
+      line: 2,
+    }];
+    current.stats.files = current.files.length;
+    current.stats.relations = current.relations.length;
+
+    const result = extractionResultToEvidenceAdapterResult(current, invocation());
+    expect(result.files.find((file) => file.normalized_path === secondPath)?.facts)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ kind: "code-relation" })]));
+    expect(result.files.find((file) => file.normalized_path === "src/index.ts")?.facts)
+      .not.toEqual(expect.arrayContaining([expect.objectContaining({ kind: "code-relation" })]));
+    expect(result.diagnostics.some((item) => item.code === "relation-locator-unresolved")).toBe(false);
+  });
+
   test("keeps source expressions out of durable relation locators", () => {
     const current = extraction();
     const expression = "fetch('/session').then((value) => value.access_token)";

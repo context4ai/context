@@ -111,11 +111,20 @@ export async function readIndexerAuthorSourceText(input: {
   if (`sha256:${hash.digest("hex")}` !== input.content_digest) {
     throw new TypeError("Author source changed since Parser extraction; refresh the registered source and retry the current lifecycle");
   }
-  if (input.spans.some((span) => span.locator.end_line > line)) {
-    throw new TypeError("Author source range is outside its pinned file; refresh Parser facts before retrying");
-  }
-  if (input.whole_file) ranges[0]!.end_line = line;
-  return { spans: ranges.map((range, index) => ({ ...range, text: pieces[index]!.join("") })), bytes };
+  // Parser facts can outlive a source refresh. Do not turn that stale locator
+  // into a workflow stop: preserve the bytes that still exist, clamp a range
+  // that overlaps the file, and omit a range that starts after EOF. Path and
+  // digest checks above remain hard guards; this is only mechanical recovery
+  // for an outdated line coordinate.
+  const repaired = ranges.flatMap((range, index) => {
+    if (range.start_line > line) return [];
+    return [{
+      ...range,
+      end_line: Math.min(range.end_line, line),
+      text: pieces[index]!.join(""),
+    }];
+  });
+  return { spans: repaired, bytes };
 }
 
 /** Temporary Author View content, not a new evidence identity or durable artifact. */
@@ -155,6 +164,15 @@ export async function buildProjectIndexerAuthorSourceText(input: {
         node.module_ref === binding.module_ref && node.targets.length > 0 ? [node.locator.path] : [])),
   });
   const items = [];
+  items.push({
+    ref: `source-access:${binding.source_ref}`, category: "source-access",
+    provenance: { protocol: input.dependency_view.protocol, digest: input.dependency_view.view_digest },
+    value: {
+      source_ref: binding.source_ref, module_ref: binding.module_ref,
+      captured_root: resolve(input.projectRoot, source.materializedAt),
+      paths: [...spansByPath.keys()].sort(),
+    },
+  });
   let remaining = INDEXER_AUTHOR_SOURCE_TEXT_MAX_BYTES;
   for (const [path, spans] of [...spansByPath].sort(([a], [b]) => a.localeCompare(b))) {
     if (materialPaths !== undefined && !materialPaths.has(path)) continue;
@@ -175,7 +193,8 @@ export async function buildProjectIndexerAuthorSourceText(input: {
     items.push({
       ref: `source-text:${descriptor.file_ref}`, category: "source-text",
       provenance: { protocol: input.dependency_view.protocol, digest: input.dependency_view.view_digest, container_ref: descriptor.file_ref },
-      value: { source_ref: binding.source_ref, module_ref: binding.module_ref, path, spans: text.spans },
+      value: { source_ref: binding.source_ref, module_ref: binding.module_ref, path,
+        read_path: resolve(input.projectRoot, source.materializedAt, path), spans: text.spans },
     });
   }
   return buildIndexerAuthorizedWorksetViewSource({
