@@ -10,6 +10,20 @@ shared code evidence does not turn every document into a maintenance audit.
 If the purpose is already clear, do not ask it again because a field is absent.
 Managed execution does not authorize deciding a truly ambiguous purpose.
 
+During representative reading, actively distinguish sections that answer the
+reader's task from supporting context and material that may be unnecessary.
+Check available document status, intended audience, version applicability and
+substantive duplication. Age, titles, archived locations and document length are
+clues, not exclusion rules; historical decisions and older procedures can still
+be required. Preserve useful detail rather than replacing it with an inventory.
+If a substantial region raises an unresolved scope choice, explain what including
+or leaving it out means and ask before dependent writing, including in managed
+mode. Unneeded material increases token use, processing and review work, and can
+bury useful answers in repetitive or conflicting pages. Recommend boundaries
+from the user's task, not from a target page count or promised speedup. Reuse
+settled decisions, use the current Result's supported dispositions, and preserve
+accepted knowledge. Do not treat unread material as irrelevant or silently omit it.
+
 Context delivers an initial readable sample and subsequent page batches through
 the current Review, close and build routes. Continue the remaining accepted plan
 after each build; preserve already delivered pages and source-grounded prose.

@@ -4,7 +4,6 @@ import {
   indexerPartitionSemanticInputSchema,
   loadIndexerRegistry,
   parseIndexerCurrentActionSubmission,
-  type IndexerInventoryMember,
 } from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -83,16 +82,18 @@ async function assertCurrentIndexerBatchRevision(input: {
   const command = `context${authorityOptions} status${input.managed ? " --managed" : ""} --view summary --format json`;
   throw new ContextError(
     ExitCode.WorkspaceStateError,
-    `The current Indexer batch changed. Re-run \`${command}\` and use the new route.`,
+    `The supplied revision does not match the current Indexer route. Re-run \`${command}\` and use the new route.`,
     {
       category: ErrorCategory.WorkflowRevisionStale,
+      project_root: input.projectRoot,
       expected_revision: input.expectedRevision,
       current_revision: route?.revision ?? null,
       revision_advanced: false,
       next_action: {
         kind: "refresh_workflow_route",
+        cwd: input.projectRoot,
         command,
-        message: "Refresh the current Indexer route and resubmit only against its task manifest.",
+        message: "Verify this is the intended workspace before refreshing. A changed revision can reflect updated instructions or resources, not only accepted tasks. Read the current Route and submit only its outstanding tasks.",
       },
     },
   );
@@ -605,12 +606,10 @@ export async function completeCurrentIndexerAction(input: {
         descriptor: current.descriptor,
         taskKey: submitted.task_key,
       });
-      const validation = task.spec.validation as unknown as {
-        canonical_inventory_members: readonly IndexerInventoryMember[];
-        authorized_source_refs: readonly string[];
-        subject_key_contract: unknown;
-        required_question_target_refs?: readonly string[];
-      };
+      const validation = task.spec.validation as unknown as Omit<
+        Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["validation"],
+        "partition_unit_type"
+      >;
       prepared.push({
         task,
         semantic: parsed.data,
@@ -619,16 +618,8 @@ export async function completeCurrentIndexerAction(input: {
           view: task.view,
           semantic: parsed.data,
           validation: {
-            canonical_inventory_members: validation.canonical_inventory_members,
-            authorized_source_refs: validation.authorized_source_refs,
-            subject_key_contract: validation.subject_key_contract,
+            ...validation,
             partition_unit_type: artifactLogicalUnits[0]!.id,
-            ...(validation.required_question_target_refs === undefined
-              ? {}
-              : {
-                  required_question_target_refs:
-                    validation.required_question_target_refs,
-                }),
           },
         }),
       });

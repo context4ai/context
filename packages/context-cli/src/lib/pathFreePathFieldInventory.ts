@@ -53,6 +53,10 @@ const DEFAULT_INTERNAL_FIELDS = [
   "template_path",
   "template_root",
   "report_path",
+  "result_file",
+  "project_root",
+  "input_project_root",
+  "input_file",
   "absolute_path",
   "route_metadata_path",
   "recovery_path",
@@ -89,6 +93,7 @@ const DEFAULT_INTERNAL_FIELDS = [
 ] as const;
 
 function policyFor(field: string): PathFieldInventoryEntry["policy"] {
+  if (["project_root", "input_project_root", "input_file"].includes(field)) return "external-input";
   if (field === "requested_approved_path" || field === "revision_path") {
     return "external-input";
   }
@@ -102,6 +107,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "compile_config_path" ||
     field === "normalized_path" ||
     field === "file_path" ||
+    field === "result_file" ||
     field === "instruction_path" ||
     field === "view_path" ||
     field === "repo_root" ||
@@ -129,6 +135,12 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
 }
 
 function semanticReplacementFor(field: string): string {
+  if (["project_root", "input_project_root", "input_file"].includes(field)) {
+    return "Explicit command workspace and supplied input locators for mismatch recovery; never use them as semantic identities or infer a different workspace from source references.";
+  }
+  if (field === "result_file") {
+    return "An explicit completion-report locator for Host reading, not a semantic identity or an inferred cache path; retain revision and outcome fields in the summary.";
+  }
   if (field === "payload.path") {
     return "Pass the payload with --input and identify it by schema_version, node_ref, view_ref, section_id, source_ref, or digest.";
   }

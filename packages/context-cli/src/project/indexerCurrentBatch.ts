@@ -36,6 +36,7 @@ import {
 } from "./indexerMainRunStoreRecords.js";
 import {
   persistPreparedIndexerWorksetView,
+  rebindIndexerWorksetViewResource,
   prepareProjectIndexerWorksetViewMaterialization,
   validateIndexerWorksetViewMaterializationRequest,
   type IndexerWorksetViewMaterializationRequest,
@@ -123,6 +124,7 @@ function validateDescriptorShape(value: unknown): CurrentIndexerBatchDescriptor 
       task.task_key !== `task-${String(index + 1).padStart(3, "0")}` ||
       task.indexer_id.length === 0 ||
       task.source_ref.length === 0 ||
+      task.view_request.resource_id !== `authorized-indexer-workset-view/${task.task_key}` ||
       task.view_path.length === 0 ||
       !/^sha256:[a-f0-9]{64}$/u.test(task.view_request.payload_digest) ||
       validateIndexerWorksetViewMaterializationRequest(task.view_request)
@@ -292,17 +294,22 @@ async function persistPlannedBatch(input: {
   );
   const tasks: CurrentIndexerBatchTaskDescriptor[] = [];
   for (const candidate of selected) {
+    const taskKey = `task-${String(tasks.length + 1).padStart(3, "0")}`;
+    // Packing may skip candidates. Bind the View to its final batch position,
+    // keeping the source projection and execution request unchanged.
+    const viewRequest = rebindIndexerWorksetViewResource(candidate.worksetView.request,
+      `authorized-indexer-workset-view/${taskKey}`);
     const output = await persistPreparedIndexerWorksetView({
       workspaceRoot: input.projectRoot,
-      prepared: candidate.worksetView,
+      prepared: { ...candidate.worksetView, request: viewRequest },
     });
     tasks.push({
-      task_key: `task-${String(tasks.length + 1).padStart(3, "0")}`,
+      task_key: taskKey,
       indexer_id: candidate.spec.request.workset.indexer_id,
       source_ref: candidate.spec.request.workset.source_ref,
       workset_digest: candidate.spec.request.workset.workset_digest,
       execution_request_digest: candidate.spec.request.execution_request_digest,
-      view_request: candidate.worksetView.request,
+      view_request: viewRequest,
       view_path: output.file_path,
       input_bytes: candidate.candidate.input_bytes,
       output_reserve_bytes: candidate.candidate.output_reserve_bytes,

@@ -12,7 +12,10 @@ metadata:
 Read the current Route action input and every required Resource marked `read-required`.
 Use the readable `resolved-indexer-instructions` and each task's
 `authorized-indexer-workset-view/task-NNN`, including its goals, constraints and source material.
-Author task Resources can point to the same batch file: read that path once. Read shared
+Task Resources can point to the same batch file: read that path once, including
+every `task-NNN — task-specific material` section after the shared material.
+The initial task list is not the complete View. Match each result to its own
+task-specific material; shared blocks apply only to their listed task keys. Read shared
 material once for its listed tasks, then focus on each task's distinct sources and reader goal.
 If the file tool truncates its output, continue with the unread part of that same file;
 do not mistake tool truncation for missing source material or restart the Context task.
@@ -39,7 +42,13 @@ accepted page plan and does not reread these resources or rewrite the report
 unless a material task decision changes.
 
 For Partition, apply the grouping rules in `resolved-indexer-instructions` to each
-task's View. Context handles strategy selection and retries; do not look up a separate
+task's View. Check its material against the settled reader purpose and scope;
+inventory membership is not a requirement to publish a page. A newly discovered
+region with materially different relevance, version or lifecycle may require a
+scope discussion before dependent output, even in managed mode. Explain the
+specific impact and preserve accepted work; refresh the Route after an authorized
+configuration change. Do not silently exclude unresolved work or replay all tasks.
+Context handles strategy selection and retries; do not look up a separate
 strategy definition or submit strategy metadata. Report missing source material or
 unresolvable semantic boundaries through the current Result schema.
 

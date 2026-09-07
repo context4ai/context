@@ -1,5 +1,7 @@
+import { assertActionInputWorkspace } from "../project/actionInputWorkspace.js";
 import { Command, Option } from "commander";
-import YAML from "yaml";
+import { prepareActionCompletionOutput, serializeActionCompletion } from "../project/actionCompletionOutput.js";
+import { findContextProjectRoot } from "../project/workspace.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
@@ -40,6 +42,7 @@ export function registerProjectActionCommands(program: Command): void {
           category: ErrorCategory.UserInputInvalid,
         });
       }
+      assertActionInputWorkspace(process.cwd(), requiredString(options.input, "--input"));
       const rootOptions = program.opts() as Record<string, unknown>;
       const result = await completeCurrentIndexerAction({
         cwd: process.cwd(),
@@ -57,8 +60,15 @@ export function registerProjectActionCommands(program: Command): void {
           options.authority,
         ),
       });
-      process.stdout.write(format === "json"
-        ? `${JSON.stringify(result, null, 2)}\n`
-        : YAML.stringify(result));
+      let output: unknown = result;
+      try {
+        output = await prepareActionCompletionOutput({
+          projectRoot: findContextProjectRoot(process.cwd())!.projectRoot, result, format,
+        });
+      } catch (error) {
+        // Submission may already be committed. Preserve its response on report I/O failure.
+        process.stderr.write(`Could not save the full completion report; returning it inline: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
+      process.stdout.write(serializeActionCompletion(output, format));
     });
 }

@@ -26,10 +26,20 @@ reconciliation, mechanical validation, layout, and Candidate compile subroute. T
 Graph is the authority for each substep. Never skip directly to compile and
 never synthesize a Provider Result or a default plan.
 
+A large `complete-current` reply may use `context.action.completion-summary/v1`.
+Read its `result_file` for complete task diagnostics and `next_route.file` for the
+exact next Route. Counts and shortened messages are only a summary; never resubmit
+committed tasks to obtain missing output. If `next_preparation` failed, use its
+recovery command; committed tasks remain saved. For a long submission use a UTF-8
+JSON/YAML file in `.tmp/` with `--input <file>` rather than feeding a long line into
+an interactive PTY. Keep the Route revision and completion command unchanged.
+
 After the registered source overview and representative reading, resolve only
 missing reader purpose and substantive scope before planning. Reuse the user's
 explicit request and existing goals; a missing `purpose` alone is not a reason
-to ask. Fully managed execution does not authorize choosing an unclear purpose.
+to ask. Source-read authorization does not settle purpose, depth or version scope.
+Fully managed execution does not authorize choosing an unclear purpose. Ask and
+wait when these choices remain unresolved, without re-asking explicit decisions.
 Ask at most three questions in one round, without filling unused slots: combine
 reader and task into one question, then clarify substantive scope, then only a
 real tradeoff. Use the current conversation language and a shared human/Agent
@@ -39,8 +49,23 @@ first small delivery instead of asking abstract classification questions.
 Save the short conclusion as `purpose` in the existing requirement, with scopes
 and exclusions in their existing fields. Do not store a questionnaire or add
 another confirmation after an explicit answer. Silence is not approval.
-If deprecated content becomes significant once reliable counts are available,
-ask only about that unresolved scope and explain the counting basis and impact.
+During the authorized source overview and representative reading, actively assess
+which regions serve the reader's task, which only support it, and which appear
+unnecessary. Check available entrypoints, maintained guidance and lifecycle or
+version notices; deprecation is one possible scope concern, not the sole trigger.
+Names, age, file counts and generated status are clues, not exclusion rules.
+Propose concrete boundaries with reasons. Explain a material tradeoff once:
+including large irrelevant regions increases token use and processing time and
+can dilute useful knowledge with repetitive or conflicting pages. Do not claim
+measured savings or reduce requested coverage merely to make the run faster.
+Resolve meaningful unanswered scope choices with the user before dependent bulk
+work, including in managed mode; carry out settled choices within existing
+authorization without asking per file. Use available counts with their unit and
+coverage, not an exhaustive scan just to obtain a number. If the relevant boundary
+is not yet checked, say what remains to inspect rather than declaring it absent.
+Preserve decisions in existing requirements and the report when applicable.
+Revisit only material new findings on continuation; do not restart accepted work
+or delete existing knowledge to implement a proposed scope reduction.
 Read authorized captured sources before raising material gaps; only unresolved
 core questions requiring new sources or human knowledge need another question.
 
@@ -50,7 +75,9 @@ choices worth preserving. Write the readable report at `.tmp/work-start-report.m
 before semantic planning, using the existing requirement reference and actual
 settings. Lightweight work keeps a short conversational summary. This is a scratch
 document written with the Host file tool, not another Gate or Action payload;
-show its path and continue the existing Route without seeking report approval.
+follow the procedure's first-report reading invitation and conversational pause,
+including in managed mode unless the user explicitly waived that pause. Then
+continue the same Route; do not add a report approval state or polling loop.
 Reuse it on continuation rather than generating a report for every batch.
 
 When the current subroute is a Gate, follow `gate.resolution_action` rather

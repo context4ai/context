@@ -6,60 +6,84 @@ mediaType: text/markdown
 
 # <Task name> | Work-start report
 
-Related requirement: <existing link or workspace location and, if needed, existing name/ID>
+Open with who will use the knowledge, what it will help them do, and the first
+pages they can read. Use connected prose. State a concrete reading milestone;
+estimate time only when supported by actual conditions.
 
-Open with the reader's actual situation, what this work will help them do, and
-the first useful delivery and reading milestone. Use connected prose rather than
-listing these elements in a fixed order. Give a time estimate only with a basis.
-
-Briefly state the current language, ordinary/managed arrangement and observed
-debug setting. Reuse existing decisions and actual settings without a new survey.
+Briefly explain what the agreed execution arrangement and observed debug setting
+mean for the reader. Do not announce the language already used in this report.
 
 ## What we read and learned
 
-Explain the important findings across the materials already inspected. Identify
-the main sources and those that contribute background, examples or supporting
-contracts. Link evidence where useful; do not list a reading log. State a limit
-beside the conclusion it affects rather than building a general risk inventory.
+Explain useful findings across the materials already read. Say which sources
+explain what, and which links were only retained without reading their targets.
+Name actual documents, images or attachments instead of internal processing terms.
+Link supporting material beside a conclusion when useful. Do not turn this into
+a reading log or claim implementation, completeness or verification beyond what
+was actually inspected.
 
 ## Scope and choices
 
-Describe what is included, what is supporting material, and what is excluded and
-why. Prefer paragraphs with a few bullets only for genuinely parallel choices.
+Describe what will be covered, what serves as background, what is excluded and
+why. Preserve choices about priorities and missing information. Distinguish user
+decisions, existing agreements and your proposed arrangements; source access or
+managed permission alone does not confirm purpose, depth or version choices.
+Name the useful regions and supporting materials rather than copying the source
+list. If a meaningful boundary remains unchecked, say what needs checking. When
+excess scope is a real concern, briefly explain the extra reading, token use and
+duplicate or conflicting output it could cause; do not invent measured savings.
 
-Preserve decisions about priorities, boundaries and missing core material, including
-what will be delivered first and whether more sources were authorized. Distinguish
-explicit user decisions, existing agreements and Agent arrangements within scope.
+## What we will deliver
 
-## Expected delivery
+Connect each content group to the reader's situation, task and expected page form.
+Express supported content categories in these page descriptions, not a separate
+internal classification column. Use the table only when comparing several groups
+helps; otherwise use a paragraph.
 
-Connect the scenarios to proposed content groups, supported collection types in
-the user's language, and useful content forms. Explain approximate scale and its
-basis when available; do not scan more material just to fill in a number. These
-are planning estimates, not approved directories, paths or a required page quota.
+| Content group | Situation and task it helps with | Page form |
+| --- | --- | --- |
 
-Use this table only when multiple groups benefit from comparison.
+Give an estimated page count or range with its basis in a short paragraph. If no
+reliable estimate is possible, state what is already known, the concrete remaining
+work needed to estimate it and when you can revisit it. An internal stage name is
+not an explanation. Do not invent counts, imply that a check happened, or scan more
+material just to fill a number. Explain the delivery order after the first pages.
 
-| Content group | Use scenario and reader task | Proposed content classification | Organization and form | Estimated scale |
+## What could be misrepresented
+
+For one to three actual pitfalls, name the objects that could be confused or the
+information that could be lost, and explain the consequence for the reader.
+Avoid generic warnings; omit this section when no concrete pitfall is known.
+
+## Indexer choices for this work
+
+An Indexer is a skill that turns particular source material into useful knowledge.
+Use the current Route's catalog, visible relevant Indexer Skills, actual selection
+and source reading to fill this table dynamically. Include the available Indexers
+not selected and why. Do not copy a fixed list of skills from this template.
+
+| Indexing skill | What it helps explain | This work's choice | Expected effect on module or text coverage | Reason |
 | --- | --- | --- | --- | --- |
 
-Explain the order after the first delivery and how the sources contribute. Follow
-the existing delivery arrangement without creating another scheduling procedure.
-
-## What could be misrepresented in this work
-
-Describe one to three concrete distinctions or omissions to watch for in these
-materials. Make them useful when reading the actual pages; do not repeat generic
-acceptance criteria or invent pitfalls to fill the section.
+Name the actual modules, documents or text groups each choice would affect and
+what knowledge it would add or leave out. State whether a choice is proposed,
+already configured, or not selected; distinguish unavailable from unnecessary.
+Describe expected coverage, not completed work or edits to the source materials.
+If the catalog or impact is not yet known, say what remains to be checked rather
+than treating missing information as a decision not to use a skill.
 
 ## Remaining gaps
 
-Include only unresolved local gaps with a current handling plan. Settled choices
-belong in scope. Resolve core purpose/scope questions through the existing
-discussion before proceeding; placing them here does not settle them.
+Include unresolved local gaps with a handling plan. Settled choices belong in
+scope; core purpose/scope questions must be resolved through discussion before
+dependent work, not hidden here.
 
-| Missing information | Affected content | Current handling | When further discussion is needed |
+| Missing information | Affected content | Current handling | When to discuss again |
 | --- | --- | --- | --- |
 
-Omit this section if there are no remaining gaps. Remove all writing instructions
-and empty tables from the actual report, and use the user's language throughout.
+Omit this section if empty. Remove template instructions, empty tables and
+placeholders from the actual report. Write in the user's language.
+
+---
+
+Related requirement: <link to existing requirement or workspace location; add existing names/IDs only as needed>

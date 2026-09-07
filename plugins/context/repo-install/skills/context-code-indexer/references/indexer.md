@@ -54,11 +54,25 @@ a current API. An explicit migration/comparison page may relate both, but must
 explain which contract belongs to each entrypoint. Preserve already accepted
 subjects during continuation; do not repartition them for cosmetic grouping.
 
-When substantial obsolete material is discovered, explain its scale and the
-consequences of including or excluding it before authoring it. Follow Context's
-scope-confirmation Gate; managed execution is not permission to choose obsolete
-scope for the user. Explicit deprecation is evidence; an old version number,
-directory named legacy, or a passing mention of deprecation alone is not.
+Actively assess useful coverage from available public entrypoints, maintained
+guidance, explicit lifecycle notices and representative source material. Identify
+what answers the reader's task, what is needed only to support it, and what may
+be outside it. This applies to code of any age: deprecated APIs can be essential
+for existing users, while current code may be irrelevant to this task. A legacy
+directory, generated file or test is a clue, not an automatic exclusion; examples,
+tests and generated contracts can contain necessary usage or interface facts.
+
+When a material new scope choice appears, explain the concrete region, available
+counting basis, recommendation and coverage consequences to the user before
+writing dependent pages. Unnecessary regions consume tokens and preparation,
+writing and review time, and can obscure useful guidance with duplicate or
+conflicting content. Do not trade required coverage for speed, invent savings,
+scan the whole repository just to count, or treat worksets as component/page counts.
+Follow Context's existing conversational scope clarification even in managed mode;
+reuse explicit decisions and do not invent a scope-confirmation Gate. Apply agreed
+member dispositions through the current Result; do not silently narrow scope,
+remove accepted pages or restart unrelated work. If lifecycle relevance is not yet
+checked, report that limitation rather than asserting there is no obsolete content.
 
 For partition work, close every inventory member as owned, excluded, or unsupported and use stable semantic subjects. Each member has exactly one primary owner; extension layers may enrich but cannot claim final authority. Do not create ordinal batches or infer identity from display titles, filenames, headings, or traversal order. If no defensible semantic grouping exists, return the protocol failure that permits the CLI-owned catalog fallback.
 

@@ -85,6 +85,13 @@ reopens the owning Author workset. Run the returned status command and follow
 the current Route. If the target is ambiguous, ask which Candidate the user
 means. Never edit `knowledge/`, `dist/`, or create a side-channel revision page.
 
+Keep the resolved workspace root as the shell tool working directory for every
+workflow command, including after conversation compaction. A previous shell
+`cd` may not persist into the next tool call. Input-file paths do not select the
+workspace; a parent directory can itself be another Context project. On a
+workspace-mismatch diagnostic, follow its working-directory recovery before
+refreshing the Route. Never merge progress from different workspaces.
+
 ### Conversation modes
 
 Enable debugging only when the user explicitly requests it. If initialization

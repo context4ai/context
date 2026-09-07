@@ -33,12 +33,17 @@ export async function prepareIndexerWorksetReadings(inputs: readonly {
     }
     return { view, workset: input.workset, task_key: input.task_key };
   }));
-  if (views.length > 0 && views.every((input) => input.workset.stage === "author")) {
+  if (views.length > 0 && views.every((input) => input.workset.stage === views[0]!.workset.stage)) {
     const batch = renderIndexerBatchReading(views.map(buildIndexerTaskReading));
-    const reading = await persistReading(inputs[0]!.ready.path, batch.markdown);
-    // Existing per-task Resource IDs still resolve, but their common file is
-    // read once. No extra discovery command or reading receipt is needed.
-    return inputs.map(() => reading);
+    // Partition packing still measures individual readings conservatively.
+    // Share only when the actual file fits within that existing budget.
+    const separateBytes = views.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0);
+    if (views[0]!.workset.stage === "author" || batch.input_bytes <= separateBytes) {
+      const reading = await persistReading(inputs[0]!.ready.path, batch.markdown);
+      // Existing per-task Resource IDs still resolve, but their common file is
+      // read once. No extra discovery command or reading receipt is needed.
+      return inputs.map(() => reading);
+    }
   }
   return Promise.all(views.map((input, index) =>
     persistReading(inputs[index]!.ready.path, renderIndexerWorksetReading(input))));

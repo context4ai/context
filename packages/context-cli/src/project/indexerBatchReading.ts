@@ -21,7 +21,7 @@ export function renderIndexerBatchReading(tasks: readonly IndexerTaskReading[]) 
   }
   const shared = [...blocks.values()].filter((entry) => entry.tasks.length > 1);
   const output = tasks.length === 1 ? [renderIndexerTaskReading(tasks[0]!)] : [
-    "# Author batch", "",
+    "# Indexer batch", "",
     "Read this file once for the entire batch. Each task keeps its own goals and result. Shared material applies only to the listed task keys; it does not authorize references for other tasks.", "",
     ...tasks.flatMap((task) => [task.introduction, ""]),
   ];

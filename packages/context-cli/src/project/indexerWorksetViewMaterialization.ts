@@ -128,6 +128,16 @@ function requestDigest(
   });
 }
 
+export function rebindIndexerWorksetViewResource(
+  request: IndexerWorksetViewMaterializationRequest,
+  resourceId: string,
+): IndexerWorksetViewMaterializationRequest {
+  const payload = { ...validateIndexerWorksetViewMaterializationRequest(request), resource_id: resourceId };
+  return validateIndexerWorksetViewMaterializationRequest({
+    ...payload, request_digest: requestDigest(payload),
+  });
+}
+
 export function validateIndexerWorksetViewMaterializationRequest(
   value: unknown,
 ): IndexerWorksetViewMaterializationRequest {

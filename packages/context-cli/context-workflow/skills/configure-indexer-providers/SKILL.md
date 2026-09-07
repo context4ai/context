@@ -43,11 +43,22 @@ current evidence. Do not infer semantic ownership from filenames, titles, or
 headings, and do not persist the discovery list. Capture proves byte/currentness
 only; the selected Markdown Provider remains responsible for semantic indexing.
 
+Choose skills to cover the useful regions agreed with the user, not every
+capability a Provider advertises or every file in a registered source. Distinguish
+regions that need knowledge pages from materials only needed to support them;
+available material does not automatically require a separate skill or page.
+If representative reading exposes a substantial unresolved scope tradeoff,
+clarify it through the existing requirement workflow before dependent selection.
+This selection Result must not silently change requirements or expand read scope.
+
 Once purpose and scope are settled and the applicable Provider capabilities are
 known, use `procedure.work-start-report` and `template.work-start-report` from the
 current Route when the work warrants a report. This is the last planning handoff
 before Partition: write or update `.tmp/work-start-report.md` with the Host file
-tool and give the user its path, then submit the normal Provider selection below.
+tool. Explain discovered Indexer choices and non-selections using the supplied
+catalog, visible relevant Skills and this task's materials; label unapplied choices
+as proposals. Follow the report procedure's reading invitation and pause before
+submitting the normal Provider selection below, unless explicitly waived.
 A useful report already formed during requirement setup should be reused; do not
 restart discussion or add report fields to the selection Result.
 
