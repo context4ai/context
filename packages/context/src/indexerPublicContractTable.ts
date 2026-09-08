@@ -1,3 +1,4 @@
+import { compactContractDeclaration } from "./indexerContractDeclaration.js";
 import type { IndexerArtifactFact } from "./indexerContentLayers.js";
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -8,7 +9,7 @@ const text = (value: unknown): string => typeof value === "string" ? value : "";
 
 /** Mechanically project already authorized declarations. No source traversal,
  * runtime evaluation, reader-purpose inference, or behavior classification. */
-export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { columns: string[]; rows: string[][] } | undefined {
+export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { columns: string[]; rows: string[][]; declaration?: string; declarationName?: string } | undefined {
   const value = record(fact.value);
   if (value === undefined) return undefined;
   const rows: string[][] = [];
@@ -16,7 +17,7 @@ export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { 
     rows.push([
       owner, text(field.name), text(field.typeAnnotation ?? field.type ?? field.signature),
       field.optional === true ? "optional" : field.optional === false ? "required" : "not declared",
-      field.defaultValue === undefined ? "not declared" : typeof field.defaultValue === "string"
+      field.defaultValue === undefined ? "unknown" : typeof field.defaultValue === "string"
         ? field.defaultValue : JSON.stringify(field.defaultValue),
       [field.readonly === true ? "readonly" : "", field.rest === true ? "rest" : "",
         text(field.location), field.number === undefined ? "" : `field ${String(field.number)}`,
@@ -29,7 +30,8 @@ export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { 
     }
   };
   const owner = text(value.name ?? value.qualifiedName);
-  if (typeof value.typeAnnotation === "string" || typeof value.initializer === "string") {
+  const hasMembers = Array.isArray(value.members) && value.members.length > 0;
+  if (!hasMembers && value.kind !== "component" && (typeof value.typeAnnotation === "string" || typeof value.initializer === "string")) {
     rows.push([owner, "declaration", [text(value.typeAnnotation), typeof value.initializer === "string"
       ? `= ${value.initializer}` : ""].filter(Boolean).join(" "), "", "", ""]);
   }
@@ -39,11 +41,20 @@ export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { 
       Array.isArray(registration.middleware) ? registration.middleware.map(String).join(" → ") : ""].filter(Boolean).join("; ")]);
   if (Array.isArray(value.members)) for (const member of value.members) {
     const field = record(member);
-    if (field !== undefined && field.visibility !== "internal" && field.visibility !== "private") add(field, owner);
+    if (field === undefined) continue;
+    // `internal` on an extracted type member describes module export scope,
+    // not member accessibility. An exported interface/alias exposes its declared
+    // members even when a referenced type could not be expanded by the checker.
+    const exportedTypeMember = value.visibility === "exported"
+      && (value.kind === "type" || value.kind === "interface")
+      && (field.kind === "prop" || field.kind === "method");
+    const hidden = field.visibility === "private" || field.visibility === "protected"
+      || /(?:^|\s)@(internal|private|protected)\b/u.test(text(field.doc));
+    if (!hidden && (field.visibility !== "internal" || exportedTypeMember)) add(field, owner);
   }
   // Resolved component Props are already the public input table. Do not repeat
   // the implementation's destructured parameter as an additional API field.
-  if (Array.isArray(value.params) && !(value.kind === "component" && Array.isArray(value.members) && value.members.length > 0)) for (const parameter of value.params) {
+  if (Array.isArray(value.params) && value.kind !== "component") for (const parameter of value.params) {
     const field = record(parameter);
     if (field !== undefined) add(field, owner);
   }
@@ -73,5 +84,10 @@ export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { 
     rows.push([text(value.method), text(value.path), value.handler, "", "", Array.isArray(value.middleware) ? value.middleware.map(String).join(" → ") : ""]);
   }
   if (rows.length === 0) return undefined;
-  return { columns: ["Contract", "Name", "Declaration", "Required", "Default", "Notes"], rows };
+  const declaration = (hasMembers || value.kind === "component") && typeof value.typeAnnotation === "string"
+    ? compactContractDeclaration(value.typeAnnotation, rows) : undefined;
+  const redundantComponent = value.kind === "component" && hasMembers && typeof value.propsType === "string"
+    && [value.propsType, `FC<${value.propsType}>`, `React.FC<${value.propsType}>`].includes(declaration ?? "");
+  return { columns: ["Contract", "Name", "Declaration", "Required", "Default", "Notes"], rows,
+    ...(declaration !== undefined && !redundantComponent ? { declaration, declarationName: owner } : {}) };
 }

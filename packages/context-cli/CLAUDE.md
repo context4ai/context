@@ -68,7 +68,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 ### V1 Agent 入口与写入契约
 
-- 公开 Agent 入口只保留 `/c4a:context`。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
+- 生产工作流入口是 `/c4a:context`；独立只读查询与来源归因入口是显式触发的 `/c4a:context-inspect-search`，不消费生产 Route 的写动作。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
 - `/c4a:context` 是对话式入口，不是同名 CLI primitive。它先运行只读 `context entry --format json`，只执行返回的 `next_action.command`；工作区就绪后把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。**不要新增或调用 `context continue`**。
 - 用户在当前会话明确授权全托管后，默认先调用 `context run --managed --until blocked-or-complete --format json`，不要由 Agent 手工重复 status/action。它不是第二个路由入口：只能执行唯一、immediate、非 read 命令，每步后必须重新求值；遇到语义读取、配置、权限缺口或多命令时返回当前 `workflow.current`。诊断描述状态，是否可自动修复由同一 Graph 的 Route 决定，不在执行循环里按 error 级别重复阻断已选定的机械修复。
 - 普通模式与全托管模式复用同一 Gate，并完整保留普通模式的 Inspection 与 Resolution 能力。只在 Graph Gate 的 `delegated` 策略中声明全托管可跳过的冗余 inspection、可替换的对话 Resource，以及需要时由 authority 选择的专用 Resolution Action；不要在 Facts、TypeScript 或入口提示词中把 Authority 伪装成已完成业务事实。普通模式在工作区创建后和来源采集完成后通过 Route-selected dialogue 说明模式差异。
@@ -374,7 +374,7 @@ Use the packaged Context shell and follow `workflow.current`.
 
 - frontmatter 三字段齐全（`description` / `argument-hint` / `allowed-tools`）；缺字段时 runtime 可能静默丢命令。
 - `allowed-tools` 按最小权限列；纯 CLI 代理命令通常只需 `Bash(context:*)`。
-- 单一 `context` agent-driven command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
+- `context` 生产 command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
 - command md 不写 `${CLAUDE_PLUGIN_ROOT}/skills/...`，只指向打包后的 Context shell。
 - command md 只负责流程入口；schema、mount matrix、source_ref 规则通过当前 Graph resource 或 CLI View 发现。
 

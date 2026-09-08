@@ -182,7 +182,7 @@ describe("project main Indexer lifecycle Actions", () => {
       indexer_id: "component-library",
     });
 
-    expect(second.execution_plan_digest).not.toBe(first.execution_plan_digest);
+    expect(second.execution_plan_digest).toBe(first.execution_plan_digest);
     expect(second.source_bindings[0]!.binding_digest).toBe(
       first.source_bindings[0]!.binding_digest,
     );

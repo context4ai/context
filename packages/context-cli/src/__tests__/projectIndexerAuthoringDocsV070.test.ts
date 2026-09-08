@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { loadProvider } from "@c4a/agent-graph";
 
 const ROOT = resolve(import.meta.dir, "../../../..");
 const DOC_ROOT = resolve(ROOT, "packages/context/docs/guides");
@@ -25,27 +26,43 @@ describe("0.7.0 Indexer authoring documentation", () => {
     }
   });
 
-  test("exposes the customization guide from root Skill, generated command and Actions", async () => {
-    const sources = await Promise.all([
-      body(resolve(PLUGIN_ROOT, "skills/context/SKILL.md")),
-      body(resolve(PLUGIN_ROOT, "repo-install/claude/commands/context.md")),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/configure-indexer-providers/SKILL.md",
-      )),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/propose-indexer-customization/SKILL.md",
-      )),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/prepare-indexer-customization-project/SKILL.md",
-      )),
+  test("ships the required customization guide and linked manuals with its workflow Actions", async () => {
+    const provider = await loadProvider(resolve(ROOT, "packages/context-cli/dist/providers/context/manifest.json"));
+    const guideRef = "resources/contracts/indexer-provider-guide.yaml";
+    const skills = new Set([
+      "skills/run-indexer-lifecycle/SKILL.md",
+      "skills/configure-indexer-providers/SKILL.md",
+      "skills/propose-indexer-customization/SKILL.md",
+      "skills/prepare-indexer-customization-project/SKILL.md",
     ]);
-    for (const source of sources) {
-      expect(source).toContain(
-        "docs/guides/indexer-provider-and-customization.md",
-      );
+    const found = new Set<string>();
+    for (const graph of provider.graphs.values()) {
+      for (const node of graph.definition.nodes) {
+        if (node.kind !== "action") continue;
+        const action = provider.actions.get(resolve(provider.root, node.action));
+        const skill = action?.definition.skill;
+        if (skill === undefined || !skills.has(skill)) continue;
+        found.add(skill);
+        expect(node.resources?.required).toContain(guideRef);
+      }
+    }
+    expect(found).toEqual(skills);
+    const guide = provider.resources.get(resolve(provider.root, guideRef));
+    if (guide === undefined) throw new Error("required Provider guide is absent from the bundle");
+    const pending = [guide.contentPath];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop()!;
+      if (visited.has(file)) continue;
+      visited.add(file);
+      expect(provider.files.has(file)).toBe(true);
+      const markdown = await body(file);
+      const relative = file.split("/references/")[1];
+      if (relative === undefined) throw new Error("Provider guide does not identify its bundled manual");
+      expect(markdown).toBe(await body(resolve(ROOT, "packages/context/docs", relative)));
+      for (const match of markdown.matchAll(/\]\(([^)]+\.md)(?:#[^)]*)?\)/gu)) {
+        if (!/^https?:/u.test(match[1]!)) pending.push(resolve(dirname(file), match[1]!));
+      }
     }
   });
 

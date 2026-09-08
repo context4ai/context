@@ -28,7 +28,6 @@ import type {
 } from "./statusTypes.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { candidateSetHash } from "./reviewShared.js";
-import { readRejectedDecisions } from "./reviewDecisions.js";
 import { verifyProjectWorkspace, type ProjectVerifyIssue } from "./verify.js";
 import { loadContextProjectModule } from "./workspace.js";
 
@@ -66,7 +65,6 @@ export async function readDraftCandidateStatus(projectRoot: string): Promise<{
   diagnostics: string[];
 }> {
   try {
-    await readRejectedDecisions(projectRoot);
     const rows = (await readCandidateRecords(projectRoot)).filter((row) =>
       row.candidate_type === "indexer-artifact"
     );
@@ -137,6 +135,7 @@ export async function readSourceStatus(projectRoot: string): Promise<{
     documentSources = await Promise.all([
       ...registry.files.map((source) => documentSourceStatus(projectRoot, "file", source)),
       ...registry.larks.map((source) => documentSourceStatus(projectRoot, "lark", source)),
+      ...await (await import("./managedDocumentStatus.js")).boundManagedDocumentStatuses(projectRoot, registry),
     ]);
     diagnostics.push(...documentSources.flatMap((source) => source.workspaceDiagnostics));
   } catch (error) {
@@ -332,7 +331,7 @@ function documentSnapshotReadiness(input: {
       return {
         ready: false,
         diagnostics: [`snapshot manifest source does not match registry source: ${input.manifest}`],
-        workspaceDiagnostics: [`snapshot manifest source does not match registry source: ${input.manifest}`],
+        workspaceDiagnostics: [],
         ...(snapshotConfigured !== undefined ? { snapshotConfigured } : {}),
       };
     }
@@ -405,7 +404,10 @@ function documentSnapshotReadiness(input: {
     return {
       ready: false,
       diagnostics: [`snapshot manifest is invalid: ${input.manifest}: ${message}`],
-      workspaceDiagnostics: [`snapshot manifest is invalid: ${input.manifest}: ${message}`],
+      // A snapshot is derived from an already registered source. Keep it
+      // unreadable, but let the existing capture permission and action rebuild
+      // it instead of trapping the workspace at a read-only verify route.
+      workspaceDiagnostics: [],
     };
   }
 }

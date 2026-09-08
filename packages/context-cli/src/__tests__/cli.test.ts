@@ -214,6 +214,18 @@ describe("CLI error handling", () => {
     expect(approveAll).toContain("current-conversation");
   });
 
+  test("registered update and task commands are reachable through the actual CLI process", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "context-command-entry-"));
+    try {
+      for (const args of [["update", "--help"], ["task", "adjust", "--help"], ["task", "rollback", "--help"]]) {
+        const result = await runShell(dir, args);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain("--input");
+        expect(result.stderr).not.toContain("unknown command");
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+
   test("removed workflow commands are not accepted, even as hidden aliases", async () => {
     for (const command of ["capture", "align", "compile", "workflow", "reconcile", "mdrive", "query", "drop", "purge", "extract", "schema", "protocol", "workspace", "config", "cache", "doctor"]) {
       let thrown: unknown;
@@ -365,7 +377,7 @@ describe("CLI error handling", () => {
       expect(agents).not.toContain("--managed");
       expect(agents).not.toContain("execution.target");
       expect(agents).not.toContain("强制批准");
-      expect(agents).not.toContain(".tmp/agent-payloads");
+      expect(agents).toContain(".tmp/agent-payloads");
       expect(readme).not.toContain("bun run context -- status");
       expect(agents).toContain("context status");
       expect(agents).not.toContain("context plugin install");

@@ -28,6 +28,8 @@ describe("0.7.5 current Indexer progress", () => {
     if (ledger === undefined) throw new Error("missing current Indexer ledger");
 
     const progress = await currentIndexerProgress({ projectRoot: root });
+    expect(progress?.task_completion).toMatchObject({ unit: "task", stage: ledger.entries[0]!.stage,
+      total: ledger.entries.length, completed: progress?.accepted, ratio: progress!.accepted / ledger.entries.length });
     expect(progress).toMatchObject({
       stage: ledger.entries[0]!.stage,
       total: ledger.entries.length,
@@ -38,6 +40,7 @@ describe("0.7.5 current Indexer progress", () => {
       stale: ledger.entries.filter((entry) => entry.state === "stale").length,
       stop: "waiting-agent",
       eta: null,
+      workflow_progress: { scope: "current-indexer-run", authored: 0, built: 0, workspace_complete: false },
     });
 
     const first = current.descriptor.tasks[0]!;

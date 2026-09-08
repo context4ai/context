@@ -21,6 +21,7 @@ import { ExitCode } from "../types/exitCode.js";
 import { recordWorkflowStop } from "../project/debugTrace.js";
 import { WorkspaceExecutionRuntime } from "../project/workflow/workflowExecutionRuntime.js";
 import { createWorkflowInProcessExecutor } from "../project/workflow/workflowInProcessActions.js";
+import { workflowRouteOutput, workflowRunResultFile } from "../project/workflow/workflowRouteOutput.js";
 
 type ProjectRunInput = Parameters<typeof runProjectPhaseCommand>[0];
 
@@ -66,7 +67,6 @@ function assertUntilOptions(
   }
   const incompatible = [
     "list",
-    "verbose",
   ].filter((key) =>
     options[key] !== undefined && options[key] !== false
   );
@@ -182,7 +182,14 @@ async function runProjectUntil(input: {
       reason_code: result.workflow.current?.reason_code,
     },
   });
-  process.stdout.write(formatWorkflowRunResult(result, input.format));
+  if (input.format === "json" && input.options.verbose !== true) {
+    process.stdout.write(`${JSON.stringify({ protocol: "context.workflow.run-summary/v1", state: result.state, stop: result.stop,
+      result_file: await workflowRunResultFile(found.projectRoot, result),
+      steps_completed: result.steps.length,
+      workflow: { status: result.workflow.status, revision: result.workflow.revision },
+      next_route: await workflowRouteOutput(found.projectRoot, result.workflow.current),
+    }, null, 2)}\n`);
+  } else process.stdout.write(formatWorkflowRunResult(result, input.format));
 }
 
 

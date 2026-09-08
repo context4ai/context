@@ -726,3 +726,11 @@ export const llmsPackage = (definition: {
 });
 
 export { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
+export { processedScopeSchema, processedScopesSchema, processedScopeKey,
+  readProcessedScopes, mergeProcessedScopes, processedVersionForScope, type ProcessedScope } from "./processedScopes.js";
+
+export { assertManagedDocumentName, assertManagedDocumentPath, discoverManagedDocuments } from "./managedSources.js";
+export type { ManagedDocumentSourceType, ManagedDocumentSourceEntry } from "./managedSources.js";
+
+export { sessionChangeSchema, sessionChangesSchema, readSessionChanges, writeSessionChanges } from "./sessionMetadata.js";
+export type { SessionChange } from "./sessionMetadata.js";

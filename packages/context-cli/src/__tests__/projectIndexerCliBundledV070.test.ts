@@ -5,6 +5,7 @@ import {
   loadIndexerProviderManifest,
   resolvedProviderStableFingerprint,
 } from "@c4a/context";
+import { collectIndexerBundleFiles } from "../project/indexerDistributionBuild.js";
 import {
   BUNDLED_CODE_PROFILE_IDS,
   BUNDLED_MARKDOWN_PROFILE_IDS,
@@ -50,6 +51,8 @@ describe("CLI bundled Indexer release", () => {
     expect(fixture.manifest.bundles.map((bundle) => bundle.skill)).toEqual([
       "context-code-indexer",
       "context-markdown-indexer",
+      "context-note-indexer",
+      "context-sessions-indexer",
     ]);
 
     const { operators, profiles } = await loadCliIndexerBaseContracts({
@@ -118,6 +121,29 @@ describe("CLI bundled Indexer release", () => {
         join(fixture.assetsRoot, "bundles", bundle.skill),
       );
       expect(provider.version).toBe(bundle.version);
+      // The release list must equal the shipped Skill directory, and every
+      // resource the manifest declares must be in it. Comparing against the
+      // directory keeps this honest through content reorganizations; profile,
+      // template and composer coverage stay pinned below against the
+      // BUNDLED_* identity constants rather than a copied file inventory.
+      expect(bundle.files).toEqual(
+        await collectIndexerBundleFiles(
+          join(PACKAGE_ROOT, "../../plugins/context/skills", bundle.skill),
+        ),
+      );
+      for (
+        const resource of [
+          ...(provider.provider.instructions ?? []),
+          ...(provider.provider.templates ?? []),
+        ]
+      ) {
+        expect(bundle.files.some((file) => file.path === resource.path)).toBe(true);
+      }
+      if (["context-note-indexer", "context-sessions-indexer"].includes(bundle.skill)) {
+        expect(provider.provider.templates?.length).toBeGreaterThan(0);
+        expect(provider.composition?.extensions.some((extension) => extension.extends === "component-library")).toBe(true);
+        continue;
+      }
       if (bundle.skill === "context-code-indexer") {
         expect(provider.provides.composers?.map((composer) => composer.id)).toEqual(
           BUNDLED_CODE_COMPOSER_IDS,
@@ -323,60 +349,9 @@ describe("CLI bundled Indexer release", () => {
             `references/composers/${composer}.md`
           ).sort()
         : [];
-      const templates = bundle.skill === "context-code-indexer"
-        ? [
-            "templates/adapter-integration.md",
-            "templates/api-service.md",
-            "templates/background-runtime.md",
-            "templates/cli-tool.md",
-            "templates/component-library.md",
-            "templates/contract-source.md",
-            "templates/data-sync-reconciliation.md",
-            "templates/derived-generated-source.md",
-            "templates/domain-service.md",
-            "templates/event-consumer.md",
-            "templates/gateway-facade.md",
-            "templates/monorepo-container.md",
-            "templates/plugin-extension.md",
-            "templates/sdk-library.md",
-            "templates/storage-repository.md",
-            "templates/web-application.md",
-          ]
-        : [];
-      const fixtureFiles = bundle.skill === "context-code-indexer"
-        ? ["tests/fixtures/profiles.json", "tests/fixtures/scenarios.json"]
-        : [
-            "tests/fixtures/anonymous.json",
-            "tests/fixtures/editorial.json",
-            "tests/fixtures/migration-equivalence.json",
-            "tests/fixtures/profiles.json",
-            "tests/fixtures/routing.json",
-          ];
-      expect(bundle.files.map((file) => file.path)).toEqual([
-        "SKILL.md",
-        "context-indexer.yaml",
-        ...composerReferences,
-        ...(bundle.skill === "context-markdown-indexer"
-          ? ["references/classification.md"]
-          : []),
-        ...(bundle.skill === "context-markdown-indexer"
-          ? ["references/editorial-policy.md"]
-          : []),
-        "references/indexer.md",
-        ...(bundle.skill === "context-code-indexer" ? ["references/metrics.md"] : []),
-        ...(bundle.skill === "context-markdown-indexer"
-          ? ["references/semantic-planning.md"]
-          : []),
-        ...(bundle.skill === "context-markdown-indexer"
-          ? ["references/structure-and-artifacts.md"]
-          : []),
-        ...[...templates, ...(provider.provider.templates ?? []).filter((template) => template.kind === "page-program")
-          .map((template) => template.path)].sort(),
-        ...(bundle.skill === "context-code-indexer"
-          ? ["tests/fixtures/chapters.json", "tests/fixtures/composers.json"]
-          : []),
-        ...fixtureFiles,
-      ]);
+      for (const path of composerReferences) {
+        expect(bundle.files.some((file) => file.path === path)).toBe(true);
+      }
     }
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 

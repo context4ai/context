@@ -1,10 +1,10 @@
-import { type IndexerPartitionValidationInput } from "@c4a/context";
+import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
+import { loadIndexerRegistry, type IndexerPartitionValidationInput } from "@c4a/context";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
 import { prepareCurrentProjectIndexerAuthorRuns } from "./indexerCurrentAuthorPreparation.js";
 import { parseProjectIndexerTargetResolutionViewBindings } from "./indexerAuthorQuestionTargets.js";
 import {
   array,
-  assertCurrentRequirement,
   assertRequirementRefs,
   protocol,
   record,
@@ -32,16 +32,11 @@ export async function buildProjectIndexerMainAuthorWorksets(input: {
     value.partitions,
     "author workset input.partitions",
   ) as unknown as IndexerPartitionValidationInput[];
-  const requirementDigests = new Set(partitions.map((partition) =>
-    partition.workset.requirement_set_digest
-  ));
-  if (requirementDigests.size !== 1) {
-    throw new TypeError("author workset partitions must target one requirement set");
+  const loaded = await loadIndexerRegistry(input.projectRoot);
+  const registry = loaded.registry;
+  if (partitions.some((partition) => !hasCurrentIndexerRegistryProjection(registry, partition.workset))) {
+    throw new TypeError("author workset partitions target changed requirements; refresh the current Context route");
   }
-  const registry = await assertCurrentRequirement(
-    input.projectRoot,
-    [...requirementDigests][0],
-  );
   assertRequirementRefs(
     registry,
     partitions.map((partition) => partition.workset.requirement_ref),
@@ -71,7 +66,7 @@ export async function buildProjectIndexerMainAuthorWorksets(input: {
     projectRoot: input.projectRoot,
     value: {
       protocol: "context.indexer.question-target-inventory-input/v1",
-      requirement_set_digest: [...requirementDigests][0],
+      requirement_set_digest: loaded.requirementSetDigest,
     },
   });
   const built = await prepareCurrentProjectIndexerAuthorRuns({

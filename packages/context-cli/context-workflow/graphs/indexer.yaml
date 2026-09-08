@@ -2,6 +2,11 @@ schema: agent-graph.graph.v1
 id: indexer
 description: Static Agent route for one digest-bound Indexer workset.
 entrypoints:
+  maintenance: advance-knowledge-maintenance
+  source-update: inspect-source-update
+  approved-revision: author-approved-revision
+  approved-revision-recovery: merge-approved-revision
+  update-structure-review: review-current-indexer-structure
   agent-step: run-indexer-agent-step
   provider-selection: configure-indexer-providers
   current-provider-resolution: resolve-current-indexer-provider
@@ -23,6 +28,41 @@ entrypoints:
   candidate-compile: compile-indexer-candidates
   incremental-impact: report-indexer-incremental-impact
 nodes:
+  - id: merge-approved-revision
+    kind: action
+    reasonCode: route.indexer.approved-revision-recovery
+    action: actions/author-approved-revision.yaml
+    resources:
+      required:
+        - resources/procedures/approved-revision.md
+  - id: advance-knowledge-maintenance
+    kind: action
+    reasonCode: route.indexer.maintenance
+    action: actions/advance-knowledge-maintenance.yaml
+    resources:
+      recommended:
+        - resources/procedures/knowledge-maintenance.md
+  - id: inspect-source-update
+    kind: action
+    reasonCode: route.indexer.source-update
+    action: actions/inspect-source-update.yaml
+    resources:
+      required:
+        - resources/procedures/source-update.md
+        - resources/procedures/knowledge-updates.md
+      recommended:
+        - resources/procedures/note.md
+        - resources/procedures/sessions.md
+  - id: author-approved-revision
+    kind: action
+    reasonCode: route.indexer.approved-revision
+    action: actions/author-approved-revision.yaml
+    resources:
+      required:
+        - resources/procedures/approved-revision.md
+      recommended:
+        - resources/procedures/note.md
+        - resources/procedures/sessions.md
   - id: advance-current-indexer-lifecycle
     kind: action
     reasonCode: route.indexer.lifecycle-advance
@@ -106,6 +146,8 @@ nodes:
     reasonCode: route.indexer.provider-configuration
     action: actions/configure-indexer-providers.yaml
     resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
       recommended:
         - resources/procedures/work-start-report.md
         - resources/templates/work-start-report.md
@@ -134,6 +176,9 @@ nodes:
     kind: action
     reasonCode: route.indexer.markdown-provider-discovery
     action: actions/discover-markdown-indexer-providers.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
   - id: route-markdown-indexer-provider-selection
     kind: action
     reasonCode: route.indexer.provider-selection
@@ -142,6 +187,9 @@ nodes:
     kind: action
     reasonCode: route.indexer.community-fallback
     action: actions/configure-community-indexer-fallback.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
   - id: route-markdown-community-indexer-fallback
     kind: action
     reasonCode: route.indexer.provider-selection
@@ -209,6 +257,9 @@ nodes:
     kind: action
     reasonCode: route.indexer.community-fallback
     action: actions/configure-community-indexer-fallback.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
   - id: route-community-indexer-fallback
     kind: action
     reasonCode: route.indexer.provider-selection
@@ -235,6 +286,9 @@ nodes:
     join: any
     reasonCode: route.indexer.customization-proposal
     action: actions/propose-indexer-customization.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
   - id: validate-indexer-customization
     kind: action
     reasonCode: route.indexer.customization-validation
@@ -243,6 +297,9 @@ nodes:
     kind: action
     reasonCode: route.indexer.customization-project-preparation
     action: actions/prepare-indexer-customization-project.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-provider-guide.yaml
   - id: indexer-customization-validation-required
     kind: terminal
     terminalOutcome: partial

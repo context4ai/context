@@ -67,6 +67,6 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
     exclude_consequence: "Do not generate outdated API pages. Old integration and migration questions will not be covered. Keep current APIs in mixed pages; captured sources and already accepted knowledge are not deleted." +
       (exclusionLeavesNoCurrentPages ? " No current pages remain: stop this indexing request without submitting another Partition or Author result. Resume only after the user supplies a different scope." : ""),
     include_action: { stage: "structure-review", decision: "approved" },
-    exclude_action: exclusionLeavesNoCurrentPages ? null : { stage: "structure-review", decision: "exclude-obsolete" },
+    exclude_action: exclusionLeavesNoCurrentPages || affected.length === 0 ? null : { stage: "structure-review", decision: "exclude-obsolete" },
   };
 }

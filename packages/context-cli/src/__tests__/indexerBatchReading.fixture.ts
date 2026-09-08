@@ -21,6 +21,7 @@ export function authorReadingFixture(index: number, sharedFacts = 80) {
     group_projection_digest: digest({ group: index }), group_dependency_view_digest: digest({ dependency: index }),
     allowed_artifact_policy_variants: ["standard"], artifact_policy_eligibility_digest: digest("eligibility"),
   });
+  if (workset.stage !== "author") throw new Error("Expected an Author fixture");
   const source = {
     kind: "source-span" as const, evidence_ref: `evidence:component-${index}`, source_ref: sourceRef, module_ref: null,
     locator: { path: `src/component-${index}.ts`, start_line: 1, end_line: 1 },

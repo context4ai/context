@@ -358,6 +358,8 @@ function validatePersistedCompile(value: unknown): IndexerCandidateCompile {
 }
 
 export interface ProjectIndexerCandidateCompileStatus {
+  rollback_pending?: boolean;
+  revision_pending?: boolean;
   state: "missing" | "current" | "stale" | "invalid";
   compile?: IndexerCandidateCompile;
   candidates: CandidateRecord[];
@@ -367,10 +369,35 @@ export interface ProjectIndexerCandidateCompileStatus {
 export async function readProjectIndexerCandidateCompileStatus(
   projectRoot: string,
 ): Promise<ProjectIndexerCandidateCompileStatus> {
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const localRevision = await readApprovedRevision(projectRoot);
+  if (localRevision) {
+    const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+    return observeApprovedRevisionBatch(projectRoot, localRevision);
+  }
   const raw = await readMaybe(join(projectRoot, INDEXER_CANDIDATE_COMPILE_CURRENT_PATH));
-  if (raw === undefined) return { state: "missing", candidates: [] };
+  if (raw === undefined) {
+    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
+    const ledger = await currentLedger(projectRoot);
+    let pending = ledger?.entries.some((entry) => entry.state === "stale") === true;
+    if (ledger?.entries.length && ledger.entries.every((entry) => entry.stage === "partition" && entry.state === "accepted")) {
+      const { hasApprovedEmptyIndexerStructure } = await import("./indexerStructureReview.js");
+      pending ||= await hasApprovedEmptyIndexerStructure(projectRoot);
+    }
+    return { state: "missing", candidates: [], ...(pending ? { revision_pending: true } : {}) };
+  }
   try {
-    const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
+    const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+    const { readTaskRollback } = await import("./taskRollback.js");
+    if (await readTaskRollback(projectRoot)) return { state: "current", candidates: [], rollback_pending: true };
+    if (await readKnowledgeUpdate(projectRoot)) return { state: "missing", candidates: [], revision_pending: true };
+    const { parseApprovedRevision } = await import("./approvedRevision.js");
+    const revision = parseApprovedRevision(JSON.parse(raw));
+    if (revision !== undefined) {
+      const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+      return observeApprovedRevisionBatch(projectRoot, revision);
+    }
+    const compile = validatePersistedCompile(JSON.parse(raw!) as unknown);
     const readinessRaw = await readMaybe(join(projectRoot, INDEXER_CURRENT_READINESS_PATH));
     const readiness = readinessRaw === undefined
       ? undefined
@@ -440,7 +467,7 @@ export async function readProjectIndexerCandidateCompileStatus(
 export async function assertProjectIndexerCandidateCurrent(input: {
   projectRoot: string;
   record: CandidateRecord;
-}): Promise<IndexerCandidateCompile["files"][number]> {
+}): Promise<IndexerCandidateCompile["files"][number] | undefined> {
   const index = await loadProjectIndexerCandidateCompileIndex(input.projectRoot);
   return assertProjectIndexerCandidateInCompileIndex({
     index,
@@ -449,19 +476,27 @@ export async function assertProjectIndexerCandidateCurrent(input: {
 }
 
 export interface ProjectIndexerCandidateCompileIndex {
-  compile: IndexerCandidateCompile;
+  compile: Pick<IndexerCandidateCompile, "compile_digest">;
+  approvedRevisionCandidates?: CandidateRecord[];
   filesByDigest: ReadonlyMap<string, IndexerCandidateCompile["files"][number]>;
 }
 
 export async function loadProjectIndexerCandidateCompileIndex(
   projectRoot: string,
 ): Promise<ProjectIndexerCandidateCompileIndex> {
-  const raw = await readMaybe(join(
-    projectRoot,
-    INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-  ));
-  if (raw === undefined) throw new TypeError("Indexer Candidate compile is missing");
-  const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const revision = await readApprovedRevision(projectRoot);
+  const raw = await readMaybe(join(projectRoot, INDEXER_CANDIDATE_COMPILE_CURRENT_PATH));
+  if (raw === undefined && revision === undefined) throw new TypeError("Indexer Candidate compile is missing");
+  if (revision !== undefined) {
+    if (!revision.review_ready && !revision.candidate) throw new TypeError("Complete the current Author batch before Review");
+    const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+    const observed = await observeApprovedRevisionBatch(projectRoot, revision);
+    if (observed.state !== "current") throw new TypeError("Revision batch is not current for Review");
+    return { compile: { compile_digest: revision.revision }, filesByDigest: new Map(),
+      approvedRevisionCandidates: [...(revision.batch_candidates ?? []), ...(revision.candidate ? [revision.candidate] : [])] };
+  }
+  const compile = validatePersistedCompile(JSON.parse(raw!) as unknown);
   const filesByDigest = new Map<string, IndexerCandidateCompile["files"][number]>();
   for (const file of compile.files) {
     if (!filesByDigest.has(file.file_digest)) filesByDigest.set(file.file_digest, file);
@@ -475,7 +510,14 @@ export async function loadProjectIndexerCandidateCompileIndex(
 export function assertProjectIndexerCandidateInCompileIndex(input: {
   index: ProjectIndexerCandidateCompileIndex;
   record: CandidateRecord;
-}): IndexerCandidateCompile["files"][number] {
+}): IndexerCandidateCompile["files"][number] | undefined {
+  if (input.record.approved_revision !== undefined) {
+    const expected = input.index.approvedRevisionCandidates?.find((item) => item.candidate_id === input.record.candidate_id);
+    if (!expected || canonicalIndexerJson({ ...input.record, status: "draft", updated: expected.updated }) !== canonicalIndexerJson(expected)) {
+      throw new TypeError("Approved revision Candidate is not part of the current compile");
+    }
+    return undefined;
+  }
   const fileDigest = input.record.indexer_candidate?.file_digest;
   const file = fileDigest === undefined
     ? undefined

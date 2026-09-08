@@ -323,6 +323,7 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
   const templateFacts = input.validation.page_template === undefined || artifacts[0]?.representation !== "sections"
     ? [] : applySelectedPageTemplate({ artifact: artifacts[0], template: input.validation.page_template,
       semanticVariables: input.semantic.template_variables,
+      supportingFacts: usedFacts.map(ref => facts.facts.get(ref)!),
       facts: [...facts.facts.values()].filter((fact) => input.validation.canonical_inventory_members.some((member) =>
         pageMembers.has(member.member_id) && facts.memberFacts.get(member.member_id)?.has(fact.fact_ref))),
     });

@@ -192,6 +192,7 @@ export async function buildIndexerAgentStepRoute(input: {
     [instructionRequest.resource_id, instructionReading] as const,
     ...input.ready_workset_views.map((resource, index) => [resource.resource_id, viewReadings[index]!] as const),
   ]);
+  const sharedReadings = [...new Map(viewReadings.flatMap((reading) => reading.common).map((reading) => [reading.digest, reading])).values()];
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -201,7 +202,7 @@ export async function buildIndexerAgentStepRoute(input: {
     provider_graph_digest: graphDigest,
     step_input_digest: stepInput.input_digest,
     instruction_request_digest: instructionRequest.request_digest,
-    reading_digests: [instructionReading.digest, ...viewReadings.map((reading) => reading.digest)],
+    reading_digests: [instructionReading.digest, ...viewReadings.map((reading) => reading.digest), ...sharedReadings.map((reading) => reading.digest)],
     workset_view_request_digests: worksetViewRequests.map((request) =>
       request.request_digest
     ),
@@ -243,6 +244,10 @@ export async function buildIndexerAgentStepRoute(input: {
           };
     });
   });
+  required.push(...sharedReadings.map((reading) => ({ id: `indexer-shared-material/${reading.digest.slice(7)}`,
+    kind: "procedure" as const, media_type: reading.media_type, path: reading.path, digest: reading.digest,
+    revision: stableFingerprint, read_state: "read-required" as const })));
+
   const recommended = resolved.resources.recommended.map((resource) =>
     projectWorkflowResourceLocation(
       resource,

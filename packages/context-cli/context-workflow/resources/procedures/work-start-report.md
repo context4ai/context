@@ -212,3 +212,10 @@ the reusable template, and do not copy this guidance into the finished report.
 
 The scratch path is outside current runtime cleanup targets, but `.tmp` is not
 permanent storage. Respect workspace ignore rules; do not publish or commit it.
+
+For Note/Sessions input, report the actual reader outcome (an existing-page
+correction, an independent FAQ/guide/decision, or saving only). Describe a chosen
+business replacement and why the default is not selected. Do not infer enabled
+skills from the shipped catalog. When combining Providers, explain which one
+writes the page and which supplies context; avoid exposing layer/profile jargon
+in the report. A session may have no code association.

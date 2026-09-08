@@ -425,7 +425,7 @@ async function resolveContextRoute(
   const route = await resolveRoute(
     provider,
     CONTEXT_WORKFLOW_GRAPH_ID,
-    CONTEXT_WORKFLOW_ENTRY,
+    observation.indexerCandidateCompile.rollback_pending ? "rollback" : CONTEXT_WORKFLOW_ENTRY,
     summary.routeId,
     {
       facts,
@@ -623,7 +623,7 @@ export async function evaluateContextWorkflow(input: {
   }, async () => evaluateGraph(
     provider,
     CONTEXT_WORKFLOW_GRAPH_ID,
-    CONTEXT_WORKFLOW_ENTRY,
+    input.observation.indexerCandidateCompile.rollback_pending ? "rollback" : CONTEXT_WORKFLOW_ENTRY,
     {
       facts,
       authorities: [...input.authorities],

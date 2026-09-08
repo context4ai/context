@@ -1,3 +1,4 @@
+import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
 import { loadSelectedPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerMainAuthorWorksets,
@@ -139,8 +140,8 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       throw new TypeError("failed PartitionPlan cannot produce author worksets");
     }
     if (
-      partition.workset.question_target_inventory_digest !== inventory.inventory_digest ||
-      partition.workset.requirement_set_digest !== inventory.requirement_set_digest
+      !hasCurrentIndexerRegistryProjection(input.registry, partition.workset) ||
+      partition.workset.allowed_question_target_refs.some((ref) => !inventory.items.some((item) => item.target_ref === ref))
     ) {
       throw new TypeError("author workset input targets a stale question inventory");
     }

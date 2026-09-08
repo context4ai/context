@@ -10,7 +10,7 @@ metadata:
 # Configure Indexer Providers
 
 Read
-`node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`
+the `context.indexer.provider-guide` resource at the exact path in the current Route
 for the registry-only default, Provider-layer rules, conflict handling and
 completion conditions. This Action is the entry for
 `indexer-provider-required`; when an exact distribution is unavailable, follow
@@ -36,6 +36,19 @@ resolution. If selecting a relevant external Skill, read only its exact
 Host-exposed frontmatter and sibling `context-indexer.yaml` needed to identify
 it; manifest version is authoritative. Do not guess missing versions, substitute
 a different version, or scan caches. Read Provider guidance only when selected.
+
+Business skill installation and switches belong to the Host. Discover relevant
+currently visible `context-…-indexer…` skills and read their actual manifests.
+Do not override a disabled default or a selected business replacement just
+because the CLI catalog lists it. There is no second CLI enable registry.
+
+Use Note/Sessions Providers for independent reader topics from those sources;
+a session does not require code association. FAQ, guide and decision are reader
+forms, not source types. Existing Code/Markdown pages retain one primary and
+receive supporting sources in their evidence/read scope. If specialized source
+interpretation is needed, explicitly select a compatible extension layer with
+`kind: extension`; `supporting` profiles are only from the same primary layer.
+The primary writes one final page, without duplicate session/note targets.
 
 When the Graph enters through `markdown-provider`, first require the completed
 capture report. Treat only the report's exact `source_inputs` as

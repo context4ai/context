@@ -66,10 +66,11 @@ describe("current Indexer batch recovery", () => {
     expect(current.descriptor.tasks.length).toBeGreaterThan(1);
     // Delivery can grow after tasks start (e.g. installed instruction changes).
     // Recovery must preserve all uncommitted ledger tasks, not repack and reject.
-    const render = reading.renderIndexerWorksetReading;
-    const renderSpy = spyOn(reading, "renderIndexerWorksetReading").mockImplementation((...args) =>
-      `${render(...args)}\n${"delivery ".repeat(33_000)}`
-    );
+    const render = reading.buildIndexerTaskReading;
+    const renderSpy = spyOn(reading, "buildIndexerTaskReading").mockImplementation((input) => {
+      const task = render(input);
+      return { ...task, introduction: `${task.introduction}\n${"delivery ".repeat(33_000)}` };
+    });
     try {
     const route = await projectCurrentIndexerWorkflowRoute({
       projectRoot: root,
@@ -122,10 +123,11 @@ describe("current Indexer batch recovery", () => {
 
   test("starts an over-target workset alone and prepares the next one after accepting it", async () => {
     const root = await createDocumentRevisionWorkspace();
-    const render = reading.renderIndexerWorksetReading;
-    const renderSpy = spyOn(reading, "renderIndexerWorksetReading").mockImplementation((...args) =>
-      `${render(...args)}\n${"delivery ".repeat(33_000)}`
-    );
+    const render = reading.buildIndexerTaskReading;
+    const renderSpy = spyOn(reading, "buildIndexerTaskReading").mockImplementation((input) => {
+      const task = render(input);
+      return { ...task, introduction: `${task.introduction}\n${"delivery ".repeat(33_000)}` };
+    });
     try {
       const { current, task, result } = await currentPartitionTask(root);
       expect(current.descriptor.tasks).toHaveLength(1);
@@ -207,6 +209,6 @@ describe("current Indexer batch recovery", () => {
         stage: "partition",
         results: [{ task_key: taskKey, result }],
       },
-    })).rejects.toThrow(/current Indexer batch changed/u);
+    })).rejects.toThrow(/revision does not match the current Indexer route/u);
   }, 20_000);
 });

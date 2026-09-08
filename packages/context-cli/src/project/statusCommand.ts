@@ -11,8 +11,11 @@ import {
 } from "./workspace.js";
 import { workflowStatusCommand } from "./workflow/workflowExecutionContext.js";
 import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
+import { workflowRouteOutput } from "./workflow/workflowRouteOutput.js";
 
-function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
+async function projectStatusSummary(status: ProjectStatus, projectRoot: string): Promise<Record<string, unknown>> {
+  const { observeKnowledgeMaintenance } = await import("./knowledgeMaintenance.js");
+  const maintenance = await observeKnowledgeMaintenance(projectRoot);
   const complete = status.workflow.status === "complete";
   const requestedSourceKeys = [
     ...status.sources.filter((source) => !source.ready).map((source) => `repo:${source.name}`),
@@ -28,37 +31,16 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
     ),
   ].sort();
   const completedCollections = [...status.approvedCollections].sort();
-  const current = status.workflow.current;
-  const compactWorkflow = {
-    protocol: status.workflow.protocol,
-    revision: status.workflow.revision,
-    status: status.workflow.status,
-    ...(current === undefined
-      ? {}
-      : {
-          current: {
-            id: current.id,
-            revision: current.revision,
-            node: current.node,
-            reason_code: current.reason_code,
-            availability: current.availability,
-            commands: current.commands,
-            resources: {
-              required: current.resources.required.map((resource) => ({
-                id: resource.id,
-                kind: resource.kind,
-                media_type: resource.media_type,
-                ...(resource.digest === undefined ? {} : { digest: resource.digest }),
-                ...(resource.path === undefined ? {} : { path: resource.path }),
-                read_state: resource.read_state,
-              })),
-            },
-          },
-        }),
-    diagnostics: status.workflow.diagnostics,
-  };
+  // The complete executable contract is in next_route.file. Do not inline its
+  // transports here or publish a partial Route that a caller might execute.
   return {
-    workflow: compactWorkflow,
+    workflow: { status: status.workflow.status, revision: status.workflow.revision },
+    next_route: await workflowRouteOutput(projectRoot, status.workflow.current),
+    ...(maintenance.state.active || maintenance.state.pending.length ? { maintenance: {
+      active: maintenance.state.active ? { id: maintenance.state.active.input.id, operation: maintenance.state.active.input.operation, targets: maintenance.state.active.targets } : null,
+      pending: maintenance.state.pending.map(item => ({ id: item.input.id, operation: item.input.operation, timing: item.input.timing, targets: item.targets })),
+      waiting_for: maintenance.reason,
+    } } : {}),
     ...(status.executionMode !== undefined
       ? { executionMode: status.executionMode }
       : {}),
@@ -80,6 +62,7 @@ function projectStatusSummary(status: ProjectStatus): Record<string, unknown> {
               : {}),
           },
         }),
+    ...(status.workflow.current?.delivery ? { delivery: status.workflow.current.delivery } : {}),
     progress: {
       pendingCapturePhases: status.pendingCapturePhases.length,
       indexerRegistry: status.indexerRegistry.state,
@@ -132,7 +115,7 @@ export async function runProjectStatusCommand(input: {
     const { next, state, routing, ...detail } = status;
     process.stdout.write(`${JSON.stringify(
       input.view === "summary"
-        ? projectStatusSummary(status)
+        ? await projectStatusSummary(status, found.projectRoot)
         : { next, state, routing, ...detail },
       null,
       2,

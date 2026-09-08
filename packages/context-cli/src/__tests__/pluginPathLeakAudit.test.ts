@@ -364,7 +364,13 @@ describe("path-free plugin source audit", () => {
 
     for (const file of files) {
       const body = await readFile(file.abs, "utf8");
-      findings.push(...scanProductionDoc(file.rel, body));
+      // The explicit inspection entry reads storage by design; it never uses
+      // those paths as a production protocol. Keep its other protocol audits.
+      // The authoring assistant reads bundle sources to create a Provider; it is not a production Route.
+      const inspection = file.rel.endsWith("/skills/context-inspect-search/SKILL.md")
+        || file.rel.includes("/skills/context-indexer-create/");
+      findings.push(...scanProductionDoc(file.rel, body).filter((finding) =>
+        !inspection || finding.rule !== "storage-path-probing"));
     }
 
     expect(findings).toEqual([]);

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import {
   buildIndexerAuthorizedWorksetViewSource,
   indexerProtocolDigest,
+  readSessionChanges,
   validateIndexerMainRunRequest,
   type IndexerAuthorizedWorksetViewSource,
 } from "@c4a/context";
@@ -59,6 +60,7 @@ async function capturedDocumentProjection(input: {
       path,
       cache: input.evidence.snapshotMarkdownCache,
     });
+    const changes = input.evidence.index.source_type === "sessions" ? readSessionChanges(markdown) : undefined;
     const outline = markdown.split(/\r?\n/u).flatMap((line) => {
       const match = /^(#{1,6})\s+(.+?)\s*$/u.exec(line);
       return match === null ? [] : [match[2]!];
@@ -73,6 +75,8 @@ async function capturedDocumentProjection(input: {
       },
       value: {
         source_ref: sourceRef,
+        ...(changes === undefined ? {} : { changes: changes.map((change) => Object.fromEntries(
+          Object.entries(change).filter((entry): entry is [string, string] => entry[1] !== undefined))) }),
         path: document.path,
         ...(document.source_path === undefined ? {} : { source_path: document.source_path }),
         content_hash: document.content_hash,

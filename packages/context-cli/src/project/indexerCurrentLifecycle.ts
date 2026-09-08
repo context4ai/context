@@ -27,6 +27,7 @@ import {
 } from "./indexerStructureReview.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
 import { hasChangedIndexerWorksetAuthority } from "./indexerCurrentRegistryFreshness.js";
+import { IndexerInputScopeError, recordIndexerInputScopeRecovery } from "./indexerInputScopeRecovery.js";
 
 async function applyCatalogFallbackIfRequired(projectRoot: string): Promise<boolean> {
   const ledger = await currentLedger(projectRoot);
@@ -77,9 +78,18 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
   advanced: boolean;
   state: "agent-required" | "gate-required" | "complete" | "failed";
 }> {
+  const { readTaskRollback } = await import("./taskRollback.js");
+  if (await readTaskRollback(projectRoot)) return { advanced: false, state: "complete" };
+  const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+  if (await readKnowledgeUpdate(projectRoot)) return { advanced: false, state: "agent-required" };
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const revision = await readApprovedRevision(projectRoot);
+  if (revision !== undefined) {
+    return { advanced: false, state: revision.candidate === undefined ? "agent-required" : "complete" };
+  }
   let ledger = await currentLedger(projectRoot);
   let advanced = false;
-  if (ledger === undefined || await hasChangedIndexerWorksetAuthority(projectRoot, ledger)) {
+  if (ledger === undefined || ledger.entries.length === 0 || ledger.entries.some((entry) => entry.state === "stale") || await hasChangedIndexerWorksetAuthority(projectRoot, ledger)) {
     await resetIndexerDeliveryProjection(projectRoot);
     ledger = await preparePartitionStage(projectRoot);
     advanced = true;
@@ -137,6 +147,13 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
     const structure = await prepareCurrentIndexerStructurePlan(projectRoot);
     await prepareCurrentIndexerAuthorStage(projectRoot);
     if (structure.approved) {
+      if (structure.preview.topics.length === 0) {
+        const { closeProjectWorkspace } = await import("./close.js");
+        const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
+        await closeProjectWorkspace(projectRoot);
+        await clearCompletedLifecycle(projectRoot);
+        return { advanced: true, state: "complete" };
+      }
       return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
     return { advanced: true, state: "gate-required" };
@@ -181,5 +198,12 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
     projectRoot,
     operation: "indexer.next-prepare",
     counters: { next_preparation_count: 1 },
-  }, () => advanceCurrentIndexerLifecycleInternal(projectRoot));
+  }, async () => {
+    try { return await advanceCurrentIndexerLifecycleInternal(projectRoot); }
+    catch (error) {
+      if (!(error instanceof IndexerInputScopeError)) throw error;
+      await recordIndexerInputScopeRecovery(projectRoot, error);
+      return { advanced: true, state: "gate-required" };
+    }
+  });
 }

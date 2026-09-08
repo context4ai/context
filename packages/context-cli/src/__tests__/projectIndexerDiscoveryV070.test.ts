@@ -22,7 +22,7 @@ const INTEGRITY = `sha256:${"a".repeat(64)}`;
 const REPOSITORY_ROOT = resolve(import.meta.dir, "../../../..");
 
 function currentReleaseBundledSkills(): string[] {
-  return ["context-code-indexer", "context-markdown-indexer"];
+  return ["context-code-indexer", "context-markdown-indexer", "context-note-indexer", "context-sessions-indexer"];
 }
 
 function requirement(readerGoals = ["understand"]) {

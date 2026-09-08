@@ -113,6 +113,7 @@ describe("@c4a/context source registry helpers", () => {
       await writeFile(join(rootDir, "sources", "repo", "index.yaml"), "");
       await expect(loadSourcesRegistry({ rootDir })).resolves.toMatchObject({
         kind: "sources.registry",
+      notes: [], sessions: [],
         repos: [],
         files: [],
         larks: [],
@@ -188,6 +189,7 @@ describe("@c4a/context source registry helpers", () => {
   test("source resolver rejects unsafe repo subpaths from programmatic registries", () => {
     const registry: SourcesRegistry = {
       kind: "sources.registry",
+      notes: [], sessions: [],
       registryPaths: {
         repo: "sources/repo/index.yaml",
         file: "sources/file/index.yaml",

@@ -1,3 +1,4 @@
+import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -271,7 +272,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   const spec = normalizeRunSpec(input.run_spec);
   const request = spec.request;
   const loadedRegistry = await loadIndexerRegistry(input.projectRoot);
-  if (loadedRegistry.requirementSetDigest !== request.workset.requirement_set_digest) {
+  if (!hasCurrentIndexerRegistryProjection(loadedRegistry.registry, request.workset)) {
     throw new TypeError("main Indexer workset targets a stale Requirement set");
   }
   const requirementId = request.workset.requirement_ref.slice("requirement:".length);
@@ -304,7 +305,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           : { questions: requirement.questions }),
         ...(requirement.exclusions === undefined
           ? {}
-          : { exclusions: requirement.exclusions }),
+          : { exclusions: requirement.exclusions.map(({ paths, ...exclusion }) => ({ ...exclusion, ...(paths === undefined ? {} : { paths }) })) }),
       },
     }],
   });
@@ -367,6 +368,9 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           value: {
             target_ref: request.workset.repair_intent.target_ref,
             instruction: request.workset.repair_intent.instruction,
+            ...(request.workset.repair_intent.current_markdown === undefined ? {} : {
+              current_markdown: request.workset.repair_intent.current_markdown,
+            }),
           },
         }],
       })

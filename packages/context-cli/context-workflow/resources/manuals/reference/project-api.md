@@ -32,14 +32,30 @@ state.
 
 ```ts
 const repo = source("20260901", "component-lib");
-const docs = source("product-docs", { type: "file" });
-const handbook = source("handbook", { type: "lark" });
-const everyRepo = allSources("repo");
+const docs = source("20260901/product-docs", { type: "file" });
+const handbook = source("20260901/handbook", { type: "lark" });
+const note = source("20260908/decision-context.md", { type: "note" });
+const session = source("20260908/design-discussion.md", { type: "sessions" });
+const everyRepo = allSources("repo"); // array: use ...everyRepo inside sources
+const everySession = allSources("sessions");
 ```
 
-References resolve against `sources/repo/index.yaml`,
-`sources/file/index.yaml`, and `sources/lark/index.yaml`. Register or refresh
-sources through `context source ...`; do not invent snapshot directories.
+Repo, file and Lark references resolve against their respective
+`sources/<type>/index.yaml`. Their names include the registration date and module.
+Register or refresh them through `context source ...`.
+
+Note and Sessions references resolve directly to saved Markdown under
+`sources/note/YYYYMMDD/topic.md` and `sources/sessions/YYYYMMDD/topic.md`.
+Use `context source import` to save them; they have no separate registry or
+capture phase. Explicitly include the desired typed references in `sources`,
+for example `sources: [note, session]`, or use `sources: [...everySession]`
+when all saved sessions are intended. Merely saving a source does not select it.
+
+A project's source list enables acquisition and initial selection; requirements
+and the selected Indexer's target/read scopes determine what it owns and may read.
+Supporting text does not require a separate page or primary Indexer. See
+[note preparation](../guides/note.md), [sessions preparation](../guides/sessions.md)
+and [knowledge updates](../guides/knowledge-updates.md).
 
 ## Capture phases
 
@@ -50,8 +66,10 @@ captureLark({ source: handbook });
 ```
 
 Capture only creates a deterministic readable snapshot. Classification,
-partitioning, authoring, Candidate creation, and Review belong to the selected
-Markdown Indexer.
+partitioning and authoring use the selected Provider's guidance. The CLI owns
+worksets, Candidate creation, Review application and delivery. Code, Markdown,
+Note and Sessions Providers can use authorized supporting documents without
+creating a second capture or knowledge pipeline.
 
 ## `customPhase`
 
@@ -85,8 +103,10 @@ may be rebuilt; it is not an authoring source.
 
 ## Indexer registry
 
-The Agent and CLI maintain `src/indexers.yaml` through typed proposals and
-Review gates. Each selected Indexer binds requirements and scopes to one
+When this file is absent, the configuration Route supplies the initial schema:
+write confirmed `requirements` with `indexers: []`, then re-evaluate. The Provider
+selection Action supplies its own completion schema; that payload is not the
+configuration file. Subsequent changes use typed proposals and applicable gates. Each selected Indexer binds requirements and scopes to one
 primary Provider, with optional declared layers or composers. Provider code
 must return the current Indexer result protocol; it must not write Candidate,
 knowledge, or Review files directly.
@@ -96,6 +116,14 @@ current workflow Route when it is needed.
 
 ## Persistent versus runtime state
 
-Commit source registries, `src/index.ts`, `src/indexers.yaml`, package templates,
-and approved knowledge. Do not commit `.tmp/context-runtime/`; it contains
-recoverable execution state and is cleaned after a successful close.
+Source registries and snapshots, saved notes/summaries, project declarations,
+package templates and approved knowledge are durable inputs. Version them only
+when Git operations are authorized. Keep `.tmp/context-runtime/` out of Git;
+it contains unfinished execution state, not the sole source of recovery truth.
+
+`knowledge/structure.yaml` keeps shared page/source metadata and compact
+`processed_scopes` for completed requirement/source/module ranges. A partial
+update or failed build does not advance the whole range's processed version.
+Session commit/MR associations stay in the saved source frontmatter, not copied
+into every knowledge page. Use the CLI to adjust or roll back current work;
+do not edit these baselines or remove runtime files to simulate completion.

@@ -1,4 +1,4 @@
-import { Buffer } from "node:buffer";
+import { planIndexerReadingFiles } from "./indexerReadingFiles.js";
 import { renderIndexerTaskReading, type IndexerTaskReading } from "./indexerAgentReading.js";
 
 /** Reading presentation only. Task identities and their full canonical Views
@@ -48,7 +48,7 @@ export function renderIndexerBatchReading(tasks: readonly IndexerTaskReading[]) 
   const markdown = output.join("\n");
   return {
     markdown,
-    input_bytes: Buffer.byteLength(markdown, "utf8"),
+    input_bytes: planIndexerReadingFiles(tasks).input_bytes,
     // Count reader-visible items, not the recovery graph that backs them.
     view_item_count: tasks.reduce((count, task) => count + task.context_item_count +
       task.material.filter((block) => blocks.get(keyOf(block))!.tasks.length === 1).length, 0) + shared.length,

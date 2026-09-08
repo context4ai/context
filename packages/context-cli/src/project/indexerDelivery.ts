@@ -1,3 +1,5 @@
+import { readCandidateRecords } from "./candidateLedger.js";
+import { readRejectedDecisions } from "./reviewDecisions.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { deliveryLinkDigest } from "./indexerDeliveryLinks.js";
 import { existsSync } from "node:fs";
@@ -53,6 +55,7 @@ export function selectDeliveryPages(input: {
   delivered: Readonly<Record<string, string>>;
   allAuthorsAccepted: boolean;
   requestedEarly?: boolean;
+  hasPriorDelivery?: boolean;
 }): DeliveryPage[] {
   const unique = new Map<string, DeliveryPage>();
   for (const page of input.pages) {
@@ -65,7 +68,7 @@ export function selectDeliveryPages(input: {
   const ready = [...unique.values()].filter((page) => input.delivered[page.ref] !== page.content_digest)
     .sort((a, b) => a.priority - b.priority || a.ref.localeCompare(b.ref));
   if (ready.length === 0) return [];
-  if (Object.keys(input.delivered).length === 0) {
+  if (!input.hasPriorDelivery && Object.keys(input.delivered).length === 0) {
     const firstBoundary = ready.slice(0, 50).findIndex((page) => page.boundary);
     return ready.slice(0, firstBoundary < 0 ? 3 : firstBoundary + 1);
   }
@@ -189,14 +192,37 @@ async function completeIndexerDeliveryUnlocked(projectRoot: string, paths: strin
 async function closeIndexerDeliveryUnlocked(projectRoot: string): Promise<boolean> {
   const state = await readIndexerDelivery(projectRoot);
   if (!state?.current.length) return false;
+  const decisions = await readRejectedDecisions(projectRoot);
+  const omitted = new Set((await readCandidateRecords(projectRoot)).filter((candidate) =>
+    candidate.status === "rejected" && decisions.get(candidate.candidate_id) === candidate.fingerprint
+  ).flatMap((candidate) => candidate.indexer_candidate?.artifact_ref ?? []));
+  if (state.current.some((page) => omitted.has(page.ref))) {
+    // Omitted pages do not publish links. Keep the source/result unchanged and
+    // settle their original content so future link delivery cannot reopen them.
+    const pages = new Map((await acceptedDeliveryPages(projectRoot, false)).map((page) => [page.ref, page]));
+    for (const page of state.current) if (omitted.has(page.ref)) {
+      if (state.link_targets) delete state.link_targets[page.ref];
+      const original = pages.get(page.ref);
+      if (original) page.content_digest = original.content_digest;
+    }
+  }
   await save(projectRoot, { ...state, closed: true });
+  // An entirely omitted batch changes no package content. Advance its resolved
+  // scope here because the Graph correctly skips an unchanged/empty build.
+  if (state.current.every((page) => omitted.has(page.ref))) {
+    await completeIndexerDeliveryUnlocked(projectRoot, state.paths);
+  }
   return true;
 }
 
 /** Revision invalidates the current projection, not accepted peers or delivered pages. */
-async function resetIndexerDeliveryProjectionUnlocked(projectRoot: string): Promise<void> {
+async function resetIndexerDeliveryProjectionUnlocked(projectRoot: string, resumeCurrent: boolean): Promise<void> {
   const state = await readIndexerDelivery(projectRoot);
-  if (state !== undefined) await save(projectRoot, { ...state, current: [], closed: false });
+  if (state !== undefined) await save(projectRoot, { ...state, current: [], closed: false,
+    // A repaired delivery must return to Review after its Author finishes,
+    // even when the batch was smaller than the normal delivery threshold.
+    ...(resumeCurrent && state.current.length > 0 ? { early_requested: true } : {}),
+  });
 }
 
 async function requestIndexerEarlyDeliveryUnlocked(projectRoot: string): Promise<void> {
@@ -205,6 +231,9 @@ async function requestIndexerEarlyDeliveryUnlocked(projectRoot: string): Promise
     throw new TypeError("Early delivery requires a prepared Author stage; continue the current Context route first.");
   }
   const state = await readIndexerDelivery(projectRoot) ?? { delivered: {}, current: [], paths: [] };
+  // An existing delivery already fulfills this request. Do not carry a second
+  // early checkpoint into the next production batch when the user retries.
+  if (state.current.length > 0) return;
   await save(projectRoot, { ...state, early_requested: true });
 }
 
@@ -220,8 +249,8 @@ export function completeIndexerDelivery(projectRoot: string, paths: string[]) {
 export function closeIndexerDelivery(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "close-page-delivery", () => closeIndexerDeliveryUnlocked(projectRoot));
 }
-export function resetIndexerDeliveryProjection(projectRoot: string) {
-  return withProjectWriteLock(projectRoot, "revise-page-delivery", () => resetIndexerDeliveryProjectionUnlocked(projectRoot));
+export function resetIndexerDeliveryProjection(projectRoot: string, resumeCurrent = false) {
+  return withProjectWriteLock(projectRoot, "revise-page-delivery", () => resetIndexerDeliveryProjectionUnlocked(projectRoot, resumeCurrent));
 }
 export function requestIndexerEarlyDelivery(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "request-page-delivery", () => requestIndexerEarlyDeliveryUnlocked(projectRoot));

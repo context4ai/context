@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import YAML from "yaml";
 import {
   indexerProviderSelectionSemanticInputSchema,
@@ -57,6 +57,10 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
       const { root, registryPath } = await workspace();
       await rm(registryPath);
       const before = await collectProjectStatus(root, { managed });
+      const summary = JSON.parse(await runCliInDir(root, [
+        "status", ...(managed ? ["--managed"] : []), "--format", "json", "--view", "summary",
+      ]));
+      expect(JSON.parse(await readFile(summary.next_route.file, "utf8"))).toEqual(before.workflow.current);
       const output = JSON.parse(await runCliInDir(root, [
         "run", ...(managed ? ["--managed"] : []), "--format", "json",
       ]));
@@ -75,6 +79,10 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
       const { root, registry, registryPath } = await workspace();
       await writeFile(registryPath, YAML.stringify({ ...registry, indexers: [] }));
       const before = await collectProjectStatus(root, { managed });
+      const summary = JSON.parse(await runCliInDir(root, [
+        "status", ...(managed ? ["--managed"] : []), "--format", "json", "--view", "summary",
+      ]));
+      expect(JSON.parse(await readFile(summary.next_route.file, "utf8"))).toEqual(before.workflow.current);
       const output = await runCurrentIndexerLifecycle({ projectRoot: root, managed, authorities: [] });
       expect(output).toMatchObject({ advanced: false, state: "agent-required" });
       expect(output.workflow).toEqual(before.workflow);
@@ -89,16 +97,15 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
     test(`Route contracts and examples continue from bootstrap through Provider selection (managed=${managed})`, async () => {
       const { root, registry, registryPath } = await workspace();
       await rm(registryPath);
-      const sdkLink = join(root, "node_modules", "@c4a/context");
-      await mkdir(dirname(sdkLink), { recursive: true });
-      await symlink(join(import.meta.dir, "../../../context"), sdkLink);
       const before = await collectProjectStatus(root, { managed });
       const route = before.workflow.current!;
       expect(route.resources.required.map((resource) => resource.id))
         .toContain("context.source-boundary");
-      const paths = route.configuration!.action.match(/node_modules\/[^\s]+\.(?:md|json)/gu)!;
-      expect(paths).toHaveLength(1);
-      const guide = await readFile(join(root, paths.find((path) => path.endsWith(".md"))!), "utf8");
+      const guideResource = route.resources.required.find((resource) =>
+        resource.id === "context.indexer.provider-guide"
+      )!;
+      expect(guideResource).toMatchObject({ kind: "procedure", read_state: "read-required" });
+      const guide = await readFile(guideResource.path!, "utf8");
       const schemaResource = route.resources.required.find((resource) =>
         resource.id === "context.indexer.registry-bootstrap"
       )!;
@@ -107,7 +114,9 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
       const example = /```yaml\n([\s\S]*?)\n```/u.exec(guide.split("## Initial registry:")[1]!)![1]!;
       const sourceRef = registry.requirements[0]!.target_scope.targets[0]!.source_ref;
       // Follow the shipped recipe, not the pre-filled fixture's requirements.
-      const yaml = example.replaceAll("repo:batch/component-library", sourceRef);
+      const exampleRegistry = YAML.parse(example) as IndexerRegistry;
+      const exampleSource = exampleRegistry.requirements[0]!.target_scope.targets[0]!.source_ref;
+      const yaml = example.replaceAll(exampleSource, sourceRef);
       const value = YAML.parse(yaml) as IndexerRegistry;
       expect(() => validateSchemaDocument(schema, value, "initial registry")).not.toThrow();
       expect(parseIndexerRegistry(yaml).requirements[0]!.target_scope.targets[0]!.module_refs).toEqual([]);
@@ -216,7 +225,7 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
   test("managed loop stops at explicit configuration, then at semantic selection", async () => {
     const { root, registry, registryPath } = await workspace();
     await rm(registryPath);
-    const args = ["run", "--managed", "--until", "blocked-or-complete", "--format", "json"];
+    const args = ["run", "--managed", "--until", "blocked-or-complete", "--format", "json", "--verbose"];
     const configuration = JSON.parse(await runCliInDir(root, args));
     expect(configuration).toMatchObject({
       state: "blocked",
@@ -273,9 +282,12 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
   test("invalid configuration is rejected instead of being treated as missing", async () => {
     const { root, registryPath } = await workspace();
     await writeFile(registryPath, "protocol: [invalid\n");
-    await expect(runCurrentIndexerLifecycle({
+    const result = await runCurrentIndexerLifecycle({
       projectRoot: root, managed: true, authorities: [],
-    })).rejects.toThrow("is not valid YAML");
+    });
+    expect(result.state).toBe("failed");
+    expect(result.advanced).toBe(false);
+    expect(JSON.stringify(result.workflow.diagnostics)).toContain("is not valid YAML");
     expect(await currentLedger(root)).toBeUndefined();
   });
 });

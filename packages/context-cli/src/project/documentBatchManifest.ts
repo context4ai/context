@@ -35,7 +35,15 @@ export function parseDocumentSnapshotBatchManifest(value: unknown): DocumentSnap
   }
   const sources = Object.fromEntries(Object.entries(record.sources as Record<string, unknown>)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([module, snapshot]) => [module, parseDocumentSnapshotManifest(snapshot)]));
+    .map(([module, value]) => {
+      const snapshot = parseDocumentSnapshotManifest(value);
+      if (!/^[a-z0-9][a-z0-9._-]*$/u.test(module) ||
+        snapshot.source_type !== record.source_type ||
+        snapshot.source_name !== `${record.batch}/${module}`) {
+        throw new TypeError(`document snapshot batch source entry does not match ${record.batch}/${module}`);
+      }
+      return [module, snapshot];
+    }));
   return {
     schema_version: DOCUMENT_SNAPSHOT_BATCH_SCHEMA_VERSION,
     source_type: record.source_type,

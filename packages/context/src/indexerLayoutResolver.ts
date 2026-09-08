@@ -153,7 +153,7 @@ export function indexerLayoutSectionRef(
   })}`;
 }
 
-function viewRef(currentArtifactRef: string, collection: KnowledgeCollection): string {
+export function indexerLayoutViewRef(currentArtifactRef: string, collection: KnowledgeCollection): string {
   return `view:artifact:${indexerProtocolDigest({
     protocol: "context.indexer.internal-view-identity/v1",
     artifact_ref: currentArtifactRef,
@@ -419,7 +419,7 @@ export function resolveIndexerLayout(input: {
       node_ref: nodeRef,
       artifact_id: artifact.artifact_id,
       artifact_kind: artifact.artifact_kind,
-      internal_view_ref: viewRef(currentArtifactRef, collection),
+      internal_view_ref: indexerLayoutViewRef(currentArtifactRef, collection),
       collection,
       output_path: outputPath({
         collection,

@@ -139,13 +139,13 @@ function parserFactIndex(view: IndexerParserFactView): ReadonlyMap<string, {
 }
 
 function capturedDocumentCoordinates(sourceRef: string): {
-  sourceType: "file" | "lark";
+  sourceType: "file" | "lark" | "note" | "sessions";
   sourceName: string;
 } | null {
   const separator = sourceRef.indexOf(":");
   if (separator < 1) return null;
   const sourceType = sourceRef.slice(0, separator);
-  if (sourceType !== "file" && sourceType !== "lark") return null;
+  if (sourceType !== "file" && sourceType !== "lark" && sourceType !== "note" && sourceType !== "sessions") return null;
   const sourceName = sourceRef.slice(separator + 1);
   if (sourceName.length === 0) {
     throw new TypeError("captured document source_ref requires a source name");
@@ -167,7 +167,7 @@ async function capturedDocumentsBinding(input: {
     throw new TypeError("captured document main Indexer source cannot bind a code module");
   }
   const registry = await readDocumentSourcesRegistry(input.projectRoot);
-  const entries = coordinates.sourceType === "file" ? registry.files : registry.larks;
+  const entries = coordinates.sourceType === "file" ? registry.files : coordinates.sourceType === "lark" ? registry.larks : coordinates.sourceType === "note" ? registry.notes : registry.sessions;
   const matchingEntries = entries.filter((entry) =>
     entry.name === coordinates.sourceName || entry.id === coordinates.sourceName
   );
@@ -182,7 +182,7 @@ async function capturedDocumentsBinding(input: {
     sourceType: coordinates.sourceType,
     sourceName: source.name,
     materializedAt: source.materializedAt,
-    manifestPath: source.snapshot?.manifest ?? `${source.materializedAt}/manifest.json`,
+    manifestPath: ("snapshot" in source ? source.snapshot?.manifest : undefined) ?? `${source.materializedAt}/manifest.json`,
   });
   const authorizedDocumentPaths = evidence.index.documents
     .map((document) => document.path)

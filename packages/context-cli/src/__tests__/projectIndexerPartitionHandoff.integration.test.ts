@@ -69,8 +69,8 @@ describe("Partition handoff uses only Agent-visible materials", () => {
           entry.workset_digest === task.workset_digest
         );
         if (!workset || workset.stage !== "partition") throw new Error("missing task workset");
-        expect(readingItems(view, "partition-authority")).toHaveLength(1);
-        const members = readingItems(view, "consumer-anchor")
+        expect(new Set(readingItems(view, "partition-authority", task.task_key).map((item) => item.ref)).size).toBe(1);
+        const members = readingItems(view, "consumer-anchor", task.task_key)
           .map((entry) => entry.ref);
         expect(members.length).toBeGreaterThan(0);
         const result: IndexerPartitionSemanticInput = {

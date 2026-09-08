@@ -15,7 +15,7 @@ composition, layout, Candidate compilation, and repair. Existing approved
 knowledge is an input to incremental planning, never a parallel authoring path.
 
 Read
-`node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`,
+the `context.indexer.provider-guide` resource at the exact path in the current Route,
 then follow the root `context` Skill's Indexer instructions and the exact
 structured outcomes returned by `context indexer ...`. Start by forming and
 confirming requirements when `src/indexers.yaml` is absent or stale. When the
@@ -47,7 +47,13 @@ knowledge package by default; do not ask about reading audience or language.
 Recommend organization and templates, and test that recommendation with the
 first small delivery instead of asking abstract classification questions.
 Save the short conclusion as `purpose` in the existing requirement, with scopes
-and exclusions in their existing fields. Do not store a questionnaire or add
+and exclusions in their existing fields. When an agreed exclusion maps to exact
+repository files or directories, set `exclusions[].paths` to those repository-relative
+paths and retain its `scope` and `reason`. No wildcards are accepted. Context filters
+these before Parser/Partition work; an omitted `paths` means the whole stated scope.
+Do not translate a vague age or naming clue into an exclusion. A shared Indexer
+retains files still needed by another applicable requirement. Confirm the scope
+before bulk work: unnecessary inputs consume tokens and slow useful delivery. Do not store a questionnaire or add
 another confirmation after an explicit answer. Silence is not approval.
 During the authorized source overview and representative reading, actively assess
 which regions serve the reader's task, which only support it, and which appear
@@ -108,7 +114,25 @@ again and continue pending work. Never manually clear accepted runtime state.
 If the user explicitly asks to inspect the current work earlier, run
 `context run --deliver --format json`, then follow its current Route. This asks
 for an earlier checkpoint; it does not authorize content or bypass Review.
+The Author Route exposes this user-requested alternative under `delivery`,
+including accepted pages waiting and the actual waiting condition. It is not an
+automatic command to run on every batch. If Author work is already running,
+finish that current batch; the next lifecycle advance selects complete accepted
+pages before starting another batch. Follow any required Composer, Review,
+close and build steps, then resume the remaining Author work with its new Route.
+`delivery_boundary: false` only means no explicit reader-task boundary; it does
+not disable the automatic 50-page checkpoint. Never predict all tasks must
+finish from that flag. A user asking when pages will appear needs this
+explanation; asking to see them now authorizes the early-delivery request.
 Ordinary mode retains the current batch's approval Gate. Existing managed
 approval covers delegatable batch Gates without another mode questionnaire.
 A failed build retains the same current pages; fix the reported build problem
 and rerun the returned command before authoring another batch.
+
+At workflow completion, return to the Context entry and reconcile the user's
+remaining requests with delivered pages and registered maintenance targets.
+Composer tasks are derivation checks, not a list of queued page revisions.
+Empty proposals may finish an already delivered scope without another Review or
+build. Continue authorized, unregistered revisions through the normal entry;
+do not resubmit accepted Composer tasks or treat an empty queue as proof that
+every conversational request was completed.

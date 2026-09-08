@@ -73,6 +73,9 @@ describe("managed Review batching", () => {
     expect(batches.every((batch) => !batch.content.includes("evidence_ref"))).toBe(true);
     expect(batches.every((batch) => !batch.content.includes("## Semantic Review checklist"))).toBe(true);
     expect(batches[0]!.content).toContain("Page: architecture/module-01.md");
+    for (const view of candidates) {
+      expect(batches.filter(batch => batch.content.includes(`context revise '${view.record.candidate_id}' --instruction`))).toHaveLength(1);
+    }
     const revised = candidates.map((view) => view.record.module === "module-01"
       ? { ...view, record: { ...view.record, indexer_candidate: { ...view.record.indexer_candidate,
           sections: view.record.indexer_candidate.sections.map((section) => ({ ...section, markdown: "Revised guidance." })),

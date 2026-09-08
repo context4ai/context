@@ -29,9 +29,9 @@ export async function prepareActionCompletionOutput(input: {
   projectRoot: string;
   result: unknown;
   format: "json" | "yaml";
+  verbose?: boolean;
 }): Promise<unknown> {
-  const serialized = serializeActionCompletion(input.result, input.format);
-  if (Buffer.byteLength(serialized) <= INLINE_LIMIT) return input.result;
+  if (input.verbose) return input.result;
   const result = record(input.result);
   if (result === undefined) return input.result;
   const full = serializeActionCompletion(result, "json");
@@ -54,21 +54,23 @@ export async function prepareActionCompletionOutput(input: {
   const summary = {
     protocol: "context.action.completion-summary/v1",
     completion_protocol: result.protocol,
-    ...pick(result, ["stage", "revision_before", "revision_after", "revision_advanced"]),
+    ...pick(result, ["stage", "outcome", "current_revision", "revision_before", "revision_after", "revision_advanced"]),
     result_file: resultFile,
     result_bytes: Buffer.byteLength(full),
     outcome_counts: counts,
-    committed_count: outcomes.filter((item) => item.committed === true).length,
+    ...pick(result, ["workflow_summary", "composer_result"]),
+    committed_count: Array.isArray(result.outcomes) ? outcomes.filter((item) => item.committed === true).length : null,
     outcomes: outcomes.slice(0, MAX_OUTCOMES).map((item) => ({
       ...pick(item, ["task_key", "outcome", "committed"]),
       ...(item.message === undefined ? {} : { message: shortText(item.message) }),
     })),
     outcomes_omitted: Math.max(0, outcomes.length - MAX_OUTCOMES),
     progress: progress === undefined ? null : pick(progress, [
-      "stage", "total", "accepted", "running", "pending", "failed", "stale", "stop",
+      "stage", "total", "accepted", "running", "pending", "failed", "stale", "stop", "workflow_progress", "task_completion", "pages",
     ]),
     next_route: next === undefined ? null : {
-      file: nextFile, ...pick(next, ["revision", "node", "availability"]),
+      file: nextFile, digest: `sha256:${createHash("sha256").update(serializeActionCompletion(next, "json")).digest("hex")}`, ...pick(next, ["revision", "node", "availability"]),
+      commands: next.commands, gate: next.gate === undefined ? undefined : pick(record(next.gate)!, ["id", "resolution", "delegatable"]),
     },
     ...(failure === undefined ? {} : { next_preparation: {
       outcome: failure.outcome, message: shortText(failure.message), command: failure.command,

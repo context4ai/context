@@ -4,11 +4,18 @@ import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStor
 import type { ContextResolvedWorkflowRoute } from "./workflow/workflowTypes.js";
 import { readCurrentIndexerBatchDescriptor } from "./indexerCurrentBatch.js";
 import { estimateCurrentIndexerStageEta } from "./indexerBatchTiming.js";
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
+import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 
 export interface IndexerCurrentProgress {
   stage: "partition" | "author";
-  pages?: { authored: number; delivered: number; current_batch: number; remaining_authored: number; preview_paths: string[] };
+  workflow_progress: {
+    scope: "current-indexer-run"; partitioned: number | null; planned_topics: number | null;
+    authored: number; built: number; awaiting_build: number;
+    workspace_complete: false; next_milestone: string;
+  };
+  pages?: { unit: "page"; authored: number; delivered: number; current_batch: number; authored_not_delivered: number; preview_paths: string[] };
+  task_completion?: { unit: "task"; stage: "partition" | "author"; completed: number; total: number; ratio: number;
+    definition: string };
   total: number;
   accepted: number;
   running: number;
@@ -36,7 +43,8 @@ function stopType(
 ): IndexerCurrentProgress["stop"] {
   if (route?.availability === "blocked") return "external-blocker";
   if (route?.availability === "requires-user") return "waiting-user";
-  if (running > 0) return "waiting-agent";
+  if (running > 0 || route?.gate?.resolution === "session-authority" ||
+    route?.commands.some((command) => command.managed_execution === "agent-required")) return "waiting-agent";
   if (pending > 0 || stale > 0 || route?.node === "advance-current-indexer-lifecycle") {
     return "mechanical";
   }
@@ -75,9 +83,19 @@ export async function currentIndexerProgress(input: {
   const authored = stage === "author" ? (await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot))
     .reduce((sum, record) => sum + indexerArtifactResultSchema.parse(record.artifact_result).artifacts.length, 0) : 0;
   const delivered = Object.keys(delivery?.delivered ?? {}).length;
+  const plan = await readJsonMaybe(input.projectRoot, ".tmp/context-runtime/indexer/structure-review/author-plan.json") as
+    { preview?: { topics?: unknown[] } } | undefined;
   return {
-    ...(stage === "author" ? { pages: { authored, delivered, current_batch: delivery?.current.length ?? 0,
-      remaining_authored: Math.max(0, authored - delivered), preview_paths: delivery?.paths ?? [] } } : {}),
+    task_completion: { unit: "task", stage, completed: accepted, total: ledger.entries.length,
+      ratio: accepted / ledger.entries.length,
+      definition: "Accepted tasks / all tasks in the current stage. This is not Review, build or overall project completion." },
+    workflow_progress: { scope: "current-indexer-run", partitioned: stage === "partition" ? accepted : null,
+      planned_topics: plan?.preview?.topics?.length ?? null, authored, built: delivered,
+      awaiting_build: delivery?.current.length ?? 0, workspace_complete: false,
+      next_milestone: stage === "partition" ? "Finish scope planning, then review the proposed structure; no pages have been written in this stage."
+        : delivered === 0 ? "Write, review and build the first readable page batch." : "Review and build the next page batch." },
+    ...(stage === "author" ? { pages: { unit: "page" as const, authored, delivered, current_batch: delivery?.current.length ?? 0,
+      authored_not_delivered: Math.max(0, authored - delivered), preview_paths: delivery?.paths ?? [] } } : {}),
     stage,
     total: ledger.entries.length,
     accepted,

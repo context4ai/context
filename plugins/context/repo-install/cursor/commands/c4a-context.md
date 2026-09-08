@@ -1,251 +1,266 @@
 ---
-description: "Build or continue structured, traceable Agent knowledge from documents and code. Use the local `context` CLI for workspace writes."
+description: "Use when the user explicitly invokes Context or continues an explicitly started Context workflow in this conversation to build, inspect, update or package knowledge from code, documents, notes and conversation summaries. Do not auto-start for ordinary planning, design or coding."
 ---
 
-Start or continue a C4A Context knowledge workspace.
+# Context
 
----
+Context turns selected sources into reviewed knowledge and packages for readers
+and Agents. The CLI supplies the current workflow, commands and required
+reading; use it for workspace writes.
 
-## Workflow
+Activate this entry only when the user invokes the Context command or Skill,
+or explicitly starts a Context knowledge workflow in this conversation.
+Related follow-up requests need no repeated invocation. Ordinary planning,
+design, coding, document editing or discussion of Context implementation does
+not activate it. A workspace, source file, MR or matching phrase alone is not
+an activation signal; unrelated work stays outside an active Context task.
 
-Context is a knowledge management tool built for Agent knowledge workflows. It
-compiles Feishu/Lark documents, local Markdown, repository code, and manually
-curated business material into structured, traceable knowledge, then produces
-knowledge packages, LLM-ready documents, or Agent Skills. The CLI packages all
-workflow guidance, knowledge-building procedures, and code-indexing capabilities
-needed to produce that knowledge; follow its returned commands and resources
-for the next action.
+Workspace knowledge queries and source attribution have a separate, explicitly
+invoked `context-inspect-search` entry. Do not auto-launch it from production
+progress or ordinary questions. When the user accepts its update suggestion,
+use this production workflow's current Route and preserve existing work.
 
-Use this as the single conversational entry for Context. Let the CLI locate an
-existing workspace, relocate into it, initialize a requested workspace, or
-evaluate its current workflow. Do not infer the workspace state yourself.
+## Supported requests
 
-### Enter the workspace
+Within an active Context workflow, requests include, but are not limited to:
 
-Run:
+| Intent | Scope |
+| --- | --- |
+| Build a knowledge base | Clarify the audience and source scope, then create or continue knowledge from selected repositories and documents. |
+| Check progress and results | Explain what is done, where delivered pages are, and what is waiting. |
+| Save notes | Save supplied observations, excerpts or decisions; stop after saving if that is all the user requested. |
+| Preserve conversation insights | Save or use a summary of supplied discussion, not an entire session history. Code-change links are optional. |
+| Update knowledge from source changes | Assess a selected commit, MR/PR or document change against a fixed source version; update affected pages and warranted new topics. |
+| Revise existing content | Correct current drafts or approved pages, including several pages or supported API-table regeneration. |
+| Organize pages and sources | Move pages within a collection, rename supported sources or remove unused sources with reference checks. |
+| Select or customize indexing | Choose compatible indexing Skills and adjust guidance or templates through the configuration flow. |
+| Deliver a batch early | Review and build complete newly authored pages before all writing finishes. |
+| Package knowledge or adjust output | Build approved content for Agents or LLMs, rebuild a package or change its output template. Rebuilding does not rewrite pages. |
+| Prepare the workspace for a new task | Explicitly discard unfinished task state, retain approved work and restore registered source access. |
+| Commit workspace results | Save selected workspace files in local Git, without pushing or including unrelated changes. |
+| Restore a historical workspace version | Select a saved commit, restore only the agreed workspace scope and make its sources usable again. |
+
+## Enter the workspace
+
+Once the activation condition is met, run:
 
 ```bash
 context entry [project-dir] --language <language> --format json
 ```
 
-If the request does not already choose ordinary review or fully managed
-operation, first use the read-only entry result to state a short execution
-plan, then ask the user to choose once. Explain that ordinary review pauses at
-human Gates and presents HTML reports, while fully managed operation resolves
-delegatable Gates within this conversation but still stops for permissions,
-hard validation, or non-delegatable decisions. Prefer the host's native choice
-UI. When initialization already needs a confirmation or missing option, combine
-the mode choice with that question instead of adding another round. Keep the
-answer only in this conversation and do not ask again after initialization,
-capture, or resume. An explicit request for review, human confirmation, fully
-managed work, or no further review already resolves this choice.
+Use the requested language, otherwise `zh-CN` for Chinese or `en` for English.
+Pass `project-dir`, `--name`, `--dev` and `--debug` only when requested. Add
+`--managed` only with explicit fully managed authorization in this conversation.
 
-Use the user's explicit language choice when present; otherwise pass `zh-CN`
-for a Chinese conversation and `en` for an English conversation. Pass
-`project-dir`, `--name`, `--dev`, or `--debug` only when the user explicitly
-requested that initialization choice. Pass `--managed` only after the user
-explicitly authorizes fully managed operation in this conversation.
+Follow the returned `next_action.command`:
 
-If the `context` process itself cannot start because the command is missing
-(`ENOENT`, or shell exit 127 explicitly identifying `context` as the missing
-command, such as `command not found: context` or `context: command not found`),
-explain that the global CLI is not installed and ask the user to install or
-authorize installation with:
+- `enter-workspace` and `evaluate-workflow` are read-only.
+- `initialize-workspace` may run immediately if the user requested initialization;
+  otherwise confirm the target. Preserve any `init-target-nonempty` confirmation.
+- After initialization, execute its exact setup command, enter the project root,
+  read the generated `AGENTS.md`, then run the entry again.
+
+Use that root as the working directory for every workflow command, including
+after compaction. A previous `cd` may not persist, and an input-file path does
+not select the workspace. A parent directory may be a different Context project.
+Follow workspace-mismatch recovery before refreshing its Route.
+
+For production, if the user has not chosen a mode, state the short plan from
+the read-only result and ask once: ordinary review pauses at human Gates with
+HTML reports; fully managed operation delegates eligible Gates within this
+conversation. Combine this choice with any necessary initialization question.
+Reuse an explicit review/managed choice across capture and continuation. Neither
+mode settles unclear purpose, missing permissions or non-delegatable decisions.
+Status, discussion and save-only requests need no production-mode question.
+
+Enable debug only when requested: use `entry --debug` for initialization or
+`context debug enable` in an existing workspace. It records diagnostics under
+`.tmp/context-runtime/debug/`; it grants no authority and is not source evidence.
+
+If the executable cannot start (`ENOENT` or exit 127 naming `context`), explain
+that the CLI is missing and ask the user to install or authorize installation:
 
 ```bash
 npm install -g @c4a/context-cli@latest
 context plugin install
 ```
 
-Stop after giving that recovery. Do not run an installation preflight, install
-automatically, or mistake a normal Context `not found` diagnostic for a missing
-executable.
+Stop with that recovery. Do not run an installation preflight or auto-install;
+a normal Context `not found` diagnostic does not mean the executable is missing.
 
-Execute only `next_action.command` returned by `context entry`:
+## Match the request to the current work
 
-- `initialize-workspace` writes a new workspace. Execute it immediately only
-  when the user explicitly requested initialization through this entry;
-  otherwise explain the target root and ask for confirmation. Preserve the
-  `init-target-nonempty` confirmation.
-- `enter-workspace` and `evaluate-workflow` are read-only and need no additional
-  confirmation.
-- After initialization, execute the exact setup command returned by `context
-  init`, enter the project root, read the generated `AGENTS.md`, and run this
-  entry again.
+A status question is read-only; an explicit continuation follows the current
+Route. A new write request must first register its target through the relevant
+entry below. The old Route does not incorporate that request or authorize
+continuing unrelated work. Ask only when missing information changes the action
+or scope; discussion and save-only requests can end without production.
 
-If the user asks to correct a current Candidate before approval, first let
-`context entry` relocate into the workspace and evaluate its current Route.
-Start the correction with:
+- **Sources, notes, sessions or changed upstream material:** read
+  `guidance.knowledge_updates.path` returned by `context entry`, then use its
+  source/update action. This installed guide also covers page/source organization,
+  same-task source adjustments, rollback and optional upstream corrections.
+- **Prepare, commit or restore the workspace:** read the matching
+  `guidance.workspace_prepare.path`, `guidance.workspace_commit.path` or
+  `guidance.workspace_restore.path` from `context entry`. Lead these tasks with
+  Host tools and the supplied checks; do not continue unrelated production merely
+  because entry also offers a status command. Context owns task-state cleanup;
+  Git target selection, commits and environment recovery remain Agent-led.
+- **One page correction:** use the current text through:
 
-```bash
-context revise "<candidate title, path, or id>" --instruction "<requested correction>" --format json
-```
+  ```bash
+  context revise "<candidate title, path, or id>" --instruction "<requested correction>" --format json
+  ```
 
-When the target is unique, Context invalidates only its derived outputs and
-reopens the owning Author workset. Run the returned status command and follow
-the current Route. If the target is ambiguous, ask which Candidate the user
-means. Never edit `knowledge/`, `dist/`, or create a side-channel revision page.
+  Resolve an ambiguous target with the user. A current Candidate reopens its
+  owning Author workset; an approved page uses the local revision flow. Follow
+  the returned status command and its new Route.
+- **Several approved pages, program regeneration or a rebuild during production:**
+  read the maintenance procedure linked by the knowledge-updates guide and use
+  its registration input. Queued means saved, not revised; explain its waiting
+  condition and do not register the same request repeatedly.
+- **Earlier delivery of newly authored pages:** use the Author Route's
+  `delivery.request.command` (`context run --deliver --format json`). Finish any
+  running command first. Complete the current Author batch, then follow the
+  returned composition, Review and build steps. This does not approve content
+  or merely rebuild old approved pages; all Author tasks need not finish first.
+- **An independent new task while work remains:** explain saved results,
+  unfinished scope and concrete rollback losses. Reuse or obtain the user's
+  choice to finish the current task or roll back an explicit scope. Do not
+  promise arbitrary task suspension. Same-task adjustments and local maintenance
+  preserve unrelated work and use their own routes, not an independent-task reset.
 
-Keep the resolved workspace root as the shell tool working directory for every
-workflow command, including after conversation compaction. A previous shell
-`cd` may not persist into the next tool call. Input-file paths do not select the
-workspace; a parent directory can itself be another Context project. On a
-workspace-mismatch diagnostic, follow its working-directory recovery before
-refreshing the Route. Never merge progress from different workspaces.
+Never hand-edit `knowledge/` or `dist/`, create a side-channel revision page, or
+clear runtime state to force a transition. Explicit historical restoration may
+restore exact Git-saved workspace files after the preparation guide has ended
+old task state; it is not an alternative content-writing path. Do not infer sources, extraction
+scope, review decisions or package choices from surrounding files. Operations on
+source repositories—clone, checkout, reset, fetch, install, build or test—require
+explicit authorization for that scope.
 
-### Conversation modes
+## Follow the current Route
 
-Enable debugging only when the user explicitly requests it. If initialization
-is required, pass `--debug` to `context entry` and execute its returned
-`context init ... --debug` command; do not run a workspace-only debug command
-before initialization. For an existing workspace, run `context debug enable`
-before workflow evaluation. Debugging records traces below
-`.tmp/context-runtime/debug/` but does not grant workflow authority or provide
-source evidence.
+`workflow.current` is the current-step authority. Preserve returned revisions,
+authority flags and payload contracts. Keep managed authority only in this
+conversation, reuse it for resumed evaluations of the authorized request, and
+stop using it when revoked. Additional `--authority` values also require an
+explicit grant.
 
-For explicitly authorized fully managed operation, use:
+After continuation is authorized or the new target is registered, both modes
+may use `context run --until blocked-or-complete` for consecutive mechanical
+steps. With explicit managed authorization:
 
 ```bash
 context run --managed --until blocked-or-complete --format json
 ```
 
-Use `--managed` for every resumed workflow evaluation in the same active
-request. Never persist or reuse that authority in another conversation, and
-stop using it when the conversation ends or the user revokes it. Pass any
-additional `--authority` only when the user explicitly grants that authority in
-this conversation.
+The CLI loop returns when Agent work, configuration, a Gate, host execution or
+a blocker needs handling. A return for Agent work hands execution to you; it
+does not end the authorized task. Follow the returned Route within existing
+authority; do not reconstruct commands from earlier steps.
 
-The managed loop executes only Route-selected work and returns the current
-`workflow.current` whenever Agent reading, project configuration, a human Gate,
-host execution, diagnostics, or a non-unique plan needs attention. Resume from
-that returned Route; never reconstruct a command from an earlier step.
+**Read.** Read each `resources.required` item marked `read-required`, including
+the complete returned file and any required direct files it names. If a resource
+has a `command`, execute it and read its output; materializing is not reading.
+Current Indexer Partition, Author, Composer and structure-review files need no
+read receipt: use their immediate completion command after reading. For other
+resources, follow the returned receipt instructions, keep receipts in this
+conversation, and use the latest `next_action.command` carrying that context.
+When only direct files remain, `resources.after_read.command` acknowledges them
+together. Do not assemble receipts or reuse an older after-read command.
 
-Code knowledge is published under `codeindex`. Context mechanically audits each
-module's input analysis, stable boundaries, facts, explanation, evidence scope,
-and page shape without producing a total score. Blocking mechanical failures
-reopen the owning Author or Composer workset; advisory metrics remain warnings
-and do not create a retry ledger or override Gate. If a legacy workspace returns
-`route.extract.codeindex-migration-required`, execute only its migration
-command; do not rename `codegraph` paths manually.
+**Act.** Execute the Route's commands. A command marked
+`after-human-confirmation` waits for the current Gate decision. Keep Gate
+inspection and resolution separate: inspection resources apply while inspecting;
+resolution resources apply once the decision is authorized. Neither replaces
+ordinary required reading. For ordinary Knowledge Review, use its selected
+dialogue; only the exact reply `强制批准` authorizes the report-inaccessible
+force-approval route. Do not offer that shortcut initially or treat generic
+approval as equivalent.
 
-### Select Indexer Providers
+For `execution.target: agent-host`, use the exact top-level host action with
+its required access, not a restricted child sandbox. For `configuration`, edit
+only the named file using the selected resources. A code-extraction preview is
+one batch decision: read its whole index-unit report and group same-kind
+capability/scale questions rather than asking module by module. Non-delegatable
+Gates still stop managed execution.
 
-For `indexer-provider-required`, `indexer-provider-unavailable`,
-`indexer-customization-required`, `indexer-customization-invalid`, or
-`indexer-customization-upstream-changed`, read
-`node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`
-before proposing a selection or project change. It defines the registry-only
-default, six-level customization ladder, upgrade conflict handling, debugging
-commands, and the exit condition for each level. Do not replace it with a
-remembered or host-specific workflow.
+A write is complete only when its process returns an exit code and receipt.
+Poll the same running invocation; never start a second workspace writer.
+Mechanical blockers follow the returned repair/recovery action; advisory
+warnings do not independently require rewriting content. Migration also uses
+its returned command, not manual path renames.
 
-When the current Route starts a new Code or Markdown indexing task, its
-`configure-indexer-providers` Action input already contains the exact applied
-requirements and CLI-bundled Provider catalog. Select applicable Providers from
-the Skills already visible to the Host and that supplied catalog. Do not add a
-catalog command, installation preflight, discovery report, or discovery-only
-confirmation to the normal workflow. The main entry being visible is not proof
-that every Provider is available; the CLI checks the selected distribution
-when it is used and returns any missing/version-conflict recovery.
+**Continue.** Read `next_route.file` for the full Route after a compact receipt;
+`result_file` is for full diagnostics. Otherwise use the returned workspace
+Route (`next`, `continuation.next` or `workflow.current`). Do not call status
+again when that Route is present; refresh after configuration changes or when
+none was returned. A phase-local `next_action` is not a workspace Route.
+If `next_preparation` fails after committed outcomes, execute its recovery
+without resubmitting accepted work. Stage completion is not workspace completion:
+Changed delivery content must finish Review, close and build through their Routes.
+An empty Composer result is a decision not to add derived content, not an API
+regeneration or proof that existing pages meet a later revision request. Do not
+infer maintenance targets from Composer task names or count.
 
-Use the supplied CLI-bundled identity for a selected shipped Provider, including
-when the same Skill/version is also visible as an installed projection. Do not
-resolve that copy through the Host or re-read its installed metadata. For a
-relevant external Skill, read only the exact Host-exposed frontmatter and
-sibling `context-indexer.yaml` needed for selection; do not guess a version or
-scan caches. Different versions remain distinct. Read Provider guidance only
-when selected. Discovery is not a durable workspace artifact.
+When the Graph reports complete, compare the user's original and subsequent
+requests with actual delivered results and registered maintenance targets.
+`next: null` alone can also mean next-step preparation failed; inspect the receipt.
+A complete registered workflow or empty queue does not settle unregistered
+conversational requests. Continue already authorized outstanding work through the
+normal Context revision/update entry and its fresh Route, respecting existing
+Gates. Do not ask for another "continue" solely because production finished.
+Report a blocker only when a required input, permission or actual entry failure
+prevents progress; do not invent a missing Review/build after an empty Composer.
 
-Return only `stage: provider-selection`, the non-CLI
-`host_visible_skills`, and the selected semantic `indexers` through the exact
-`context action complete-current` command returned by the Route. The CLI owns
-construction of the full registry payload, fallback/conflict checks, static
-validation, Provider resolution and staging, final validation, and atomic
-application of `src/indexers.yaml`. Do not call their low-level commands as a
-second production workflow.
+For an authorized end-to-end task, continue while the current Route is actionable
+within that authority. Report batch progress during execution, without ending
+the turn to wait for another “continue”. End when the requested scope is complete,
+the user asks to pause, or a required decision, permission, unresolved blocker or
+actual Host limit prevents further work. If ending early, state the specific
+reason and remaining work; do not describe a CLI return or batch completion as
+that reason. Fully managed mode does not waive required human decisions.
 
-If a selected external Provider needs Host resolution, the next current Route
-contains one `context.resolve-indexer-provider/v1` Host Action and its exact
-request. Invoke that Host Action once, then submit
-`stage: provider-resolution` with the returned Host result through the Route's
-`complete-current` command. If the Bundle carries a non-allowlisted program,
-the following current Route presents the existing program-execution Gate; wait
-for its user/session-authority decision and submit that decision through
-`complete-current`. A recovered `provider-finalization` Route consumes
-only its fixed Action input; it must not resolve or install the Provider again.
+When the user's full production scope has finished close/build with no remaining
+work, mention once that the workspace results can be committed locally. This is
+optional, not a Gate or an automatic commit; omit it for intermediate deliveries
+and when the user declined it. Use the commit guide if the user chooses it.
 
-### Follow the current Route
+## When selecting or customizing Indexers
 
-Treat `workflow.current` as the current-step authority:
+Read `context.indexer.provider-guide` at the path supplied by the Route and the
+selected Action's instructions. They own the selection schema, layer rules,
+customization ladder, program authorization and upgrade recovery.
 
-1. Read every `resources.required` item whose `read_state` is `read-required`.
-   Read a returned `path` completely, or execute a returned resource `command`
-   and read its complete output file. For a current Indexer Partition, Author,
-   Composer or structure-review Route, read the materialized files and then use
-   the Route's immediate completion command; do not create or submit a read
-   receipt. Other workflow resources may still require the returned receipt
-   command. Materializing a resource is not reading it. Keep those receipts only
-   in this conversation. After materialization, read the returned file and any
-   required direct files named in its reading instructions, then use its latest
-   `next_action.command`. It carries the combined reading context; do not reuse
-   an older Route's `after_read` command or assemble receipts yourself. When only
-   direct files are pending, `resources.after_read.command` acknowledges them
-   together and returns the re-evaluated `workflow.current`; no extra status call
-   is needed.
-2. At a Gate, keep inspection and resolution phase-local. Read an
-   `inspection_action` resource only while inspecting the decision, and read a
-   `resolution_action` resource only after the user confirms the Gate. Neither
-   replaces ordinary required resources.
-   For ordinary Knowledge Review, follow the Route-selected dialogue: do not
-   advertise force approval in the initial prompt. If the user cannot access
-   the report, only their exact current-conversation reply `强制批准` authorizes
-   the returned force-approval resolution command; generic approval wording
-   does not.
-3. Execute only `commands` returned by the Route, preserving revision and
-   authority flags exactly. A command marked `after-human-confirmation` waits
-   for the current Gate decision. Run a command whose `execution.target` is `agent-host`
-   as an exact top-level host action with the required host access,
-   not inside a restricted child sandbox. Follow the Route-selected procedure
-   for its audit and approval contract; never invent a payload, destination, or
-   substitute command.
-   A Context command is complete only after its process returns an exit code and
-   receipt. If the host reports that it is still running, keep polling that same
-   invocation; never start a second Context write command in parallel.
-   Treat a code-extraction batch preview as one Route action. Read its complete
-   index-unit report and keep same-kind capability or scale decisions in the
-   single returned Gate; do not ask about modules one by one. A non-delegatable
-   extraction Gate must stop even in fully managed mode.
-4. If `configuration` is present, edit only the named project file and use the
-   selected resources as its contract.
-5. Continue from the workspace Route returned by the action (`next`,
-   `continuation.next`, or `workflow.current`). Do not call status again when
-   that Route is present. Refresh status only after editing configuration or
-   when no workspace Route was returned. A phase-local `next_action` is not a
-   workspace Route. Both modes may use `context run --until blocked-or-complete`
-   for consecutive mechanical steps; only explicit managed authority delegates gates.
-   If `next_preparation` fails after committed outcomes, run its recovery
-   command without resubmitting saved work. A stage's completed count is not
-   workspace completion; Review, close and package build follow their Routes.
+Use the supplied requirements and CLI-bundled catalog. Discover relevant
+external Providers only among Host-visible `context-…-indexer…` Skills and read
+their exposed manifest. Host switches and installation channels determine
+availability; the catalog does not override a disabled Skill or a chosen
+business replacement. Do not scan caches, run a discovery preflight, or create
+a second enabled-Skill registry.
 
-Explain, ask, confirm, and summarize in the user's current conversation
-language. Keep commands, flags, paths, ids, status values, JSONL keys,
-`source_ref` values, and copied CLI tokens unchanged.
+Copy bundled Provider identities from the catalog, even if the same version
+is Host-visible. Read only selected Provider guidance. Keep one primary for an
+existing page; supporting note/session material belongs in its evidence/read
+scope, with compatible extension guidance when needed. Source type alone does
+not require a new page. Submit the selection through the Route's
+`complete-current` contract; the CLI validates, resolves and applies it. Follow
+returned Host-resolution and program Gates without calling low-level commands
+as a parallel workflow. Provider finalization consumes its existing input and
+must not resolve or install the Provider again.
 
-Keep a conversation-local list of HTML review reports that the user actually
-used to make a review decision. Preserve each exact report URL or local path
-and its reviewed scope when the Route provides them. In the final completion
-summary, include one compact `Review reports` section containing those exact
-references. Do not scan workspace internals to reconstruct the list, persist a
-second ledger, invent a public URL, or describe an inaccessible report or a
-fully managed/force approval as user-reviewed.
+## Report the actual outcome
 
-When the user explicitly asks to publish a completed build, treat publication
-as a downstream distribution step outside the Context Route. Use only an
-explicitly installed distribution tool and its documented complete-output
-upload command. If no such tool is available, stop after the local build and
-explain that Context itself does not publish to a hosted service.
+Use the conversation language for explanations and questions; preserve commands,
+flags, paths, ids, `source_ref` values and copied CLI tokens. Distinguish saved
+sources, accepted drafts and delivered pages when reporting progress.
 
-Do not infer repo sources, extraction scope, review decisions, or package output
-choices from surrounding files. Do not call source-repo operations such as
-clone, checkout, reset, fetch, install, build, or test without explicit user
-approval.
+Keep the exact HTML review report links the user actually used in this
+conversation. Include those links in a compact final `Review reports` section
+when applicable; do not reconstruct them from runtime files or describe managed,
+force-approved or inaccessible reports as user-reviewed.
+
+Publication is outside the Context production Route. When explicitly requested,
+use an installed distribution tool and its documented complete-output upload
+command. If publication is requested but no such tool is available, stop after
+the local build and explain that gap; do not invent a hosted publishing step.

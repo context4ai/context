@@ -2,7 +2,7 @@ import {
   buildIndexerRenderedContentBlock,
   canonicalIndexerJson,
   projectIndexerFactValue,
-  renderIndexerDeterministicFacts,
+  materializeIndexerStructuredContent,
   type IndexerArtifactResult,
   type IndexerJson,
   type IndexerRenderedContentBlock,
@@ -183,14 +183,17 @@ export function renderIndexerTemplateSectionLayers(input: {
       factRefs: binding.fact_refs,
       variableId: block.source_variable_id,
     });
-    contentBlocks.push(buildIndexerRenderedContentBlock({
-      layer: "deterministic-block",
-      markdown: renderIndexerDeterministicFacts({ renderer: block.renderer, facts }),
-      fact_refs: binding.fact_refs,
-      evidence_refs: binding.evidence_refs.filter((ref) =>
-        input.acceptedEvidenceRefs.has(ref)
-      ),
-    }));
+    // Materialize through the same boundary as final layout/Candidate compile.
+    // All additional evidence must already belong to this accepted result.
+    const rendered = materializeIndexerStructuredContent({
+      blocks: [{ block_id: id, layer: "deterministic-block", renderer: block.renderer, fact_refs: binding.fact_refs }],
+      facts: input.result.facts,
+    })[0]!;
+    if (rendered.evidence_refs.some(ref => !input.acceptedEvidenceRefs.has(ref))) {
+      throw new TypeError("template supporting fact is outside accepted evidence");
+    }
+    void facts;
+    contentBlocks.push(rendered);
   }
   semanticMarkdown += input.body.slice(cursor);
   flushSemantic();

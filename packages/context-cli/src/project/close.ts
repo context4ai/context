@@ -1,8 +1,10 @@
-import { closeIndexerDelivery } from "./indexerDelivery.js";
+import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import YAML from "yaml";
+import { readProcessedScopes } from "@c4a/context";
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
@@ -21,7 +23,6 @@ import {
   currentCodegraphEdges,
   type CodegraphRelationshipCoverage,
 } from "./codegraphRelationshipProjection.js";
-import { clearCompletedLifecycle } from "./lifecycleCleanup.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
@@ -228,6 +229,7 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
   compactFiles: ApprovedKnowledgeFile[];
 }> {
   const rawFiles = await approvedKnowledgeFiles(projectRoot);
+  const processedScopes = readProcessedScopes((await readKnowledgeStructure(projectRoot)).parsed);
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   const files = rawFiles.map((file) => ({
     ...file,
@@ -354,6 +356,7 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       nodes,
       views: projectedViews,
       edges,
+      ...(processedScopes.length === 0 ? {} : { processed_scopes: processedScopes }),
     },
     edgeWarnings,
     compactFiles,
@@ -438,7 +441,9 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
       views: Array.isArray(record.views) ? record.views.filter(isApprovedStructureRecord) : [],
       edges: Array.isArray(record.edges) ? record.edges.filter(isApprovedStructureRecord) : [],
     });
-    return recorded === inputHash
+    const delivery = await readIndexerDelivery(projectRoot);
+    const deliveryNeedsClose = (delivery?.current.length ?? 0) > 0 && delivery?.closed !== true;
+    return recorded === inputHash && !deliveryNeedsClose
       ? { state: "ready", inputHash, relationshipCoverage, diagnostics: [] }
       : { state: "stale", inputHash, relationshipCoverage, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
   } catch (error) {
@@ -502,7 +507,8 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
-    if (!await closeIndexerDelivery(projectRoot)) await clearCompletedLifecycle(projectRoot);
+    const { readTaskRollback } = await import("./taskRollback.js");
+    if (!await readTaskRollback(projectRoot)) await closeIndexerDelivery(projectRoot);
     return {
       action: "closed",
       projectRoot,

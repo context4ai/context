@@ -26,11 +26,10 @@ import { ExitCode } from "../types/exitCode.js";
 import { documentSourceAddCommand, resolveDocumentPhaseSource } from "./documentRun.js";
 import { larkSourceIdentities } from "./larkSourceIdentity.js";
 import {
-  findDocumentSnapshotForSource,
-  readDocumentManifestFile,
   renderDocumentManifestFile,
   updateDocumentManifestFile,
 } from "./documentBatchManifest.js";
+import { readDocumentManifestForCapture } from "./documentManifestRecovery.js";
 import {
   workspaceRouteReevaluation,
   type WorkspaceRouteReevaluation,
@@ -349,6 +348,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
   phase: CaptureLarkPhaseDefinition;
   now?: Date;
   larkRunner?: LarkRunner;
+  prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
 }): Promise<CaptureLarkRunResult> {
   const resolved = await resolveDocumentPhaseSource({
     projectRoot: input.projectRoot,
@@ -363,6 +363,8 @@ async function runCaptureLarkPhaseUnlocked(input: {
     });
   }
 
+  const { assertSourceInputMutable } = await import("./sourceInputMutation.js");
+  await assertSourceInputMutable(input.projectRoot, `lark:${resolved.sourceName}`);
   const entry = resolved.entry as LarkSourceRegistryEntry;
   assertLarkSnapshotMaterializedAt(entry);
   const target = larkTarget(entry);
@@ -371,6 +373,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     fetched = await fetchFeishuDocSnapshot({
       url: target.value,
       resourcePolicy: input.phase.resources,
+      ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
     }, input.larkRunner);
   } catch (error) {
     throw normalizeLarkError(error, resolved.sourceName);
@@ -433,10 +436,9 @@ async function runCaptureLarkPhaseUnlocked(input: {
     }),
     normalizerVersion: LARK_DOCUMENT_NORMALIZER_VERSION,
   });
-  const currentManifestFile = await readDocumentManifestFile(manifestAbsPath);
-  const previousManifest = currentManifestFile === null
-    ? null
-    : findDocumentSnapshotForSource(currentManifestFile, resolved.sourceName);
+  const { current: currentManifestFile, previous: previousManifest, recovery } = await readDocumentManifestForCapture({
+    projectRoot: input.projectRoot, manifestPath, sourceType: "lark", sourceName: resolved.sourceName,
+  });
   const changed = previousManifest?.snapshot_hash !== manifest.snapshot_hash;
   const manifestToWrite = changed || previousManifest === null
     ? manifest
@@ -555,6 +557,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     fidelity: fetched.fidelity,
     resource_materialization: fetched.resourceMaterialization,
     diagnostics: [
+      ...(recovery === undefined ? [] : [recovery.diagnostic]),
       ...(fetched.identityFallback
         ? [`info: lark.capture.identity-fallback: user credentials unavailable; captured with ${fetched.accessIdentity} identity`]
         : []),
@@ -574,6 +577,7 @@ export async function runCaptureLarkPhase(input: {
   phase: CaptureLarkPhaseDefinition;
   now?: Date;
   larkRunner?: LarkRunner;
+  prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
 }): Promise<CaptureLarkRunResult> {
   return withProjectWriteLock(input.projectRoot, "capture-lark", () => runCaptureLarkPhaseUnlocked(input));
 }

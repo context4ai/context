@@ -58,15 +58,19 @@ async function assertAuthorReadingCost(root: string, route: ContextResolvedWorkf
   const taskPaths = new Set<string>();
   for (const item of route.resources.required) {
     if ("path" in item && item.path &&
-        (item.id === "resolved-indexer-instructions" || item.id.startsWith("authorized-indexer-workset-view/"))) {
+        (item.id === "resolved-indexer-instructions" || item.id.startsWith("indexer-shared-material/") ||
+          item.id.startsWith("authorized-indexer-workset-view/"))) {
       paths.add(item.path);
       if (item.id.startsWith("authorized-indexer-workset-view/")) taskPaths.add(item.path);
     }
   }
-  expect(taskPaths.size).toBe(1);
+  const context = await resolveCurrentIndexerAgentContext(root);
+  if (!context) throw new Error("missing Author context");
+  expect(taskPaths.size).toBe(context.descriptor.tasks.length);
+  expect(taskPaths.size).toBeGreaterThan(0);
   const bytes = (await Promise.all([...paths].map(async (path) => (await readFile(path)).byteLength)))
     .reduce((total, size) => total + size, 0);
-  expect((await resolveCurrentIndexerAgentContext(root))?.descriptor.input_bytes).toBe(bytes);
+  expect(context?.descriptor.input_bytes).toBe(bytes);
 }
 
 beforeAll(async () => {
@@ -137,7 +141,7 @@ describe("installed Provider upgrades preserve useful work", () => {
           stage: "partition", outcome: "complete", groups: [{
             key: task.task_key, title: "Public constants", subject: task.task_key, subject_intent: "primary",
             reader_task: "Find exported constants and their values.",
-            members: readingItems(view, "consumer-anchor").map((item) => item.ref),
+            members: readingItems(view, "consumer-anchor", task.task_key).map((item) => item.ref),
             questions: [...workset.reader_question_refs],
             question_targets: workset.allowed_question_target_refs.map((target) => ({ target, role: "primary-carrier" })),
             outline: ["Exports"],
@@ -146,12 +150,12 @@ describe("installed Provider upgrades preserve useful work", () => {
       }
       await expect(completeCurrentIndexerAction({
         cwd: root, revision: before.revision, managed, authorities, value: { stage: "partition", results },
-      })).rejects.toThrow("current Indexer batch changed");
+      })).rejects.toThrow("revision does not match the current Indexer route");
       const completed = await completeCurrentIndexerAction({
         cwd: root, revision: after.revision, managed, authorities, value: { stage: "partition", results },
       });
       if (!("outcomes" in completed)) throw new Error("missing batch completion");
-      expect(completed.outcomes.every((item) => item.outcome === "accepted" && item.committed)).toBe(true);
+      expect(completed.outcomes.filter((item) => item.outcome !== "accepted" || !item.committed)).toEqual([]);
       expect(completed.next).not.toBeNull();
       // Reconciliation must not throw away the just accepted grouping after the
       // Provider upgrade and ask the Agent to generate the same groups again.

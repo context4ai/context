@@ -4,7 +4,6 @@ import {
   buildIndexerParserResolutionLocks,
   indexerParserExecutionEntryDigest,
   indexerProtocolDigest,
-  loadSourcesRegistry,
   validateIndexerParserExecutionPlan,
   type IndexerDependencyAuthorizationReceipt,
   type IndexerParserCoordinateMapping,
@@ -17,7 +16,7 @@ import {
   buildProjectIndexerParserExecutionPlan,
   projectIndexerApplicableParserCapabilities,
 } from "./indexerParserExecutionPlanning.js";
-import { indexerRequirementSourceBoundaryDigest } from "./indexerRequirementProject.js";
+import { currentIndexerSourceBoundaryDigest } from "./indexerSourceBoundary.js";
 import {
   executeProjectIndexerParserPlan,
   type IndexerParserRuntimeExecutionReceipt,
@@ -61,7 +60,7 @@ export async function buildProjectIndexerParserPlanAction(input: {
     );
   }
   const currentIndexerId = indexerId(value, "parser execution plan build input");
-  const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
+  const sourceBoundaryDigest = await currentIndexerSourceBoundaryDigest(input.projectRoot, currentIndexerId);
   const profileContract = bundledIndexerProfileContract();
   const materialized = input.materialized ??
     await materializeProjectIndexerParserFiles({
@@ -72,7 +71,7 @@ export async function buildProjectIndexerParserPlanAction(input: {
   return buildProjectIndexerParserExecutionPlan({
     profile_contract: profileContract,
     profile_id: materialized.profile_id,
-    source_registry_digest: indexerRequirementSourceBoundaryDigest(registry),
+    source_registry_digest: sourceBoundaryDigest,
     authorized_files: materialized.files,
     parser_locks: array(
       value.parser_locks,
@@ -97,8 +96,8 @@ export async function executeProjectIndexerParserPlanAction(input: {
   const plan = validateIndexerParserExecutionPlan(
     record(value.execution_plan, "parser runtime execution input.execution_plan"),
   );
-  const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
-  if (plan.source_registry_digest !== indexerRequirementSourceBoundaryDigest(registry)) {
+  const sourceBoundaryDigest = await currentIndexerSourceBoundaryDigest(input.projectRoot, currentIndexerId);
+  if (plan.source_registry_digest !== sourceBoundaryDigest) {
     throw new TypeError("parser execution plan is stale against the current source registry");
   }
   const profileContract = bundledIndexerProfileContract();
@@ -181,7 +180,7 @@ export async function buildProjectIndexerParserDependencyIntentsAction(input: {
     );
   }
   const currentIndexerId = indexerId(value, "parser dependency intent input");
-  const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
+  const sourceBoundaryDigest = await currentIndexerSourceBoundaryDigest(input.projectRoot, currentIndexerId);
   const profileContract = bundledIndexerProfileContract();
   const materialized = input.materialized ??
     await materializeProjectIndexerParserFiles({
@@ -249,7 +248,7 @@ export async function buildProjectIndexerParserDependencyIntentsAction(input: {
       });
   const payload = {
     profile_contract_digest: profileContract.contract_digest,
-    source_registry_digest: indexerRequirementSourceBoundaryDigest(registry),
+    source_registry_digest: sourceBoundaryDigest,
     indexer_id: currentIndexerId,
     profile_id: materialized.profile_id,
     applicable_capabilities: capabilities,

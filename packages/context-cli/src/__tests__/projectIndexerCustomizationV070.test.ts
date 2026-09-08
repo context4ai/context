@@ -57,6 +57,9 @@ function manifest(
       },
       instructions: [{ path: "references/guidance.md", profiles: ["component-library"] }],
       templates: [{ id: "guide", profile: "component-library", path: "templates/guide.md" }],
+      // This fixture advertises every customization capability, so it has to back
+      // the two that require a resource: the program above and this schema.
+      config_schema: "references/config.schema.json",
     },
     customization: { supports },
   };
@@ -204,6 +207,13 @@ describe("fixed project-local Indexer customization", () => {
     expect(first.upstream_review_required).toBe(false);
     expect(second.fingerprint).toBe(first.fingerprint);
     expect(JSON.stringify(first)).not.toContain(rootA);
+    const fromFiles = await loadIndexerCustomization({
+      workspaceRoot: rootA, projectRef: "project:sample", indexer: indexer("extend"),
+      manifest: manifest(), providerIntegrity: INTEGRITY,
+    });
+    expect(fromFiles.files).toEqual(first.files);
+    expect(fromFiles.plan.selected_step).toBe("template-override");
+    expect(fromFiles.plan.requires_human_confirmation).toBe(false);
   });
 
   test("preserves an older origin and reports an upstream review instead of rewriting it", async () => {
@@ -240,6 +250,10 @@ describe("fixed project-local Indexer customization", () => {
     });
     expect(view.files[0]?.capability).toBe("program-extend");
     expect(await lstat(marker).catch(() => undefined)).toBeUndefined();
+    await expect(loadIndexerCustomization({
+      workspaceRoot: root, projectRef: "project:sample", indexer: indexer("extend"),
+      manifest: manifest(), providerIntegrity: INTEGRITY,
+    })).rejects.toThrow("executable customization requires");
     await expect(loadIndexerCustomization({
       ...loadInput(root, "replace"),
       replaceCapabilityGap: gap({ provider_integrity: `sha256:${"c".repeat(64)}` }),

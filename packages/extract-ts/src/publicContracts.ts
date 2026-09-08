@@ -1,3 +1,4 @@
+import { componentDefaultsFromBinding, componentPropsNode } from "./componentContract.js";
 import { federationContracts } from "./federationContracts.js";
 import { posix } from "node:path";
 import ts from "typescript";
@@ -23,6 +24,16 @@ function declarationAt(source: ts.SourceFile, symbol: SymbolInfo): ts.Node | und
   visit(source);
   return candidates.find((node) => "name" in node && (node.name as ts.Node | undefined)?.getText(source) === symbol.name)
     ?? (candidates.length === 1 ? candidates[0] : undefined);
+}
+
+/** Explicit object members remain knowable when an intersection contains an
+ * unavailable dependency. Do not traverse unions, conditional types or generic
+ * arguments: their fields are not unconditionally part of the public contract. */
+function declaredObjectTypes(node: ts.Node): ts.TypeLiteralNode[] {
+  if (ts.isTypeAliasDeclaration(node)) return declaredObjectTypes(node.type);
+  if (ts.isParenthesizedTypeNode(node)) return declaredObjectTypes(node.type);
+  if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(declaredObjectTypes);
+  return ts.isTypeLiteralNode(node) ? [node] : [];
 }
 
 function callable(node: ts.Node): ts.SignatureDeclaration | undefined {
@@ -109,7 +120,8 @@ export async function enrichPublicContracts(input: {
       }
       // Generic wrappers can be unresolved without their external library.
       // A directly typed callable parameter is still an authoritative link.
-      const annotation = fn?.parameters[0]?.type;
+      const annotation = fn?.parameters[0]?.type
+        ?? (ts.isVariableDeclaration(declaration) ? componentPropsNode(declaration.type) : undefined);
       if (annotation !== undefined) {
         contractType = checker.getTypeFromTypeNode(annotation);
         symbol.propsType = annotation.getText(source);
@@ -117,7 +129,12 @@ export async function enrichPublicContracts(input: {
     } else if (ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration)) {
       contractType = checker.getTypeAtLocation(declaration);
     }
-    if (contractType === undefined || (contractType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) continue;
+    if (contractType === undefined) continue;
+    const unresolved = (contractType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
+    const properties = unresolved
+      ? declaredObjectTypes(declaration).flatMap((node) => checker.getPropertiesOfType(checker.getTypeAtLocation(node)))
+      : checker.getPropertiesOfType(contractType);
+    if (properties.length === 0) continue;
     if (symbol.kind === SymbolKind.Component && symbol.propsType !== undefined && input.relations !== undefined) {
       const typeSymbol = contractType.aliasSymbol ?? contractType.getSymbol();
       const declaration = typeSymbol?.declarations?.[0];
@@ -125,32 +142,39 @@ export async function enrichPublicContracts(input: {
         EdgeType.OfType, symbol.name, typeSymbol.name,
         !sources.has(declaration.getSourceFile().fileName), symbol.line), file: symbol.file });
     }
-    const defaults = new Map<string, string>();
     const pattern = fn?.parameters[0]?.name;
-    if (pattern !== undefined && ts.isObjectBindingPattern(pattern)) for (const binding of pattern.elements) {
-      if (binding.initializer !== undefined) defaults.set((binding.propertyName ?? binding.name).getText(source), binding.initializer.getText(source));
-    }
+    const defaults = pattern === undefined ? {} : componentDefaultsFromBinding(pattern, source);
     const members: SymbolInfo[] = [];
-    for (const property of checker.getPropertiesOfType(contractType)) {
+    for (const property of properties) {
       const member = property.valueDeclaration ?? property.declarations?.[0];
       if (member === undefined || !sources.has(member.getSourceFile().fileName)) continue;
       const memberSource = member.getSourceFile();
       const modifiers = ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined;
       const propertyType = checker.getTypeOfSymbolAtLocation(property, member);
       const annotation = "type" in member ? member.type as ts.TypeNode | undefined : undefined;
+      const documentedDefault = ts.getJSDocTags(member).find((tag) => tag.tagName.text === "default" || tag.tagName.text === "defaultValue");
+      const defaultComment = documentedDefault?.comment;
+      const defaultText = typeof defaultComment === "string" ? defaultComment.trim()
+        : defaultComment === undefined ? undefined : defaultComment.map((part) => part.getText(memberSource)).join("").trim();
+      const defaultValue = (Object.hasOwn(defaults, property.name) ? defaults[property.name] : undefined) ?? (defaultText || undefined);
+      const hidden = ts.getJSDocTags(member).some((tag) => ["internal", "private"].includes(tag.tagName.text))
+        || modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword
+          || modifier.kind === ts.SyntaxKind.ProtectedKeyword);
+      if (hidden) continue;
       members.push({ name: property.name, kind: SymbolKind.Prop, visibility: Visibility.Exported,
         file: posix.relative("/", memberSource.fileName),
         line: memberSource.getLineAndCharacterOfPosition(member.getStart()).line + 1,
         endLine: memberSource.getLineAndCharacterOfPosition(member.getEnd()).line + 1,
         optional: (property.flags & ts.SymbolFlags.Optional) !== 0,
-        ...(defaults.has(property.name) ? { defaultValue: defaults.get(property.name)! } : {}),
+        ...(defaultValue === undefined ? {} : { defaultValue }),
         readonly: modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
-        typeAnnotation: annotation !== undefined && (propertyType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+        typeAnnotation: annotation !== undefined && ((propertyType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+          || checker.typeToString(propertyType, member, format) === "{}")
           ? annotation.getText(memberSource) : checker.typeToString(propertyType, member, format),
         doc: ts.displayPartsToString(property.getDocumentationComment(checker)),
       });
     }
-    if (members.length > 0) {
+    if (properties.length > 0) {
       symbol.members = members;
       // Unresolved heritage remains visible in the declaration; never advertise
       // a complete inherited contract on the basis of local fields alone.
@@ -159,7 +183,7 @@ export async function enrichPublicContracts(input: {
         diagnostics = program.getSemanticDiagnostics(source);
         diagnosticsByFile.set(source.fileName, diagnostics);
       }
-      symbol.contractResolution = diagnostics.length === 0 ? "resolved" : "declaration-only";
+      symbol.contractResolution = !unresolved && diagnostics.length === 0 ? "resolved" : "declaration-only";
     }
   }
 }

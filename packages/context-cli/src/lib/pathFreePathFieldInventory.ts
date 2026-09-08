@@ -29,6 +29,7 @@ const DEFAULT_INTERNAL_FIELDS = [
   "expected_target_path",
   "expected_path",
   "current_path",
+  "previous_path",
   "candidate_path",
   "patch_path",
   "patch_root",
@@ -94,7 +95,7 @@ const DEFAULT_INTERNAL_FIELDS = [
 
 function policyFor(field: string): PathFieldInventoryEntry["policy"] {
   if (["project_root", "input_project_root", "input_file"].includes(field)) return "external-input";
-  if (field === "requested_approved_path" || field === "revision_path") {
+  if (field === "previous_path" || field === "requested_approved_path" || field === "revision_path") {
     return "external-input";
   }
   if (field === "href" || field === "packageDir" || field === "package_dir" || field === "report_path" || field === "absolute_path") {
@@ -138,6 +139,7 @@ function semanticReplacementFor(field: string): string {
   if (["project_root", "input_project_root", "input_file"].includes(field)) {
     return "Explicit command workspace and supplied input locators for mismatch recovery; never use them as semantic identities or infer a different workspace from source references.";
   }
+  if (field === "previous_path") return "Explicit approved-page move origin, checked against stable View identity and current bytes before Review apply; not an inferred runtime path.";
   if (field === "result_file") {
     return "An explicit completion-report locator for Host reading, not a semantic identity or an inferred cache path; retain revision and outcome fields in the summary.";
   }

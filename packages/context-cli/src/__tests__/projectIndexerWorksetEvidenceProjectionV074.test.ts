@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import YAML from "yaml";
 import {
   buildIndexerMainRunRequest,
+  buildIndexerPrimaryRegistryProjection,
   buildIndexerMainWorkset,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
@@ -39,6 +40,7 @@ function markdownRunRequest(
     indexer_id?: string;
     source_ref?: string;
     requirement_set_digest?: string;
+    primary_registry_projection_digest?: string;
   } = {},
 ) {
   const indexerId = options.indexer_id ?? "sample-markdown-indexer";
@@ -53,7 +55,7 @@ function markdownRunRequest(
   };
   const primaryExecutionProjection = buildIndexerPrimaryExecutionProjection({
     indexer_id: indexerId,
-    primary_registry_projection_digest: digest("3"),
+    primary_registry_projection_digest: options.primary_registry_projection_digest ?? digest("3"),
     program_digest: null,
     instructions_digest: digest("4"),
     template_set_digest: digest("5"),
@@ -74,7 +76,7 @@ function markdownRunRequest(
     owner_cell_refs: ["owner-cell:documentation#business-semantics"],
     source_ref: options.source_ref ?? "file:docs",
     module_ref: null,
-    primary_registry_projection_digest: digest("3"),
+    primary_registry_projection_digest: options.primary_registry_projection_digest ?? digest("3"),
     requirement_set_digest: options.requirement_set_digest ?? digest("9"),
     primary_execution_fingerprint:
       primaryExecutionProjection.primary_execution_fingerprint,
@@ -281,6 +283,7 @@ describe("0.7.4 Indexer workset evidence projection", () => {
     }
     const runRequest = markdownRunRequest(binding, {
       requirement_set_digest: indexerRegistryDigests(registry).requirementSetDigest,
+      primary_registry_projection_digest: buildIndexerPrimaryRegistryProjection({ registry, indexer_id: "sample-markdown-indexer", pre_authority_provider_ids: [] }).projection_digest,
     });
     const runSpec = normalizeRunSpec({
       protocol: "context.indexer.main-run-spec/v1",

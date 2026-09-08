@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { PackageDefinition } from "@c4a/context";
+import { readProcessedScopes, type PackageDefinition } from "@c4a/context";
 import { parse as parseYaml } from "yaml";
 import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
@@ -55,6 +55,7 @@ export async function readKnowledgeStructure(projectRoot: string): Promise<Knowl
   const record = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : null;
+  readProcessedScopes(record);
   return {
     path,
     content,

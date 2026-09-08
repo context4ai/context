@@ -256,3 +256,47 @@ describe("explicit IndexerResult Candidate compile", () => {
     }).files).toHaveLength(1);
   });
 });
+
+test.each([false, true])("final Candidate reconciles defaults with a catalog-only component=%s", (supportingOnly) => {
+  const fixture = candidateCompileFixture(result => {
+    const common = { fact_kind: "code-symbol", subject_key: result.logical_unit.subject_key,
+      evidence_refs: [result.evidence_bindings[0]!.evidence_ref] };
+    const members = [
+      { name: "visible", typeAnnotation: "boolean", defaultValue: "true" },
+      { name: "showMonth", typeAnnotation: "boolean", defaultValue: "true" },
+      { name: "locale", typeAnnotation: "string", defaultValue: "'en-US'" },
+      { name: "items", typeAnnotation: "string[]", defaultValue: "[]" },
+    ].map(member => ({ ...member, kind: "prop", visibility: "exported", optional: true }));
+    result.facts = [{ ...common, fact_ref: "fact:component", value: {
+      name: "Widget", kind: "component", visibility: "exported", file: "view.tsx",
+      propsType: "Props", typeAnnotation: "FC<Props>", members, publicEntrypoints: ["index.ts"],
+    } }, { ...common, fact_ref: "fact:props", value: {
+      name: "Props", kind: "type", visibility: "exported", file: "view.tsx",
+      typeAnnotation: "{ visible?: boolean; showMonth?: boolean; locale?: string; items?: string[] }",
+      members: [...members.map(({ defaultValue, ...member }) => {
+        void defaultValue;
+        return { ...member, ...(member.name === "visible" ? { defaultValue: "false" } : {}) };
+      }), { name: "label", kind: "prop", visibility: "exported", typeAnnotation: "string", optional: false }],
+    } }];
+    const artifact = result.artifacts[0]!;
+    if (artifact.representation !== "sections") throw new Error("fixture must remain structured");
+    artifact.sections[0]!.blocks.push({ block_id: "api", layer: "deterministic-block",
+      renderer: "public-contract-table", fact_refs: supportingOnly ? ["fact:props"] : result.facts.map(fact => fact.fact_ref) });
+  });
+  const before = JSON.stringify(fixture.accepted);
+  const candidate = compile(fixture);
+  const markdown = candidate.files[0]!.markdown;
+  for (const [name, value] of [["visible", "true"], ["showMonth", "true"], ["locale", "'en-US'"], ["items", "[]"]]) {
+    const rows = markdown.split("\n").filter(line => line.includes(`| ${name} |`));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain(`| Props | ${name} |`);
+    expect(rows[0]).toContain(`| ${value} |`);
+  }
+  if (!supportingOnly) expect(markdown).toContain("export entry");
+  else expect(markdown).not.toContain("| Widget | export entry |");
+  expect(markdown).toContain("declaration documents false");
+  expect(markdown).not.toContain("| Widget | visible |");
+  expect(markdown).toContain("| Props | label | string | required | unknown |");
+  expect(JSON.stringify(fixture.accepted)).toBe(before);
+  expect(compile(fixture).files[0]!.markdown).toBe(markdown);
+});

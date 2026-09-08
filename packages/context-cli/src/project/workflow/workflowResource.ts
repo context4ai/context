@@ -508,7 +508,7 @@ export async function materializeContextWorkflowResource(input: {
       kind: "read_resource_file",
       path: location.filePath,
       message:
-        "Read the complete file, then run the returned command. Materialization alone is not a read receipt." +
+        "Read the complete file, then run the returned command BEFORE any configuration edit. After editing, refresh status instead of acknowledging the old revision. Materialization alone is not a read receipt." +
         (directResources.length === 0 ? "" : ` Also read the current Route's required files before acknowledging: ${directResources.map((resource) => resource.path).join(", ")}. This command preserves all these readings; do not use the earlier Route's after_read command.`),
       command: afterReadCommand,
     },

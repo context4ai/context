@@ -262,7 +262,7 @@ try {
     version?: string;
     bundles?: Array<{ skill?: string }>;
   };
-  const expectedSkills = new Set(["context-code-indexer", "context-markdown-indexer"]);
+  const expectedSkills = new Set(["context-code-indexer", "context-markdown-indexer", "context-note-indexer", "context-sessions-indexer"]);
   const actualSkills = new Set((catalog.bundles ?? []).map((bundle) => bundle.skill));
   if (
     catalog.protocol !== "context.indexer.cli-bundled-catalog/v1" ||

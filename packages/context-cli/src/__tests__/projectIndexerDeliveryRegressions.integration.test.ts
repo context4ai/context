@@ -65,9 +65,11 @@ test("complete-current accepts the page intent and template advertised by its ow
 
 test("skipping an oversized middle candidate keeps task and View numbering aligned and repairs old descriptors", async () => {
   const root = await workspace(4);
-  const render = reading.renderIndexerWorksetReading;
-  const renderSpy = spyOn(reading, "renderIndexerWorksetReading").mockImplementation((input) =>
-    render(input) + (input.task_key === "task-002" ? "oversized ".repeat(40_000) : ""));
+  const render = reading.buildIndexerTaskReading;
+  const renderSpy = spyOn(reading, "buildIndexerTaskReading").mockImplementation((input) => {
+    const task = render(input);
+    return { ...task, introduction: task.introduction + (input.task_key === "task-002" ? "oversized ".repeat(40_000) : "") };
+  });
   try {
     await advanceCurrentIndexerLifecycle(root);
     const current = (await resolveCurrentIndexerAgentContext(root))!;
@@ -99,7 +101,7 @@ test.each(["json", "yaml"] as const)("large completion output retains full diagn
   const { task, result } = await currentTask(root);
   result.groups[0]!.artifact_intent = "not-advertised";
   const status = JSON.parse(await runCliInDir(root, ["status", "--managed", "--view", "summary", "--format", "json"]));
-  const current = status.workflow.current;
+  const current = JSON.parse(await readFile(status.next_route.file, "utf8"));
   expect(current.node).toBe("run-indexer-agent-step");
   const input = join(root, ".tmp/submission.json");
   await writeFile(input, JSON.stringify({ stage: "partition", results: [{ task_key: task.descriptor.task_key, result }] }));

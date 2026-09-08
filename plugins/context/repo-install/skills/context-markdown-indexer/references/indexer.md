@@ -76,3 +76,26 @@ coverage, preserve the source-backed content and improve its presentation
 rather than deleting it.
 
 Do not return output paths, collection names, arbitrary question text, new authority, or pass/fail claims.
+
+## Notes and conversation summaries as supporting material
+
+Use only the authorized excerpts or summaries and cite the material actually
+read. Distinguish quotations, paraphrases, confirmed decisions and proposals;
+write the explanation useful to the reader instead of copying the source.
+Keep claims within what the captured documents establish. A summary may record that participants reported an implementation or a passing
+test; attribute that report and retain its stated version and scope. Do not
+present it as independently verified in this task. Claims of direct validation
+need the actual relevant code, execution or test results in the authorized
+material. Discussion or a plan alone does not establish completion.
+
+Keep this Provider responsible for the existing page. If the host selects a
+Note/Sessions or business Provider extension, apply its supplied instructions
+to the same writing task. Do not load an unselected skill or create a second
+page solely because supporting material has a different source type. An
+independent reader task can use a dedicated Provider selected by the host.
+
+If the source is inaccurate, return the correction to the host source-input
+flow; do not edit it from the Indexer. If only the knowledge is misleading,
+revise the page from its approved text through Author/Review. Keep source
+associations in the source and page/section references in structure.yaml;
+do not add provenance fields to the knowledge header.

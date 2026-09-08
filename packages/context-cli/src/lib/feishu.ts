@@ -98,7 +98,14 @@ export async function checkLarkCli(runner: LarkRunner = defaultRunner): Promise<
   return result.stdout.trim();
 }
 
+export interface PrefetchedLarkDocument {
+  responsePages: string[];
+  identity: LarkAccessIdentity;
+  mediaFiles?: Record<string, string>;
+}
+
 export interface FetchFeishuDocInput {
+  prefetched?: PrefetchedLarkDocument;
   /**
    * Full feishu/lark URL (e.g. `https://xxx.feishu.cn/docx/...`,
    * `https://xxx.larkoffice.com/wiki/...`). We pass the URL verbatim to
@@ -355,10 +362,10 @@ function extractDocsFetchContent(payload: DocsFetchPayload, requestedFormat: "xm
 
 function extractDocsFetchRevisionId(payload: DocsFetchPayload): string | undefined {
   const document = payload.document && typeof payload.document === "object" ? payload.document : undefined;
-  return stringValue(payload.revision_id) ??
-    stringValue(payload.revisionId) ??
-    stringValue(document?.revision_id) ??
-    stringValue(document?.revisionId);
+  const revision = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? String(value) : stringValue(value);
+  return revision(payload.revision_id) ?? revision(payload.revisionId) ??
+    revision(document?.revision_id) ?? revision(document?.revisionId);
 }
 
 function assetArrays(payload: DocsFetchPayload): unknown[][] {
@@ -498,7 +505,9 @@ async function fetchDocsResponse(
     if (docsFetchPlan.docFormat === "xml") args.push("--doc-format", "xml");
     if (nextOffset !== undefined) args.push("--offset", String(nextOffset));
 
-    const result = await runner(args);
+    const saved = input.prefetched?.responsePages[page];
+    if (input.prefetched && saved === undefined) throw new LarkCliError("The saved document response is incomplete; provide every returned page before importing.", 0, "");
+    const result = saved === undefined ? await runner(args) : { stdout: saved, stderr: "", exitCode: 0 };
     if (result.exitCode !== 0) {
       throw new LarkCliError(
         docsFetchFailureMessage(result.stderr, docsFetchPlan.apiVersion),
@@ -508,6 +517,9 @@ async function fetchDocsResponse(
     }
     const payload = parseDocsFetchPayload(result.stdout);
     const extracted = extractDocsFetchContent(payload, docsFetchPlan.docFormat ?? "xml");
+    if (input.prefetched && /<fragment(?:\s|>)/u.test(extracted.body ?? "")) {
+      throw new LarkCliError("A partial document fragment cannot replace the registered document snapshot; provide the full selected document response.", 0, "");
+    }
     if (contentFormat !== undefined && contentFormat !== extracted.format) {
       throw new LarkCliError("lark-cli docs +fetch changed content format between pages", 0, "");
     }
@@ -520,7 +532,12 @@ async function fetchDocsResponse(
     } else if (!extracted.recognizedShape && unsupportedShape === undefined) {
       unsupportedShape = payloadShapeSummary(payload);
     }
-    if (payload.has_more !== true) break;
+    if (payload.has_more !== true) {
+      if (input.prefetched && page + 1 !== input.prefetched.responsePages.length) {
+        throw new LarkCliError("Saved document input contains extra responses beyond its final page; select only this document's response pages.", 0, "");
+      }
+      break;
+    }
     if (typeof payload.next_offset !== "number") {
       throw new LarkCliError(
         `${LARK_BIN} docs +fetch returned has_more=true but no next_offset; cannot paginate further`,
@@ -612,14 +629,19 @@ export async function fetchFeishuDocSnapshot(
   input: FetchFeishuDocInput,
   runner: LarkRunner = defaultRunner,
 ): Promise<FetchFeishuDocSnapshotResult> {
-  const docsFetchPlan = await resolveDocsFetchPlan(input.docsApiVersion ?? "auto", runner);
-  const identityFetch = await fetchWithIdentity(input, docsFetchPlan, runner);
+  const docsFetchPlan: DocsFetchPlan = input.prefetched
+    ? { apiVersion: "v2", docFormat: "xml" }
+    : await resolveDocsFetchPlan(input.docsApiVersion ?? "auto", runner);
+  const identityFetch = input.prefetched
+    ? { fetched: await fetchDocsResponse(input, docsFetchPlan, runner, input.prefetched.identity),
+        identity: input.prefetched.identity, fallback: false }
+    : await fetchWithIdentity(input, docsFetchPlan, runner);
   let fetched = identityFetch.fetched;
   const accessIdentity = identityFetch.identity;
   let projection: LarkDocxProjection | undefined;
   for (let attempt = 0; attempt < MAX_STRUCTURAL_FETCH_ATTEMPTS && fetched.contentFormat === "xml"; attempt++) {
     projection = projectLarkDocxXml({ xml: fetched.body, sourceUrl: input.url });
-    if (!hasEmptySubPageList(projection) || attempt === MAX_STRUCTURAL_FETCH_ATTEMPTS - 1) break;
+    if (input.prefetched || !hasEmptySubPageList(projection) || attempt === MAX_STRUCTURAL_FETCH_ATTEMPTS - 1) break;
     fetched = await fetchDocsResponse(input, docsFetchPlan, runner, accessIdentity);
   }
 
@@ -657,6 +679,7 @@ export async function fetchFeishuDocSnapshot(
     const materialized = await materializeLarkResources({
       resources: projection.resources,
       runner,
+      ...(input.prefetched?.mediaFiles === undefined ? {} : { mediaFiles: input.prefetched.mediaFiles }),
       policy,
       identity: accessIdentity,
       resolveSyncedReference: async (resource) => {

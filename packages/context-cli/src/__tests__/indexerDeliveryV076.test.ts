@@ -22,6 +22,10 @@ const delivered = { "previous-page": "previous-content" };
 test("first delivery is small even when one accepted Result contains 73 pages", () => {
   expect(selectDeliveryPages({ pages: pages(73), delivered: {}, allAuthorsAccepted: false })).toHaveLength(3);
 });
+test("new pages in an existing knowledge package use normal delivery batches", () => {
+  expect(selectDeliveryPages({ pages: pages(29), delivered: {}, hasPriorDelivery: true, allAuthorsAccepted: false })).toEqual([]);
+  expect(selectDeliveryPages({ pages: pages(51), delivered: {}, hasPriorDelivery: true, allAuthorsAccepted: false })).toHaveLength(50);
+});
 test("29 pages continue; a module boundary at 30 delivers; 50 forces a delivery", () => {
   expect(selectDeliveryPages({ pages: pages(29), delivered, allAuthorsAccepted: false })).toEqual([]);
   const module = pages(32);

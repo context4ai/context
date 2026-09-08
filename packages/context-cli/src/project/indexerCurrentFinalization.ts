@@ -49,6 +49,7 @@ import {
 
 import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
   "./indexerComposerFinalization.js";
+import { indexerInputScopeRecoveryIsCurrent, type IndexerInputScopeRecovery } from "./indexerInputScopeRecovery.js";
 export { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerComposerFinalization.js";
 
 type AcceptedAuthorRecord = Awaited<ReturnType<
@@ -59,6 +60,7 @@ export interface CurrentIndexerFinalizationState {
   state: "layout-confirmation-required" | "composer-required" | "blocked" | "ready";
   revision: string;
   diagnostic?: string;
+  scope_recovery?: IndexerInputScopeRecovery;
   layout_proposal_set?: ReturnType<typeof buildIndexerLayoutProposalSet>;
   layout_transition?: ReturnType<typeof buildIndexerLayoutTransition>;
   confirmations?: IndexerLayoutChangeConfirmation[];
@@ -249,7 +251,9 @@ export async function readCurrentIndexerFinalization(
   if (state === undefined || typeof state.state !== "string" || typeof state.revision !== "string") {
     return undefined;
   }
-  return state as unknown as CurrentIndexerFinalizationState;
+  const current = state as unknown as CurrentIndexerFinalizationState;
+  if (current.scope_recovery && !await indexerInputScopeRecoveryIsCurrent(projectRoot, current.scope_recovery)) return undefined;
+  return current;
 }
 
 export async function confirmCurrentIndexerLayout(input: {

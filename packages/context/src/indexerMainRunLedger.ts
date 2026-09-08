@@ -531,3 +531,19 @@ export function observeIndexerMainRunLedger(value: unknown): IndexerMainWorksetS
     records,
   });
 }
+
+
+/** Invalidate only the explicitly adjusted current worksets. Preserve peers and
+ * their accepted identities; the next preparation reconciles changed inputs. */
+export function invalidateIndexerMainRunWorksets(value: unknown, worksets: ReadonlySet<string>): IndexerMainRunLedger {
+  const ledger = validateIndexerMainRunLedger(value);
+  if ([...worksets].some((digest) => !ledger.entries.some((entry) => entry.workset_digest === digest))) {
+    throw new TypeError("adjusted workset is not in the current ledger");
+  }
+  return buildLedger({ workset_set: ledger.workset_set,
+    entries: ledger.entries.map((entry, index) => !worksets.has(entry.workset_digest) ? entry : {
+      ...entryBase({ item: ledger.workset_set.items[index]!, execution_request_digest: entry.execution_request_digest }),
+      state: "stale" as const, previous_workset_digest: entry.workset_digest,
+      previous_execution_request_digest: entry.execution_request_digest,
+    }) });
+}

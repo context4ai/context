@@ -315,8 +315,24 @@ export const indexerLayoutConfirmationInputSchema = z.discriminatedUnion("decisi
   }),
 ]);
 
+export const approvedRevisionSemanticInputSchema = z.object({
+  stage: z.literal("approved-revision"),
+  markdown: z.string().min(1),
+}).strict();
+
+export const sourceUpdateSemanticInputSchema = z.object({
+  stage: z.literal("source-update"),
+  decisions: z.array(z.object({ path: z.string().min(1), instruction: z.string().trim().min(1).optional(),
+    supporting_sources: z.array(z.string().min(1)).min(1).optional() }).strict()),
+  scope_summary: z.string().trim().min(1),
+  new_topics: z.array(z.object({ path: z.string().trim().min(1), title: z.string().trim().min(1),
+    source_refs: z.array(z.string().min(1)).min(1), instruction: z.string().trim().min(1) }).strict()),
+}).strict();
+
 /** Build-time input schema sources; the CLI exports these into its existing contract. */
 export const indexerCurrentActionInputDefinitions = {
+  sourceUpdate: sourceUpdateSemanticInputSchema,
+  approvedRevision: approvedRevisionSemanticInputSchema,
   providerSelection: indexerProviderSelectionSemanticInputSchema,
   providerResolution: indexerProviderResolutionSemanticInputSchema,
   providerProgramAuthorization: indexerProviderProgramAuthorizationSemanticInputSchema,
@@ -328,6 +344,8 @@ export const indexerCurrentActionInputDefinitions = {
 };
 
 export const indexerCurrentActionInputSchema = z.union([
+  sourceUpdateSemanticInputSchema,
+  approvedRevisionSemanticInputSchema,
   indexerProviderSelectionSemanticInputSchema,
   indexerProviderResolutionSemanticInputSchema,
   indexerProviderProgramAuthorizationSemanticInputSchema,

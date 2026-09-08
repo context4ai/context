@@ -1,3 +1,4 @@
+import type { IndexerJson } from "@c4a/context";
 import { describe, expect, test } from "bun:test";
 import { buildIndexerTaskReading, renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { projectIndexerAuthorFactReading } from "../project/indexerAuthorFactReading.js";
@@ -10,7 +11,7 @@ function fixture(index = 0) {
   const path = `src/component-${index}.ts`;
   const source = input.view.items.find((item) => item.category === "source-text")!;
   (source.value as Record<string, unknown>).read_path = `/captured/${path}`;
-  const add = (ref: string, kind: string, payload: unknown) => input.view.items.push({
+  const add = (ref: string, kind: string, payload: IndexerJson) => input.view.items.push({
     ...source, ref, category: "fact", value: { fact_ref: ref, kind, payload,
       payload_digest: "sha256:parser-record", locator: { source_ref: input.view.source_ref, module_ref: null,
         normalized_path: path, qualified_item_path: `${kind}:${ref}`, signature_digest: "sha256:locator" } },

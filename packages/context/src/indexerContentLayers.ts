@@ -1,3 +1,4 @@
+import { publicContractSupport, reconcilePublicContractFacts } from "./indexerPublicContractFacts.js";
 import { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
 import { z } from "zod";
 import {
@@ -103,6 +104,7 @@ export function projectIndexerFactValue(
 export function renderIndexerDeterministicFacts(input: {
   renderer: IndexerDeterministicBlockRenderer;
   facts: readonly IndexerArtifactFact[];
+  supporting_facts?: readonly IndexerArtifactFact[];
 }): string {
   if (input.facts.length === 0) {
     throw new TypeError("deterministic block requires at least one canonical Fact");
@@ -112,14 +114,26 @@ export function renderIndexerDeterministicFacts(input: {
   );
   const value = projectIndexerFactValue(facts);
   if (input.renderer === "public-contract-table") {
-    const tables = facts.flatMap((fact) => {
+    const support = publicContractSupport(facts, input.supporting_facts ?? []);
+    const supportingRefs = new Set(support.map(fact => fact.fact_ref));
+    const tables = reconcilePublicContractFacts([...facts, ...support]).flatMap((fact) => {
+      if (supportingRefs.has(fact.fact_ref) && typeof fact.value === "object" && fact.value !== null
+        && !Array.isArray(fact.value) && fact.value.kind === "component") return [];
       const table = projectIndexerPublicContractTable(fact);
       return table === undefined ? [] : [table];
     });
     if (tables.length === 0) throw new TypeError("public-contract-table requires declared public contracts");
-    return renderIndexerDeterministicFacts({ renderer: "multi-column-table", facts: [{
+    const rendered = renderIndexerDeterministicFacts({ renderer: "multi-column-table", facts: [{
       ...facts[0]!, value: { columns: tables[0]!.columns, rows: tables.flatMap((table) => table.rows) },
     }] });
+    const declarations = [...new Map(tables.filter(table => table.declaration !== undefined)
+      .map(table => [JSON.stringify([table.declarationName, table.declaration]), table])).values()];
+    return [rendered, ...declarations.map((table) => {
+      const declaration = table.declaration!;
+      const name = (table.declarationName || "Contract").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      const fence = "`".repeat(Math.max(3, ...[...declaration.matchAll(/`+/gu)].map(match => match[0].length + 1)));
+      return `<details>\n<summary>${name}: type details</summary>\n\n${fence}typescript\n${declaration}\n${fence}\n\n</details>`;
+    })].join("\n\n");
   }
   if (input.renderer === "multi-column-table") {
     const table = z.object({ columns: z.array(z.string()).min(1), rows: z.array(z.array(z.string())) }).strict().parse(value);
@@ -230,14 +244,17 @@ export function materializeIndexerStructuredContent(input: {
       }
       return fact;
     });
+    const support = block.renderer === "public-contract-table" ? publicContractSupport(referenced, input.facts) : [];
+    const consumed = [...referenced, ...support];
     return buildIndexerRenderedContentBlock({
       layer: block.layer,
       markdown: renderIndexerDeterministicFacts({
         renderer: block.renderer,
         facts: referenced,
+        supporting_facts: support,
       }),
-      fact_refs: referenced.map((fact) => fact.fact_ref),
-      evidence_refs: referenced.flatMap((fact) => fact.evidence_refs),
+      fact_refs: consumed.map((fact) => fact.fact_ref),
+      evidence_refs: consumed.flatMap((fact) => fact.evidence_refs),
     });
   });
 }

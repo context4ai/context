@@ -139,6 +139,20 @@ It should also inspect the scratch project's `package.json` to distinguish a
 linked SDK from a published dependency. This prevents results from mixing a
 local CLI with an old SDK, or a new CLI with stale agent commands.
 
+The CLI also bundles SDK code at build time. Importing the separately installed
+SDK does not test that embedded copy. After changes to programmatic content,
+build the CLI and run `bun run test:cli-artifact`. To check a prepared or
+installed CLI, run the same fixture with its actual executable:
+
+```bash
+CONTEXT_TEST_CLI=/absolute/path/to/cli.js CONTEXT_RUNTIME_EVENTS_DISABLED=1 \
+  bun test packages/context-cli/src/__tests__/projectProgrammaticContractCli.test.ts
+```
+
+This runs the Candidate compilation command through Node in disposable
+workspaces and checks the resulting API rows, including supporting facts.
+It does not write to an existing knowledge workspace.
+
 Agents may execute normal build, link, plugin refresh, scratch initialization,
 and verification steps when those actions are already in scope. They must not
 silently replace a user's global CLI, test inside a real customer workspace, or

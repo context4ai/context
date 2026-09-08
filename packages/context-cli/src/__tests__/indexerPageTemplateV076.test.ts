@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { indexerTemplateContractSchema, renderIndexerDeterministicFacts,
+import { indexerTemplateContractSchema, renderIndexerDeterministicFacts, materializeIndexerStructuredContent,
   type IndexerArtifactResult, type IndexerArtifactFact } from "@c4a/context";
 import { applySelectedPageTemplate } from "../project/indexerPageTemplate.js";
 import { splitFrontmatter, parseSectionBodies } from "../project/indexerTemplateRendering.js";
@@ -35,8 +35,27 @@ test("selected page program combines source-backed API reference and semantic pr
     ? block.markdown : renderIndexerDeterministicFacts({ renderer: block.renderer,
       facts: derived.filter((item) => block.fact_refs.includes(item.fact_ref)) }))).join("\n");
   expect(markdown).toContain("## Declared properties");
-  expect(markdown).toContain("| Panel | label | string | required | not declared | readonly |");
+  expect(markdown).toContain("| Panel | label | string | required | unknown | readonly |");
   expect(markdown).toContain("&#124;");
   expect(markdown).not.toContain("fact:");
   expect(markdown).not.toContain("sha256:");
+  const props: IndexerArtifactFact = { ...fact, fact_ref: "fact:props", value: {
+    name: "PanelProps", kind: "type", file: "panel.tsx", visibility: "exported",
+    members: [{ name: "mode", kind: "prop", typeAnnotation: "string", defaultValue: "old" }],
+  } };
+  const supporting: IndexerArtifactFact = { ...fact, fact_ref: "fact:implementation", evidence_refs: ["evidence:implementation"], value: {
+    name: "Panel", kind: "component", file: "panel.tsx", visibility: "exported", propsType: "PanelProps",
+    members: [{ name: "mode", kind: "prop", typeAnnotation: "string", defaultValue: "new" }],
+  } };
+  const repaired = structuredClone(artifact);
+  repaired.sections = repaired.sections.slice(0, 1);
+  applySelectedPageTemplate({ artifact: repaired, template, facts: [props], supportingFacts: [supporting] });
+  const api = repaired.sections[1]!.blocks.find(block => block.layer === "deterministic-block")!;
+  if (api.layer !== "deterministic-block") throw new Error("missing program block");
+  expect(api.fact_refs).toEqual([props.fact_ref]);
+  const final = materializeIndexerStructuredContent({ blocks: [api], facts: [props, supporting] })[0]!;
+  expect(final.markdown).toContain("| new |");
+  expect(final.markdown).not.toContain("| Panel | mode |");
+  expect(final.evidence_refs).toContain("evidence:implementation");
+
 });

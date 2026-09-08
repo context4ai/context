@@ -89,7 +89,7 @@ export const indexerProtocolIdSchema = z.string().regex(
 );
 
 export const indexerCanonicalRefSchema = z.string().regex(
-  /^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#@+-]*$/u,
+  /^[a-z][a-z0-9.-]*:[\p{L}\p{N}][\p{L}\p{N}._~:/#@+-]*$/u,
 );
 
 export const indexerProviderLayerRefSchema = indexerCanonicalRefSchema.refine(

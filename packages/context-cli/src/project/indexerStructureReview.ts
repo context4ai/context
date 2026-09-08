@@ -1,3 +1,4 @@
+import { loadIndexerRegistry } from "@c4a/context";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -95,6 +96,7 @@ interface PreparedIndexerStructurePlan {
   workset_set: unknown;
   run_specs: unknown[];
   obsolete_member_ids?: string[];
+  partition_request_digests?: string[];
   plan_digest: string;
 }
 
@@ -125,6 +127,7 @@ function preparedPlan(value: unknown): PreparedIndexerStructurePlan | undefined 
     workset_set: candidate.workset_set,
     run_specs: candidate.run_specs,
     ...(candidate.obsolete_member_ids === undefined ? {} : { obsolete_member_ids: candidate.obsolete_member_ids }),
+    ...(candidate.partition_request_digests === undefined ? {} : { partition_request_digests: candidate.partition_request_digests }),
   };
   if (indexerProtocolDigest(payload) !== candidate.plan_digest) {
     throw new TypeError("prepared semantic structure plan failed integrity validation");
@@ -136,6 +139,17 @@ async function readPreparedPlan(
   projectRoot: string,
 ): Promise<PreparedIndexerStructurePlan | undefined> {
   return preparedPlan(await readJsonMaybe(projectRoot, PLAN_PATH));
+}
+
+/** The planning inputs include Indexers that legitimately produced no pages.
+ * Keep their original requests when checking the later Author stage's scope. */
+export async function readStructurePartitionRequestDigests(projectRoot: string): Promise<string[] | undefined> {
+  return (await readPreparedPlan(projectRoot))?.partition_request_digests;
+}
+
+export async function hasApprovedEmptyIndexerStructure(projectRoot: string): Promise<boolean> {
+  const structure = await currentIndexerStructureReview(projectRoot);
+  return structure?.approved === true && structure.preview.topics.length === 0;
 }
 
 async function reviewDecision(projectRoot: string, revision: string): Promise<boolean> {
@@ -303,6 +317,9 @@ export async function prepareCurrentIndexerStructurePlan(
     workset_set: prepared.author.workset_set,
     run_specs: prepared.author.run_specs,
     obsolete_member_ids: [...new Set(prepared.author.obsolete_scope.affected.flatMap((item) => item.member_ids))].sort(),
+    partition_request_digests: [...new Map(records.map((record) => [
+      record.request.workset.indexer_id, record.request.execution_request_digest,
+    ])).values()].sort(),
   };
   await atomicWriteFile(
     join(projectRoot, PLAN_PATH),
@@ -418,7 +435,7 @@ async function prepareAuthorPlan(
       projectRoot,
       value: {
         protocol: "context.indexer.target-resolution-build-input/v1",
-        requirement_set_digest: first.workset.requirement_set_digest,
+        requirement_set_digest: (await loadIndexerRegistry(projectRoot)).requirementSetDigest,
         catalog,
         queries,
       },
@@ -481,6 +498,9 @@ export async function prepareCurrentIndexerAuthorStage(projectRoot: string): Pro
   if (plan === undefined) {
     throw new TypeError("semantic structure Author plan is missing or stale");
   }
+  // With no reader pages there is no Author stage. Retain the accepted
+  // Partition ledger so the empty structure still has a reviewable authority.
+  if (plan.run_specs.length === 0) return;
   await prepareIndexerMainRunStore({
     projectRoot,
     workset_set: plan.workset_set,
@@ -503,6 +523,11 @@ export async function completeCurrentIndexerStructureReview(input: {
     if (scope === undefined || scope.exclusion_leaves_no_current_pages) {
       throw new TypeError("obsolete scope exclusion has no remaining current pages; choose a different scope");
     }
+    // A no-op exclusion is approval of the current plan. Never replace the
+    // accepted Partition ledger with a newly prepared (possibly older) one.
+    if (scope.affected_page_count === 0) {
+      return completeCurrentIndexerStructureReview({ ...input, decision: "approved" });
+    }
     const prior = await readJsonMaybe(input.projectRoot, FEEDBACK_PATH) as
       { excluded_member_ids?: string[] } | undefined;
     const prepared = await readPreparedPlan(input.projectRoot);
@@ -523,7 +548,9 @@ export async function completeCurrentIndexerStructureReview(input: {
     }));
     // Switching ledgers reuses accepted Partition records. Only the derived
     // Author plan changes; no captured sources or accepted cache is deleted.
-    const partitionLedger = await preparePartitionStage(input.projectRoot);
+    const ledgerBeforeExclusion = await currentLedger(input.projectRoot);
+    const partitionLedger = ledgerBeforeExclusion?.entries.every((entry) => entry.stage === "partition" && entry.state === "accepted")
+      ? ledgerBeforeExclusion : await preparePartitionStage(input.projectRoot);
     if (partitionLedger?.entries.some((entry) => entry.state !== "accepted")) {
       return "partition";
     }

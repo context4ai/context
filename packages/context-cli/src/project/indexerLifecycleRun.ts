@@ -1,3 +1,4 @@
+import { indexerDeliveryGuidance } from "./indexerDeliveryGuidance.js";
 import { requestIndexerEarlyDelivery } from "./indexerDelivery.js";
 import { advanceCurrentIndexerLifecycle } from "./indexerCurrentLifecycle.js";
 import { advanceCurrentIndexerProviderFinalizationIfReady } from
@@ -52,6 +53,7 @@ export async function runCurrentIndexerLifecycle(input: {
   return {
     protocol: "context.indexer.lifecycle-advance/v1" as const,
     advanced,
+    ...(input.deliver === true ? { delivery: await indexerDeliveryGuidance(input.projectRoot, input.authorities) } : {}),
     state: lifecycleState(status.workflow),
     workflow: status.workflow,
   };

@@ -226,11 +226,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
             required: ["name", "template"],
             defaults: { template: "src/package-templates/llms" },
           },
-          {
-            id: "none",
-            factory: null,
-            required: [],
-          },
         ],
         resource_delivery: {
           applies_to: "agent-knowledge-base",

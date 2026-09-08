@@ -1,3 +1,4 @@
+import type { IndexerDeliveryGuidance } from "../indexerDeliveryGuidance.js";
 import type {
   Evaluation,
   HostActionResult,
@@ -124,6 +125,8 @@ export interface ContextWorkflowObservation {
     diagnostic?: string;
   };
   indexerCandidateCompile: {
+    rollback_pending?: boolean;
+  revision_pending?: boolean;
     delivery_pending?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };
@@ -208,6 +211,7 @@ export interface ContextResolvedWorkflowRoute {
   node: string;
   reason_code: string;
   summary?: string;
+  delivery?: IndexerDeliveryGuidance;
   availability: "immediate" | "requires-user" | "blocked";
   commands: ContextWorkflowCommand[];
   action?: {

@@ -228,7 +228,7 @@ describe("Markdown Provider Route", () => {
     });
   }, 15_000);
 
-  test("resolves and stages the exact CLI-bundled Markdown Provider", async () => {
+  test.each(["markdown", "note", "sessions"])("resolves and stages the exact CLI-bundled %s document Provider", async (kind) => {
     const fixture = await capturedProjectWithDistribution();
     const capture = await inspectProjectMarkdownProviderCapture({
       projectRoot: fixture.projectRoot,
@@ -239,7 +239,7 @@ describe("Markdown Provider Route", () => {
       },
     });
     const bundle = fixture.release.bundles.find((candidate) =>
-      candidate.skill === "context-markdown-indexer"
+      candidate.skill === `context-${kind}-indexer`
     )!;
     const selected = selectedRegistry({
       base: fixture.registry,
@@ -252,14 +252,30 @@ describe("Markdown Provider Route", () => {
         distribution: bundle.distribution,
       },
     });
+    if (kind !== "markdown") selected.indexers[0]!.profile.primary.id = "technical-guide";
+    if (kind === "sessions") {
+      const codeTarget = { source_ref: "repo:20260828/app", module_refs: [] };
+      selected.requirements[0]!.target_scope.targets.push(codeTarget);
+      selected.requirements[0]!.evidence_source_scope.targets.push(codeTarget);
+      selected.indexers[0]!.requirement_bindings[0]!.owned_scope = { targets: [{ source_ref: fixture.sourceRef, module_refs: [] }] };
+      const codeBundle = fixture.release.bundles.find((item) => item.skill === "context-code-indexer")!;
+      const code = structuredClone(selected.indexers[0]!);
+      code.id = "workspace-code";
+      code.profile.primary.id = "component-library";
+      code.requirement_bindings[0]!.owned_scope = { targets: [codeTarget] };
+      code.providers = [{ id: "community", role: "primary", skill: codeBundle.skill,
+        version: codeBundle.version, integrity: codeBundle.integrity, distribution: codeBundle.distribution }];
+      // Both read the document. Only the document owner is validated as a
+      // Markdown-domain Provider; inline ownership here is a proper subset.
+      selected.indexers.push(code);
+      await writeFile(join(fixture.projectRoot, "src/indexers.yaml"), YAML.stringify(fixture.registry));
+    }
     const routeInput = buildIndexerProviderRouteInput({
       project_ref: capture.project_ref,
       registry: selected,
-      visible_skills: [{
-        skill: bundle.skill,
-        version: bundle.version,
-        source_type: "cli-bundled",
-      }],
+      visible_skills: selected.indexers.flatMap((indexer) => indexer.providers.map((provider) => ({
+        skill: provider.skill, version: provider.version, source_type: "cli-bundled" as const,
+      }))),
       community_fallback_attempted: true,
     });
     const route = await routeProjectIndexerProviderSelection({

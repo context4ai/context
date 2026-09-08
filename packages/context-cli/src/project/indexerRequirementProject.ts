@@ -29,7 +29,7 @@ import {
 import { withProjectWriteLock } from "./writeLock.js";
 
 interface SourceBoundaryEntry {
-  type: "repo" | "file" | "lark";
+  type: "repo" | "file" | "lark" | "note" | "sessions";
   id: string;
   name: string;
   revision: string | null;
@@ -75,15 +75,20 @@ function sourceBoundaryEntries(registry: SourcesRegistry): SourceBoundaryEntry[]
       name: source.name,
       revision: source.snapshot?.manifest ?? null,
     })),
+    ...([ ["note", registry.notes], ["sessions", registry.sessions] ] as const).flatMap(([type, entries]) =>
+      entries.map((source) => ({ type, id: source.id, name: source.name, revision: null }))),
   ].sort((left, right) => `${left.type}:${left.name}`.localeCompare(`${right.type}:${right.name}`));
 }
 
 export function indexerRequirementSourceBoundaryDigest(
   registry: SourcesRegistry,
+  requirements?: readonly IndexRequirement[],
 ): string {
-  return indexerProtocolDigest({
-    protocol: "context.indexer.source-boundary/v1",
-    sources: sourceBoundaryEntries(registry),
+  const refs = requirements === undefined ? undefined : new Set(requirements.flatMap((requirement) =>
+    [...requirement.target_scope.targets, ...requirement.evidence_source_scope.targets,
+      ...(requirement.exclusions ?? []).flatMap((exclusion) => exclusion.scope.targets)].map((target) => target.source_ref)));
+  return indexerProtocolDigest({ protocol: "context.indexer.source-boundary/v1",
+    sources: sourceBoundaryEntries(registry).filter((source) => refs === undefined || refs.has(`${source.type}:${source.name}`) || refs.has(`docs:${source.name}`)),
   });
 }
 
@@ -94,7 +99,7 @@ function sourceCandidates(
 ): SourceBoundaryEntry[] {
   const entries = sourceBoundaryEntries(registry);
   const allowed = prefix === "docs"
-    ? new Set(["file", "lark"])
+    ? new Set(["file", "lark", "note", "sessions"])
     : new Set([prefix]);
   return entries.filter((entry) =>
     allowed.has(entry.type) && (entry.id === identity || entry.name === identity || (
@@ -104,7 +109,7 @@ function sourceCandidates(
 }
 
 function canonicalSourceRef(registry: SourcesRegistry, sourceRef: string): string {
-  const match = /^(repo|docs|file|lark):(.+)$/u.exec(sourceRef);
+  const match = /^(repo|docs|file|lark|note|sessions):(.+)$/u.exec(sourceRef);
   if (match === null || match[2]!.includes("#") || match[2]!.includes("@")) {
     throw new TypeError(
       `requirement source_ref must identify a registered source boundary: ${sourceRef}`,
@@ -152,13 +157,13 @@ export async function inspectProjectIndexerRequirements(input: {
 }): Promise<IndexerRequirementInspection> {
   const parsed = indexerRequirementInspectionInputSchema.parse(input.value);
   const sources = await loadSourcesRegistry({ rootDir: input.projectRoot });
+  const requirements = parsed.requirements.map((requirement) => normalizeRequirementSources(sources, requirement));
   return buildIndexerRequirementInspection({
     value: {
       ...parsed,
-      requirements: parsed.requirements.map((requirement) =>
-        normalizeRequirementSources(sources, requirement)),
+      requirements,
     },
-    source_boundary_digest: indexerRequirementSourceBoundaryDigest(sources),
+    source_boundary_digest: indexerRequirementSourceBoundaryDigest(sources, requirements),
   });
 }
 
@@ -185,9 +190,10 @@ async function currentIndexerRegistry(input: {
 async function assertCurrentSourceBoundary(input: {
   projectRoot: string;
   expectedDigest: string;
+  requirements: readonly IndexRequirement[];
 }): Promise<void> {
   const sources = await loadSourcesRegistry({ rootDir: input.projectRoot });
-  if (indexerRequirementSourceBoundaryDigest(sources) !== input.expectedDigest) {
+  if (indexerRequirementSourceBoundaryDigest(sources, input.requirements) !== input.expectedDigest) {
     throw new TypeError("requirement inspection source boundary is stale");
   }
 }
@@ -200,6 +206,7 @@ export async function compareProjectIndexerRequirements(input: {
   await assertCurrentSourceBoundary({
     projectRoot: input.projectRoot,
     expectedDigest: inspection.source_boundary_digest,
+    requirements: inspection.requirement_set.requirements,
   });
   const current = await currentIndexerRegistry({ projectRoot: input.projectRoot });
   return buildIndexerRequirementWorksetReport({
@@ -228,7 +235,7 @@ function validateApplyBindings(input: {
   }
 }
 
-function targetRegistry(input: {
+export function targetRegistry(input: {
   current: IndexerRegistry | null;
   report: IndexerRequirementWorksetReport;
 }): { registry: IndexerRegistry; changed: boolean; invalidatedCount: number } {
@@ -236,14 +243,18 @@ function targetRegistry(input: {
     ? null
     : indexerRegistryDigests(input.current).requirementSetDigest;
   const changed = currentDigest !== input.report.target_requirement_set_digest;
+  const previous = new Map(input.current?.requirements.map((requirement) => [requirement.id, canonicalIndexerJson(requirement)]) ?? []);
+  const unchanged = new Set(input.report.target_requirement_set.requirements.filter((requirement) =>
+    previous.get(requirement.id) === canonicalIndexerJson(requirement)).map((requirement) => requirement.id));
+  const indexers = (input.current?.indexers ?? []).filter((indexer) =>
+    indexer.requirement_bindings.every((binding) => unchanged.has(binding.requirement_ref)) &&
+    indexer.read_scope.refs.every((ref) => {
+      const requirement = /^requirement:([^#]+)#/u.exec(ref)?.[1];
+      return requirement === undefined || unchanged.has(requirement);
+    }));
   return {
-    registry: {
-      protocol: "context.indexer.registry/v1",
-      requirements: input.report.target_requirement_set.requirements,
-      indexers: changed ? [] : input.current?.indexers ?? [],
-    },
-    changed,
-    invalidatedCount: changed ? input.current?.indexers.length ?? 0 : 0,
+    registry: { protocol: "context.indexer.registry/v1", requirements: input.report.target_requirement_set.requirements, indexers },
+    changed, invalidatedCount: (input.current?.indexers.length ?? 0) - indexers.length,
   };
 }
 
@@ -265,6 +276,7 @@ export async function applyProjectIndexerRequirements(input: {
     await assertCurrentSourceBoundary({
       projectRoot: input.projectRoot,
       expectedDigest: report.source_boundary_digest,
+      requirements: report.target_requirement_set.requirements,
     });
 
     const current = await currentIndexerRegistry({ projectRoot: input.projectRoot });
@@ -284,6 +296,8 @@ export async function applyProjectIndexerRequirements(input: {
     const targetContent = YAML.stringify(target.registry);
     const parsedTarget = parseIndexerRegistry(targetContent, "requirement-apply:target");
     const targetDigests = indexerRegistryDigests(parsedTarget);
+    const { invalidateChangedProcessedRequirements } = await import("./processedScopeStorage.js");
+    await invalidateChangedProcessedRequirements(input.projectRoot, current?.registry.requirements ?? [], target.registry.requirements);
     const transaction = await runDurableSingleFileTransaction({
       projectRoot: input.projectRoot,
       kind: "apply-index-requirements",

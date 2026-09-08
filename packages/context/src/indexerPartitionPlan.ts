@@ -422,9 +422,9 @@ export function validateIndexerPartitionPlan(input: {
   if (plan.status === "complete") {
     if (plan.groups.length === 0) {
       if (
-        plan.reader_question_refs.length > 0 ||
-        (input.required_question_target_refs ?? input.workset.allowed_question_target_refs)
-            .length > 0 ||
+        plan.reader_question_refs.length > 0 || input.workset.reader_question_refs.length > 0 ||
+        ((input.required_question_target_refs ?? input.workset.allowed_question_target_refs).length > 0 &&
+          !plan.member_dispositions.every((item) => item.inventory_disposition === "excluded-with-reason")) ||
         plan.member_dispositions.some((item) => item.inventory_disposition === "owned")
       ) {
         throw new TypeError(
@@ -432,10 +432,15 @@ export function validateIndexerPartitionPlan(input: {
         );
       }
     }
-    validateQuestionTargetClosure(
-      plan,
-      input.required_question_target_refs ?? input.workset.allowed_question_target_refs,
-    );
+    // All inventory has already been checked for exact closure above. With no
+    // reader questions and every member explicitly excluded, inherited targets
+    // have no in-scope content; do not invent a reader group to dispose them.
+    if (plan.groups.length > 0 || plan.member_dispositions.length === 0) {
+      validateQuestionTargetClosure(
+        plan,
+        input.required_question_target_refs ?? input.workset.allowed_question_target_refs,
+      );
+    }
   } else {
     const closed = new Set(plan.member_dispositions.map((item) => item.member_id));
     const expectedUnassigned = canonicalInventory

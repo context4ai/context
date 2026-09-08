@@ -1,10 +1,12 @@
+import { planIndexerReadingFiles } from "./indexerReadingFiles.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { indexerProtocolDigest, type IndexerAuthorizedWorksetView, type IndexerMainWorkset } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { buildIndexerTaskReading, readingBlock, renderIndexerInstructionsReading, renderIndexerWorksetReading } from "./indexerAgentReading.js";
-import { renderIndexerBatchReading } from "./indexerBatchReading.js";
+import { buildIndexerTaskReading, renderIndexerInstructionsReading } from "./indexerAgentReading.js";
+import { renderIndexerPostAuthorReading } from "./indexerPostAuthorReading.js";
+import type { IndexerPrimaryResultView } from "@c4a/context";
 
 type Ready = { path: string; digest: string };
 
@@ -33,24 +35,17 @@ export async function prepareIndexerWorksetReadings(inputs: readonly {
     }
     return { view, workset: input.workset, task_key: input.task_key };
   }));
-  if (views.length > 0 && views.every((input) => input.workset.stage === views[0]!.workset.stage)) {
-    const batch = renderIndexerBatchReading(views.map(buildIndexerTaskReading));
-    // Partition packing still measures individual readings conservatively.
-    // Share only when the actual file fits within that existing budget.
-    const separateBytes = views.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0);
-    if (views[0]!.workset.stage === "author" || batch.input_bytes <= separateBytes) {
-      const reading = await persistReading(inputs[0]!.ready.path, batch.markdown);
-      // Existing per-task Resource IDs still resolve, but their common file is
-      // read once. No extra discovery command or reading receipt is needed.
-      return inputs.map(() => reading);
-    }
-  }
-  return Promise.all(views.map((input, index) =>
-    persistReading(inputs[index]!.ready.path, renderIndexerWorksetReading(input))));
+  const plan = planIndexerReadingFiles(views.map(buildIndexerTaskReading));
+  const commonFiles = new Map(await Promise.all(plan.shared.map(async (block) =>
+    [block.digest, await persistReading(inputs[0]!.ready.path, block.markdown)] as const)));
+  return Promise.all(plan.readings.map(async (task, index) => ({
+    ...await persistReading(inputs[index]!.ready.path, task.markdown),
+    common: task.common.map((block) => commonFiles.get(block.digest)!),
+  })));
 }
 
 export async function prepareIndexerPostAuthorReading(ready: Ready) {
-  const value = JSON.parse(await readFile(ready.path, "utf8")) as { view_digest?: string };
+  const value = JSON.parse(await readFile(ready.path, "utf8")) as IndexerPrimaryResultView;
   if (value.view_digest !== ready.digest) throw new TypeError("Indexer composer reading uses a stale View");
-  return persistReading(ready.path, `# Current composer material\n\n${readingBlock(value)}\n`);
+  return persistReading(ready.path, renderIndexerPostAuthorReading(value));
 }

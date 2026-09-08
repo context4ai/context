@@ -144,6 +144,10 @@ export function buildIndexerPrimaryRegistryProjection(input: {
       `${right.provider}\u0000${right.id}\u0000${right.kind}`,
     )
   );
+  const readRequirementIds = new Set(entry.read_scope.refs.flatMap((ref) => {
+    const match = /^requirement:([^#]+)#/u.exec(ref);
+    return match ? [match[1]!] : [];
+  }));
   const payload: PrimaryRegistryProjectionPayload = {
     protocol: "context.indexer.primary-registry-projection/v1",
     indexer_id: entry.id,
@@ -154,6 +158,8 @@ export function buildIndexerPrimaryRegistryProjection(input: {
     >[],
     read_scope: {
       refs: [...entry.read_scope.refs].sort(compareIndexerCanonicalText),
+      requirements: input.registry.requirements.filter((requirement) => readRequirementIds.has(requirement.id))
+        .sort((a, b) => compareIndexerCanonicalText(a.id, b.id)),
       ...(entry.read_scope.extra_targets === undefined
         ? {}
         : { extra_targets: canonicalTargets(entry.read_scope.extra_targets) }),

@@ -155,7 +155,18 @@ Select `artifact_intent` from the current Author authority's allowed tuples. Con
 
 When the same Authorized Workset View contains CLI-authorized captured documents or tool snapshots, treat them as ordinary input evidence for the current logical unit. Use that material to answer a supplied question only when its evidence contract permits; otherwise keep the canonical material-gap disposition. Do not create a second answer flow or inspect registered sources outside the View.
 
-Treat the CLI inventory as the complete denominator, not a sample. Parser facts may prove files, declarations, entries, contracts, and relationships; they do not by themselves prove business meaning, runtime defaults, failure behavior, or ownership. Every relationship must cite the concrete evidence for its own handoff. Do not repeat one whole-page evidence set across unrelated facts, and do not reduce a multi-source fact to one arbitrary primary file.
+Treat the CLI inventory as the complete denominator, not a sample. Parser facts may prove files, declarations, entries, contracts, relationships and written default expressions; they do not by themselves prove business meaning, evaluated runtime values, failure behavior, or ownership. Every relationship must cite the concrete evidence for its own handoff. Do not repeat one whole-page evidence set across unrelated facts, and do not reduce a multi-source fact to one arbitrary primary file.
+
+For generated API content, separate the displayed API from the facts supporting
+it. Keep relevant implementation or inherited-type facts as supporting material
+even when they need no separate page; use the current catalog/section references,
+not an exclusion to suppress duplicate presentation. Establish associations from
+declared links, not matching names. Shared types can have different defaults for
+different callers. A written `resolveDefault()` is an expression, not its evaluated
+result; an unresolved import does not prove an empty API. Read available captured
+source when the reader's task requires more certainty. Request material only if
+it is absent; report an extraction or rendering discrepancy when the source is
+already available. Preserve supported content and explain the specific limit.
 
 Inventory closure is not a license to attach a convenient fallback binding to
 unrelated members. A `boundary-only` member still needs evidence that places
@@ -234,3 +245,27 @@ Do not return output paths, collection names, quality thresholds, pass/fail
 decisions, extra owners, ad hoc question contracts, or facts outside the
 supplied authority. Context validates deterministic structure, references,
 layout, freshness, reconciliation, and final Review independently.
+
+## Notes and conversation summaries as supporting material
+
+Use only the authorized excerpts or summaries and cite the material actually
+read. Distinguish quotations, paraphrases, confirmed decisions and proposals;
+write the explanation useful to the reader instead of copying the source.
+Use code for API definitions and implemented behavior; a conversation can
+explain the reasons behind them. A summary may record that participants reported an implementation or a passing
+test; attribute that report and retain its stated version and scope. Do not
+present it as independently verified in this task. Claims of direct validation
+need the actual relevant code, execution or test results in the authorized
+material. Discussion or a plan alone does not establish completion.
+
+Keep this Provider responsible for the existing page. If the host selects a
+Note/Sessions or business Provider extension, apply its supplied instructions
+to the same writing task. Do not load an unselected skill or create a second
+page solely because supporting material has a different source type. An
+independent reader task can use a dedicated Provider selected by the host.
+
+If the source is inaccurate, return the correction to the host source-input
+flow; do not edit it from the Indexer. If only the knowledge is misleading,
+revise the page from its approved text through Author/Review. Keep source
+associations in the source and page/section references in structure.yaml;
+do not add provenance fields to the knowledge header.

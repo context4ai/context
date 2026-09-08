@@ -36,7 +36,7 @@ see each `packages/*/README.md`; for development rules see [CLAUDE.md](CLAUDE.md
 │                               ▼                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │
 │  │ knowledge/                                                  │  │
-│  │ approved pages + structure.yaml + compact decisions.json   │  │
+│  │ approved pages + structure.yaml                           │  │
 │  └────────────────────────────┬───────────────────────────────┘  │
 │                               ▼                                  │
 │  ┌────────────────────────────────────────────────────────────┐  │
@@ -145,7 +145,7 @@ The main state directories are:
 | `src/index.ts` | SDK user/project | Declares sources, phases, and packages |
 | `sources/` | CLI | Source registries and captured snapshots |
 | `.tmp/context-runtime/lifecycle/` | CLI + review gate | Disposable structure drafts and active candidate records; removed after successful close |
-| `knowledge/` | CLI after approval/close | Approved pages, `structure.yaml`, and compact rejected candidate fingerprints in `decisions.json` |
+| `knowledge/` | CLI after approval/close | Approved pages and `structure.yaml`; rejected Candidate status lives only in the temporary lifecycle ledger |
 | `dist/` | CLI build | Generated package output |
 | `.tmp/` | CLI/runtime | Run logs, review HTML, reports, transient payloads |
 
@@ -210,7 +210,6 @@ Document capture lives under `packages/context-cli/src/project`:
 | `documentCaptureLark.ts` | Lark document capture |
 | `documentEvidenceIndex.ts` | Snapshot indexing, source refs, span lookup |
 | `documentSiteDetection.ts` | Deterministic MDX/docs-site signals and route metadata detection |
-| `documentSnapshotFreshness.ts` | Snapshot stale checks |
 
 Captured evidence is addressed by canonical `source_ref` strings. Later stages
 must cite these refs instead of reading raw source files directly.

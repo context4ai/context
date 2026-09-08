@@ -1,0 +1,96 @@
+---
+id: procedure.approved-revision
+kind: procedure
+mediaType: text/markdown
+---
+
+# Revise an approved page
+
+The current action contains the approved page and the user's instruction. Read
+the entire page first. Revise only what the instruction and available sources
+support; retain still-correct explanations and confirmed user contributions.
+
+For an expression-only change, the approved text is enough. Do not capture,
+parse, partition, or reconfigure its source. For changed facts, read the relevant
+registered material with the available host tools. Missing evidence is a reason
+to ask about the affected claim, not to reconstruct the whole knowledge base.
+Record new factual contributions as managed sources before expanding source
+ownership; an editing instruction alone is not a permanent factual source.
+
+Return the full revised Markdown in the supplied output schema, preserving the
+page's identity, source list, and source-bound section markup. Do not silently
+turn paraphrased text into a verbatim quotation. Do not directly write knowledge
+files. Context prepares a Candidate and routes it through the existing Review,
+apply, close, and build steps. Managed mode delegates Review, not source truth.
+
+If Context reports that the approved page changed, read that version and restart
+the revision. Never overwrite a concurrent edit with the old page snapshot.
+
+When `target.base_digest` is null, this is a new page in the confirmed update scope.
+The supplied Markdown contains only its stable identity and initial metadata.
+Read the specified source material and write the complete page with source-bound
+sections, using the existing purpose and page forms. Do not treat the initial
+heading as an already written page.
+
+Use `target.source_refs` as the final page source list. It can include explicitly
+selected supporting material absent from the old Markdown. Read that material
+before using it, add only its relevant explanation, and cite it in the affected
+sections. A session rationale is not proof of runtime behavior.
+
+When `target.previous_path` is present, the user explicitly selected a page move.
+Keep its stable Node/View identity. The supplied Markdown already rebases its
+relative links for `target.path`; do not put them back at the old location.
+Explain the move in the review summary. Approval moves the page and updates
+incoming Markdown navigation together; do not create a second copy or manually
+delete the old file. A changed destination or original page requires a fresh
+revision, not an overwrite.
+
+For selected `note` inputs, read [note guidance](note.md). For `sessions`,
+read [sessions guidance](sessions.md). Read only the applicable source guide.
+
+
+Read `writing_context` for the selected Provider, reader profile, current sections
+and actual template resources. These apply to direct page corrections too.
+Preserve the current page form; choose a different form only for an explicit
+change of purpose. Do not replace API tables with generic explanatory prose.
+The current sections are approved content, not freshly extracted API facts.
+For source updates or an explicit regeneration request, `program_blocks` contains API tables computed from current
+scoped Parser facts with the ordinary deterministic renderer. Select only the
+relevant blocks and place their exact `token` inside the corresponding sourced
+section. The CLI expands it at submission; do not retype its rows. Do not use an
+unrelated declaration merely because it shares a module. If a needed block is
+absent, report the missing material rather than present an old table as fresh.
+
+Compare the relevant generated rows with the requested correction before
+submitting. If the source is available but its type or expression cannot be
+resolved, state that specific limit instead of requesting the same files again
+or guessing a value. If a supplied block contradicts a confirmed fact, report the
+field and source location; do not rewrite the token's table by hand. The final
+Candidate still needs Review: a token or accepted submission does not establish
+that the requested correction reached the page.
+
+Context collects complete pages into a delivery batch. An Author completion can
+therefore lead to another Author before Review. Follow that Route; do not close
+or build after each page. Review, close and build operate on the assembled batch.
+A new topic reaches this action only after its affected structure is approved.
+
+After a Review rejection, the current Author action contains the rejected draft
+and its original task. Apply the user's feedback, or ask what should change if
+it is unclear; do not resubmit the same rejected proposal without addressing the
+decision. Other approved pages remain approved. Revisiting an earlier batch page
+also retains the interrupted Author in the same task queue, so follow the next
+Route instead of restarting the update.
+
+For note/sessions contributions, `writing_context.sources` supplies the exact
+saved-source paths and optional known change associations. Read the relevant
+summary before revising. A source change reference does not authorize an external
+fetch or prove upstream adoption. Keep the existing knowledge header minimal;
+page/section source relationships belong in structure.yaml.
+
+When the Route selects merge recovery, approved content changed during revision.
+Read its latest target and merge_context, retain the concurrent edits and any
+still-applicable draft changes, and submit the merged Markdown with the returned
+revision. Ask the user if the changes conflict in meaning; a deleted page is not
+permission to recreate it. The CLI checks the new baseline again and sends the
+result through ordinary Review. Unaffected batch pages and queued operations stay
+in place. Do not retry an older revision or overwrite the approved file directly.

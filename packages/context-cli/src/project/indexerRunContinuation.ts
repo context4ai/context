@@ -1,8 +1,10 @@
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   canonicalIndexerJson, indexerAuthorDependencyViewSchema,
   indexerSourceIdentityInventorySchema, type IndexerMainWorkset,
 } from "@c4a/context";
-import { currentLedger, currentSpec, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
+import { currentLedger, currentSpec, type MainRunSpec, INDEXER_MAIN_RUN_STORE_ROOT } from "./indexerMainRunStoreRecords.js";
 
 /** Work is scoped by sources, reader requirements and result contracts, not the
  * byte identity of the tool that happened to prepare it. Keep the original
@@ -13,7 +15,8 @@ import { currentLedger, currentSpec, type MainRunSpec } from "./indexerMainRunSt
 function continuationIdentity(spec: MainRunSpec): string {
   const workset: Record<string, unknown> = { ...spec.request.workset };
   for (const key of ["workset_digest", "primary_execution_fingerprint",
-    "primary_resource_binding_digest", "strategy_set_digest"]) delete workset[key];
+    "primary_resource_binding_digest", "strategy_set_digest",
+    "requirement_set_digest", "question_target_inventory_digest"]) delete workset[key];
   const validation = { ...spec.validation };
   delete validation.authorized_strategies;
   const { primary_execution_projection: execution, environment_digest: _digest,
@@ -93,6 +96,19 @@ export async function reuseCurrentIndexerRuns(input: {
     `${spec.request.workset.indexer_id}/${spec.request.workset.stage}`
   ));
   const byIdentity = new Map<string, MainRunSpec>();
+  // Crossing stages during an explicit current-task adjustment can reuse the
+  // earlier stage's accepted cache. This is existing temporary state, removed
+  // at final cleanup; no result is relabeled or persisted across tasks.
+  if (input.specs.some((spec) => !ledger.entries.some((entry) => entry.stage === spec.request.workset.stage))) {
+    let names: string[] = [];
+    try { names = await readdir(join(input.projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "accepted")); }
+    catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error; }
+    for (const name of names.sort()) {
+      if (!/^[a-f0-9]{64}\.json$/u.test(name)) continue;
+      const spec = await currentSpec({ projectRoot: input.projectRoot, request_digest: `sha256:${name.slice(0, -5)}` });
+      if (scopes.has(`${spec.request.workset.indexer_id}/${spec.request.workset.stage}`)) byIdentity.set(continuationIdentity(spec), spec);
+    }
+  }
   for (const entry of ledger.entries) {
     if (!scopes.has(`${entry.indexer_id}/${entry.stage}`)) continue;
     const spec = await currentSpec({

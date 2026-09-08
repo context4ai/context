@@ -11,7 +11,7 @@ code, distinguish a whole repository/subspace from one concrete package or
 subdirectory. For documents, distinguish one file, a local document directory,
 a documentation site, and a remote document.
 
-Explain the observable impact:
+For repo/file/lark registration, explain the observable impact:
 
 - the date is one capture batch;
 - every confirmed source is a module inside that batch;

@@ -10,13 +10,16 @@ metadata:
 # Run one bounded Indexer Agent batch
 
 Read the current Route action input and every required Resource marked `read-required`.
+For `stage: approved-revision`, follow `procedure.approved-revision`: read the
+supplied approved page and return the revised Markdown using that action's schema.
+The batch instructions below apply to Partition, Author, and Composer worksets.
+
 Use the readable `resolved-indexer-instructions` and each task's
 `authorized-indexer-workset-view/task-NNN`, including its goals, constraints and source material.
-Task Resources can point to the same batch file: read that path once, including
-every `task-NNN — task-specific material` section after the shared material.
-The initial task list is not the complete View. Match each result to its own
-task-specific material; shared blocks apply only to their listed task keys. Read shared
-material once for its listed tasks, then focus on each task's distinct sources and reader goal.
+Each task has its own reading file. Read its referenced shared files once;
+relative links resolve beside that task file. Shared resources are also listed
+in the Route. A shared file does not authorize another task to use its references.
+Match each result to its task's own goals, source material and allowed references.
 If the file tool truncates its output, continue with the unread part of that same file;
 do not mistake tool truncation for missing source material or restart the Context task.
 Match Views and outputs only through
@@ -103,7 +106,7 @@ follow the current Route without comparing Provider fingerprints or regenerating
 Do not invent or manually copy read-receipt, execution-receipt, or stable-result digests. Submit
 exactly `context.indexer.current-action-input/v2` through the Route's completion command; Context
 derives internal envelopes and performs dependency, schema, owner, scope, and per-workset validation
-before reporting each task accepted. Read the completion's `outcomes`, then continue directly from
+before reporting each task accepted. Read the completion's `outcomes` and `next_route.file` (the exact next Route), then continue directly from
 its `next` Route and ready Resource paths. Do not run `context status` or either Resource materializer
 between successful batches. A failed item is retried from its returned task-only skeleton; already
 accepted peers are not repeated. Never report success merely because the envelope or prose looks valid.
@@ -124,3 +127,5 @@ Integration and maintenance purposes may share contracts without duplicating pro
 Identify actual module roles from registrations and consumption: a client is not
 a server, a runtime is not a module role, and an application component is not
 a published component library. Preserve behavior needed for the reader's task.
+
+For `stage: source-update`, follow the selected source-update procedure and action schema. Read current approved pages and the fixed source changes before deciding which pages need revision, including any new topics absent from existing page references.

@@ -15,7 +15,6 @@ import {
 } from "./verifySourceRefs.js";
 import type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
 import { findContextProjectRoot } from "./workspace.js";
-import { readRejectedDecisions, REVIEW_DECISIONS_FILE } from "./reviewDecisions.js";
 import { knowledgeAssetReferences, unprojectedSourceAssetLinks } from "./knowledgeAssets.js";
 import { parseDocumentSourceLocator } from "@c4a/extract";
 import {
@@ -54,18 +53,7 @@ async function readCandidateDecisionState(input: {
   candidatesByViewRef: Map<string, CandidateRecord>;
   rejectedDecisions: Map<string, string>;
 }> {
-  let rejectedDecisions = new Map<string, string>();
-  try {
-    rejectedDecisions = await readRejectedDecisions(input.projectRoot);
-  } catch (error) {
-    input.issues.push({
-      severity: "error",
-      code: "decisions-invalid",
-      path: REVIEW_DECISIONS_FILE,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-
+  const rejectedDecisions = new Map<string, string>();
   const candidateIds = new Set<string>();
   const candidatesByViewRef = new Map<string, CandidateRecord>();
   try {
@@ -84,22 +72,7 @@ async function readCandidateDecisionState(input: {
         });
       }
       candidatesByViewRef.set(record.view_ref, record);
-      const rejectedFingerprint = rejectedDecisions.get(record.candidate_id);
-      if (record.status === "rejected" && rejectedFingerprint !== record.fingerprint) {
-        input.issues.push({
-          severity: "error",
-          code: "candidate-decision-conflict",
-          path: CANDIDATE_LEDGER_FILE,
-          message: `rejected candidate does not match its durable decision: ${record.candidate_id}`,
-        });
-      } else if (record.status === "draft" && rejectedFingerprint !== undefined) {
-        input.issues.push({
-          severity: "error",
-          code: "candidate-decision-conflict",
-          path: CANDIDATE_LEDGER_FILE,
-          message: `draft candidate also has a durable rejected decision: ${record.candidate_id}`,
-        });
-      }
+      if (record.status === "rejected") rejectedDecisions.set(record.candidate_id, record.fingerprint);
     }
   } catch (error) {
     input.issues.push({

@@ -41,10 +41,6 @@ export type PhaseResourceReference =
     select?: PackageSelectDefinition;
   }
   | {
-    kind: "knowledge.decisions";
-    path: "knowledge/decisions.json";
-  }
-  | {
     kind: "package.template";
     path: string;
   }

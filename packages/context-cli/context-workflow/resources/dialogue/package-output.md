@@ -10,8 +10,12 @@ Explain output shapes before SDK factory names. Offer:
 
 - an Agent knowledge-base package with `AGENTS.md`, a knowledge-query Skill,
   approved OKF roots, and adaptive indexes;
-- one LLM text bundle for model context or RAG import; or
-- no package yet, leaving approved Markdown in `knowledge/`.
+- one LLM text bundle for model context or RAG import.
+
+The user may postpone packaging and keep the approved Markdown in `knowledge/`.
+Pause at this choice and resume when an output is selected; postponing is not a
+package declaration or a completed delivery. Do not write a `none` factory or
+claim that `packages: []` records a finished output choice.
 
 For the Agent knowledge-base package, show a compact tree and explain that
 small directory contents are linked from the parent index while a directory

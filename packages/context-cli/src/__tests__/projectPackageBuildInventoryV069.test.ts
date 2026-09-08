@@ -41,6 +41,8 @@ describe("0.6.9 package build inventory collection summaries", () => {
     mkdirSync(join(projectRoot, "knowledge"), { recursive: true });
     writeFileSync(join(projectRoot, "knowledge", "structure.yaml"), `${JSON.stringify({
       schema_version: "context.approved-structure.v1",
+      processed_scopes: [{ requirement_ref: "sample-manual", source_ref: "file:docs",
+        processed_version: "sha256:" + "a".repeat(64) }],
       material_gap_ledger: {
         protocol: "context.indexer.material-gap-ledger/v1",
         entries: [{ answer_body: "must-not-enter-dist" }],
@@ -124,6 +126,13 @@ describe("0.6.9 package build inventory collection summaries", () => {
     expect(JSON.stringify(scopedStructure.parsed)).not.toContain("architecture:action/alpha");
     expect(scopedStructure.parsed).not.toHaveProperty("material_gap_ledger");
     expect(scopedStructure.parsed).not.toHaveProperty("material_answers");
+    expect(scopedStructure.parsed).not.toHaveProperty("processed_scopes");
+    const originalStructure = await readKnowledgeStructure(projectRoot);
+    const advancedStructure = { ...originalStructure, parsed: { ...originalStructure.parsed,
+      processed_scopes: [{ requirement_ref: "sample-manual", source_ref: "file:docs",
+        processed_version: "sha256:" + "b".repeat(64) }] } };
+    expect(packageScopedKnowledgeStructure({ selected, structure: advancedStructure }).sha256)
+      .toBe(scopedStructure.sha256);
     expect(JSON.stringify(scopedStructure.parsed)).not.toContain("must-not-enter-dist");
 
     const inventory = packageBuildInventory({

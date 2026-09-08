@@ -1,6 +1,6 @@
 protocol: context.indexer.provider/v1
 id: context-code-indexer
-version: 1.2.0
+version: 1.2.1
 domains: [code]
 
 activation:
@@ -74,7 +74,7 @@ provides:
       supported_profiles: [component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, adapter-integration, contract-source, derived-generated-source]
       contract:
         instruction: references/composers/public-contract.md
-        primary_requirements: { fact_kinds: [public-surface], artifact_kinds: [content] }
+        primary_requirements: { fact_kinds: [code-symbol], artifact_kinds: [content] }
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
@@ -247,7 +247,7 @@ provider:
 
 
 customization:
-  supports: [config, instructions-append, template-override, program-extend]
+  supports: [instructions-append, template-override]
 
 quality_guidance:
   metric_ids:

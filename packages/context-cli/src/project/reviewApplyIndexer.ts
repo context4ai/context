@@ -40,6 +40,7 @@ export function renderApprovedIndexerMarkdown(input: {
   record: CandidateRecord;
   timestamp: string;
 }): string {
+  if (input.record.approved_revision !== undefined) return input.record.body;
   const binding = input.record.indexer_candidate;
   if (input.record.candidate_type !== "indexer-artifact" || binding === undefined) {
     throw new TypeError("Indexer approved renderer requires an indexer-artifact Candidate");

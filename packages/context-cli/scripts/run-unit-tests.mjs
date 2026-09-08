@@ -7,19 +7,6 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const testsRoot = join(packageRoot, "src", "__tests__");
-const exactTests = new Set([
-  "caseStudyReplay.test.ts",
-  "cli.test.ts",
-  "okfTypes.test.ts",
-  "pathFreeContractInventory.test.ts",
-  "proseAlignBudget.test.ts",
-  "sectionContentDigest.test.ts",
-]);
-const selectedPatterns = [
-  /^document.*V062\.test\.ts$/u,
-  /^plugin.*\.test\.ts$/u,
-  /^project.*\.test\.ts$/u,
-];
 const isolatedTests = new Set([
   "projectCompileProseV066Evidence.test.ts",
   "projectIndexerProviderDispatcherV070.test.ts",
@@ -27,7 +14,7 @@ const isolatedTests = new Set([
 const chunkSize = 32;
 
 function selectedTest(name) {
-  return exactTests.has(name) || selectedPatterns.some((pattern) => pattern.test(name));
+  return /\.test\.tsx?$/u.test(name);
 }
 
 async function runChunk(files, index, total, forwardedArgs) {
@@ -62,10 +49,14 @@ async function runChunk(files, index, total, forwardedArgs) {
 }
 
 const forwardedArgs = process.argv.slice(2);
-const tests = (await readdir(testsRoot))
+const tests = (await readdir(testsRoot, { recursive: true }))
   .filter(selectedTest)
   .sort((left, right) => left.localeCompare(right));
 if (tests.length === 0) throw new Error(`no Context CLI unit tests found under ${testsRoot}`);
+if (forwardedArgs.includes("--list")) {
+  process.stdout.write(`${tests.join("\n")}\n`);
+  process.exit(0);
+}
 
 const chunks = [];
 const sharedProcessTests = tests.filter((name) => !isolatedTests.has(name));

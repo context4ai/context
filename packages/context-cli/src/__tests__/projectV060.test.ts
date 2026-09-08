@@ -45,7 +45,7 @@ describe("0.6.0 project init and source ensure", () => {
       expect(agents).not.toContain("evidence_status");
       expect(agents).not.toContain("context debug enable");
       expect(agents).not.toContain("context revise");
-      expect(agents).not.toContain(".tmp/agent-payloads");
+      expect(agents).toContain(".tmp/agent-payloads");
       expect(existsSync(join(project, "package.json"))).toBe(true);
       const readme = await readFile(join(project, "README.md"), "utf8");
       expect(readme).toContain('TMPDIR="$PWD/.tmp/install" bun install');

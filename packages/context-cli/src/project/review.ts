@@ -1,3 +1,4 @@
+import { createReviewCodeCodec } from "./reviewCode.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -212,6 +213,20 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
       reason: message,
       next: "Pass the JSON or JSONL review Payload copied from the review HTML page.",
     });
+  }
+  if (raw.trim().startsWith("CR")) {
+    try {
+      const decoded = createReviewCodeCodec().decode(raw);
+      const collection = decoded.scope === "all" ? undefined : assertCollection(decoded.scope);
+      return { decisions: [], encoded_statuses: decoded.statuses, ...(collection === undefined ? {} : { collection }),
+        scope: { kind: collection === undefined ? "all" : "collection", ...(collection === undefined ? {} : { collection }),
+          count: decoded.count, ids_sha256: decoded.idsHash, candidates_sha256: decoded.contentHash } };
+    } catch (error) {
+      throw new ContextError(ExitCode.UserError, error instanceof Error ? error.message : String(error), {
+        category: ErrorCategory.UserInputInvalid,
+        next: "Copy all review code segments unchanged from the current HTML report into one input file, one per line; apply only after all segments are present.",
+      });
+    }
   }
   return parseReviewPayloadText(raw);
 }

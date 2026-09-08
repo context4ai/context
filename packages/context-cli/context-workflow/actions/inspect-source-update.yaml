@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: inspect-source-update
+runner: agent
+effect: write
+skill: skills/run-indexer-agent-step/SKILL.md
+outputSchema: schemas/source-update-result.schema.json

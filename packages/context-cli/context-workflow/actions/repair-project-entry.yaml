@@ -3,3 +3,12 @@ id: repair-project-entry
 runner: host
 effect: write
 handler: context.project.repair-entry
+# Supporting SDK manuals remain available through links, without mandatory reads.
+files:
+  - resources/manuals/reference/code-extractors.md
+  - resources/manuals/guides/knowledge-updates.md
+  - resources/manuals/guides/note.md
+  - resources/manuals/guides/sessions.md
+  - resources/manuals/guides/workspace-prepare.md
+  - resources/manuals/guides/workspace-commit.md
+  - resources/manuals/guides/workspace-restore.md

@@ -33,6 +33,25 @@ import {
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 describe("Context workflow resources", () => {
+  test("summary status links the intact Route without expanding its transport", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-summary-route-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
+      const full = JSON.parse(await runCliInDir(initialized.projectRoot, ["status", "--format", "json", "--view", "full"]));
+      const summary = JSON.parse(await runCliInDir(initialized.projectRoot, ["status", "--format", "json", "--view", "summary"]));
+      expect(full.workflow.current.gate.resolution_action.input_schema).toBeDefined();
+      expect(full.workflow.current.resources.required.some((resource: { command?: string }) => resource.command !== undefined)).toBe(true);
+      expect(summary.workflow.current).toBeUndefined();
+      expect(summary.workflow.revision).toBe(full.workflow.revision);
+      expect(JSON.parse(await readFile(summary.next_route.file, "utf8"))).toEqual(full.workflow.current);
+      const stopped = JSON.parse(await runCliInDir(initialized.projectRoot, ["run", "--until", "blocked-or-complete", "--format", "json"]));
+      expect(stopped.workflow.current).toBeUndefined();
+      expect(JSON.parse(await readFile(stopped.next_route.file, "utf8"))).toHaveProperty("resources");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("returns a structured recovery action when a receipt file is missing", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-workflow-missing-receipt-"));
     const reference = "@.tmp/context-runtime/workflow/read-receipts/missing.json";
@@ -194,7 +213,7 @@ describe("Context workflow resources", () => {
       expect(result.next_action.command).toContain(`--resource-receipts '@${receiptPath}'`);
       expect(workflowResourceReceiptCwd(`@${receiptPath}`, root)).toBe(initialized.projectRoot);
       const resumed = JSON.parse(await runCliInDir(root, [
-        "status",
+        "status", "--view", "full",
         "--resource-receipts",
         `@${receiptPath}`,
         "--format",

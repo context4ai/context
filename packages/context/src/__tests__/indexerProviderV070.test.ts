@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   INDEXER_PROVIDER_MANIFEST_NAME,
   loadIndexerProviderManifest,
@@ -289,6 +290,55 @@ describe("context.indexer.provider/v1", () => {
     expect(() => parseIndexerProviderManifest(
       providerManifest().replace("priority: 200", "priority: 100"),
     )).toThrow(/priorities must be unique/);
+  });
+
+  test("keeps the documented minimal manifest valid against this schema", async () => {
+    // The authoring guide points new Providers at this example for the field
+    // tree, so it has to stay parseable as the schema moves.
+    const doc = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../docs/guides/indexer-manifest-example.md",
+    );
+    const blocks = [...(await readFile(doc, "utf8")).matchAll(/```yaml\n([\s\S]*?)```/gu)]
+      .map((match) => match[1]!);
+    expect(blocks).toHaveLength(1);
+    const manifest = parseIndexerProviderManifest(blocks[0]!);
+    expect(manifest.id).toBe("context-example-indexer");
+    // The example advertises only the two hooks that need no backing resource.
+    expect(manifest.customization?.supports)
+      .toEqual(["instructions-append", "template-override"]);
+    expect(manifest.provider.config_schema).toBeUndefined();
+    expect(manifest.provider.program).toBeUndefined();
+  });
+
+  test("rejects a customization capability the Provider cannot back", () => {
+    // Both inconsistencies already fail later — a non-empty config while
+    // validating the selection, program-extend while preparing the customization
+    // project. The manifest is where an author can still act on them.
+    expect(() => parseIndexerProviderManifest(
+      providerManifest().replace("  config_schema: references/config.schema.json\n", ""),
+    )).toThrow(/supports config but the Provider declares no config_schema/);
+
+    expect(() => parseIndexerProviderManifest(
+      providerManifest().replace(
+        [
+          "  program:",
+          "    execution: { runtime: node, entry: scripts/index.mjs, args: [--format=json] }",
+          "    protocol: context.indexer.program/v1",
+          "    capabilities: [source.read, parser-facts.read, indexer-result.write]",
+          "",
+        ].join("\n"),
+        "",
+      ),
+    )).toThrow(/supports program-extend but the Provider declares no program/);
+
+    // Advertising only the text hooks needs no backing resource.
+    expect(parseIndexerProviderManifest(
+      providerManifest().replace(
+        "  supports: [config, instructions-append, template-override, program-extend]",
+        "  supports: [instructions-append, template-override]",
+      ),
+    ).customization?.supports).toEqual(["instructions-append", "template-override"]);
   });
 
   test("requires namespaced profiles to declare their extension authority", () => {

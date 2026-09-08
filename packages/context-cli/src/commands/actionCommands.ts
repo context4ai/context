@@ -34,6 +34,7 @@ export function registerProjectActionCommands(program: Command): void {
         .argParser(collectWorkflowAuthorityOption)
         .default([]),
     )
+    .option("--verbose", "include the full completion and next Route inline")
     .option("--format <format>", "output format: json | yaml", "json")
     .action(async (options: Record<string, unknown>) => {
       const format = options.format;
@@ -63,12 +64,16 @@ export function registerProjectActionCommands(program: Command): void {
       let output: unknown = result;
       try {
         output = await prepareActionCompletionOutput({
-          projectRoot: findContextProjectRoot(process.cwd())!.projectRoot, result, format,
+          projectRoot: findContextProjectRoot(process.cwd())!.projectRoot, result, format, verbose: options.verbose === true,
         });
       } catch (error) {
         // Submission may already be committed. Preserve its response on report I/O failure.
         process.stderr.write(`Could not save the full completion report; returning it inline: ${error instanceof Error ? error.message : String(error)}\n`);
       }
-      process.stdout.write(serializeActionCompletion(output, format));
+      await new Promise<void>((resolve, reject) => {
+        process.stdout.write(serializeActionCompletion(output, format), (error) => {
+          if (error) reject(error); else resolve();
+        });
+      });
     });
 }

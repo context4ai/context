@@ -399,7 +399,7 @@ export async function collectPackageFreshness(
   }));
 }
 
-export async function buildProjectPackages(projectRoot: string): Promise<ProjectBuildResult> {
+export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
   if (await legacyCodeIndexMigrationRequired(projectRoot)) {
     throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
       category: ErrorCategory.WorkspaceStateInvalid,
@@ -589,7 +589,22 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       changes,
     });
   }
-  if (summaries.length > 0) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+  if (summaries.length > 0 && options.delivery !== false) {
+    const { readTaskRollback } = await import("./taskRollback.js");
+    const { readMaintenance } = await import("./maintenanceStorage.js");
+    const maintenanceActive = !!(await readMaintenance(projectRoot)).active;
+    if (!maintenanceActive && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+    const { finishApprovedRevision } = await import("./approvedRevision.js");
+    await finishApprovedRevision(projectRoot);
+    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
+    const { readApprovedRevision } = await import("./approvedRevision.js");
+    const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+    if (!maintenanceActive && !await readTaskRollback(projectRoot) && !await currentLedger(projectRoot) && !await readApprovedRevision(projectRoot) &&
+        !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
+      const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
+      await clearCompletedLifecycle(projectRoot);
+    }
+  }
   return { projectRoot, packages: summaries, agent_hints: agentHints };
 }
 
@@ -660,14 +675,7 @@ function summarizePackageChanges(
   };
 }
 
-export async function runProjectBuildCommand(input: {
-  cwd: string;
-  format?: "text" | "json";
-  verbose?: boolean;
-}): Promise<boolean> {
-  const found = findContextProjectRoot(input.cwd);
-  if (found === null) return false;
-  const result = await buildProjectPackages(found.projectRoot);
+export function queueProjectBuildCompletedEvent(result: ProjectBuildResult): void {
   queueContextRuntimeEvent({
     cwd: result.projectRoot,
     kind: "package.build.completed",
@@ -680,6 +688,17 @@ export async function runProjectBuildCommand(input: {
       resource_file_count: result.packages.reduce((total, pkg) => total + pkg.resources.files, 0),
     },
   });
+}
+
+export async function runProjectBuildCommand(input: {
+  cwd: string;
+  format?: "text" | "json";
+  verbose?: boolean;
+}): Promise<boolean> {
+  const found = findContextProjectRoot(input.cwd);
+  if (found === null) return false;
+  const result = await buildProjectPackages(found.projectRoot);
+  queueProjectBuildCompletedEvent(result);
   const deliveryHint = runtimeEventPendingAgentHint(
     await flushQueuedContextRuntimeEvents(result.projectRoot),
   );

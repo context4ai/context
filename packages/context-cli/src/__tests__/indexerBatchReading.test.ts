@@ -1,3 +1,4 @@
+import { planIndexerReadingFiles } from "../project/indexerReadingFiles.js";
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,7 +7,7 @@ import { indexerProtocolDigest } from "@c4a/context";
 import { buildIndexerTaskReading, renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { renderIndexerBatchReading } from "../project/indexerBatchReading.js";
 import { prepareIndexerWorksetReadings } from "../project/indexerAgentReadingResources.js";
-import { planIndexerCurrentBatch, restoreIndexerCurrentBatch } from "../project/indexerCurrentBatchPlanner.js";
+import { planIndexerCurrentBatch, restoreIndexerCurrentBatch, type IndexerCurrentBatchCandidate } from "../project/indexerCurrentBatchPlanner.js";
 import { authorReadingFixture } from "./indexerBatchReading.fixture.js";
 import { readingObjects } from "./indexerReading.fixture.js";
 
@@ -18,7 +19,8 @@ describe("Author batch reading", () => {
     const batch = renderIndexerBatchReading(readings);
     const separateBytes = inputs.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0);
     expect(batch.input_bytes).toBeLessThan(separateBytes / 2);
-    expect(batch.input_bytes).toBe(Buffer.byteLength(batch.markdown));
+    const files = planIndexerReadingFiles(readings);
+    expect(batch.input_bytes).toBe([...files.readings, ...files.shared].reduce((n, file) => n + Buffer.byteLength(file.markdown), 0));
     for (const input of inputs) {
       expect(batch.markdown).toContain(input.text);
       expect(batch.markdown).toContain(`Use component ${inputs.indexOf(input)}`);
@@ -38,7 +40,7 @@ describe("Author batch reading", () => {
   test("uses actual shared reading size to pack four tasks without increasing limits", () => {
     const inputs = Array.from({ length: 4 }, (_, i) => authorReadingFixture(i));
     const readings = inputs.map(buildIndexerTaskReading);
-    const candidates = inputs.map((input, index) => ({
+    const candidates: IndexerCurrentBatchCandidate[] = inputs.map((input, index) => ({
       workset: input.workset, instruction_identity: indexerProtocolDigest("instructions"),
       input_bytes: renderIndexerBatchReading([readings[index]!]).input_bytes,
       output_reserve_bytes: 20 * 1024, view_item_count: input.view.items.length,
@@ -88,7 +90,7 @@ describe("Author batch reading", () => {
     expect(readingObjects(reading).some((item) => item.content === doc.value.content)).toBe(true);
   });
 
-  test("materializes one file behind existing task resources, with stable reuse and safe partial recovery", async () => {
+  test("materializes separate task files and shared resources, with stable reuse and safe partial recovery", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-batch-reading-"));
     try {
       const inputs = [authorReadingFixture(0, 2), authorReadingFixture(1, 2)];
@@ -98,12 +100,17 @@ describe("Author batch reading", () => {
         return { ...input, ready: { path, digest: indexerProtocolDigest(input.view) } };
       }));
       const files = await prepareIndexerWorksetReadings(ready);
-      expect(new Set(files.map((file) => file.path)).size).toBe(1);
+      expect(new Set(files.map((file) => file.path)).size).toBe(2);
+      expect(files[0]!.common).toHaveLength(1);
+      expect(files[0]!.common.map((file) => file.path)).toEqual(files[1]!.common.map((file) => file.path));
       const content = await readFile(files[0]!.path, "utf8");
       const timestamp = (await stat(files[0]!.path)).mtimeMs;
       expect(await prepareIndexerWorksetReadings(ready)).toEqual(files);
       expect((await stat(files[0]!.path)).mtimeMs).toBe(timestamp);
-      for (const input of inputs) expect(content).toContain(input.text);
+      expect(content).toContain(inputs[0]!.text);
+      expect(content).not.toContain(inputs[1]!.text);
+      const shared = await Promise.all(files[0]!.common.map((file) => readFile(file.path, "utf8")));
+      expect(shared.join("\n")).toContain("fact:shared-0");
       const retried = await prepareIndexerWorksetReadings([ready[1]!]);
       expect(await readFile(retried[0]!.path, "utf8")).not.toContain("task-001");
       expect(await readFile(retried[0]!.path, "utf8")).toContain("fact:shared-0");

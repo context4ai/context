@@ -126,8 +126,15 @@ export function validateIndexerProviderContractReferences(input: {
     ...variant.artifact_kinds.required,
     ...variant.artifact_kinds.discretionary,
   ]));
-  const sourceRoles = new Set(targetProfiles.flatMap((profile) =>
-    profile.layout_mappings.flatMap((mapping) => mapping.source_roles)
+  // source_roles advertises the whole bundle, not just the active profile.
+  // A document Provider may also extend a code profile whose layout uses
+  // different roles. Validate the advertised vocabulary across its declared
+  // profiles; actual page roles still use the selected layout contract.
+  const declaredProfileIds = selectedBaseProfileIds({ manifest: input.manifest,
+    selectedProfiles: input.manifest.provides.profiles,
+    registeredProfiles: new Set(profilesById.keys()) });
+  const sourceRoles = new Set([...declaredProfileIds].flatMap((id) =>
+    profilesById.get(id)!.layout_mappings.flatMap((mapping) => mapping.source_roles)
   ));
 
   for (const sourceRole of input.manifest.provides.source_roles ?? []) {

@@ -1,3 +1,4 @@
+import { validateManagedIndexerDistribution } from "./indexerDistributionManagedValidation.js";
 import { createHash } from "node:crypto";
 import {
   cp,
@@ -131,14 +132,15 @@ export async function materializeBundledIndexerDistribution(input: {
   const sourceEntries = (await readdir(sourceRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  const communityEntries = ["context", ...EXPECTED_BUNDLES.map((bundle) => bundle.id)];
+  const nonProviderEntries = ["context", "context-inspect-search", "context-indexer-create"];
+  const communityEntries = [...nonProviderEntries, ...EXPECTED_BUNDLES.map((bundle) => bundle.id)];
   const missingCommunityEntries = communityEntries.filter((entry) => !sourceEntries.includes(entry));
   if (missingCommunityEntries.length > 0) {
     throw new TypeError(
       `root plugin Skill directory set is missing CLI base contract entries: ${missingCommunityEntries.join(", ")}`,
     );
   }
-  const providerEntries = sourceEntries.filter((name) => name !== "context")
+  const providerEntries = sourceEntries.filter((name) => !nonProviderEntries.includes(name))
     .sort(compareIndexerCanonicalText);
 
   const operators = bundledIndexerOperatorContract();
@@ -251,6 +253,7 @@ export async function materializeBundledIndexerDistribution(input: {
         manifest,
       });
     }
+    await validateManagedIndexerDistribution({ source, manifest, profileContract: profiles, operatorContract: operators });
     const files = await collectIndexerBundleFiles(source);
     if (expected?.codeAuthoring) {
       await validateBundledIndexerPortableVocabulary({

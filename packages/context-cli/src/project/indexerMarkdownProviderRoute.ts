@@ -22,7 +22,6 @@ import type { IndexerProviderHostManagedOutput } from
   "./indexerProviderDispatcher.js";
 import { readSourceStatus } from "./statusReaders.js";
 
-const MARKDOWN_SKILL = "context-markdown-indexer";
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -150,10 +149,6 @@ async function validateCaptureReport(
   return report;
 }
 
-function markdownSkill(skill: string): boolean {
-  return skill === MARKDOWN_SKILL || skill.startsWith(`${MARKDOWN_SKILL}-`);
-}
-
 function scopeSourceRefs(registry: IndexerRegistry, ref: string): string[] {
   const match = /^requirement:([^#]+)#(target_scope|evidence_source_scope)$/u.exec(ref);
   if (match === null) return [ref];
@@ -170,10 +165,14 @@ function assertMarkdownCoverage(input: {
   sourceRefs: readonly string[];
 }): string[] {
   const markdownIndexers = input.registry.indexers.filter((indexer) =>
-    indexer.providers.some((provider) => markdownSkill(provider.skill))
+    indexer.requirement_bindings.some((binding) => binding.role === "primary" &&
+      ("ref" in binding.owned_scope
+        ? scopeSourceRefs(input.registry, binding.owned_scope.ref)
+        : binding.owned_scope.targets.map((target) => target.source_ref))
+        .some((source) => input.sourceRefs.includes(source)))
   );
   if (markdownIndexers.length === 0) {
-    throw new TypeError("Markdown Provider route selected no context-markdown-indexer Skill");
+    throw new TypeError("Document Provider route selected no Indexer covering the captured sources");
   }
   const covered = new Set(markdownIndexers.flatMap((indexer) =>
     indexer.read_scope.refs.flatMap((ref) => scopeSourceRefs(input.registry, ref))

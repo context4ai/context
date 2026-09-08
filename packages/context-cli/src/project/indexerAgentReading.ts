@@ -119,7 +119,15 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
   for (const category of priorities) {
     for (const item of view.items.filter((candidate) => candidate.category === category)) {
       const contextStart = output.length;
-      output.push(`### ${category}`, "", readingBlock({ ref: item.ref, ...record(item.value) }), "");
+      const value = record(item.value);
+      if (category === "repair-intent" && typeof value.current_markdown === "string") {
+        const { current_markdown, ...instruction } = value;
+        output.push(`### ${category}`, "", readingBlock({ ref: item.ref, ...instruction }), "",
+          "Current page — revise the requested content and preserve still-correct sections:", "",
+          readingBlock(current_markdown, "markdown"), "");
+      } else {
+        output.push(`### ${category}`, "", readingBlock({ ref: item.ref, ...value }), "");
+      }
       if (category === "partition-authority") {
         output.push("Naming: group.key identifies the group; title labels the content. The main page path uses knowledge/<collection>/<subject.namespace>/<subject.local_key>.md as readable slugs. A string subject inherits the base namespace. For a new page with an opaque capture-ID namespace, choose a readable namespace and local_key using the explicit subject object and a permitted kind. Preserve existing subjects on updates; approved paths are reused and collisions go through layout confirmation.", "");
       }

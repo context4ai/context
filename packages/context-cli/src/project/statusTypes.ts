@@ -43,7 +43,7 @@ export interface ProjectRouting {
 }
 
 export interface DocumentSourceStatus {
-  type: "file" | "lark";
+  type: "file" | "lark" | "note" | "sessions";
   id?: string;
   name: string;
   local?: string;
@@ -97,6 +97,8 @@ export interface ProjectStatus {
     state: "missing" | "pending" | "current" | "invalid";
   };
   indexerCandidateCompile: {
+    rollback_pending?: boolean;
+  revision_pending?: boolean;
     delivery_pending?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };

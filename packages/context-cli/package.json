@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "type": "module",
   "license": "MIT",
   "engines": {

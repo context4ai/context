@@ -70,8 +70,6 @@ function resourceLabel(resource: PhaseResourceReference): string {
       return `knowledge:${resource.collection}:approved`;
     case "knowledge.approved":
       return "knowledge:approved";
-    case "knowledge.decisions":
-      return "knowledge:decisions";
     case "package.template":
       return `template:${resource.path}`;
     case "review.payload":
@@ -122,7 +120,6 @@ function phaseResourcePlan(resource: PhaseResourceReference): ProjectPhaseResour
         status: resource.status,
       };
     case "knowledge.approved":
-    case "knowledge.decisions":
     case "package.template":
     case "review.payload":
       return {

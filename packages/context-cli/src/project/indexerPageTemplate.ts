@@ -50,6 +50,7 @@ export function applySelectedPageTemplate(input: {
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>;
   template: IndexerPageTemplate;
   facts: readonly IndexerArtifactFact[];
+  supportingFacts?: readonly IndexerArtifactFact[];
   semanticVariables?: Readonly<Record<string, string>> | undefined;
 }): IndexerArtifactFact[] {
   const { artifact, template } = input;
@@ -63,6 +64,7 @@ export function applySelectedPageTemplate(input: {
   const contractFacts = input.facts.filter((fact) => projectIndexerPublicContractTable(fact) !== undefined);
   const projection = artifact.sections[0];
   if (projection === undefined) return [];
+  const availableFacts = [...new Map([...contractFacts, ...(input.supportingFacts ?? [])].map(fact => [fact.fact_ref, fact])).values()];
   const semanticEvidence = [...new Set(artifact.sections.flatMap((section) => section.blocks.flatMap((block) =>
     block.layer === "semantic-prose" ? block.evidence_refs : [])))].sort();
   const variables: Extract<IndexerArtifactResult["artifacts"][number], { representation: "template" }>["variables"] = {};
@@ -78,7 +80,7 @@ export function applySelectedPageTemplate(input: {
     variables.api = { value: projectIndexerFactValue(contractFacts),
       fact_refs: contractFacts.map((fact) => fact.fact_ref), evidence_refs: evidence };
   }
-  const acceptedEvidence = [...new Set([...evidence, ...semanticEvidence])];
+  const acceptedEvidence = [...new Set([...availableFacts.flatMap(fact => fact.evidence_refs), ...semanticEvidence])];
   let renderedBytes = 0;
   let usesContractFact = false;
   for (const definition of template.contract.sections) {
@@ -89,7 +91,7 @@ export function applySelectedPageTemplate(input: {
     }
     const body = template.section_bodies[definition.section_key]!;
     const rendered = renderIndexerTemplateSectionLayers({
-      body, section: definition, result: { facts: contractFacts },
+      body, section: definition, result: { facts: availableFacts },
       contract: template.contract, acceptedEvidenceRefs: new Set(acceptedEvidence), artifact: {
         artifact_id: artifact.artifact_id, artifact_kind: artifact.artifact_kind,
         artifact_policy_variant: artifact.artifact_policy_variant,
@@ -111,7 +113,7 @@ export function applySelectedPageTemplate(input: {
       document_kind: projection.document_kind, reader_goal: projection.reader_goal,
       artifact_kind: projection.artifact_kind, blocks: rendered.contentBlocks.map((block, index) =>
         block.layer === "deterministic-block" ? { block_id: `template-${index}`, layer: block.layer,
-          renderer: renderers[deterministicIndex++]!, fact_refs: block.fact_refs }
+          renderer: renderers[deterministicIndex++]!, fact_refs: block.fact_refs.filter(ref => contractFacts.some(fact => fact.fact_ref === ref)) }
           : { block_id: `template-${index}`, layer: block.layer, markdown: block.markdown,
             evidence_refs: block.evidence_refs.length ? block.evidence_refs : acceptedEvidence }),
     });

@@ -4,6 +4,12 @@
   "$comment": "Generated from indexerCurrentActionInputDefinitions; do not edit by hand. Runtime validation additionally checks current-workset references, ownership and unique task keys.",
   "oneOf": [
     {
+      "$ref": "#/$defs/sourceUpdate"
+    },
+    {
+      "$ref": "#/$defs/approvedRevision"
+    },
+    {
       "$ref": "#/$defs/providerSelection"
     },
     {
@@ -29,6 +35,107 @@
     }
   ],
   "$defs": {
+    "sourceUpdate": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "const": "source-update"
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "instruction": {
+                "type": "string",
+                "minLength": 1
+              },
+              "supporting_sources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "scope_summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "new_topics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              },
+              "instruction": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "path",
+              "title",
+              "source_refs",
+              "instruction"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "stage",
+        "decisions",
+        "scope_summary",
+        "new_topics"
+      ],
+      "additionalProperties": false
+    },
+    "approvedRevision": {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "const": "approved-revision"
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "stage",
+        "markdown"
+      ],
+      "additionalProperties": false
+    },
     "providerSelection": {
       "type": "object",
       "properties": {

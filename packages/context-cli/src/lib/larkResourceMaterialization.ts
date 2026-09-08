@@ -62,6 +62,7 @@ export interface SyncedReferenceProjection {
 }
 
 export interface MaterializeLarkResourcesInput {
+  mediaFiles?: Readonly<Record<string, string>>;
   resources: readonly LarkExternalResource[];
   runner: LarkResourceCommandRunner;
   policy: LarkResourceMaterializationPolicy;
@@ -211,7 +212,12 @@ async function downloadedFile(input: {
   identity: LarkAccessIdentity;
   token: string;
   type: "media" | "whiteboard";
+  localPath?: string;
 }): Promise<{ path: string; bytes: Uint8Array; mediaType: string }> {
+  if (input.localPath !== undefined) {
+    const bytes = await readFile(input.localPath);
+    return { path: input.localPath, bytes, mediaType: mediaTypeFor(input.localPath, bytes) };
+  }
   const tempRoot = await mkdtemp(join(tmpdir(), "context-lark-resource-"));
   try {
     await runLarkResourceCommand(input.runner, [
@@ -713,6 +719,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
         identity,
         token,
         type: "media",
+        ...(input.mediaFiles?.[token] === undefined ? {} : { localPath: input.mediaFiles[token] }),
       });
       const digest = resourceDigest(resource);
       const extension = extensionFor(downloaded.mediaType, downloaded.path);

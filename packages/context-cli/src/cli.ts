@@ -50,29 +50,6 @@ import {
 import { registerPluginCommands } from "./registerPluginCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
 
-const TOP_LEVEL_COMMANDS = new Set([
-  "entry",
-  "init",
-  "plugin",
-  "status",
-  "run",
-  "review",
-  "close",
-  "build",
-  "source",
-  "indexer",
-  "verify",
-  "resource",
-  "package",
-  "clean-cache",
-  "debug",
-  "revise",
-  "migrate",
-  "logs",
-  "action",
-  "help",
-]);
-
 function inferErrorCategory(message: string): string {
   const lower = message.toLowerCase();
   if (lower.includes("cannot be mounted") || lower.includes("mount matrix")) return ErrorCategory.MountMatrixViolation;
@@ -126,11 +103,12 @@ function quickstartHelpText(): string {
   ])}\n`;
 }
 
-function assertKnownTopLevelCommand(argv: string[]): void {
+function assertKnownTopLevelCommand(argv: string[], program: Command): void {
+  const commands = new Set(["help", ...program.commands.flatMap((command) => [command.name(), ...command.aliases()])]);
   for (const token of argv.slice(2)) {
     if (token === "-h" || token === "--help" || token === "-V" || token === "--version") return;
     if (token.startsWith("-")) return;
-    if (!TOP_LEVEL_COMMANDS.has(token)) {
+    if (!commands.has(token)) {
       throw new ContextError(ExitCode.UserError, `unknown command '${token}'`, {
         category: ErrorCategory.UserInputInvalid,
       });
@@ -284,7 +262,7 @@ export function createCliProgram(): Command {
 
   review
     .command("apply <payload-file>")
-    .description("Apply a copied review Payload from a JSON or JSONL file")
+    .description("Apply a copied review code (all segments in one file) or JSON/JSONL decisions")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (payloadInput: string, options: Record<string, unknown>) => {
       if (options.format !== "text" && options.format !== "json") {
@@ -493,8 +471,8 @@ export function createCliProgram(): Command {
 export async function cli_main(argv: string[] = process.argv): Promise<void> {
   await withCommandReadCache(() => withDebugCliInvocation(argv, async () => {
     await withContextRuntimeEventDelivery(async () => {
-      assertKnownTopLevelCommand(argv);
       const program = createCliProgram();
+      assertKnownTopLevelCommand(argv, program);
       await program.parseAsync(argv);
     });
   }));

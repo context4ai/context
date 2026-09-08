@@ -11,7 +11,7 @@ import { closeProjectWorkspace } from "../project/close.js";
 import { buildProjectPackages } from "../project/packageBuilder.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { afterEach, describe, expect, test } from "bun:test";
@@ -36,7 +36,6 @@ import {
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 import {
   createDocumentRevisionWorkspace,
-  DOCUMENT_REVISION_SOURCE_REF as SOURCE_REF,
   documentRevisionOuterIndexerRoute as outerIndexerRoute,
 } from "./projectDocumentRevisionV074.fixture.js";
 
@@ -393,49 +392,81 @@ describe("current Indexer document revision", () => {
     expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
-  test("reopens only the approved page source as a recoverable Partition run", async () => {
+  test("revises an approved page twice across cleanup without Partition or Author history", async () => {
     const root = await workspace();
-    const staleDerivedPath = join(
-      root,
-      ".tmp/context-runtime/indexer/finalization/current.json",
-    );
-    await mkdir(join(staleDerivedPath, ".."), { recursive: true });
-    await writeFile(staleDerivedPath, "{}\n");
-
-    const result = await beginDocumentRevision({
-      projectRoot: root,
-      selector: "architecture/revision-fixture.md",
-      instruction: "Explain the public entry point more clearly.",
-    });
-
-    if (result.status !== "partition-reopened") {
-      throw new TypeError(`expected partition revision, received ${result.status}`);
+    await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
+      join(root, "src/package-templates/kb"), { recursive: true });
+    const entryPath = join(root, "src/index.ts");
+    const entry = await readFile(entryPath, "utf8");
+    await writeFile(entryPath, entry.replace("defineProject, source", "defineProject, kbPackage, source")
+      .replace("packages: []", 'packages: [kbPackage({ name: "revision-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
+    await completePartitionStage(root);
+    const structure = await currentIndexerStructureReview(root);
+    if (!structure) throw new Error("missing initial structure review");
+    await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
+      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }) });
+    await completeAuthorStage(root);
+    const initial = await readCandidateRecords(root);
+    const path = initial[0]!.path;
+    await approveCandidates(root, initial);
+    await closeProjectWorkspace(root);
+    await acceptStarterPackageTemplates({ projectRoot: root });
+    await buildProjectPackages(root);
+    const peers = await Promise.all(initial.slice(1).map(async (candidate) => ({
+      path: candidate.path, bytes: await readFile(join(root, "knowledge", candidate.path), "utf8"),
+    })));
+    for (const wording of ["First revision.", "Second revision."]) {
+      await rm(join(root, ".tmp"), { recursive: true, force: true });
+      await rm(join(root, "dist"), { recursive: true, force: true });
+      const result = await beginDocumentRevision({ projectRoot: root, selector: path,
+        instruction: `Keep all other content and replace the public entry point wording with ${wording}` });
+      expect(result.status).toBe("author-reopened");
+      expect(await currentLedger(root)).toBeUndefined();
+      const route = await projectCurrentIndexerWorkflowRoute({ projectRoot: root,
+        route: outerIndexerRoute(), managed: true, authorities: contextWorkflowAuthorities({ managed: true }) });
+      expect(route?.node).toBe("author-approved-revision");
+      const input = route?.action?.input as { target: { markdown: string } };
+      expect(input.target.markdown).toContain("context:section");
+      const markdown = input.target.markdown.replace(/public entry point|First revision\./u, wording);
+      const { readApprovedRevision } = await import("../project/approvedRevision.js");
+      await completeCurrentIndexerAction({ cwd: root, revision: route!.revision,
+        value: { stage: "approved-revision", markdown }, managed: true,
+        authorities: contextWorkflowAuthorities({ managed: true }) });
+      expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
+      await approveCandidates(root, await readCandidateRecords(root));
+      await closeProjectWorkspace(root);
+      expect(await readApprovedRevision(root)).toBeDefined();
+      if (wording === "First revision.") {
+        const configured = await readFile(entryPath, "utf8");
+        await writeFile(entryPath, configured.replace("src/package-templates/kb", "src/missing-template"));
+        await expect(buildProjectPackages(root)).rejects.toThrow();
+        expect(await readApprovedRevision(root)).toBeDefined();
+        await writeFile(entryPath, configured);
+      }
+      await buildProjectPackages(root);
+      expect(await readApprovedRevision(root)).toBeUndefined();
+      expect(await currentLedger(root)).toBeUndefined();
+      const approved = await readFile(join(root, "knowledge", path), "utf8");
+      expect(approved).toContain(wording);
+      for (const peer of peers) expect(await readFile(join(root, "knowledge", peer.path), "utf8")).toBe(peer.bytes);
     }
-    expect(result).toMatchObject({
-      status: "partition-reopened",
-      path: "architecture/revision-fixture.md",
-      source_refs: [SOURCE_REF],
-    });
-    expect(result.workset_count).toBeGreaterThan(0);
-    expect(existsSync(staleDerivedPath)).toBe(false);
-    const ledger = await currentLedger(root);
-    expect(ledger?.entries).toHaveLength(result.workset_count);
-    expect(ledger?.entries.some((entry) => entry.state === "running")).toBe(true);
-    expect(ledger?.entries.every((entry) => entry.stage === "partition")).toBe(true);
-    const running = ledger!.entries.find((entry) => entry.state === "running")!;
-    const spec = await currentSpec({
-      projectRoot: root,
-      request_digest: running.execution_request_digest,
-    });
-    expect(spec.request.workset).toMatchObject({
-      stage: "partition",
-      source_ref: SOURCE_REF,
-      repair_intent: {
-        target_ref: "knowledge/architecture/revision-fixture.md",
-        instruction: "Explain the public entry point more clearly.",
-      },
-    });
-  });
+    const { readApprovedRevision, completeApprovedRevision } = await import("../project/approvedRevision.js");
+    await beginDocumentRevision({ projectRoot: root, selector: path, instruction: "Check whether any wording still needs changing." });
+    const unchanged = (await readApprovedRevision(root))!;
+    await completeApprovedRevision({ projectRoot: root, revision: unchanged.revision, markdown: unchanged.target.markdown });
+    expect(await readApprovedRevision(root)).toBeUndefined();
+    expect(await readCandidateRecords(root)).toEqual([]);
+    await beginDocumentRevision({ projectRoot: root, selector: path, instruction: "Clarify the introduction." });
+    const concurrent = (await readApprovedRevision(root))!;
+    const approvedPath = join(root, "knowledge", path);
+    const current = await readFile(approvedPath, "utf8");
+    await writeFile(approvedPath, current + "\nConcurrent user edit.\n");
+    await expect(completeApprovedRevision({ projectRoot: root, revision: concurrent.revision,
+      markdown: concurrent.target.markdown })).rejects.toThrow("stale");
+    expect(await readFile(approvedPath, "utf8")).toContain("Concurrent user edit.");
+    expect(await readCandidateRecords(root)).toEqual([]);
+  }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
   test("reopens only the current Candidate's owning Author workset", async () => {
     const root = await workspace();
@@ -561,6 +592,7 @@ describe("current Indexer document revision", () => {
       repair_intent: {
         target_ref: target.candidate_id,
         instruction: "Clarify the public entry point.",
+        current_markdown: target.body,
       },
     });
 

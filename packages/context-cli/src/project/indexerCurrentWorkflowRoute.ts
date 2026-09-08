@@ -1,3 +1,5 @@
+import { indexerDeliveryGuidance } from "./indexerDeliveryGuidance.js";
+import { contextWorkflowAuthorities } from "./workflow/workflowFacts.js";
 import { indexerProtocolDigest, loadIndexerRegistry } from "@c4a/context";
 import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
 import type { JsonValue, Route } from "@c4a/agent-graph";
@@ -41,7 +43,7 @@ const INDEXER_GRAPH_ID = "indexer";
 const CURRENT_INDEXER_ENTRY = "current-lifecycle";
 const CURRENT_ACTION_OUTPUT_SCHEMA_FILE = "indexer-agent-step-result.schema.json";
 
-function projectCurrentIndexerGateResolution(input: {
+export function projectCurrentIndexerGateResolution(input: {
   resolved: Route;
   revision: string;
   authorities: readonly ContextWorkflowAuthority[];
@@ -83,7 +85,7 @@ function projectCurrentIndexerGateResolution(input: {
   return { ...projected, effect: source.effect };
 }
 
-function projectCurrentIndexerGate(
+export function projectCurrentIndexerGate(
   resolved: Route,
   resolutionAction: NonNullable<
     NonNullable<ContextResolvedWorkflowRoute["gate"]>["resolution_action"]
@@ -114,12 +116,13 @@ async function resolveCurrentIndexerGraphNode(input: {
     readProjectIndexerCandidateCompileStatus(input.projectRoot),
   ]);
   const runningEntries = ledger?.entries.filter((entry) => entry.state === "running") ?? [];
-  const composer = ledger?.entries.some((entry) => entry.stage === "author" && entry.state === "accepted")
+  const observedComposer = ledger?.entries.some((entry) => entry.stage === "author" && entry.state === "accepted")
     ? await readCurrentIndexerComposerBatch(input.projectRoot)
     : undefined;
+  const composer = finalization?.state === "composer-required" &&
+    observedComposer?.batch_digest === finalization.revision ? observedComposer : undefined;
   const failedEntry = ledger?.entries.find((entry) => entry.state === "failed");
-  const blocked = failedEntry !== undefined || finalization?.state === "blocked" ||
-    (finalization?.state === "composer-required" && composer === undefined);
+  const blocked = failedEntry !== undefined || finalization?.state === "blocked";
   const structureReviewRequired = structure !== undefined && !structure.approved;
   const layoutRequired = finalization?.state === "layout-confirmation-required";
   const candidateCurrent = compile.state === "current";
@@ -234,7 +237,14 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
   authorities: readonly ContextWorkflowAuthority[];
   managed: boolean;
 }): Promise<ContextResolvedWorkflowRoute | undefined> {
+  input = { ...input, authorities: contextWorkflowAuthorities(input) };
+  const { knowledgeMaintenanceRoute } = await import("./knowledgeMaintenanceRoute.js");
+  const maintenance = await knowledgeMaintenanceRoute(input);
+  if (maintenance) return maintenance;
   if (input.route?.node !== OUTER_INDEXER_NODE) return input.route;
+  const { buildApprovedRevisionRoute } = await import("./approvedRevisionRoute.js");
+  const approvedRevisionRoute = await buildApprovedRevisionRoute(input);
+  if (approvedRevisionRoute !== undefined) return approvedRevisionRoute;
   const providerContinuation = await buildCurrentIndexerProviderContinuationRoute({
     projectRoot: input.projectRoot,
     authorities: input.authorities,
@@ -255,7 +265,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         ...input.route,
         configuration: {
           file: "src/indexers.yaml",
-          action: "Read node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md and the required context.indexer.registry-bootstrap schema resource. Write the confirmed requirements using the initial registry example, the registered source boundaries, and indexers: []. Then re-evaluate the workflow for Provider selection; this file is not a complete-current payload.",
+          action: "Read the required context.indexer.provider-guide and context.indexer.registry-bootstrap resources at their current Route paths. Write the confirmed requirements using the initial registry example, the registered source boundaries, and indexers: []. Then re-evaluate the workflow for Provider selection; this file is not a complete-current payload.",
         },
       };
     }
@@ -277,7 +287,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
     if (selected.current === undefined) {
       throw new TypeError("current Indexer graph selected an unavailable Agent workset");
     }
-    return (await buildIndexerAgentStepRoute({
+    const route = (await buildIndexerAgentStepRoute({
       run_requests: selected.current.specs.map((spec) => spec.request),
       instruction_request: selected.current.instructionRequest,
       workset_view_requests: selected.current.descriptor.tasks.map((task) =>
@@ -296,6 +306,11 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       authorities: input.authorities,
       managed: input.managed,
     })).route;
+    if (selected.current.descriptor.stage === "author") {
+      const delivery = await indexerDeliveryGuidance(input.projectRoot, input.authorities);
+      if (delivery) route.delivery = delivery;
+    }
+    return route;
   }
   if (selected.node === "run-current-indexer-composer") {
     const composer = selected.composer;
@@ -426,6 +441,9 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       node: "resolve-current-indexer-block",
       reason_code: "route.indexer.recovery-required",
       summary: diagnostic,
+      ...(selected.finalization?.scope_recovery === undefined ? {} : {
+        configuration: { file: selected.finalization.scope_recovery.file, action: selected.finalization.scope_recovery.action },
+      }),
       availability: "requires-user",
       commands: [{
         command: `context${authorityOptions} run${input.managed ? " --managed" : ""} --format json`,

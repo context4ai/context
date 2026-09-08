@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFile, rename, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { createHash } from "node:crypto";
 import { buildIndexerAuthorDependencyView, validateIndexerAuthorDependencyView, indexerAgentStepInputSchema, type IndexerInventoryMember } from "@c4a/context";
 import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
@@ -80,10 +81,20 @@ async function publish(root: string, task: Task) {
   const current = await route(root);
   const resource = current.resources.required.find((item) => item.id === `authorized-indexer-workset-view/${task.descriptor.task_key}`);
   if (!resource || !("path" in resource) || !resource.path) throw new Error("missing source material");
-  const material = await readFile(resource.path, "utf8");
+  const taskMaterial = await readFile(resource.path, "utf8");
+  const sharedMaterial = await Promise.all([...taskMaterial.matchAll(
+    /^Read shared material: \.\/([a-f0-9]{64})\.md \(sha256:([a-f0-9]{64})\)$/gmu,
+  )].map(async (match) => {
+    expect(match[1]).toBe(match[2]!);
+    const content = await readFile(join(dirname(resource.path!), `${match[1]}.md`), "utf8");
+    expect(createHash("sha256").update(content).digest("hex")).toBe(match[1]!);
+    return content;
+  }));
+  const material = [taskMaterial, ...sharedMaterial].join("\n\n");
   const taskReading = renderIndexerWorksetReading({ task_key: task.descriptor.task_key, workset: task.spec.request.workset, view: task.view });
-  const sourceItems = readingObjects(taskReading).flatMap((item) => Array.isArray(item.source_items) ? item.source_items as string[] : []);
-  for (const ref of sourceItems) expect(material).toContain(ref);
+  const sourceItems = [...new Set(readingObjects(material).flatMap((item) => Array.isArray(item.source_items) ? item.source_items as string[] : []))];
+  const expectedSourceItems = readingObjects(taskReading).flatMap((item) => Array.isArray(item.source_items) ? item.source_items as string[] : []);
+  expect(new Set(sourceItems)).toEqual(new Set(expectedSourceItems));
   const validation = task.spec.validation as {
     allowed_artifact_intents: Array<{ source_role: string; document_kind: string; reader_goal: string; artifact_kind: string }>;
     artifact_policy_eligibility: { eligible_variants: Array<{ id: string }> };

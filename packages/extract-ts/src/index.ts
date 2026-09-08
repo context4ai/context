@@ -13,3 +13,5 @@ export {
   typeScriptExtractionToEvidenceAdapterMaterialization,
   typeScriptExtractionToEvidenceAdapterResult,
 } from "./evidenceAdapter.js";
+
+export { componentPropsName, componentBindingDefaults } from "./componentContract.js";

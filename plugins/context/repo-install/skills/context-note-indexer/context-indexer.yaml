@@ -1,0 +1,626 @@
+protocol: context.indexer.provider/v1
+id: context-note-indexer
+version: 1.0.0
+domains:
+  - markdown
+activation:
+  target_kinds:
+    - note
+    - note-set
+  required_signals:
+    - id: durable-note
+      description: An authorized saved record, excerpt, observation or note summary is
+        available.
+  supporting_signals:
+    - id: reader-purpose
+      description: The material answers a reader question or improves existing knowledge.
+  negative_signals:
+    - id: unavailable-original
+      description: Only a pointer to unread material exists; do not invent its content.
+  agent_questions:
+    - Does this material improve an existing page, justify an independent reader
+      topic, or only need saving?
+provides:
+  profiles: &a1
+    - domain-reference
+    - product-requirements
+    - technical-guide
+    - user-and-developer-guide
+    - runbook
+    - faq-support
+    - decision-record
+    - incident-review
+    - test-validation
+    - note/monorepo-container
+    - note/web-application
+    - note/component-library
+    - note/sdk-library
+    - note/cli-tool
+    - note/plugin-extension
+    - note/api-service
+    - note/gateway-facade
+    - note/domain-service
+    - note/background-runtime
+    - note/event-consumer
+    - note/data-sync-reconciliation
+    - note/storage-repository
+    - note/adapter-integration
+    - note/contract-source
+    - note/derived-generated-source
+    - note/domain-reference
+    - note/product-requirements
+    - note/technical-guide
+    - note/user-and-developer-guide
+    - note/public-api-reference
+    - note/runbook
+    - note/faq-support
+    - note/standard-policy
+    - note/decision-record
+    - note/incident-review
+    - note/test-validation
+    - note/release-migration-guide
+    - note/documentation-site
+  partition_strategies:
+    - id: reader-subject
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+      priority: 100
+  operations:
+    - id: main-index
+      consumes: context.indexer.main-workset/v2
+      produces: context.indexer.main-result/v1
+      accepts_layer_fragments:
+        - fact-enrichment
+        - template-variables
+  source_roles:
+    - authoritative-document
+    - supporting-document
+    - operational-document
+    - decision-record
+  logical_units:
+    - id: reader-subject
+      identity: canonical-subject-key
+      artifacts:
+        recommended:
+          - content
+        supported_policy_variants:
+          - standard
+composition:
+  extensions:
+    - profile: note/monorepo-container
+      extends: monorepo-container
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: project
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/web-application
+      extends: web-application
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: application
+            local_key:
+              operator: canonical-module-identity
+          - id: capability
+            local_key:
+              operator: canonical-export-family
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/component-library
+      extends: component-library
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: component
+            local_key:
+              operator: canonical-export-family
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/sdk-library
+      extends: sdk-library
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: capability
+            local_key:
+              operator: canonical-export-family
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/cli-tool
+      extends: cli-tool
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: command-family
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/plugin-extension
+      extends: plugin-extension
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: extension
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/api-service
+      extends: api-service
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: service
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/gateway-facade
+      extends: gateway-facade
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: gateway
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/domain-service
+      extends: domain-service
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: domain-capability
+            local_key:
+              operator: canonical-module-identity
+          - id: operation-entrypoint
+            local_key:
+              operator: canonical-export-family
+          - id: operation-flow
+            local_key:
+              operator: canonical-export-family
+          - id: runtime-context-family
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/background-runtime
+      extends: background-runtime
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: runtime
+            local_key:
+              operator: canonical-module-identity
+          - id: scheduled-operation
+            local_key:
+              operator: canonical-export-family
+          - id: dispatch-contract
+            local_key:
+              operator: canonical-module-identity
+          - id: dependency-boundary
+            local_key:
+              operator: canonical-export-family
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/event-consumer
+      extends: event-consumer
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: consumer
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/data-sync-reconciliation
+      extends: data-sync-reconciliation
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: sync-pipeline
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/storage-repository
+      extends: storage-repository
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: store
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/adapter-integration
+      extends: adapter-integration
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: adapter
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/contract-source
+      extends: contract-source
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-service-namespace
+        kinds:
+          - id: contract-family
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/derived-generated-source
+      extends: derived-generated-source
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: generated-surface
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/domain-reference
+      extends: domain-reference
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/product-requirements
+      extends: product-requirements
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/technical-guide
+      extends: technical-guide
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/user-and-developer-guide
+      extends: user-and-developer-guide
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/public-api-reference
+      extends: public-api-reference
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/runbook
+      extends: runbook
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/faq-support
+      extends: faq-support
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/standard-policy
+      extends: standard-policy
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/decision-record
+      extends: decision-record
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/incident-review
+      extends: incident-review
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/test-validation
+      extends: test-validation
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/release-migration-guide
+      extends: release-migration-guide
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-section
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+    - profile: note/documentation-site
+      extends: documentation-site
+      subject_key_schema:
+        version: 1
+        namespace:
+          operator: canonical-source-module-namespace
+        kinds:
+          - id: document-set
+            local_key:
+              operator: canonical-module-identity
+        normalization:
+          - trim
+          - unicode-nfc
+          - preserve-case
+provider:
+  instructions:
+    - path: references/indexer.md
+      profiles: *a1
+    - path: references/classification.md
+      profiles: *a1
+    - path: references/writing.md
+      profiles: *a1
+    - path: references/updates-and-composition.md
+      profiles: *a1
+    - path: references/extension-placement.md
+      profiles:
+        - note/monorepo-container
+        - note/web-application
+        - note/component-library
+        - note/sdk-library
+        - note/cli-tool
+        - note/plugin-extension
+        - note/api-service
+        - note/gateway-facade
+        - note/domain-service
+        - note/background-runtime
+        - note/event-consumer
+        - note/data-sync-reconciliation
+        - note/storage-repository
+        - note/adapter-integration
+        - note/contract-source
+        - note/derived-generated-source
+        - note/domain-reference
+        - note/product-requirements
+        - note/technical-guide
+        - note/user-and-developer-guide
+        - note/public-api-reference
+        - note/runbook
+        - note/faq-support
+        - note/standard-policy
+        - note/decision-record
+        - note/incident-review
+        - note/test-validation
+        - note/release-migration-guide
+        - note/documentation-site
+  templates:
+    - id: note-domain-reference
+      profile: domain-reference
+      path: templates/domain-reference.md
+      kind: procedure
+    - id: note-product-requirements
+      profile: product-requirements
+      path: templates/product-requirements.md
+      kind: procedure
+    - id: note-technical-guide
+      profile: technical-guide
+      path: templates/technical-guide.md
+      kind: procedure
+    - id: note-user-and-developer-guide
+      profile: user-and-developer-guide
+      path: templates/user-and-developer-guide.md
+      kind: procedure
+    - id: note-runbook
+      profile: runbook
+      path: templates/runbook.md
+      kind: procedure
+    - id: note-faq-support
+      profile: faq-support
+      path: templates/faq-support.md
+      kind: procedure
+    - id: note-decision-record
+      profile: decision-record
+      path: templates/decision-record.md
+      kind: procedure
+    - id: note-incident-review
+      profile: incident-review
+      path: templates/incident-review.md
+      kind: procedure
+    - id: note-test-validation
+      profile: test-validation
+      path: templates/test-validation.md
+      kind: procedure
+  forbidden_fallbacks:
+    - transcript-as-knowledge
+    - inferred-approval
+    - duplicate-reader-target
+  completion_checks:
+    - source-authority-binding
+    - section-disposition-closure
+    - material-gap-closure
+customization:
+  supports:
+    - instructions-append
+    - template-override
+  guide: references/customization.md
+quality_guidance:
+  metric_ids:
+    - inventory-disposition-coverage
+    - duplicated-fact-target-ratio
+    - narrative-enumeration-ratio
+    - normalized-template-repetition-ratio
+    - implementation-body-ratio
+    - reference-only-reader-targets
+    - unresolved-ordinal-partitions
+    - discretionary-artifacts-per-logical-unit
+  repair: references/writing.md

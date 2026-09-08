@@ -9,6 +9,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { collectProjectStatus } from "./status.js";
+import { actionWorkflowSummary } from "./actionWorkflowSummary.js";
 import {
   assertProjectWorkflowRevision,
   assertProjectWorkflowRevisionValue,
@@ -136,6 +137,7 @@ async function advanceAfterBatch(input: {
       next: status.workflow.current ?? null,
       current_revision: status.workflow.revision,
       progress: status.indexerProgress ?? null,
+      workflow_summary: await actionWorkflowSummary(input.projectRoot, status.workflow.status),
     };
   } catch (error) {
     return {
@@ -172,6 +174,24 @@ export async function completeCurrentIndexerAction(input: {
     ...(input.authorities === undefined ? {} : { authorities: input.authorities }),
   });
   const semantic = parseIndexerCurrentActionSubmission(input.value);
+  if (semantic.stage === "source-update") {
+    await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision,
+      managed: input.managed === true, authorities });
+    const { completeKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+    const result = await completeKnowledgeUpdate({ projectRoot: found.projectRoot, revision: input.revision,
+      decisions: semantic.decisions, scope_summary: semantic.scope_summary, new_topics: semantic.new_topics });
+    return completedRevisionReceipt(found.projectRoot, semantic.stage, result, input.managed === true, authorities);
+  }
+  if (semantic.stage === "approved-revision") {
+    await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision,
+      managed: input.managed === true, authorities });
+    const { completeApprovedRevision } = await import("./approvedRevision.js");
+    const candidate = await completeApprovedRevision({ projectRoot: found.projectRoot,
+      revision: input.revision, markdown: semantic.markdown });
+    return completedRevisionReceipt(found.projectRoot, semantic.stage,
+      { outcome: candidate === undefined ? "unchanged" : "candidate-prepared",
+        ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id }) }, input.managed === true, authorities);
+  }
   if (
     semantic.stage === "partition" || semantic.stage === "author" ||
     semantic.stage === "post-author"
@@ -368,6 +388,13 @@ export async function completeCurrentIndexerAction(input: {
     };
   }
   if (semantic.stage === "structure-review") {
+    const { readKnowledgeUpdate, completeUpdateStructureReview } = await import("./knowledgeUpdate.js");
+    if ((await readKnowledgeUpdate(found.projectRoot))?.structure_proposal) {
+      await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision, managed: input.managed === true, authorities });
+      const result = await completeUpdateStructureReview({ projectRoot: found.projectRoot, revision: input.revision,
+        decision: semantic.decision, ...(semantic.feedback ? { feedback: semantic.feedback } : {}) });
+      return completedRevisionReceipt(found.projectRoot, semantic.stage, result, input.managed === true, authorities);
+    }
     const structure = await currentIndexerStructureReview(found.projectRoot);
     if (structure === undefined || structure.revision !== input.revision) {
       throw new ContextError(
@@ -392,7 +419,7 @@ export async function completeCurrentIndexerAction(input: {
       decision: semantic.decision,
       ...(semantic.feedback === undefined ? {} : { feedback: semantic.feedback }),
     });
-    if (nextStage === "partition") {
+    if (nextStage === "partition" || structure.preview.topics.length === 0) {
       await advanceCurrentIndexerLifecycle(found.projectRoot);
     }
     const status = await collectProjectStatus(found.projectRoot, {
@@ -686,4 +713,16 @@ export async function completeCurrentIndexerAction(input: {
       : revisionAfter !== input.revision,
     ...nextState,
   };
+}
+
+async function completedRevisionReceipt(projectRoot: string, stage: string, result: Record<string, unknown>,
+  managed: boolean, authorities: readonly ContextWorkflowAuthority[]) {
+  const receipt = { protocol: "context.indexer.current-action-completion/v2" as const, stage, ...result };
+  try {
+    const status = await collectProjectStatus(projectRoot, { managed, authorities });
+    return { ...receipt, workflow: status.workflow };
+  } catch (error) {
+    return { ...receipt, next_preparation_error: error instanceof Error ? error.message : String(error),
+      next_action: { command: "context status --format json" } };
+  }
 }

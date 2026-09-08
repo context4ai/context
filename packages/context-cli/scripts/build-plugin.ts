@@ -24,6 +24,7 @@
 import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { syncIndexerAuthoringReferences } from "./indexerAuthoringReferences.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(__dirname, "..");
@@ -39,6 +40,7 @@ interface CommandSource {
   title: string;
   description: string;
   body: string;
+  explicitOnly: boolean;
 }
 
 function cursorCommandFileName(slug: string): string {
@@ -51,7 +53,6 @@ function rewriteClaudeSlashCommandsForCursor(body: string): string {
     .replace(/\/c4a:([a-z-]+)/g, (_match, slug: string) =>
       `/c4a-${slug}`
     )
-    .replace(/^## Your [Tt]ask$/gm, "## Workflow")
     .replace(/\bnot a user slash command\b/g, "not a user command");
 }
 
@@ -178,28 +179,18 @@ function titleFromSlug(slug: string): string {
     .join(" ");
 }
 
-const CURSOR_COMMAND_SUMMARIES: Record<string, string> = {
-  context: "Start or continue a C4A Context knowledge workspace.",
-};
-
-function cursorCommandSummary(command: CommandSource): string {
-  return CURSOR_COMMAND_SUMMARIES[command.slug] ?? command.description;
-}
-
 function stripHtmlComments(markdown: string): string {
   return markdown.replace(/<!--[\s\S]*?-->\n*/g, "");
 }
 
 async function readCommands(): Promise<CommandSource[]> {
-  const file = join(PLUGIN_SOURCE_ROOT, "skills", "context", "SKILL.md");
-  const raw = await readFile(file, "utf8");
-  const { frontmatter, body } = parseFrontmatter(raw, file);
-  return [{
-    slug: "context",
-    title: titleFromSlug("context"),
-    description: frontmatterValue(frontmatter, "description", file),
-    body,
-  }];
+  return Promise.all(["context", "context-inspect-search"].map(async (slug) => {
+    const file = join(PLUGIN_SOURCE_ROOT, "skills", slug, "SKILL.md");
+    const { frontmatter, body } = parseFrontmatter(await readFile(file, "utf8"), file);
+    return { slug, title: titleFromSlug(slug),
+      description: frontmatterValue(frontmatter, "description", file), body,
+      explicitOnly: /^disable-model-invocation:\s*true\s*$/mu.test(frontmatter) };
+  }));
 }
 
 async function renderManifest(input: {
@@ -272,6 +263,7 @@ async function buildClaude(
     outputPath: join(out, ".claude-plugin/plugin.json"),
   });
   const commands = await readCommands();
+  await copyAuthoringSkill(out);
   await writeClaudeCommands(out, commands);
   await writeGeneratedGuards(out, "CLAUDE.md", "Claude plugin build");
 }
@@ -287,7 +279,9 @@ async function writeClaudeCommands(
       "---",
       `description: ${JSON.stringify(command.description)}`,
       'argument-hint: "[project-dir or user intent]"',
-      "allowed-tools: Bash(context:*), Bash(bun:*), Bash(cd *)",
+      ...(command.explicitOnly ? ["disable-model-invocation: true"] : [
+        "allowed-tools:", "  - Bash(context:*)", "  - Bash(bun:*)", "  - Bash(cd *)",
+      ]),
       "---",
       "",
       command.body.trimEnd(),
@@ -301,11 +295,17 @@ async function copyAllCanonicalSkills(outputRoot: string): Promise<void> {
   await copyDir(join(PLUGIN_SOURCE_ROOT, "skills"), join(outputRoot, "skills"));
 }
 
+async function copyAuthoringSkill(outputRoot: string): Promise<void> {
+  await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", "context-indexer-create"),
+    join(outputRoot, "skills", "context-indexer-create"));
+}
+
 async function copyContextEntrySkill(outputRoot: string): Promise<void> {
-  await copyDir(
-    join(PLUGIN_SOURCE_ROOT, "skills", "context"),
-    join(outputRoot, "skills", "context"),
-  );
+  await copyAuthoringSkill(outputRoot);
+  for (const command of await readCommands()) {
+    await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", command.slug),
+      join(outputRoot, "skills", command.slug));
+  }
 }
 
 async function buildCodex(
@@ -330,7 +330,7 @@ async function buildCodex(
   await verifyNoClaudePluginRootLeak(out, "codex");
 }
 
-async function buildVercel(commands: readonly CommandSource[]): Promise<void> {
+async function buildVercel(): Promise<void> {
   // Vercel-style standalone skills live directly under dist/plugins/skills/.
   // No plugin manifest, no per-build README; the top-level dist/plugins/README.md
   // owns onboarding for this install path.
@@ -347,7 +347,7 @@ async function writeCursorCommands(outRoot: string, commands: readonly CommandSo
   for (const command of commands) {
     const rewrittenBody = rewriteClaudeSlashCommandsForCursor(command.body);
     const body = stripHtmlComments(rewrittenBody).trimStart();
-    const file = `---\ndescription: ${JSON.stringify(command.description)}\n---\n\n${cursorCommandSummary(command)}\n\n---\n\n${body.trimEnd()}\n`;
+    const file = `---\ndescription: ${JSON.stringify(command.description)}\n---\n\n${body.trimEnd()}\n`;
     await writeFile(join(dest, cursorCommandFileName(command.slug)), file, "utf8");
   }
 }
@@ -358,6 +358,7 @@ async function buildCursor(
   out = join(PLUGINS_ROOT, "cursor"),
 ): Promise<void> {
   await resetDir(out);
+  await copyAuthoringSkill(out);
   const manifest = await renderManifest({
     label: "cursor",
     version,
@@ -447,10 +448,18 @@ async function writeMarketplaceManifests(version: string): Promise<void> {
   );
 }
 
+function generatedReadme(body: string, name: string): string {
+  const notice = name === "README_CN.md"
+    ? "> 本目录由构建生成，请勿直接编辑。以下说明中的路径以源码仓库根目录为准；文档真源位于 `plugins/context/README_CN.md`。"
+    : "> This directory is generated; do not edit it directly. Paths below are relative to the source repository root. Edit `plugins/context/README.md` for this documentation.";
+  const headingEnd = body.indexOf("\n");
+  return `${body.slice(0, headingEnd)}\n\n${notice}\n\n${body.slice(headingEnd).trimStart()}`;
+}
+
 async function writePluginsTopLevelDocs(): Promise<void> {
   for (const name of ["README.md", "README_CN.md"]) {
     const body = await readFile(join(PLUGIN_SOURCE_ROOT, name), "utf8");
-    await writeFile(join(PLUGINS_ROOT, name), body, "utf8");
+    await writeFile(join(PLUGINS_ROOT, name), generatedReadme(body, name), "utf8");
   }
 
   await copyRuntimeAssets(PLUGINS_ROOT, ["logo.svg"]);
@@ -486,7 +495,8 @@ async function buildRepoInstall(
     rm(join(REPO_INSTALL_ROOT, "cursor", "AGENTS.md"), { force: true }),
   ]);
   for (const name of ["README.md", "README_CN.md"]) {
-    await copyFile(join(PLUGIN_SOURCE_ROOT, name), join(REPO_INSTALL_ROOT, name));
+    const body = await readFile(join(PLUGIN_SOURCE_ROOT, name), "utf8");
+    await writeFile(join(REPO_INSTALL_ROOT, name), generatedReadme(body, name), "utf8");
   }
   await writeFile(
     join(REPO_INSTALL_ROOT, ".generated"),
@@ -544,6 +554,7 @@ async function main(): Promise<void> {
   const version = pkg.version;
   if (!version) throw new Error("package.json is missing `version`");
 
+  await syncIndexerAuthoringReferences(repoRoot);
   const targetLabel = "dist/plugins";
   await resetDir(PLUGINS_ROOT);
 
@@ -551,7 +562,7 @@ async function main(): Promise<void> {
   await buildClaude(version);
   await buildCodex(version, commands);
   await buildCursor(version, commands);
-  await buildVercel(commands);
+  await buildVercel();
   await writeMarketplaceManifests(version);
   await writePluginsTopLevelDocs();
   await buildRepoInstall(version, commands);

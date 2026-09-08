@@ -34,7 +34,7 @@ function status(root: string, node: string, changes: Partial<ContextResolvedWork
   return { projectRoot: root, workflow: { revision: `sha256:${node}`, status: "actionable", diagnostics: [],
     current: { node, reason_code: node, availability: "immediate", resources: { required: [], recommended: [] },
       commands: [{ command: `context ${node} --format json`, effect: "write", availability: "immediate", managed_execution: "automatic" }],
-      ...changes } } } as ProjectStatus;
+      ...changes } } } as unknown as ProjectStatus;
 }
 
 describe("automatic continuation without implicit approval", () => {

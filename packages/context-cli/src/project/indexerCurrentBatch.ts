@@ -44,7 +44,7 @@ import {
 import { LIFECYCLE_ROOT } from "./lifecyclePaths.js";
 import { readPendingIndexerStructureFeedback } from "./indexerStructureReview.js";
 import { observeIndexerBatchStarted } from "./indexerBatchTiming.js";
-import { buildIndexerTaskReading, renderIndexerInstructionsReading, renderIndexerWorksetReading } from "./indexerAgentReading.js";
+import { buildIndexerTaskReading, renderIndexerInstructionsReading } from "./indexerAgentReading.js";
 import { renderIndexerBatchReading } from "./indexerBatchReading.js";
 
 const CURRENT_BATCH_DESCRIPTOR = join(
@@ -250,7 +250,7 @@ async function prepareCandidates(input: {
     };
     const reading = spec.request.workset.stage === "author" ? buildIndexerTaskReading(readingInput) : undefined;
     const measured = reading === undefined ? {
-      input_bytes: Buffer.byteLength(renderIndexerWorksetReading(readingInput), "utf8"),
+      input_bytes: renderIndexerBatchReading([buildIndexerTaskReading(readingInput)]).input_bytes,
       view_item_count: worksetView.projection.view.items.length,
     } : renderIndexerBatchReading([reading]);
     prepared.push({

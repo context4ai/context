@@ -76,8 +76,8 @@ describe("@c4a/context SDK bootstrap", () => {
     const assertContracts = () => {
       // @ts-expect-error capture factories require an options object.
       captureFile(docs);
-      // @ts-expect-error source types are repo/file/lark only.
-      source("doc", { type: "note" });
+      // @ts-expect-error unrecognized source types remain invalid.
+      source("doc", { type: "unknown" });
       // @ts-expect-error source collections are repo/file/lark only.
       allSources("url");
       // @ts-expect-error packages use name instead of id.

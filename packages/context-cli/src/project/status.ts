@@ -1,4 +1,5 @@
 import { readIndexerDelivery } from "./indexerDelivery.js";
+import { assertPreparationComplete } from "./workspacePreparation.js";
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
 import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
@@ -105,6 +106,7 @@ async function collectProjectStatusSnapshotInternal(
   projectRoot: string,
   options: CollectProjectStatusOptions = {},
 ): Promise<ProjectStatusSnapshot> {
+  await assertPreparationComplete(projectRoot);
   const authorities = contextWorkflowAuthorities({
     managed: options.managed === true,
     ...(options.authorities === undefined ? {} : { authorities: options.authorities }),
@@ -166,6 +168,12 @@ async function collectProjectStatusSnapshotInternal(
   const codeIndexMigrationRequired = phaseStatus.projectEntryValid
     ? await legacyCodeIndexMigrationRequired(projectRoot)
     : false;
+  const { readMaintenance } = await import("./maintenanceStorage.js");
+  const maintenance = (await readMaintenance(projectRoot)).active;
+  // Output-only maintenance owns this evaluation; an unfinished production
+  // ledger must not hide package configuration/Review recovery gates.
+  const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
+    (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
   const observation: ContextWorkflowObservation = {
     projectRoot,
     projectEntryValid: phaseStatus.projectEntryValid,
@@ -203,8 +211,10 @@ async function collectProjectStatusSnapshotInternal(
     approvedPages,
     close: closeStatus,
     indexerRegistry,
-    indexerCandidateCompile: { state: indexerCandidateCompile.state,
-      ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
+    indexerCandidateCompile: { state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
+      ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
+      ...(!maintenanceOutputOnly && indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
+      ...(maintenanceOutputOnly || indexerDelivery === undefined ? {} : { delivery_pending: true }) },
   };
   const workflowSnapshot = await evaluateContextWorkflow({
     observation,
@@ -228,6 +238,7 @@ async function collectProjectStatusSnapshotInternal(
     ...baseWorkflow,
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+    ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
   };
   const indexerProgress = await currentIndexerProgress({
     projectRoot,
@@ -269,6 +280,8 @@ async function collectProjectStatusSnapshotInternal(
     codeIndexMigrationRequired,
     indexerRegistry: { state: indexerRegistry.state },
     indexerCandidateCompile: { state: indexerCandidateCompile.state,
+      ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
+      ...(indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
       ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
     ...(indexerProgress === undefined ? {} : { indexerProgress }),
     packageCount: packages.length,
@@ -353,6 +366,7 @@ export async function reevaluateProjectStatusWorkflow(input: {
     ...baseWorkflow,
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+    ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
   };
   await recordWorkflowEvaluation(input.snapshot.observation.projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({

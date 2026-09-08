@@ -22,7 +22,7 @@ export function createIndexerAuthorSourceResolver(input: {
   const bindings = new Map<string, Promise<ProjectIndexerMainSourceBinding>>();
   return async (partition: IndexerPartitionValidationInput) => {
     const workset = partition.workset;
-    const isDocument = /^(file|lark):/u.test(workset.source_ref);
+    const isDocument = /^(file|lark|note|sessions):/u.test(workset.source_ref);
     const projection = input.projections.get(workset.workset_digest);
     if (!isDocument && projection === undefined) {
       throw new TypeError("Author preparation requires the current Partition consumer projection");

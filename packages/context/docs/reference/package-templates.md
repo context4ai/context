@@ -182,7 +182,7 @@ Built-in variables:
 | `{{displayName}}` | Display name. Defaults to a title-cased `packageName`; override with `template.vars.displayName`. |
 | `{{knowledgeCount}}` | Number of selected approved Markdown files. |
 | `{{knowledgeTimestamp}}` | Latest `timestamp` from selected approved Markdown, or `1970-01-01T00:00:00.000Z` when empty. |
-| `{{knowledge}}` | Concatenated selected approved Markdown bundle. |
+| `{{knowledge}}` | Concatenated consumer projection of selected approved pages, with path headings and without lifecycle metadata. |
 | `{{approvedKnowledge}}` | Alias for `{{knowledge}}`. |
 | `{{knowledgeItems}}` | Array of selected approved knowledge page metadata for loops. |
 | `{{knowledgeGroups}}` | Selected approved knowledge pages grouped by OKF root and first directory segment; each item also exposes `internal_collection`. |
@@ -322,7 +322,7 @@ Approved Markdown under `knowledge/` and its deterministic
   revision, or build. Do not copy a compact page as a new page without using a
   Context authoring command;
 - do not nest Context production metadata under `context`; fields such as
-  `context.sources` and `context.code_symbols` are not part of the 0.6 profile;
+  `context.sources` and `context.code_symbols` are not accepted production fields;
 - section provenance lives in `<!-- context:section ... source_ref="..." -->`
   comments. When a Section needs more than one citation, the CLI preserves the
   complete set in its adjacent `context:source_refs` block;
@@ -352,8 +352,9 @@ treat the complete `source_ref` as opaque. Production pages do not expose
 Candidate fingerprints, Indexer digests, or `code_origin`.
 
 `#span:` refs retain source snapshot line ranges for human review, diffing, and
-stable re-pinning. They resolve against committed file/lark document snapshots,
-not the code symbol index.
+stable re-pinning. They resolve against the stored file/Lark snapshot or the saved
+Note/Sessions Markdown, not the code symbol index. A session's optional commit/MR
+association stays in its source file; knowledge does not duplicate those fields.
 
 The kb package root may contain agent files such as `AGENTS.md` and `skills/`.
 The OKF-compatible surface is the selected `wikis/`, `guides/`, `rules/`, and
@@ -373,11 +374,11 @@ The OKF-compatible surface is the selected `wikis/`, `guides/`, `rules/`, and
 6. Writes output under `dist/<package-name>/`.
 
 `context-build-inventory.json` records what was selected and why. Each selected
-file includes `selected_by` entries such as `{ "kind": "collection" }` and a
-`production_metadata` object for selected page-level production fields. Child
-and relationship records use the inventory's canonical structure projection,
-`{ "kind": "okf_root" }`, `{ "kind": "include" }`, or
-`{ "kind": "default" }`. The inventory also exposes package-visible typed
+file includes `selected_by` entries such as `{ "kind": "collection" }`,
+`{ "kind": "okf_root" }`, `{ "kind": "include" }`, or `{ "kind": "default" }`,
+and a `production_metadata` object for selected page-level production fields.
+Child and relationship records use the inventory's canonical structure
+projection. The inventory exposes package-visible typed
 edges under `structure.edge_records`; these records are filtered to edges whose
 endpoints are present in the selected package. Use those edge records for
 relationship citations inside the package instead of assuming the workspace

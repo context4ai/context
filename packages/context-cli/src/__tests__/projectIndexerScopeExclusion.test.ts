@@ -1,5 +1,7 @@
+import YAML from "yaml";
+import { resolveCurrentIndexerWorkflowRoute } from "../project/indexerCurrentWorkflowRoute.js";
 import { afterEach, expect, test } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadIndexerRegistry, validateIndexerPartitionInputs } from "@c4a/context";
 import { project } from "./projectIndexerMainLifecycleV070.fixture.js";
@@ -61,6 +63,11 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   }
   const review = await prepareCurrentIndexerStructurePlan(root);
   expect(review.preview.obsolete_scope?.affected_page_count).toBe(1);
+  const managed = await resolveCurrentIndexerWorkflowRoute({ projectRoot: root, authorities: [], managed: true });
+  expect(managed?.availability).toBe("immediate");
+  expect(managed?.gate?.resolution).toBe("session-authority");
+  const ordinary = await resolveCurrentIndexerWorkflowRoute({ projectRoot: root, authorities: [], managed: false });
+  expect(ordinary?.availability).toBe("requires-user");
   const storedPlan = JSON.parse(await readFile(join(root, ".tmp/context-runtime/indexer/structure-review/author-plan.json"), "utf8"));
   const excluded = new Set<string>(storedPlan.obsolete_member_ids);
   expect(JSON.stringify(review.preview.obsolete_scope)).not.toContain("member_ids");
@@ -88,4 +95,30 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   expect(repeated.preview.topics).toHaveLength(after!.entries.length);
   expect(repeated.preview.obsolete_scope?.affected_page_count).toBe(0);
   expect(repeated.approved).toBe(true);
+  const acceptedDigests = restored!.entries.map((entry) => entry.execution_request_digest);
+  expect(await completeCurrentIndexerStructureReview({ projectRoot: root,
+    revision: repeated.revision, decision: "exclude-obsolete" })).toBe("author");
+  expect((await currentLedger(root))!.entries.every((entry) => entry.stage === "author")).toBe(true);
+  for (const request of acceptedDigests) expect(await readFile(join(root, acceptedCachePath(request)), "utf8")).toBeTruthy();
 }, 60_000);
+
+
+test("settled path exclusions remove inventory before Partition without removing captured sources", async () => {
+  const { root } = await project({ rankedCodeInventory: true, deprecatedEntry: true });
+  roots.push(root);
+  const path = join(root, "src/indexers.yaml");
+  const registry = YAML.parse(await readFile(path, "utf8"));
+  for (const requirement of registry.requirements) requirement.exclusions = [{
+    id: "exclude-retired", reason: "User selected current APIs", scope: requirement.target_scope,
+    paths: ["src/deprecated"],
+  }];
+  await writeFile(path, YAML.stringify(registry));
+  const ledger = await preparePartitionStage(root);
+  expect(ledger!.entries.length).toBeGreaterThan(0);
+  for (const entry of ledger!.entries) {
+    const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
+    const view = await prepareProjectIndexerWorksetViewMaterialization({ projectRoot: root, run_spec: spec });
+    expect(JSON.stringify(view.projection.view)).not.toContain("src/deprecated/index.ts");
+  }
+  expect(await readFile(join(root, "sources/repo/20260902/sample/src/deprecated/index.ts"), "utf8")).toContain("@deprecated");
+});

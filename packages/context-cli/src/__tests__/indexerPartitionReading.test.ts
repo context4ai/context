@@ -100,7 +100,7 @@ test("shares only exact same-origin Partition material with task applicability a
   expect(readingItems(renderIndexerBatchReading(inputs.map(buildIndexerTaskReading)).markdown, "consumer-anchor")).toHaveLength(3);
 });
 
-test("Partition Route resources share a bounded file without changing canonical inputs", async () => {
+test("Partition Route resources isolate tasks and reuse common material without changing canonical inputs", async () => {
   const root = await mkdtemp(join(tmpdir(), "context-partition-reading-"));
   try {
     const inputs = [fixture(0), fixture(1)];
@@ -110,7 +110,10 @@ test("Partition Route resources share a bounded file without changing canonical 
       return { ...input, ready: { path, digest: indexerProtocolDigest(input.view) } };
     }));
     const files = await prepareIndexerWorksetReadings(ready);
-    expect(files[0]).toEqual(files[1]);
+    expect(files[0]!.path).not.toBe(files[1]!.path);
+    expect(files[0]!.common).toEqual(files[1]!.common);
+    const shared = await Promise.all(files[0]!.common.map((file) => readFile(file.path, "utf8")));
+    expect(restoredCarrier(shared.join("\n")).payload).toEqual(inputs[0]!.payload);
     expect(await prepareIndexerWorksetReadings(ready)).toEqual(files);
     const text = await readFile(files[0]!.path, "utf8");
     expect(Buffer.byteLength(text)).toBeLessThan(inputs.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0));

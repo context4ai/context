@@ -24,7 +24,7 @@ Without explicit session-managed authority:
 
 - open the report returned by the route;
 - let the user publish or durably omit candidates;
-- apply the exact returned decision payload; and
+- apply the exact copied review code through the returned review apply command; and
 - retain the exact report reference and reviewed scope in this conversation for
   the final completion summary.
 
@@ -53,3 +53,22 @@ The Review UI names the internal `rejected` decision **Omit** because it is a
 durable content decision, not a request to rewrite the page. When a page needs
 changes, leave the whole batch unapplied and use `context revise` so the owning
 Author or Composer produces a new Candidate through the same lifecycle.
+
+Use the affected page's `Repair` command in the review material, replacing only
+the correction instruction. Current candidates are repaired within this batch;
+`--timing priority` is not needed and does not queue them behind delivery.
+`--regenerate` schedules program regeneration for approved pages. If supplied
+for a current candidate, follow the CLI's returned repair command instead.
+After the repair, read the new Route and review the changed material before
+approving the batch. Pending maintenance requests for other pages remain queued.
+
+For a repaired generated table, inspect the new Candidate's affected rows, not
+only its Repair ID or accepted Author/Composer outcome. Check the reported error
+against the available source version and facts. A missing value is not always a
+missing source: the source may be present but unsupported by the parser, or the
+correct fact may have been lost during rendering. Describe which case the
+available material establishes. An explicit limitation may be acceptable for the
+reader's task; a known false value must be repaired. If the same error remains
+after regeneration, preserve the batch and report the affected page, field and
+source/fact comparison. Repeating the same repair without new material or a tool
+fix is not progress. Do not approve, omit, or hand-edit a block to hide the error.

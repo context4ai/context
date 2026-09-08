@@ -4,9 +4,9 @@ import { join } from "node:path";
 import type {
   FileSourceRegistryEntry,
   LarkSourceRegistryEntry,
+  ManagedDocumentSourceEntry,
 } from "@c4a/context";
 import { loadSourcesRegistry } from "@c4a/context";
-import type { DocumentSourceType } from "@c4a/extract";
 import { DEFAULT_FILE_SOURCE_INCLUDE, fileSourceIncludeMismatchDiagnostic } from "./documentCapture.js";
 import { larkSnapshotIdentityDiagnostic } from "./larkSourceIdentity.js";
 import {
@@ -23,7 +23,7 @@ function documentSourceManifestPath(source: FileSourceRegistryEntry | LarkSource
 
 async function documentSnapshotState(input: {
   projectRoot: string;
-  sourceType: DocumentSourceType;
+  sourceType: "file" | "lark";
   source: FileSourceRegistryEntry | LarkSourceRegistryEntry;
 }): Promise<{
   snapshotReady: boolean;
@@ -63,10 +63,10 @@ async function documentSnapshotState(input: {
     if (parsed.source_type !== input.sourceType || parsed.source_name !== input.source.name) {
       return {
         snapshotReady: false,
-        state: "workspace-state-invalid",
+        state: "needs-capture",
         manifest,
         diagnostics: [`snapshot manifest source does not match registry source: ${manifest}`],
-        next: `rerun context run capture:${input.sourceType}:${input.source.name} or fix ${manifest}`,
+        next: `context run capture:${input.sourceType}:${input.source.name}`,
       };
     }
     if (input.sourceType === "file") {
@@ -143,17 +143,17 @@ async function documentSnapshotState(input: {
     const message = error instanceof Error ? error.message : String(error);
     return {
       snapshotReady: false,
-      state: "workspace-state-invalid",
+      state: "needs-capture",
       manifest,
       diagnostics: [`snapshot manifest is invalid: ${manifest}: ${message}`],
-      next: `rerun context run capture:${input.sourceType}:${input.source.name} or fix ${manifest}`,
+      next: `context run capture:${input.sourceType}:${input.source.name}`,
     };
   }
 }
 
 async function documentSourceStatusView(input: {
   projectRoot: string;
-  sourceType: DocumentSourceType;
+  sourceType: "file" | "lark";
   source: FileSourceRegistryEntry | LarkSourceRegistryEntry;
 }): Promise<Record<string, unknown>> {
   const snapshot = await documentSnapshotState(input);
@@ -186,15 +186,17 @@ async function documentSourceStatusView(input: {
 export async function documentSourcesForName(input: {
   projectRoot: string;
   name?: string;
-}): Promise<Array<{ sourceType: DocumentSourceType; source: FileSourceRegistryEntry | LarkSourceRegistryEntry }>> {
+}): Promise<Array<{ sourceType: "file" | "lark"; source: FileSourceRegistryEntry | LarkSourceRegistryEntry } | { sourceType: "note" | "sessions"; source: ManagedDocumentSourceEntry }>> {
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   const docs = [
     ...registry.files.map((source) => ({ sourceType: "file" as const, source })),
     ...registry.larks.map((source) => ({ sourceType: "lark" as const, source })),
+    ...registry.notes.map((source) => ({ sourceType: "note" as const, source })),
+    ...registry.sessions.map((source) => ({ sourceType: "sessions" as const, source })),
   ];
   if (input.name === undefined) return docs;
-  return docs.filter(({ source }) =>
-    source.name === input.name || source.id === input.name || source.namespace === input.name
+  return docs.filter(({ source, sourceType }) =>
+    `${sourceType}:${source.name}` === input.name || source.name === input.name || source.id === input.name || source.namespace === input.name
   );
 }
 
@@ -203,7 +205,17 @@ export async function inspectDocumentSources(input: {
   name?: string;
 }): Promise<Record<string, unknown>[]> {
   const selected = await documentSourcesForName(input);
-  return Promise.all(selected.map(({ sourceType, source }) =>
-    documentSourceStatusView({ projectRoot: input.projectRoot, sourceType, source })
-  ));
+  return Promise.all(selected.map(async (entry) => {
+    if (entry.sourceType === "note" || entry.sourceType === "sessions") {
+      const { readManagedDocumentSnapshot } = await import("./managedDocumentSnapshot.js");
+      const { manifest } = await readManagedDocumentSnapshot(input.projectRoot, entry.sourceType, entry.source.name);
+      return { type: entry.sourceType, id: `${entry.sourceType}:${entry.source.name}`,
+        ...(entry.source.changes === undefined ? {} : { changes: entry.source.changes }),
+        name: entry.source.name, content: entry.source.materializedAt, status: "ready",
+        snapshotReady: true, snapshotHash: manifest.snapshot_hash, diagnostics: [],
+        next: "context status --format json" };
+    }
+    return documentSourceStatusView({ projectRoot: input.projectRoot,
+      sourceType: entry.sourceType, source: entry.source as FileSourceRegistryEntry | LarkSourceRegistryEntry });
+  }));
 }

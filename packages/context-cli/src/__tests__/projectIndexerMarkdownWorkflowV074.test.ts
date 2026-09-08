@@ -47,7 +47,7 @@ function outerIndexerRoute(): ContextResolvedWorkflowRoute {
   };
 }
 
-async function markdownWorkspace(): Promise<{
+async function markdownWorkspace(type: "file" | "note" | "sessions" = "file", withChanges = false): Promise<{
   projectRoot: string;
   indexer: IndexerRegistry["indexers"][number];
 }> {
@@ -71,6 +71,7 @@ async function markdownWorkspace(): Promise<{
     "Rerun the same command after fixing the reported configuration.",
     "",
   ].join("\n"), "utf8");
+  if (type === "file") {
   await runCliInDir(projectRoot, [
     "source", "add", "file", "20260903",
     "--module", "manual",
@@ -96,8 +97,15 @@ async function markdownWorkspace(): Promise<{
     "run", "capture:file:20260903/manual", "--format", "json",
   ]);
 
+  } else {
+    const { importManagedDocument } = await import("../project/managedDocumentImport.js");
+    await importManagedDocument(projectRoot, { type, name: "20260903/manual.md", markdown: await readFile(join(docsRoot, "intro.md"), "utf8"), ...(withChanges ? { changes: [{ mr: "https://git.example.org/team/project/pull/42" }] } : {}) });
+    await writeFile(join(projectRoot, "src/index.ts"), `import { defineProject, kbPackage, source } from "@c4a/context";\nexport default defineProject({ sources: [source("20260903/manual.md", { type: "${type}" })], phases: [], packages: [kbPackage({ name: "markdown-workflow-kb", template: { path: "src/package-templates/kb", vars: {} } })] });\n`);
+  }
+  const sourceRef = type === "file" ? SOURCE_REF : `${type}:20260903/manual.md`;
+
   const bundle = (await listCliBundledIndexers()).bundles.find((candidate) =>
-    candidate.skill === "context-markdown-indexer"
+    candidate.skill === (type === "file" ? "context-markdown-indexer" : `context-${type}-indexer`)
   );
   if (bundle === undefined) throw new Error("missing bundled Markdown Indexer");
   const indexer: IndexerRegistry["indexers"][number] = {
@@ -112,7 +120,7 @@ async function markdownWorkspace(): Promise<{
     read_scope: {
       refs: ["requirement:documentation-knowledge#evidence_source_scope"],
     },
-    profile: { primary: { id: "documentation-site", provider: "community" } },
+    profile: { primary: { id: type === "file" ? "documentation-site" : "technical-guide", provider: "community" } },
     providers: [{
       id: "community",
       role: "primary",
@@ -128,9 +136,9 @@ async function markdownWorkspace(): Promise<{
       id: "documentation-knowledge",
       reader_goals: ["understand-documentation"],
       coverage_domains: { "business-semantics": "required" },
-      target_scope: { targets: [{ source_ref: SOURCE_REF, module_refs: [] }] },
+      target_scope: { targets: [{ source_ref: sourceRef, module_refs: [] }] },
       evidence_source_scope: {
-        targets: [{ source_ref: SOURCE_REF, module_refs: [] }],
+        targets: [{ source_ref: sourceRef, module_refs: [] }],
       },
     }],
     indexers: [],
@@ -175,8 +183,8 @@ async function configureMarkdownIndexer(input: {
 }
 
 describe("0.7.4 Markdown current workflow", () => {
-  test("captures one document and completes Partition, Author, Review, close, and build", async () => {
-    const { projectRoot, indexer } = await markdownWorkspace();
+  test.each([["file", false], ["note", false], ["sessions", false], ["sessions", true]] as const)("reads %s (changes=%s) and completes Partition, Author, Review, close, and build", async (type, withChanges) => {
+    const { projectRoot, indexer } = await markdownWorkspace(type, withChanges);
     const providerRoute = await currentRoute(projectRoot);
     expect(providerRoute).toMatchObject({
       node: "configure-indexer-providers",
@@ -201,6 +209,8 @@ describe("0.7.4 Markdown current workflow", () => {
           required_question_target_refs?: string[];
         };
         expect(task.view.items.some((item) => item.category === "document")).toBe(true);
+        if (withChanges) expect(task.view.items.find((item) => item.category === "document")?.value)
+          .toMatchObject({ changes: [{ mr: "https://git.example.org/team/project/pull/42" }] });
         results.push({
           task_key: descriptor.task_key,
           result: {
@@ -386,6 +396,11 @@ describe("0.7.4 Markdown current workflow", () => {
     })]);
 
     const approvedPage = join(projectRoot, "knowledge", candidates[0]!.path);
+    const page = await readFile(approvedPage, "utf8");
+    const header = YAML.parse(/^---\n([\s\S]*?)\n---/u.exec(page)?.[1] ?? "{}");
+    for (const field of ["changes", "commit", "mr", "session", "provider"]) expect(header[field]).toBeUndefined();
+    const approvedStructure = await readFile(join(projectRoot, "knowledge/structure.yaml"), "utf8");
+    if (type !== "file") expect(approvedStructure).toContain(`${type}:20260903/manual.md`);
     expect(await readFile(approvedPage, "utf8")).toContain(
       "# Deployment and recovery guide",
     );
