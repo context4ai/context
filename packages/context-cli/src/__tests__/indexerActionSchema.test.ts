@@ -18,6 +18,7 @@ const batch = (stage: string, result: unknown) => ({
 const publish = (changes: Record<string, unknown>) => batch("author", { ...author, ...changes });
 const valid = [
   publish({}),
+  publish({ member_dispositions: [{ items: ["entry:start", "entry:stop"], state: "covered", section: "usage" }] }),
   batch("author", { stage: "author", group_key: "public-api", outcome: "catalog-only", member_dispositions: [{ item: "entry:start", state: "catalog-only" }] }),
   batch("partition", { stage: "partition", outcome: "complete", groups: [] }),
   batch("partition", { stage: "partition", outcome: "failed", failure: { code: "invalid-input", message: "No identity", unassigned: [] } }),
@@ -31,6 +32,8 @@ const valid = [
   { stage: "layout-confirmation", decision: "rejected", feedback: "Use readable paths" },
 ];
 const invalid = [
+  publish({ member_dispositions: [{ items: [], state: "covered" }] }),
+  publish({ member_dispositions: [{ item: "entry:start", items: ["entry:start"], state: "covered" }] }),
   publish({ title: undefined }), publish({ summary: undefined }), publish({ sections: [] }),
   publish({ target_resolutions: [{ target: "target:1", disposition: "request-material" }] }),
   publish({ sections: [{ ...author.sections[0], facts: [{ fact_ref: "fact:start" }] }] }),

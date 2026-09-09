@@ -28,6 +28,10 @@ describe("0.7.5 current Indexer progress", () => {
     if (ledger === undefined) throw new Error("missing current Indexer ledger");
 
     const progress = await currentIndexerProgress({ projectRoot: root });
+    expect(progress?.scopes.overall.planning).toMatchObject({ total: ledger.entries.length, unit: "task" });
+    expect(progress?.scopes.overall.delivery.total).toBeNull();
+    expect(progress?.scopes.wave).toBeNull();
+    expect(progress?.scopes.slice).toMatchObject({ total: current.descriptor.tasks.length, unit: "task" });
     expect(progress?.task_completion).toMatchObject({ unit: "task", stage: ledger.entries[0]!.stage,
       total: ledger.entries.length, completed: progress?.accepted, ratio: progress!.accepted / ledger.entries.length });
     expect(progress).toMatchObject({

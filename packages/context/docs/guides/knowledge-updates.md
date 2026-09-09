@@ -16,6 +16,33 @@ and continues through Review and delivery. Expression-only changes need no
 source capture or Parser. Preserve prior confirmed contributions; distinguish
 actual behavior, a confirmed decision, and a proposal that is not implemented.
 
+## Edit one section or review part of a batch
+
+The current approved-revision Route accepts either full `markdown` or explicit
+`sections` edits. Use an existing `writing_context.current_sections` ID and an
+ordered `content` list of `{ "markdown": "new text" }` and/or
+`{ "program": "exact current program token" }`. Unchanged sections and the
+selected section's source references remain intact. Use full Markdown when
+changing structure, adding a page or when a section has no unambiguous ID.
+
+For an optional check, append `--preview` to the current `action complete-current`
+command with the same revision and input file. It validates and returns the
+assembled page and previous text without accepting the edit. Submit the same
+input without that flag to continue. A preview is not approval and does not make
+a stale revision valid.
+
+Review can approve checked pages while leaving repair pages pending. The HTML
+review code includes pending positions; managed Review provides the same current
+scope as a JSON template. Send decisions only for pages actually reviewed. Omit
+means a durable exclusion, not repair. Partial approval alone does not build.
+
+When the user requests an earlier delivery, use the Route's `context run
+--deliver` request. Independently approved pages can pass close/build while
+pending candidates remain for Review or repair. Links to pending or missing
+pages keep their necessary scope together. Source processing baselines advance
+only after the entire update finishes. Failed builds retain the selected delivery
+and pending work; repair the cause and follow the current Route.
+
 ## Acquire the selected change once
 
 Use the host's existing Git, code-hosting or document tools and their installed

@@ -1,10 +1,11 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
-  processedVersionForScope, indexRequirementSchema, loadIndexerRegistry } from "@c4a/context";
+  processedVersionForScope, indexRequirementSchema, } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { prepareApprovedRevision, readApprovedRevision } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";

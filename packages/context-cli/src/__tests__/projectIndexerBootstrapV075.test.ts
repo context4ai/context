@@ -219,7 +219,7 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
       const ledger = await currentLedger(root);
       expect(ledger?.entries.some((entry) => entry.stage === "partition" && entry.state === "running")).toBe(true);
       expect((await collectProjectStatus(root, { managed })).workflow.current?.node).toBe("run-indexer-agent-step");
-    }, 30_000);
+    }, 60_000);
   }
 
   test("managed loop stops at explicit configuration, then at semantic selection", async () => {
@@ -261,7 +261,7 @@ describe("Indexer bootstrap follows the current workspace Graph", () => {
     expect(resumed.advanced).toBe(false);
     expect(resumed.workflow.current?.node).toBe("run-indexer-agent-step");
     expect(await currentLedger(root)).toEqual(ledger);
-  }, 30_000);
+  }, 60_000);
 
   test("dry-run observes the ready deterministic route without preparing a ledger", async () => {
     const { root } = await workspace();

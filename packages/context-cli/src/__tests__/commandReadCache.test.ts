@@ -5,6 +5,31 @@ import { join } from "node:path";
 import { reuseCommandFileRead, withCommandReadCache } from "../project/commandReadCache.js";
 
 describe("command-local file reads", () => {
+  test("keeps a completed aggregate reusable when its many child reads exceed the cache bound", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-command-aggregate-"));
+    try {
+      const path = join(root, "source");
+      await writeFile(path, "initial");
+      let aggregates = 0;
+      const read = () => reuseCommandFileRead({ key: "aggregate", paths: [path], read: async () => {
+        aggregates++;
+        return Promise.all(Array.from({ length: 80 }, (_, index) => reuseCommandFileRead({
+          key: `child:${index}`, paths: [path], read: () => readFile(path, "utf8"),
+        })));
+      } });
+      await withCommandReadCache(async () => {
+        const first = await read();
+        expect(await read()).toBe(first);
+        expect(aggregates).toBe(1);
+        await writeFile(path, "changed");
+        expect((await read()).every(item => item === "changed")).toBe(true);
+        expect(aggregates).toBe(2);
+      });
+      await withCommandReadCache(read);
+      expect(aggregates).toBe(3);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("joins concurrent reads, notices writes/deletion, and never reuses across commands", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-command-read-"));
     try {

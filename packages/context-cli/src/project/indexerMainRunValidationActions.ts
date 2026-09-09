@@ -51,6 +51,7 @@ export async function validateProjectIndexerMainRun(input: {
   assertProjectIndexerMainSourceBinding({
     workset,
     binding,
+    partition_projection: validation.partition_projection,
     ...(workset.stage === "author"
       ? { dependency_view: validation.dependency_view }
       : {}),

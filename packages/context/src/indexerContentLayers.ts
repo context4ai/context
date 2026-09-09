@@ -227,9 +227,13 @@ export function validateIndexerRenderedContentBlock(
 export function materializeIndexerStructuredContent(input: {
   blocks: readonly IndexerArtifactContentBlock[];
   facts: readonly IndexerArtifactFact[];
+  render_cache?: Map<string, IndexerRenderedContentBlock[]> | undefined;
 }): IndexerRenderedContentBlock[] {
+  const key = input.render_cache === undefined ? undefined : indexerProtocolDigest({ blocks: input.blocks, facts: input.facts });
+  const cached = key === undefined ? undefined : input.render_cache?.get(key);
+  if (cached !== undefined) return structuredClone(cached);
   const facts = new Map(input.facts.map((fact) => [fact.fact_ref, fact]));
-  return input.blocks.map((block) => {
+  const rendered = input.blocks.map((block) => {
     if (block.layer === "semantic-prose") {
       return buildIndexerRenderedContentBlock({
         layer: block.layer,
@@ -257,4 +261,9 @@ export function materializeIndexerStructuredContent(input: {
       evidence_refs: consumed.flatMap((fact) => fact.evidence_refs),
     });
   });
+  if (key !== undefined && input.render_cache !== undefined) {
+    if (input.render_cache.size >= 256) input.render_cache.delete(input.render_cache.keys().next().value!);
+    input.render_cache.set(key, structuredClone(rendered));
+  }
+  return rendered;
 }

@@ -1,3 +1,5 @@
+import { currentLedger } from "./indexerMainRunStoreRecords.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { removeLegacyReviewDecisions } from "./reviewDecisions.js";
@@ -20,6 +22,10 @@ const COMPLETED_RUNTIME_PATHS = [
 ] as const;
 
 export async function clearCompletedLifecycle(projectRoot: string): Promise<void> {
+  const stream = await readPartitionStream(projectRoot);
+  if (stream && (stream.phase !== "planning" || (await currentLedger(projectRoot))?.entries.some(entry => entry.state !== "accepted"))) {
+    throw new TypeError("Pending Partition work must resume before lifecycle cleanup");
+  }
   await removeLegacyReviewDecisions(projectRoot);
   // Keep the current compile/revision/rollback pointer until every other task
   // artifact has been removed. A failed cleanup must still block a new task.

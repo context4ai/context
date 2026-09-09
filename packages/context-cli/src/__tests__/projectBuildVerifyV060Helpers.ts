@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createCliProgram, handleCliFailure } from "../cli.js";
+import { cli_main, handleCliFailure } from "../cli.js";
 
 export async function invokeCliInDir(
   dir: string,
@@ -12,12 +12,14 @@ export async function invokeCliInDir(
   const stdoutChunks: string[] = [];
   const stderrChunks: string[] = [];
   process.chdir(dir);
-  process.stdout.write = ((chunk: string | Uint8Array) => {
+  process.stdout.write = ((chunk: string | Uint8Array, encodingOrCallback?: unknown, callback?: (error?: Error | null) => void) => {
     stdoutChunks.push(String(chunk));
+    const complete = typeof encodingOrCallback === "function" ? encodingOrCallback as (error?: Error | null) => void : callback;
+    if (complete) queueMicrotask(() => complete());
     return true;
   }) as typeof process.stdout.write;
   try {
-    await createCliProgram().parseAsync(["node", "context", ...args]);
+    await cli_main(["node", "context", ...args]);
     return { status: 0, stdout: stdoutChunks.join(""), stderr: stderrChunks.join("") };
   } catch (error) {
     const status = handleCliFailure(error, {

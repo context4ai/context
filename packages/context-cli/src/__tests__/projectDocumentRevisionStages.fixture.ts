@@ -21,7 +21,7 @@ import type { readCandidateRecords } from "../project/candidateLedger.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 
-export async function completePartitionStage(root: string, withPagePlan = false): Promise<void> {
+export async function completePartitionStage(root: string, withPagePlan = false, streaming = false, subject?: string): Promise<void> {
   await advanceCurrentIndexerLifecycle(root);
   while (true) {
     const current = await resolveCurrentIndexerAgentContext(root);
@@ -48,13 +48,14 @@ export async function completePartitionStage(root: string, withPagePlan = false)
         groups: [{
           key: `fixture-${suffix}`,
           title: `Fixture ${suffix}`,
+          ...(streaming ? { ready_for_author: true } : {}),
           reader_task: "Understand the public fixture capability.",
           ...(withPagePlan ? { artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
             template_id: "component-library-usage-guide", priority: 0, delivery_boundary: true } : {}),
           subject: {
             namespace: workset.partition_subject_key.namespace,
             kind: workset.partition_subject_key.kind,
-            local_key: `fixture-${suffix}`,
+            local_key: subject ?? `fixture-${suffix}`,
           },
           subject_intent: "primary" as const,
           members: validation.canonical_inventory_members.map((member) => member.member_id),

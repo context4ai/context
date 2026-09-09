@@ -1,5 +1,6 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { join } from "node:path";
-import { canonicalIndexerJson, indexerProtocolDigest, loadIndexerRegistry } from "@c4a/context";
+import { canonicalIndexerJson, indexerProtocolDigest, } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerComposerFinalization.js";
 import { inspectProjectIndexerParserSourceAuthority } from "./indexerParserSourceMaterialization.js";

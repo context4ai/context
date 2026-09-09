@@ -54,6 +54,7 @@ const partitionGroupSchema = z.object({
   template_id: z.string().min(1).optional(),
   priority: z.number().int().nonnegative().optional(),
   delivery_boundary: z.boolean().optional(),
+  ready_for_author: z.boolean().optional(),
   subject: subjectChoiceSchema,
   subject_intent: z.enum(["primary", "enrich-or-independent"]),
   members: z.array(z.string().min(1)).min(1),
@@ -123,7 +124,7 @@ const authorSectionSchema = z.object({
   key: z.string().min(1),
   heading: z.string().min(1),
   markdown: z.string().min(1),
-  source_items: z.array(z.string().min(1)).min(1),
+  source_items: z.array(z.string().min(1)).default([]),
   facts: z.array(z.string().min(1)).default([]),
   answers: z.array(z.string().min(1)).default([]),
 }).strict();
@@ -161,7 +162,14 @@ const authorInputBaseSchema = z.object({
   title: z.string().min(1).optional(),
   summary: z.string().min(1).optional(),
   sections: z.array(authorSectionSchema).default([]),
-  member_dispositions: z.array(authorMemberDispositionSchema),
+  member_dispositions: z.array(z.union([
+    authorMemberDispositionSchema,
+    authorMemberDispositionSchema.omit({ item: true }).extend({ items: z.array(z.string().min(1)).min(1) }).strict(),
+  ])).transform(entries => entries.flatMap(entry => {
+    if ("item" in entry) return [entry];
+    const { items, ...disposition } = entry;
+    return items.map(item => ({ item, ...disposition }));
+  })),
   material_gaps: z.array(authorMaterialGapSchema).default([]),
   diagnostics: z.array(authorDiagnosticSchema).default([]),
 }).strict();
@@ -315,10 +323,19 @@ export const indexerLayoutConfirmationInputSchema = z.discriminatedUnion("decisi
   }),
 ]);
 
-export const approvedRevisionSemanticInputSchema = z.object({
-  stage: z.literal("approved-revision"),
-  markdown: z.string().min(1),
-}).strict();
+export const approvedRevisionSemanticInputSchema = z.union([
+  z.object({ stage: z.literal("approved-revision"), markdown: z.string().min(1) }).strict(),
+  z.object({
+    stage: z.literal("approved-revision"),
+    sections: z.array(z.object({
+      section_id: z.string().min(1),
+      content: z.array(z.union([
+        z.object({ markdown: z.string() }).strict(),
+        z.object({ program: z.string().min(1) }).strict(),
+      ])).min(1),
+    }).strict()).min(1),
+  }).strict(),
+]);
 
 export const sourceUpdateSemanticInputSchema = z.object({
   stage: z.literal("source-update"),

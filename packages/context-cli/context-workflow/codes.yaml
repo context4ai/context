@@ -33,7 +33,7 @@ codes:
   - { code: route.indexer.lifecycle-required, kind: route-reason, summary: Continue the sole registry-and-Provider indexing lifecycle until current Candidates exist. }
   - { code: route.indexer.lifecycle-advance, kind: route-reason, summary: Advance deterministic Indexer lifecycle state to the next Agent step or user Gate. }
   - { code: route.indexer.semantic-structure-review, kind: route-reason, summary: Review the complete semantic structure and create-or-enrich targets before Author work starts. }
-  - { code: route.indexer.obsolete-scope-confirmation, kind: route-reason, summary: Ask the user whether to include substantial obsolete content after explaining its page and file counts and both consequences. }
+  - { code: route.indexer.obsolete-scope-confirmation, kind: route-reason, summary: Resolve substantial obsolete scope from an applicable explicit decision or scope delegation; otherwise explain counts and consequences and ask the user. }
   - { code: route.indexer.recovery-required, kind: route-reason, summary: "Resolve a persisted source, material, or execution failure before retrying the Indexer lifecycle." }
   - { code: route.indexer.layout-confirmation-required, kind: route-reason, summary: Confirm the proposed knowledge layout change or reject it with revision feedback. }
   - { code: route.indexer.agent-step, kind: route-reason, summary: Run one digest-bound Indexer workset with the static Context Agent Action. }

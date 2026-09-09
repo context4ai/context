@@ -1,3 +1,5 @@
+import { submittedProgressSlice } from "./indexerProgressScopes.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
 import {
   indexerPostAuthorSemanticInputSchema,
   indexerProtocolDigest,
@@ -35,7 +37,7 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
   authorities: readonly ContextWorkflowAuthority[];
   inject_next_preparation_failure?: () => void | Promise<void>;
 }) {
-  const current = await readCurrentIndexerComposerBatch(input.projectRoot);
+  const current = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.read-current` }, () => readCurrentIndexerComposerBatch(input.projectRoot));
   if (current === undefined) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
@@ -153,10 +155,10 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
     committed: false,
   })));
   if (completions.length > 0) {
-    const stored = await completeIndexerPostAuthorRunsStore({
+    const stored = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.commit-results` }, () => completeIndexerPostAuthorRunsStore({
       projectRoot: input.projectRoot,
       runs: completions.map((completion) => completion.store),
-    });
+    }));
     for (const completion of completions) {
       const context = completion.task.context;
       const storedOutcome = stored.outcomes.find((outcome) =>
@@ -175,11 +177,11 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
           : { message: storedOutcome.message }),
       });
       if (!storedOutcome.committed) continue;
-      await persistIndexerSemanticResult({
+      await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.persist-semantic` }, () => persistIndexerSemanticResult({
         projectRoot: input.projectRoot,
         requestDigest: context.request.request_digest,
         semantic: completion.semantic,
-      });
+      }));
     }
   }
   let next: Awaited<ReturnType<typeof resolveCurrentIndexerWorkflowRoute>> = undefined;
@@ -189,21 +191,21 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
   let workflowSummary: Awaited<ReturnType<typeof actionWorkflowSummary>> | undefined;
   try {
     await input.inject_next_preparation_failure?.();
-    await advanceCurrentIndexerLifecycle(input.projectRoot);
-    next = await resolveCurrentIndexerWorkflowRoute({
+    await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.advance` }, () => advanceCurrentIndexerLifecycle(input.projectRoot));
+    next = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.route` }, () => resolveCurrentIndexerWorkflowRoute({
       projectRoot: input.projectRoot,
       managed: input.managed,
       authorities: input.authorities,
-    });
+    }));
     revisionAfter = next?.revision ?? null;
     progress = await currentIndexerProgress({
       projectRoot: input.projectRoot,
       ...(next === undefined ? {} : { route: next }),
     });
     if (next === undefined) {
-      const status = await collectProjectStatus(input.projectRoot, {
+      const status = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.status` }, () => collectProjectStatus(input.projectRoot, {
         managed: input.managed, authorities: input.authorities,
-      });
+      }));
       next = status.workflow.current;
       revisionAfter = status.workflow.revision;
       progress = status.indexerProgress ?? null;
@@ -220,7 +222,8 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
   return {
     protocol: "context.indexer.current-action-completion/v2" as const,
     stage: input.semantic.stage,
-    outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
+    submitted_slice: submittedProgressSlice(input.semantic.stage, outcomes),
+      outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
     revision_before: input.revision,
     revision_after: revisionAfter,
     revision_advanced: revisionAfter === null

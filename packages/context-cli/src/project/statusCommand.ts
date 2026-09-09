@@ -72,6 +72,13 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
         ? {}
         : { indexer: status.indexerProgress }),
     },
+    delivery_status: {
+      approved_pages: status.approvedPages,
+      awaiting_review: status.draftCandidates,
+      current_node: status.workflow.current?.node ?? null,
+      packages: status.packages.map(item => ({ name: item.name, state: item.state })),
+      meaning: "Approved pages may not yet be built. Package freshness describes dist; task completion describes the current stage only.",
+    },
     counts: {
       sources: status.sourceSummary,
       draftCandidates: status.draftCandidates,

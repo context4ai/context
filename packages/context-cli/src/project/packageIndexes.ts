@@ -1,3 +1,4 @@
+import { replaceMarkdownInlineLinkTargets } from "./markdownLinks.js";
 import { existsSync, statSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, posix as pathPosix, relative } from "node:path";
@@ -199,6 +200,15 @@ function relativeMarkdownHref(fromRelPath: string, targetRelPath: string): strin
   return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
 }
 
+function descriptionAt(item: KnowledgeItemTemplateRecord, indexPath: string): string {
+  return replaceMarkdownInlineLinkTargets(item.description, link => {
+    if (/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(link.target)) return undefined;
+    const [, path, suffix = ""] = /^([^?#]*)(.*)$/u.exec(link.target)!;
+    if (!path) return undefined;
+    return relativeMarkdownHref(indexPath, pathPosix.normalize(pathPosix.join(pathPosix.dirname(item.path), path))) + suffix;
+  });
+}
+
 function titleFromSegment(segment: string): string {
   return segment
     .replace(/\.md$/u, "")
@@ -380,7 +390,7 @@ export function knowledgeInventory(
   const itemsMarkdown = items.length === 0
     ? "- No approved knowledge selected.\n"
     : items.slice(0, 50).map((item) =>
-      `- [${item.title}](${item.href}) - ${item.type}${item.description ? `; ${item.description}` : ""}`
+      `- [${item.title}](${item.href}) - ${item.type}${item.description ? `; ${descriptionAt(item, templateRelPath)}` : ""}`
     ).join("\n");
   const currentRoot = templateRelPath.split("/")[0] ?? "";
   const currentDirectory = navigationPlan.find((directory) => directory.relPath === templateRelPath);
@@ -406,7 +416,7 @@ export function knowledgeInventory(
       }
       for (const item of group.items) {
         navigationLines.push(
-          `- [${item.title}](${relativeMarkdownHref(templateRelPath, item.path)}) - ${item.type}${item.description ? `; ${item.description}` : ""}`,
+          `- [${item.title}](${relativeMarkdownHref(templateRelPath, item.path)}) - ${item.type}${item.description ? `; ${descriptionAt(item, templateRelPath)}` : ""}`,
         );
       }
     }
@@ -518,7 +528,7 @@ function renderKnowledgeDirectoryIndex(input: {
   );
   const pageSections = input.directory.pageGroups.flatMap((group) => {
     const pageLines = group.items.map((item) =>
-      `- [${item.title}](${relativeMarkdownHref(input.directory.relPath, item.path)}) - ${item.type}${item.description ? `; ${item.description}` : ""}`
+      `- [${item.title}](${relativeMarkdownHref(input.directory.relPath, item.path)}) - ${item.type}${item.description ? `; ${descriptionAt(item, input.directory.relPath)}` : ""}`
     );
     return [`### ${group.title}`, "", ...pageLines, ""];
   });

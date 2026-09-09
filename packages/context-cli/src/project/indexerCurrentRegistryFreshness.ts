@@ -1,6 +1,6 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import {
   buildIndexerPrimaryRegistryProjection,
-  loadIndexerRegistry,
   type IndexerMainRunLedger,
   type IndexerMainWorkset, type IndexerRegistry,
 } from "@c4a/context";

@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { indexerProtocolDigest, type IndexerAuthorizedWorksetView, type IndexerMainWorkset } from "@c4a/context";
 import { buildIndexerTaskReading, renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { renderIndexerBatchReading } from "../project/indexerBatchReading.js";
 import { prepareIndexerWorksetReadings } from "../project/indexerAgentReadingResources.js";
 import { readingItems } from "./indexerReading.fixture.js";
+import { planIndexerReadingFiles } from "../project/indexerReadingFiles.js";
 
 function fixture(index: number) {
   const digest = indexerProtocolDigest(index);
@@ -84,12 +85,37 @@ test("unknown anchor carriers and non-duplicate file references remain intact", 
   }
 });
 
+test("large declarations move to complete optional files without removing members or reducing Author material", () => {
+  const input = fixture(0);
+  input.payload.typeAnnotation = Array.from({ length: 200 }, (_, i) =>
+    `/** Detailed supported meaning for property ${i}. */\nproperty${i}?: string | number;`).join("\n");
+  input.payload.members = Array.from({ length: 200 }, (_, i) => ({
+    name: `property${i}`, optional: true, readonly: false, doc: "All constraints stay in the detail file.".repeat(8),
+  }));
+  const original = JSON.stringify(input.view);
+  const compact = planIndexerReadingFiles([buildIndexerTaskReading(input)]);
+  const full = renderIndexerWorksetReading(input);
+  expect(compact.details).toHaveLength(1);
+  expect(restoredCarrier(compact.details[0]!.markdown).payload).toEqual(input.payload);
+  expect(readingItems(compact.readings[0]!.markdown, "consumer-anchor overview")[0]!.value).toMatchObject({
+    payload: { members: input.payload.members.map(({ doc: _doc, ...member }) => { void _doc; return member; }) },
+  });
+  expect(compact.input_bytes).toBeLessThan(Buffer.byteLength(full) / 2);
+  expect(JSON.stringify(input.view)).toBe(original);
+  console.info(JSON.stringify({ fixture: "200-members", full_bytes: Buffer.byteLength(full), default_reading_bytes: compact.input_bytes,
+    detail_bytes: Buffer.byteLength(compact.details[0]!.markdown), members: 200 }));
+  const author = structuredClone(input);
+  author.workset.stage = "author";
+  author.view.stage = "author";
+  expect(planIndexerReadingFiles([buildIndexerTaskReading(author)]).details).toHaveLength(0);
+});
+
 test("shares only exact same-origin Partition material with task applicability and standalone retry", () => {
   const inputs = [fixture(0), fixture(1), fixture(2)];
   inputs[2]!.view.items.find((item) => item.category === "consumer-anchor")!.provenance.container_ref = "source:other";
   const batch = renderIndexerBatchReading(inputs.map(buildIndexerTaskReading));
   expect(readingItems(batch.markdown, "index-requirement")).toHaveLength(1);
-  expect(readingItems(batch.markdown, "consumer-anchor")).toHaveLength(2);
+  expect(readingItems(batch.markdown, "consumer-anchor overview")).toHaveLength(2);
   expect(batch.markdown).toContain("Applies to: task-001, task-002 — Task facts");
   expect(batch.input_bytes).toBeLessThan(inputs.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0));
   const retry = renderIndexerWorksetReading(inputs[1]!);
@@ -97,7 +123,7 @@ test("shares only exact same-origin Partition material with task applicability a
   expect(retry).not.toContain("task-001");
   // Equal IDs and provenance are insufficient if the semantic content differs.
   inputs[1]!.carrier.payload.extra.signature_digest = "changed meaning";
-  expect(readingItems(renderIndexerBatchReading(inputs.map(buildIndexerTaskReading)).markdown, "consumer-anchor")).toHaveLength(3);
+  expect(readingItems(renderIndexerBatchReading(inputs.map(buildIndexerTaskReading)).markdown, "consumer-anchor overview")).toHaveLength(3);
 });
 
 test("Partition Route resources isolate tasks and reuse common material without changing canonical inputs", async () => {
@@ -113,12 +139,48 @@ test("Partition Route resources isolate tasks and reuse common material without 
     expect(files[0]!.path).not.toBe(files[1]!.path);
     expect(files[0]!.common).toEqual(files[1]!.common);
     const shared = await Promise.all(files[0]!.common.map((file) => readFile(file.path, "utf8")));
-    expect(restoredCarrier(shared.join("\n")).payload).toEqual(inputs[0]!.payload);
+    const detailName = shared.join("\n").match(/\.\/([a-f0-9]{64}\.md)/)![1]!;
+    const detail = await readFile(join(dirname(files[0]!.path), detailName), "utf8");
+    expect(restoredCarrier(detail).payload).toEqual(inputs[0]!.payload);
+    expect(shared.join("\n")).not.toContain(inputs[0]!.payload.initializer);
+    expect(readingItems(shared.join("\n"), "consumer-anchor overview")[0]!.value).toMatchObject({ payload: { members: [{ name: "enabled", optional: true, readonly: false }] } });
     expect(await prepareIndexerWorksetReadings(ready)).toEqual(files);
     const text = await readFile(files[0]!.path, "utf8");
     expect(Buffer.byteLength(text)).toBeLessThan(inputs.reduce((sum, input) => sum + Buffer.byteLength(renderIndexerWorksetReading(input)), 0));
     for (const item of ready) expect(JSON.parse(await readFile(item.ready.path, "utf8"))).toEqual(item.view);
     const retry = await prepareIndexerWorksetReadings([ready[1]!]);
-    expect(restoredCarrier(await readFile(retry[0]!.path, "utf8")).payload).toEqual(inputs[1]!.payload);
+    const retryText = await readFile(retry[0]!.path, "utf8");
+    const retryShared = await Promise.all(retry[0]!.common.map(file => readFile(file.path, "utf8")));
+    const retryDetail = [retryText, ...retryShared].join("\n").match(/Detailed [^\n]+: \.\/([a-f0-9]{64}\.md)/)![1]!;
+    expect(restoredCarrier(await readFile(join(dirname(retry[0]!.path), retryDetail), "utf8")).payload).toEqual(inputs[1]!.payload);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("Partition navigation shares fields without dropping tasks or extensions", async () => {
+  const { compactPartitionNavigation } = await import("../project/indexerPartitionOverview.js");
+  const tasks = Array.from({ length: 120 }, (_, i) => ({ source: "repo:example", module: null,
+    subject: { namespace: "library", kind: "component" }, family: `component-${i}`, members: i,
+    ...(i === 119 ? { extension: false } : {}) }));
+  const value = { tasks, guidance: "Keep every task" };
+  const before = JSON.stringify(value);
+  const compact = compactPartitionNavigation(value);
+  const groups = (compact.tasks as { groups: { common: object; columns: string[]; rows: unknown[][] }[] }).groups;
+  const restored = groups.flatMap(group => group.rows.map(row => ({ ...group.common,
+    ...Object.fromEntries(group.columns.map((column, i) => [column, row[i]])) })));
+  expect(restored).toEqual(tasks);
+  expect(JSON.stringify(value)).toBe(before);
+  expect(JSON.stringify(compact).length).toBeLessThan(before.length / 2);
+});
+
+test("Partition style reading preserves the entire payload in compact JSON", () => {
+  const input = fixture(0);
+  const anchor = input.view.items.find(item => item.category === "consumer-anchor")!;
+  const value = anchor.value as Record<string, unknown>;
+  value.kind = "style-selector";
+  value.payload = { name: "focus", selector: ".button:focus-visible", declarations: { outline: "2px solid" },
+    extension: { absent: null, literal: "\\n and ```" } };
+  const before = JSON.stringify(input);
+  const markdown = renderIndexerWorksetReading(input);
+  expect((readingItems(markdown, "consumer-anchor")[0]!.value as Record<string, unknown>).payload).toEqual(value.payload);
+  expect(JSON.stringify(input)).toBe(before);
 });

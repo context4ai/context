@@ -1,5 +1,5 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import {
-  loadIndexerRegistry,
   validateFinalizedIndexerRegistry,
   type PhaseDefinition,
 } from "@c4a/context";

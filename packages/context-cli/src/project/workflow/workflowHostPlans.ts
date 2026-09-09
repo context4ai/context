@@ -57,9 +57,7 @@ function reviewApproveCommand(
   ) {
     return undefined;
   }
-  return observation.draftCollections.length === 1
-    ? `context review approve-all ${observation.draftCollections[0]} --managed --format json`
-    : "context review approve-all --all --managed --format json";
+  return "context review apply '<review-decisions-file>' --format json";
 }
 
 function reviewForceApproveCommand(

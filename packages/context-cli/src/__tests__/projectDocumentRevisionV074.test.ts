@@ -1,3 +1,4 @@
+import { indexerBatchStagePolicy } from "../project/indexerCurrentBatchPlanner.js";
 import {
   approveCandidates,
   completeAuthorStage,
@@ -56,7 +57,7 @@ afterEach(async () => {
 
 describe("current Indexer document revision", () => {
   test("a delivery Composer starts with its matching route state while Author peers remain pending", async () => {
-    const root = await workspace({ sourceCount: 8 });
+    const root = await workspace({ sourceCount: indexerBatchStagePolicy("author").max_tasks + 4 });
     const path = join(root, "src/indexers.yaml");
     const registry = YAML.parse(await readFile(path, "utf8"));
     registry.indexers[0].profile.composers = [{ id: "public-contract", provider: "community" }];
@@ -67,6 +68,7 @@ describe("current Indexer document revision", () => {
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
       value: { stage: "structure-review", decision: "approved" }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
+    expect((await currentLedger(root))?.entries.filter(entry => entry.state === "running")).toHaveLength(indexerBatchStagePolicy("author").max_tasks);
     await completeAuthorStage(root);
     expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending")).toBe(true);
     const composer = await readCurrentIndexerComposerBatch(root);
@@ -89,7 +91,7 @@ describe("current Indexer document revision", () => {
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
   test("delivers a small readable batch while Author peers remain pending, then resumes after build", async () => {
-    const root = await workspace({ sourceCount: 8, purpose: "Help a developer integrate the public constants." });
+    const root = await workspace({ sourceCount: indexerBatchStagePolicy("author").max_tasks + 4, purpose: "Help a developer integrate the public constants." });
     await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
       join(root, "src/package-templates/kb"), { recursive: true });
     const entryPath = join(root, "src/index.ts");

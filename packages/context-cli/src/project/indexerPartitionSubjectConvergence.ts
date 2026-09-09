@@ -176,6 +176,10 @@ function convergeSubjectGroup(
     // The primary owner's accepted page plan remains authoritative when
     // supplementary evidence is merged into the same Subject.
     ...owner.group,
+    ...(entries.some((entry) => entry.group.scope_change !== undefined) ? {
+      scope_change: { removed_member_ids: uniqueSorted(entries.flatMap((entry) => entry.group.scope_change?.removed_member_ids ?? [])) },
+      artifact_intent: undefined, template_id: undefined,
+    } : {}),
     group_key: groupKey,
     subject_key: owner.group.subject_key,
     subject_intent: owner.group.subject_intent,

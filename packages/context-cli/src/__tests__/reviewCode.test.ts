@@ -36,3 +36,12 @@ test("missing, duplicate, mixed, corrupt and unsupported codes fail", () => {
   expect(() => codec.decode(code.replace("CR1", "CR2"))).toThrow();
   expect(() => codec.decode(code.slice(0, -1))).toThrow();
 });
+
+test("partial decisions round-trip with pending positions and complete 980-character segments", () => {
+  const statuses = Array.from({ length: 10000 }, (_, i) => (["approved", "pending", "rejected"] as const)[i % 3]!);
+  const browser = runInContext(`(${createReviewCodeCodec.toString()})()`, createContext({})) as ReturnType<typeof createReviewCodeCodec>;
+  const parts = browser.encode("all", hash, other, statuses);
+  expect(parts.every(part => part.length <= 980)).toBe(true);
+  expect(codec.decode(parts.join("\n")).statuses).toEqual(statuses);
+  expect(() => codec.decode(parts.slice(1).join("\n"))).toThrow();
+});

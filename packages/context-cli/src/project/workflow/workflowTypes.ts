@@ -125,6 +125,8 @@ export interface ContextWorkflowObservation {
     diagnostic?: string;
   };
   indexerCandidateCompile: {
+    managed_source_pending?: boolean;
+    partial_delivery?: boolean;
     rollback_pending?: boolean;
   revision_pending?: boolean;
     delivery_pending?: boolean;
@@ -212,6 +214,7 @@ export interface ContextResolvedWorkflowRoute {
   reason_code: string;
   summary?: string;
   delivery?: IndexerDeliveryGuidance;
+  batch_budget?: { input_bytes_scope?: "required-reading-excludes-optional-details"; tasks: number; input_bytes: number; output_reserve_bytes: number; view_items: number; task_limit: number; packing_limits: string[]; shared_instruction_bytes?: number | undefined; deduplicated_input_bytes?: number | undefined };
   availability: "immediate" | "requires-user" | "blocked";
   commands: ContextWorkflowCommand[];
   action?: {

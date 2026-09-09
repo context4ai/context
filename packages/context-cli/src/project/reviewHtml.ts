@@ -288,12 +288,12 @@ function renderReviewHtml(
       updatePayloadBox();
     }
     function payloadParts() {
-      if (decisionCounts().pending || candidates.length === 0) return [];
+      if (decisionCounts().pending === candidates.length) return [];
       const ordered = [...candidates].sort((a, b) => a.candidate_id < b.candidate_id ? -1 : a.candidate_id > b.candidate_id ? 1 : 0);
       return reviewCode.encode(payloadScopeLabel, payloadScope.ids_sha256, payloadScope.candidates_sha256,
         ordered.map((item) => decisions.get(item.candidate_id)));
     }
-    function payloadText() { return payloadParts()[codePart] || t("Resolve all pending pages before copying."); }
+    function payloadText() { return payloadParts()[codePart] || t("Select at least one page decision; pending pages remain for later review."); }
     function setDecision(id, status) {
       const item = candidates.find((candidate) => candidate.candidate_id === id);
       if (status === "approved" && item && !item.snapshot_ready) return;
@@ -312,7 +312,7 @@ function renderReviewHtml(
       document.getElementById("code-previous").disabled = codePart === 0;
       document.getElementById("code-next").disabled = codePart + 1 >= parts.length;
       const counts = decisionCounts();
-      const ready = counts.pending === 0 && candidates.length > 0;
+      const ready = counts.approved + counts.rejected > 0;
       decisionSummary.innerHTML = '<p>' + html(t('{approved} approved · {rejected} not included · {pending} pending', counts)) + '</p>' +
         (counts.rejected ? '<details><summary>' + html(t('Pages not included')) + '</summary><ul>' + candidates.filter((item) => decisions.get(item.candidate_id) === "rejected").map((item) => '<li>' + html(item.review.title) + '</li>').join('') + '</ul></details>' : '');
       payloadCopy.disabled = !ready;
@@ -333,9 +333,9 @@ function renderReviewHtml(
     }
     async function copyPayload() {
       const counts = decisionCounts();
-      if (counts.pending > 0) {
+      if (counts.approved + counts.rejected === 0) {
         updatePayloadBox();
-        const message = t("Resolve all pending pages before copying.");
+        const message = t("Select at least one page decision; pending pages remain for later review.");
         modalCopyState.textContent = message;
         return;
       }
@@ -416,7 +416,7 @@ function renderReviewHtml(
         evidenceWarning +
         sectionDetails +
         previewBlock +
-        '<p class="repair-hint">' + html(t('Need changes? Leave this batch unapplied and ask the agent to repair this page.')) + '</p>' +
+        '<p class="repair-hint">' + html(t('Need changes? Leave this page pending and ask the agent to repair it. Other reviewed pages can be approved.')) + '</p>' +
         sourceLocationsBlock;
       document.querySelectorAll("[data-id]").forEach((button) => button.addEventListener("click", () => { selected = button.dataset.id; render(); }));
       document.querySelectorAll("[data-action]").forEach((button) => button.addEventListener("click", () => setDecision(item.candidate_id, button.dataset.action)));

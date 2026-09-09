@@ -109,6 +109,7 @@ describe("0.7.5 current Indexer batch planner", () => {
     });
 
     expect(first.candidates).toHaveLength(taskLimit);
+    expect(first.packing_limits).toContain("task-limit");
     expect(first.candidates.map((item) => item.workset.workset_digest)).toEqual(
       candidates.slice(0, taskLimit)
         .map((item) => item.workset.workset_digest),
@@ -139,6 +140,7 @@ describe("0.7.5 current Indexer batch planner", () => {
 
     expect(planned.candidates).toHaveLength(1);
     expect(planned.input_bytes).toBe(6 * 1024 * 1024 + 1);
+    expect(planned.packing_limits).toContain("input-budget");
     expect(planned.candidates[0]!.workset).toEqual(workset(0));
   });
 

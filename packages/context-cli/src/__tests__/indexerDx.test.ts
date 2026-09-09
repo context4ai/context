@@ -31,11 +31,26 @@ test("small completion is compact by default and preserves the exact Route and v
       committed_count: number; next_route: { file: string; digest: string }; result_file: string;
     };
     expect(summary.committed_count).toBe(1);
+    expect(summary).toHaveProperty("details_required", false);
     expect(summary).not.toHaveProperty("next.action");
     const bytes = await readFile(summary.next_route.file, "utf8");
     expect(JSON.parse(bytes)).toEqual(result.next);
     expect(summary.next_route.digest).toBe(`sha256:${createHash("sha256").update(bytes).digest("hex")}`);
     expect(JSON.parse(await readFile(summary.result_file, "utf8"))).toEqual(result);
     expect(await prepareActionCompletionOutput({ projectRoot: root, result, format: "json", verbose: true })).toEqual(result);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("failed, unknown and omitted completion outcomes require full diagnostics", async () => {
+  const root = await mkdtemp(join(tmpdir(), "context-dx-"));
+  try {
+    for (const outcomes of [
+      [{ task_key: "task-001", outcome: "failed", message: "diagnostic".repeat(1000) }],
+      [{ task_key: "task-001", outcome: "unexpected" }],
+      Array.from({ length: 240 }, (_, i) => ({ task_key: `task-${i}`, outcome: "accepted", committed: true })),
+    ]) {
+      const output = await prepareActionCompletionOutput({ projectRoot: root, format: "json", result: { outcomes } });
+      expect(output).toHaveProperty("details_required", true);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });

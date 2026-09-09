@@ -1,3 +1,6 @@
+import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
+import { withCommandReadCache } from "./commandReadCache.js";
+import { readPartitionStream, resumePartitionStream } from "./indexerPartitionStream.js";
 import { prepareIndexerDelivery, previewIndexerDelivery, resetIndexerDeliveryProjection } from "./indexerDelivery.js";
 import { resolveCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import {
@@ -87,6 +90,9 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
   if (revision !== undefined) {
     return { advanced: false, state: revision.candidate === undefined ? "agent-required" : "complete" };
   }
+  const { prepareManagedSourceKnowledgeUpdate } = await import("./managedSourceKnowledgeUpdate.js");
+  if (await prepareManagedSourceKnowledgeUpdate(projectRoot)) return { advanced: true, state: "agent-required" };
+  if ((await readPartitionStream(projectRoot))?.phase === "resuming") await resumePartitionStream(projectRoot);
   let ledger = await currentLedger(projectRoot);
   let advanced = false;
   if (ledger === undefined || ledger.entries.length === 0 || ledger.entries.some((entry) => entry.state === "stale") || await hasChangedIndexerWorksetAuthority(projectRoot, ledger)) {
@@ -96,6 +102,7 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
   }
   if (ledger === undefined) throw new TypeError("Indexer lifecycle did not prepare a main run ledger");
   if (ledger.entries.some((entry) => entry.state === "failed")) {
+    await interruptDeliveryCadence(projectRoot);
     await retryFailedIndexerMainRunStore(projectRoot);
     ledger = await currentLedger(projectRoot);
     if (ledger === undefined) throw new TypeError("Indexer retry lost the main run ledger");
@@ -111,9 +118,33 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
       return { advanced: true, state: "agent-required" };
     }
     if (await prepareIndexerDelivery(projectRoot)) {
-      const finalization = await advanceCurrentIndexerFinalization(projectRoot);
+      const finalization = await advanceCurrentIndexerFinalization(projectRoot,
+        delivery === undefined ? undefined : new Set(delivery.current.map(page => page.workset_digest)));
       return { advanced: true, state: finalization?.state === "ready" ? "complete"
         : finalization?.state === "composer-required" ? "agent-required" : "gate-required" };
+    }
+  }
+  const refreshedLedger = await currentLedger(projectRoot);
+  if (refreshedLedger === undefined) return { advanced: true, state: "complete" };
+  if (refreshedLedger.ledger_digest !== ledger.ledger_digest) return advanceCurrentIndexerLifecycleInternal(projectRoot);
+  if (ledger.entries.every(entry => entry.stage === "partition") &&
+      ledger.entries.some(entry => entry.state === "accepted") && ledger.entries.some(entry => entry.state !== "accepted")) {
+    // This is only a cheap scheduling hint. If it finds a ready declaration,
+    // structure preparation validates the actual accepted cache before acting.
+    // Do not repeatedly revalidate every accepted envelope for legacy/all-at-once
+    // plans that never opted into an early wave.
+    const hints = await Promise.all(ledger.entries.filter(entry => entry.state === "accepted").map(entry =>
+      readJsonMaybe(projectRoot, `.tmp/context-runtime/indexer/semantic-results/${entry.execution_request_digest.slice(7)}.json`)));
+    const hasReady = hints.some(value => {
+      const plan = value as { outcome?: string; groups?: Array<{ ready_for_author?: boolean }> } | undefined;
+      return plan?.outcome === "complete" && Array.isArray(plan.groups) && plan.groups.some(group => group?.ready_for_author === true);
+    });
+    if (hasReady) {
+      const structure = await prepareCurrentIndexerStructurePlan(projectRoot, true);
+      if (structure.preview.topics.length > 0) {
+        await prepareCurrentIndexerAuthorStage(projectRoot);
+        return structure.approved ? advanceCurrentIndexerLifecycleInternal(projectRoot) : { advanced: true, state: "gate-required" };
+      }
     }
   }
   const next = ledger.entries.find((entry) =>
@@ -173,7 +204,8 @@ async function advanceCurrentIndexerLifecycleInternal(projectRoot: string): Prom
         return { advanced: true, state: "gate-required" };
       }
       if (next.state === "failed") {
-        await retryFailedIndexerMainRunStore(projectRoot);
+        await interruptDeliveryCadence(projectRoot);
+    await retryFailedIndexerMainRunStore(projectRoot);
       }
       return advanceCurrentIndexerLifecycleInternal(projectRoot);
     }
@@ -194,7 +226,7 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
   advanced: boolean;
   state: "agent-required" | "gate-required" | "complete" | "failed";
 }> {
-  return measureContextDebugOperation({
+  return withCommandReadCache(() => measureContextDebugOperation({
     projectRoot,
     operation: "indexer.next-prepare",
     counters: { next_preparation_count: 1 },
@@ -205,5 +237,5 @@ export async function advanceCurrentIndexerLifecycle(projectRoot: string): Promi
       await recordIndexerInputScopeRecovery(projectRoot, error);
       return { advanced: true, state: "gate-required" };
     }
-  });
+  }));
 }

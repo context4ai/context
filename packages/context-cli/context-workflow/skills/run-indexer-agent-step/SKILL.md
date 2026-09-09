@@ -55,6 +55,25 @@ Context handles strategy selection and retries; do not look up a separate
 strategy definition or submit strategy metadata. Report missing source material or
 unresolvable semantic boundaries through the current Result schema.
 
+During Partition, read the whole inventory overview and each member's identity,
+not every implementation body. `partition-navigation` shows the surrounding scope;
+`consumer-anchor overview` links to complete immutable fact details. Open those
+files and the bounded `source-access` paths whenever ownership, lifecycle, a
+shared dependency or the reader task is unclear. Sampling helps orient you but
+cannot justify excluding uninspected members or asserting behavior. Unknown
+material formats remain full required reading. Author can access complete selected
+facts and source text; reduced planning input is not evidence for a final claim.
+
+Set a group's `ready_for_author: true` only after its identity, primary ownership,
+reader task and relevant shared dependencies are resolved well enough to write
+an independently useful page. A sample, file boundary or large fact count is
+not sufficient. Leave it absent/false when neighboring material could change the
+boundary. This declaration permits an early wave; it does not mark the remaining
+inventory complete or bypass normal structure/content review. After a wave's
+build, follow the fresh Route back to remaining Partition tasks. Later material
+for the same subject must retain its identity and improve its approved pages,
+not create duplicates. All inventory members still need final dispositions.
+
 Read `partition-authority` before choosing each group subject. A string
 changes only the local key and preserves `base_subject_key` namespace and kind. Use an explicit
 subject object only when its kind is listed in `subject_key_contract.kinds`; never invent a kind
@@ -77,9 +96,49 @@ an independent subject otherwise. Do not emit `supporting`; material that must n
 subject must not be emitted as a group.
 
 For an Author Result, write reader-facing `title`, `summary`, and `sections` only when publishing.
-When the task lists multiple artifact intents, choose its displayed `artifact_intent` for the page you write.
-Each section uses `source_items` to refer to supplied sources and, when useful, `facts` to refer
-to supplied Fact items; both are arrays of references, not objects. Copy `source_items` from the
+Read the main task and its shared material, then expand details for the claims and
+member decisions you need to make; do not open every optional file as a checklist.
+Style-name rows locate captured CSS, not public interfaces or runtime behavior.
+Rows use the supplied column names; row numbers are never source or member IDs.
+All inventory IDs remain explicit. Supporting style rows without a ref can be
+traced through the source or full parser detail when a fact citation is needed.
+A stylesheet path or inventory ID is not a requirement to read the whole file.
+Use the accepted plan and supplied evidence for supporting/catalog decisions;
+open the relevant rules only when a planned claim or unresolved member decision
+needs layout/state/theme/override/accessibility detail. Do not add visual prose
+merely to cover style records, or infer exclusions from selector names alone.
+Package briefs support the fields explicitly shown. Open the full manifest only
+when a needed import condition, dependency or build detail is missing. Do not
+reread either source solely because it appears in navigation.
+`members_from` reuses an identical Props member list within the same source file;
+combine it with the component's own parameters/defaults and retain any uncertainty.
+Inherit `page_plan.artifact_intent`; omitting `artifact_intent` also uses the saved plan.
+Use `primary_artifact_options` when selecting a policy; derived-page intents are not additional pages to write.
+For mechanical assembly, copy the current Route's recommended `indexer-author-scaffold`
+JSON resource to workspace `.tmp/agent-payloads/`; do not edit the runtime resource.
+It already contains the current task keys, planned intent, unambiguous policy and member IDs.
+Write the prose, references and member decisions. Use a fresh scaffold when the Route's
+revision or task set changes; never reuse accepted tasks from an earlier batch.
+`context action scaffold-current --revision <current-revision>` remains available to
+explicitly recreate the skeleton, but is not an additional required command.
+Empty states are intentional:
+the scaffold never chooses coverage or a publishing decision on your behalf.
+Members with the same state, section and reason can share one disposition entry:
+`{items: [<member-id>, ...], state: covered, section: <section-key>}`.
+Do not also list these members individually. Context expands the groups and performs
+the same per-member ownership and coverage validation.
+For uncertain submissions, add `--preview` to the current Author completion command.
+It validates and renders the current result without accepting tasks or advancing the Route;
+this is optional, not another required round trip. Read failures, repair the payload,
+then submit normally. Preview input errors include `issues` with paths relative to
+each task entry (starting at `result`) and section/member identifiers when available.
+Use those paths to locate edits; errors from conversion or rendering keep their
+original message and do not imply a payload field location. Preview does not replace Review or guarantee a later unchanged revision.
+Each section references supplied source material through `source_items`, `facts`, or both.
+Both are arrays of references, not objects. Authorized Facts already carry their source
+bindings, so do not repeat those bindings in `source_items` merely to satisfy a field.
+A section with neither resolvable sources nor Facts is still invalid.
+Catalog-only and unsupported results publish no Artifact and need no policy selection. Copy `source_items` from the
 task's Source material, or use repository-relative file paths for captured code you read directly,
 not inventory or repository identifiers. Context constructs the internal
 Facts and EvidenceBindings. For `catalog-only`, return the member dispositions without dummy prose
@@ -93,7 +152,13 @@ resolves the source association without manual fingerprints or a separate CLI ca
 A signature or call name alone does
 not establish behavior absent from those lines. Do not copy process-only carriers into reader Markdown.
 Read shared instructions once while they remain available in the current conversation;
-unchanged instructions do not need rereading for each task. Read every task's own material.
+unchanged instructions do not need rereading for each task. Read every task's own goals and member overview. Large captured files may be linked
+rather than inlined: read the relevant implementations and dependencies by range;
+if scope or behavior is unclear, expand the whole file. Navigation, CSS selectors
+and AST signatures do not establish behavior by themselves. Full parser detail
+files are optional unless needed to resolve a relationship or ambiguity. Known
+carrier metadata may be omitted from the overview; all submission references and
+canonical facts remain available. Never treat absent overview text as absent capability.
 If an explanation needs a dependency body, first read its captured file directly. Only when
 the supplied source access cannot provide the body, use `request-material` with
 specific repository-relative file or directory paths in `material_gaps[].source_hints`.
@@ -104,10 +169,13 @@ returns usable material again. If a path is unavailable, correct it or describe 
 Installed guidance can be newer than a resumed task. Context owns this compatibility decision;
 follow the current Route without comparing Provider fingerprints or regenerating task identities.
 Do not invent or manually copy read-receipt, execution-receipt, or stable-result digests. Submit
-exactly `context.indexer.current-action-input/v2` through the Route's completion command; Context
+the stage-specific input described by the current Action schema through the Route's completion command; Context
 derives internal envelopes and performs dependency, schema, owner, scope, and per-workset validation
-before reporting each task accepted. Read the completion's `outcomes` and `next_route.file` (the exact next Route), then continue directly from
-its `next` Route and ready Resource paths. Do not run `context status` or either Resource materializer
+before reporting each task accepted. Read the completion's `outcomes` and
+`next_route.file` (the exact next Route). Read `result_file` when `details_required`
+is true, output was truncated or the outcome is unclear; an ordinary successful
+summary does not require rereading the full result, which embeds the same Route.
+Continue directly from that Route and ready Resource paths. Do not run `context status` or either Resource materializer
 between successful batches. A failed item is retried from its returned task-only skeleton; already
 accepted peers are not repeated. Never report success merely because the envelope or prose looks valid.
 If `next` is null and `next_preparation` reports failure, the committed outcomes
@@ -129,3 +197,89 @@ a server, a runtime is not a module role, and an application component is not
 a published component library. Preserve behavior needed for the reader's task.
 
 For `stage: source-update`, follow the selected source-update procedure and action schema. Read current approved pages and the fixed source changes before deciding which pages need revision, including any new topics absent from existing page references.
+
+## Semantic judgment and narrowed scope
+
+Scripts may assemble references, serialize an Agent-authored result and submit it.
+Do not use the first path to name an entire mixed group, classify all inventory
+members as one topic, or generate identical API prose and unconditional publish
+results. Reading a View with a script is not a substitute for understanding its
+sources. Reuse mechanics, not unsupported content claims.
+
+When the selected template supplies a program-generated API table, bind the
+applicable facts and let the renderer produce field rows, types and defaults.
+Do not write a second equivalent table or restate every row in prose. Explain
+usage decisions, composition, pitfalls and migration boundaries; mention a
+parameter or default when it helps explain that behavior. This does not waive
+source reading or member coverage. If a generated value conflicts with source,
+identify the field and source location through the current repair flow; do not
+patch the generated block or add a competing answer in prose. Without a suitable
+program block, follow the selected template and write the source-backed explanation
+needed by the reader rather than omitting it.
+
+Keep each parameter and default attached to its own callable or type. Missing
+extracted members do not establish that an API has no parameters or callbacks;
+read the referenced source when inherited types or static methods matter to the
+reader. Before extending a first batch, check that its pages answer the promised
+reader tasks, including document-grounded integration or troubleshooting where
+required, rather than only listing exports.
+
+For Composer, inspect the selected task's primary page and remaining material
+before choosing an empty proposal list. A script must not decide that every
+Composer is unnecessary. Existing API tables may remove duplicate table work
+without answering the task's examples or usage questions.
+
+Use one production driver for this workspace. If a submission process is still
+running, await its completion instead of starting another lifecycle driver from
+an observed status. A local content repair or truncated read is not a reason to
+run `task prepare --apply`: that command ends the old task. When scope decisions
+change, update the existing applicable requirement/report without extending a
+one-task exclusion into a permanent policy.
+
+When `page_plan.scope_change` is present, reassess the residual group before
+Author: the previous title, reader task and outline describe the original scope.
+Excluded members remain excluded. Publish only when the remaining sources support
+a useful page, with an accurate title, summary and an allowed artifact intent.
+The old template/intent restriction has been released for this changed group.
+If it should not be a page, use a supported non-publishing outcome and truthful
+member dispositions; catalog-only requires authorized facts. Zero extracted facts
+alone does not prohibit a source-grounded document, and does not establish an API.
+Do not restart unrelated accepted tasks to repair this group's interpretation.
+
+## User-facing progress
+
+Use CLI `progress.scopes` (or `indexerProgress.scopes` in status) as the
+single source for progress in conversation and reports. It separates:
+- `overall`: delivered pages and cumulative planning for the current Indexer run;
+- `wave`: writing tasks, observed pages and composition for the current wave;
+- `slice`: tasks in the currently active Route slice.
+
+Planning completed counts currently valid accepted tasks, not lifetime effort.
+When overall.planning.needs_recheck is nonzero, report “规划当前有效 X/Y 项；Z 项因任务绑定变化待复核”.
+Do not describe a lower valid count as lost pages or silently restarting from zero.
+The CLI reason identifies binding changes, not proof that source code changed;
+do not invent a more specific cause.
+
+Keep these scopes separate. A wave or pause target never replaces the overall
+scope. Preserve overall planning across Author, Composer and Review transitions.
+Use each counter's `unit`: task means 项/任务, page means 页. A writing task is
+not automatically one page. A null total means 总数待确定, not zero or the
+number of currently prepared tasks. Revisions can overlap delivered pages;
+do not add wave tasks to delivered pages to invent a page total.
+
+Use two bold progress lines. The first combines `overall` and a clearly labelled
+`wave` supplement; the second uses `slice`. For example, with matching CLI values:
+**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前分片：补充内容检查 0/8 项]**
+
+A completion receipt's `submitted_slice` describes the slice just submitted;
+`progress.scopes.slice` can already describe the next Route. Use the former when
+reporting submission success and the latter when announcing the next slice.
+Never combine their numerators and denominators. A null slice means no active
+Agent task slice, not that the workflow is complete. During Review/build, state
+the returned Route action briefly rather than inventing a slice ratio.
+If progress is unavailable after task cleanup, say the counters are unavailable;
+do not turn the last wave into the overall scope or report delivery as zero.
+Continue authorized work after an update; only the agreed delivery stop or an
+actual unresolved blocker permits stopping. This format governs progress, not
+answers, review findings or necessary questions.

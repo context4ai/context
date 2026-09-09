@@ -15,6 +15,7 @@ export function isExplicitDeprecatedPath(path: string): boolean {
  */
 export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], options: {
   deprecated_member_ids?: ReadonlySet<string>;
+  pending_planning?: boolean;
   titles?: ReadonlyMap<string, string>;
 } = {}) {
   const files = new Set<string>();
@@ -52,7 +53,7 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
       member_ids: [...new Set(owned.filter((member) => member.deprecated).map((member) => member.member_id))].sort(),
       mixed_current_content: owned.some((member) => !member.deprecated) });
   }
-  const exclusionLeavesNoCurrentPages = runSpecs.length > 0 && affected.length === runSpecs.length &&
+  const exclusionLeavesNoCurrentPages = options.pending_planning !== true && runSpecs.length > 0 && affected.length === runSpecs.length &&
     affected.every((item) => !item.mixed_current_content);
   return {
     requires_confirmation: affected.length >= 5 || files.size >= 5,
@@ -64,7 +65,7 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
     exclusion_leaves_no_current_pages: exclusionLeavesNoCurrentPages,
     affected,
     include_consequence: "Generate documentation for these outdated APIs too. This adds reading, writing and maintenance work; keep their entry points and contracts distinct from current APIs.",
-    exclude_consequence: "Do not generate outdated API pages. Old integration and migration questions will not be covered. Keep current APIs in mixed pages; captured sources and already accepted knowledge are not deleted." +
+    exclude_consequence: (options.pending_planning ? "This summary covers the current ready wave; excluding it resumes the remaining planning. It does not establish that the rest of the scope has no useful pages. " : "") + "Do not generate outdated API pages. Old integration and migration questions will not be covered. Keep current APIs in mixed pages; captured sources and already accepted knowledge are not deleted." +
       (exclusionLeavesNoCurrentPages ? " No current pages remain: stop this indexing request without submitting another Partition or Author result. Resume only after the user supplies a different scope." : ""),
     include_action: { stage: "structure-review", decision: "approved" },
     exclude_action: exclusionLeavesNoCurrentPages || affected.length === 0 ? null : { stage: "structure-review", decision: "exclude-obsolete" },

@@ -156,13 +156,19 @@ function parsePayloadValues(parsed: unknown[]): ReviewPayload {
       category: ErrorCategory.UserInputInvalid,
     });
   }
-  const defaultStatus = parseReviewStatus(first.default, "review payload default");
-  const decisions = parsed.slice(1).map((item, index) => parsePayloadLineDecision(item, index + 2));
+  const defaultStatus = first.default === undefined ? undefined : parseReviewStatus(first.default, "review payload default");
+  if (first.decisions !== undefined && (!Array.isArray(first.decisions) || parsed.length > 1)) {
+    throw new ContextError(ExitCode.UserError, "review decisions must be an array and cannot be mixed with JSONL decisions", {
+      category: ErrorCategory.UserInputInvalid,
+    });
+  }
+  const decisions = (first.decisions ?? parsed.slice(1) as unknown[]) as unknown[];
+  const validatedDecisions = decisions.map((item, index) => parsePayloadLineDecision(item, index + 2));
   return {
-    decisions,
+    decisions: validatedDecisions,
     ...(typeof first.note === "string" ? { note: first.note } : {}),
     ...(collection !== undefined ? { collection } : {}),
-    default: defaultStatus,
+    ...(defaultStatus === undefined ? {} : { default: defaultStatus }),
     ...(scope !== undefined ? { scope } : {}),
   };
 }

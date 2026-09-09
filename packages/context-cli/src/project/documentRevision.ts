@@ -226,6 +226,27 @@ async function registerRequestedRevisionMaintenance(input: DocumentRevisionInput
   return undefined;
 }
 
+async function assertCandidateReviewAvailable(projectRoot: string, selector: string, compileState: string): Promise<void> {
+  const candidates = await readCandidateRecords(projectRoot);
+  const matches = candidates.filter((candidate) => candidateAliases(candidate).some((alias) =>
+    normalizedSelector(alias).toLocaleLowerCase() === normalizedSelector(selector).toLocaleLowerCase()));
+  if (matches.length > 0) {
+    const candidate = resolveCandidate(matches, selector);
+    const command = "context status --format json";
+    // Reopening a peer invalidates the batch compile, not the remaining
+    // Candidate identities. Never reinterpret those drafts as approved pages.
+    throw new ContextError(ExitCode.WorkspaceStateError,
+      "This Candidate belongs to a delivery whose review is being rebuilt; continue its current Route before registering another repair", {
+        category: ErrorCategory.WorkspaceStateInvalid,
+        reason_code: "candidate-review-not-current",
+        candidate_id: candidate.candidate_id,
+        compile_state: compileState,
+        request_registered: false,
+        next_action: { command, message: "Finish the active repair or recovery using the current Route, then select this page from the refreshed Review. Keep this repair instruction for that step. Do not approve the incorrect page, clear the task, or retry its old Candidate id while another repair is active." },
+      });
+  }
+}
+
 /**
  * Reopen the exact Author workset that produced a current Candidate. The
  * instruction is part of the new workset identity, so an old accepted Result
@@ -246,6 +267,7 @@ export async function beginDocumentRevision(input: DocumentRevisionInput) {
   if (reopened) return reopened;
   const status = await readProjectIndexerCandidateCompileStatus(input.projectRoot);
   if (status.state !== "current" || status.compile === undefined) {
+    await assertCandidateReviewAvailable(input.projectRoot, input.selector, status.state);
     if (await currentLedger(input.projectRoot) !== undefined) {
       if (status.state === "stale" || status.state === "invalid") throw new TypeError("Repair the unfinished Indexer lifecycle before revising a page whose current compile is stale or invalid. Run context status --format json.");
       if (input.move_to) throw new TypeError("Finish the current delivery before moving an approved page; no current task was replaced.");

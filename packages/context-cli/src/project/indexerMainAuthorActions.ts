@@ -1,5 +1,6 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
-import { loadIndexerRegistry, type IndexerPartitionValidationInput } from "@c4a/context";
+import { type IndexerPartitionValidationInput } from "@c4a/context";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
 import { prepareCurrentProjectIndexerAuthorRuns } from "./indexerCurrentAuthorPreparation.js";
 import { parseProjectIndexerTargetResolutionViewBindings } from "./indexerAuthorQuestionTargets.js";

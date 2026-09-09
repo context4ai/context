@@ -156,6 +156,9 @@ async function collectProjectStatusSnapshotInternal(
   const evidenceWarnings = evidenceWarningState(verifyStatus.issues);
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
   const indexerRegistry = await readIndexerWorkflowRegistryStatus(projectRoot);
+  const { planManagedSourceKnowledgeUpdate } = await import("./managedSourceKnowledgeUpdate.js");
+  const managedSourceUpdatePending = phaseStatus.projectEntryValid && indexerRegistry.state === "current" &&
+    (await planManagedSourceKnowledgeUpdate(projectRoot)).length > 0;
   const indexerCandidateCompile = await readProjectIndexerCandidateCompileStatus(projectRoot);
   const indexerDelivery = await readIndexerDelivery(projectRoot);
   const indexerDrafts = indexerCandidateCompile.state === "current"
@@ -211,7 +214,8 @@ async function collectProjectStatusSnapshotInternal(
     approvedPages,
     close: closeStatus,
     indexerRegistry,
-    indexerCandidateCompile: { state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
+    indexerCandidateCompile: { partial_delivery: indexerDelivery?.partial !== undefined, state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
+      managed_source_pending: !maintenanceOutputOnly && managedSourceUpdatePending,
       ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
       ...(!maintenanceOutputOnly && indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
       ...(maintenanceOutputOnly || indexerDelivery === undefined ? {} : { delivery_pending: true }) },

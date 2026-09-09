@@ -8,7 +8,7 @@ import {
   loadProvider,
   type LoadedProvider,
 } from "@c4a/agent-graph";
-import { syncIndexerActionSchema } from "./indexerActionSchema.js";
+import { syncIndexerActionSchema, syncApprovedRevisionSchema } from "./indexerActionSchema.js";
 
 const CURRENT_ACTION_SCHEMA = "schemas/indexer-agent-step-result.schema.json";
 const CURRENT_ACTION_SCHEMA_ID = "context.indexer.current-action-input/v2";
@@ -126,6 +126,7 @@ for (const manual of sdkManuals) {
     await readFile(resolve(packageRoot, "../context/docs", manual), "utf8"));
 }
 await syncIndexerActionSchema(resolve(packageRoot, "context-workflow", CURRENT_ACTION_SCHEMA));
+await syncApprovedRevisionSchema(resolve(packageRoot, "context-workflow/schemas/approved-revision-result.schema.json"));
 for (const sourceGuide of ["note", "sessions", "workspace-prepare", "workspace-commit", "workspace-restore"]) {
   await writeFile(resolve(packageRoot, `context-workflow/resources/procedures/${sourceGuide}.md`),
     `---\nid: procedure.${sourceGuide}\nkind: procedure\nmediaType: text/markdown\n---\n\n` +

@@ -111,10 +111,11 @@ export function createContextWorkflowFacts(
   const captureComplete =
     observation.capturedDocumentSources === observation.documentSources.length &&
     observation.pendingCaptureCommands.length === 0;
-  const reviewGateClear = observation.draftCandidates === 0;
+  const partialDelivery = observation.indexerCandidateCompile.partial_delivery === true && observation.indexerCandidateCompile.state === "current" && !observation.indexerCandidateCompile.revision_pending;
+  const reviewGateClear = observation.draftCandidates === 0 || partialDelivery;
   const hasApprovedKnowledge = observation.approvedPages > 0;
   const rollback = observation.indexerCandidateCompile.rollback_pending === true;
-  const indexerLifecycleCurrent = !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
+  const indexerLifecycleCurrent = !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
     (
@@ -182,7 +183,7 @@ export function createContextWorkflowFacts(
       // A pending revision (including a rejected draft) must reach Author
       // before the root graph can close its approved output.
       current: observation.indexerCandidateCompile.revision_pending === true || closeActionSatisfied({
-        draftCandidates: observation.draftCandidates,
+        draftCandidates: partialDelivery ? 0 : observation.draftCandidates,
         rejectedCandidates: observation.rejectedCandidates,
         hasApprovedKnowledge: hasApprovedKnowledge || rollback,
         closeReady: observation.close.state === "ready",
@@ -192,7 +193,7 @@ export function createContextWorkflowFacts(
     packages: {
       declared: packagesDeclared,
       templates_reviewed: packageTemplatesReviewed(observation),
-      current: packagesCurrent,
+      current: packagesCurrent && !partialDelivery,
     },
     logs: {
       configured: runtimeEvents.configured,

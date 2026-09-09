@@ -100,7 +100,8 @@ describe("Agent task reading and Author source references", () => {
     expect(markdown).toContain('"payload_digest": "business-digest"');
     expect(markdown).not.toContain(`"payload_digest": "${digest}"`);
     expect(markdown).toContain("Retain non-object material too");
-    expect(markdown).toContain('"artifact_intent": "authoritative-source/code-reference/understand-capability/content"');
+    expect(readingObjects(markdown).find(item => item.ref === "authority:sample")?.allowed_artifact_intents)
+      .toContainEqual({ source_role: "authoritative-source", document_kind: "code-reference", reader_goal: "understand-capability", artifact_kind: "content" });
     const choices = readingObjects(markdown).filter((value) => Array.isArray(value.source_items));
     expect(choices.length).toBeGreaterThan(0);
     const index = buildIndexerAuthorSourceItems({ view, nodes: dependency.positive_nodes });

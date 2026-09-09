@@ -1,5 +1,6 @@
+import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
-import { completeIndexerDelivery } from "./indexerDelivery.js";
+import { completeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -400,6 +401,16 @@ export async function collectPackageFreshness(
 }
 
 export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
+  try { return await buildProjectPackagesInternal(projectRoot, options); }
+  catch (error) {
+    if (options.delivery !== false && (await readIndexerDelivery(projectRoot))?.current.length) {
+      await interruptDeliveryCadence(projectRoot);
+    }
+    throw error;
+  }
+}
+
+async function buildProjectPackagesInternal(projectRoot: string, options: { delivery?: boolean }): Promise<ProjectBuildResult> {
   if (await legacyCodeIndexMigrationRequired(projectRoot)) {
     throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
       category: ErrorCategory.WorkspaceStateInvalid,
@@ -593,7 +604,7 @@ export async function buildProjectPackages(projectRoot: string, options: { deliv
     const { readTaskRollback } = await import("./taskRollback.js");
     const { readMaintenance } = await import("./maintenanceStorage.js");
     const maintenanceActive = !!(await readMaintenance(projectRoot)).active;
-    if (!maintenanceActive && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+    if ((!maintenanceActive || (await readIndexerDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
     const { finishApprovedRevision } = await import("./approvedRevision.js");
     await finishApprovedRevision(projectRoot);
     const { currentLedger } = await import("./indexerMainRunStoreRecords.js");

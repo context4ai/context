@@ -1,6 +1,6 @@
 schema: agent-graph.graph.v1
 id: indexer
-description: Static Agent route for one digest-bound Indexer workset.
+description: Static Agent route for digest-bound Indexer work, including ready-theme delivery followed by resumption of remaining planning.
 entrypoints:
   maintenance: advance-knowledge-maintenance
   source-update: inspect-source-update
@@ -90,8 +90,9 @@ nodes:
     resolutionAction: actions/resolve-current-indexer-gate.yaml
     gate:
       id: indexer-obsolete-scope-confirmation
-      prompt: Explain the obsolete scope page/file counts and mixed-current pages from the structure preview, then ask whether to include or exclude them. Include approves the structure; exclude requests adjustment using the supplied feedback. Explain both consequences. Explicit user choice is required even in managed mode.
-      delegatable: false
+      prompt: Resolve the obsolete scope against the current user request and existing requirements. Reuse an applicable explicit include/exclude decision or explicit delegation of this scope choice; managed review authorization alone does not decide scope. Otherwise explain the affected pages, files and consequences, ask the user and wait. This is a scope question, not a CLI failure. Inspect the full structure before submitting its approval or exclusion action.
+      authority: context.knowledge-review
+      delegatable: true
     satisfiedBy:
       - path: indexer_current.obsolete_scope_confirmed
         equals: true

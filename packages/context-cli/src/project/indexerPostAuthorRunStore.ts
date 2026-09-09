@@ -1,3 +1,4 @@
+import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import type { ComposerBatchFinalization } from "./indexerComposerFinalization.js";
 import {
   acceptIndexerPostAuthorRun,
@@ -540,6 +541,7 @@ export async function completeIndexerPostAuthorRunsStore(input: {
       states,
       ...(input.inject_failure === undefined ? {} : { inject_failure: input.inject_failure }),
     });
+    if (outcomes.some(outcome => outcome.committed && outcome.outcome === "failed")) await interruptDeliveryCadence(input.projectRoot);
     return { outcomes, transaction };
   });
 }

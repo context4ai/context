@@ -1,8 +1,12 @@
+import { submittedProgressSlice } from "./indexerProgressScopes.js";
+import { assertCurrentIndexerBatchRevision } from "./indexerBatchRevision.js";
+import { previewAuthorBatch } from "./indexerAuthorDraft.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import type { HostActionResult } from "@c4a/agent-graph";
 import {
   indexerAuthorSemanticInputSchema,
   indexerPartitionSemanticInputSchema,
-  loadIndexerRegistry,
   parseIndexerCurrentActionSubmission,
 } from "@c4a/context";
 import { ErrorCategory } from "../lib/cliFeedback.js";
@@ -12,7 +16,6 @@ import { collectProjectStatus } from "./status.js";
 import { actionWorkflowSummary } from "./actionWorkflowSummary.js";
 import {
   assertProjectWorkflowRevision,
-  assertProjectWorkflowRevisionValue,
 } from "./statusCommand.js";
 import { findContextProjectRoot } from "./workspace.js";
 import {
@@ -68,38 +71,6 @@ import { completeCurrentIndexerPostAuthorAction } from
 import { prepareIndexerAuthorMaterial } from "./indexerAuthorMaterial.js";
 import { applyIndexerAuthorMaterials, type PreparedAuthorMaterial } from "./indexerAuthorMaterialStore.js";
 
-async function assertCurrentIndexerBatchRevision(input: {
-  projectRoot: string;
-  expectedRevision: string;
-  managed: boolean;
-  authorities: readonly ContextWorkflowAuthority[];
-}) {
-  assertProjectWorkflowRevisionValue(input.expectedRevision);
-  const route = await resolveCurrentIndexerWorkflowRoute(input);
-  if (route?.revision === input.expectedRevision) return route;
-  const authorityOptions = input.authorities.map((authority) =>
-    ` --authority '${authority}'`
-  ).join("");
-  const command = `context${authorityOptions} status${input.managed ? " --managed" : ""} --view summary --format json`;
-  throw new ContextError(
-    ExitCode.WorkspaceStateError,
-    `The supplied revision does not match the current Indexer route. Re-run \`${command}\` and use the new route.`,
-    {
-      category: ErrorCategory.WorkflowRevisionStale,
-      project_root: input.projectRoot,
-      expected_revision: input.expectedRevision,
-      current_revision: route?.revision ?? null,
-      revision_advanced: false,
-      next_action: {
-        kind: "refresh_workflow_route",
-        cwd: input.projectRoot,
-        command,
-        message: "Verify this is the intended workspace before refreshing. A changed revision can reflect updated instructions or resources, not only accepted tasks. Read the current Route and submit only its outstanding tasks.",
-      },
-    },
-  );
-}
-
 async function advanceAfterBatch(input: {
   projectRoot: string;
   descriptor: CurrentIndexerBatchDescriptor;
@@ -117,8 +88,8 @@ async function advanceAfterBatch(input: {
   }
   try {
     await input.inject_next_preparation_failure?.();
-    await advanceCurrentIndexerLifecycle(input.projectRoot);
-    const next = await resolveCurrentIndexerWorkflowRoute(input);
+    await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${input.descriptor.stage}.advance` }, () => advanceCurrentIndexerLifecycle(input.projectRoot));
+    const next = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${input.descriptor.stage}.route` }, () => resolveCurrentIndexerWorkflowRoute(input));
     if (next !== undefined) {
       return {
         next,
@@ -129,10 +100,10 @@ async function advanceAfterBatch(input: {
         }),
       };
     }
-    const status = await collectProjectStatus(input.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${input.descriptor.stage}.status` }, () => collectProjectStatus(input.projectRoot, {
       managed: input.managed,
       authorities: input.authorities,
-    });
+    }));
     return {
       next: status.workflow.current ?? null,
       current_revision: status.workflow.revision,
@@ -160,6 +131,7 @@ export async function completeCurrentIndexerAction(input: {
   managed?: boolean;
   authorities?: readonly ContextWorkflowAuthority[];
   inject_next_preparation_failure?: () => void | Promise<void>;
+  preview?: boolean;
 }) {
   const found = findContextProjectRoot(input.cwd);
   if (found === null) {
@@ -174,6 +146,7 @@ export async function completeCurrentIndexerAction(input: {
     ...(input.authorities === undefined ? {} : { authorities: input.authorities }),
   });
   const semantic = parseIndexerCurrentActionSubmission(input.value);
+  if (input.preview && semantic.stage !== "approved-revision" && semantic.stage !== "author") throw new TypeError("--preview applies only to current Author or approved-revision Routes; no tasks were submitted");
   if (semantic.stage === "source-update") {
     await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision,
       managed: input.managed === true, authorities });
@@ -186,8 +159,11 @@ export async function completeCurrentIndexerAction(input: {
     await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision,
       managed: input.managed === true, authorities });
     const { completeApprovedRevision } = await import("./approvedRevision.js");
+    const content = "markdown" in semantic ? { markdown: semantic.markdown } : { sections: semantic.sections };
+    if (input.preview) return completeApprovedRevision({ projectRoot: found.projectRoot,
+      revision: input.revision, ...content, preview: true });
     const candidate = await completeApprovedRevision({ projectRoot: found.projectRoot,
-      revision: input.revision, markdown: semantic.markdown });
+      revision: input.revision, ...content });
     return completedRevisionReceipt(found.projectRoot, semantic.stage,
       { outcome: candidate === undefined ? "unchanged" : "candidate-prepared",
         ...(candidate === undefined ? {} : { candidate_id: candidate.candidate_id }) }, input.managed === true, authorities);
@@ -196,12 +172,12 @@ export async function completeCurrentIndexerAction(input: {
     semantic.stage === "partition" || semantic.stage === "author" ||
     semantic.stage === "post-author"
   ) {
-    await assertCurrentIndexerBatchRevision({
+    await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.revision-check` }, () => assertCurrentIndexerBatchRevision({
       projectRoot: found.projectRoot,
       expectedRevision: input.revision,
       managed: input.managed === true,
       authorities,
-    });
+    }));
   } else {
     await assertProjectWorkflowRevision({
       cwd: found.projectRoot,
@@ -250,12 +226,12 @@ export async function completeCurrentIndexerAction(input: {
       });
     });
     if (outcome === "selection-applied") {
-      await advanceCurrentIndexerLifecycle(found.projectRoot);
+      await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.advance` }, () => advanceCurrentIndexerLifecycle(found.projectRoot));
     }
-    const status = await collectProjectStatus(found.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
       managed: input.managed === true,
       authorities,
-    });
+    }));
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
@@ -278,12 +254,12 @@ export async function completeCurrentIndexerAction(input: {
           }),
     });
     if (outcome === "selection-applied") {
-      await advanceCurrentIndexerLifecycle(found.projectRoot);
+      await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.advance` }, () => advanceCurrentIndexerLifecycle(found.projectRoot));
     }
-    const status = await collectProjectStatus(found.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
       managed: input.managed === true,
       authorities,
-    });
+    }));
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
@@ -307,12 +283,12 @@ export async function completeCurrentIndexerAction(input: {
       decision: semantic.decision,
     });
     if (outcome === "selection-applied") {
-      await advanceCurrentIndexerLifecycle(found.projectRoot);
+      await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.advance` }, () => advanceCurrentIndexerLifecycle(found.projectRoot));
     }
-    const status = await collectProjectStatus(found.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
       managed: input.managed === true,
       authorities,
-    });
+    }));
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
@@ -342,10 +318,10 @@ export async function completeCurrentIndexerAction(input: {
         target_ref: `layout:${current.revision}`,
         instruction: semantic.feedback,
       });
-      const status = await collectProjectStatus(found.projectRoot, {
+      const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
         managed: input.managed === true,
         authorities,
-      });
+      }));
       return {
         protocol: "context.indexer.current-action-completion/v2" as const,
         stage: semantic.stage,
@@ -376,10 +352,10 @@ export async function completeCurrentIndexerAction(input: {
       });
     }
     await advanceCurrentIndexerFinalization(found.projectRoot);
-    const status = await collectProjectStatus(found.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
       managed: input.managed === true,
       authorities,
-    });
+    }));
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
@@ -420,12 +396,12 @@ export async function completeCurrentIndexerAction(input: {
       ...(semantic.feedback === undefined ? {} : { feedback: semantic.feedback }),
     });
     if (nextStage === "partition" || structure.preview.topics.length === 0) {
-      await advanceCurrentIndexerLifecycle(found.projectRoot);
+      await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.advance` }, () => advanceCurrentIndexerLifecycle(found.projectRoot));
     }
-    const status = await collectProjectStatus(found.projectRoot, {
+    const status = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.status` }, () => collectProjectStatus(found.projectRoot, {
       managed: input.managed === true,
       authorities,
-    });
+    }));
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
@@ -445,7 +421,7 @@ export async function completeCurrentIndexerAction(input: {
         : { inject_next_preparation_failure: input.inject_next_preparation_failure }),
     });
   }
-  const current = await resolveCurrentIndexerAgentContext(found.projectRoot);
+  const current = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.read-current` }, () => resolveCurrentIndexerAgentContext(found.projectRoot));
   if (current === undefined) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
@@ -464,7 +440,9 @@ export async function completeCurrentIndexerAction(input: {
     );
   }
   if (semantic.stage === "author") {
-    const accepted = [];
+    if (input.preview) return previewAuthorBatch({ projectRoot: found.projectRoot, revision: input.revision,
+      descriptor: current.descriptor, results: semantic.results });
+    const accepted: Awaited<ReturnType<typeof prepareIndexerAuthorSubmission>>[] = [];
     const materials: Array<{ task_key: string; material: PreparedAuthorMaterial }> = [];
     const outcomes: IndexerTaskCompletionOutcome[] = [];
     const keyCounts = new Map<string, number>();
@@ -494,11 +472,11 @@ export async function completeCurrentIndexerAction(input: {
         continue;
       }
       try {
-        const task = await loadCurrentIndexerBatchTask({
+        const task = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.read-task` }, () => loadCurrentIndexerBatchTask({
           projectRoot: found.projectRoot,
           descriptor: current.descriptor,
           taskKey: submitted.task_key,
-        });
+        }));
         if (parsed.data.outcome === "request-material") {
           const material = await prepareIndexerAuthorMaterial({
             projectRoot: found.projectRoot, spec: task.spec, group_key: parsed.data.group_key,
@@ -507,9 +485,9 @@ export async function completeCurrentIndexerAction(input: {
           materials.push({ task_key: submitted.task_key, material });
           continue;
         }
-        accepted.push(await prepareIndexerAuthorSubmission({
+        accepted.push(await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.prepare-result` }, () => prepareIndexerAuthorSubmission({
           projectRoot: found.projectRoot, task, semantic: parsed.data,
-        }));
+        })));
       } catch (error) {
         outcomes.push({
           task_key: submitted.task_key,
@@ -527,13 +505,13 @@ export async function completeCurrentIndexerAction(input: {
       committed: false,
     })));
     if (accepted.length > 0) {
-      const stored = await acceptIndexerMainAuthorRunsStore({
+      const stored = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.commit-results` }, () => acceptIndexerMainAuthorRunsStore({
         projectRoot: found.projectRoot,
         runs: accepted.map((item) => ({
           workset_digest: item.task.spec.request.workset.workset_digest,
           result: item.result,
         })),
-      });
+      }));
       for (const item of accepted) {
         const storedOutcome = stored.outcomes.find((outcome) =>
           outcome.workset_digest === item.task.spec.request.workset.workset_digest
@@ -550,11 +528,11 @@ export async function completeCurrentIndexerAction(input: {
             : { message: storedOutcome.message }),
         });
         if (storedOutcome.outcome !== "accepted") continue;
-        await persistIndexerSemanticResult({
+        await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.persist-semantic` }, () => persistIndexerSemanticResult({
           projectRoot: found.projectRoot,
           requestDigest: item.task.spec.request.execution_request_digest,
           semantic: item.semantic,
-        });
+        }));
       }
     }
     if (materials.length > 0) {
@@ -583,6 +561,7 @@ export async function completeCurrentIndexerAction(input: {
     return {
       protocol: "context.indexer.current-action-completion/v2" as const,
       stage: semantic.stage,
+      submitted_slice: submittedProgressSlice(semantic.stage, outcomes),
       outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
       revision_before: input.revision,
       revision_after: revisionAfter,
@@ -599,7 +578,11 @@ export async function completeCurrentIndexerAction(input: {
       `Primary Provider ${current.authority.manifest.id} must declare exactly one artifact-bearing logical unit`,
     );
   }
-  const prepared = [];
+  const prepared: Array<{
+    task: Awaited<ReturnType<typeof loadCurrentIndexerBatchTask>>;
+    semantic: ReturnType<typeof indexerPartitionSemanticInputSchema.parse>;
+    result: ReturnType<typeof buildIndexerPartitionRunResultFromSemantic>;
+  }> = [];
   const outcomes: IndexerTaskCompletionOutcome[] = [];
   const keyCounts = new Map<string, number>();
   for (const submitted of semantic.results) {
@@ -628,11 +611,11 @@ export async function completeCurrentIndexerAction(input: {
       continue;
     }
     try {
-      const task = await loadCurrentIndexerBatchTask({
+      const task = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.read-task` }, () => loadCurrentIndexerBatchTask({
         projectRoot: found.projectRoot,
         descriptor: current.descriptor,
         taskKey: submitted.task_key,
-      });
+      }));
       const validation = task.spec.validation as unknown as Omit<
         Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["validation"],
         "partition_unit_type"
@@ -667,13 +650,13 @@ export async function completeCurrentIndexerAction(input: {
     committed: false,
   })));
   if (prepared.length > 0) {
-    const converged = await acceptIndexerMainPartitionRunsStore({
+    const converged = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.commit-results` }, () => acceptIndexerMainPartitionRunsStore({
       projectRoot: found.projectRoot,
       runs: prepared.map((item) => ({
         workset_digest: item.task.spec.request.workset.workset_digest,
         result: item.result,
       })),
-    });
+    }));
     for (const [index, item] of prepared.entries()) {
       const outcome = converged.outcomes[index]!;
       outcomes.push({
@@ -683,11 +666,11 @@ export async function completeCurrentIndexerAction(input: {
         ...(outcome.message === undefined ? {} : { message: outcome.message }),
       });
       if (outcome.outcome === "accepted") {
-        await persistIndexerSemanticResult({
+        await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.persist-semantic` }, () => persistIndexerSemanticResult({
           projectRoot: found.projectRoot,
           requestDigest: item.task.spec.request.execution_request_digest,
           semantic: item.semantic,
-        });
+        }));
       }
     }
   }
@@ -705,7 +688,8 @@ export async function completeCurrentIndexerAction(input: {
   return {
     protocol: "context.indexer.current-action-completion/v2" as const,
     stage: semantic.stage,
-    outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
+    submitted_slice: submittedProgressSlice(semantic.stage, outcomes),
+      outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
     revision_before: input.revision,
     revision_after: revisionAfter,
     revision_advanced: revisionAfter === null

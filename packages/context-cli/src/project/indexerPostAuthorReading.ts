@@ -1,4 +1,6 @@
-import { validateIndexerPrimaryResultView, type IndexerPrimaryResultView } from "@c4a/context";
+import { isDeepStrictEqual } from "node:util";
+import { compactReadingMembers, MEMBER_ROWS_GUIDANCE, readingJson } from "./indexerReadingMemberRows.js";
+import { projectIndexerPublicContractTable, validateIndexerPrimaryResultView, type IndexerPrimaryResultView } from "@c4a/context";
 import { readingBlock } from "./indexerAgentReading.js";
 
 function object(value: unknown): Record<string, unknown> | undefined {
@@ -9,10 +11,15 @@ function object(value: unknown): Record<string, unknown> | undefined {
 /** Strip only the known section/block carrier. Provider values remain verbatim. */
 function sectionsReading(value: unknown, aliases: Map<string, string>): string {
   if (!Array.isArray(value)) return readingBlock(value);
-  return value.map((value) => {
+  const first = object(value[0]);
+  const common = Object.fromEntries(Object.entries(first ?? {}).filter(([key, entry]) =>
+    key !== "blocks" && key !== "section_key" && value.length > 1 &&
+    value.every(section => Object.hasOwn(object(section) ?? {}, key) && isDeepStrictEqual(object(section)?.[key], entry))));
+  const sections = value.map((value) => {
     const section = object(value);
     if (!section || !Array.isArray(section.blocks)) return readingBlock(value);
     const { blocks, ...metadata } = section;
+    for (const key of Object.keys(common)) delete metadata[key];
     return [readingBlock(metadata), ...blocks.map((value) => {
       const block = object(value);
       if (!block) return readingBlock(value);
@@ -29,6 +36,7 @@ function sectionsReading(value: unknown, aliases: Map<string, string>): string {
       return readingBlock(block);
     })].join("\n\n");
   }).join("\n\n");
+  return [Object.keys(common).length ? `Shared section fields (apply to every section):\n${readingBlock(common)}` : "", sections].filter(Boolean).join("\n\n");
 }
 
 export function renderIndexerPostAuthorReading(input: IndexerPrimaryResultView): string {
@@ -40,14 +48,13 @@ export function renderIndexerPostAuthorReading(input: IndexerPrimaryResultView):
   }
   const aliases = new Map(view.facts.map((fact, index) => [fact.fact_ref, `fact:${index + 1}`]));
   const lines = ["# Current composer material", "Use fact:N or artifact:N as source_refs in this task. The CLI restores their original evidence bindings. These aliases are local to this View; use the current Route for targets and output constraints.",
+    "Type declaration diagnostics: table-complete omits a duplicate declaration; component-wrapper omits a redundant wrapper; not-provided means no separate declaration in these facts. This is formatting, not proof of content completeness. Check the actual generated rows and evidence; respect explicit user format requirements.",
     "## Subjects", ...[...subjects].map(([key, alias]) => {
       const { protocol: _protocol, ...subject } = JSON.parse(key);
       void _protocol;
       return readingBlock({ ref: alias, ...subject });
-    }), "## Facts"];
-  for (const [index, fact] of view.facts.entries()) lines.push(`### fact:${index + 1}`,
-    readingBlock({ subject: subjects.get(JSON.stringify(fact.subject_key)), kind: fact.fact_kind, value: fact.value }));
-  lines.push("## Primary pages");
+    })];
+  lines.push("## Primary pages", "Read the existing pages and their program bindings first, then compare the facts below with this Composer’s declared purpose. A bound fact is not proof that all of its useful information is covered. Empty proposals require that comparison; do not infer them from a renderer name alone.");
   for (const [index, artifact] of view.artifacts.entries()) {
     lines.push(`### artifact:${index + 1}`, readingBlock({ subject: subjects.get(JSON.stringify(artifact.subject_key)),
       kind: artifact.artifact_kind, policy: artifact.artifact_policy_variant }));
@@ -57,6 +64,13 @@ export function renderIndexerPostAuthorReading(input: IndexerPrimaryResultView):
       if (Object.keys(extra).length) lines.push(readingBlock(extra));
       lines.push(sectionsReading(sections, aliases));
     } else lines.push(readingBlock(artifact.variables));
+  }
+  lines.push("## Facts", MEMBER_ROWS_GUIDANCE);
+  for (const [index, fact] of view.facts.entries()) {
+    const table = projectIndexerPublicContractTable(fact);
+    lines.push(`### fact:${index + 1}`,
+    readingBlock(readingJson({ subject: subjects.get(JSON.stringify(fact.subject_key)), kind: fact.fact_kind, value: fact.fact_kind === "code-symbol" ? compactReadingMembers(fact.value) : fact.value,
+      ...(table ? { type_declaration: table.declaration_status } : {}) })));
   }
   return `${lines.join("\n\n")}\n`;
 }

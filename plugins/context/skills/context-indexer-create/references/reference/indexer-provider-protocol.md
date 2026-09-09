@@ -767,3 +767,31 @@ Structured owner/source checks still run, but no keyword, punctuation, heading
 or sentence-pattern scan can reject an otherwise valid Result. Physical output
 checks distinguish a missing or blank body from an authored body; they do not
 decide whether headings, comments or short prose are sufficient knowledge.
+
+### Groups narrowed by a scope decision
+
+The CLI may attach `scope_change.removed_member_ids` to a derived PartitionPlan
+group after excluding only part of its membership. This is runtime provenance,
+not an extra field Provider authors should invent in semantic Partition results.
+The remaining identity stays stable; the old page form/template is no longer a
+binding choice. Author receives the change in `page_plan.scope_change` and must
+reassess the residual sources, title and reader task. It can choose an allowed
+page form or an applicable non-publishing outcome. This metadata does not belong
+in knowledge frontmatter and is not proof that remaining material is useful.
+
+## Incremental planning handoff
+
+A semantic Partition group may declare `ready_for_author: true` when the Agent
+has resolved its subject, primary ownership, reader task and shared dependencies.
+The CLI can then deliver an initial wave before all Partition tasks are accepted.
+This is an optional scheduling declaration, not a new evidence or approval gate.
+Absent/false groups wait; every inventory member still needs a final disposition.
+The original Partition ledger resumes after normal structure review, Author,
+Composer, content Review, close and successful build. Later material for the same
+subject reuses its page identity and approved prose. A wave finishing never means
+the remaining source scope is complete.
+
+Known code-symbol planning views provide member overviews with immutable full
+fact links and bounded captured-source access. Providers must inspect details
+when semantic boundaries are uncertain; unknown payload formats retain full
+reading. Author receives full selected facts and source material.

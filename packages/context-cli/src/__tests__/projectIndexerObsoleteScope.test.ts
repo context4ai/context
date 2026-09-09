@@ -60,11 +60,17 @@ describe("obsolete scope confirmation", () => {
     value.validation.source_identity_inventory.files[0]!.facts = [];
     expect(summarizeIndexerObsoleteScope([value]).affected_page_count).toBe(1);
   });
+  test("excluding an obsolete ready wave does not end unplanned scope", () => {
+    const summary = summarizeIndexerObsoleteScope([spec(["deprecated/old.ts"])], { pending_planning: true });
+    expect(summary.exclusion_leaves_no_current_pages).toBe(false);
+    expect(() => validateIndexerCurrentActionInput(summary.exclude_action)).not.toThrow();
+    expect(summary.exclude_consequence).toContain("remaining planning");
+  });
   test("excluding an entirely obsolete scope stops instead of sending an empty Partition", () => {
     expect(summarizeIndexerObsoleteScope(Array.from({ length: 5 }, (_, i) => spec([`deprecated/api-${i}.ts`]))))
       .toMatchObject({ requires_confirmation: true, exclusion_leaves_no_current_pages: true, exclude_action: null });
   });
-  test("both ordinary and managed Graph routes require an explicit scope decision", async () => {
+  test("scope resolution remains required; managed review can delegate judgment without auto-completing it", async () => {
     const provider = await loadContextWorkflowProvider();
     for (const managed of [false, true]) {
       const context = { facts: { indexer_current: { advance_complete: true, agent_complete: true,
@@ -75,8 +81,11 @@ describe("obsolete scope confirmation", () => {
       const route = await resolveRoute(provider, "indexer", "current-lifecycle", evaluated.evaluation.primaryRoute!.routeId,
         context, evaluated.evaluation.revision);
       expect(route.node).toBe("confirm-current-indexer-obsolete-scope");
-      expect(route.availability).toBe("requires-user");
-      expect(route.gate?.delegatable).toBe(false);
+      expect(route.availability).toBe(managed ? "immediate" : "requires-user");
+      expect(route.gate?.delegatable).toBe(true);
+      expect(route.gate?.authority).toBe("context.knowledge-review");
+      expect(route.gate?.resolutionAction?.action.runner).toBe("agent");
+      expect(evaluated.evaluation.statusCode).not.toBe("complete");
       const after = await evaluateGraph(provider, "indexer", "current-lifecycle", { ...context, facts: {
         indexer_current: { ...context.facts.indexer_current, obsolete_scope_confirmed: true, structure_review_complete: true },
       } });

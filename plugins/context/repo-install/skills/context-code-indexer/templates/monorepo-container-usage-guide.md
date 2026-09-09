@@ -62,10 +62,11 @@
     ]
   },
   "anonymous_section_examples": [
-    "A declared parameter with an explicit default and a source-backed usage explanation."
+    "A source-backed explanation of when to use an operation and how its options interact, referring to the generated API table without repeating its rows."
   ],
   "anti_examples": [
-    "Inferring server behavior from a generated client."
+    "Inferring server behavior from a generated client.",
+    "Duplicating a program-generated API table in prose or using prose to contradict its field values."
   ],
   "forbidden_outputs": [
     "Unresolved internal identifiers in reader-facing tables."

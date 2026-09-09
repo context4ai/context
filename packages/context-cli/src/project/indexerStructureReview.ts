@@ -1,8 +1,14 @@
-import { loadIndexerRegistry } from "@c4a/context";
+import { deliveryWaveSize, readDeliveryCadence } from "./indexerDeliveryCadence.js";
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { authorStreamRecord, PARTITION_STREAM_PATH, partitionAuthorBinding, partitionStreamRecord, readPartitionStream, reopenPartitionStream } from "./indexerPartitionStream.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   buildIndexerAuthorizedWorksetViewSource,
+  buildIndexerMainWorksetSet,
+  invalidateIndexerMainRunWorksets,
   canonicalIndexerJson,
   indexerPartitionGroupRef,
   indexerProtocolDigest,
@@ -28,6 +34,8 @@ import {
 import {
   currentLedger,
   readJsonMaybe,
+  normalizeRunSpec,
+  acceptedCachePath, currentSpec, persistLedger,
 } from "./indexerMainRunStoreRecords.js";
 import type { ProjectIndexerTargetResolutionViewBinding } from
   "./indexerAuthorQuestionTargets.js";
@@ -69,6 +77,7 @@ export interface IndexerSemanticStructurePreview {
     key: string;
     title: string;
     reader_task: string;
+    scope_change?: { removed_member_ids: string[] };
     outline: string[];
     subject_key?: IndexerSubjectKey;
     members: string[];
@@ -97,6 +106,7 @@ interface PreparedIndexerStructurePlan {
   run_specs: unknown[];
   obsolete_member_ids?: string[];
   partition_request_digests?: string[];
+  final_wave?: boolean;
   plan_digest: string;
 }
 
@@ -122,6 +132,7 @@ function preparedPlan(value: unknown): PreparedIndexerStructurePlan | undefined 
     !Array.isArray(candidate.run_specs)
   ) return undefined;
   const payload = {
+    ...(candidate.final_wave === undefined ? {} : { final_wave: candidate.final_wave }),
     revision: candidate.revision,
     preview: candidate.preview,
     workset_set: candidate.workset_set,
@@ -179,17 +190,19 @@ export async function currentIndexerStructureReview(
 
 export async function prepareCurrentIndexerStructurePlan(
   projectRoot: string,
+  allowPending = false,
 ): Promise<CurrentIndexerStructureReview> {
   const ledger = await currentLedger(projectRoot);
   if (
     ledger === undefined ||
     ledger.entries.some((entry) => entry.stage !== "partition") ||
     ledger.entries.length === 0 ||
-    ledger.entries.some((entry) => entry.state !== "accepted")
+    (!allowPending && ledger.entries.some((entry) => entry.state !== "accepted")) ||
+    ledger.entries.some((entry) => entry.state === "running")
   ) {
     throw new TypeError("semantic structure preparation requires accepted Partition results");
   }
-  const records = await readAcceptedIndexerMainPartitionResultRecords(projectRoot);
+  const records = await readAcceptedIndexerMainPartitionResultRecords(projectRoot, allowPending);
   const semantic = await Promise.all(records.map((record) =>
     readSemanticPartition(projectRoot, record.request.execution_request_digest)
   ));
@@ -231,6 +244,29 @@ export async function prepareCurrentIndexerStructurePlan(
       : [[record.request.workset.workset_digest,
           record.validation.partition_projection as IndexerConsumerWorksetProjection] as const])),
   );
+  const stream = await readPartitionStream(projectRoot);
+  const completed = new Set(stream?.completed_bindings ?? []);
+  const allPlanned = ledger.entries.every(entry => entry.state === "accepted");
+  const available = prepared.author.run_specs.filter(spec =>
+    !completed.has(partitionAuthorBinding(spec)) && (allPlanned ||
+      (spec.validation.page_plan as { ready_for_author?: boolean } | undefined)?.ready_for_author === true))
+    .sort((left, right) => {
+      const priority = (spec: typeof left) => (spec.validation.page_plan as { priority?: number } | undefined)?.priority ?? Number.MAX_SAFE_INTEGER;
+      return priority(left) - priority(right) || left.request.workset.workset_digest.localeCompare(right.request.workset.workset_digest);
+    });
+  const target = deliveryWaveSize(await readDeliveryCadence(projectRoot),
+    allPlanned ? prepared.author.run_specs.length : undefined);
+  const selected = !allPlanned && available.length < target
+    ? [] : available.slice(0, target);
+  const selectedKeys = new Set(selected.map(spec => spec.request.workset.stage === "author" ? spec.request.workset.group_key : ""));
+  prepared.author.obsolete_scope = summarizeIndexerObsoleteScope(selected, {
+    pending_planning: !allPlanned,
+    deprecated_member_ids: new Set(prepared.author.obsolete_scope.affected.flatMap(item => item.member_ids)),
+    titles: new Map(converged.partitions.flatMap(partition => partition.plan.status === "complete"
+      ? partition.plan.groups.map(group => [group.group_key, group.label] as const) : [])),
+  });
+  prepared.author.run_specs = selected;
+  prepared.author.workset_set = buildIndexerMainWorksetSet(selected.map(spec => spec.request.workset));
   const targetByGroup = new Map(prepared.targets.map((target) => [target.group_ref, target]));
   const authoredByOrigin = new Map(records.flatMap((partition, entryIndex) => {
     const result = semantic[entryIndex];
@@ -251,7 +287,7 @@ export async function prepareCurrentIndexerStructurePlan(
     },
     topics: converged.partitions.flatMap((partition) => {
       const plan = partition.plan as IndexerPartitionPlan;
-      return plan.status === "complete" ? plan.groups.map((group) => {
+      return plan.status === "complete" ? plan.groups.filter(group => selectedKeys.has(group.group_key)).map((group) => {
         const groupRef = indexerPartitionGroupRef({
           partition_workset_digest: partition.workset.workset_digest,
           group_key: group.group_key,
@@ -269,6 +305,7 @@ export async function prepareCurrentIndexerStructurePlan(
         }
         return {
           key: group.group_key,
+          ...(group.scope_change === undefined ? {} : { scope_change: group.scope_change }),
           title: authored?.title ?? group.label,
           reader_task: authored?.reader_task ?? `Browse ${group.label}.`,
           outline: authored?.outline ?? [group.label],
@@ -312,13 +349,14 @@ export async function prepareCurrentIndexerStructurePlan(
     partition_results: records.map((record) => record.accepted_record.result_digest).sort(),
   });
   const planPayload = {
+    final_wave: allPlanned && selected.length === available.length,
     revision,
     preview,
     workset_set: prepared.author.workset_set,
     run_specs: prepared.author.run_specs,
     obsolete_member_ids: [...new Set(prepared.author.obsolete_scope.affected.flatMap((item) => item.member_ids))].sort(),
-    partition_request_digests: [...new Map(records.map((record) => [
-      record.request.workset.indexer_id, record.request.execution_request_digest,
+    partition_request_digests: [...new Map(ledger.entries.map((entry) => [
+      entry.indexer_id, entry.execution_request_digest,
     ])).values()].sort(),
   };
   await atomicWriteFile(
@@ -390,6 +428,12 @@ async function prepareAuthorPlan(
   }[]>,
   sourceProjections: ReadonlyMap<string, IndexerConsumerWorksetProjection>,
 ) {
+  const structure = await readKnowledgeStructure(projectRoot);
+  const approved = new Set((Array.isArray(structure.parsed?.views) ? structure.parsed.views : [])
+    .map(view => (view as Record<string, unknown>).node_ref));
+  const primaryTarget = (groupRef: string, nodeRef: string) => ({ group_ref: groupRef,
+    mode: approved.has(nodeRef) ? "enrich" as const : "create" as const,
+    node_ref: approved.has(nodeRef) ? nodeRef : null });
   const targetResolutionViews: ProjectIndexerTargetResolutionViewBinding[] = [];
   const targets: Array<{
     group_ref: string;
@@ -450,7 +494,7 @@ async function prepareAuthorPlan(
         group_key: group.group_key,
       });
       if (group.subject_intent === "primary") {
-        targets.push({ group_ref: groupRef, mode: "create", node_ref: null });
+        targets.push(primaryTarget(groupRef, group.logical_unit_ref));
         continue;
       }
       const view = resolved.views.find((binding) => binding.group_ref === groupRef)?.view;
@@ -473,7 +517,7 @@ async function prepareAuthorPlan(
       group_key: group.group_key,
     });
     if (!targets.some((target) => target.group_ref === groupRef)) {
-      targets.push({ group_ref: groupRef, mode: "create", node_ref: null });
+      targets.push(primaryTarget(groupRef, group.logical_unit_ref));
     }
   }
   const author = await buildProjectIndexerMainAuthorWorksets({
@@ -501,8 +545,12 @@ export async function prepareCurrentIndexerAuthorStage(projectRoot: string): Pro
   // With no reader pages there is no Author stage. Retain the accepted
   // Partition ledger so the empty structure still has a reviewable authority.
   if (plan.run_specs.length === 0) return;
+  const ledger = await currentLedger(projectRoot);
+  const streaming = ledger?.entries.every(entry => entry.stage === "partition");
+  const stream = streaming ? await authorStreamRecord(projectRoot, plan.run_specs.map(value => partitionAuthorBinding(normalizeRunSpec(value))), plan.final_wave) : undefined;
   await prepareIndexerMainRunStore({
     projectRoot,
+    ...(stream === undefined ? {} : { mutable_records: [{ path: PARTITION_STREAM_PATH, value: stream }] }),
     workset_set: plan.workset_set,
     run_specs: plan.run_specs,
   });
@@ -587,6 +635,28 @@ export async function completeCurrentIndexerStructureReview(input: {
     feedback: input.feedback,
     feedback_digest: feedbackDigest,
   }));
+  if (await readPartitionStream(input.projectRoot)) {
+    const members = new Set(current.preview.topics.flatMap(topic => topic.members));
+    await reopenPartitionStream(input.projectRoot);
+    const stream = (await readPartitionStream(input.projectRoot))!;
+    const ledger = (await currentLedger(input.projectRoot))!;
+    const affected = new Set<string>();
+    const deleted: string[] = [];
+    for (const entry of ledger.entries) {
+      if (entry.state !== "accepted") continue;
+      const spec = await currentSpec({ projectRoot: input.projectRoot, request_digest: entry.execution_request_digest });
+      const inventory = spec.validation.canonical_inventory_members as Array<{ member_id: string }>;
+      if (!inventory.some(member => members.has(member.member_id))) continue;
+      affected.add(entry.workset_digest);
+      deleted.push(acceptedCachePath(entry.execution_request_digest), semanticResultPath(entry.execution_request_digest));
+    }
+    const revised = invalidateIndexerMainRunWorksets(ledger, affected);
+    const { digest: _digest, ...payload } = stream; void _digest;
+    await persistLedger({ projectRoot: input.projectRoot, operation: "prepare", transaction_kind: "adjust-streaming-structure",
+      ledger: revised, delete_records: deleted,
+      mutable_records: [{ path: PARTITION_STREAM_PATH, value: partitionStreamRecord({ ...payload, partition_ledger: revised }) }] });
+    return "partition";
+  }
   await rm(join(input.projectRoot, INDEXER_MAIN_RUN_STORE_ROOT), {
     recursive: true,
     force: true,

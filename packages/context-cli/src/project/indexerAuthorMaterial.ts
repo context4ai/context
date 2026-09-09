@@ -1,8 +1,9 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { join, posix } from "node:path";
 import {
   buildIndexerAuthorDependencyView, buildIndexerMainRunRequest, buildIndexerMainWorkset,
   buildIndexerRunEnvironment, buildIndexerSourceIdentityInventory, composeIndexerLayerInput,
-  indexerProtocolDigest, loadIndexerRegistry, loadSourcesRegistry,
+  indexerProtocolDigest, loadSourcesRegistry,
   validateIndexerAuthorDependencyView, validateIndexerSourceIdentityInventory,
   type IndexerAuthorDependencyView, type IndexerSourceIdentityInventory,
 } from "@c4a/context";

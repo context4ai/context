@@ -94,3 +94,40 @@ revision. Ask the user if the changes conflict in meaning; a deleted page is not
 permission to recreate it. The CLI checks the new baseline again and sends the
 result through ordinary Review. Unaffected batch pages and queued operations stay
 in place. Do not retry an older revision or overwrite the approved file directly.
+
+## Local section edits and optional preview
+
+For a small change, submit `sections` instead of `markdown`. Select exact IDs from
+`writing_context.current_sections`; each edit contains `section_id` and `content`,
+an ordered array of `{ "markdown": "replacement text" }` or
+`{ "program": "exact token from program_blocks" }`. The CLI retains untouched
+sections, page identity and the edited section's source references. Do not include
+section wrappers in replacement text. Use full Markdown for new pages, changed
+structure or pages without unambiguous section IDs. Both forms use the current
+Action schema and the same source and baseline validation.
+
+For example, after substituting IDs/tokens from this Route:
+
+```json
+{"stage":"approved-revision","sections":[{"section_id":"usage","content":[{"markdown":"Revised explanation."},{"program":"<current program token>"}]}]}
+```
+
+Use `--input <file>` on the Route command. If useful, append `--preview` to that
+same command: it returns the assembled Markdown and prior text without accepting
+or advancing the revision. Submit without `--preview` after checking it. Preview
+is optional; it does not replace Review or authorize a stale revision.
+
+## Interpreting generated API output
+
+Check fields, types, requiredness and supported defaults against the selected
+source version. A table can completely express a simple declaration; omitting
+that duplicate folded declaration is intentional. Complex relationships or
+constraints not represented in rows remain in a named declaration. Program
+`declaration_status`, when present, distinguishes `table-complete`,
+`component-wrapper`, `retained` and `not-provided`; its `fact_ref` and `source_ref`
+locate the input. Missing folds alone do not establish a parser failure.
+
+If the user explicitly requires a different presentation, explain the difference
+and resolve that choice before accepting it. Do not rerun unchanged Repair to
+force a format the program deliberately omits. Check the actual resulting page;
+accepted tasks or an empty Composer result alone do not demonstrate a correction.

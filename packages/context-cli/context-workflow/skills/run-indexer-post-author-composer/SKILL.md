@@ -70,3 +70,41 @@ workflow summary and registered maintenance targets to distinguish production
 completion from outstanding user requests; Composer task names are not a revision
 queue. If the Graph is complete, return to the Context entry to handle any
 remaining authorized requests rather than declaring a missing Review/build.
+
+## User-facing progress
+
+Use CLI `progress.scopes` (or `indexerProgress.scopes` in status) as the
+single source for progress in conversation and reports. It separates:
+- `overall`: delivered pages and cumulative planning for the current Indexer run;
+- `wave`: writing tasks, observed pages and composition for the current wave;
+- `slice`: tasks in the currently active Route slice.
+
+Planning completed counts currently valid accepted tasks, not lifetime effort.
+When overall.planning.needs_recheck is nonzero, report “规划当前有效 X/Y 项；Z 项因任务绑定变化待复核”.
+Do not describe a lower valid count as lost pages or silently restarting from zero.
+The CLI reason identifies binding changes, not proof that source code changed;
+do not invent a more specific cause.
+
+Keep these scopes separate. A wave or pause target never replaces the overall
+scope. Preserve overall planning across Author, Composer and Review transitions.
+Use each counter's `unit`: task means 项/任务, page means 页. A writing task is
+not automatically one page. A null total means 总数待确定, not zero or the
+number of currently prepared tasks. Revisions can overlap delivered pages;
+do not add wave tasks to delivered pages to invent a page total.
+
+Use two bold progress lines. The first combines `overall` and a clearly labelled
+`wave` supplement; the second uses `slice`. For example, with matching CLI values:
+**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前分片：补充内容检查 0/8 项]**
+
+A completion receipt's `submitted_slice` describes the slice just submitted;
+`progress.scopes.slice` can already describe the next Route. Use the former when
+reporting submission success and the latter when announcing the next slice.
+Never combine their numerators and denominators. A null slice means no active
+Agent task slice, not that the workflow is complete. During Review/build, state
+the returned Route action briefly rather than inventing a slice ratio.
+If progress is unavailable after task cleanup, say the counters are unavailable;
+do not turn the last wave into the overall scope or report delivery as zero.
+Continue authorized work after an update; only the agreed delivery stop or an
+actual unresolved blocker permits stopping. This format governs progress, not
+answers, review findings or necessary questions.

@@ -119,22 +119,91 @@
       "additionalProperties": false
     },
     "approvedRevision": {
-      "type": "object",
-      "properties": {
-        "stage": {
-          "type": "string",
-          "const": "approved-revision"
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string",
+              "const": "approved-revision"
+            },
+            "markdown": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "stage",
+            "markdown"
+          ],
+          "additionalProperties": false
         },
-        "markdown": {
-          "type": "string",
-          "minLength": 1
+        {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string",
+              "const": "approved-revision"
+            },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "section_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "content": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "markdown": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "markdown"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "program": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "program"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "section_id",
+                  "content"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "stage",
+            "sections"
+          ],
+          "additionalProperties": false
         }
-      },
-      "required": [
-        "stage",
-        "markdown"
-      ],
-      "additionalProperties": false
+      ]
     },
     "providerSelection": {
       "type": "object",
@@ -704,6 +773,9 @@
                             "delivery_boundary": {
                               "type": "boolean"
                             },
+                            "ready_for_author": {
+                              "type": "boolean"
+                            },
                             "subject": {
                               "anyOf": [
                                 {
@@ -1072,7 +1144,7 @@
                                 "type": "string",
                                 "minLength": 1
                               },
-                              "minItems": 1
+                              "default": []
                             },
                             "facts": {
                               "type": "array",
@@ -1094,8 +1166,7 @@
                           "required": [
                             "key",
                             "heading",
-                            "markdown",
-                            "source_items"
+                            "markdown"
                           ],
                           "additionalProperties": false
                         },
@@ -1104,34 +1175,65 @@
                       "member_dispositions": {
                         "type": "array",
                         "items": {
-                          "type": "object",
-                          "properties": {
-                            "item": {
-                              "type": "string",
-                              "minLength": 1
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "item": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "covered",
+                                    "catalog-only",
+                                    "unsupported"
+                                  ]
+                                },
+                                "section": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "reason_code": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "item",
+                                "state"
+                              ],
+                              "additionalProperties": false
                             },
-                            "state": {
-                              "type": "string",
-                              "enum": [
-                                "covered",
-                                "catalog-only",
-                                "unsupported"
-                              ]
-                            },
-                            "section": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "reason_code": {
-                              "type": "string",
-                              "minLength": 1
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/state"
+                                },
+                                "section": {
+                                  "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/section"
+                                },
+                                "reason_code": {
+                                  "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/reason_code"
+                                },
+                                "items": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "minItems": 1
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "items"
+                              ],
+                              "additionalProperties": false
                             }
-                          },
-                          "required": [
-                            "item",
-                            "state"
-                          ],
-                          "additionalProperties": false
+                          ]
                         }
                       },
                       "material_gaps": {

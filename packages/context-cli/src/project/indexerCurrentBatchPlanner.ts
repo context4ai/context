@@ -5,7 +5,7 @@ import {
   type IndexerMainWorkset,
 } from "@c4a/context";
 
-export const INDEXER_BATCH_POLICY_VERSION = "context-indexer-batch-policy-2026-09";
+export const INDEXER_BATCH_POLICY_VERSION = "context-indexer-batch-policy-2026-09-partition-overview";
 
 export interface IndexerBatchStagePolicy {
   /** Packing targets for combining tasks, not validity limits on one task. */
@@ -28,13 +28,13 @@ const STAGE_POLICIES: Record<IndexerBatchStage, IndexerBatchStagePolicy> = {
     max_input_bytes: 256 * 1024,
     max_output_reserve_bytes: 128 * 1024,
     max_view_items: 800,
-    max_tasks: 4,
+    max_tasks: 8,
   },
   "post-author": {
     max_input_bytes: 4 * 1024 * 1024,
     max_output_reserve_bytes: 4 * 1024 * 1024,
     max_view_items: 600,
-    max_tasks: 4,
+    max_tasks: 8,
   },
 };
 
@@ -59,6 +59,9 @@ export interface PlannedIndexerCurrentBatch {
   input_bytes: number;
   output_reserve_bytes: number;
   view_item_count: number;
+  packing_limits: string[];
+  shared_instruction_bytes: number;
+  deduplicated_input_bytes: number;
 }
 
 function assertNonNegativeInteger(value: number, label: string): void {
@@ -113,17 +116,22 @@ export function planIndexerCurrentBatch(input: {
     candidate.workset.source_ref === first.workset.source_ref &&
     candidate.instruction_identity === first.instruction_identity
   );
+  const limits = new Set<string>();
+  if (eligible.length !== input.candidates.length) limits.add("provider-source-or-instruction-boundary");
   const selected: IndexerCurrentBatchCandidate[] = [];
   let inputBytes = input.shared_instruction_bytes;
   let outputReserveBytes = 0;
   let viewItemCount = 0;
   for (const candidate of eligible) {
-    if (selected.length === policy.max_tasks) break;
+    if (selected.length === policy.max_tasks) { limits.add("task-limit"); break; }
     const reading = input.measure_reading?.([...selected, candidate]);
     const nextInputBytes = reading === undefined ? inputBytes + candidate.input_bytes
       : input.shared_instruction_bytes + reading.input_bytes;
     const nextOutputReserveBytes = outputReserveBytes + candidate.output_reserve_bytes;
     const nextViewItemCount = reading?.view_item_count ?? viewItemCount + candidate.view_item_count;
+    if (nextInputBytes > policy.max_input_bytes) limits.add("input-budget");
+    if (nextOutputReserveBytes > policy.max_output_reserve_bytes) limits.add("output-budget");
+    if (nextViewItemCount > policy.max_view_items) limits.add("view-budget");
     const fits = selected.length < policy.max_tasks &&
       nextInputBytes <= policy.max_input_bytes &&
       nextOutputReserveBytes <= policy.max_output_reserve_bytes &&
@@ -138,11 +146,12 @@ export function planIndexerCurrentBatch(input: {
     viewItemCount = nextViewItemCount;
     if (!fits) break;
   }
-  return restoreIndexerCurrentBatch({
+  if (selected.length >= policy.max_tasks) limits.add("task-limit");
+  return { ...restoreIndexerCurrentBatch({
     candidates: selected,
     shared_instruction_bytes: input.shared_instruction_bytes,
     measure_reading: input.measure_reading,
-  });
+  }), packing_limits: [...limits] };
 }
 
 /** Rebuild delivery for ledger-owned running tasks without scheduling them again. */
@@ -186,7 +195,10 @@ export function restoreIndexerCurrentBatch(input: {
     transport: buildIndexerMainTransportBatch(input.candidates.map((candidate) => candidate.workset)),
     candidates: input.candidates,
     input_bytes: inputBytes,
+    shared_instruction_bytes: input.shared_instruction_bytes,
+    deduplicated_input_bytes: Math.max(0, input.shared_instruction_bytes + input.candidates.reduce((sum, item) => sum + item.input_bytes, 0) - inputBytes),
     output_reserve_bytes: outputReserveBytes,
     view_item_count: viewItemCount,
+    packing_limits: [],
   };
 }

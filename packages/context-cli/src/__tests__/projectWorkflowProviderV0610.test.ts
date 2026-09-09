@@ -387,7 +387,7 @@ describe("Context workflow Provider", () => {
       },
     });
     expect(managed.route?.commands).toContainEqual(expect.objectContaining({
-      command: expect.stringContaining("review approve-all architecture --managed"),
+      command: expect.stringContaining("review apply"),
       availability: "immediate",
     }));
     expect(managed.route?.commands.some((item) =>

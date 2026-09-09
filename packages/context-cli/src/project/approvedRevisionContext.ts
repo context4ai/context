@@ -1,6 +1,7 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadIndexerRegistry, assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest } from "@c4a/context";
+import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest } from "@c4a/context";
 import { loadIndexerCustomization } from "./indexerCustomization.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
 import { currentCliInstructionDescriptors } from "./indexerCurrentInstructionMaterialization.js";

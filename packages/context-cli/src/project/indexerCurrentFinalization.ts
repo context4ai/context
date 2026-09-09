@@ -1,4 +1,8 @@
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readIndexerDelivery } from "./indexerDelivery.js";
+import { partitionAuthorBinding, readPartitionStream } from "./indexerPartitionStream.js";
 import { basename, join } from "node:path";
 import {
   buildIndexerLayoutChangeConfirmation,
@@ -11,7 +15,6 @@ import {
   indexerLayoutSectionRef,
   indexerProtocolDigest,
   indexerRegistryDigests,
-  loadIndexerRegistry,
   reconcileIndexerResults,
   resolveIndexerBaseQuestionBindingAuthority,
   resolveIndexerOverlayQuestionBindingAuthority,
@@ -29,7 +32,10 @@ import {
   compileProjectIndexerCandidates,
   INDEXER_CURRENT_READINESS_PATH,
 } from "./indexerCandidateCompileActions.js";
-import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
+import {
+  readAcceptedIndexerMainAuthorResultHistory,
+  readAcceptedIndexerMainAuthorResultRecords,
+} from "./indexerMainRunStore.js";
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 import { buildProjectIndexerQuestionTargetInventory } from
   "./indexerQuestionTargetInventoryActions.js";
@@ -364,6 +370,7 @@ export async function prepareCurrentIndexerLayout(input: {
 
 export async function advanceCurrentIndexerFinalization(
   projectRoot: string,
+  resolvedComposerWorksets?: ReadonlySet<string>,
 ): Promise<CurrentIndexerFinalizationState | undefined> {
   const ledger = await currentLedger(projectRoot);
   const delivery = await readIndexerDelivery(projectRoot);
@@ -373,8 +380,12 @@ export async function advanceCurrentIndexerFinalization(
     (!delivery?.current.length && ledger.entries.some((entry) => entry.state !== "accepted"))
   ) return undefined;
 
-  const composerBatch = await resolveCurrentIndexerComposerBatch(projectRoot,
-    delivery?.current.length ? new Set(delivery.current.map((page) => page.workset_digest)) : undefined);
+  const worksets = delivery?.current.length ? new Set(delivery.current.map(page => page.workset_digest)) : undefined;
+  // Only reuse the immediately preceding resolution for the exact same scope.
+  // Derived pages may change the delivery selection; those require resolution again.
+  const alreadyResolved = worksets !== undefined && resolvedComposerWorksets !== undefined &&
+    worksets.size === resolvedComposerWorksets.size && [...worksets].every(key => resolvedComposerWorksets.has(key));
+  const composerBatch = alreadyResolved ? undefined : await resolveCurrentIndexerComposerBatch(projectRoot, worksets);
   if (composerBatch !== undefined) {
     return composerFinalizationState({
       batch_digest: composerBatch.batch_digest,
@@ -422,7 +433,10 @@ export async function advanceCurrentIndexerFinalization(
     },
   });
   const allowedFactPaths = new Set(["target.eligible", "evidence.current"]);
-  const resolvedQuestions = loaded.registry.requirements.flatMap((requirement) =>
+  const stream = await readPartitionStream(projectRoot);
+  const globalCoverageRequired = stream === undefined ||
+    stream.partition_ledger.entries.every((entry) => entry.state === "accepted");
+  const resolvedQuestions = globalCoverageRequired ? loaded.registry.requirements.flatMap((requirement) =>
     (requirement.questions ?? []).map((binding) => ({
       requirement_ref: `requirement:${requirement.id}`,
       question: binding.authority.kind === "cli-base-contract"
@@ -450,21 +464,34 @@ export async function advanceCurrentIndexerFinalization(
             })(),
           }),
     }))
-  );
+  ) : [];
   const targetFacts = Object.fromEntries(inventory.items.map((item) => [
     item.target_ref,
     { target: { eligible: true }, evidence: { current: true } },
   ]));
-  const reconciliation = reconcileIndexerResults({
+  const streamedAuthorBindings = stream === undefined ? undefined : new Set([
+    ...stream.completed_bindings,
+    ...stream.active_bindings,
+  ]);
+  const reconciliationRecords = stream !== undefined && globalCoverageRequired
+    ? await readAcceptedIndexerMainAuthorResultHistory({
+        projectRoot,
+        include: (spec) => streamedAuthorBindings!.has(partitionAuthorBinding(spec)),
+      })
+    : allRecords;
+  const reconciliationResults = reconciliationRecords.map((record) =>
+    indexerArtifactResultSchema.parse(record.artifact_result));
+  const reconciliation = globalCoverageRequired ? reconcileIndexerResults({
     registry: loaded.registry,
     question_target_inventory: inventory,
     resolved_questions: resolvedQuestions,
     target_facts: targetFacts,
     allowed_selector_fact_paths: allowedFactPaths,
-    author_results: allRecords.map((record) => indexerArtifactResultSchema.parse(record.artifact_result)),
-    registered_material_sources: registeredSources(allRecords.map((record) => indexerArtifactResultSchema.parse(record.artifact_result))),
-  });
-  if (ledger.entries.every((entry) => entry.state === "accepted") && !reconciliation.can_report_complete) {
+    author_results: reconciliationResults,
+    registered_material_sources: registeredSources(reconciliationResults),
+  }) : undefined;
+  if (ledger.entries.every((entry) => entry.state === "accepted") &&
+      reconciliation !== undefined && !reconciliation.can_report_complete) {
     return writeState(projectRoot, {
       state: "blocked",
       revision: reconciliation.report_digest,
@@ -504,6 +531,9 @@ export async function advanceCurrentIndexerFinalization(
       primary_result_digest: String(record.accepted_record.result_digest),
     })),
   });
+  const renderCache = await loadCandidateRenderCache(projectRoot);
+  const renderCounters = { result_count: records.length, rendered_sections: 0, reused_sections: 0 };
+  const proposals = await measureContextDebugOperation({ projectRoot, operation: "indexer.delivery-layout", counters: renderCounters }, async () => {
   const proposals: IndexerLayoutProposal[] = [];
   for (const [index, record] of records.entries()) {
     const result = results[index]!;
@@ -511,6 +541,7 @@ export async function advanceCurrentIndexerFinalization(
     if (indexer === undefined) throw new TypeError(`unknown accepted Indexer ${result.indexer_id}`);
     const postAuthor = postAuthorEnvelopes[index]!;
     proposals.push(resolveIndexerLayout({
+      render_cache: renderCache.entries,
       artifact_result: result,
       ...(delivery?.current.length ? { delivery_artifact_ids: delivery.current.filter(
         (page) => page.result_digest === result.output_digest).map((page) => page.artifact_id) } : {}),
@@ -522,6 +553,11 @@ export async function advanceCurrentIndexerFinalization(
       shared_artifact_fingerprint: record.run_envelope.shared_artifact_fingerprint,
     }));
   }
+  renderCounters.rendered_sections = renderCache.entries.misses;
+  renderCounters.reused_sections = renderCache.entries.hits;
+  return proposals;
+  });
+  await saveCandidateRenderCache(projectRoot, renderCache);
   const prepared = await prepareCurrentIndexerLayout({ projectRoot, proposals });
   if (prepared.pending) return prepared.state;
   const { layout_proposal_set: layoutSet, layout_transition: transition, confirmations } = prepared.layout;

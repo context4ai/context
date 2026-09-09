@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { indexerProtocolDigest } from "@c4a/context";
 import { buildIndexerTaskReading, renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
-import { renderIndexerBatchReading } from "../project/indexerBatchReading.js";
+import { measureIndexerBatchReading, renderIndexerBatchReading } from "../project/indexerBatchReading.js";
 import { prepareIndexerWorksetReadings } from "../project/indexerAgentReadingResources.js";
 import { planIndexerCurrentBatch, restoreIndexerCurrentBatch, type IndexerCurrentBatchCandidate } from "../project/indexerCurrentBatchPlanner.js";
 import { authorReadingFixture } from "./indexerBatchReading.fixture.js";
@@ -35,6 +35,13 @@ describe("Author batch reading", () => {
     expect(batch.markdown).not.toContain("source_span_node_refs");
     expect(JSON.stringify(inputs)).toBe(before);
     expect(renderIndexerBatchReading(readings)).toEqual(batch);
+    for (let count = 1; count <= readings.length; count++) {
+      const selected = readings.slice(0, count);
+      const rendered = renderIndexerBatchReading(selected);
+      expect(measureIndexerBatchReading(selected)).toEqual({
+        input_bytes: rendered.input_bytes, view_item_count: rendered.view_item_count,
+      });
+    }
   });
 
   test("uses actual shared reading size to pack four tasks without increasing limits", () => {
@@ -68,6 +75,9 @@ describe("Author batch reading", () => {
     expect(readingObjects(markdown).filter((item) => item.ref === "fact:shared-0")).toHaveLength(3);
     expect(markdown).toContain("Applies to: task-001, task-002 — Task facts");
     expect(markdown).toContain("Different contract");
+    const measured = measureIndexerBatchReading(inputs.map(buildIndexerTaskReading));
+    const rendered = renderIndexerBatchReading(inputs.map(buildIndexerTaskReading));
+    expect(measured).toEqual({ input_bytes: rendered.input_bytes, view_item_count: rendered.view_item_count });
   });
 
   test("keeps partial-retry files standalone, including formerly shared sources and document bodies", () => {
@@ -101,8 +111,15 @@ describe("Author batch reading", () => {
       }));
       const files = await prepareIndexerWorksetReadings(ready);
       expect(new Set(files.map((file) => file.path)).size).toBe(2);
-      expect(files[0]!.common).toHaveLength(1);
-      expect(files[0]!.common.map((file) => file.path)).toEqual(files[1]!.common.map((file) => file.path));
+      expect(files[0]!.common.length).toBeGreaterThan(0);
+      const sharedPaths = files[0]!.common.filter(file => files[1]!.common.some(peer => peer.path === file.path));
+      expect(sharedPaths.length).toBeGreaterThan(0);
+      for (const [index, file] of files.entries()) {
+        const resources = await Promise.all(file.common.map(resource => readFile(resource.path, "utf8")));
+        const ownReading = [await readFile(file.path, "utf8"), ...resources].join("\n");
+        expect(ownReading).toContain(`Use component ${index}`);
+        expect(ownReading).not.toContain(`Use component ${1 - index}`);
+      }
       const content = await readFile(files[0]!.path, "utf8");
       const timestamp = (await stat(files[0]!.path)).mtimeMs;
       expect(await prepareIndexerWorksetReadings(ready)).toEqual(files);
@@ -111,6 +128,9 @@ describe("Author batch reading", () => {
       expect(content).not.toContain(inputs[1]!.text);
       const shared = await Promise.all(files[0]!.common.map((file) => readFile(file.path, "utf8")));
       expect(shared.join("\n")).toContain("fact:shared-0");
+      for (const material of shared) {
+        expect(content).toContain(`${Buffer.byteLength(material)} UTF-8 bytes`);
+      }
       const retried = await prepareIndexerWorksetReadings([ready[1]!]);
       expect(await readFile(retried[0]!.path, "utf8")).not.toContain("task-001");
       expect(await readFile(retried[0]!.path, "utf8")).toContain("fact:shared-0");

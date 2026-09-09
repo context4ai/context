@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildIndexerApprovedLayoutProjection,
   buildIndexerCandidateCompile,
+  materializeIndexerStructuredContent,
   buildIndexerLayoutChangeConfirmation,
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutTransition,
@@ -299,4 +300,22 @@ test.each([false, true])("final Candidate reconciles defaults with a catalog-onl
   expect(markdown).toContain("| Props | label | string | required | unknown |");
   expect(JSON.stringify(fixture.accepted)).toBe(before);
   expect(compile(fixture).files[0]!.markdown).toBe(markdown);
+});
+
+test("command render memo preserves authority checks and refreshes link projection without mutating cached sections", () => {
+  const fixture = candidateCompileFixture();
+  const render_cache = new Map<string, ReturnType<typeof materializeIndexerStructuredContent>>();
+  const input = { layout_proposal_set: fixture.layoutSet, layout_transition: fixture.transition,
+    accepted_results: [fixture.accepted], profile_contract: fixture.profiles,
+    operator_contract: fixture.operators, subject_key_schema_set: fixture.subjectKeySchemaSet, render_cache };
+  const first = buildIndexerCandidateCompile(input);
+  expect(render_cache.size).toBe(1);
+  const originalCache = structuredClone([...render_cache]);
+  const projected = buildIndexerCandidateCompile({ ...input, markdown_projection: ({ markdown }) => markdown + "\nChanged navigation." });
+  expect(projected.files[0]!.markdown).toContain("Changed navigation.");
+  expect([...render_cache]).toEqual(originalCache);
+  expect(buildIndexerCandidateCompile(input)).toEqual(first);
+  const broken = structuredClone(fixture.accepted);
+  broken.accepted_record.acceptance_digest = `sha256:${"0".repeat(64)}`;
+  expect(() => buildIndexerCandidateCompile({ ...input, accepted_results: [broken] })).toThrow();
 });

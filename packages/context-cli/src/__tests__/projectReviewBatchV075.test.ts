@@ -1,5 +1,6 @@
+import { readReviewPayloadFile } from "../project/review.js";
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { writeFile, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CandidateRecord } from "../project/candidateLedger.js";
@@ -93,6 +94,14 @@ describe("managed Review batching", () => {
       const result = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
       expect(result.batch_count).toBe(2);
       const index = await readFile(result.path, "utf8");
+      const payload = JSON.parse(index.match(/```json\n([\s\S]*?)\n```/u)![1]!);
+      payload.decisions = [{ candidate_id: candidates[0]!.record.candidate_id, status: "approved" }];
+      const payloadFile = join(root, "decisions.json");
+      await writeFile(payloadFile, JSON.stringify(payload));
+      const decoded = await readReviewPayloadFile(payloadFile);
+      expect(decoded.decisions).toEqual(payload.decisions);
+      expect(decoded.default).toBeUndefined();
+      expect(decoded.scope?.visible_candidate_ids).toHaveLength(7);
       expect(index).toContain("bound reader purpose");
       expect(index).toContain("actually implements or guarantees");
       expect(index).toContain("reuse the review of unchanged pages");

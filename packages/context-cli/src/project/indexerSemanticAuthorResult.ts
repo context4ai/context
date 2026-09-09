@@ -1,3 +1,4 @@
+import { primaryIntentKey, resolvePrimaryArtifactIntent, selectAuthorPolicy, type PrimaryArtifactPolicy } from "./indexerPrimaryArtifactPolicy.js";
 import { applySelectedPageTemplate, type IndexerPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerArtifactBundle,
@@ -157,6 +158,7 @@ function factIndex(input: {
 function chooseIntent(input: {
   semantic: IndexerAuthorSemanticInput;
   validation: AuthorValidation;
+  policy: PrimaryArtifactPolicy;
 }) {
   const choices = input.validation.allowed_artifact_intents;
   const aliases = aliasMap(choices.map((intent) => ({
@@ -169,9 +171,6 @@ function chooseIntent(input: {
     aliases: [`intent:${intent.artifact_kind}`, intent.artifact_kind],
   })));
   const requested = input.semantic.artifact_intent ?? input.validation.page_plan?.artifact_intent;
-  if (input.validation.page_plan?.artifact_intent !== undefined && requested !== input.validation.page_plan.artifact_intent) {
-    throw new TypeError("author intent differs from the accepted page plan; revise the affected plan before changing its purpose");
-  }
   const selected = requested === undefined
     ? choices.length === 1 ? choices[0] : undefined
     : choices.find((intent) => [
@@ -183,7 +182,17 @@ function chooseIntent(input: {
   if (selected === undefined) {
     throw new TypeError(`author output must choose one allowed artifact intent. Set artifact_intent from the current task's author-authority: ${choices.map((intent) => [intent.source_role, intent.document_kind, intent.reader_goal, intent.artifact_kind].join("/")).join(", ")}`);
   }
-  return selected;
+  const resolved = resolvePrimaryArtifactIntent(selected, choices, input.policy);
+  const planned = input.validation.page_plan?.artifact_intent;
+  if (planned !== undefined) {
+    const plan = choices.find(choice => primaryIntentKey(choice) === resolveAlias(aliases, planned, "planned artifact intent"));
+    if (plan === undefined || primaryIntentKey(resolvePrimaryArtifactIntent(plan, choices, input.policy)) !== primaryIntentKey(resolved)) {
+      throw new TypeError(`author intent differs from the accepted page plan: planned=${planned}; received=${requested}. ` +
+        `To keep the accepted purpose, omit artifact_intent or set it to ${planned}; keep the prose and other fields. ` +
+        "If the purpose really changed, revise the affected plan through the current Context workflow before resubmitting this task. Do not reset state or resubmit accepted peers.");
+    }
+  }
+  return resolved;
 }
 
 export function buildIndexerAuthorRunResultFromSemantic(input: {
@@ -283,14 +292,10 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
   const eligibility = validateIndexerArtifactPolicyEligibilityReport(
     input.validation.artifact_policy_eligibility,
   );
-  const variant = input.semantic.policy === undefined
-    ? eligibility.eligible_variants.length === 1
-      ? eligibility.eligible_variants[0]
-      : undefined
-    : eligibility.eligible_variants.find((candidate) => candidate.id === input.semantic.policy);
-  if (variant === undefined) throw new TypeError("author output must choose one eligible policy");
+  const variant = selectAuthorPolicy(eligibility.eligible_variants, input.semantic.policy,
+    input.semantic.outcome === "publish");
   const intent = input.semantic.outcome === "publish"
-    ? chooseIntent({ semantic: input.semantic, validation: input.validation })
+    ? chooseIntent({ semantic: input.semantic, validation: input.validation, policy: variant })
     : undefined;
   const artifacts: IndexerArtifactResult["artifacts"] = intent === undefined ? [] : [{
     artifact_id: artifactId,
@@ -526,13 +531,19 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
     artifact_bundle: bundle,
     material_question_proposals: materialProposals,
     question_target_dispositions: questionDispositions,
-    diagnostics: input.semantic.diagnostics.map((diagnostic) => ({
+    diagnostics: [
+      ...(intent !== undefined && input.validation.page_plan?.artifact_intent !== undefined &&
+        input.validation.page_plan.artifact_intent !== primaryIntentKey(intent) ? [{
+          code: "primary-artifact-policy-normalized",
+          message: `Primary artifact normalized from ${input.validation.page_plan.artifact_intent} to ${primaryIntentKey(intent)} for policy ${variant.id}; source role, document kind and reader goal are unchanged.`,
+        }] : []),
+      ...input.semantic.diagnostics.map((diagnostic) => ({
       code: diagnostic.code,
       message: diagnostic.message,
       ...(diagnostic.target === undefined ? {} : {
         target_ref: resolveAlias(questionAliases, diagnostic.target, "diagnostic target"),
       }),
-    })),
+    }))],
     input_digest: input.request.execution_request_digest,
   };
   const result: IndexerArtifactResult = {

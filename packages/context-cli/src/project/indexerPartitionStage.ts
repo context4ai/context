@@ -1,4 +1,6 @@
-import { loadIndexerRegistry } from "@c4a/context";
+import { reopenPartitionStream } from "./indexerPartitionStream.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+
 import {
   buildProjectIndexerMainPartitionWorksets,
   buildProjectIndexerQuestionTargetInventory,
@@ -8,6 +10,7 @@ import { currentLedger } from "./indexerMainRunStoreRecords.js";
 
 /** Reconcile with the accepted cache; never clear it to change a scope. */
 export async function preparePartitionStage(projectRoot: string) {
+  await reopenPartitionStream(projectRoot);
   const loaded = await loadIndexerRegistry(projectRoot);
   const questionTargets = await buildProjectIndexerQuestionTargetInventory({
     projectRoot,

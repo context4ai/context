@@ -1,6 +1,14 @@
 import { planIndexerReadingFiles } from "./indexerReadingFiles.js";
 import { renderIndexerTaskReading, type IndexerTaskReading } from "./indexerAgentReading.js";
 
+/** Packing uses the actual files, without also rendering an unused combined
+ * preview on every lookahead attempt. This does not change reading budgets. */
+export function measureIndexerBatchReading(tasks: readonly IndexerTaskReading[]) {
+  if (tasks.length === 0) throw new TypeError("Indexer batch reading requires a task");
+  const files = planIndexerReadingFiles(tasks);
+  return { input_bytes: files.input_bytes, view_item_count: files.view_item_count };
+}
+
 /** Reading presentation only. Task identities and their full canonical Views
  * remain independent. Share only byte-identical material from the same origin;
  * never infer equivalent facts or broaden a task's available references. */
@@ -48,7 +56,7 @@ export function renderIndexerBatchReading(tasks: readonly IndexerTaskReading[]) 
   const markdown = output.join("\n");
   return {
     markdown,
-    input_bytes: planIndexerReadingFiles(tasks).input_bytes,
+    input_bytes: measureIndexerBatchReading(tasks).input_bytes,
     // Count reader-visible items, not the recovery graph that backs them.
     view_item_count: tasks.reduce((count, task) => count + task.context_item_count +
       task.material.filter((block) => blocks.get(keyOf(block))!.tasks.length === 1).length, 0) + shared.length,

@@ -40,16 +40,19 @@ export function createReviewCodeCodec() {
   }
   function encode(scope: string, idsHash: string, contentHash: string, statuses: string[]): string[] {
     if (!/^[a-z][a-z0-9-]*$/.test(scope) || !statuses.length || statuses.length > 1_000_000 ||
-      statuses.some((status) => status !== "approved" && status !== "rejected")) {
-      throw new Error("Resolve every page before copying review results");
+      statuses.some((status) => status !== "approved" && status !== "rejected" && status !== "pending")) {
+      throw new Error("Select at least one review decision and keep undecided pages pending");
     }
-    const mode = statuses.every((s) => s === "approved") ? "a" : statuses.every((s) => s === "rejected") ? "r" : "b";
-    const bytes = Array<number>(Math.ceil(statuses.length / 8)).fill(0);
+    if (statuses.every(s => s === "pending")) throw new Error("Select at least one review decision");
+    const mode = statuses.every((s) => s === "approved") ? "a" : statuses.every((s) => s === "rejected") ? "r" : statuses.includes("pending") ? "p" : "b";
+    const bytes = Array<number>(Math.ceil(statuses.length / (mode === "p" ? 4 : 8))).fill(0);
+    if (mode === "p") statuses.forEach((s, i) => { bytes[i >> 2]! |= (s === "approved" ? 1 : s === "rejected" ? 2 : 0) << ((i % 4) * 2); });
     if (mode === "b") statuses.forEach((s, i) => { if (s === "rejected") bytes[i >> 3]! |= 1 << (i % 8); });
-    const body = ["CR1", scope, statuses.length, hash(idsHash), hash(contentHash), mode, mode === "b" ? pack(bytes) : ""].join(".");
+    const body = ["CR1", scope, statuses.length, hash(idsHash), hash(contentHash), mode, mode === "b" || mode === "p" ? pack(bytes) : ""].join(".");
     const code = `${body}.${checksum(body)}`;
     if (code.length <= 980) return [code];
     const total = Math.ceil(code.length / 900);
+    if (total > 200) throw new Error("Review decisions exceed 200 segments; use a smaller collection scope");
     const identity = checksum(code);
     return Array.from({ length: total }, (_, i) => `CRP1.${identity}.${i + 1}.${total}.${code.slice(i * 900, (i + 1) * 900)}`);
   }
@@ -80,13 +83,21 @@ export function createReviewCodeCodec() {
     const [, scope, countText, ids, content, mode, data] = fields;
     if (!/^[a-z][a-z0-9-]*$/.test(scope!) || !/^[1-9][0-9]*$/.test(countText!)) throw new Error("Invalid review scope");
     const count = Number(countText);
-    if (count > 1_000_000 || !["a", "r", "b"].includes(mode!)) throw new Error("Invalid review decisions");
+    if (count > 1_000_000 || !["a", "r", "b", "p"].includes(mode!)) throw new Error("Invalid review decisions");
     const bytes = unpack(data!);
-    if (mode === "b" ? bytes.length !== Math.ceil(count / 8) || (count % 8 !== 0 && bytes.at(-1)! >>> (count % 8) !== 0) : data !== "") {
+    const perByte = mode === "p" ? 4 : 8;
+    if (mode === "b" || mode === "p" ? bytes.length !== Math.ceil(count / perByte) || (count % perByte !== 0 && bytes.at(-1)! >>> ((count % perByte) * (mode === "p" ? 2 : 1)) !== 0) : data !== "") {
       throw new Error("Invalid review decision bitmap");
     }
-    const statuses = Array.from({ length: count }, (_, i): "approved" | "rejected" =>
-      mode === "r" || (mode === "b" && (bytes[i >> 3]! & (1 << (i % 8)))) ? "rejected" : "approved");
+    const statuses = Array.from({ length: count }, (_, i): "approved" | "rejected" | "pending" => {
+      if (mode === "p") {
+        const value = (bytes[i >> 2]! >>> ((i % 4) * 2)) & 3;
+        if (value === 3) throw new Error("Invalid pending review bitmap");
+        return value === 1 ? "approved" : value === 2 ? "rejected" : "pending";
+      }
+      return mode === "r" || (mode === "b" && (bytes[i >> 3]! & (1 << (i % 8)))) ? "rejected" : "approved";
+    });
+    if (statuses.every(s => s === "pending")) throw new Error("Review contains no decisions");
     return { scope: scope!, count, idsHash: unhash(ids!), contentHash: unhash(content!), statuses };
   }
   return { encode, decode };

@@ -81,3 +81,18 @@ test("exported type members use owner visibility while private and internal APIs
   }
   expect(project({ ...base, value: { name: "Service", kind: "class", visibility: "exported", members } })).toBeUndefined();
 });
+
+test("partial component members retain unresolved wrapper details while complete contracts stay compact", async () => {
+  const { projectIndexerPublicContractTable: project } = await import("../indexerPublicContractTable.js");
+  const value = { name: "View", kind: "component", propsType: "PropsWithChildren<Props>",
+    typeAnnotation: "FC<PropsWithChildren<Props>>", members: [
+      { name: "testId", kind: "prop", typeAnnotation: "string", optional: true, defaultValue: "'view'" },
+    ] };
+  const partial = project({ value: { ...value, contractResolution: "declaration-only" } });
+  expect(partial?.rows[0]?.[4]).toBe("'view'");
+  expect(partial?.declaration_status).toBe("retained");
+  expect(partial?.declaration).toBe("FC<PropsWithChildren<Props>>");
+  const complete = project({ value: { ...value, contractResolution: "resolved" } });
+  expect(complete?.declaration_status).toBe("component-wrapper");
+  expect(complete?.declaration).toBeUndefined();
+});

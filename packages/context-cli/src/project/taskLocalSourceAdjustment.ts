@@ -1,7 +1,8 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerProtocolDigest, loadIndexerRegistry, type IndexerProjectFileTarget } from "@c4a/context";
+import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
 import { readApprovedRevision, requestDigest, currentApprovedRevisionTarget } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";

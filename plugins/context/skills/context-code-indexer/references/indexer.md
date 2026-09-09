@@ -40,6 +40,17 @@ not mean the whole source is finished.
 
 ## Partition and identity
 
+Use the complete scope/member overview first; inspect linked fact details and
+captured source only where necessary to resolve a theme. Check public entrypoints,
+shared types, wrappers and lifecycle boundaries before setting `ready_for_author`.
+Do not infer a whole repository from samples or automatically exclude internal,
+generated or deprecated paths. Every supplied member still needs a disposition.
+A ready theme may be written and delivered while other themes remain in planning.
+Preserve the accepted subject when subsequent material supplements it; start from
+its approved prose and retain unaffected content. Source details deferred during
+planning must be examined before corresponding behavior claims in Author.
+
+
 Public API coverage does not imply one page per exported symbol. Group simple
 helpers, related types and aliases under their caller-facing capability while
 retaining useful inputs, outputs and edge cases. Give an API its own page when
@@ -53,6 +64,9 @@ entrypoint or lifecycle; do not merge them by name or let a legacy title describ
 a current API. An explicit migration/comparison page may relate both, but must
 explain which contract belongs to each entrypoint. Preserve already accepted
 subjects during continuation; do not repartition them for cosmetic grouping.
+For retained deprecated components, use the optional guidance in
+[the component-library profile](../templates/component-library.md#optional-guidance-for-deprecated-components).
+It guides source-backed differences, not mandatory columns or automatic migration advice.
 
 Actively assess useful coverage from available public entrypoints, maintained
 guidance, explicit lifecycle notices and representative source material. Identify
@@ -156,6 +170,15 @@ Select `artifact_intent` from the current Author authority's allowed tuples. Con
 When the same Authorized Workset View contains CLI-authorized captured documents or tool snapshots, treat them as ordinary input evidence for the current logical unit. Use that material to answer a supplied question only when its evidence contract permits; otherwise keep the canonical material-gap disposition. Do not create a second answer flow or inspect registered sources outside the View.
 
 Treat the CLI inventory as the complete denominator, not a sample. Parser facts may prove files, declarations, entries, contracts, relationships and written default expressions; they do not by themselves prove business meaning, evaluated runtime values, failure behavior, or ownership. Every relationship must cite the concrete evidence for its own handoff. Do not repeat one whole-page evidence set across unrelated facts, and do not reduce a multi-source fact to one arbitrary primary file.
+
+With a program-generated API table, let its bound facts supply the field rows,
+types and defaults. Author prose explains when to use the API, how to combine it,
+and relevant pitfalls or migration limits. Refer to individual parameters when
+needed for that explanation; do not duplicate the table or narrate every row.
+An incorrect generated value needs a field-specific source reference and the
+current repair flow, not a contradictory prose override. This does not remove
+fact coverage or source verification, and does not apply to APIs for which the
+selected template provides no suitable program block.
 
 For generated API content, separate the displayed API from the facts supporting
 it. Keep relevant implementation or inherited-type facts as supporting material

@@ -47,13 +47,19 @@ describe("source-first Author reading", () => {
 
   test("preserves unknown Provider fields, foreign-source facts and unavailable bodies", () => {
     const { input, add } = fixture();
+    add("symbol:inherited", "code-symbol", { name: "Options", kind: "interface", file: "src/component-0.ts",
+      line: 1, endLine: 1, members: [{ name: "active", file: "src/base.ts", defaultValue: "true" }] });
     add("custom:relation", "code-relation", { type: "calls", from: "custom", to: "runtime", behavior: "Provider-specific guarantee" });
+    add("custom:prototype", "constructor", { behavior: "Unknown Provider kind" });
     add("foreign:relation", "code-relation", { type: "calls", from: "foreign", to: "runtime", line: 1 });
     const foreign = input.view.items.at(-1)!.value as { locator: { source_ref: string } };
     foreign.locator.source_ref = "repo:foreign";
     expect(renderIndexerWorksetReading(input)).toContain("Provider-specific guarantee");
+    expect(renderIndexerWorksetReading(input)).toContain("Unknown Provider kind");
     const projected = projectIndexerAuthorFactReading(input.view);
     expect(projected.omitted.has("foreign:relation")).toBe(false);
+    expect(projected.omitted.has("symbol:inherited")).toBe(false);
+    expect(renderIndexerWorksetReading(input)).toContain("src/base.ts");
     delete (input.view.items.find((item) => item.category === "source-text")!.value as Record<string, unknown>).read_path;
     const partial = projectIndexerAuthorFactReading(input.view);
     expect(partial.omitted.has("call:0")).toBe(false);

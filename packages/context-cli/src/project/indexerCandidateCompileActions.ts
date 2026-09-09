@@ -1,3 +1,6 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
 import { readIndexerDelivery, recordIndexerDeliveryLinks } from "./indexerDelivery.js";
 import { createDeliveryLinkProjection } from "./indexerDeliveryLinks.js";
 import { readFile } from "node:fs/promises";
@@ -9,7 +12,6 @@ import {
   indexerCandidateCompileSchema,
   indexerArtifactResultSchema,
   indexerProtocolDigest,
-  loadIndexerRegistry,
   validateIndexerLayoutProposalSet,
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
@@ -191,6 +193,7 @@ function renderedByResult(value: unknown): Map<string, unknown[]> {
 
 export function buildProjectIndexerCandidateCompileFromRecords(input: {
   markdown_projection?: Parameters<typeof buildIndexerCandidateCompile>[0]["markdown_projection"];
+  render_cache?: Parameters<typeof buildIndexerCandidateCompile>[0]["render_cache"];
   value: unknown;
   records: readonly AcceptedAuthorRecord[];
   operator_contract: unknown;
@@ -224,6 +227,7 @@ export function buildProjectIndexerCandidateCompileFromRecords(input: {
   }
   return buildIndexerCandidateCompile({
     markdown_projection: input.markdown_projection,
+    render_cache: input.render_cache,
     layout_proposal_set: value.layout_proposal_set,
     layout_transition: value.layout_transition,
     layout_change_confirmations: array(
@@ -625,13 +629,24 @@ export async function compileProjectIndexerCandidates(input: {
       const layout = validateIndexerLayoutProposalSet(record(input.value, "Candidate compile input").layout_proposal_set);
       const currentPaths = new Set(layout.proposals.flatMap((proposal) => proposal.artifacts.map((artifact) => artifact.output_path)));
       const links = delivery?.current.length ? createDeliveryLinkProjection(input.projectRoot, currentPaths) : undefined;
-      const compile = buildProjectIndexerCandidateCompileFromRecords({
+      const renderCache = await loadCandidateRenderCache(input.projectRoot);
+      const renderCounters = { result_count: records.length, page_count: currentPaths.size, rendered_sections: 0, reused_sections: 0 };
+      const compile = await measureContextDebugOperation({ projectRoot: input.projectRoot,
+        operation: "indexer.candidate-render", counters: renderCounters },
+      async () => {
+        const result = buildProjectIndexerCandidateCompileFromRecords({
+        render_cache: renderCache.entries,
         value: input.value,
         records,
         operator_contract: authority.operator_contract,
         profile_contract: authority.profile_contract,
         markdown_projection: links?.project,
+        });
+        renderCounters.rendered_sections = renderCache.entries.misses;
+        renderCounters.reused_sections = renderCache.entries.hits;
+        return result;
       });
+      await saveCandidateRenderCache(input.projectRoot, renderCache);
       if (delivery?.current.length) {
         const expected = new Set(delivery.current.map((page) => page.ref));
         const actual = new Set(compile.files.map((file) => file.artifact_ref));

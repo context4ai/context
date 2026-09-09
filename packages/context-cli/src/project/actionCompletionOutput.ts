@@ -5,7 +5,6 @@ import YAML from "yaml";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 
 const INLINE_LIMIT = 16 * 1024;
-const MAX_OUTCOMES = 20;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -39,7 +38,8 @@ export async function prepareActionCompletionOutput(input: {
   const root = join(input.projectRoot, ".tmp/context-runtime/action-results");
   const resultFile = join(root, `${digest}.json`);
   await atomicWriteFile(resultFile, full);
-  const next = record(result.next);
+  const next = record(result.next) ?? record(record(result.workflow)?.current) ??
+    record(record(result.continuation)?.next);
   const nextFile = next === undefined ? undefined : join(root, `${digest}.next.json`);
   if (nextFile !== undefined) await atomicWriteFile(nextFile, serializeActionCompletion(next, "json"));
   const outcomes = (Array.isArray(result.outcomes) ? result.outcomes : [])
@@ -58,15 +58,15 @@ export async function prepareActionCompletionOutput(input: {
     result_file: resultFile,
     result_bytes: Buffer.byteLength(full),
     outcome_counts: counts,
-    ...pick(result, ["workflow_summary", "composer_result"]),
+    ...pick(result, ["workflow_summary", "composer_result", "submitted_slice"]),
     committed_count: Array.isArray(result.outcomes) ? outcomes.filter((item) => item.committed === true).length : null,
-    outcomes: outcomes.slice(0, MAX_OUTCOMES).map((item) => ({
+    outcomes: outcomes.map((item) => ({
       ...pick(item, ["task_key", "outcome", "committed"]),
       ...(item.message === undefined ? {} : { message: shortText(item.message) }),
     })),
-    outcomes_omitted: Math.max(0, outcomes.length - MAX_OUTCOMES),
+    outcomes_omitted: 0,
     progress: progress === undefined ? null : pick(progress, [
-      "stage", "total", "accepted", "running", "pending", "failed", "stale", "stop", "workflow_progress", "task_completion", "pages",
+      "scopes", "stage", "total", "accepted", "running", "pending", "failed", "stale", "stop", "workflow_progress", "task_completion", "pages",
     ]),
     next_route: next === undefined ? null : {
       file: nextFile, digest: `sha256:${createHash("sha256").update(serializeActionCompletion(next, "json")).digest("hex")}`, ...pick(next, ["revision", "node", "availability"]),
@@ -75,12 +75,18 @@ export async function prepareActionCompletionOutput(input: {
     ...(failure === undefined ? {} : { next_preparation: {
       outcome: failure.outcome, message: shortText(failure.message), command: failure.command,
     } }),
-    guidance: "Read result_file for full diagnostics and next_route.file for the exact next Route. Do not resubmit committed tasks. Long messages are shortened only in this summary.",
+    details_required: false,
+    guidance: "Read result_file only when details_required is true, transport output was truncated, or the outcome is unclear. Otherwise the summary contains all task outcomes. Read next_route.file once for the exact next Route when present; result_file embeds the same Route. Do not resubmit committed tasks or start another production driver while a submission is running.",
+
   };
   // An unusually large individual diagnostic must not defeat the output limit.
   while (summary.outcomes.length > 0 && Buffer.byteLength(serializeActionCompletion(summary, input.format)) > INLINE_LIMIT) {
     summary.outcomes.pop();
     summary.outcomes_omitted++;
   }
+  summary.details_required = summary.outcomes_omitted > 0 || failure?.outcome === "failed" ||
+    outcomes.some(item => !["accepted", "material-expanded"].includes(String(item.outcome))) ||
+    (outcomes.length === 0 && result.outcome === undefined && result.workflow_summary === undefined) ||
+    (next === undefined && result.workflow_summary === undefined);
   return summary;
 }

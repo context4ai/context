@@ -1,9 +1,10 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { digestText } from "@c4a/agent-graph";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { loadIndexerRegistry } from "@c4a/context";
-import type { ReviewCandidateView } from "./reviewShared.js";
+
+import { REVIEW_PAYLOAD_SCHEMA, candidateIdsHash, candidateSetHash, type ReviewCandidateView } from "./reviewShared.js";
 
 const REVIEW_BATCH_MAX_CANDIDATES = 6;
 const REVIEW_BATCH_MAX_BYTES = 512 * 1024;
@@ -36,6 +37,7 @@ function renderReviewCandidate(candidate: ReviewCandidateView, index: number): s
     `Collection: ${record.collection}`,
     `Module: ${record.module}`,
     `Page: ${record.path}`,
+    `Candidate: ${record.candidate_id}`,
     `Repair: context revise '${record.candidate_id.replace(/'/gu, "'\\''")}' --instruction '<describe the correction>' --format json`,
     "",
     record.review.behavior_summary ?? record.review.summary,
@@ -154,8 +156,13 @@ export async function materializeCurrentReviewBatchSet(input: {
     "On the first review, read all batch files below. After a revision, recheck changed pages and any conclusions affected by them; reuse the review of unchanged pages when it is still available in this conversation. If that review context was lost, read those pages again.",
     "Batch files are reading material, not separate CLI steps. They need no per-batch read receipts or approval commands.",
     "The material note below only compares delivered previews, not approval or reading history. Reuse an unchanged batch only if its content review is still in this conversation; a new reviewer must read it.",
-    "Only after every candidate is acceptable, run the single approval command returned by the Route.",
-    "If any Candidate needs repair, do not approve any batch. Use its Repair command below with the actual correction; it reopens the owning Author or Composer in the current delivery. Do not use Omit as a rewrite request.",
+    "Apply only decisions for pages actually reviewed. Keep undecided or repair pages out of decisions; do not set default unless every page has that decision. Omit remains a durable exclusion, never a request to repair.",
+    "Save the following current scope in a temporary JSON input file and add decisions as {candidate_id, status: approved|rejected}; use that file in the Route command. Applied pages survive later repairs of other pages.",
+    "```json", JSON.stringify({ schema: REVIEW_PAYLOAD_SCHEMA, scope: { kind: "all", count: input.candidates.length,
+      ids_sha256: candidateIdsHash(input.candidates.map(item => item.record.candidate_id).sort()),
+      candidates_sha256: candidateSetHash(input.candidates.map(item => item.record)),
+      visible_candidate_ids: input.candidates.map(item => item.record.candidate_id).sort() }, decisions: [] }, null, 2), "```",
+    "For a page needing changes use its Repair command. Approval alone does not request one build per page; ask for early delivery only when the user wants the independently publishable approved pages now.",
     "",
     "## Semantic Review checklist",
     "",

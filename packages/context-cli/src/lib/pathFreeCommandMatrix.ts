@@ -20,6 +20,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
 
   { command: "update", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Prepare a scoped update from fixed source inputs and approved knowledge." },
   { command: "task", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Current task adjustment and explicit rollback namespace." },
+  { command: "task prepare", view: "production-semantic", handles: ["state", "next_command"], notes: "Prepare an explicitly requested workspace maintenance reset while retaining approved knowledge and registered sources." },
   { command: "task maintain", view: "production-semantic", handles: ["id", "targets", "timing", "next_command"], notes: "Registers approved-page maintenance without replacing active production." },
   { command: "task maintenance-status", view: "production-semantic", handles: ["revision", "state", "reason"], notes: "Reads active and queued maintenance and its current transition revision." },
   { command: "task advance-maintenance", view: "production-semantic", handles: ["revision", "outcome", "next_command"], notes: "Executes the Graph-selected transition at a safe delivery boundary." },
@@ -31,6 +32,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "source rename", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Preview and apply an exact managed source rename with references." },
   { command: "status", view: "production-semantic", handles: ["project_status", "source_name", "phase_id", "next_command"], notes: "Reports project lifecycle state and status-driven next actions." },
   { command: "action", view: "production-semantic", handles: ["project_status", "next_command"], notes: "Current workflow Action completion namespace." },
+  { command: "action scaffold-current", view: "production-semantic", handles: ["project_status", "input_payload"], notes: "Prints an unfilled revision-bound Author draft without accepting or advancing tasks." },
   { command: "action complete-current", view: "production-semantic", handles: ["project_status", "input_payload", "next_command"], notes: "Submits one revision-bound result for the exact current workflow Action." },
   { command: "resource", view: "production-semantic", handles: ["project_status"], notes: "Context workflow resource namespace." },
   { command: "resource acknowledge-current", view: "production-semantic", handles: ["project_status", "resource_digest", "next_command"], notes: "Records one merged current-conversation receipt set after the Agent reads every direct required resource." },

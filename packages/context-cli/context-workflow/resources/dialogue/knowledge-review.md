@@ -45,7 +45,8 @@ state that existing approvals were preserved and no Review gate remains.
 
 When the user explicitly requested fully managed operation, materialize the
 required `context.review-current` Markdown Resource once, read its index and
-every listed reader-facing batch, then use only the revision-bound atomic
-approve command returned by the managed route. Do not open HTML, synthesize
-per-candidate approval calls, persist review receipts, or approve any subset
-before all batches have been judged.
+the pages being decided, then use the revision-bound atomic apply command with
+the index's current scope template. Approve only pages actually reviewed; leave
+undecided and repair pages pending. Do not open HTML or persist a parallel review
+ledger. A partial review code in ordinary mode likewise leaves pending pages
+unchanged; all segments of that code are still required.

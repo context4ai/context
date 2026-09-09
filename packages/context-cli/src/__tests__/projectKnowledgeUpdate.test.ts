@@ -12,7 +12,7 @@ import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { buildProjectPackages } from "../project/packageBuilder.js";
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
-import { readApprovedRevision, type ApprovedRevision } from "../project/approvedRevision.js";
+import { completeApprovedRevision, readApprovedRevision, type ApprovedRevision } from "../project/approvedRevision.js";
 import { collectProjectStatus } from "../project/status.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 
@@ -167,7 +167,11 @@ test("late development context updates one code page without moving its code ver
   const request = (await readApprovedRevision(root))!;
   expect(request.target.source_refs).toContain(note.source_ref);
   const header = /^---\n([\s\S]*?)\n---\n/u.exec(request.target.markdown)!;
-  const metadata = YAML.parse(header[1]!); metadata.sources = request.target.source_refs;
+  const metadata = YAML.parse(header[1]!); metadata.sources = [...request.target.source_refs].reverse();
+  expect(metadata.sources.length).toBeGreaterThan(1);
+  const wrongSources = { ...metadata, sources: [...metadata.sources, "note:unregistered/extra"] };
+  await expect(completeApprovedRevision({ projectRoot: root, revision: request.revision, preview: true,
+    markdown: request.target.markdown.replace(header[0], `---\n${YAML.stringify(wrongSources)}---\n`) })).rejects.toThrow("identity and sources");
   const markdown = request.target.markdown.replace(header[0], `---\n${YAML.stringify(metadata)}---\n`) +
     `\n<!-- context:section id="rationale" kind="content" source_ref="${note.source_ref}" -->\n\nThe development discussion chose separate constants for separate callers. This is intent, not a runtime guarantee.\n\n<!-- /context:section -->\n`;
   await complete(root, { stage: "approved-revision", markdown });
@@ -478,4 +482,76 @@ test("revision Route includes selected Provider resources and expands current AP
   const candidates = await readCandidateRecords(root);
   expect(candidates[0]!.body).toContain(block!.markdown);
   expect(candidates[0]!.body).not.toContain(block!.token);
+}, 30_000);
+
+test("partial revision delivery returns to remaining Review and never advances the source baseline early", async () => {
+  const root = await initialKnowledge();
+  await beginKnowledgeUpdate(root, { scopes: [scope] });
+  const update = (await readKnowledgeUpdate(root))!;
+  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Improve this explanation." })), scope_summary: "Both pages.", new_topics: [] });
+  const first = (await readApprovedRevision(root))!;
+  const { completeApprovedRevision } = await import("../project/approvedRevision.js");
+  const { approvedContextSectionsInMarkdown } = await import("../project/verifyContextSections.js");
+  const section = approvedContextSectionsInMarkdown(first.target.markdown)[0]!;
+  const edit = { sections: [{ section_id: section.id!, content: [{ markdown: `${section.readerVisibleBody}\n\nClarified usage.` }] }] };
+  const before = await readApprovedRevision(root);
+  const candidatesBefore = await readCandidateRecords(root);
+  const preview = await completeApprovedRevision({ projectRoot: root, revision: first.revision, ...edit, preview: true });
+  expect(preview.changed).toBe(true);
+  expect(await readApprovedRevision(root)).toEqual(before);
+  expect(await readCandidateRecords(root)).toEqual(candidatesBefore);
+  const candidate = await completeApprovedRevision({ projectRoot: root, revision: first.revision, ...edit });
+  expect(candidate!.body).toBe(preview.markdown);
+  const second = (await readApprovedRevision(root))!;
+  await complete(root, { stage: "approved-revision", markdown: second.target.markdown.replace("public entry point", "documented public entry point") });
+  await approveOne(root, first.target.path);
+  expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("review-current-batch");
+  const { requestIndexerEarlyDelivery, readIndexerDelivery } = await import("../project/indexerDelivery.js");
+  await requestIndexerEarlyDelivery(root);
+  const pending = await readCandidateRecords(root);
+  expect(pending).toHaveLength(1);
+  expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("close-approved-knowledge");
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect((await readIndexerDelivery(root))?.partial).toBeUndefined();
+  expect(await readCandidateRecords(root)).toEqual(pending);
+  expect(await baseline(root)).toEqual([]);
+  expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("review-current-batch");
+  await approveCandidates(root, pending);
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect(await baseline(root)).toHaveLength(1);
+}, 30_000);
+
+test("partial delivery preserves pending linked pages and survives a failed build before resuming Review", async () => {
+  const root = await initialKnowledge();
+  await beginKnowledgeUpdate(root, { scopes: [scope] });
+  const update = (await readKnowledgeUpdate(root))!;
+  await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this page." })), scope_summary: "Both pages.", new_topics: [] });
+  const first = (await readApprovedRevision(root))!;
+  const peer = update.candidates.find(item => item.path !== first.target.path)!;
+  const { posix } = await import("node:path");
+  const link = posix.relative(posix.dirname(first.target.path), peer.path);
+  const linked = first.target.markdown.replace("public entry point", `public entry point; see [related page](${link})`);
+  await complete(root, { stage: "approved-revision", markdown: linked });
+  const second = (await readApprovedRevision(root))!;
+  await complete(root, { stage: "approved-revision", markdown: second.target.markdown.replace("public entry point", "documented public entry point") });
+  await approveOne(root, first.target.path);
+  const { requestIndexerEarlyDelivery, readIndexerDelivery } = await import("../project/indexerDelivery.js");
+  await expect(requestIndexerEarlyDelivery(root)).rejects.toThrow("linked page");
+  expect((await readIndexerDelivery(root))?.partial).toBeUndefined();
+  expect(await readCandidateRecords(root)).toHaveLength(1);
+  // The dependent set must finish Review together; approval of the peer unlocks delivery.
+  await approveCandidates(root, await readCandidateRecords(root));
+  await closeProjectWorkspace(root);
+  const entryPath = join(root, "src/index.ts");
+  const original = await readFile(entryPath, "utf8");
+  await writeFile(entryPath, "throw new Error('injected build failure');\n");
+  await expect(buildProjectPackages(root)).rejects.toThrow();
+  expect(await baseline(root)).toEqual([]);
+  expect(await readApprovedRevision(root)).toBeDefined();
+  await writeFile(entryPath, original);
+  await buildProjectPackages(root);
+  expect(await readApprovedRevision(root)).toBeUndefined();
+  expect(await baseline(root)).toHaveLength(1);
 }, 30_000);

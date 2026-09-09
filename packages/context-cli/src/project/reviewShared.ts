@@ -31,7 +31,7 @@ export interface ReviewDecision {
 }
 
 export interface ReviewPayload {
-  encoded_statuses?: ReviewStatus[];
+  encoded_statuses?: Array<ReviewStatus | "pending">;
   decisions: ReviewDecision[];
   note?: string;
   collection?: KnowledgeCollection;

@@ -36,3 +36,10 @@ export async function syncIndexerActionSchema(path: string): Promise<void> {
   const updated = `${JSON.stringify(document, null, 2)}\n`;
   if (updated !== original) await writeFile(path, updated);
 }
+
+export async function syncApprovedRevisionSchema(path: string): Promise<void> {
+  const schema = zodToJsonSchema(indexerCurrentActionInputDefinitions.approvedRevision,
+    { target: "jsonSchema2019-09", effectStrategy: "input" });
+  const updated = `${JSON.stringify(schema, null, 2)}\n`;
+  if (await readFile(path, "utf8") !== updated) await writeFile(path, updated);
+}

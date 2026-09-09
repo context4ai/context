@@ -25,6 +25,7 @@ test("Composer reading preserves semantic values and Markdown while using submis
   expect(reading).toContain("# Panel\n\nRead the panel.");
   expect(reading).toContain('"fact:1"');
   expect(reading).toContain("artifact:1");
+  expect(reading.indexOf("# Panel\n")).toBeLessThan(reading.indexOf("### fact:1"));
   expect(reading).toContain("@default false");
   expect(reading).toContain("declaration-only");
   expect(reading).toContain("business-value-must-survive");
@@ -42,4 +43,29 @@ test("Composer applicability follows declared kinds and actual evidenced inputs"
   expect(missingComposerInputs(composer, { ...view(), artifacts: [] })).toEqual(["artifact:content"]);
   const unbound = view(); unbound.facts[0]!.evidence_refs = [];
   expect(missingComposerInputs(composer, unbound)).toEqual(["fact:code-symbol"]);
+});
+
+test("Composer shares section metadata and preserves member values without changing canonical facts", () => {
+  const original = view();
+  const sections = ["usage", "limits"].map(section_key => ({ section_key, owner: "sample-provider", custom: { keep: true },
+    blocks: [{ layer: "semantic-prose", markdown: `## ${section_key}\nRead this section.` }],
+  }));
+  const members = Array.from({ length: 10 }, (_, i) => ({ name: `value${i}`, kind: "property", optional: true,
+    visibility: "exported", file: "src/options.ts", type: "boolean", default: i % 2 === 0 }));
+  const input = materializeIndexerPrimaryResultView({ workset_digest: digest, primary_result_digest: digest, validator_contract_digest: digest,
+    facts: original.facts.map(fact => ({ ...fact, value: { ...fact.value as object, members } })),
+    artifacts: original.artifacts.map(artifact => ({ ...artifact, variables: { representation: "sections", sections } })),
+  });
+  const before = JSON.stringify(input);
+  const reading = renderIndexerPostAuthorReading(input);
+  const blocks = [...reading.matchAll(/```json\n([\s\S]*?)\n```/gu)].map(match => JSON.parse(match[1]!));
+  expect(blocks.filter(block => block.owner === "sample-provider")).toHaveLength(1);
+  expect(blocks.some(block => block.section_key === "usage")).toBe(true);
+  expect(blocks.some(block => block.section_key === "limits")).toBe(true);
+  const groups = blocks.find(block => block.kind === "code-symbol").value.members.groups;
+  expect(groups.flatMap((group: { common: object; columns: string[]; rows: unknown[][] }) => group.rows.map(row => ({ ...group.common,
+    ...Object.fromEntries(group.columns.map((key, i) => [key, row[i]])),
+  })))).toEqual(members);
+  expect(reading).toContain("## limits\nRead this section.");
+  expect(JSON.stringify(input)).toBe(before);
 });

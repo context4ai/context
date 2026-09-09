@@ -1,3 +1,4 @@
+import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
 import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -442,7 +443,7 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
       edges: Array.isArray(record.edges) ? record.edges.filter(isApprovedStructureRecord) : [],
     });
     const delivery = await readIndexerDelivery(projectRoot);
-    const deliveryNeedsClose = (delivery?.current.length ?? 0) > 0 && delivery?.closed !== true;
+    const deliveryNeedsClose = ((delivery?.current.length ?? 0) > 0 || delivery?.partial !== undefined) && delivery?.closed !== true;
     return recorded === inputHash && !deliveryNeedsClose
       ? { state: "ready", inputHash, relationshipCoverage, diagnostics: [] }
       : { state: "stale", inputHash, relationshipCoverage, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
@@ -460,7 +461,9 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     const draftCandidates = (await readCandidateRecords(projectRoot)).filter((candidate) =>
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
-    if (draftCandidates.length > 0) {
+    const delivery = await readIndexerDelivery(projectRoot);
+    if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
+    if (draftCandidates.length > 0 && !delivery?.partial) {
       throw new ContextError(ExitCode.WorkspaceStateError, "close is blocked while draft candidates still need Review", {
         category: ErrorCategory.WorkspaceStateInvalid,
         code: "close-draft-candidates-pending",

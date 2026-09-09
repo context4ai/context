@@ -43,6 +43,7 @@ export interface WorkflowAutomaticStep {
 }
 
 export interface WorkflowRunStop {
+  handoff?: { to: "agent" | "user" | "external" | "none"; message: string };
   reasonCode: string;
   message: string;
   revision: string;
@@ -79,9 +80,16 @@ function blockedStop(
   message: string,
   command?: string,
 ): WorkflowRunStop {
+  const agent = ["workflow.until.configuration-required", "workflow.until.agent-context-required", "workflow.until.agent-execution-required", "workflow.until.command-plan-not-unique"].includes(reasonCode);
+  const recipient = reasonCode === "workflow.until.complete" ? "none" : agent ? "agent"
+    : status.workflow.current?.availability === "requires-user" ? "user" : "external";
   return {
     reasonCode,
     message,
+    handoff: { to: recipient, message: recipient === "agent"
+      ? "Continue within the current authorized conversation using this Route. CLI return is an Agent handoff, not a request for the user to say continue. Reuse already-read unchanged resources by digest; read again if their content or available context changed."
+      : recipient === "none" ? "Registered scope completed; check any remaining user requests."
+      : "Explain the current decision or external recovery needed, preserving accepted work." },
     revision: status.workflow.revision,
     ...(status.workflow.current === undefined
       ? {}

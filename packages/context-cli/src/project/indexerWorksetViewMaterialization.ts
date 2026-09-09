@@ -1,3 +1,6 @@
+import { supportsPrimaryArtifact, primaryIntentKey, type PrimaryArtifactPolicy, type PrimaryArtifactIntent } from "./indexerPrimaryArtifactPolicy.js";
+import { buildPartitionNavigation } from "./indexerPartitionNavigation.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -18,7 +21,6 @@ import {
   canonicalIndexerJson,
   indexerInventoryMembersDigest,
   indexerProtocolDigest,
-  loadIndexerRegistry,
   validateIndexerAuthorizedWorksetProjection,
   type IndexerAuthorizedWorksetView,
   type IndexerAuthorizedWorksetViewProjection,
@@ -65,6 +67,12 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
     allowed_artifact_intents: spec.validation.allowed_artifact_intents,
+    primary_artifact_options: (spec.validation.artifact_policy_eligibility as { eligible_variants: PrimaryArtifactPolicy[] }).eligible_variants.map(policy => ({
+      policy: policy.id,
+      artifact_intents: (spec.validation.allowed_artifact_intents as PrimaryArtifactIntent[])
+        .filter(intent => supportsPrimaryArtifact(intent.artifact_kind, policy)).map(primaryIntentKey),
+    })),
+    primary_artifact_guidance: "Semantic Author emits one primary artifact. Choose a primary_artifact_options intent and its policy. An accepted plan with a different artifact kind is normalized only to a unique policy-compatible kind with the same source role, document kind and reader goal; the result records that normalization. Do not duplicate prose to satisfy required kinds.",
     ...(spec.validation.page_plan === undefined ? {} : { page_plan: spec.validation.page_plan }),
     ...(spec.validation.page_template === undefined ? {} : { page_template: spec.validation.page_template }),
     ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates }),
@@ -391,6 +399,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   assertProjectIndexerMainSourceBinding({
     workset: request.workset,
     binding,
+    partition_projection: spec.validation.partition_projection,
     ...(request.workset.stage === "author"
       ? { dependency_view: spec.validation.dependency_view }
       : {}),
@@ -490,6 +499,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   const mainSources = buildIndexerMainRunWorksetViewSources({
     request,
     source_projection_sources: [
+      ...(request.workset.stage === "partition" ? [await buildPartitionNavigation(input.projectRoot, spec)] : []),
       requirementProjection,
       ...(partitionAuthorityProjection === null ? [] : [partitionAuthorityProjection]),
       ...(authorAuthorityProjection === null ? [] : [authorAuthorityProjection]),

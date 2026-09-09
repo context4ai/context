@@ -76,7 +76,6 @@ async function resolveInstalledParserPackage(input: {
   version: string;
 }): Promise<{
   entry_path: string;
-  entry_content: Buffer;
   manifest: { name: string; version: string };
 }> {
   let entryPath: string;
@@ -95,8 +94,6 @@ async function resolveInstalledParserPackage(input: {
   }
   return {
     entry_path: entryPath,
-    entry_content: await reuseCommandFileRead({ key: "parser-package-entry", paths: [entryPath],
-      read: () => readFile(entryPath) }),
     manifest: manifest.value,
   };
 }
@@ -107,13 +104,15 @@ export async function inspectInstalledIndexerParserPackage(input: {
 }): Promise<InstalledIndexerParserPackage> {
   const installed = await resolveInstalledParserPackage(input);
   return reuseCommandFileRead({ key: `parser-package-identity:${input.package}:${input.version}`,
-    paths: [installed.entry_path], read: async () => ({
-    package: installed.manifest.name,
-    version: installed.manifest.version,
-    lock_integrity: `sha512-${createHash("sha512").update(installed.entry_content).digest("base64")}`,
-    resolved_digest:
-      `sha256:${createHash("sha256").update(installed.entry_content).digest("hex")}`,
-  }) });
+    paths: [installed.entry_path], read: async () => {
+      const content = await readFile(installed.entry_path);
+      return {
+        package: installed.manifest.name,
+        version: installed.manifest.version,
+        lock_integrity: `sha512-${createHash("sha512").update(content).digest("base64")}`,
+        resolved_digest: `sha256:${createHash("sha256").update(content).digest("hex")}`,
+      };
+    } });
 }
 
 function receiptDigest(
@@ -165,7 +164,7 @@ export async function loadProjectIndexerParser(input: {
     version: lock.actual_coordinate.version,
   });
   const resolvedEntryDigest =
-    `sha256:${createHash("sha256").update(installed.entry_content).digest("hex")}`;
+    `sha256:${createHash("sha256").update(await readFile(installed.entry_path)).digest("hex")}`;
   const loaded = await import(pathToFileURL(installed.entry_path).href) as Record<string, unknown>;
   const adapter = loaded[lock.actual_coordinate.export];
   if (typeof adapter !== "function") {

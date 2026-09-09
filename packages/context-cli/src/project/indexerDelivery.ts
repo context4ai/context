@@ -1,3 +1,7 @@
+import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
+import { finishPartitionStream, readPartitionStream, resumePartitionStream } from "./indexerPartitionStream.js";
+import { reuseCommandValue } from "./commandReadCache.js";
+import { selectPartialDelivery, type PartialDeliveryScope } from "./partialDelivery.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { readRejectedDecisions } from "./reviewDecisions.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -20,7 +24,8 @@ const pageSchema = z.object({
   workset_digest: z.string().min(1), content_digest: z.string().min(1),
   boundary: z.boolean(), priority: z.number().int().nonnegative(),
 }).strict();
-const stateSchema = z.object({ delivered: z.record(z.string()), current: z.array(pageSchema).max(50),
+const stateSchema = z.object({ partial: z.object({ kind: z.enum(["indexer", "revision"]),
+  paths: z.array(z.string().startsWith("knowledge/")).min(1), refs: z.array(z.string()).min(1) }).strict().optional(), delivered: z.record(z.string()), current: z.array(pageSchema).max(50),
   link_targets: z.record(z.array(z.string().startsWith("knowledge/").refine((path) => !path.split("/").includes("..")))).optional(),
   paths: z.array(z.string()), closed: z.boolean().optional(), early_requested: z.boolean().optional() }).strict();
 export interface DeliveryPage {
@@ -33,6 +38,7 @@ export interface DeliveryPage {
   priority: number;
 }
 export interface IndexerDeliveryState {
+  partial?: PartialDeliveryScope | undefined;
   link_targets?: Record<string, string[]> | undefined;
   delivered: Record<string, string>;
   current: DeliveryPage[];
@@ -56,6 +62,7 @@ export function selectDeliveryPages(input: {
   allAuthorsAccepted: boolean;
   requestedEarly?: boolean;
   hasPriorDelivery?: boolean;
+  waveSize?: number;
 }): DeliveryPage[] {
   const unique = new Map<string, DeliveryPage>();
   for (const page of input.pages) {
@@ -68,6 +75,13 @@ export function selectDeliveryPages(input: {
   const ready = [...unique.values()].filter((page) => input.delivered[page.ref] !== page.content_digest)
     .sort((a, b) => a.priority - b.priority || a.ref.localeCompare(b.ref));
   if (ready.length === 0) return [];
+  if (input.waveSize !== undefined) {
+    if (input.requestedEarly || input.allAuthorsAccepted) {
+      // Wave size counts themes, not derived pages. Keep the existing page cap.
+      return ready.slice(0, 50);
+    }
+    return [];
+  }
   if (!input.hasPriorDelivery && Object.keys(input.delivered).length === 0) {
     const firstBoundary = ready.slice(0, 50).findIndex((page) => page.boundary);
     return ready.slice(0, firstBoundary < 0 ? 3 : firstBoundary + 1);
@@ -98,7 +112,7 @@ export async function acceptedDeliveryPages(projectRoot: string, includeLinks = 
     allow_pending: true,
     results: records.map((record) => ({ author_workset_digest: record.accepted_record.workset_digest,
       primary_result_digest: record.accepted_record.result_digest })) });
-  return records.flatMap((record, index) => {
+  const pages = reuseCommandValue(`delivery-pages:${indexerProtocolDigest({ records, envelopes })}`, () => records.flatMap((record, index) => {
     const result = indexerArtifactResultSchema.parse(record.artifact_result);
     const plan = record.validation.page_plan as { priority?: number; delivery_boundary?: boolean } | undefined;
     const effective = materializeIndexerEffectiveArtifactSet({ artifact_result: result,
@@ -107,11 +121,12 @@ export async function acceptedDeliveryPages(projectRoot: string, includeLinks = 
       ref: indexerLayoutArtifactRef(result.logical_unit.logical_unit_ref, artifact),
       artifact_id: artifact.artifact_id, result_digest: result.output_digest,
       workset_digest: record.accepted_record.workset_digest,
-      content_digest: deliveryLinkDigest(projectRoot, deliveryPageContentDigest(artifact, result),
-        delivery?.link_targets?.[indexerLayoutArtifactRef(result.logical_unit.logical_unit_ref, artifact)]),
+      content_digest: deliveryPageContentDigest(artifact, result),
       boundary: plan?.delivery_boundary === true && artifactIndex === effective.artifacts.length - 1, priority: plan?.priority ?? index,
     }));
-  });
+  }));
+  // Link availability is mutable filesystem state and must always be checked.
+  return pages.map(page => ({ ...page, content_digest: deliveryLinkDigest(projectRoot, page.content_digest, delivery?.link_targets?.[page.ref]) }));
 }
 
 function assertDeliveryLinksComplete(projectRoot: string, state: IndexerDeliveryState, pages: readonly DeliveryPage[]): void {
@@ -128,6 +143,7 @@ async function finishDeliveryIfReady(projectRoot: string, state: IndexerDelivery
   const pages = await acceptedDeliveryPages(projectRoot);
   if (pages.some((page) => state.delivered[page.ref] !== page.content_digest)) return;
   assertDeliveryLinksComplete(projectRoot, state, pages);
+  if (!await finishPartitionStream(projectRoot) && await resumePartitionStream(projectRoot)) return;
   await clearCompletedLifecycle(projectRoot);
 }
 
@@ -151,10 +167,16 @@ async function prepareIndexerDeliveryUnlocked(projectRoot: string, requestedEarl
   const ledger = await currentLedger(projectRoot);
   if (ledger?.entries[0]?.stage !== "author" || !ledger.entries.some((entry) => entry.state === "accepted")) return undefined;
   const pages = await acceptedDeliveryPages(projectRoot);
+  const stream = await readPartitionStream(projectRoot);
   const current = selectDeliveryPages({ pages,
+    ...(stream?.phase === "author" ? { waveSize: Math.max(1, stream.active_bindings.length) } : {}),
     delivered: previous?.delivered ?? {}, allAuthorsAccepted: ledger.entries.every((entry) => entry.state === "accepted"), requestedEarly: requestedEarly || previous?.early_requested === true });
   if (current.length === 0) {
     if (preview) return undefined;
+    if (pages.length === 0 && ledger.entries.every(entry => entry.state === "accepted") && await readPartitionStream(projectRoot)) {
+      await finishDeliveryIfReady(projectRoot, previous ?? { delivered: {}, current: [], paths: [] });
+      return undefined;
+    }
     if (previous !== undefined && ledger.entries.every((entry) => entry.state === "accepted") &&
         pages.every((page) => previous.delivered[page.ref] === page.content_digest)) {
       await finishDeliveryIfReady(projectRoot, previous);
@@ -171,6 +193,19 @@ async function prepareIndexerDeliveryUnlocked(projectRoot: string, requestedEarl
  * A failed build retains the same active page set and accepted author results. */
 async function completeIndexerDeliveryUnlocked(projectRoot: string, paths: string[]): Promise<void> {
   const state = await readIndexerDelivery(projectRoot);
+  if (state?.partial && state.closed) {
+    const delivered = new Set(state.partial.refs);
+    if (state.partial.kind === "indexer") {
+      for (const page of state.current) if (delivered.has(page.ref)) state.delivered[page.ref] = page.content_digest;
+      state.current = state.current.filter(page => !delivered.has(page.ref));
+    }
+    delete state.partial;
+    state.closed = false;
+    state.paths = paths;
+    await save(projectRoot, state);
+    // Keep the current compile and remaining Candidate ledger for Review/repair.
+    return;
+  }
   if (state === undefined || state.current.length === 0 || !state.closed) return;
   for (const page of state.current) state.delivered[page.ref] = page.content_digest;
   state.current = [];
@@ -191,6 +226,7 @@ async function completeIndexerDeliveryUnlocked(projectRoot: string, paths: strin
 
 async function closeIndexerDeliveryUnlocked(projectRoot: string): Promise<boolean> {
   const state = await readIndexerDelivery(projectRoot);
+  if (state?.partial) { await save(projectRoot, { ...state, closed: true }); return true; }
   if (!state?.current.length) return false;
   const decisions = await readRejectedDecisions(projectRoot);
   const omitted = new Set((await readCandidateRecords(projectRoot)).filter((candidate) =>
@@ -217,7 +253,9 @@ async function closeIndexerDeliveryUnlocked(projectRoot: string): Promise<boolea
 
 /** Revision invalidates the current projection, not accepted peers or delivered pages. */
 async function resetIndexerDeliveryProjectionUnlocked(projectRoot: string, resumeCurrent: boolean): Promise<void> {
+  if (resumeCurrent) await interruptDeliveryCadence(projectRoot);
   const state = await readIndexerDelivery(projectRoot);
+  if (state !== undefined) delete state.partial;
   if (state !== undefined) await save(projectRoot, { ...state, current: [], closed: false,
     // A repaired delivery must return to Review after its Author finishes,
     // even when the batch was smaller than the normal delivery threshold.
@@ -226,11 +264,14 @@ async function resetIndexerDeliveryProjectionUnlocked(projectRoot: string, resum
 }
 
 async function requestIndexerEarlyDeliveryUnlocked(projectRoot: string): Promise<void> {
+  const state = await readIndexerDelivery(projectRoot) ?? { delivered: {}, current: [], paths: [] };
+  const partial = await selectPartialDelivery(projectRoot, state.current.length ? new Set(state.current.map(page => page.ref)) : undefined);
+  if (partial) { await save(projectRoot, { ...state, partial, closed: false }); return; }
+  if ((await readCandidateRecords(projectRoot)).some(candidate => candidate.status === "draft")) return;
   const ledger = await currentLedger(projectRoot);
   if (ledger?.entries[0]?.stage !== "author") {
     throw new TypeError("Early delivery requires a prepared Author stage; continue the current Context route first.");
   }
-  const state = await readIndexerDelivery(projectRoot) ?? { delivered: {}, current: [], paths: [] };
   // An existing delivery already fulfills this request. Do not carry a second
   // early checkpoint into the next production batch when the user retries.
   if (state.current.length > 0) return;
@@ -255,3 +296,6 @@ export function resetIndexerDeliveryProjection(projectRoot: string, resumeCurren
 export function requestIndexerEarlyDelivery(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "request-page-delivery", () => requestIndexerEarlyDeliveryUnlocked(projectRoot));
 }
+
+/** Read-only page identities for progress across planning/delivery waves. */
+export { acceptedDeliveryPages as readAcceptedIndexerDeliveryPages };

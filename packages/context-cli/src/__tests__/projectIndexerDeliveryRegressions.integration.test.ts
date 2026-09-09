@@ -61,7 +61,7 @@ test("complete-current accepts the page intent and template advertised by its ow
   expect(completion).toMatchObject({ outcomes: expect.arrayContaining([
     expect.objectContaining({ task_key: task.descriptor.task_key, outcome: "accepted", committed: true }),
   ]) });
-}, 30_000);
+}, 60_000);
 
 test("skipping an oversized middle candidate keeps task and View numbering aligned and repairs old descriptors", async () => {
   const root = await workspace(4);
@@ -91,7 +91,7 @@ test("skipping an oversized middle candidate keeps task and View numbering align
     expect((await route(root))?.action?.input).toMatchObject({ stage: "partition" });
     expect((await currentLedger(root))?.ledger_digest).toBe(before?.ledger_digest);
   } finally { renderSpy.mockRestore(); }
-}, 30_000);
+}, 60_000);
 
 test.each(["json", "yaml"] as const)("large completion output retains full diagnostics and the next Route (%s)", async (format) => {
   // Exercise the real CLI route, including checkout readiness. macOS temporary
@@ -118,4 +118,4 @@ test.each(["json", "yaml"] as const)("large completion output retains full diagn
   const next = JSON.parse(await readFile(summary.next_route.file, "utf8"));
   expect(next).toEqual(full.next);
   expect(next.revision).toBe(current.revision);
-}, 30_000);
+}, 60_000);

@@ -1,3 +1,4 @@
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -212,6 +213,8 @@ export async function currentSpec(input: {
   projectRoot: string;
   request_digest: string;
 }): Promise<MainRunSpec> {
+  return reuseCommandFileRead({ key: "validated-main-run-spec", paths: [join(input.projectRoot, runSpecPath(input.request_digest))],
+    read: async () => {
   const value = await readJsonMaybe(input.projectRoot, runSpecPath(input.request_digest));
   if (value === undefined) throw new TypeError("main run request cache is missing");
   const spec = normalizeRunSpec(value);
@@ -219,6 +222,8 @@ export async function currentSpec(input: {
     throw new TypeError("main run request cache path does not match its request digest");
   }
   return spec;
+    },
+  });
 }
 
 async function writeTarget(input: {
@@ -248,9 +253,16 @@ export async function persistLedger(input: {
   transaction_kind: string;
   ledger: IndexerMainRunLedger;
   immutable_records?: readonly { path: string; value: unknown }[];
+  mutable_records?: readonly { path: string; value: unknown }[];
+  delete_records?: readonly string[];
   inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<IndexerMainRunStoreReceipt> {
   const candidates = await Promise.all([
+    ...(input.delete_records ?? []).map(async (path): Promise<IndexerProjectFileTarget | undefined> => {
+      const content = await readMaybe(input.projectRoot, path);
+      return content === undefined ? undefined : { path, operation: "delete", base_digest: durableContentDigest(content), target_digest: null };
+    }),
+    ...(input.mutable_records ?? []).map((record) => writeTarget({ projectRoot: input.projectRoot, ...record })),
     ...(input.immutable_records ?? []).map((record) => writeTarget({
       projectRoot: input.projectRoot,
       path: record.path,

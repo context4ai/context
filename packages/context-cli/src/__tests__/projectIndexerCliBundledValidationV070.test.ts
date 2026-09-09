@@ -384,9 +384,10 @@ describe("CLI bundled Indexer release validation", () => {
     );
     const manifestPath = join(sourceRoot, "context-code-indexer", "context-indexer.yaml");
     const manifest = await readFile(manifestPath, "utf8");
+    expect(manifest).toContain("fact_kinds: [code-symbol]");
     await writeFile(
       manifestPath,
-      manifest.replace("fact_kinds: [public-surface]", "fact_kinds: [public-surface-drift]"),
+      manifest.replace("fact_kinds: [code-symbol]", "fact_kinds: [public-surface-drift]"),
       "utf8",
     );
     await expect(validateBundledIndexerComposers({

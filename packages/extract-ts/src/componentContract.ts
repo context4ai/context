@@ -7,6 +7,27 @@ export function componentPropsNode(node: ts.TypeNode | undefined): ts.TypeNode |
   return node.typeArguments?.length === 1 ? node.typeArguments[0] : undefined;
 }
 
+/** Only React's additive wrapper preserves local Props when its declaration
+ * is unavailable. A same-named local or third-party generic may transform P. */
+export function componentLocalPropsNode(node: ts.TypeNode, checker: ts.TypeChecker): ts.TypeNode | undefined {
+  if (ts.isParenthesizedTypeNode(node)) return componentLocalPropsNode(node.type, checker);
+  if (!ts.isTypeReferenceNode(node) || node.typeArguments?.length !== 1) return undefined;
+  const name = node.typeName;
+  const identifier = ts.isIdentifier(name) ? name : ts.isIdentifier(name.left) ? name.left : undefined;
+  if (identifier === undefined) return undefined;
+  const imported = checker.getSymbolAtLocation(identifier)?.declarations?.find(declaration =>
+    ts.isImportSpecifier(declaration) || ts.isNamespaceImport(declaration) || ts.isImportClause(declaration));
+  if (imported === undefined) return undefined;
+  let owner: ts.Node = imported;
+  while (!ts.isImportDeclaration(owner) && owner.parent !== undefined) owner = owner.parent;
+  if (!ts.isImportDeclaration(owner) || !ts.isStringLiteral(owner.moduleSpecifier)
+    || owner.moduleSpecifier.text !== "react") return undefined;
+  const wrapper = ts.isIdentifier(name)
+    ? ts.isImportSpecifier(imported) ? (imported.propertyName ?? imported.name).text : undefined
+    : (ts.isNamespaceImport(imported) || ts.isImportClause(imported)) ? name.right.text : undefined;
+  return wrapper === "PropsWithChildren" ? node.typeArguments[0] : undefined;
+}
+
 export function componentPropsName(annotation: string): string | undefined {
   const source = ts.createSourceFile("contract.ts", `type Contract = ${annotation};`, ts.ScriptTarget.Latest, true);
   const declaration = source.statements[0];

@@ -44,11 +44,27 @@ test("compact completion retains terminal context and empty Composer counts", as
   const projectRoot = await root();
   const workflow = await actionWorkflowSummary(projectRoot, "complete");
   const result = { protocol: "context.indexer.current-action-completion/v2", stage: "post-author", next: null,
+    progress: { scopes: { overall: { planning: { unit: "task", completed: 20, total: 70 } }, wave: null, slice: null } },
+    submitted_slice: { scope: "submitted-slice", stage: "post-author", unit: "task", completed: 3, total: 3 },
     workflow_summary: workflow, composer_result: { accepted_tasks: 3, proposals: 0 },
     outcomes: Array.from({ length: 3 }, (_, i) => ({ task_key: `task-${i}`, outcome: "accepted", committed: true })) };
   const compact = await prepareActionCompletionOutput({ projectRoot, result, format: "json" }) as Record<string, unknown>;
+  expect(compact.progress).toEqual(result.progress);
+  expect(compact.submitted_slice).toEqual(result.submitted_slice);
   expect(compact.workflow_summary).toEqual(workflow);
   expect(compact.composer_result).toEqual({ accepted_tasks: 3, proposals: 0 });
   expect(compact.next_route).toBeNull();
   expect(JSON.parse(await readFile(compact.result_file as string, "utf8"))).toEqual(result);
 });
+
+for (const wrapper of ["workflow", "continuation"] as const) {
+  test(`compact completion retains the Route nested in ${wrapper}`, async () => {
+    const projectRoot = await root();
+    const route = { protocol: "context.workflow.route.v1", revision: "sha256:current", node: "run-indexer-agent-step", commands: [] };
+    const result = { protocol: "context.indexer.current-action-completion/v2", stage: "structure-review",
+      [wrapper]: wrapper === "workflow" ? { current: route } : { next: route } };
+    const compact = await prepareActionCompletionOutput({ projectRoot, result, format: "json" }) as { next_route: { file: string }; result_file: string };
+    expect(JSON.parse(await readFile(compact.next_route.file, "utf8"))).toEqual(route);
+    expect(JSON.parse(await readFile(compact.result_file, "utf8"))).toEqual(result);
+  });
+}

@@ -1,5 +1,4 @@
 import { compactContractDeclaration } from "./indexerContractDeclaration.js";
-import type { IndexerArtifactFact } from "./indexerContentLayers.js";
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -9,7 +8,7 @@ const text = (value: unknown): string => typeof value === "string" ? value : "";
 
 /** Mechanically project already authorized declarations. No source traversal,
  * runtime evaluation, reader-purpose inference, or behavior classification. */
-export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { columns: string[]; rows: string[][]; declaration?: string; declarationName?: string } | undefined {
+export function projectIndexerPublicContractTable(fact: { value: unknown }): { columns: string[]; rows: string[][]; declaration?: string; declarationName?: string; declaration_status: "retained" | "table-complete" | "component-wrapper" | "not-provided" } | undefined {
   const value = record(fact.value);
   if (value === undefined) return undefined;
   const rows: string[][] = [];
@@ -86,8 +85,13 @@ export function projectIndexerPublicContractTable(fact: IndexerArtifactFact): { 
   if (rows.length === 0) return undefined;
   const declaration = (hasMembers || value.kind === "component") && typeof value.typeAnnotation === "string"
     ? compactContractDeclaration(value.typeAnnotation, rows) : undefined;
-  const redundantComponent = value.kind === "component" && hasMembers && typeof value.propsType === "string"
+  // Partial local Props do not cover an unresolved external wrapper. Preserve
+  // its declaration so readers can still locate the unexpanded contract.
+  const redundantComponent = value.kind === "component" && value.contractResolution !== "declaration-only"
+    && hasMembers && typeof value.propsType === "string"
     && [value.propsType, `FC<${value.propsType}>`, `React.FC<${value.propsType}>`].includes(declaration ?? "");
   return { columns: ["Contract", "Name", "Declaration", "Required", "Default", "Notes"], rows,
+    declaration_status: redundantComponent ? "component-wrapper" : declaration !== undefined ? "retained"
+      : typeof value.typeAnnotation === "string" && hasMembers ? "table-complete" : "not-provided",
     ...(declaration !== undefined && !redundantComponent ? { declaration, declarationName: owner } : {}) };
 }

@@ -83,7 +83,7 @@ async function publish(root: string, task: Task) {
   if (!resource || !("path" in resource) || !resource.path) throw new Error("missing source material");
   const taskMaterial = await readFile(resource.path, "utf8");
   const sharedMaterial = await Promise.all([...taskMaterial.matchAll(
-    /^Read shared material: \.\/([a-f0-9]{64})\.md \(sha256:([a-f0-9]{64})\)$/gmu,
+    /^Read shared material: \.\/([a-f0-9]{64})\.md \(sha256:([a-f0-9]{64}); \d+ UTF-8 bytes\)$/gmu,
   )].map(async (match) => {
     expect(match[1]).toBe(match[2]!);
     const content = await readFile(join(dirname(resource.path!), `${match[1]}.md`), "utf8");

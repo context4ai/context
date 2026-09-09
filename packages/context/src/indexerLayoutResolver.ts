@@ -215,11 +215,13 @@ interface MaterializedSection {
 function structuredSections(
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>,
   facts: IndexerArtifactResult["facts"],
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>>,
 ): MaterializedSection[] {
   return artifact.sections.map((section) => {
     const contentBlocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
       facts,
+      render_cache,
     });
     const evidenceRefs = [...new Set(contentBlocks.flatMap((block) => block.evidence_refs))]
       .sort(compareIndexerCanonicalText);
@@ -302,6 +304,7 @@ function templateSections(input: {
 
 export function resolveIndexerLayout(input: {
   artifact_result: unknown;
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
   post_author_envelope?: unknown | null;
   profile: string;
   profile_contract: unknown;
@@ -380,7 +383,7 @@ export function resolveIndexerLayout(input: {
       throw new TypeError(`Artifact ${artifact.artifact_id} is absent from its closed Bundle`);
     }
     const sections = artifact.representation === "sections"
-      ? structuredSections(artifact, result.facts)
+      ? structuredSections(artifact, result.facts, input.render_cache)
       : (() => {
         const rendered = renderedById.get(artifact.artifact_id);
         if (rendered === undefined) {
@@ -505,6 +508,7 @@ export function resolveIndexerLayout(input: {
 export function validateIndexerLayoutProposal(input: {
   proposal: unknown;
   artifact_result: unknown;
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
   post_author_envelope?: unknown | null;
   profile_contract: unknown;
   operator_contract: unknown;
@@ -514,6 +518,7 @@ export function validateIndexerLayoutProposal(input: {
   const proposal = indexerLayoutProposalSchema.parse(input.proposal);
   const expected = resolveIndexerLayout({
     artifact_result: input.artifact_result,
+    render_cache: input.render_cache,
     post_author_envelope: input.post_author_envelope,
     profile: proposal.profile,
     profile_contract: input.profile_contract,

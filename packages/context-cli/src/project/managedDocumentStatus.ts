@@ -1,4 +1,5 @@
-import { loadIndexerRegistry } from "@c4a/context";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+
 import { loadContextProjectModule } from "./workspace.js";
 import { readManagedDocumentSnapshot } from "./managedDocumentSnapshot.js";
 import type { DocumentSourcesRegistryView } from "./documentSources.js";

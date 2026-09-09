@@ -60,6 +60,21 @@ not produce an empty component page.
 - **Migration or compatibility guide**: only when maintained sources describe
   version transitions or supported platform constraints.
 
+## Optional guidance for deprecated components
+
+Use this guidance only for deprecated APIs retained in the agreed scope. Reuse
+public-contract templates; deprecated status does not require a separate page.
+Explain why an existing user needs this content, cite the deprecation notice,
+and identify the exact supported import or legacy entrypoint. Let the generated
+API table carry props and defaults; prose covers component-specific constraints.
+
+Include styling passthrough, accessibility or migration advice only when relevant
+and supported by sources. Omit inapplicable sections. Do not infer a replacement,
+removal date or migration guarantee from a deprecated label. If migration is the
+reader's goal but supporting guidance is missing, state that gap. Shared migration
+background can live in one existing guide, with individual pages explaining their
+differences and linking to it; do not create a generic guide just to fill a template.
+
 ## Chapter blueprints
 
 ```markdown

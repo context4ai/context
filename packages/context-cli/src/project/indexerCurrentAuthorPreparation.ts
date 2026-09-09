@@ -1,3 +1,6 @@
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { streamingAuthorBase } from "./indexerStreamingAuthorBase.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
 import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
 import { loadSelectedPageTemplate } from "./indexerPageTemplate.js";
 import {
@@ -16,7 +19,6 @@ import {
   type IndexerRegistry,
 } from "@c4a/context";
 import {
-  assertProjectIndexerMainSourceBinding,
   type ProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
 import { createIndexerAuthorSourceResolver, mergeIndexerAuthorSourceBindings } from "./indexerAuthorSources.js";
@@ -238,11 +240,14 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
         group,
       });
       const origins = originsForGroup({ partition, group });
+      const scopeChange = [...new Set(origins.flatMap((origin) => origin.group.scope_change?.removed_member_ids ?? []))].sort();
       const binding = mergeIndexerAuthorSourceBindings(origins.filter((origin) =>
         origin.binding.source_ref === partition.workset.source_ref &&
         origin.binding.module_ref === partition.workset.module_ref
       ).map((origin) => origin.binding));
-      assertProjectIndexerMainSourceBinding({ workset: partition.workset, binding });
+      // Each origin was checked against its exact Partition projection by the
+      // source resolver. The merged source binding covers several shards and
+      // must not be compared to the first shard's local dependency digest.
       const view = buildProjectIndexerAuthorDependencyView({
         primary_binding: binding,
         synthetic_plan: plan,
@@ -260,6 +265,7 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
         authority,
         binding,
         group,
+        scopeChange,
         members,
         dependency_view: view,
         supplementary_sources: origins.flatMap((origin) =>
@@ -335,6 +341,8 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
   if (preparationByGroup.size !== preparations.length) {
     throw new TypeError("author preparation contains duplicate group identities");
   }
+  const stream = await readPartitionStream(input.projectRoot);
+  const approvedStructure = stream ? await readKnowledgeStructure(input.projectRoot) : undefined;
   const runSpecs = await Promise.all(built.worksets.map(async (partitionWorkset) => {
     const prepared = preparationByGroup.get(groupIdentity(partitionWorkset));
     if (prepared === undefined) {
@@ -342,9 +350,10 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     }
     // The accepted grouping stays intact. A newly prepared Author request uses
     // current instructions without pretending its parent used the same bundle.
-    const workset = buildIndexerMainWorkset(currentExecutionWorksetFields({
+    const base = stream ? await streamingAuthorBase(input.projectRoot, partitionWorkset.logical_unit_ref, approvedStructure) : undefined;
+    const workset = buildIndexerMainWorkset({ ...currentExecutionWorksetFields({
       workset: partitionWorkset, execution: prepared.authority.primary_execution,
-    }));
+    }), ...(base === undefined ? {} : { repair_intent: base }) });
     if (workset.stage !== "author") throw new TypeError("expected author workset");
     const selectedFactRefs = prepared.dependency_view.positive_nodes.flatMap((node) =>
       node.kind === "selected-fact" && prepared.binding.adapter === "parser-facts" &&
@@ -379,14 +388,16 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       dependency_view: prepared.dependency_view,
       canonical_inventory_members: prepared.members,
       expected_subject_key: prepared.group.subject_key,
-      page_template: await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.group.template_id }),
+      page_template: await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.scopeChange.length ? undefined : prepared.group.template_id }),
       page_plan: Object.fromEntries(Object.entries({
         reader_task: prepared.group.reader_task,
         outline: prepared.group.outline,
-        artifact_intent: prepared.group.artifact_intent,
-        template_id: prepared.group.template_id,
+        artifact_intent: prepared.scopeChange.length ? undefined : prepared.group.artifact_intent,
+        template_id: prepared.scopeChange.length ? undefined : prepared.group.template_id,
+        scope_change: prepared.scopeChange.length ? { removed_member_ids: prepared.scopeChange } : undefined,
         priority: prepared.group.priority,
         delivery_boundary: prepared.group.delivery_boundary,
+        ready_for_author: prepared.group.ready_for_author,
       }).filter(([, value]) => value !== undefined)),
       artifact_policy_eligibility: prepared.eligibility,
       allowed_question_targets: prepared.allowed_question_targets,

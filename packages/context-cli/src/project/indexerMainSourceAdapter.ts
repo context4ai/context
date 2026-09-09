@@ -1,3 +1,5 @@
+import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
+import { buildPartitionSourceAccess } from "./indexerPartitionNavigation.js";
 import {
   buildIndexerAuthorDependencyWorksetViewSource,
   buildIndexerAuthorizedWorksetViewSource,
@@ -334,16 +336,20 @@ export function assertProjectIndexerMainSourceBinding(input: {
   workset: Record<string, unknown>;
   binding: ProjectIndexerMainSourceBinding;
   dependency_view?: unknown;
+  partition_projection?: unknown;
 }): void {
   const authorDependencyView = input.workset.stage === "author"
     ? validateIndexerAuthorDependencyView(input.dependency_view)
     : null;
+  const partitionDigest = input.workset.stage === "partition"
+    ? partitionDependencyDigest(input.binding, input.partition_projection as IndexerConsumerWorksetProjection | undefined) : undefined;
+  const scopedPartition = partitionDigest !== undefined && input.workset.source_binding_digest === partitionDigest;
   if (
     input.workset.source_ref !== input.binding.source_ref ||
     input.workset.module_ref !== input.binding.module_ref ||
     input.workset.profile_contract_digest !== input.binding.profile_contract_digest ||
     input.workset.source_binding_digest !== (
-      authorDependencyView?.view_digest ?? input.binding.source_binding_digest
+      authorDependencyView?.view_digest ?? (scopedPartition ? partitionDigest : input.binding.source_binding_digest)
     )
   ) {
     throw new TypeError("main Indexer workset targets a stale source adapter binding");
@@ -354,7 +360,7 @@ export function assertProjectIndexerMainSourceBinding(input: {
         ? input.workset.partition_input_digests
         : [],
     );
-    if (input.binding.partition_input_digests.some((digest) => !supplied.has(digest))) {
+    if ((scopedPartition ? [partitionDigest!] : input.binding.partition_input_digests).some((digest) => !supplied.has(digest))) {
       throw new TypeError("partition workset omits source adapter input digests");
     }
   }
@@ -480,6 +486,10 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
         })),
       ],
     })];
+    if (request.workset.stage === "partition") sources.push(await buildPartitionSourceAccess({
+      projectRoot: input.projectRoot, spec_request: request, binding,
+      paths: selectedFileDescriptors.map(file => file.normalized_path),
+    }));
     if (dependencyView !== null) {
       sources.push(await buildProjectIndexerAuthorSourceText({
         projectRoot: input.projectRoot, request, indexer_id: request.workset.indexer_id,

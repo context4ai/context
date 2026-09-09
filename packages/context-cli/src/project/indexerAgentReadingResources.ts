@@ -36,6 +36,8 @@ export async function prepareIndexerWorksetReadings(inputs: readonly {
     return { view, workset: input.workset, task_key: input.task_key };
   }));
   const plan = planIndexerReadingFiles(views.map(buildIndexerTaskReading));
+  await Promise.all([...new Map(inputs.map(input => [dirname(input.ready.path), input.ready.path])).values()]
+    .flatMap(path => plan.details.map(block => persistReading(path, block.markdown))));
   const commonFiles = new Map(await Promise.all(plan.shared.map(async (block) =>
     [block.digest, await persistReading(inputs[0]!.ready.path, block.markdown)] as const)));
   return Promise.all(plan.readings.map(async (task, index) => ({

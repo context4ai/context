@@ -1,3 +1,4 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { excludedIndexerSourcePath, selectedIndexerExclusions } from "./indexerScopeExclusions.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -7,7 +8,6 @@ import { basename, extname, join, relative, resolve } from "node:path";
 import {
   INDEXER_PARSER_CAPABILITY_SPECS,
   indexerProtocolDigest,
-  loadIndexerRegistry,
   loadSourcesRegistry,
   type IndexerProfileContract,
   type IndexerRegistryEntry,

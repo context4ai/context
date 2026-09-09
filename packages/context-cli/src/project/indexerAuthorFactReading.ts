@@ -43,7 +43,7 @@ export function projectIndexerAuthorFactReading(view: IndexerAuthorizedWorksetVi
   for (const item of view.items) {
     if (item.category !== "fact") continue;
     const fact = record(item.value);
-    const fields = PAYLOAD_FIELDS[String(fact.kind)];
+    const fields = Object.hasOwn(PAYLOAD_FIELDS, String(fact.kind)) ? PAYLOAD_FIELDS[String(fact.kind)] : undefined;
     const payload = record(fact.payload);
     if (fields === undefined || Object.keys(payload).length === 0 ||
         Object.keys(payload).some((key) => !fields.includes(key))) continue;
@@ -58,6 +58,9 @@ export function projectIndexerAuthorFactReading(view: IndexerAuthorizedWorksetVi
     // source access. Older partial Views without a read path keep their facts.
     if (file.read_path === undefined && !(fact.kind === "code-symbol" && inlineCovered)) continue;
     if (fact.kind === "code-symbol") {
+      // A readable local declaration does not replace inherited members or
+      // extracted parameter/default documentation. Keep those facts intact.
+      if (["members", "params"].some(key => Array.isArray(payload[key]) && (payload[key] as unknown[]).length > 0) || payload.doc !== undefined) continue;
       if (typeof payload.name !== "string" || typeof payload.kind !== "string") continue;
       const keys = ["name", "kind", "visibility", "line", "endLine", "signature", "propsType", "typeAnnotation", "params", "returnType", "extends", "implements"];
       file.symbols.push(Object.fromEntries(keys.filter((key) => payload[key] !== undefined).map((key) => [key, payload[key]])));

@@ -16,10 +16,22 @@ export function excludeIndexerPartitionMembers(
     if (plan.status !== "complete" || !plan.groups.some((group) =>
       group.member_ids.some((id) => excluded.has(id))
     )) return partition;
-    const groups = plan.groups.map((group) => ({
-      ...group,
-      member_ids: group.member_ids.filter((id) => !excluded.has(id)),
-    })).filter((group) => group.member_ids.length > 0);
+    const groups = plan.groups.map((group) => {
+      const removed = group.member_ids.filter((id) => excluded.has(id));
+      if (removed.length === 0) return group;
+      // Keep identity and accepted receipts, but the old document form no longer
+      // constrains the remaining content. Author must reassess the residual group.
+      const retained = { ...group };
+      delete retained.artifact_intent;
+      delete retained.template_id;
+      return {
+        ...retained,
+        member_ids: group.member_ids.filter((id) => !excluded.has(id)),
+        scope_change: { removed_member_ids: [...new Set([
+          ...(group.scope_change?.removed_member_ids ?? []), ...removed,
+        ])].sort() },
+      };
+    }).filter((group) => group.member_ids.length > 0);
     const payload = {
       ...plan,
       groups,

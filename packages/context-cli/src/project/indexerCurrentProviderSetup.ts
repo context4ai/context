@@ -179,6 +179,7 @@ export async function buildCurrentIndexerProviderSelectionRoute(input: {
     input: {
       stage: "provider-selection",
       requirements: input.registry.requirements,
+      existing_indexers: input.registry.indexers,
       cli_bundled_providers: await projectIndexerSelectionCatalog(catalog),
     } as unknown as JsonValue,
   };

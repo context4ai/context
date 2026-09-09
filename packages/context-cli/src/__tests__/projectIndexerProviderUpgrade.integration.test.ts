@@ -22,11 +22,9 @@ import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js
 import type { ContextResolvedWorkflowRoute } from "../project/workflow/workflowTypes.js";
 import { completeCurrentIndexerProviderSelection } from "../project/indexerCurrentProviderSetup.js";
 import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } from "./projectDocumentRevisionV074.fixture.js";
-import { readingItems, readingObjects } from "./indexerReading.fixture.js";
+import { readingObjects } from "./indexerReading.fixture.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
 import { LIFECYCLE_ROOT } from "../project/lifecyclePaths.js";
-import { readIndexerDelivery } from "../project/indexerDelivery.js";
-import { readCandidateRecords } from "../project/candidateLedger.js";
 
 const packageRoot = resolve(import.meta.dir, "../..");
 const roots: string[] = [];
@@ -134,14 +132,15 @@ describe("installed Provider upgrades preserve useful work", () => {
       if (input.stage !== "partition") throw new Error("expected Partition");
       const results = [];
       for (const task of input.tasks) {
-        const view = await resource(after, task.workset_view_resource_id);
+        await resource(after, task.workset_view_resource_id);
+        const spec = await currentSpec({ projectRoot: root, request_digest: task.execution_request_digest });
         const workset = input.transport.worksets.find((entry) => entry.workset_digest === task.workset_digest);
         if (!workset || workset.stage !== "partition") throw new Error("missing workset");
         results.push({ task_key: task.task_key, result: {
           stage: "partition", outcome: "complete", groups: [{
             key: task.task_key, title: "Public constants", subject: task.task_key, subject_intent: "primary",
             reader_task: "Find exported constants and their values.",
-            members: readingItems(view, "consumer-anchor", task.task_key).map((item) => item.ref),
+            members: (spec.validation.canonical_inventory_members as IndexerInventoryMember[]).map((item) => item.member_id),
             questions: [...workset.reader_question_refs],
             question_targets: workset.allowed_question_target_refs.map((target) => ({ target, role: "primary-carrier" })),
             outline: ["Exports"],
@@ -300,10 +299,14 @@ describe("installed Provider upgrades preserve useful work", () => {
       if (managed) {
         expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "accepted")).toHaveLength(1);
         const next = await resolveCurrentIndexerAgentContext(root);
-        expect(next).toBeUndefined();
-        expect((await readIndexerDelivery(root))?.current).toHaveLength(1);
-        expect(await readCandidateRecords(root)).toHaveLength(1);
-        expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "pending")).toHaveLength(1);
+        // A size-limited Author slice can continue within the delivery wave.
+        // Provider upgrades must not reschedule the already accepted page.
+        const accepted = new Set(authorResults.map(result => result.task_key));
+        const submitted = new Set(indexerAgentStepInputSchema.parse(author.action?.input).tasks.filter(task => accepted.has(task.task_key)).map(task => task.workset_digest));
+        for (const task of next?.descriptor.tasks ?? []) {
+          expect(submitted.has(task.workset_digest)).toBe(false);
+        }
+        expect((await currentLedger(root))?.entries.filter((entry) => entry.state === "pending" || entry.state === "running")).toHaveLength(1);
       }
       expect(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).toBe(sourcesBefore);
       expect((YAML.parse(await readFile(registryPath, "utf8")) as IndexerRegistry).indexers[0]!.providers[0]!.integrity)

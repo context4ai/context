@@ -1,4 +1,4 @@
-import { componentDefaultsFromBinding, componentPropsNode } from "./componentContract.js";
+import { componentDefaultsFromBinding, componentLocalPropsNode, componentPropsNode } from "./componentContract.js";
 import { federationContracts } from "./federationContracts.js";
 import { posix } from "node:path";
 import ts from "typescript";
@@ -29,11 +29,44 @@ function declarationAt(source: ts.SourceFile, symbol: SymbolInfo): ts.Node | und
 /** Explicit object members remain knowable when an intersection contains an
  * unavailable dependency. Do not traverse unions, conditional types or generic
  * arguments: their fields are not unconditionally part of the public contract. */
-function declaredObjectTypes(node: ts.Node): ts.TypeLiteralNode[] {
-  if (ts.isTypeAliasDeclaration(node)) return declaredObjectTypes(node.type);
-  if (ts.isParenthesizedTypeNode(node)) return declaredObjectTypes(node.type);
-  if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(declaredObjectTypes);
-  return ts.isTypeLiteralNode(node) ? [node] : [];
+function declaredObjectTypes(node: ts.Node, checker: ts.TypeChecker, seen = new Set<ts.Node>()): Array<ts.TypeLiteralNode | ts.InterfaceDeclaration> {
+  if (seen.has(node)) return [];
+  seen.add(node);
+  if (ts.isTypeAliasDeclaration(node)) return declaredObjectTypes(node.type, checker, seen);
+  if (ts.isParenthesizedTypeNode(node)) return declaredObjectTypes(node.type, checker, seen);
+  if (ts.isIntersectionTypeNode(node)) return node.types.flatMap(type => declaredObjectTypes(type, checker, seen));
+  if (ts.isTypeReferenceNode(node) && !node.typeArguments?.length) {
+    let symbol = checker.getSymbolAtLocation(node.typeName);
+    if (symbol !== undefined && (symbol.flags & ts.SymbolFlags.Alias) !== 0) symbol = checker.getAliasedSymbol(symbol);
+    return (symbol?.declarations ?? []).flatMap(declaration => declaredObjectTypes(declaration, checker, seen));
+  }
+  return ts.isTypeLiteralNode(node) || ts.isInterfaceDeclaration(node) ? [node] : [];
+}
+
+/** noLib can erase an array inside a union or function signature while leaving
+ * the enclosing type apparently resolved. Keep the written contract in that
+ * case; never publish a degraded checker representation as a complete type. */
+function memberTypeText(checker: ts.TypeChecker, type: ts.Type, member: ts.Node, annotation: ts.TypeNode | undefined): {
+  text: string; complete: boolean;
+} {
+  const text = checker.typeToString(type, member, format);
+  if (annotation === undefined) return { text, complete: (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) === 0 };
+  if (annotation.kind === ts.SyntaxKind.AnyKeyword || annotation.kind === ts.SyntaxKind.UnknownKeyword) {
+    return { text: annotation.getText(), complete: true };
+  }
+  let incomplete = (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+    || (text === "{}" && !ts.isTypeLiteralNode(annotation));
+  const visit = (node: ts.Node) => {
+    if (ts.isArrayTypeNode(node) || ts.isTupleTypeNode(node) || ts.isTypeReferenceNode(node)) {
+      const resolved = checker.getTypeFromTypeNode(node);
+      const rendered = checker.typeToString(resolved, node, format);
+      if ((resolved.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+        || (ts.isArrayTypeNode(node) && rendered === "{}")) incomplete = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(annotation);
+  return { text: incomplete ? annotation.getText() : text, complete: !incomplete };
 }
 
 function callable(node: ts.Node): ts.SignatureDeclaration | undefined {
@@ -112,6 +145,7 @@ export async function enrichPublicContracts(input: {
     // written signatures instead of publishing such inference as a declaration.
     if (declaredSignatures.length > 1) symbol.overloads = declaredSignatures;
     let contractType: ts.Type | undefined;
+    let localProps: ts.TypeNode | undefined;
     if (symbol.kind === SymbolKind.Component) {
       const parameter = signatures[0]?.parameters[0];
       if (parameter !== undefined) {
@@ -125,18 +159,21 @@ export async function enrichPublicContracts(input: {
       if (annotation !== undefined) {
         contractType = checker.getTypeFromTypeNode(annotation);
         symbol.propsType = annotation.getText(source);
+        localProps = componentLocalPropsNode(annotation, checker);
       }
     } else if (ts.isInterfaceDeclaration(declaration) || ts.isTypeAliasDeclaration(declaration)) {
       contractType = checker.getTypeAtLocation(declaration);
     }
     if (contractType === undefined) continue;
     const unresolved = (contractType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
-    const properties = unresolved
-      ? declaredObjectTypes(declaration).flatMap((node) => checker.getPropertiesOfType(checker.getTypeAtLocation(node)))
-      : checker.getPropertiesOfType(contractType);
+    const localType = unresolved && localProps !== undefined ? checker.getTypeFromTypeNode(localProps) : undefined;
+    const knownType = localType ?? contractType;
+    const properties = (knownType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
+      ? declaredObjectTypes(localProps ?? declaration, checker).flatMap((node) => checker.getPropertiesOfType(checker.getTypeAtLocation(node)))
+      : checker.getPropertiesOfType(knownType);
     if (properties.length === 0) continue;
     if (symbol.kind === SymbolKind.Component && symbol.propsType !== undefined && input.relations !== undefined) {
-      const typeSymbol = contractType.aliasSymbol ?? contractType.getSymbol();
+      const typeSymbol = knownType.aliasSymbol ?? knownType.getSymbol();
       const declaration = typeSymbol?.declarations?.[0];
       if (typeSymbol !== undefined && declaration !== undefined) input.relations.push({ ...createRelation(
         EdgeType.OfType, symbol.name, typeSymbol.name,
@@ -145,6 +182,7 @@ export async function enrichPublicContracts(input: {
     const pattern = fn?.parameters[0]?.name;
     const defaults = pattern === undefined ? {} : componentDefaultsFromBinding(pattern, source);
     const members: SymbolInfo[] = [];
+    let completeMembers = true;
     for (const property of properties) {
       const member = property.valueDeclaration ?? property.declarations?.[0];
       if (member === undefined || !sources.has(member.getSourceFile().fileName)) continue;
@@ -161,6 +199,8 @@ export async function enrichPublicContracts(input: {
         || modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword
           || modifier.kind === ts.SyntaxKind.ProtectedKeyword);
       if (hidden) continue;
+      const renderedType = memberTypeText(checker, propertyType, member, annotation);
+      completeMembers &&= renderedType.complete;
       members.push({ name: property.name, kind: SymbolKind.Prop, visibility: Visibility.Exported,
         file: posix.relative("/", memberSource.fileName),
         line: memberSource.getLineAndCharacterOfPosition(member.getStart()).line + 1,
@@ -168,9 +208,7 @@ export async function enrichPublicContracts(input: {
         optional: (property.flags & ts.SymbolFlags.Optional) !== 0,
         ...(defaultValue === undefined ? {} : { defaultValue }),
         readonly: modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) ?? false,
-        typeAnnotation: annotation !== undefined && ((propertyType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0
-          || checker.typeToString(propertyType, member, format) === "{}")
-          ? annotation.getText(memberSource) : checker.typeToString(propertyType, member, format),
+        typeAnnotation: renderedType.text,
         doc: ts.displayPartsToString(property.getDocumentationComment(checker)),
       });
     }
@@ -183,7 +221,7 @@ export async function enrichPublicContracts(input: {
         diagnostics = program.getSemanticDiagnostics(source);
         diagnosticsByFile.set(source.fileName, diagnostics);
       }
-      symbol.contractResolution = !unresolved && diagnostics.length === 0 ? "resolved" : "declaration-only";
+      symbol.contractResolution = !unresolved && completeMembers && diagnostics.length === 0 ? "resolved" : "declaration-only";
     }
   }
 }

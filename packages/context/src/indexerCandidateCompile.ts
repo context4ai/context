@@ -291,11 +291,13 @@ function structuredArtifactSections(input: {
   result: IndexerArtifactResult;
   proposal: IndexerLayoutProposal;
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>;
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
 }) {
   return input.artifact.sections.map((section) => {
     const blocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
       facts: input.result.facts,
+      render_cache: input.render_cache,
     });
     const evidenceRefs = [...new Set(blocks.flatMap((block) => block.evidence_refs))]
       .sort(compareIndexerCanonicalText);
@@ -373,6 +375,8 @@ function candidateFiles(input: {
   proposal: IndexerLayoutProposal;
   binding: z.infer<typeof compileResultBindingSchema>;
   markdown_projection?: ((input: { markdown: string; output_path: string; artifact_ref: string }) => string) | undefined;
+  /** Command-lifetime memo of unprojected sections. All authority validation still runs. */
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
 }) {
   const layoutById = new Map(input.proposal.artifacts.map((artifact) => [
     artifact.artifact_id,
@@ -394,6 +398,7 @@ function candidateFiles(input: {
           result: input.accepted.artifactResult,
           proposal: input.proposal,
           artifact,
+          render_cache: input.render_cache,
         })
       : (() => {
           const rendered = renderedById.get(artifact.artifact_id);
@@ -505,6 +510,8 @@ export function buildIndexerCandidateCompile(input: {
   /** Host presentation only, after source/section integrity checks. The Host
    * may defer links to pages outside this delivery; accepted Results stay intact. */
   markdown_projection?: ((input: { markdown: string; output_path: string; artifact_ref: string }) => string) | undefined;
+  /** Command-lifetime memo of unprojected sections. All authority validation still runs. */
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
   layout_proposal_set: unknown;
   layout_transition: unknown;
   layout_change_confirmations?: readonly unknown[];
@@ -568,13 +575,14 @@ export function buildIndexerCandidateCompile(input: {
       operator_contract: input.operator_contract,
       subject_key_schema_set: input.subject_key_schema_set,
       rendered_artifacts: item.renderedArtifacts,
+      render_cache: input.render_cache,
     });
     const binding = resultBinding({ accepted: item, proposal });
     return {
       accepted: item,
       proposal,
       binding,
-      files: candidateFiles({ accepted: item, proposal, binding, markdown_projection: input.markdown_projection }),
+      files: candidateFiles({ accepted: item, proposal, binding, markdown_projection: input.markdown_projection, render_cache: input.render_cache }),
     };
   }).sort((left, right) => compareIndexerCanonicalText(
     left.binding.artifact_result_digest,

@@ -1,3 +1,4 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
   "./indexerComposerFinalization.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -9,7 +10,6 @@ import {
   indexerArtifactResultSchema,
   indexerProtocolDigest,
   indexerRegistryDigests,
-  loadIndexerRegistry,
   materializeIndexerPrimaryResultViewFromArtifactResult,
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
@@ -83,6 +83,8 @@ export interface CurrentIndexerComposerBatchContext {
   output_reserve_bytes: number;
   view_item_count: number;
   batch_digest: string;
+  packing_limits?: string[];
+  shared_instruction_bytes?: number;
 }
 
 async function describeRecord(input: {
@@ -346,8 +348,10 @@ async function materializeComposerBatch(input: {
   projectRoot: string;
   contexts: readonly CurrentIndexerComposerContext[];
   instruction: Awaited<ReturnType<typeof instructionContext>>;
+  materialized_instruction?: Awaited<ReturnType<typeof materializeCurrentIndexerInstructions>>;
+  packing_limits?: string[];
 }): Promise<CurrentIndexerComposerBatchContext> {
-  const materialized = await materializeCurrentIndexerInstructions({
+  const materialized = input.materialized_instruction ?? await materializeCurrentIndexerInstructions({
     request: input.instruction.request,
     authority: input.contexts[0]!.authority,
     customization: input.instruction.customization,
@@ -404,7 +408,9 @@ async function materializeComposerBatch(input: {
     instruction_path: instructionPath,
     instruction_payload_digest: materialized.payload_digest,
     tasks,
-    input_bytes: tasks.reduce((total, task) => total + task.input_bytes, 0),
+    input_bytes: Buffer.byteLength(canonicalIndexerJson(materialized), "utf8") + tasks.reduce((total, task) => total + task.input_bytes, 0),
+    shared_instruction_bytes: Buffer.byteLength(canonicalIndexerJson(materialized), "utf8"),
+    packing_limits: input.packing_limits ?? [],
     output_reserve_bytes: tasks.reduce(
       (total, task) => total + task.output_reserve_bytes,
       0,
@@ -426,23 +432,33 @@ async function selectComposerBatch(input: {
     context: first,
   });
   const policy = indexerBatchStagePolicy("post-author");
+  const limits = new Set<string>();
   const selected: CurrentIndexerComposerContext[] = [];
-  let inputBytes = 0;
+  const materialized = await materializeCurrentIndexerInstructions({
+    request: firstInstruction.request, authority: first.authority,
+    customization: firstInstruction.customization, workspaceRoot: input.projectRoot,
+  });
+  let inputBytes = Buffer.byteLength(canonicalIndexerJson(materialized), "utf8");
   let outputBytes = 0;
   let viewItems = 0;
   for (const context of input.contexts) {
+    if (!input.resume && selected.length >= policy.max_tasks) { limits.add("task-limit"); break; }
     const candidateInstruction = context === first
       ? firstInstruction
       : await instructionContext({ projectRoot: input.projectRoot, context });
     if (candidateInstruction.request.request_digest !== firstInstruction.request.request_digest) {
+      limits.add("instruction-boundary");
       continue;
     }
     const cost = composerTaskCost(context);
+    if (inputBytes + cost.input_bytes > policy.max_input_bytes) limits.add("input-budget");
+    if (outputBytes + cost.output_reserve_bytes > policy.max_output_reserve_bytes) limits.add("output-budget");
+    if (viewItems + cost.view_item_count > policy.max_view_items) limits.add("view-budget");
     const fits = selected.length < policy.max_tasks &&
       inputBytes + cost.input_bytes <= policy.max_input_bytes &&
       outputBytes + cost.output_reserve_bytes <= policy.max_output_reserve_bytes &&
       viewItems + cost.view_item_count <= policy.max_view_items;
-    if (!input.resume && selected.length > 0 && !fits) break;
+    if (!input.resume && selected.length > 0 && !fits) continue;
     selected.push(context);
     inputBytes += cost.input_bytes;
     outputBytes += cost.output_reserve_bytes;
@@ -451,7 +467,8 @@ async function selectComposerBatch(input: {
   }
   // The first task runs alone when it exceeds packing targets. Existing running
   // tasks retain their ledger identity even if delivery costs have changed.
-  return { contexts: selected, instruction: firstInstruction };
+  if (selected.length >= policy.max_tasks) limits.add("task-limit");
+  return { contexts: selected, instruction: firstInstruction, materialized_instruction: materialized, packing_limits: [...limits] };
 }
 
 async function resolveCurrentIndexerComposerBatchInternal(
@@ -524,7 +541,7 @@ async function resolveCurrentIndexerComposerBatchInternal(
   if (selected === undefined) return undefined;
   // The digest uses requests and instructions, not mutable ledger states. Prepare
   // resources first so starting tasks and publishing their route share one transaction.
-  const batch = await materializeComposerBatch({ projectRoot, ...selected });
+  const batch = { ...await materializeComposerBatch({ projectRoot, ...selected }), packing_limits: selected.packing_limits };
   const started = await startIndexerPostAuthorRunsStore({
     projectRoot,
     composer_batch: { batch_digest: batch.batch_digest, task_count: batch.tasks.length },

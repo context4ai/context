@@ -256,6 +256,7 @@ export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
   deliver?: boolean;
+  deliverySize?: string;
   list?: boolean;
   dryRun?: boolean;
   managed?: boolean;
@@ -290,6 +291,7 @@ export async function runProjectPhaseCommand(input: {
       authorities: input.authorities ?? [],
       ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
       ...(input.deliver === undefined ? {} : { deliver: input.deliver }),
+      ...(input.deliverySize === undefined ? {} : { deliverySize: input.deliverySize }),
     });
     if (format === "json") {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

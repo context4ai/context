@@ -12,6 +12,7 @@ export async function prepareIndexerAuthorSubmission(input: {
   projectRoot: string;
   task: Awaited<ReturnType<typeof loadCurrentIndexerBatchTask>>;
   semantic: IndexerAuthorSemanticInput;
+  preview?: boolean;
 }) {
   let task = input.task;
   const paths = [...new Set(input.semantic.sections.flatMap((section) => section.source_items))]
@@ -36,7 +37,7 @@ export async function prepareIndexerAuthorSubmission(input: {
   });
   // Validate the semantic submission before replacing its pending request.
   // Accepted peers and the stable page/group identity are never reset.
-  if (material !== undefined && material.spec.spec_digest !== input.task.spec.spec_digest) {
+  if (!input.preview && material !== undefined && material.spec.spec_digest !== input.task.spec.spec_digest) {
     await applyIndexerAuthorMaterials({ projectRoot: input.projectRoot, materials: [material] });
   }
   return { task, semantic: input.semantic, result };

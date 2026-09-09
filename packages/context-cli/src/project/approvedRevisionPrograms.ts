@@ -1,9 +1,10 @@
-import { indexerProtocolDigest, loadIndexerRegistry, projectIndexerPublicContractTable, materializeIndexerStructuredContent,
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { indexerProtocolDigest, projectIndexerPublicContractTable, materializeIndexerStructuredContent,
   type IndexerArtifactFact, type ProcessedScope } from "@c4a/context";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
 import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
 
-export interface RevisionProgramBlock { token: string; source_ref: string; fact_ref: string; markdown: string }
+export interface RevisionProgramBlock { token: string; source_ref: string; fact_ref: string; markdown: string; declaration_status?: string | undefined }
 
 /** Called by explicit update preparation, never by readonly status or an
  * expression-only revise. Reuse the same Parser source slice and renderer as
@@ -33,12 +34,13 @@ export async function prepareRevisionProgramBlocks(root: string, sourceRefs: str
             value: item.payload, evidence_refs: [scope.source_ref],
           }));
           for (const fact of facts) {
-            if (!projectIndexerPublicContractTable(fact)) continue;
+            const table = projectIndexerPublicContractTable(fact);
+            if (!table) continue;
             const token = `{{context:program:${indexerProtocolDigest({ source: scope.source_ref, fact: fact.fact_ref }).slice(7)}}}`;
             const [rendered] = materializeIndexerStructuredContent({ facts, blocks: [{
               block_id: "api", layer: "deterministic-block", renderer: "public-contract-table", fact_refs: [fact.fact_ref],
             }] });
-            blocks.set(token, { token, source_ref: scope.source_ref, fact_ref: fact.fact_ref, markdown: rendered!.markdown });
+            blocks.set(token, { token, source_ref: scope.source_ref, fact_ref: fact.fact_ref, markdown: rendered!.markdown, declaration_status: table.declaration_status });
           }
         }
       }

@@ -1,5 +1,6 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { selectedIndexerExclusions } from "./indexerScopeExclusions.js";
-import { indexerProtocolDigest, loadIndexerRegistry, loadSourcesRegistry, type SourcesRegistry } from "@c4a/context";
+import { indexerProtocolDigest, loadSourcesRegistry, type SourcesRegistry } from "@c4a/context";
 import { projectIndexerReadTargets, type ProjectIndexerReadTarget } from "./indexerReadScopeAuthorization.js";
 
 /** Bind only inputs the selected Indexer can read. Unrelated registrations or

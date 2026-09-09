@@ -1,10 +1,88 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["stage", "markdown"],
-  "properties": {
-    "stage": { "const": "approved-revision" },
-    "markdown": { "type": "string", "minLength": 1 }
-  }
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "const": "approved-revision"
+        },
+        "markdown": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "stage",
+        "markdown"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "stage": {
+          "type": "string",
+          "const": "approved-revision"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "section_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "markdown": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "markdown"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "program": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "program"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "section_id",
+              "content"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "stage",
+        "sections"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2019-09/schema#"
 }

@@ -1,7 +1,8 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { loadIndexerRegistry, loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
+import { loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
   readProcessedScopes, indexerProtocolDigest, type IndexRequirement, type ProcessedScope } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";

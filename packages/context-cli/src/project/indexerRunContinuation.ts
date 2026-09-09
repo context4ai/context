@@ -12,7 +12,7 @@ import { currentLedger, currentSpec, type MainRunSpec, INDEXER_MAIN_RUN_STORE_RO
  * result produced by the newly installed Provider. Instructions are refreshed
  * independently by the current batch materializer.
  */
-function continuationIdentity(spec: MainRunSpec): string {
+export function continuationIdentity(spec: MainRunSpec): string {
   const workset: Record<string, unknown> = { ...spec.request.workset };
   for (const key of ["workset_digest", "primary_execution_fingerprint",
     "primary_resource_binding_digest", "strategy_set_digest",
@@ -23,6 +23,15 @@ function continuationIdentity(spec: MainRunSpec): string {
     ...environmentFields } = spec.request.run_environment;
   const environment: Record<string, unknown> = environmentFields;
   void _digest;
+  if (spec.request.workset.stage === "partition" && typeof validation.partition_dependency_digest === "string") {
+    // The shard digest covers its visible files and facts. Module execution
+    // receipts can change for an unrelated shard or toolchain refresh.
+    delete workset.source_binding_digest;
+    delete workset.partition_input_digests;
+    delete environment.source_dependency_fingerprint;
+    delete environment.source_snapshot_digest;
+    delete environment.source_precedence_digest;
+  }
   if (spec.request.workset.stage === "author") {
     // Resume by the selected sources/subjects, not by how a parser described
     // them. File contents, membership, requirements and output contracts still
@@ -115,6 +124,11 @@ export async function reuseCurrentIndexerRuns(input: {
       projectRoot: input.projectRoot, request_digest: entry.execution_request_digest,
     });
     byIdentity.set(continuationIdentity(spec), spec);
+    if (entry.state === "stale" && "previous_execution_request_digest" in entry &&
+        typeof entry.previous_execution_request_digest === "string") {
+      const previous = await currentSpec({ projectRoot: input.projectRoot, request_digest: entry.previous_execution_request_digest });
+      byIdentity.set(continuationIdentity(previous), previous);
+    }
   }
   return input.specs.map((spec) => byIdentity.get(continuationIdentity(spec)) ?? spec);
 }

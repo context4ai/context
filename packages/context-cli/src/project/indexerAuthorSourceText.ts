@@ -1,10 +1,10 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   buildIndexerAuthorizedWorksetViewSource,
-  loadIndexerRegistry,
   loadSourcesRegistry,
   type IndexerAuthorDependencyView,
 } from "@c4a/context";
@@ -60,8 +60,8 @@ export async function readIndexerAuthorSourceText(input: {
   spans: readonly SourceSpan[];
   max_bytes: number;
   whole_file?: boolean;
-}): Promise<{ spans: TextRange[]; bytes: number }> {
-  if (input.spans.length === 0) return { spans: [], bytes: 0 };
+}): Promise<{ spans: TextRange[]; bytes: number; line_count: number }> {
+  if (input.spans.length === 0) return { spans: [], bytes: 0, line_count: 0 };
   for (const span of input.spans) {
     if (span.locator.path !== input.path || span.content_digest !== input.content_digest) {
       throw new TypeError("Author source span does not match its current file identity");
@@ -81,9 +81,12 @@ export async function readIndexerAuthorSourceText(input: {
   const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   const hash = createHash("sha256");
   let line = 1;
+  let hasText = false;
+  let endsWithNewline = false;
   let rangeIndex = 0;
   let bytes = 0;
   const consume = (text: string) => {
+    if (text.length) { hasText = true; endsWithNewline = text.endsWith("\n"); }
     if (text.includes("\0")) throw new TypeError("Author source is not UTF-8 text");
     let start = 0;
     while (start < text.length) {
@@ -124,7 +127,7 @@ export async function readIndexerAuthorSourceText(input: {
       text: pieces[index]!.join(""),
     }];
   });
-  return { spans: repaired, bytes };
+  return { spans: repaired, bytes, line_count: hasText ? line - (endsWithNewline ? 1 : 0) : 0 };
 }
 
 /** Temporary Author View content, not a new evidence identity or durable artifact. */
@@ -194,7 +197,7 @@ export async function buildProjectIndexerAuthorSourceText(input: {
       ref: `source-text:${descriptor.file_ref}`, category: "source-text",
       provenance: { protocol: input.dependency_view.protocol, digest: input.dependency_view.view_digest, container_ref: descriptor.file_ref },
       value: { source_ref: binding.source_ref, module_ref: binding.module_ref, path,
-        read_path: resolve(input.projectRoot, source.materializedAt, path), spans: text.spans },
+        read_path: resolve(input.projectRoot, source.materializedAt, path), line_count: text.line_count, spans: text.spans },
     });
   }
   return buildIndexerAuthorizedWorksetViewSource({

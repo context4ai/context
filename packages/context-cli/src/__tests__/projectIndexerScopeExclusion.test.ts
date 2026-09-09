@@ -1,4 +1,5 @@
 import YAML from "yaml";
+import { buildProjectIndexerMainAuthorWorksets } from "../project/indexerMainLifecycleActions.js";
 import { resolveCurrentIndexerWorkflowRoute } from "../project/indexerCurrentWorkflowRoute.js";
 import { afterEach, expect, test } from "bun:test";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -32,11 +33,13 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   const ledger = await preparePartitionStage(root);
   const cached = new Map<string, string>();
   const partitions: IndexerPartitionValidationInput[] = [];
+  const projections = new Map<string, IndexerConsumerWorksetProjection>();
   for (const entry of ledger!.entries) {
     const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
     const workset = spec.request.workset;
     if (workset.stage !== "partition") throw new Error("expected Partition");
     const projection = spec.validation.partition_projection as IndexerConsumerWorksetProjection;
+    projections.set(workset.workset_digest, projection);
     const validation = spec.validation as Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["validation"];
     const prepared = await prepareProjectIndexerWorksetViewMaterialization({ projectRoot: root, run_spec: spec });
     const semantic: Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["semantic"] = {
@@ -80,6 +83,22 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   const narrowed = excludeIndexerPartitionMembers([mixed], new Set([members[0]!]));
   expect(() => validateIndexerPartitionInputs(narrowed)).not.toThrow();
   expect((narrowed[0]!.plan as { groups: { member_ids: string[] }[] }).groups[0]!.member_ids).toEqual(members.slice(1));
+  const scopedAuthor = await buildProjectIndexerMainAuthorWorksets({ projectRoot: root, source_projections: projections, value: {
+    protocol: "context.indexer.main-author-workset-build-input/v1",
+    partitions: excludeIndexerPartitionMembers(partitions, new Set([members[0]!])),
+    target_resolution_views: [],
+  } });
+  if (!("run_specs" in scopedAuthor)) throw new Error("expected scoped Author runs");
+  const changedSpec = scopedAuthor.run_specs.find((spec) => (spec.validation.page_plan as {
+    scope_change?: unknown } | undefined)?.scope_change !== undefined)!;
+  expect(changedSpec).toBeDefined();
+  expect(changedSpec.validation.page_plan).toMatchObject({ scope_change: { removed_member_ids: [members[0]!] } });
+  expect(changedSpec.validation.page_plan).not.toHaveProperty("artifact_intent");
+  expect(changedSpec.validation.page_plan).not.toHaveProperty("template_id");
+  const changedView = await prepareProjectIndexerWorksetViewMaterialization({ projectRoot: root, run_spec: changedSpec });
+  const authorityItem = changedView.projection.view.items.find((item) => item.category === "author-authority");
+  expect(authorityItem?.value).toMatchObject({ page_plan: { scope_change: { removed_member_ids: [members[0]!] } } });
+  expect(excludeIndexerPartitionMembers(narrowed, new Set([members[0]!]))).toEqual(narrowed);
   await prepareCurrentIndexerAuthorStage(root);
   expect(await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision,
     decision: "exclude-obsolete" })).toBe("author");

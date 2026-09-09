@@ -1,3 +1,5 @@
+import { configureDeliveryCadence } from "../project/indexerDeliveryCadence.js";
+import { indexerBatchStagePolicy } from "../project/indexerCurrentBatchPlanner.js";
 import { test, expect } from "bun:test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -16,7 +18,7 @@ import { runCurrentIndexerLifecycle } from "../project/indexerLifecycleRun.js";
 import { readIndexerDelivery } from "../project/indexerDelivery.js";
 
 test("an explicit build request delivers an unfinished Author batch, keeps Review and resumes production", async () => {
-  const root = await createDocumentRevisionWorkspace({ sourceCount: 16 });
+  const root = await createDocumentRevisionWorkspace({ sourceCount: indexerBatchStagePolicy("author").max_tasks * 3 });
   try {
     await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"), join(root, "src/package-templates/kb"), { recursive: true });
     const entry = join(root, "src/index.ts");
@@ -32,6 +34,10 @@ test("an explicit build request delivers an unfinished Author batch, keeps Revie
     await buildProjectPackages(root);
     const first = await readIndexerDelivery(root);
     expect(Object.keys(first!.delivered)).toHaveLength(3);
+    await configureDeliveryCadence(root, "20");
+    await completePartitionStage(root);
+    const nextStructure = (await currentIndexerStructureReview(root))!;
+    await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision, managed: true, value: { stage: "structure-review", decision: "approved" } });
     await advanceCurrentIndexerLifecycle(root);
     const before = (await currentLedger(root))!;
     expect(before.entries.some(entry => entry.state === "running")).toBe(true);

@@ -207,12 +207,15 @@ function reviewFileTarget(input: {
 function expandEncodedReviewDecisions(payload: ReviewPayload, scopedIds: string[]): ReviewDecision[] {
   if (payload.scope?.candidates_sha256 === undefined || payload.encoded_statuses!.length !== scopedIds.length ||
     payload.decisions.length !== 0 || payload.default !== undefined ||
-    payload.encoded_statuses!.some((status) => status !== "approved" && status !== "rejected")) {
+    payload.encoded_statuses!.some((status) => status !== "approved" && status !== "rejected" && status !== "pending")) {
     throw new ContextError(ExitCode.UserError, "Invalid scoped review code decisions", {
       category: ErrorCategory.UserInputInvalid, next: "Copy a fresh complete review code from the current HTML report.",
     });
   }
-  return scopedIds.map((candidate_id, index) => ({ candidate_id, status: payload.encoded_statuses![index]! }));
+  return scopedIds.flatMap((candidate_id, index) => {
+    const status = payload.encoded_statuses![index]!;
+    return status === "pending" ? [] : [{ candidate_id, status }];
+  });
 }
 
 function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRecord[]): ReviewDecision[] {

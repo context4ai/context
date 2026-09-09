@@ -37,6 +37,15 @@ Host-exposed frontmatter and sibling `context-indexer.yaml` needed to identify
 it; manifest version is authoritative. Do not guess missing versions, substitute
 a different version, or scan caches. Read Provider guidance only when selected.
 
+Use `existing_indexers` in the Action input as the starting point. Preserve
+unrelated entries and reuse an applicable owner before adding a binding for a
+new reader topic. An installed Provider and a workspace binding are different:
+adding a binding does not create or install a Skill. Once the user has settled
+the knowledge purpose and workspace, complete ordinary compatible bindings
+without asking the user to approve internal Indexer counts or configuration.
+Do not invoke Indexer creation when the supplied catalog already covers the
+requested interpretation. Real capability gaps still follow the Provider guide.
+
 Business skill installation and switches belong to the Host. Discover relevant
 currently visible `context-…-indexer…` skills and read their actual manifests.
 Do not override a disabled default or a selected business replacement just

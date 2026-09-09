@@ -27,7 +27,7 @@ export const REVIEW_UI_ZH: Record<string, string> = {
   "Set all {count} pages in {group} to {status}?": "将 {group} 的全部 {count} 页设为“{status}”？",
   "Set all {count} pages to {status}?": "将全部 {count} 页设为“{status}”？",
   "Choices changed. Copy the updated code before applying.": "选择已变更，请复制更新后的审核码再应用。",
-  "Resolve all pending pages before copying.": "请先完成所有待审页面的选择，再复制审核码。",
+  "Select at least one page decision; pending pages remain for later review.": "请至少选择一页的审核结果；待审页面留待后续处理。",
   "Segment {part}/{total} · {length}/980 characters": "第 {part}/{total} 段 · {length}/980 字符",
   "No review code yet": "暂未生成审核码",
   "{approved} approved · {rejected} not included · {pending} pending": "{approved} 页批准 · {rejected} 页不收录 · {pending} 页待审核",
@@ -47,5 +47,5 @@ export const REVIEW_UI_ZH: Record<string, string> = {
   "Source locations": "来源位置",
   "Approve": "批准",
   "Omit": "不收录",
-  "Need changes? Leave this batch unapplied and ask the agent to repair this page.": "需要修改？请暂不应用本批审核结果，回到会话让 Agent 修订此页。",
+  "Need changes? Leave this page pending and ask the agent to repair it. Other reviewed pages can be approved.": "需要修改？本页保留待审，并让 Agent 返修。已审核的其他页面可以先批准。",
 };

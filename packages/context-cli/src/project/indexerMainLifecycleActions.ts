@@ -1,3 +1,4 @@
+import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import {
   buildIndexerMainPartitionWorksets,
   buildIndexerMainWorksetSet,
@@ -337,17 +338,21 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       strategyId: primaryStrategy.strategy_id,
     });
     const carrierShardIndex = questionCarrierShardIndex(shards);
-    return shards.map(({ inventory, projection }, shardIndex) => ({
-      input: {
-        ...base,
-        partition_inventory_digest: indexerInventoryMembersDigest(inventory),
-        allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
-      },
-      inventory,
-      projection,
-      authority,
-      binding,
-    }));
+    return shards.map(({ inventory, projection }, shardIndex) => {
+      const dependency = partitionDependencyDigest(binding, projection);
+      return {
+        input: {
+          ...base,
+          ...(dependency === undefined ? {} : { source_binding_digest: dependency, partition_input_digests: [dependency] }),
+          partition_inventory_digest: indexerInventoryMembersDigest(inventory),
+          allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
+        },
+        inventory,
+        projection,
+        authority,
+        binding,
+      };
+    });
   }))).flat();
   const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
     prepared.map((item) => item.input);

@@ -45,6 +45,15 @@ describe("authorized Author source text", () => {
     expect(await readIndexerAuthorSourceText({ ...input, spans: [...input.spans].reverse() })).toEqual(read);
   });
 
+  test("counts the whole file even when only one line is selected", async () => {
+    for (const trailing of ["", "\n"]) {
+      const text = Array.from({ length: 801 }, () => "x").join("\n") + trailing;
+      const read = await readIndexerAuthorSourceText(await fixture(text, [[1, 1]]));
+      expect(read.line_count).toBe(801);
+      expect(read.spans[0]!.text).toBe("x\n");
+    }
+  });
+
   test("rejects changed files and mismatched span identities", async () => {
     const input = await fixture("export const count = 1;\n", [[1, 1]]);
     await writeFile(join(input.source_root, input.path), "export const count = 2;\n");

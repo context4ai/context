@@ -220,6 +220,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       ...(group.artifact_intent === undefined ? {} : { artifact_intent: group.artifact_intent }),
       ...(group.template_id === undefined ? {} : { template_id: group.template_id }),
       ...(group.priority === undefined ? {} : { priority: group.priority }),
+      ...(group.ready_for_author === undefined ? {} : { ready_for_author: group.ready_for_author }),
       ...(group.delivery_boundary === undefined ? {} : { delivery_boundary: group.delivery_boundary }),
       reader_question_refs: resolvedQuestions,
       question_target_bindings: resolvedTargets,

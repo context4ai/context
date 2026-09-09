@@ -1,5 +1,5 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import {
-  loadIndexerRegistry,
   type LoadedIndexerRegistry,
 } from "@c4a/context";
 import { loadContextProjectModule } from "./workspace.js";

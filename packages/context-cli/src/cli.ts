@@ -1,7 +1,7 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Command, Option } from "commander";
+import { Command, CommanderError, Option } from "commander";
 import { redactIndexerOutput, redactIndexerOutputText } from "@c4a/core";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
@@ -473,7 +473,16 @@ export async function cli_main(argv: string[] = process.argv): Promise<void> {
     await withContextRuntimeEventDelivery(async () => {
       const program = createCliProgram();
       assertKnownTopLevelCommand(argv, program);
-      await program.parseAsync(argv);
+      const overrideExit = (command: Command): void => {
+        command.exitOverride();
+        command.commands.forEach(overrideExit);
+      };
+      overrideExit(program);
+      try {
+        await program.parseAsync(argv);
+      } catch (error) {
+        if (!(error instanceof CommanderError && error.exitCode === 0)) throw error;
+      }
     });
   }));
 }

@@ -1,10 +1,12 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile, realpath } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
 import { z } from "zod";
 import YAML from "yaml";
 import { indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema,
-  indexRequirementSchema, loadIndexerRegistry, readProcessedScopes, processedVersionForScope, type IndexRequirement, type ProcessedScope } from "@c4a/context";
+  indexRequirementSchema, readProcessedScopes, processedVersionForScope, type IndexRequirement, type ProcessedScope } from "@c4a/context";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { candidateRecordsContent, indexerCandidateId, isSafeKnowledgeTargetPath, readCandidateRecords,
@@ -42,7 +44,7 @@ const requestSchema = z.object({
   candidate: z.unknown().optional(),
   batch_candidates: z.array(z.unknown()).optional(),
   review_ready: z.boolean().optional(),
-  program_blocks: z.array(z.object({ token: z.string(), source_ref: z.string(), fact_ref: z.string(), markdown: z.string() }).strict()).optional(),
+  program_blocks: z.array(z.object({ token: z.string(), source_ref: z.string(), fact_ref: z.string(), markdown: z.string(), declaration_status: z.string().optional() }).strict()).optional(),
   refresh_sources: z.array(z.string().min(1)).min(1).optional(),
   merge_context: z.object({ approved_markdown: z.string().nullable(), draft_markdown: z.string() }).strict().optional(),
 }).strict();
@@ -285,9 +287,11 @@ function frontmatter(markdown: string): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
-export async function completeApprovedRevision(input: {
-  projectRoot: string; revision: string; markdown: string;
-}) {
+interface RevisionSubmission extends RevisionContentInput { projectRoot: string; revision: string; preview?: boolean }
+export interface RevisionPreview { protocol: "context.approved-revision-preview/v1"; revision: string; path: string; before: string; markdown: string; changed: boolean }
+export function completeApprovedRevision(input: RevisionSubmission & { preview: true }): Promise<RevisionPreview>;
+export function completeApprovedRevision(input: RevisionSubmission & { preview?: false }): Promise<CandidateRecord | undefined>;
+export async function completeApprovedRevision(input: RevisionSubmission): Promise<RevisionPreview | CandidateRecord | undefined> {
   return withProjectWriteLock(input.projectRoot, "compile-approved-revision", async () => {
     const currentRequest = await readApprovedRevision(input.projectRoot);
     const { approvedRevisionRecovery } = await import("./approvedRevisionRecovery.js");
@@ -296,31 +300,20 @@ export async function completeApprovedRevision(input: {
     if (!request || request.revision !== input.revision || request.candidate) throw new TypeError("Approved revision is stale. Refresh context status --format json.");
     if (request.refresh_sources) throw new TypeError("Import the explicitly adjusted source inputs, then run context task adjust with refresh: true before submitting page content.");
     await assertApprovedRevisionBase(input.projectRoot, request);
-    const { expandRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
-    input = { ...input, markdown: expandRevisionProgramBlocks(input.markdown, request.program_blocks ?? []) };
-    if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
+    const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
     await assertRevisionRequirements(input.projectRoot, request);
     const approved = request.target.base_digest === null ? undefined : hydrateApprovedKnowledgeMarkdown({
       content: await targetBytes(input.projectRoot, request.target.previous_path ?? request.target.path), relPath: request.target.previous_path ?? request.target.path,
       metadata: await readApprovedKnowledgeMetadataIndex(input.projectRoot),
     });
-    const metadata = frontmatter(input.markdown);
+    const metadata = frontmatter(markdown);
     if (metadata.node_ref !== request.target.node_ref || metadata.view_ref !== request.target.view_ref ||
-        indexerProtocolDigest(metadata.sources) !== indexerProtocolDigest(request.target.source_refs)) {
+        (!Array.isArray(metadata.sources) || metadata.sources.some(source => typeof source !== "string") ||
+          indexerProtocolDigest([...metadata.sources].sort()) !== indexerProtocolDigest([...request.target.source_refs].sort()))) {
       throw new TypeError("Direct revision must retain the approved identity and sources. Register additional factual material before changing its source scope.");
     }
     const replacingCandidate = (await readCandidateRecords(input.projectRoot)).some((item) => item.path === request.target.path);
-    if (input.markdown === approved && request.target.previous_path === undefined && !replacingCandidate) {
-      const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
-      const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
-      if (next || request.batch_candidates?.length) {
-        await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(next ?? { ...request, review_ready: true })}\n`);
-      } else {
-        await advanceApprovedRevision(input.projectRoot, request);
-      }
-      return undefined;
-    }
-    const sections = approvedContextSectionsInMarkdown(input.markdown);
+    const sections = approvedContextSectionsInMarkdown(markdown);
     if (sections.length === 0 || sections.some((section) => !section.id || section.refs.length === 0)) {
       throw new TypeError("Revision must retain source-bound context sections");
     }
@@ -333,7 +326,7 @@ export async function completeApprovedRevision(input: {
       throw new TypeError("Revision section identities must be unique");
     }
     const title = z.string().trim().min(1).parse(metadata.title);
-    const fingerprint = indexerProtocolDigest({ revision: request.revision, markdown: input.markdown });
+    const fingerprint = indexerProtocolDigest({ revision: request.revision, markdown });
     const projectedSections = sections.map((section) => ({
       section_ref: `${request.target.view_ref}#${section.id!}`, section_key: section.id!,
       evidence_refs: [], markdown: section.readerVisibleBody,
@@ -344,7 +337,7 @@ export async function completeApprovedRevision(input: {
       collection: request.target.collection, status: "draft", candidate_type: "indexer-artifact",
       kind: sections[0]?.kind ?? "content", visibility: "public", module: "approved-revision",
       path: request.target.path, structure_digest: request.revision, source_refs: request.target.source_refs,
-      body: input.markdown, fingerprint,
+      body: markdown, fingerprint,
       approved_revision: { request_digest: request.revision, base_digest: request.target.base_digest,
         ...(request.target.previous_path === undefined ? {} : { previous_path: request.target.previous_path }) },
       indexer_candidate: { compile_digest: request.revision, file_digest: fingerprint,
@@ -353,6 +346,19 @@ export async function completeApprovedRevision(input: {
       review: { title, summary: z.string().trim().min(1).parse(metadata.description ?? title),
         signals: ["approved-page-revision"], reason: request.instruction }, updated: new Date().toISOString(),
     }, 1);
+    if (input.preview) return { protocol: "context.approved-revision-preview/v1", revision: request.revision,
+      path: request.target.path, before: request.target.markdown, markdown, changed: markdown !== request.target.markdown };
+    if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
+    if (markdown === approved && request.target.previous_path === undefined && !replacingCandidate) {
+      const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
+      const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
+      if (next || request.batch_candidates?.length) {
+        await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(next ?? { ...request, review_ready: true })}\n`);
+      } else {
+        await advanceApprovedRevision(input.projectRoot, request);
+      }
+      return undefined;
+    }
     const current = await readFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), "utf8");
     let previous: string | undefined;
     try { previous = await readFile(join(input.projectRoot, CANDIDATE_LEDGER_FILE), "utf8"); }
@@ -379,6 +385,7 @@ export async function finishApprovedRevision(projectRoot: string): Promise<void>
   await withProjectWriteLock(projectRoot, "finish-approved-revision", async () => {
     const request = await readApprovedRevision(projectRoot);
     if (!request || (!request.candidate && !request.batch_candidates?.length)) return;
+    if ((await readCandidateRecords(projectRoot)).some(item => item.status === "draft")) return;
     if (request.refresh_sources) throw new TypeError("Finish the pending source adjustment before advancing this update queue.");
     const { approvedRevisionCandidateApplied } = await import("./approvedRevisionBatch.js");
     for (const candidate of [...(request.batch_candidates ?? []), ...(request.candidate ? [request.candidate] : [])]) {

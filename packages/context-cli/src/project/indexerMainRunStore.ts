@@ -1,4 +1,4 @@
-import { rm } from "node:fs/promises";
+import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   acceptIndexerMainRun,
@@ -106,6 +106,7 @@ async function prepareUnlocked(input: {
   projectRoot: string;
   workset_set: unknown;
   run_specs: readonly unknown[];
+  mutable_records?: readonly { path: string; value: unknown }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   await recoverDurableMultiFileTransactions(input.projectRoot);
@@ -184,6 +185,7 @@ async function prepareUnlocked(input: {
     operation: "prepare",
     transaction_kind: PREPARE_TRANSACTION,
     ledger,
+    ...(input.mutable_records === undefined ? {} : { mutable_records: input.mutable_records }),
     immutable_records: specs.map((spec) => ({
       path: runSpecPath(spec.request.execution_request_digest),
       value: spec,
@@ -197,6 +199,7 @@ export async function prepareIndexerMainRunStore(input: {
   projectRoot: string;
   workset_set: unknown;
   run_specs: readonly unknown[];
+  mutable_records?: readonly { path: string; value: unknown }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
   return withProjectWriteLock(input.projectRoot, PREPARE_TRANSACTION, () =>
@@ -514,6 +517,7 @@ export async function observeIndexerMainRunStore(projectRoot: string) {
 async function readAcceptedMainResultRecordsUnlocked(
   projectRoot: string,
   stage: "partition" | "author",
+  allowPending = false,
 ) {
   await recoverDurableMultiFileTransactions(projectRoot);
   const ledger = await currentLedger(projectRoot);
@@ -521,7 +525,7 @@ async function readAcceptedMainResultRecordsUnlocked(
   if (ledger.entries.some((entry) => entry.stage !== stage)) {
     throw new TypeError(`current main run ledger is not the ${stage} stage`);
   }
-  if (stage === "partition" && ledger.entries.some((entry) => entry.state !== "accepted")) {
+  if (stage === "partition" && !allowPending && ledger.entries.some((entry) => entry.state !== "accepted")) {
     throw new TypeError(`main ${stage} results require every run to be accepted`);
   }
   return reuseCommandFileRead({
@@ -540,27 +544,63 @@ async function readAcceptedMainResultRecordsUnlocked(
         if (canonicalIndexerJson(accepted.accepted_record) !== canonicalIndexerJson(entry.accepted_record)) {
           throw new TypeError(`accepted main ${stage} cache does not match the current ledger`);
         }
-        records.push({
-          request: spec.request,
-          run_result: accepted.result,
-          accepted_record: accepted.accepted_record,
-          artifact_result: accepted.operation_result,
-          run_envelope: accepted.run_envelope,
-          dependency_view: spec.validation.dependency_view,
-          get artifact_dependency_set() { return accepted.artifact_dependency_set; },
-          validation: spec.validation,
-        });
+        records.push(acceptedMainResultRecord(spec, accepted));
       }
       return records;
     },
   });
 }
 
-export async function readAcceptedIndexerMainPartitionResultRecords(projectRoot: string) {
+function acceptedMainResultRecord(
+  spec: MainRunSpec,
+  accepted: ReturnType<typeof readAcceptedCache>,
+) {
+  return {
+    request: spec.request,
+    run_result: accepted.result,
+    accepted_record: accepted.accepted_record,
+    artifact_result: accepted.operation_result,
+    run_envelope: accepted.run_envelope,
+    dependency_view: spec.validation.dependency_view,
+    get artifact_dependency_set() { return accepted.artifact_dependency_set; },
+    validation: spec.validation,
+  };
+}
+
+/** Read immutable Author receipts retained across delivery waves. The caller
+ * supplies the current stream identity, so obsolete caches never become
+ * reconciliation authority merely because their files still exist. */
+export async function readAcceptedIndexerMainAuthorResultHistory(input: {
+  projectRoot: string;
+  include: (spec: MainRunSpec) => boolean;
+}) {
+  return withProjectWriteLock(input.projectRoot, "read-accepted-main-author-result-history", async () => {
+    await recoverDurableMultiFileTransactions(input.projectRoot);
+    let names: string[] = [];
+    try {
+      names = await readdir(join(input.projectRoot, INDEXER_MAIN_RUN_STORE_ROOT, "accepted"));
+    } catch (error) {
+      if (!(error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+    }
+    const records = [];
+    for (const name of names.sort()) {
+      if (!/^[a-f0-9]{64}\.json$/u.test(name)) continue;
+      const requestDigest = `sha256:${name.slice(0, -5)}`;
+      const spec = await currentSpec({ projectRoot: input.projectRoot, request_digest: requestDigest });
+      if (spec.request.workset.stage !== "author" || !input.include(spec)) continue;
+      const cache = await readJsonMaybe(input.projectRoot, acceptedCachePath(requestDigest));
+      if (cache === undefined) throw new TypeError("accepted main author result cache is missing");
+      records.push(acceptedMainResultRecord(spec, readAcceptedCache({ cache, spec })));
+    }
+    return records;
+  });
+}
+
+export async function readAcceptedIndexerMainPartitionResultRecords(projectRoot: string, allowPending = false) {
   return withProjectWriteLock(
     projectRoot,
     "read-accepted-main-partition-result-records",
-    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "partition"),
+    () => readAcceptedMainResultRecordsUnlocked(projectRoot, "partition", allowPending),
   );
 }
 

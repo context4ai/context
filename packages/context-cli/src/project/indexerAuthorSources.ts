@@ -50,7 +50,7 @@ export function createIndexerAuthorSourceResolver(input: {
       bindings.set(key, pending);
     }
     const binding = await pending;
-    assertProjectIndexerMainSourceBinding({ workset, binding });
+    assertProjectIndexerMainSourceBinding({ workset, binding, partition_projection: projection });
     if (binding.adapter === "parser-facts") {
       validateIndexerConsumerWorksetProjection({
         value: projection, factView: binding.parser_fact_view,

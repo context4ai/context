@@ -1,3 +1,4 @@
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState,
   type ComposerBatchFinalization } from "./indexerComposerFinalization.js";
 import { readFile } from "node:fs/promises";
@@ -209,11 +210,11 @@ export async function readPostAuthorCurrentState(
   projectRoot: string,
   authorWorksetDigest: string,
 ): Promise<PostAuthorRuntimeState | undefined> {
-  const value = await readPostAuthorJsonMaybe(
-    projectRoot,
-    postAuthorCurrentStatePath(authorWorksetDigest),
-  );
-  return value === undefined ? undefined : validateState(value);
+  const path = postAuthorCurrentStatePath(authorWorksetDigest);
+  return reuseCommandFileRead({ key: "validated-post-author-state", paths: [join(projectRoot, path)], read: async () => {
+    const value = await readPostAuthorJsonMaybe(projectRoot, path);
+    return value === undefined ? undefined : validateState(value);
+  } });
 }
 
 function validateEnvelopeRecord(value: unknown): PostAuthorEnvelopeRecord {
