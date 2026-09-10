@@ -146,7 +146,9 @@ const analyzeLexicalDeclaration = (
       );
     }
     appendTypeRelations(relations, EdgeType.ReturnType, nameNode.text, returnType, importBindings, declarations, getLine(declarator));
-    appendTypeRelations(relations, EdgeType.OfType, nameNode.text, typeAnnotation, importBindings, declarations, getLine(declarator));
+    appendTypeRelations(relations, EdgeType.OfType, nameNode.text,
+      extractTypeAnnotation(typeNode) ?? getInitializerTypeAnnotation(initializer, { referencesOnly: true }),
+      importBindings, declarations, getLine(declarator));
   }
 };
 
@@ -165,7 +167,8 @@ const analyzeFunctionDeclaration = (
   const params = collectParams(paramsNode);
   const returnType = getReturnType(node);
   const funcDoc = extractJSDoc(node);
-  const signature = `${name}(${params.map((param) => `${param.name}${param.type ? `: ${param.type}` : ""}`).join(", ")})`;
+  const body = node.childForFieldName("body");
+  const signature = body === null ? node.text : node.text.slice(0, body.startIndex - node.startIndex).trimEnd();
   declarations.set(name, {
     info: {
       name,
@@ -428,7 +431,10 @@ export const analyzeFile = async (
   return {
     declarations,
     importBindings,
-    relations,
+    // Preserve the physical source file for every relation. `from` may be a
+    // local identifier shared by many files, so downstream adapters must not
+    // infer provenance from the identifier alone.
+    relations: relations.map((relation) => ({ ...relation, file: filePath })),
     lines: countLines(source),
     disposition: "analyzed",
     diagnostics: [],

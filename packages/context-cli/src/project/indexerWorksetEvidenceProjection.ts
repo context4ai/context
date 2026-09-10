@@ -1,7 +1,9 @@
+import { capturedVisualResources, approvedVisualResults, readVisualConversionPreference } from "./visualSourceProcessing.js";
 import { join } from "node:path";
 import {
   buildIndexerAuthorizedWorksetViewSource,
   indexerProtocolDigest,
+  readSessionChanges,
   validateIndexerMainRunRequest,
   type IndexerAuthorizedWorksetViewSource,
 } from "@c4a/context";
@@ -48,6 +50,8 @@ async function capturedDocumentProjection(input: {
     input.evidence.index.documents.map((document) => [document.path, document]),
   );
   const authorizedPaths = uniqueDocumentPaths(input.authorized_document_paths);
+  const previous = await approvedVisualResults(input.projectRoot);
+  const convertVisuals = await readVisualConversionPreference(input.projectRoot);
   const items = await Promise.all(authorizedPaths.map(async (path) => {
     const document = documentsByPath.get(path);
     if (document === undefined) {
@@ -59,6 +63,9 @@ async function capturedDocumentProjection(input: {
       path,
       cache: input.evidence.snapshotMarkdownCache,
     });
+    const visuals = capturedVisualResources({ sourceRef, documentPath: document.path, markdown,
+      materializedAt: input.evidence.index.materialized_at, manifest: input.evidence.manifest, previous });
+    const changes = input.evidence.index.source_type === "sessions" ? readSessionChanges(markdown) : undefined;
     const outline = markdown.split(/\r?\n/u).flatMap((line) => {
       const match = /^(#{1,6})\s+(.+?)\s*$/u.exec(line);
       return match === null ? [] : [match[2]!];
@@ -73,6 +80,13 @@ async function capturedDocumentProjection(input: {
       },
       value: {
         source_ref: sourceRef,
+        convert_visuals: convertVisuals,
+        ...(visuals.length ? { visual_context: markdown } : {}),
+        visual_resources: JSON.parse(JSON.stringify(visuals.map(({ document_text, ...resource }) => {
+          void document_text; return resource;
+        }))),
+        ...(changes === undefined ? {} : { changes: changes.map((change) => Object.fromEntries(
+          Object.entries(change).filter((entry): entry is [string, string] => entry[1] !== undefined))) }),
         path: document.path,
         ...(document.source_path === undefined ? {} : { source_path: document.source_path }),
         content_hash: document.content_hash,

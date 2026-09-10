@@ -1,5 +1,6 @@
+import { contextWorkflowProviderPath } from "./workflow/workflowProvider.js";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import {
   findContextProjectRoot,
   findContextWorkspaceExpectation,
@@ -31,6 +32,12 @@ export interface ContextEntryResult {
     root: string;
     exists: boolean;
   };
+  guidance?: {
+    knowledge_updates: { path: string };
+    workspace_prepare: { path: string };
+    workspace_commit: { path: string };
+    workspace_restore: { path: string };
+  };
   next_action: {
     kind: "evaluate-workflow" | "enter-workspace" | "initialize-workspace";
     command: string;
@@ -47,14 +54,10 @@ function shellQuote(value: string): string {
 
 function workflowCommand(input: ContextEntryInput): string {
   const authorities = input.authorities ?? [];
-  if (input.managed === true) {
-    return [
-      "context run --managed --until blocked-or-complete --format json",
-      ...authorities.map((authority) => `--authority ${shellQuote(authority)}`),
-    ].join(" ");
-  }
+
   return [
     "context status --format json",
+    ...(input.managed === true ? ["--managed"] : []),
     ...authorities.map((authority) => `--authority ${shellQuote(authority)}`),
   ].join(" ");
 }
@@ -81,6 +84,12 @@ function readyResult(
   const command = workflowCommand(input);
   return {
     schema: "context.entry.v1",
+    guidance: {
+      knowledge_updates: { path: resolve(dirname(contextWorkflowProviderPath()), "resources/procedures/knowledge-updates.md") },
+      workspace_prepare: { path: resolve(dirname(contextWorkflowProviderPath()), "resources/procedures/workspace-prepare.md") },
+      workspace_commit: { path: resolve(dirname(contextWorkflowProviderPath()), "resources/procedures/workspace-commit.md") },
+      workspace_restore: { path: resolve(dirname(contextWorkflowProviderPath()), "resources/procedures/workspace-restore.md") },
+    },
     state: relocation ? "workspace-relocation-required" : "workspace-ready",
     cwd: resolve(input.cwd),
     workspace: {
@@ -123,7 +132,7 @@ export function resolveContextEntry(input: ContextEntryInput): ContextEntryResul
   }
 
   const found = findContextProjectRoot(cwd);
-  if (found !== null) return readyResult(input, found.projectRoot, false);
+  if (found !== null) return readyResult(input, found.projectRoot, found.projectRoot !== cwd);
 
   const expectation = findContextWorkspaceExpectation(cwd);
   if (expectation !== null) {

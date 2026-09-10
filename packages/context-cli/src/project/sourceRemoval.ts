@@ -7,6 +7,7 @@ import {
   DEFAULT_LARK_SOURCES_REGISTRY_PATH,
   DEFAULT_REPO_SOURCES_REGISTRY_PATH,
   loadSourcesRegistry,
+  assertManagedDocumentPath,
   type PhaseResourceReference,
   type ProjectSourceDefinition,
 } from "@c4a/context";
@@ -25,7 +26,7 @@ import {
 import { loadContextProjectModule } from "./workspace.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
-type SourceKind = "repo" | "file" | "lark";
+type SourceKind = "repo" | "file" | "lark" | "note" | "sessions";
 
 interface RemovableSource {
   type: SourceKind;
@@ -49,7 +50,7 @@ export interface SourceRemovalCleanup {
 export interface SourceRemovalResult {
   action: "preview" | "removed";
   source: RemovableSource;
-  registry: string;
+  registry: string | null;
   materialized: string;
   references: string[];
   plan_digest: string;
@@ -58,7 +59,7 @@ export interface SourceRemovalResult {
 }
 
 interface SourceRemovalPlan extends SourceRemovalResult {
-  registryWrite: AtomicFileBatchWrite;
+  registryWrite?: AtomicFileBatchWrite;
   manifestWrite?: AtomicFileBatchWrite;
   absoluteRemovals: string[];
 }
@@ -78,7 +79,7 @@ function canonicalSourcePrefix(source: RemovableSource): string {
 
 function stringReferencesSource(value: string, source: RemovableSource): boolean {
   const prefix = canonicalSourcePrefix(source);
-  return value === prefix || value.startsWith(`${prefix}#`);
+  return value === prefix || value.startsWith(`${prefix}#`) || value.startsWith(`${prefix}/`);
 }
 
 function collectStrings(value: unknown, output: string[]): void {
@@ -110,6 +111,13 @@ async function yamlReferences(input: {
 
 async function collectSourceReferences(projectRoot: string, source: RemovableSource): Promise<string[]> {
   const references = new Set<string>();
+  const { currentLedger, currentSpec } = await import("./indexerMainRunStoreRecords.js");
+  const ledger = await currentLedger(projectRoot);
+  for (const entry of ledger?.entries ?? []) {
+    const spec = await currentSpec({ projectRoot, request_digest: entry.execution_request_digest });
+    const values: string[] = []; collectStrings(spec.request.workset, values);
+    if (values.some((value) => stringReferencesSource(value, source))) references.add(`active Indexer ${entry.indexer_id}`);
+  }
   const loaded = await loadContextProjectModule(projectRoot);
   loaded.project.sources.forEach((declared, index) => {
     if (sourceIdentity(declared) === source.name) references.add(`project.sources[${index}]`);
@@ -129,6 +137,8 @@ async function collectSourceReferences(projectRoot: string, source: RemovableSou
   }
 
   for (const path of [
+    "src/indexers.yaml",
+    ".tmp/context-runtime/indexer/candidate-compile/current.json",
     "knowledge/structure.yaml",
     ".tmp/context-runtime/lifecycle/structure.yaml",
   ]) {
@@ -137,7 +147,8 @@ async function collectSourceReferences(projectRoot: string, source: RemovableSou
   return [...references].sort();
 }
 
-function registryPath(type: SourceKind): string {
+function registryPath(type: SourceKind): string | null {
+  if (type === "note" || type === "sessions") return null;
   if (type === "repo") return DEFAULT_REPO_SOURCES_REGISTRY_PATH;
   return type === "file" ? DEFAULT_FILE_SOURCES_REGISTRY_PATH : DEFAULT_LARK_SOURCES_REGISTRY_PATH;
 }
@@ -171,7 +182,10 @@ async function resolveRemovableSource(projectRoot: string, selector: string): Pr
       materializedAt: source.materializedAt,
       ...(source.snapshot?.manifest !== undefined ? { manifest: source.snapshot.manifest } : {}),
     })),
-  ].filter((source) => source.id === selector || source.name === selector);
+    ...([ ["note", registry.notes], ["sessions", registry.sessions] ] as const).flatMap(([type, entries]) =>
+      entries.map((source) => ({ type, id: `${type}:${source.name}`, name: source.name,
+        materializedAt: source.materializedAt }))),
+  ].filter((source) => source.id === selector || source.name === selector || `${source.type}:${source.name}` === selector);
   if (matches.length === 0) {
     throw new ContextError(ExitCode.WorkspaceStateError, `source '${selector}' is not registered`, {
       category: ErrorCategory.SourceNotFound,
@@ -210,8 +224,9 @@ function removeDocumentEntry(document: unknown, source: RemovableSource): unknow
   return { ...record, sources: nextSources };
 }
 
-async function registryRemovalWrite(projectRoot: string, source: RemovableSource): Promise<AtomicFileBatchWrite> {
+async function registryRemovalWrite(projectRoot: string, source: RemovableSource): Promise<AtomicFileBatchWrite | undefined> {
   const path = registryPath(source.type);
+  if (path === null) return undefined;
   const absolutePath = join(projectRoot, path);
   const document = existsSync(absolutePath)
     ? YAML.parse(await readFile(absolutePath, "utf8")) as unknown
@@ -320,7 +335,12 @@ async function createRemovalPlan(projectRoot: string, selector: string): Promise
     directoriesToRemove: [],
   };
 
-  if (source.type === "file" || source.type === "lark") {
+  if (source.type === "note" || source.type === "sessions") {
+    const path = await assertManagedDocumentPath(projectRoot, source.type, source.name);
+    absoluteRemovals.push(path);
+    cleanup = { mode: "document-snapshot", sharedMaterializedBy: [],
+      filesToRemove: [source.materializedAt], directoriesToRemove: [] };
+  } else if (source.type === "file" || source.type === "lark") {
     const manifestPath = safeManagedManifestPath(projectRoot, source);
     let removal;
     try {
@@ -372,7 +392,9 @@ async function createRemovalPlan(projectRoot: string, selector: string): Promise
   const planDigest = digest({
     source,
     registry: registryPath(source.type),
-    registryBytes: registryWrite.bytes,
+    registryBytes: registryWrite?.bytes ?? null,
+    managedBytes: source.type === "note" || source.type === "sessions"
+      ? await readFile(absoluteRemovals[0]!, "utf8") : null,
     references,
     cleanup,
     manifestBytes: manifestWrite?.bytes ?? null,
@@ -389,7 +411,7 @@ async function createRemovalPlan(projectRoot: string, selector: string): Promise
     plan_digest: planDigest,
     cleanup,
     next,
-    registryWrite,
+    ...(registryWrite === undefined ? {} : { registryWrite }),
     ...(manifestWrite !== undefined ? { manifestWrite } : {}),
     absoluteRemovals: [...new Set(absoluteRemovals)].sort(),
   };
@@ -516,7 +538,7 @@ export async function removeProjectSource(input: {
     }
     await applyAtomicFileBatch({
       transactionRoot: join(input.projectRoot, ".tmp", "context-runtime", "source-remove-transactions"),
-      writes: [plan.registryWrite, ...(plan.manifestWrite !== undefined ? [plan.manifestWrite] : [])],
+      writes: [...(plan.registryWrite === undefined ? [] : [plan.registryWrite]), ...(plan.manifestWrite !== undefined ? [plan.manifestWrite] : [])],
       removals: plan.absoluteRemovals,
     });
     await pruneExtractRuntime(input.projectRoot, plan.source);

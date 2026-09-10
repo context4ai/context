@@ -53,10 +53,14 @@ export interface SourceRegistryLookup {
     repo: ReadonlySet<string>;
     file: ReadonlySet<string>;
     lark: ReadonlySet<string>;
+    note: ReadonlySet<string>;
+    sessions: ReadonlySet<string>;
   };
   documents: {
     file: ReadonlyMap<string, DocumentSourceRegistryEntry>;
     lark: ReadonlyMap<string, DocumentSourceRegistryEntry>;
+    note: ReadonlyMap<string, DocumentSourceRegistryEntry>;
+    sessions: ReadonlyMap<string, DocumentSourceRegistryEntry>;
   };
 }
 
@@ -83,11 +87,11 @@ function emptySourceRegistryLookup(loaded: boolean): SourceRegistryLookup {
     names: {
       repo: new Set(),
       file: new Set(),
-      lark: new Set(),
+      lark: new Set(), note: new Set(), sessions: new Set(),
     },
     documents: {
       file: new Map(),
-      lark: new Map(),
+      lark: new Map(), note: new Map(), sessions: new Map(),
     },
   };
 }
@@ -117,10 +121,14 @@ export async function loadSourceRegistryLookup(projectRoot: string, issues: Proj
         repo: new Set(registry.repos.flatMap((source) => [source.name, source.id])),
         file: new Set(registry.files.flatMap((source) => [source.name, source.id])),
         lark: new Set(registry.larks.flatMap((source) => [source.name, source.id])),
+        note: new Set(registry.notes.map((source) => source.name)),
+        sessions: new Set(registry.sessions.map((source) => source.name)),
       },
       documents: {
         file: sourceEntryMap(registry.files),
         lark: sourceEntryMap(registry.larks),
+        note: sourceEntryMap(registry.notes),
+        sessions: sourceEntryMap(registry.sessions),
       },
     };
   } catch (error) {

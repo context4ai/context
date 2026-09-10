@@ -1,5 +1,6 @@
 import {
   loadSourcesRegistry,
+  type ManagedDocumentSourceEntry,
   type FileSourceDefinition,
   type FileSourceRegistryEntry,
   type LarkSourceDefinition,
@@ -10,6 +11,8 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 
 export interface DocumentSourcesRegistryView {
+  notes: readonly ManagedDocumentSourceEntry[];
+  sessions: readonly ManagedDocumentSourceEntry[];
   files: readonly FileSourceRegistryEntry[];
   larks: readonly LarkSourceRegistryEntry[];
   registryPaths: {
@@ -30,6 +33,8 @@ export async function readDocumentSourcesRegistry(projectRoot: string): Promise<
   try {
     const registry = await loadSourcesRegistry({ rootDir: projectRoot });
     return {
+      notes: registry.notes,
+      sessions: registry.sessions,
       files: registry.files,
       larks: registry.larks,
       registryPaths: {

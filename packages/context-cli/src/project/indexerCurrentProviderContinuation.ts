@@ -241,7 +241,11 @@ export async function buildCurrentIndexerProviderContinuationRoute(input: {
       after_action: { evaluate: true },
     };
   }
-  if (current.nextRequest === undefined) {
+  // A Host resolution or program authorization is persisted before continuing
+  // the remaining selection. Resume a CLI-owned request through the same
+  // deterministic action after an interruption; status must not resolve it.
+  if (current.nextRequest === undefined ||
+    current.nextRequest.provider.distribution.kind === "cli-bundled") {
     const resolved = await resolveProviderContinuationGraphRoute({
       ...input,
       entry: PROVIDER_FINALIZATION_ENTRY,
@@ -509,13 +513,13 @@ export async function advanceCurrentIndexerProviderFinalizationIfReady(
   const current = await currentSetup(projectRoot);
   if (
     current === undefined ||
-    current.nextRequest !== undefined ||
+    (current.nextRequest !== undefined &&
+      current.nextRequest.provider.distribution.kind !== "cli-bundled") ||
     current.pendingProgramAuthorization !== undefined
   ) return false;
-  await finalizeCurrentIndexerProviderSetup({
+  await persistAndContinue({
     projectRoot,
-    proposal: current.validation.proposal,
-    staticReport: current.validation.static_report,
+    validation: current.validation,
     resolved: current.state.resolved,
   });
   return true;

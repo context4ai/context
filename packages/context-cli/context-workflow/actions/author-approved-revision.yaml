@@ -1,0 +1,6 @@
+schema: agent-graph.action.v1
+id: author-approved-revision
+runner: agent
+effect: write
+skill: skills/run-indexer-agent-step/SKILL.md
+outputSchema: schemas/approved-revision-result.schema.json

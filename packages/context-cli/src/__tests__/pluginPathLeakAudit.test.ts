@@ -43,6 +43,20 @@ const SOURCE_PATH_FIELD_ALLOWED_FIELDS = new Set([
   "previousHeadingPath", "rawBlocksByFile", "rawByPath", "rawFile", "rawPath", "relPath", "repo_root_path", "repoPath", "reviewPath", "root", "savePath", "scanFile", "search_path", "settingsPath",
   "node_ref_is_identity_not_path", "snapshot_dir", "snapshotFile", "snapshotPathBySourcePath", "source_manifest_path", "sourceFile", "sourceFilePath", "sourcePath", "sourcesFile", "stderrPath", "stdoutPath", "sub_path", "targetAbsPath", "target_href", "targetPath", "templatesDir",
   "qualified_item_path",
+  // Exact CLI-bundled Provider instruction returned for selection, not a
+  // workspace storage locator. projectIndexerSelectionCatalog.test.ts verifies
+  // it against the release manifest; Agents must not infer sibling paths.
+  "skill_path",
+  // Author exposes registered captured source files for explicit read-only
+  // access, not arbitrary workspace state probing. Material integration tests
+  // verify real readable paths and scoped source_items submission.
+  "captured_root", "read_path",
+  // Example inventory identity: the full path within the already authorized
+  // captured source, never a workspace storage or absolute filesystem path.
+  "full_relative_path",
+  // Internal boolean controlling selected-source read extent, not a path value
+  // or an Agent-facing output field.
+  "whole_file",
   "tmpPath", "workspace_root", "workspaceDir", "workspaceRoot",
 ]);
 const SOURCE_AUDITED_PATH_FIELDS = PATH_FIELD_INVENTORY.map((entry) => entry.field)
@@ -353,7 +367,13 @@ describe("path-free plugin source audit", () => {
 
     for (const file of files) {
       const body = await readFile(file.abs, "utf8");
-      findings.push(...scanProductionDoc(file.rel, body));
+      // The explicit inspection entry reads storage by design; it never uses
+      // those paths as a production protocol. Keep its other protocol audits.
+      // The authoring assistant reads bundle sources to create a Provider; it is not a production Route.
+      const inspection = file.rel.endsWith("/skills/context-inspect-search/SKILL.md")
+        || file.rel.includes("/skills/context-indexer-create/");
+      findings.push(...scanProductionDoc(file.rel, body).filter((finding) =>
+        !inspection || finding.rule !== "storage-path-probing"));
     }
 
     expect(findings).toEqual([]);

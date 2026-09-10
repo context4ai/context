@@ -489,6 +489,14 @@ export async function materializeContextWorkflowResource(input: {
     authorities,
     receipts: afterReadReceipts,
   });
+  const directResources = (status.workflow.current?.resources.required ?? []).filter(
+    (resource) => resource.read_state === "read-required" && resource.path !== undefined &&
+      resource.digest !== undefined,
+  );
+  // Carry this view into the same acknowledgement as the Route's direct files.
+  // The older Route's after_read command does not yet know this view was read.
+  const afterReadCommand = directResources.length === 0 ? continuation.command :
+    `context resource acknowledge-current --revision ${shellQuote(input.revision)}${authorityCommandOptions(authorities, "resource")} --resource-receipts ${shellQuote(`@${join(found.projectRoot, continuation.path)}`)} --format json`;
   return {
     protocol: "context.workflow.resource.v1",
     id: resourceId,
@@ -500,8 +508,9 @@ export async function materializeContextWorkflowResource(input: {
       kind: "read_resource_file",
       path: location.filePath,
       message:
-        "Read the complete file, then run the returned command. Materialization alone is not a read receipt.",
-      command: continuation.command,
+        "Read the complete file, then run the returned command BEFORE any configuration edit. After editing, refresh status instead of acknowledging the old revision. Materialization alone is not a read receipt." +
+        (directResources.length === 0 ? "" : ` Also read the current Route's required files before acknowledging: ${directResources.map((resource) => resource.path).join(", ")}. This command preserves all these readings; do not use the earlier Route's after_read command.`),
+      command: afterReadCommand,
     },
   };
 }

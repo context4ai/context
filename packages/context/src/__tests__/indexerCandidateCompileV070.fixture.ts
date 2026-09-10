@@ -205,9 +205,15 @@ function acceptedResult(result: IndexerArtifactResult) {
   };
 }
 
-export function candidateCompileFixture() {
+export function candidateCompileFixture(adjust?: (result: IndexerArtifactResult) => void) {
   const contracts = artifactPolicyContractsFixture();
   const result = resultFixture();
+  if (adjust) {
+    adjust(result);
+    const { output_digest, ...payload } = result;
+    void output_digest;
+    result.output_digest = indexerArtifactResultDigest(payload);
+  }
   const subjectKeySchemaSet = resolveIndexerSubjectKeySchemas({
     profile_contract: contracts.profiles,
     operator_contract: contracts.operators,

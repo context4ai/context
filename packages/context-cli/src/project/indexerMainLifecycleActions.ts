@@ -1,5 +1,7 @@
+import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import {
   buildIndexerMainPartitionWorksets,
+  buildIndexerMainWorksetSet,
   buildIndexerSubjectCatalog,
   buildIndexerTargetResolutionViews,
   evaluateIndexerCandidateMaterialization,
@@ -37,6 +39,7 @@ import {
   type IndexerConsumerInventoryShard,
 } from "./indexerConsumerWorksetPlanner.js";
 import { capturedDocumentIndexerRef } from "./indexerWorksetEvidenceProjection.js";
+import { reuseCurrentIndexerRuns } from "./indexerRunContinuation.js";
 export { buildProjectIndexerQuestionTargetInventory };
 export { buildProjectIndexerMainAuthorWorksets } from "./indexerMainAuthorActions.js";
 export { validateProjectIndexerMainRun } from "./indexerMainRunValidationActions.js";
@@ -335,17 +338,21 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       strategyId: primaryStrategy.strategy_id,
     });
     const carrierShardIndex = questionCarrierShardIndex(shards);
-    return shards.map(({ inventory, projection }, shardIndex) => ({
-      input: {
-        ...base,
-        partition_inventory_digest: indexerInventoryMembersDigest(inventory),
-        allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
-      },
-      inventory,
-      projection,
-      authority,
-      binding,
-    }));
+    return shards.map(({ inventory, projection }, shardIndex) => {
+      const dependency = partitionDependencyDigest(binding, projection);
+      return {
+        input: {
+          ...base,
+          ...(dependency === undefined ? {} : { source_binding_digest: dependency, partition_input_digests: [dependency] }),
+          partition_inventory_digest: indexerInventoryMembersDigest(inventory),
+          allowed_question_target_refs: shardIndex === carrierShardIndex ? allowedTargets : [],
+        },
+        inventory,
+        projection,
+        authority,
+        binding,
+      };
+    });
   }))).flat();
   const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
     prepared.map((item) => item.input);
@@ -379,11 +386,17 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       ...(enrichment === undefined ? {} : { enrichment }),
     });
   }));
+  const currentRuns = await reuseCurrentIndexerRuns({ projectRoot: input.projectRoot, specs: runSpecs });
+  const currentWorksets = currentRuns.map((spec) => {
+    if (spec.request.workset.stage !== "partition") throw new TypeError("expected partition workset");
+    return spec.request.workset;
+  });
   return {
     protocol: "context.indexer.main-partition-workset-build/v1" as const,
     requirement_set_digest: questionTargets.requirement_set_digest,
-    ...built,
-    run_specs: runSpecs,
+    worksets: currentWorksets,
+    workset_set: buildIndexerMainWorksetSet(currentWorksets),
+    run_specs: currentRuns,
     graph_outcome: "completed" as const,
   };
 }

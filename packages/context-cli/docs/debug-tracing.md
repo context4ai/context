@@ -57,7 +57,15 @@ The event stream records:
 - managed workflow action start and completion with deterministic receipts;
 - execution-scope open and close events, including whether a deterministic
   action ran in-process or in a child process and whether every short-lived
-  resource was released;
+  resource was released; normal project write-lock open/close pairs are omitted,
+  while release failures remain visible;
+- performance measurements: errors and operations taking at least one second
+  are written immediately. Short successful operations inside a CLI invocation
+  are aggregated into `cli.completed.data.performance` by operation and relevant
+  cache/read mode (and requested operation for locks). Each total includes count,
+  summed duration, maximum duration, and summed counters. It excludes the slow/error
+  events already written individually; add those when computing an operation total.
+  Direct SDK calls outside a CLI invocation retain individual measurements;
 - the reason and graph position at which a managed loop stopped.
 
 `trace_id` groups the workspace-local debug history, `sequence` defines replay order,
@@ -71,6 +79,14 @@ Execution-scope events are runtime evidence, not workflow facts. They make
 resource ownership and cleanup observable without changing a Route or adding
 workspace state. Durable knowledge mutations are still audited through the
 normal action receipt, revision, close, and verify results.
+
+Performance summaries live only in command memory until normal or error completion;
+there is no background writer or extra persistent queue. Abruptly killed commands
+may lack their short-operation summary, but invocation, slow-operation and error
+events already written remain available. Summary groups are bounded; overflow
+measurements are recorded individually. Operation durations can be nested, so their
+sum is not total CLI wall time. In particular, write-lock hold time includes the
+protected operation; acquisition duration identifies lock contention.
 
 ## Inspect and export
 

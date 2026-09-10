@@ -72,11 +72,11 @@ function closeActionSatisfied(input: {
   closeReady: boolean;
   verifyIssues: readonly ProjectVerifyIssue[];
 }): boolean {
-  // Close precedes source/indexer/review in the root repair graph. Pending
-  // drafts therefore defer it until the review route has resolved.
+  // Pending drafts defer close until the Review route has resolved.
   if (input.draftCandidates > 0) return true;
-  if (input.rejectedCandidates !== 0) return false;
-  if (!input.hasApprovedKnowledge) return true;
+  // Omit is a completed Review decision. It needs one close, not an endless
+  // close loop while its durable rejection remains in the Candidate ledger.
+  if (!input.hasApprovedKnowledge && input.rejectedCandidates === 0) return true;
   return input.closeReady && !verifyErrorsAreCloseRepairable(input.verifyIssues);
 }
 
@@ -111,19 +111,22 @@ export function createContextWorkflowFacts(
   const captureComplete =
     observation.capturedDocumentSources === observation.documentSources.length &&
     observation.pendingCaptureCommands.length === 0;
-  const reviewGateClear = observation.draftCandidates === 0;
+  const partialDelivery = observation.indexerCandidateCompile.partial_delivery === true && observation.indexerCandidateCompile.state === "current" && !observation.indexerCandidateCompile.revision_pending;
+  const reviewGateClear = observation.draftCandidates === 0 || partialDelivery;
   const hasApprovedKnowledge = observation.approvedPages > 0;
-  const indexerLifecycleCurrent = observation.sourceCount === 0 || (
+  const rollback = observation.indexerCandidateCompile.rollback_pending === true;
+  const indexerLifecycleCurrent = !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
     (
       observation.indexerCandidateCompile.state === "current" ||
-      observation.close.state === "ready"
+      (observation.close.state === "ready" && !observation.indexerCandidateCompile.delivery_pending)
     )
-  );
+  ));
   const evidenceClear = evidenceMaintenanceClear(observation);
   const packagesDeclared = !hasApprovedKnowledge || observation.packages.length > 0;
-  const packagesCurrent = !hasApprovedKnowledge || (
+  const packagesCurrent = rollback ? observation.packageFreshness.length === observation.packages.length &&
+    observation.packageFreshness.every((item) => item.state === "ready") : !hasApprovedKnowledge || (
     observation.packages.length > 0 &&
     observation.packageFreshness.length === observation.packages.length &&
     observation.packageFreshness.every((item) => item.state === "ready")
@@ -177,10 +180,12 @@ export function createContextWorkflowFacts(
       candidate_set_digest: observation.candidateSetDigest ?? null,
     },
     close: {
-      current: closeActionSatisfied({
-        draftCandidates: observation.draftCandidates,
+      // A pending revision (including a rejected draft) must reach Author
+      // before the root graph can close its approved output.
+      current: observation.indexerCandidateCompile.revision_pending === true || closeActionSatisfied({
+        draftCandidates: partialDelivery ? 0 : observation.draftCandidates,
         rejectedCandidates: observation.rejectedCandidates,
-        hasApprovedKnowledge,
+        hasApprovedKnowledge: hasApprovedKnowledge || rollback,
         closeReady: observation.close.state === "ready",
         verifyIssues: observation.verifyIssues,
       }),
@@ -188,7 +193,7 @@ export function createContextWorkflowFacts(
     packages: {
       declared: packagesDeclared,
       templates_reviewed: packageTemplatesReviewed(observation),
-      current: packagesCurrent,
+      current: packagesCurrent && !partialDelivery,
     },
     logs: {
       configured: runtimeEvents.configured,

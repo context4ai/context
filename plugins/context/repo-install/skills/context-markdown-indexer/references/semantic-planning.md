@@ -9,13 +9,28 @@ second review workflow. Context remains the authority for schemas, SubjectKey
 normalization, identities, paths, collisions, stale state, layout changes,
 Review, and publication.
 
-## `reader-subject` partition strategy
+## Reader-subject grouping
+
+The rules below are the grouping guidance for the current document View.
+Context handles strategy selection, ordering, retry, and catalog fallback;
+do not retrieve a separate strategy definition or submit strategy metadata.
 
 For a partition workset, group captured document members by durable reader
 subject rather than by file, heading, route, or temporary capture batch. Use
 the complete authorized document text together with maintained title,
 `source_path`, route, audience, and reader-task evidence. These fields are
 evidence for the decision; none is sufficient by itself.
+
+Choose readable, durable subject names during Partition. Context's main-page
+path uses the subject namespace as the directory and local key as the basename;
+the group's key and authored title do not rename it. When the default namespace
+is a capture ID or opaque source token, use the existing explicit subject object
+with a source-supported product/platform namespace and topic key, such as
+`sample-web` / `faq`, under a permitted kind. Do not repeat the source token in
+both path segments or use random/hash suffixes to resolve collisions. Keep an
+existing subject and its approved path on updates; a title edit alone does not
+create a new identity. Review the proposed subject and final reader path, not
+only the page title. Context handles path normalization and layout confirmation.
 
 One group may contain multiple documents when they jointly explain the same
 reader subject. Split platform or runtime variants only when their supported
@@ -24,8 +39,8 @@ navigation-only indexes, generated duplicates, empty placeholders, and
 superseded pages out of authored groups with an explicit inventory
 disposition. Every current inventory member must still receive exactly one
 partition disposition. If durable subject boundaries cannot be established,
-fail this semantic strategy so Context can use its existing catalog fallback;
-do not silently return one group per file under `reader-subject`.
+return a failed Partition Result explaining the missing boundary evidence so
+Context can choose the next attempt. Do not silently substitute one group per file.
 
 ## Evidence and authority
 
@@ -46,17 +61,16 @@ only because its path contains `ops/`.
 
 ## Subject boundary
 
-The primary logical-unit SubjectKey is fixed by the workset. Do not replace it
+For Author, the primary logical-unit SubjectKey is fixed by the workset. Do not replace it
 with a title-derived key. When Context supplies target-resolution entries,
 close every entry with exactly one current disposition:
 
 - `reuse-existing` only for an exact evidence-supported subject match;
 - `create-independent` only when evidence establishes a distinct durable
   subject and separate reader value under a permitted SubjectKey schema;
-- `request-material` when a semantic decision is possible but identity facts
-  or authority are insufficient;
-- `unsupported` when the required parser, evidence kind, or capability is not
-  available.
+- `unresolved` with a `reason_code` when the supplied material cannot establish
+  identity or the required capability is unavailable. `request-material` and
+  `unsupported` are whole-Result outcomes, not target-resolution dispositions.
 
 Treat local material as a Section before proposing an independent subject or
 Artifact. A heading, table row, FAQ label, warning, short example, relationship

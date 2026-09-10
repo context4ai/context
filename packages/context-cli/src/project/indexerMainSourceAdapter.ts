@@ -1,3 +1,5 @@
+import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
+import { buildPartitionSourceAccess } from "./indexerPartitionNavigation.js";
 import {
   buildIndexerAuthorDependencyWorksetViewSource,
   buildIndexerAuthorizedWorksetViewSource,
@@ -139,13 +141,13 @@ function parserFactIndex(view: IndexerParserFactView): ReadonlyMap<string, {
 }
 
 function capturedDocumentCoordinates(sourceRef: string): {
-  sourceType: "file" | "lark";
+  sourceType: "file" | "lark" | "note" | "sessions";
   sourceName: string;
 } | null {
   const separator = sourceRef.indexOf(":");
   if (separator < 1) return null;
   const sourceType = sourceRef.slice(0, separator);
-  if (sourceType !== "file" && sourceType !== "lark") return null;
+  if (sourceType !== "file" && sourceType !== "lark" && sourceType !== "note" && sourceType !== "sessions") return null;
   const sourceName = sourceRef.slice(separator + 1);
   if (sourceName.length === 0) {
     throw new TypeError("captured document source_ref requires a source name");
@@ -167,7 +169,7 @@ async function capturedDocumentsBinding(input: {
     throw new TypeError("captured document main Indexer source cannot bind a code module");
   }
   const registry = await readDocumentSourcesRegistry(input.projectRoot);
-  const entries = coordinates.sourceType === "file" ? registry.files : registry.larks;
+  const entries = coordinates.sourceType === "file" ? registry.files : coordinates.sourceType === "lark" ? registry.larks : coordinates.sourceType === "note" ? registry.notes : registry.sessions;
   const matchingEntries = entries.filter((entry) =>
     entry.name === coordinates.sourceName || entry.id === coordinates.sourceName
   );
@@ -182,7 +184,7 @@ async function capturedDocumentsBinding(input: {
     sourceType: coordinates.sourceType,
     sourceName: source.name,
     materializedAt: source.materializedAt,
-    manifestPath: source.snapshot?.manifest ?? `${source.materializedAt}/manifest.json`,
+    manifestPath: ("snapshot" in source ? source.snapshot?.manifest : undefined) ?? `${source.materializedAt}/manifest.json`,
   });
   const authorizedDocumentPaths = evidence.index.documents
     .map((document) => document.path)
@@ -334,16 +336,20 @@ export function assertProjectIndexerMainSourceBinding(input: {
   workset: Record<string, unknown>;
   binding: ProjectIndexerMainSourceBinding;
   dependency_view?: unknown;
+  partition_projection?: unknown;
 }): void {
   const authorDependencyView = input.workset.stage === "author"
     ? validateIndexerAuthorDependencyView(input.dependency_view)
     : null;
+  const partitionDigest = input.workset.stage === "partition"
+    ? partitionDependencyDigest(input.binding, input.partition_projection as IndexerConsumerWorksetProjection | undefined) : undefined;
+  const scopedPartition = partitionDigest !== undefined && input.workset.source_binding_digest === partitionDigest;
   if (
     input.workset.source_ref !== input.binding.source_ref ||
     input.workset.module_ref !== input.binding.module_ref ||
     input.workset.profile_contract_digest !== input.binding.profile_contract_digest ||
     input.workset.source_binding_digest !== (
-      authorDependencyView?.view_digest ?? input.binding.source_binding_digest
+      authorDependencyView?.view_digest ?? (scopedPartition ? partitionDigest : input.binding.source_binding_digest)
     )
   ) {
     throw new TypeError("main Indexer workset targets a stale source adapter binding");
@@ -354,7 +360,7 @@ export function assertProjectIndexerMainSourceBinding(input: {
         ? input.workset.partition_input_digests
         : [],
     );
-    if (input.binding.partition_input_digests.some((digest) => !supplied.has(digest))) {
+    if ((scopedPartition ? [partitionDigest!] : input.binding.partition_input_digests).some((digest) => !supplied.has(digest))) {
       throw new TypeError("partition workset omits source adapter input digests");
     }
   }
@@ -480,10 +486,17 @@ export async function buildProjectIndexerMainSourceViewSources(input: {
         })),
       ],
     })];
+    if (request.workset.stage === "partition") sources.push(await buildPartitionSourceAccess({
+      projectRoot: input.projectRoot, spec_request: request, binding,
+      paths: selectedFileDescriptors.map(file => file.normalized_path),
+    }));
     if (dependencyView !== null) {
       sources.push(await buildProjectIndexerAuthorSourceText({
         projectRoot: input.projectRoot, request, indexer_id: request.workset.indexer_id,
         registry: input.registry, binding, dependency_view: dependencyView,
+        ...(input.author_inventory_members === undefined ? {} : {
+          author_member_ids: input.author_inventory_members.map((member) => member.member_id),
+        }),
       }));
     }
     if (dependencyView !== null && input.supplementary !== true) {

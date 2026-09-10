@@ -1,13 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { IndexerRegistry } from "@c4a/context";
-import { ErrorCategory } from "../lib/cliFeedback.js";
-import { ContextError } from "../lib/errors.js";
 import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "../project/indexerCurrentPrimaryAuthority.js";
 
 describe("current Indexer primary Provider authority", () => {
-  test("reports the required and available identities when a bundled Provider digest drifts", async () => {
+  test("uses the installed bundled Provider without requiring the historical content pin", async () => {
     const bundle = (await listCliBundledIndexers()).bundles.find((candidate) =>
       candidate.skill === "context-code-indexer"
     );
@@ -48,32 +46,15 @@ describe("current Indexer primary Provider authority", () => {
       }],
     };
 
-    let caught: unknown;
-    try {
-      await resolveCurrentProjectIndexerPrimaryAuthority({
+    for (const version of [bundle.version, "0.0.1"]) {
+      registry.indexers[0]!.providers[0]!.version = version;
+      const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
         registry,
         indexer_id: "reader-guide",
       });
-    } catch (error) {
-      caught = error;
+      expect(authority.provider).toMatchObject({ skill: bundle.skill, version: bundle.version, integrity: bundle.integrity });
+      expect(authority.manifest.version).toBe(bundle.version);
+      expect(registry.indexers[0]!.providers[0]!.integrity).toBe(requiredIntegrity);
     }
-
-    expect(caught).toBeInstanceOf(ContextError);
-    const failure = caught as ContextError;
-    const message = failure.message;
-    expect(message).toContain(
-      `requires exact primary Provider context-code-indexer@${bundle.version} (integrity ${requiredIntegrity}`,
-    );
-    expect(message).toContain(
-      `current CLI provides context-code-indexer@${bundle.version} (integrity ${bundle.integrity}`,
-    );
-    expect(message).toContain("bundle catalog has no exact identity match");
-    expect(failure.detail?.category).toBe(ErrorCategory.ProviderIdentityMismatch);
-    expect(failure.detail?.required_provider).toMatchObject({
-      skill: "context-code-indexer",
-      version: bundle.version,
-      integrity: requiredIntegrity,
-    });
-    expect(failure.detail?.available_providers).toEqual([bundle]);
   });
 });

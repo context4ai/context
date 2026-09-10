@@ -1,3 +1,4 @@
+import { projectPackageArticleLinks, type PackageArticleLinkWarning } from "./packageArticleLinks.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -16,7 +17,7 @@ import {
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { packageNavigation } from "./packageNavigation.js";
 import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
-import { projectPackageKnowledgeMarkdown } from "./packageKnowledgeProjection.js";
+import { cachedPackageKnowledgeMarkdown } from "./packageRenderCache.js";
 import {
   projectPackageKnowledgeAssets,
   type PackageAssetFile,
@@ -160,7 +161,8 @@ export async function packageKnowledgeBundle(
     const distPath = packageKnowledgeOutputPath(pkg, file.relPath);
     const lines = [`# ${distPath}`, ""];
     if (file.relPath !== distPath) lines.push(`<!-- approved_path: ${file.relPath} -->`, "");
-    lines.push(projectPackageKnowledgeMarkdown(content).trim());
+    lines.push((await cachedPackageKnowledgeMarkdown({ projectRoot,
+      key: `${pkg.name}/bundle/${file.relPath}`, content })).trim());
     return lines.join("\n");
   }));
   return projected.join("\n\n---\n\n");
@@ -247,11 +249,15 @@ export async function writeSelectedPackageKnowledge(input: {
   prepared?: PreparedPackageKnowledge;
 }): Promise<{
   pages: number;
+  linkWarnings: PackageArticleLinkWarning[];
   resources: number;
   resourceBytes: number;
   assetDelivery: PackageAssetDeliverySummary;
 }> {
   const { projectedPages, delivered } = input.prepared ?? await prepareSelectedPackageKnowledge(input);
+  const linkWarnings: PackageArticleLinkWarning[] = [];
+  const outputByApproved = new Map(input.files.map(file => [file.relPath, packageKnowledgeOutputPath(input.pkg, file.relPath)]));
+  const approvedByOutput = new Map([...outputByApproved].map(([approved, output]) => [output, approved]));
   for (const projected of projectedPages) {
     assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
     const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
@@ -266,7 +272,11 @@ export async function writeSelectedPackageKnowledge(input: {
       return undefined;
     });
     await mkdir(dirname(outputPath), { recursive: true });
-    await writeFile(outputPath, projectPackageKnowledgeMarkdown(rewritten), "utf8");
+    const links = projectPackageArticleLinks({ markdown: rewritten, approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
+    linkWarnings.push(...links.warnings);
+    const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
+      key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
+    await writeFile(outputPath, markdown, "utf8");
   }
   const deliveredAssets = new Map(delivered.assets.map((asset) => [asset.packageRelPath, asset]));
   for (const asset of deliveredAssets.values()) {
@@ -277,6 +287,7 @@ export async function writeSelectedPackageKnowledge(input: {
   }
   return {
     pages: projectedPages.length,
+    linkWarnings,
     resources: deliveredAssets.size,
     resourceBytes: [...deliveredAssets.values()].reduce((sum, asset) => sum + asset.bytes.byteLength, 0),
     assetDelivery: delivered.summary,

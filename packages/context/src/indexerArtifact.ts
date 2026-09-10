@@ -44,6 +44,7 @@ const indexerTemplateArtifactSchema = z.object({
 const indexerSectionArtifactSchema = z.object({
   ...artifactCommonFields,
   representation: z.literal("sections"),
+  template_id: indexerIdSchema.optional(),
   sections: z.array(indexerArtifactSectionSchema).min(1),
 }).strict();
 

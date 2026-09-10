@@ -20,6 +20,7 @@ import {
 
 interface CurrentInstructionDescriptor {
   kind: "provider" | "template" | "composer" | "customization-append";
+  provider_id: string;
   location: "staged" | "workspace";
   path: string;
   digest: string;
@@ -61,7 +62,8 @@ export interface CurrentCliInstructionAuthority {
   };
 }
 
-function currentCliInstructionDescriptors(input: {
+/** Shared resource selection for Author and approved-page revision. */
+export function currentCliInstructionDescriptors(input: {
   authority: CurrentCliInstructionAuthority;
   composerId: string | null;
   customization: IndexerCustomizationView;
@@ -92,6 +94,7 @@ function currentCliInstructionDescriptors(input: {
         }
         return {
           kind: "provider" as const,
+          provider_id: layer.layer.id,
           location: "staged" as const,
           path: instruction.path,
           digest: file.digest,
@@ -104,7 +107,7 @@ function currentCliInstructionDescriptors(input: {
         };
       }));
     descriptors.push(...(layer.manifest.provider.templates ?? [])
-      .filter((template) => activeProfiles.includes(template.profile))
+      .filter((template) => template.kind !== "page-program" && template.delivery !== "selected" && activeProfiles.includes(template.profile))
       .map((template) => {
         const override = layer.layer.role === "primary"
           ? customization.files.find((file) => file.path === `templates/${template.id}.md`)
@@ -116,6 +119,7 @@ function currentCliInstructionDescriptors(input: {
         return override === undefined
           ? {
               kind: "template" as const,
+              provider_id: layer.layer.id,
               location: "staged" as const,
               path: template.path,
               digest: file!.digest,
@@ -130,6 +134,7 @@ function currentCliInstructionDescriptors(input: {
             }
           : {
               kind: "template" as const,
+              provider_id: layer.layer.id,
               location: "workspace" as const,
               path: override.path,
               digest: override.digest,
@@ -167,6 +172,7 @@ function currentCliInstructionDescriptors(input: {
     }
     descriptors.push({
       kind: "composer",
+      provider_id: layer!.layer.id,
       location: "staged",
       path: instructionPath,
       digest: file.digest,
@@ -183,6 +189,7 @@ function currentCliInstructionDescriptors(input: {
   if (append !== undefined) {
     descriptors.push({
       kind: "customization-append",
+      provider_id: authority.provider.id,
       location: "workspace",
       path: append.path,
       digest: append.digest,

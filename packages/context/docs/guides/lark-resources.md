@@ -2,7 +2,11 @@
 
 Lark documents can contain evidence that is not present in the readable text
 body. Context handles these resources mechanically during `captureLark`; the
-Agent does not download, summarize, or reconstruct them itself.
+Agent does not reconstruct resource bytes or substitute a summary for them.
+When the host already fetched the document, `context source import` accepts the
+actual full response files and downloaded media for the same normalization and
+resource checks; it does not fetch that supplied body again. See
+[importing an existing response](knowledge-updates.md#import-a-document-response-already-read-by-the-host).
 
 ## Resource policy
 

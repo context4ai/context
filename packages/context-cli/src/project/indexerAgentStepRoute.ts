@@ -33,6 +33,7 @@ import type {
   ContextResolvedWorkflowRoute,
   ContextWorkflowRouteActionSource,
 } from "./workflow/workflowTypes.js";
+import { prepareIndexerInstructionsReading, prepareIndexerWorksetReadings, prepareIndexerPostAuthorReading } from "./indexerAgentReadingResources.js";
 
 const INDEXER_GRAPH_ID = "indexer";
 const INDEXER_GRAPH_ENTRY = "agent-step";
@@ -45,9 +46,12 @@ function assertInstructionRunBinding(input: {
   runRequest: ReturnType<typeof validateIndexerProgramRunRequest>;
 }): void {
   const workset = input.runRequest.workset;
+  // An installed instruction update may have different bytes from the tool
+  // that prepared this immutable task. Bind delivery to the Provider and stage;
+  // the current Route revision still rejects results from an obsolete delivery.
   if (
     workset.stage !== input.request.stage ||
-    input.runRequest.final_authority.integrity !== input.request.provider_integrity
+    input.runRequest.final_authority.layer_ref !== `provider:${input.request.provider_id}#layer:primary`
   ) {
     throw new TypeError("Indexer Agent step request does not match its instructions/workset authority");
   }
@@ -171,13 +175,6 @@ export async function buildIndexerAgentStepRoute(input: {
     location.readState = "read-required";
     return location;
   });
-  const readyResources = new Map([
-    [instructionRequest.resource_id, input.ready_instruction] as const,
-    ...input.ready_workset_views.map((resource) => [
-      resource.resource_id,
-      { path: resource.path, digest: resource.digest },
-    ] as const),
-  ]);
   for (const [index, request] of worksetViewRequests.entries()) {
     const ready = input.ready_workset_views[index];
     if (
@@ -187,6 +184,15 @@ export async function buildIndexerAgentStepRoute(input: {
       throw new TypeError("Context Indexer Agent Route ready View does not match its request");
     }
   }
+  const instructionReading = await prepareIndexerInstructionsReading(input.ready_instruction);
+  const viewReadings = await prepareIndexerWorksetReadings(input.ready_workset_views.map((ready, index) =>
+    ({ ready, workset: runRequests[index]!.workset, task_key: stepInput.tasks[index]!.task_key }),
+  ));
+  const readyResources = new Map([
+    [instructionRequest.resource_id, instructionReading] as const,
+    ...input.ready_workset_views.map((resource, index) => [resource.resource_id, viewReadings[index]!] as const),
+  ]);
+  const sharedReadings = [...new Map(viewReadings.flatMap((reading) => reading.common).map((reading) => [reading.digest, reading])).values()];
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -196,6 +202,7 @@ export async function buildIndexerAgentStepRoute(input: {
     provider_graph_digest: graphDigest,
     step_input_digest: stepInput.input_digest,
     instruction_request_digest: instructionRequest.request_digest,
+    reading_digests: [instructionReading.digest, ...viewReadings.map((reading) => reading.digest), ...sharedReadings.map((reading) => reading.digest)],
     workset_view_request_digests: worksetViewRequests.map((request) =>
       request.request_digest
     ),
@@ -227,7 +234,7 @@ export async function buildIndexerAgentStepRoute(input: {
         : {
             id: projected.id,
             kind: projected.kind,
-            media_type: projected.media_type,
+            media_type: ready.media_type,
             digest: ready.digest,
             path: ready.path,
             ...(projected.revision === undefined
@@ -237,6 +244,10 @@ export async function buildIndexerAgentStepRoute(input: {
           };
     });
   });
+  required.push(...sharedReadings.map((reading) => ({ id: `indexer-shared-material/${reading.digest.slice(7)}`,
+    kind: "procedure" as const, media_type: reading.media_type, path: reading.path, digest: reading.digest,
+    revision: stableFingerprint, read_state: "read-required" as const })));
+
   const recommended = resolved.resources.recommended.map((resource) =>
     projectWorkflowResourceLocation(
       resource,
@@ -400,6 +411,8 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       throw new TypeError("Context post-author Agent Route ready View does not match its task");
     }
   }
+  const instructionReading = await prepareIndexerInstructionsReading(input.ready_instruction);
+  const viewReadings = await Promise.all(input.ready_workset_views.map(prepareIndexerPostAuthorReading));
   const graphDigest = provider.graphDigests.get(INDEXER_GRAPH_ID);
   if (graphDigest === undefined) {
     throw new TypeError("Context Indexer graph digest is unavailable");
@@ -407,6 +420,7 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
   const stableFingerprint = indexerProtocolDigest({
     protocol: "context.indexer.agent-step-route-fingerprint/v1",
     phase: "post-author",
+    reading_digests: [instructionReading.digest, ...viewReadings.map((reading) => reading.digest)],
     provider_graph_digest: graphDigest,
     step_input_digest: stepInput.input_digest,
     instruction_request_digest: instructionRequest.request_digest,
@@ -434,9 +448,9 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       : {
           id: projected.id,
           kind: projected.kind,
-          media_type: projected.media_type,
-          digest: input.ready_instruction.digest,
-          path: input.ready_instruction.path,
+          media_type: instructionReading.media_type,
+          digest: instructionReading.digest,
+          path: instructionReading.path,
           ...(projected.revision === undefined ? {} : { revision: projected.revision }),
           read_state: "read-required" as const,
         };
@@ -447,11 +461,11 @@ export async function buildIndexerPostAuthorAgentStepRoute(input: {
       stableFingerprint,
       input.authorities ?? [],
     );
-    const ready = input.ready_workset_views[index]!;
+    const ready = viewReadings[index]!;
     return {
       id: projected.id,
       kind: projected.kind,
-      media_type: projected.media_type,
+      media_type: ready.media_type,
       digest: ready.digest,
       path: ready.path,
       ...(projected.revision === undefined ? {} : { revision: projected.revision }),

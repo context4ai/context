@@ -205,3 +205,19 @@ bun run --filter @c4a/context-cli test
 ## License
 
 MIT.
+
+### 精简状态与配置读取
+
+`context status --view summary --format json` 返回进度和 `next_route.file`，完整可执行 Route 保存在该文件；需要内联完整 Route 时用 `--view full`。`context run --managed --until blocked-or-complete --format json` 默认返回停止摘要、`next_route.file` 和保存完整执行记录的 `result_file`，加 `--verbose` 可展开完整结果。执行下一步前读取所指 Route。
+
+`task_completion` 是当前阶段已接受任务占比，不是整体交付率；任务、主题、页面不能混作同一分母。`pages.authored_not_delivered` 只统计已写出但尚未交付的页面。配置步骤先读完材料并确认读取，再编辑配置，编辑后刷新状态，不执行旧 revision 的读取确认。
+
+### 生产过程中的维护
+
+`context revise <页面> --instruction <要求>` 保留当前批次返修能力；修订其他已批准页面时可登记待办，不覆盖生产账本。`--regenerate` 明确准备当前程序化 API 内容，即使来源版本没有变化；`--timing priority` 请求提前交付已有完整页面，仍保留正常审核。
+
+多页使用 `context task maintain --input <文件> --format json`。输入包含 `id`、`operation`（`revise`、`regenerate` 或 `rebuild`）、可选 `timing`（`after-batch` 或 `priority`），以及 `targets: [{ path, instruction }]`。`rebuild` 不带 targets，只重新打包已批准内容，不完成生产任务。重试复用相同 id 和输入。状态会说明当前维护、待办及等待原因。
+
+来源刷新仍走明确范围调整；该入口不会抓取远端来源，也不代表能够重跑任意自定义 Composer。目标主体仍有未交付生产内容时，先等该写入方完成，再修订最新正文，避免恢复后覆盖。
+
+`context task maintenance-status --format json` 返回维护状态和 revision。`context task cancel-maintenance <id> --format json` 取消待办；明确放弃活动维护草稿时，再提供当前 `--discard-revision`。已批准页面和其他生产成果保留。

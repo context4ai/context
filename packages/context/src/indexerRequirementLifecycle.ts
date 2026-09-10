@@ -177,6 +177,7 @@ function normalizeRequirement(requirement: IndexRequirement): IndexRequirement {
     ));
   return {
     id: requirement.id,
+    ...(requirement.purpose === undefined ? {} : { purpose: requirement.purpose }),
     reader_goals: sortedUnique(requirement.reader_goals, "reader_goals"),
     coverage_domains: Object.fromEntries(Object.entries(requirement.coverage_domains)
       .sort(([left], [right]) => compareIndexerCanonicalText(left, right))),

@@ -4,7 +4,7 @@ description: Context-managed Provider for source-grounded document knowledge. Us
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.1.1"
+  context-provider-version: "1.1.3"
 ---
 
 # Context Markdown Indexer
@@ -26,5 +26,11 @@ execution receipts, content digests, internal refs, and other recovery machinery
 out of reader Markdown. Bind each reader claim only to the smallest relevant
 source span or captured evidence set; never attach a whole document corpus or
 Authorized Workset View to a generic summary.
+
+For updates, read the current approved page as well as the selected change.
+Preserve applicable tasks, steps, images, limits and confirmed contributions;
+do not turn every update into a troubleshooting article. A newly supplied
+explanation can improve the existing page without becoming a separate topic. Source text or an image that cannot
+be read remains an explicit gap, not permission to delete the page.
 
 The machine-readable authority is `context-indexer.yaml`. Context materializes the detailed guidance only after verifying this Bundle's release identity and complete file ledger.

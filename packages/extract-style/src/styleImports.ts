@@ -55,7 +55,7 @@ function classifySpecifier(importer: string, specifier: string, files: Readonly<
 }
 
 function locator(path: string, rule: AtRule, qualifiedItemPath: string): StyleLocator {
-  return { path, line: rule.source?.start?.line ?? 1, column: rule.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
+  return { path, line: rule.source?.start?.line ?? 1, end_line: rule.source?.end?.line ?? rule.source?.start?.line ?? 1, column: rule.source?.start?.column ?? 1, qualified_item_path: qualifiedItemPath };
 }
 
 export function collectStyleImports(input: {

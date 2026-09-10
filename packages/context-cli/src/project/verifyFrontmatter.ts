@@ -350,7 +350,7 @@ function validateApprovedSources(input: {
         severity: "error",
         code: "approved-source-invalid",
         path: input.relPath,
-        message: `frontmatter sources entry must be repo:<namespace>/<module> or file|lark:<source>/<doc>: ${source}`,
+        message: `frontmatter sources entry must be repo:<namespace>/<module> or a file/lark document locator or note/sessions dated Markdown path: ${source}`,
       });
       continue;
     }

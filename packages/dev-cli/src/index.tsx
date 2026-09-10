@@ -57,9 +57,6 @@ async function executeCommand(commandId: string): Promise<void> {
     case "build":
       await runCommandLogged("bun", ["run", "build"], { cwd: ROOT_DIR });
       break;
-    case "verify:fast":
-      await runCommandLogged("bun", ["run", "verify:fast"], { cwd: ROOT_DIR });
-      break;
     case "verify":
       await runCommandLogged("bun", ["run", "verify"], { cwd: ROOT_DIR });
       break;
@@ -412,7 +409,7 @@ async function routeArgs(args: string[]) {
     return;
   }
 
-  if (args[0] === "verify" || args[0] === "verify:fast" || args[0] === "verify:full") {
+  if (args[0] === "verify" || args[0] === "verify:full") {
     await runCommandLogged("bun", ["run", args[0]], { cwd: ROOT_DIR });
     return;
   }

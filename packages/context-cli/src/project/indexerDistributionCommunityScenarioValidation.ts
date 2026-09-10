@@ -42,7 +42,7 @@ const POSITIVE_SCENARIOS: readonly ScenarioExpectation[] = [
 const NEGATIVE_SCENARIOS: readonly NegativeScenarioExpectation[] = [
   { scenario_id: "complete-page-stale-source", authoring_fixture_ref: "anonymous-api-service", profile: "api-service", observed_condition: "source-revision-or-locator-drift", expected_outcome: "reject-stale-evidence" },
   { scenario_id: "one-method-one-page-inflation", authoring_fixture_ref: "anonymous-api-service", profile: "api-service", observed_condition: "method-count-equals-artifact-count", expected_outcome: "reject-artifact-inflation" },
-  { scenario_id: "unresolved-authoring-placeholder", authoring_fixture_ref: "anonymous-background-runtime", profile: "background-runtime", observed_condition: "generated-placeholder-remains", expected_outcome: "block-generated-placeholder" },
+  { scenario_id: "unresolved-authoring-placeholder", authoring_fixture_ref: "anonymous-background-runtime", profile: "background-runtime", observed_condition: "generated-placeholder-remains", expected_outcome: "agent-review-advisory" },
   { scenario_id: "missing-runtime-platform-fact", authoring_fixture_ref: "anonymous-gateway-facade", profile: "gateway-facade", observed_condition: "required-runtime-fact-absent", expected_outcome: "request-material" },
 ];
 

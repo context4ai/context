@@ -302,6 +302,25 @@ describe("PartitionPlan authority and closure", () => {
     })).toEqual(empty);
   });
 
+  test("all-excluded inventory closes inherited targets without inventing a reader group", () => {
+    const original = workset();
+    const current = buildIndexerMainWorkset({ ...original, reader_question_refs: [] });
+    if (current.stage !== "partition") throw new Error("expected partition");
+    const { canonical_hash: _hash, ...base } = completePlan(current);
+    void _hash;
+    const payload = { ...base, groups: [], reader_question_refs: [], member_dispositions: INVENTORY.map((member) => ({
+      member_id: member.member_id, member_kind: member.member_kind,
+      inventory_disposition: "excluded-with-reason" as const, reason_code: "outside-confirmed-scope",
+    })) };
+    const plan = { ...payload, canonical_hash: indexerPartitionPlanCanonicalHash(payload) };
+    const input = { plan, workset: current, canonical_inventory_members: INVENTORY,
+      authorized_source_refs: [current.source_ref], authorized_strategies: AUTHORIZED_STRATEGIES };
+    expect(validateIndexerPartitionPlan(input)).toEqual(plan);
+    const incomplete = { ...payload, member_dispositions: payload.member_dispositions.slice(1) };
+    expect(() => validateIndexerPartitionPlan({ ...input, plan: { ...incomplete,
+      canonical_hash: indexerPartitionPlanCanonicalHash(incomplete) } })).toThrow();
+  });
+
   test("requires exact missing identity diagnostics on a failed plan", () => {
     const currentWorkset = workset();
     const complete = completePlan(currentWorkset);

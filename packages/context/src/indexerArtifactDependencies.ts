@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { compositionFactDependencies } from "./indexerCompositionFactDependencies.js";
+import { exampleFactDependencies } from "./indexerExampleFactDependencies.js";
 import {
   indexerEvidenceTargetAllows,
   type IndexerArtifactResult,
@@ -173,11 +174,7 @@ function assertBoundInputs(input: {
     runEnvelope.module_ref !== result.module_ref ||
     runEnvelope.indexer_id !== result.indexer_id ||
     runEnvelope.source_role !== result.source_role ||
-    runEnvelope.provider_layer_ref !== result.provider_layer_ref ||
-    runEnvelope.provider_integrity !== result.provider_integrity ||
-    runEnvelope.provider_bundle_digest !== result.provider_bundle_digest ||
-    runEnvelope.config_fingerprint !== result.config_fingerprint ||
-    runEnvelope.customization_fingerprint !== result.customization_fingerprint
+    runEnvelope.provider_layer_ref !== result.provider_layer_ref
   ) {
     throw new TypeError("Artifact dependency inputs do not bind the same current author run");
   }
@@ -226,6 +223,7 @@ export function buildIndexerArtifactDependencySet(input: {
     node.kind === "source-span"
   );
   const sourceByEvidence = new Map(sourceNodes.map((node) => [node.evidence_ref, node]));
+  const sourceByNode = new Map(sourceNodes.map((node) => [node.node_ref, node]));
   const evidenceByRef = new Map(input.result.evidence_bindings.map((evidence) => {
     let node = sourceByEvidence.get(evidence.evidence_ref);
     const belongsToPrimary = evidence.source_ref === input.workset.source_ref &&
@@ -255,25 +253,26 @@ export function buildIndexerArtifactDependencySet(input: {
     }
     if (
       node === undefined ||
-      canonicalIndexerJson({
-        source_ref: node.source_ref,
-        module_ref: node.module_ref,
-        locator: node.locator,
-        content_digest: node.content_digest,
-      }) !== canonicalIndexerJson({
-        source_ref: evidence.source_ref,
-        module_ref: evidence.module_ref,
-        locator: evidence.locator,
-        content_digest: evidence.content_digest,
-      })
+      node.source_ref !== evidence.source_ref ||
+      node.module_ref !== evidence.module_ref ||
+      node.locator.path !== evidence.locator.path ||
+      node.content_digest !== evidence.content_digest
     ) {
-      throw new TypeError(`evidence ${evidence.evidence_ref} is absent or stale in the dependency view`);
+      throw new TypeError(`Source ${evidence.evidence_ref} is unavailable or its file content changed; refresh the current task's source material`);
     }
-    return [evidence.evidence_ref, versionedPositive(node)] as const;
+    // Line ranges describe how the source is presented, not whether the source
+    // is still usable. Keep the current range for updates without requiring an
+    // older parser's byte-identical locator.
+    const current = { ...node, locator: evidence.locator };
+    return [evidence.evidence_ref, versionedPositive({
+      ...current,
+      node_ref: indexerDependencyNodeRef({ polarity: "positive", node: current }),
+    })] as const;
   }));
 
   const factNodes = [
     ...dependencyView.positive_nodes.filter((node) => node.kind === "selected-fact"),
+    ...exampleFactDependencies({ workset: input.workset, dependency_view: dependencyView, result: input.result }),
     ...(input.composition_input === undefined ? [] : compositionFactDependencies({
       composition_input: input.composition_input,
       workset: input.workset,
@@ -291,21 +290,28 @@ export function buildIndexerArtifactDependencySet(input: {
       }
       return evidence.node_ref;
     }));
-    if (
-      node === undefined ||
-      node.fact_digest !== indexerProtocolDigest(fact) ||
-      canonicalIndexerJson(node.source_span_node_refs) !== canonicalIndexerJson(sourceSpanNodeRefs)
-    ) {
-      throw new TypeError(`Fact ${fact.fact_ref} is absent or stale in the dependency view`);
+    if (node === undefined) {
+      throw new TypeError(`Fact ${fact.fact_ref} is not available in the current task; use a supplied Fact or source_items reference`);
     }
-    return [fact.fact_ref, versionedPositive(node)] as const;
+    const expectedEvidence = canonicalUnique(node.source_span_node_refs.map((ref) =>
+      sourceByNode.get(ref)!.evidence_ref
+    ));
+    if (canonicalIndexerJson(expectedEvidence) !== canonicalIndexerJson(canonicalUnique(fact.evidence_refs))) {
+      throw new TypeError(`Fact ${fact.fact_ref} refers to a different source than the current task`);
+    }
+    // Facts are reconstructed by Context from the current View. A persisted
+    // payload digest is an incremental-update hint, not a second approval gate
+    // on newer parser metadata. Record what was actually used this time.
+    return [fact.fact_ref, versionedPositive({
+      ...node, fact_digest: indexerProtocolDigest(fact), source_span_node_refs: sourceSpanNodeRefs,
+    })] as const;
   }));
 
   const logical = versionedPositive(
     dependencyView.positive_nodes.find((node) => node.kind === "logical-unit")!,
   );
   const resources = dependencyView.positive_nodes.filter((node) =>
-    node.kind === "template-policy-fragment" || node.kind === "contract-metric"
+    node.kind === "template-policy-fragment" || node.kind === "contract-metric" || node.kind === "approved-knowledge"
   ).map(versionedPositive);
   const negatives = dependencyView.negative_nodes.map(versionedNegative);
   const usedPositive = new Map<string, PositiveDependency>([[logical.node_ref, logical]]);

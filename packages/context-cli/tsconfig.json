@@ -24,13 +24,6 @@
     "src/lib/userCache.ts",
     "src/lib/workspaceLayout.ts",
     "src/types/exitCode.ts",
-    "src/__tests__/cli.test.ts",
-    "src/__tests__/document*V062.test.ts",
-    "src/__tests__/okfTypes.test.ts",
-    "src/__tests__/pathFreeContractInventory.test.ts",
-    "src/__tests__/plugin*.test.ts",
-    "src/__tests__/project*.test.ts",
-    "src/__tests__/proseAlignBudget.test.ts",
-    "src/__tests__/sectionContentDigest.test.ts"
+    "src/__tests__/**/*.test.ts"
   ]
 }

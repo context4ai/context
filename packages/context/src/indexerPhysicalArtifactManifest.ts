@@ -97,17 +97,7 @@ function normalizedReaderBody(markdown: string): string {
     });
     if (end >= 0) lines.splice(0, end + 2);
   }
-  return lines.join("\n").replace(/<!--[\s\S]*?-->/gu, "").trim();
-}
-
-function isReaderContentLine(line: string): boolean {
-  const value = line.trim();
-  if (value.length === 0) return false;
-  if (/^#{1,6}(?:\s+.*)?$/u.test(value)) return false;
-  if (/^(?:`{3,}|~{3,})(?:[^`]*)?$/u.test(value)) return false;
-  if (/^(?:[-=_*]\s*){3,}$/u.test(value)) return false;
-  if (/^(?:[-+*]|>)\s*$/u.test(value)) return false;
-  return true;
+  return lines.join("\n").trim();
 }
 
 function fileMetrics(markdown: string): {
@@ -125,7 +115,9 @@ function fileMetrics(markdown: string): {
     }),
     byteCount: Buffer.byteLength(markdown, "utf8"),
     readerBodyLineCount: lines.length,
-    empty: !lines.some(isReaderContentLine),
+    // Only missing body bytes are mechanical emptiness; headings, examples and
+    // comments are authored content whose usefulness belongs to Review.
+    empty: readerBody.length === 0,
   };
 }
 

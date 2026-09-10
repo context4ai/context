@@ -1,13 +1,19 @@
+import { renderVisualDecisions, visualResourcesFromView, removeConvertedVisualLinks } from "./visualSourceProcessing.js";
+import { buildAuthorExampleFacts } from "./indexerAuthorExamples.js";
+import { prepareAuthorArticles } from "./indexerAuthorArticles.js";
+import { primaryIntentKey, resolvePrimaryArtifactIntent, selectAuthorPolicy, type PrimaryArtifactPolicy } from "./indexerPrimaryArtifactPolicy.js";
+import { applySelectedPageTemplate, type IndexerPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerArtifactBundle,
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
   compareIndexerCanonicalText,
   indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerProtocolDigest,
   validateIndexerArtifactPolicyEligibilityReport,
   validateIndexerAuthorDependencyView,
+  validateIndexerPlannedArticles,
+  type IndexerArticlePlan,
   type IndexerArtifactFact,
   type IndexerArtifactResult,
   type IndexerAuthorizedWorksetView,
@@ -17,9 +23,13 @@ import {
   type IndexerMainRunResult,
   type IndexerSubjectKey,
 } from "@c4a/context";
-import { renderMarkdownSection } from "./markdownPageTitle.js";
+import { ensureMarkdownPageTitle, renderMarkdownSection } from "./markdownPageTitle.js";
+import { buildIndexerAuthorSourceItems, resolveIndexerAuthorSourceItems } from "./indexerAuthorSourceItems.js";
 
 type AuthorValidation = {
+  page_template?: IndexerPageTemplate;
+  page_plan?: { artifact_intent?: string | undefined; template_id?: string; articles?: IndexerArticlePlan[] };
+  article_templates?: Record<string, IndexerPageTemplate>;
   dependency_view: unknown;
   expected_subject_key: unknown;
   artifact_policy_eligibility: unknown;
@@ -46,10 +56,8 @@ function object(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function uniqueSorted(values: readonly string[], label: string): string[] {
-  const result = [...new Set(values)].sort(compareIndexerCanonicalText);
-  if (result.length !== values.length) throw new TypeError(`${label} contains duplicates`);
-  return result;
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort(compareIndexerCanonicalText);
 }
 
 function aliasMap(entries: readonly { canonical: string; aliases: readonly string[] }[]) {
@@ -83,56 +91,6 @@ function isAuthorizedFactCategory(category: string): boolean {
     category === "supporting-fact";
 }
 
-function evidenceIndex(input: {
-  dependencyView: ReturnType<typeof validateIndexerAuthorDependencyView>;
-  view: IndexerAuthorizedWorksetView;
-}) {
-  const bindings = new Map<string, IndexerEvidenceBinding>();
-  const entries: Array<{ canonical: string; aliases: string[] }> = [];
-  const documentPaths = new Set(input.view.items.flatMap((item) => {
-    if (item.category !== "document") return [];
-    const value = object(item.value, `document ${item.ref}`);
-    return typeof value.path === "string" ? [value.path] : [];
-  }));
-  for (const node of input.dependencyView.positive_nodes) {
-    if (node.kind !== "source-span") continue;
-    const isDocument = documentPaths.has(node.locator.path);
-    const payload = {
-      evidence_ref: node.evidence_ref,
-      kind: isDocument ? "documentation" as const : "code" as const,
-      source_ref: node.source_ref,
-      module_ref: node.module_ref,
-      locator: node.locator,
-      content_digest: node.content_digest,
-      coverage_tier: isDocument ? "lightweight-evidence" as const : "ast-catalog" as const,
-    };
-    bindings.set(node.evidence_ref, {
-      ...payload,
-      binding_digest: indexerEvidenceBindingDigest(payload),
-    });
-    entries.push({
-      canonical: node.evidence_ref,
-      aliases: [node.node_ref, node.locator.path],
-    });
-  }
-  for (const item of input.view.items) {
-    if (item.category !== "document") continue;
-    const value = object(item.value, `document ${item.ref}`);
-    const path = typeof value.path === "string" ? value.path : undefined;
-    if (path === undefined) continue;
-    const match = [...bindings.values()].find((binding) => binding.locator.path === path);
-    if (match !== undefined) {
-      entries.push({
-        canonical: match.evidence_ref,
-        aliases: [item.ref, path, ...(typeof value.source_path === "string"
-          ? [value.source_path]
-          : [])],
-      });
-    }
-  }
-  return { bindings, aliases: aliasMap(entries) };
-}
-
 function factIndex(input: {
   dependencyView: ReturnType<typeof validateIndexerAuthorDependencyView>;
   view: IndexerAuthorizedWorksetView;
@@ -146,6 +104,7 @@ function factIndex(input: {
     node.kind === "selected-fact" ? [[node.fact_ref, node] as const] : []
   ));
   const facts = new Map<string, IndexerArtifactFact>();
+  const memberFacts = new Map<string, Set<string>>();
   const aliases: Array<{ canonical: string; aliases: string[] }> = [];
   for (const item of input.view.items) {
     if (!isAuthorizedFactCategory(item.category)) continue;
@@ -179,6 +138,18 @@ function factIndex(input: {
       value: (value.payload ?? null) as IndexerArtifactFact["value"],
       evidence_refs: evidenceRefs,
     });
+    // Parser members are exact Fact identities or file identities. Use the
+    // authorized projection's container, never a path/name heuristic or every
+    // Fact used elsewhere in the page. Provider-derived facts do not establish
+    // a new inventory identity.
+    if (node !== undefined) {
+      for (const memberId of [factRef, item.provenance.container_ref]) {
+        if (memberId === undefined) continue;
+        const refs = memberFacts.get(memberId) ?? new Set<string>();
+        refs.add(factRef);
+        memberFacts.set(memberId, refs);
+      }
+    }
     const locator = object(value.locator ?? {}, `${factRef}.locator`);
     aliases.push({
       canonical: factRef,
@@ -187,12 +158,13 @@ function factIndex(input: {
         : [])],
     });
   }
-  return { facts, aliases: aliasMap(aliases) };
+  return { facts, aliases: aliasMap(aliases), memberFacts };
 }
 
 function chooseIntent(input: {
   semantic: IndexerAuthorSemanticInput;
   validation: AuthorValidation;
+  policy: PrimaryArtifactPolicy;
 }) {
   const choices = input.validation.allowed_artifact_intents;
   const aliases = aliasMap(choices.map((intent) => ({
@@ -204,8 +176,8 @@ function chooseIntent(input: {
     ].join("/"),
     aliases: [`intent:${intent.artifact_kind}`, intent.artifact_kind],
   })));
-  const requested = input.semantic.artifact_intent;
-  const selected = input.semantic.artifact_intent === undefined
+  const requested = input.semantic.artifact_intent ?? input.validation.page_plan?.artifact_intent;
+  const selected = requested === undefined
     ? choices.length === 1 ? choices[0] : undefined
     : choices.find((intent) => [
         intent.source_role,
@@ -214,9 +186,19 @@ function chooseIntent(input: {
         intent.artifact_kind,
       ].join("/") === resolveAlias(aliases, requested!, "artifact intent"));
   if (selected === undefined) {
-    throw new TypeError("author output must choose one allowed artifact intent");
+    throw new TypeError(`author output must choose one allowed artifact intent. Set artifact_intent from the current task's author-authority: ${choices.map((intent) => [intent.source_role, intent.document_kind, intent.reader_goal, intent.artifact_kind].join("/")).join(", ")}`);
   }
-  return selected;
+  const resolved = resolvePrimaryArtifactIntent(selected, choices, input.policy);
+  const planned = input.validation.page_plan?.artifact_intent;
+  if (planned !== undefined) {
+    const plan = choices.find(choice => primaryIntentKey(choice) === resolveAlias(aliases, planned, "planned artifact intent"));
+    if (plan === undefined || primaryIntentKey(resolvePrimaryArtifactIntent(plan, choices, input.policy)) !== primaryIntentKey(resolved)) {
+      throw new TypeError(`author intent differs from the accepted page plan: planned=${planned}; received=${requested}. ` +
+        `To keep the accepted purpose, omit artifact_intent or set it to ${planned}; keep the prose and other fields. ` +
+        "If the purpose really changed, revise the affected plan through the current Context workflow before resubmitting this task. Do not reset state or resubmit accepted peers.");
+    }
+  }
+  return resolved;
 }
 
 export function buildIndexerAuthorRunResultFromSemantic(input: {
@@ -232,15 +214,48 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
   if (input.semantic.group_key !== workset.group_key) {
     throw new TypeError("author semantic output belongs to another group");
   }
+  // A missing source body need not correspond to a predeclared reader question.
+  // Keep the existing task pending via the normal failed-task response instead
+  // of committing an empty ArtifactResult or inventing question authority.
+  if (input.semantic.outcome === "request-material" &&
+      input.validation.allowed_question_targets.length === 0) {
+    const gaps = input.semantic.material_gaps.map((gap) =>
+      `${gap.question}${gap.source_hints.length ? ` (sources: ${gap.source_hints.join(", ")})` : ""}`
+    );
+    const details = gaps.length ? gaps : input.semantic.diagnostics.map((item) => item.message);
+    throw new TypeError(`Author requested source material: ${details.join("; ") || "required source content is missing"}. This task remains pending; other accepted tasks are preserved. Read the current Source material and resubmit this task when the required content is available; do not invent a question target or restart collection/Partition.`);
+  }
+  const preparedArticles = prepareAuthorArticles(input.semantic, input.validation.page_plan?.articles);
+  input = { ...input, semantic: preparedArticles.semantic };
+  const sectionKey = (key: string) => preparedArticles.articles === undefined ? slug(key) : key;
   const subjectKey = input.validation.expected_subject_key as IndexerSubjectKey;
   const dependencyView = validateIndexerAuthorDependencyView(input.validation.dependency_view);
-  const evidence = evidenceIndex({ dependencyView, view: input.view });
+  const evidence = buildIndexerAuthorSourceItems({ nodes: dependencyView.positive_nodes, view: input.view });
+  const visualResources = visualResourcesFromView(input.view);
+  const visualSections = new Map<string, string>();
+  for (const section of input.semantic.sections) {
+    if (!section.visuals?.length) continue;
+    const refs = resolveIndexerAuthorSourceItems(evidence, section.source_items, `${section.key}.source_items`);
+    const allowed = visualResources.filter(resource => refs.some(ref => {
+      const binding = evidence.bindings.get(ref);
+      return binding?.source_ref === resource.source_ref && binding.locator.path === resource.document_path;
+    }));
+    const rendered = renderVisualDecisions(section.visuals, allowed);
+    input.semantic.diagnostics.push(...rendered.warnings.map(message => ({ code: "visual-retained", message })));
+    visualSections.set(sectionKey(section.key), rendered.markdown);
+  }
   const facts = factIndex({
     dependencyView,
     view: input.view,
     subjectKey,
     evidence: evidence.bindings,
   });
+  const exampleFacts = buildAuthorExampleFacts({
+    candidates: input.semantic.example_candidates ?? [], sourceIndex: evidence,
+    source_scope_digest: workset.source_scope_digest, logical_unit_ref: workset.logical_unit_ref,
+    subject_key: subjectKey,
+  });
+  for (const fact of exampleFacts) facts.facts.set(fact.fact_ref, fact);
   const memberKinds = new Map(input.validation.canonical_inventory_members.map((member) => [
     member.member_id,
     member.member_kind,
@@ -257,19 +272,17 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
     canonical: target.question_target_key,
     aliases: [`question-target:${index + 1}`, target.question_ref],
   })));
-  const targetResolutionAliases = input.request.workset.target_resolution_view === undefined
+  const targetResolutionAliases = workset.target_resolution_view === undefined
     ? new Map<string, string>()
-    : aliasMap(input.request.workset.target_resolution_view.entries.map((entry, index) => ({
+    : aliasMap(workset.target_resolution_view.entries.map((entry, index) => ({
         canonical: entry.query_ref,
         aliases: [`target:${index + 1}`, `target-resolution:${index + 1}`],
       })));
   const resolvedSections = input.semantic.sections.map((section) => {
-    const evidenceRefs = uniqueSorted(section.source_items.map((item) =>
-      resolveAlias(evidence.aliases, item, `${section.key}.source_items`)
-    ), `${section.key}.source_items`);
+    const evidenceRefs = resolveIndexerAuthorSourceItems(evidence, section.source_items, `${section.key}.source_items`);
     const factRefs = uniqueSorted(section.facts.map((fact) =>
       resolveAlias(facts.aliases, fact, `${section.key}.facts`)
-    ), `${section.key}.facts`);
+    ));
     const factEvidence = factRefs.flatMap((ref) => facts.facts.get(ref)?.evidence_refs ?? []);
     const allEvidence = [...new Set([...evidenceRefs, ...factEvidence])]
       .sort(compareIndexerCanonicalText);
@@ -280,53 +293,134 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
       factRefs,
       answers: uniqueSorted(section.answers.map((answer) =>
         resolveAlias(questionAliases, answer, `${section.key}.answers`)
-      ), `${section.key}.answers`),
+      )),
     };
   });
-  const usedEvidence = [...new Set(resolvedSections.flatMap((section) => section.evidenceRefs))]
+  const catalogFacts = new Map<string, string[]>();
+  for (const entry of input.semantic.member_dispositions) {
+    if (entry.state !== "catalog-only") continue;
+    const memberId = resolveAlias(memberAliases, entry.item, "member disposition");
+    const refs = [...(facts.memberFacts.get(memberId) ?? [])].sort(compareIndexerCanonicalText);
+    if (refs.length === 0) {
+      throw new TypeError(`${entry.item} has no authorized catalog facts; use unsupported or request material instead`);
+    }
+    catalogFacts.set(memberId, refs);
+  }
+  const usedFacts = [...new Set([
+    ...exampleFacts.map(fact => fact.fact_ref),
+    ...resolvedSections.flatMap((section) => section.factRefs),
+    ...[...catalogFacts.values()].flat(),
+  ])]
     .sort(compareIndexerCanonicalText);
-  const usedFacts = [...new Set(resolvedSections.flatMap((section) => section.factRefs))]
-    .sort(compareIndexerCanonicalText);
+  const usedEvidence = [...new Set([
+    ...resolvedSections.flatMap((section) => section.evidenceRefs),
+    ...usedFacts.flatMap((ref) => facts.facts.get(ref)!.evidence_refs),
+  ])].sort(compareIndexerCanonicalText);
   const bindings = usedEvidence.map((ref) => evidence.bindings.get(ref)!);
-  const artifactId = slug(input.semantic.title ?? workset.group_key);
+  const artifactId = slug(`${subjectKey.namespace}-${subjectKey.local_key}`);
   const eligibility = validateIndexerArtifactPolicyEligibilityReport(
     input.validation.artifact_policy_eligibility,
   );
-  const variant = input.semantic.policy === undefined
-    ? eligibility.eligible_variants.length === 1
-      ? eligibility.eligible_variants[0]
-      : undefined
-    : eligibility.eligible_variants.find((candidate) => candidate.id === input.semantic.policy);
-  if (variant === undefined) throw new TypeError("author output must choose one eligible policy");
+  const variant = selectAuthorPolicy(eligibility.eligible_variants, input.semantic.policy,
+    input.semantic.outcome === "publish");
   const intent = input.semantic.outcome === "publish"
-    ? chooseIntent({ semantic: input.semantic, validation: input.validation })
+    ? chooseIntent({ semantic: preparedArticles.articles === undefined ? input.semantic : { ...input.semantic, artifact_intent: preparedArticles.articles[0]!.artifact_intent }, validation: input.validation, policy: variant })
     : undefined;
-  const artifacts: IndexerArtifactResult["artifacts"] = intent === undefined ? [] : [{
-    artifact_id: artifactId,
-    artifact_kind: intent.artifact_kind,
+  const articleInputs = preparedArticles.articles ?? [{ key: artifactId, title: input.semantic.title ?? "", summary: input.semantic.summary ?? "", section_keys: resolvedSections.map(section => section.semantic.key), artifact_intent: input.semantic.artifact_intent, template_id: input.validation.page_plan?.template_id, template_variables: input.semantic.template_variables }];
+  const artifacts: IndexerArtifactResult["artifacts"] = intent === undefined ? [] : articleInputs.map(article => {
+    const articleIntent = preparedArticles.articles === undefined ? intent : chooseIntent({
+      semantic: { ...input.semantic, artifact_intent: article.artifact_intent },
+      validation: { ...input.validation, page_plan: { artifact_intent: article.artifact_intent } }, policy: variant,
+    });
+    return {
+    artifact_id: article.key,
+    ...(preparedArticles.articles === undefined || article.template_id === undefined ? {} : { template_id: article.template_id }),
+    artifact_kind: articleIntent.artifact_kind,
     artifact_policy_variant: variant.id,
     representation: "sections",
-    sections: resolvedSections.map((section, index) => ({
-      section_key: slug(section.semantic.key),
+    sections: resolvedSections.filter(section => article.section_keys.includes(section.semantic.key)).map((section, index) => ({
+      section_key: sectionKey(section.semantic.key),
       owner_indexer_id: workset.indexer_id,
-      document_kind: intent.document_kind,
-      reader_goal: intent.reader_goal,
-      artifact_kind: intent.artifact_kind,
+      document_kind: articleIntent.document_kind,
+      reader_goal: articleIntent.reader_goal,
+      artifact_kind: articleIntent.artifact_kind,
       blocks: [{
         block_id: `${slug(section.semantic.key)}-prose`,
         layer: "semantic-prose",
         markdown: renderMarkdownSection({
           markdown: section.semantic.markdown,
           heading: section.semantic.heading,
-          ...(index === 0 && input.semantic.title !== undefined
-            ? { pageTitle: input.semantic.title } : {}),
-          ...(index === 0 && input.semantic.summary !== undefined
-            ? { summary: input.semantic.summary } : {}),
+          ...(index === 0 ? { pageTitle: article.title } : {}),
+          ...(index === 0 ? { summary: article.summary } : {}),
         }),
         evidence_refs: section.evidenceRefs,
       }],
     })),
-  }];
+  }; });
+  const pageMembers = new Set(input.semantic.member_dispositions.filter((entry) => entry.state === "covered")
+    .map((entry) => resolveAlias(memberAliases, entry.item, "member disposition")));
+  const templateDiagnostics: Array<{ code: string; message: string }> = [];
+  const templateFacts = artifacts.flatMap((artifact, index) => {
+    const article = articleInputs[index]!;
+    const template = preparedArticles.articles === undefined ? input.validation.page_template : input.validation.article_templates?.[article.key];
+    if (template === undefined || artifact.representation !== "sections") return [];
+    const articleFacts = new Set(resolvedSections.filter(section => article.section_keys.includes(section.semantic.key))
+      .flatMap(section => section.factRefs));
+    const semanticVariables = Object.fromEntries(Object.entries(article.template_variables ?? {}).map(([id, value]) => {
+      if (typeof value === "string") return [id, value];
+      const variableFacts = value.facts.map(ref => resolveAlias(facts.aliases, ref, `${article.key}.${id}.facts`));
+      const variableEvidence = [...new Set([
+        ...resolveIndexerAuthorSourceItems(evidence, value.source_items, `${article.key}.${id}.source_items`),
+        ...variableFacts.flatMap(ref => facts.facts.get(ref)!.evidence_refs),
+      ])].sort(compareIndexerCanonicalText);
+      for (const ref of variableFacts) {
+        articleFacts.add(ref);
+        if (!usedFacts.includes(ref)) usedFacts.push(ref);
+      }
+      for (const ref of variableEvidence) if (!usedEvidence.includes(ref)) {
+        usedEvidence.push(ref); bindings.push(evidence.bindings.get(ref)!);
+      }
+      return [id, { value: value.value, evidence_refs: variableEvidence }];
+    }));
+    return applySelectedPageTemplate({ artifact, template, semanticVariables,
+      authorizedEvidenceRefs: new Set(evidence.bindings.keys()),
+      diagnostics: templateDiagnostics,
+      articleKey: preparedArticles.articles === undefined ? undefined : article.key,
+      supportingFacts: usedFacts.map(ref => facts.facts.get(ref)!),
+      facts: [...facts.facts.values()].filter(fact => preparedArticles.articles === undefined
+        ? input.validation.canonical_inventory_members.some(member =>
+          pageMembers.has(member.member_id) && facts.memberFacts.get(member.member_id)?.has(fact.fact_ref))
+        : articleFacts.has(fact.fact_ref)),
+    });
+  });
+  for (const fact of templateFacts) {
+    facts.facts.set(fact.fact_ref, fact);
+    if (!usedFacts.includes(fact.fact_ref)) usedFacts.push(fact.fact_ref);
+    for (const ref of fact.evidence_refs) if (!usedEvidence.includes(ref)) {
+      usedEvidence.push(ref); bindings.push(evidence.bindings.get(ref)!);
+    }
+  }
+  // A rendered slot may replace the opening Author section. Preserve the
+  // accepted article title regardless of which supported section comes first.
+  for (const [index, artifact] of artifacts.entries()) {
+    if (artifact.representation !== "sections") continue;
+    for (const section of artifact.sections) {
+      const visual = visualSections.get(section.section_key);
+      if (!visual) continue;
+      const source = resolvedSections.find(item => sectionKey(item.semantic.key) === section.section_key);
+      for (const block of section.blocks) if (block.layer === "semantic-prose") {
+        block.markdown = removeConvertedVisualLinks(block.markdown, visual, visualResources);
+      }
+      if (source) section.blocks.push({ block_id: `${slug(section.section_key)}-visual`,
+        layer: "semantic-prose", markdown: visual, evidence_refs: source.evidenceRefs });
+    }
+    const opening = artifact.sections[0]?.blocks[0];
+    if (opening?.layer === "semantic-prose") {
+      opening.markdown = ensureMarkdownPageTitle(opening.markdown, articleInputs[index]!.title);
+    }
+  }
+  usedFacts.sort(compareIndexerCanonicalText);
+  usedEvidence.sort(compareIndexerCanonicalText);
   const memberDispositions = input.semantic.member_dispositions.map((entry) => {
     const memberId = resolveAlias(memberAliases, entry.item, "member disposition");
     const memberKind = memberKinds.get(memberId)!;
@@ -342,20 +436,19 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
         inventory_disposition: "owned" as const,
         projection_disposition: "detailed" as const,
         section_evidence: [{
-          artifact_id: artifactId,
-          section_key: slug(section.semantic.key),
+          artifact_id: preparedArticles.articles?.find(article => article.section_keys.includes(section.semantic.key))?.key ?? artifactId,
+          section_key: sectionKey(section.semantic.key),
           evidence_refs: section.evidenceRefs,
         }],
       };
     }
     if (entry.state === "catalog-only") {
-      if (usedFacts.length === 0) throw new TypeError("catalog-only disposition requires facts");
       return {
         member_id: memberId,
         member_kind: memberKind,
         inventory_disposition: "owned" as const,
         projection_disposition: "catalog-only" as const,
-        fact_refs: usedFacts,
+        fact_refs: catalogFacts.get(memberId)!,
       };
     }
     return {
@@ -369,8 +462,13 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
   for (const section of resolvedSections) {
     const bindingDigest = evidence.bindings.get(section.evidenceRefs[0]!)!.binding_digest;
     for (const target of section.answers) {
-      if (answered.has(target)) throw new TypeError(`question target answered twice: ${target}`);
-      answered.set(target, bindingDigest);
+      // Several sections may answer the same reader question. Keep one
+      // coverage marker; this is not a conflicting write or a second approval.
+      const plannedArticle = input.validation.page_plan?.articles?.find(article => article.question_targets.includes(target));
+      if (plannedArticle !== undefined && !section.semantic.key.startsWith(plannedArticle.key + "--")) {
+        throw new TypeError("question " + target + " belongs to article " + plannedArticle.key + "; answer it in its planned primary article");
+      }
+      if (!answered.has(target)) answered.set(target, bindingDigest);
     }
   }
   const gapByTarget = new Map(input.semantic.material_gaps.map((gap) => [
@@ -463,20 +561,20 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
   const bundle = artifacts.length === 0 ? null : buildIndexerArtifactBundle({
     logical_unit_ref: workset.logical_unit_ref,
     artifact_policy_variant: variant.id,
-    artifacts: [{
-      artifact_id: artifactId,
-      artifact_kind: artifacts[0]!.artifact_kind,
-      purpose: variant.required_artifact_kinds.includes(artifacts[0]!.artifact_kind)
+    artifacts: artifacts.map(artifact => ({
+      artifact_id: artifact.artifact_id,
+      artifact_kind: artifact.artifact_kind,
+      purpose: variant.required_artifact_kinds.includes(artifact.artifact_kind)
         ? "required"
         : "discretionary",
       reader_question_refs: uniqueSorted(
         input.validation.allowed_question_targets
-          .filter((target) => answered.has(target.question_target_key))
+          .filter((target) => answered.has(target.question_target_key) && (input.validation.page_plan?.articles === undefined || input.validation.page_plan.articles.find(article => article.key === artifact.artifact_id)?.question_targets.includes(target.question_target_key)))
           .map((target) => target.question_ref),
-        "answered reader questions",
       ),
-      evidence_refs: usedEvidence,
-    }],
+      evidence_refs: artifact.representation === "sections" ? uniqueSorted(artifact.sections.flatMap(section => section.blocks.flatMap(block =>
+        block.layer === "semantic-prose" ? block.evidence_refs : block.fact_refs.flatMap(ref => facts.facts.get(ref)?.evidence_refs ?? [])))) : usedEvidence,
+    })),
   });
   const payload: Omit<IndexerArtifactResult, "output_digest"> = {
     protocol: "context.indexer.artifact-result/v1",
@@ -518,15 +616,25 @@ export function buildIndexerAuthorRunResultFromSemantic(input: {
     artifact_bundle: bundle,
     material_question_proposals: materialProposals,
     question_target_dispositions: questionDispositions,
-    diagnostics: input.semantic.diagnostics.map((diagnostic) => ({
+    diagnostics: [
+      ...templateDiagnostics,
+      ...(intent !== undefined && input.validation.page_plan?.artifact_intent !== undefined &&
+        input.validation.page_plan.artifact_intent !== primaryIntentKey(intent) ? [{
+          code: "primary-artifact-policy-normalized",
+          message: `Primary artifact normalized from ${input.validation.page_plan.artifact_intent} to ${primaryIntentKey(intent)} for policy ${variant.id}; source role, document kind and reader goal are unchanged.`,
+        }] : []),
+      ...input.semantic.diagnostics.map((diagnostic) => ({
       code: diagnostic.code,
       message: diagnostic.message,
       ...(diagnostic.target === undefined ? {} : {
         target_ref: resolveAlias(questionAliases, diagnostic.target, "diagnostic target"),
       }),
-    })),
+    }))],
     input_digest: input.request.execution_request_digest,
   };
+  if (input.validation.page_plan?.articles !== undefined) {
+    payload.diagnostics.push(...validateIndexerPlannedArticles({ ...payload, output_digest: indexerArtifactResultDigest(payload) }, input.validation.page_plan.articles));
+  }
   const result: IndexerArtifactResult = {
     ...payload,
     output_digest: indexerArtifactResultDigest(payload),

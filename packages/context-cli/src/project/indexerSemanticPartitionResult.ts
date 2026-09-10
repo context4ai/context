@@ -1,5 +1,6 @@
 import {
   canonicalIndexerNodeRef,
+  validateIndexerArticlePlan,
   compareIndexerCanonicalText,
   indexerPartitionPlanCanonicalHash,
   validateIndexerSubjectKeyForContract,
@@ -11,6 +12,7 @@ import {
   type IndexerPartitionSemanticInput,
   type IndexerSubjectKey,
 } from "@c4a/context";
+import { qualifyIndexerPartitionEntrySubject } from "./indexerPartitionEntrySubject.js";
 
 function uniqueSorted(values: readonly string[], label: string): string[] {
   const sorted = [...new Set(values)].sort(compareIndexerCanonicalText);
@@ -48,6 +50,30 @@ function resolveAlias(
   const resolved = aliases.get(value);
   if (resolved === undefined) throw new TypeError(`${label} is not authorized: ${value}`);
   return resolved;
+}
+
+function containerAliases(input: {
+  view: IndexerAuthorizedWorksetView;
+  inventory: readonly IndexerInventoryMember[];
+}): Map<string, string> {
+  const knownMembers = new Set(input.inventory.map((item) => item.member_id));
+  const aliases = new Map<string, string>();
+  for (const item of input.view.items) {
+    if (
+      item.category !== "supporting-fact" &&
+      item.category !== "fact" &&
+      item.category !== "consumer-anchor"
+    ) continue;
+    const container = item.provenance.container_ref;
+    if (container !== undefined && knownMembers.has(container)) {
+      aliases.set(item.ref, container);
+    }
+  }
+  return aliases;
+}
+
+function deduplicatedSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort(compareIndexerCanonicalText);
 }
 
 function inventoryAliases(input: {
@@ -94,6 +120,8 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     subject_key_contract: unknown;
     partition_unit_type: string;
     required_question_target_refs?: readonly string[];
+    available_artifact_intents?: readonly string[];
+    available_templates?: readonly { id: string; reader_goal?: string }[];
   };
 }): IndexerMainRunResult {
   if (input.request.workset.stage !== "partition") {
@@ -113,6 +141,27 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     view: input.view,
     inventory: input.validation.canonical_inventory_members,
   });
+  // An unresolved projection intentionally exposes supporting facts without
+  // promoting any of them to reader targets. If an Agent uses one of those
+  // facts as a group member, recover the authorized file member from its
+  // explicit container instead of making it retry a mechanical alias error.
+  // Once consumer anchors exist, keep the normal exact inventory contract.
+  const allowContainerMemberAliases = !input.view.items.some((item) =>
+    item.category === "consumer-anchor"
+  );
+  const factContainers = allowContainerMemberAliases
+    ? containerAliases({
+      view: input.view,
+      inventory: input.validation.canonical_inventory_members,
+    })
+    : new Map<string, string>();
+  const resolveMember = (value: string, label: string): string => {
+    const direct = members.get(value);
+    if (direct !== undefined) return direct;
+    const container = factContainers.get(value);
+    if (container !== undefined) return container;
+    throw new TypeError(`${label} is not authorized: ${value}`);
+  };
   const memberKinds = new Map(input.validation.canonical_inventory_members.map((item) => [
     item.member_id,
     item.member_kind,
@@ -127,9 +176,36 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     "question targets",
   );
   const groups = input.semantic.groups.map((group) => {
-    const resolvedMembers = uniqueSorted(group.members.map((member) =>
-      resolveAlias(members, member, "partition member")
-    ), `${group.key}.members`);
+    if (group.artifact_intent !== undefined && !input.validation.available_artifact_intents?.includes(group.artifact_intent)) {
+      throw new TypeError(`unknown page intent ${group.artifact_intent}; choose from the current partition authority`);
+    }
+    if (group.template_id !== undefined && !input.validation.available_templates?.some((template) => template.id === group.template_id)) {
+      throw new TypeError(`unknown template ${group.template_id}; choose from the current partition authority`);
+    }
+    const assertTemplateIntent = (templateId: string | undefined, intent: string | undefined) => {
+      const template = input.validation.available_templates?.find(item => item.id === templateId);
+      if (template?.reader_goal !== undefined && intent !== undefined && intent.split("/")[2] !== template.reader_goal) {
+        throw new TypeError(`template ${templateId} is registered for ${template.reader_goal}; choose a matching intent or another template from current authority`);
+      }
+    };
+    assertTemplateIntent(group.template_id, group.artifact_intent);
+    if (group.articles !== undefined) {
+      if (group.template_id !== undefined || group.artifact_intent !== undefined) throw new TypeError("choose either the article plan or the legacy page plan, not both");
+      for (const article of group.articles) {
+        assertTemplateIntent(article.template_id, article.artifact_intent);
+        if (!input.validation.available_artifact_intents?.includes(article.artifact_intent)) throw new TypeError(
+          "unknown article intent " + article.artifact_intent + "; choose from current partition authority");
+        if (article.template_id !== undefined && !input.validation.available_templates?.some(template => template.id === article.template_id)) throw new TypeError(
+          "unknown article template " + article.template_id + "; choose from current partition authority");
+      }
+    }
+    const resolvedMembers = allowContainerMemberAliases
+      ? deduplicatedSorted(group.members.map((member) =>
+        resolveMember(member, "partition member")
+      ))
+      : uniqueSorted(group.members.map((member) =>
+        resolveMember(member, "partition member")
+      ), `${group.key}.members`);
     const resolvedQuestions = uniqueSorted(group.questions.map((question) =>
       resolveAlias(questions, question, "reader question")
     ), `${group.key}.questions`);
@@ -140,7 +216,16 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       left.target_ref,
       right.target_ref,
     ));
-    const subject = subjectKey(group.subject, workset.partition_subject_key);
+    const articles = group.articles?.map(article => ({ ...article,
+      question_targets: article.question_targets.map(target => resolveAlias(targets, target, "article question target")).sort(),
+    }));
+    if (articles !== undefined) validateIndexerArticlePlan(articles, resolvedTargets.filter(target => target.role === "primary-carrier").map(target => target.target_ref));
+    const subject = qualifyIndexerPartitionEntrySubject({
+      subject: subjectKey(group.subject, workset.partition_subject_key),
+      explicit_subject: typeof group.subject !== "string",
+      members: resolvedMembers,
+      view: input.view,
+    });
     validateIndexerSubjectKeyForContract(
       subject,
       input.validation.subject_key_contract,
@@ -152,6 +237,14 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       subject_intent: group.subject_intent,
       logical_unit_ref: canonicalIndexerNodeRef(subject),
       label: group.title,
+      reader_task: group.reader_task,
+      outline: group.outline,
+      ...(articles === undefined ? {} : { articles }),
+      ...(group.artifact_intent === undefined ? {} : { artifact_intent: group.artifact_intent }),
+      ...(group.template_id === undefined ? {} : { template_id: group.template_id }),
+      ...(group.priority === undefined ? {} : { priority: group.priority }),
+      ...(group.ready_for_author === undefined ? {} : { ready_for_author: group.ready_for_author }),
+      ...(group.delivery_boundary === undefined ? {} : { delivery_boundary: group.delivery_boundary }),
       reader_question_refs: resolvedQuestions,
       question_target_bindings: resolvedTargets,
       member_ids: resolvedMembers,
@@ -165,7 +258,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       group_key: group.group_key,
     }))),
     ...input.semantic.excluded.map((entry) => {
-      const memberId = resolveAlias(members, entry.item, "excluded partition member");
+      const memberId = resolveMember(entry.item, "excluded partition member");
       return {
         member_id: memberId,
         member_kind: memberKinds.get(memberId)!,
@@ -174,7 +267,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       };
     }),
     ...input.semantic.unsupported.map((entry) => {
-      const memberId = resolveAlias(members, entry.item, "unsupported partition member");
+      const memberId = resolveMember(entry.item, "unsupported partition member");
       return {
         member_id: memberId,
         member_kind: memberKinds.get(memberId)!,

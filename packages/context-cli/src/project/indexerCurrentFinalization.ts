@@ -1,3 +1,9 @@
+import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readIndexerDelivery } from "./indexerDelivery.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
 import { basename, join } from "node:path";
 import {
   buildIndexerLayoutChangeConfirmation,
@@ -10,7 +16,6 @@ import {
   indexerLayoutSectionRef,
   indexerProtocolDigest,
   indexerRegistryDigests,
-  loadIndexerRegistry,
   reconcileIndexerResults,
   resolveIndexerBaseQuestionBindingAuthority,
   resolveIndexerOverlayQuestionBindingAuthority,
@@ -28,11 +33,13 @@ import {
   compileProjectIndexerCandidates,
   INDEXER_CURRENT_READINESS_PATH,
 } from "./indexerCandidateCompileActions.js";
-import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
+import {
+  readAcceptedIndexerMainAuthorResultRecords,
+} from "./indexerMainRunStore.js";
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 import { buildProjectIndexerQuestionTargetInventory } from
   "./indexerQuestionTargetInventoryActions.js";
-import { readCurrentIndexerPostAuthorEnvelopeForResult } from
+import { readCurrentIndexerPostAuthorEnvelopesForResults } from
   "./indexerPostAuthorRunStore.js";
 import { resolveCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
@@ -46,13 +53,10 @@ import {
   type IndexerReaderPathPreparation,
 } from "./indexerLayoutPathResolution.js";
 
-export const INDEXER_CURRENT_FINALIZATION_PATH = join(
-  ".tmp",
-  "context-runtime",
-  "indexer",
-  "finalization",
-  "current.json",
-);
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
+  "./indexerComposerFinalization.js";
+import { indexerInputScopeRecoveryIsCurrent, type IndexerInputScopeRecovery } from "./indexerInputScopeRecovery.js";
+export { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerComposerFinalization.js";
 
 type AcceptedAuthorRecord = Awaited<ReturnType<
   typeof readAcceptedIndexerMainAuthorResultRecords
@@ -62,6 +66,7 @@ export interface CurrentIndexerFinalizationState {
   state: "layout-confirmation-required" | "composer-required" | "blocked" | "ready";
   revision: string;
   diagnostic?: string;
+  scope_recovery?: IndexerInputScopeRecovery;
   layout_proposal_set?: ReturnType<typeof buildIndexerLayoutProposalSet>;
   layout_transition?: ReturnType<typeof buildIndexerLayoutTransition>;
   confirmations?: IndexerLayoutChangeConfirmation[];
@@ -133,7 +138,7 @@ function oldSections(input: {
     .sort((left, right) => left.section_identity_ref.localeCompare(right.section_identity_ref));
 }
 
-function approvedBaseProjection(input: {
+export function approvedBaseProjection(input: {
   proposal: IndexerLayoutProposal;
   structure: Record<string, unknown> | undefined;
 }): IndexerApprovedLayoutProjection | undefined {
@@ -151,10 +156,8 @@ function approvedBaseProjection(input: {
     const byName = input.proposal.artifacts.filter((artifact) =>
       readableId(artifact.artifact_id) === readableId(basename(path))
     );
-    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined) ??
-      (views.length === 1 && input.proposal.artifacts.length === 1
-        ? input.proposal.artifacts[0]
-        : undefined);
+    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined);
+    if (input.proposal.delivery_artifact_ids !== undefined && proposed === undefined) return [];
     const firstSection = Array.isArray(view.sections)
       ? object(view.sections[0])
       : undefined;
@@ -254,7 +257,9 @@ export async function readCurrentIndexerFinalization(
   if (state === undefined || typeof state.state !== "string" || typeof state.revision !== "string") {
     return undefined;
   }
-  return state as unknown as CurrentIndexerFinalizationState;
+  const current = state as unknown as CurrentIndexerFinalizationState;
+  if (current.scope_recovery && !await indexerInputScopeRecoveryIsCurrent(projectRoot, current.scope_recovery)) return undefined;
+  return current;
 }
 
 export async function confirmCurrentIndexerLayout(input: {
@@ -365,23 +370,32 @@ export async function prepareCurrentIndexerLayout(input: {
 
 export async function advanceCurrentIndexerFinalization(
   projectRoot: string,
+  resolvedComposerWorksets?: ReadonlySet<string>,
 ): Promise<CurrentIndexerFinalizationState | undefined> {
   const ledger = await currentLedger(projectRoot);
+  const delivery = await readIndexerDelivery(projectRoot);
   if (
     ledger === undefined || ledger.entries.length === 0 ||
-    ledger.entries.some((entry) => entry.stage !== "author" || entry.state !== "accepted")
+    ledger.entries.some((entry) => entry.stage !== "author") ||
+    (!delivery?.current.length && ledger.entries.some((entry) => entry.state !== "accepted"))
   ) return undefined;
 
-  const composerBatch = await resolveCurrentIndexerComposerBatch(projectRoot);
+  const worksets = delivery?.current.length ? new Set(delivery.current.map(page => page.workset_digest)) : undefined;
+  // Only reuse the immediately preceding resolution for the exact same scope.
+  // Derived pages may change the delivery selection; those require resolution again.
+  const alreadyResolved = worksets !== undefined && resolvedComposerWorksets !== undefined &&
+    worksets.size === resolvedComposerWorksets.size && [...worksets].every(key => resolvedComposerWorksets.has(key));
+  const composerBatch = alreadyResolved ? undefined : await resolveCurrentIndexerComposerBatch(projectRoot, worksets);
   if (composerBatch !== undefined) {
-    return writeState(projectRoot, {
-      state: "composer-required",
-      revision: composerBatch.batch_digest,
-      diagnostic: `${composerBatch.tasks.length} Composer task(s) are ready.`,
+    return composerFinalizationState({
+      batch_digest: composerBatch.batch_digest,
+      task_count: composerBatch.tasks.length,
     });
   }
   const loaded = await loadIndexerRegistry(projectRoot);
-  const records = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+  const allRecords = await readDeliverableAuthorRecords(projectRoot);
+  const records = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
+    (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
   const results = records.map((item) => indexerArtifactResultSchema.parse(item.artifact_result));
   const authorities = await Promise.all(loaded.registry.indexers.map((indexer) =>
     resolveCurrentProjectIndexerPrimaryAuthority({
@@ -419,7 +433,15 @@ export async function advanceCurrentIndexerFinalization(
     },
   });
   const allowedFactPaths = new Set(["target.eligible", "evidence.current"]);
-  const resolvedQuestions = loaded.registry.requirements.flatMap((requirement) =>
+  const stream = await readPartitionStream(projectRoot);
+  // Finishing Partition only means all topics are known. A planned topic can
+  // still belong to a later Author wave; global reconciliation at this point
+  // would block the first deliverable pages on that future responsibility.
+  // Check the full registry on the final wave, preserving the legacy behavior
+  // for checkpoints written before the explicit final-wave marker existed.
+  const globalCoverageRequired = stream === undefined || (stream.final_wave !== false &&
+    stream.partition_ledger.entries.every((entry) => entry.state === "accepted"));
+  const resolvedQuestions = globalCoverageRequired ? loaded.registry.requirements.flatMap((requirement) =>
     (requirement.questions ?? []).map((binding) => ({
       requirement_ref: `requirement:${requirement.id}`,
       question: binding.authority.kind === "cli-base-contract"
@@ -447,21 +469,27 @@ export async function advanceCurrentIndexerFinalization(
             })(),
           }),
     }))
-  );
+  ) : [];
   const targetFacts = Object.fromEntries(inventory.items.map((item) => [
     item.target_ref,
     { target: { eligible: true }, evidence: { current: true } },
   ]));
-  const reconciliation = reconcileIndexerResults({
+  // Reconciliation and delivery must use the same exact settled receipts.
+  // Old accepted caches remain audit records, not current coverage authority.
+  const reconciliationRecords = allRecords;
+  const reconciliationResults = reconciliationRecords.map((record) =>
+    indexerArtifactResultSchema.parse(record.artifact_result));
+  const reconciliation = globalCoverageRequired ? reconcileIndexerResults({
     registry: loaded.registry,
     question_target_inventory: inventory,
     resolved_questions: resolvedQuestions,
     target_facts: targetFacts,
     allowed_selector_fact_paths: allowedFactPaths,
-    author_results: results,
-    registered_material_sources: registeredSources(results),
-  });
-  if (!reconciliation.can_report_complete) {
+    author_results: reconciliationResults,
+    registered_material_sources: registeredSources(reconciliationResults),
+  }) : undefined;
+  if (ledger.entries.every((entry) => entry.state === "accepted") &&
+      reconciliation !== undefined && !reconciliation.can_report_complete) {
     return writeState(projectRoot, {
       state: "blocked",
       revision: reconciliation.report_digest,
@@ -494,19 +522,27 @@ export async function advanceCurrentIndexerFinalization(
         set_digest: selectionState.final_report.subject_key_schema_set_digest,
       };
   const indexerById = new Map(loaded.registry.indexers.map((indexer) => [indexer.id, indexer]));
+  const postAuthorEnvelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({
+    projectRoot,
+    results: records.map((record) => ({
+      author_workset_digest: String(record.accepted_record.workset_digest),
+      primary_result_digest: String(record.accepted_record.result_digest),
+    })),
+  });
+  const renderCache = await loadCandidateRenderCache(projectRoot);
+  const renderCounters = { result_count: records.length, rendered_sections: 0, reused_sections: 0 };
+  const proposals = await measureContextDebugOperation({ projectRoot, operation: "indexer.delivery-layout", counters: renderCounters }, async () => {
   const proposals: IndexerLayoutProposal[] = [];
   for (const [index, record] of records.entries()) {
-    const accepted = object(record.accepted_record)!;
     const result = results[index]!;
     const indexer = indexerById.get(result.indexer_id);
     if (indexer === undefined) throw new TypeError(`unknown accepted Indexer ${result.indexer_id}`);
-    const postAuthor = await readCurrentIndexerPostAuthorEnvelopeForResult({
-      projectRoot,
-      author_workset_digest: String(accepted.workset_digest),
-      primary_result_digest: String(accepted.result_digest),
-    });
+    const postAuthor = postAuthorEnvelopes[index]!;
     proposals.push(resolveIndexerLayout({
+      render_cache: renderCache.entries,
       artifact_result: result,
+      ...(delivery?.current.length ? { delivery_artifact_ids: delivery.current.filter(
+        (page) => page.result_digest === result.output_digest).map((page) => page.artifact_id) } : {}),
       ...(postAuthor === null ? {} : { post_author_envelope: postAuthor }),
       profile: indexer.profile.primary.id,
       profile_contract: contracts.profile_contract,
@@ -515,6 +551,11 @@ export async function advanceCurrentIndexerFinalization(
       shared_artifact_fingerprint: record.run_envelope.shared_artifact_fingerprint,
     }));
   }
+  renderCounters.rendered_sections = renderCache.entries.misses;
+  renderCounters.reused_sections = renderCache.entries.hits;
+  return proposals;
+  });
+  await saveCandidateRenderCache(projectRoot, renderCache);
   const prepared = await prepareCurrentIndexerLayout({ projectRoot, proposals });
   if (prepared.pending) return prepared.state;
   const { layout_proposal_set: layoutSet, layout_transition: transition, confirmations } = prepared.layout;

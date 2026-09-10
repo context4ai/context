@@ -361,6 +361,7 @@ export const buildEdgeHashId = (
   isExternal: edge.isExternal,
   grounding: edge.grounding,
   source: edge.source,
+  file: edge.file ?? null,
   line: edge.line ?? null,
   versionLabel,
 });

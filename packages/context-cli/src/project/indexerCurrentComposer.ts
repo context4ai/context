@@ -1,3 +1,7 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState } from
+  "./indexerComposerFinalization.js";
+import { withProjectWriteLock } from "./writeLock.js";
 import { Buffer } from "node:buffer";
 import { join } from "node:path";
 import {
@@ -6,7 +10,6 @@ import {
   indexerArtifactResultSchema,
   indexerProtocolDigest,
   indexerRegistryDigests,
-  loadIndexerRegistry,
   materializeIndexerPrimaryResultViewFromArtifactResult,
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
@@ -20,11 +23,12 @@ import { resolveCurrentProjectIndexerPrimaryAuthority } from
 import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import {
   composeIndexerPostAuthorEnvelopeStore,
-  prepareIndexerPostAuthorRunStore,
+  prepareIndexerPostAuthorRunsStore,
   retryFailedIndexerPostAuthorRunStore,
   startIndexerPostAuthorRunsStore,
 } from "./indexerPostAuthorRunStore.js";
-import { readPostAuthorCurrentState } from "./indexerPostAuthorStorePersistence.js";
+import { normalizePostAuthorRunSpec, readPostAuthorCurrentState } from "./indexerPostAuthorStorePersistence.js";
+import { createPostAuthorContinuationResolver } from "./indexerPostAuthorContinuation.js";
 import { loadIndexerCustomization } from "./indexerCustomization.js";
 import {
   buildCurrentIndexerInstructionMaterializationRequest,
@@ -38,6 +42,9 @@ import {
   indexerBatchStagePolicy,
 } from "./indexerCurrentBatchPlanner.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { renderIndexerPostAuthorReading } from "./indexerPostAuthorReading.js";
+import { missingComposerInputs, settleInapplicableComposer } from "./indexerComposerApplicability.js";
+import { observeIndexerPostAuthorRunStore } from "./indexerPostAuthorRunStore.js";
 
 type AcceptedAuthorRecord = Awaited<ReturnType<
   typeof readAcceptedIndexerMainAuthorResultRecords
@@ -76,21 +83,28 @@ export interface CurrentIndexerComposerBatchContext {
   output_reserve_bytes: number;
   view_item_count: number;
   batch_digest: string;
+  packing_limits?: string[];
+  shared_instruction_bytes?: number;
 }
 
 async function describeRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
   registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  authorities: Map<string, Promise<CurrentIndexerComposerContext["authority"]>>;
+  continuation: ReturnType<typeof createPostAuthorContinuationResolver>;
 }) {
   const result = indexerArtifactResultSchema.parse(input.record.artifact_result);
   const indexer = input.registry.indexers.find((item) => item.id === result.indexer_id);
   if (indexer === undefined) throw new TypeError(`unknown accepted Indexer ${result.indexer_id}`);
-  const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
-    projectRoot: input.projectRoot,
-    registry: input.registry,
-    indexer_id: indexer.id,
-  });
+  let pendingAuthority = input.authorities.get(indexer.id);
+  if (pendingAuthority === undefined) {
+    pendingAuthority = resolveCurrentProjectIndexerPrimaryAuthority({
+      projectRoot: input.projectRoot, registry: input.registry, indexer_id: indexer.id,
+    });
+    input.authorities.set(indexer.id, pendingAuthority);
+  }
+  const authority = await pendingAuthority;
   const selected = indexer.profile.composers ?? [];
   const effective = resolveEffectiveIndexerComposers({
     selections: selected.map((composer) => ({
@@ -115,7 +129,10 @@ async function describeRecord(input: {
   });
   const accepted = acceptedIdentity(input.record);
   const validatorContractDigest = authority.profile_contract.contract_digest;
-  const primaryView = materializeIndexerPrimaryResultViewFromArtifactResult({
+  // The SDK's empty-selection plan has no PrimaryResultView. Avoid building
+  // and validating that unused deep projection for every accepted article.
+  // The accepted ArtifactResult is still validated by the store above.
+  const primaryView = effective.entries.length === 0 ? undefined : materializeIndexerPrimaryResultViewFromArtifactResult({
     artifact_result: result,
     primary_result_digest: accepted.result_digest,
     validator_contract_digest: validatorContractDigest,
@@ -124,17 +141,30 @@ async function describeRecord(input: {
     effective_composer_set: effective,
     author_workset_digest: accepted.workset_digest,
     primary_result_digest: accepted.result_digest,
-    primary_facts: primaryView.facts,
-    primary_artifacts: primaryView.artifacts,
+    primary_facts: primaryView?.facts ?? [],
+    primary_artifacts: primaryView?.artifacts ?? [],
     validator_contract_digest: validatorContractDigest,
     current_profile_binding_digest: indexerProtocolDigest(indexer.profile),
     allowed_target_refs: [result.logical_unit.logical_unit_ref],
   });
+  const requested = normalizePostAuthorRunSpec({
+    requirement_set_digest: indexerRegistryDigests(input.registry).requirementSetDigest,
+    plan, effective_composer_set: effective,
+    validator_contract_digest: validatorContractDigest,
+    accepted_input_view_digest: input.record.run_result.consumed_input_view_digest,
+  });
+  const instructionLayers = new Set(authority.layers.filter((layer) =>
+    layer.layer.distribution.kind === "cli-bundled" &&
+    layer.manifest.provider.program === undefined &&
+    Object.keys(layer.layer.config ?? {}).length === 0 &&
+    (indexer.customization?.mode ?? "none") === "none"
+  ).map((layer) => `provider:${layer.layer.id}#layer:${layer.layer.role}`));
+  const continued = await input.continuation(requested, instructionLayers);
   return {
     result,
     authority,
-    effective,
-    plan,
+    effective: continued.effective_composer_set,
+    plan: continued.plan,
     validatorContractDigest,
     acceptedInputViewDigest: input.record.run_result.consumed_input_view_digest,
     requirementSetDigest: indexerRegistryDigests(input.registry).requirementSetDigest,
@@ -155,9 +185,9 @@ function acceptedIdentity(record: AcceptedAuthorRecord): {
 async function prepareRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
-  registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  described: Awaited<ReturnType<typeof describeRecord>>;
+  observed: Awaited<ReturnType<typeof observeIndexerPostAuthorRunStore>>;
 }): Promise<CurrentIndexerComposerContext | undefined> {
-  const described = await describeRecord(input);
   const {
     authority,
     effective,
@@ -165,17 +195,11 @@ async function prepareRecord(input: {
     validatorContractDigest,
     acceptedInputViewDigest,
     requirementSetDigest,
-  } = described;
-  const observed = await prepareIndexerPostAuthorRunStore({
-    projectRoot: input.projectRoot,
-    requirement_set_digest: requirementSetDigest,
-    plan,
-    effective_composer_set: effective,
-    validator_contract_digest: validatorContractDigest,
-    accepted_input_view_digest: acceptedInputViewDigest,
-  });
+  } = input.described;
+  const observed = input.observed;
   if (plan.state === "not-required") return undefined;
-  if (observed.status.can_reconcile) {
+  if (observed.status.post_author_envelope.state === "current") return undefined;
+  if (observed.expected_envelope !== null) {
     await composeIndexerPostAuthorEnvelopeStore({
       projectRoot: input.projectRoot,
       plan,
@@ -221,7 +245,7 @@ async function prepareRecord(input: {
     item.id === composerId
   );
   if (composer === undefined) throw new TypeError(`current Composer ${composerId} is unavailable`);
-  return {
+  const context: CurrentIndexerComposerContext = {
     request,
     record: input.record,
     authority,
@@ -232,12 +256,22 @@ async function prepareRecord(input: {
     accepted_input_view_digest: acceptedInputViewDigest,
     requirement_set_digest: requirementSetDigest,
   };
+  if (missingComposerInputs(composer, request.primary_result_view).length > 0) {
+    const accepted = await settleInapplicableComposer(input.projectRoot, context);
+    const refreshed = await observeIndexerPostAuthorRunStore({ projectRoot: input.projectRoot,
+      plan, ledger: accepted.ledger, effective_composer_set: effective,
+      validator_contract_digest: validatorContractDigest, accepted_input_view_digest: acceptedInputViewDigest });
+    return prepareRecord({ ...input, observed: refreshed });
+  }
+  return context;
 }
 
 async function readRecord(input: {
   projectRoot: string;
   record: AcceptedAuthorRecord;
   registry: Awaited<ReturnType<typeof loadIndexerRegistry>>["registry"];
+  authorities: Map<string, Promise<CurrentIndexerComposerContext["authority"]>>;
+  continuation: ReturnType<typeof createPostAuthorContinuationResolver>;
 }): Promise<CurrentIndexerComposerContext | undefined> {
   const described = await describeRecord(input);
   if (described.plan.state === "not-required") return undefined;
@@ -247,6 +281,9 @@ async function readRecord(input: {
   );
   const running = state?.ledger.entries.find((entry) => entry.state === "running");
   if (state === undefined || running === undefined) return undefined;
+  // Observation must not publish a request under a different ledger authority.
+  // The deterministic lifecycle first restores compatible accepted receipts.
+  if (indexerProtocolDigest(state.spec.plan) !== indexerProtocolDigest(described.plan)) return undefined;
   const workset = described.plan.worksets.find((item) =>
     item.composer_ref === running.composer_ref
   );
@@ -304,7 +341,7 @@ async function instructionContext(input: {
 function composerTaskCost(context: CurrentIndexerComposerContext) {
   const view = context.request.primary_result_view;
   return {
-    input_bytes: Buffer.byteLength(canonicalIndexerJson(view), "utf8"),
+    input_bytes: Buffer.byteLength(renderIndexerPostAuthorReading(view), "utf8"),
     output_reserve_bytes: 32 * 1024 + view.artifacts.length * 16 * 1024,
     view_item_count: view.facts.length + view.artifacts.length,
   };
@@ -314,8 +351,10 @@ async function materializeComposerBatch(input: {
   projectRoot: string;
   contexts: readonly CurrentIndexerComposerContext[];
   instruction: Awaited<ReturnType<typeof instructionContext>>;
+  materialized_instruction?: Awaited<ReturnType<typeof materializeCurrentIndexerInstructions>>;
+  packing_limits?: string[];
 }): Promise<CurrentIndexerComposerBatchContext> {
-  const materialized = await materializeCurrentIndexerInstructions({
+  const materialized = input.materialized_instruction ?? await materializeCurrentIndexerInstructions({
     request: input.instruction.request,
     authority: input.contexts[0]!.authority,
     customization: input.instruction.customization,
@@ -372,7 +411,9 @@ async function materializeComposerBatch(input: {
     instruction_path: instructionPath,
     instruction_payload_digest: materialized.payload_digest,
     tasks,
-    input_bytes: tasks.reduce((total, task) => total + task.input_bytes, 0),
+    input_bytes: Buffer.byteLength(canonicalIndexerJson(materialized), "utf8") + tasks.reduce((total, task) => total + task.input_bytes, 0),
+    shared_instruction_bytes: Buffer.byteLength(canonicalIndexerJson(materialized), "utf8"),
+    packing_limits: input.packing_limits ?? [],
     output_reserve_bytes: tasks.reduce(
       (total, task) => total + task.output_reserve_bytes,
       0,
@@ -385,6 +426,7 @@ async function materializeComposerBatch(input: {
 async function selectComposerBatch(input: {
   projectRoot: string;
   contexts: readonly CurrentIndexerComposerContext[];
+  resume?: boolean;
 }) {
   const first = input.contexts[0];
   if (first === undefined) return undefined;
@@ -393,58 +435,79 @@ async function selectComposerBatch(input: {
     context: first,
   });
   const policy = indexerBatchStagePolicy("post-author");
+  const limits = new Set<string>();
   const selected: CurrentIndexerComposerContext[] = [];
-  let inputBytes = 0;
+  const materialized = await materializeCurrentIndexerInstructions({
+    request: firstInstruction.request, authority: first.authority,
+    customization: firstInstruction.customization, workspaceRoot: input.projectRoot,
+  });
+  let inputBytes = Buffer.byteLength(canonicalIndexerJson(materialized), "utf8");
   let outputBytes = 0;
   let viewItems = 0;
   for (const context of input.contexts) {
+    if (!input.resume && selected.length >= policy.max_tasks) { limits.add("task-limit"); break; }
     const candidateInstruction = context === first
       ? firstInstruction
       : await instructionContext({ projectRoot: input.projectRoot, context });
     if (candidateInstruction.request.request_digest !== firstInstruction.request.request_digest) {
+      limits.add("instruction-boundary");
       continue;
     }
     const cost = composerTaskCost(context);
+    if (inputBytes + cost.input_bytes > policy.max_input_bytes) limits.add("input-budget");
+    if (outputBytes + cost.output_reserve_bytes > policy.max_output_reserve_bytes) limits.add("output-budget");
+    if (viewItems + cost.view_item_count > policy.max_view_items) limits.add("view-budget");
     const fits = selected.length < policy.max_tasks &&
       inputBytes + cost.input_bytes <= policy.max_input_bytes &&
       outputBytes + cost.output_reserve_bytes <= policy.max_output_reserve_bytes &&
       viewItems + cost.view_item_count <= policy.max_view_items;
-    if (selected.length > 0 && !fits) break;
+    if (!input.resume && selected.length > 0 && !fits) continue;
     selected.push(context);
     inputBytes += cost.input_bytes;
     outputBytes += cost.output_reserve_bytes;
     viewItems += cost.view_item_count;
-    if (!fits) break;
+    if (!input.resume && !fits) break;
   }
-  if (
-    selected.length === 1 &&
-    (inputBytes > policy.max_input_bytes ||
-      outputBytes > policy.max_output_reserve_bytes ||
-      viewItems > policy.max_view_items)
-  ) {
-    throw new TypeError(
-      `current Composer workset exceeds ${INDEXER_BATCH_POLICY_VERSION} without a semantic split`,
-    );
-  }
-  return { contexts: selected, instruction: firstInstruction };
+  // The first task runs alone when it exceeds packing targets. Existing running
+  // tasks retain their ledger identity even if delivery costs have changed.
+  if (selected.length >= policy.max_tasks) limits.add("task-limit");
+  return { contexts: selected, instruction: firstInstruction, materialized_instruction: materialized, packing_limits: [...limits] };
 }
 
-export async function resolveCurrentIndexerComposerBatch(
+async function resolveCurrentIndexerComposerBatchInternal(
   projectRoot: string,
+  authorWorksets?: ReadonlySet<string>,
 ): Promise<CurrentIndexerComposerBatchContext | undefined> {
   const [loaded, records] = await Promise.all([
     loadIndexerRegistry(projectRoot),
     readAcceptedIndexerMainAuthorResultRecords(projectRoot),
   ]);
-  const ordered = [...records].sort((left, right) =>
+  const ordered = records.filter((record) => authorWorksets === undefined || authorWorksets.has(record.accepted_record.workset_digest)).sort((left, right) =>
     left.accepted_record.workset_digest.localeCompare(right.accepted_record.workset_digest)
   );
   const candidates: CurrentIndexerComposerContext[] = [];
-  for (const record of ordered) {
+  const authorities = new Map<string, Promise<CurrentIndexerComposerContext["authority"]>>();
+  const descriptions = [];
+  const continuation = createPostAuthorContinuationResolver(projectRoot);
+  for (const record of ordered) descriptions.push(await describeRecord({
+    projectRoot, record, registry: loaded.registry, authorities, continuation,
+  }));
+  const prepared = await prepareIndexerPostAuthorRunsStore({
+    projectRoot,
+    runs: descriptions.map((item) => ({
+      requirement_set_digest: item.requirementSetDigest,
+      plan: item.plan,
+      effective_composer_set: item.effective,
+      validator_contract_digest: item.validatorContractDigest,
+      accepted_input_view_digest: item.acceptedInputViewDigest,
+    })),
+  });
+  for (const [index, record] of ordered.entries()) {
     const current = await prepareRecord({
       projectRoot,
       record,
-      registry: loaded.registry,
+      described: descriptions[index]!,
+      observed: prepared.observations[index]!,
     });
     if (current !== undefined) candidates.push(current);
   }
@@ -457,6 +520,7 @@ export async function resolveCurrentIndexerComposerBatch(
     const selectedRunning = await selectComposerBatch({
       projectRoot,
       contexts: alreadyRunning,
+      resume: true,
     });
     if (
       selectedRunning === undefined ||
@@ -464,16 +528,26 @@ export async function resolveCurrentIndexerComposerBatch(
     ) {
       throw new TypeError("running Composer tasks do not form one authorized batch");
     }
-    return materializeComposerBatch({
+    const batch = await materializeComposerBatch({
       projectRoot,
       contexts: selectedRunning.contexts,
       instruction: selectedRunning.instruction,
     });
+    // Resume also repairs workspaces started before batch/state publication was paired.
+    await atomicWriteFile(join(projectRoot, INDEXER_CURRENT_FINALIZATION_PATH),
+      JSON.stringify(composerFinalizationState({
+        batch_digest: batch.batch_digest, task_count: batch.tasks.length,
+      }), null, 2) + "\n");
+    return batch;
   }
   const selected = await selectComposerBatch({ projectRoot, contexts: candidates });
   if (selected === undefined) return undefined;
+  // The digest uses requests and instructions, not mutable ledger states. Prepare
+  // resources first so starting tasks and publishing their route share one transaction.
+  const batch = { ...await materializeComposerBatch({ projectRoot, ...selected }), packing_limits: selected.packing_limits };
   const started = await startIndexerPostAuthorRunsStore({
     projectRoot,
+    composer_batch: { batch_digest: batch.batch_digest, task_count: batch.tasks.length },
     runs: selected.contexts.map((context) => ({
       plan: context.plan,
       ledger: context.ledger,
@@ -497,11 +571,17 @@ export async function resolveCurrentIndexerComposerBatch(
       ledger: startedTask.ledger,
     };
   });
-  return materializeComposerBatch({
-    projectRoot,
-    contexts,
-    instruction: selected.instruction,
-  });
+  return { ...batch, tasks: batch.tasks.map((task, index) => ({
+    ...task, context: contexts[index]!,
+  })) };
+}
+
+export async function resolveCurrentIndexerComposerBatch(
+  projectRoot: string,
+  authorWorksets?: ReadonlySet<string>,
+): Promise<CurrentIndexerComposerBatchContext | undefined> {
+  return withProjectWriteLock(projectRoot, "resolve-current-composer-batch", () =>
+    resolveCurrentIndexerComposerBatchInternal(projectRoot, authorWorksets));
 }
 
 export async function readCurrentIndexerComposerBatch(
@@ -515,15 +595,19 @@ export async function readCurrentIndexerComposerBatch(
     left.accepted_record.workset_digest.localeCompare(right.accepted_record.workset_digest)
   );
   const running: CurrentIndexerComposerContext[] = [];
+  const authorities = new Map<string, Promise<CurrentIndexerComposerContext["authority"]>>();
+  const continuation = createPostAuthorContinuationResolver(projectRoot);
   for (const record of ordered) {
     const current = await readRecord({
       projectRoot,
       record,
       registry: loaded.registry,
+      authorities,
+      continuation,
     });
     if (current !== undefined) running.push(current);
   }
-  const selected = await selectComposerBatch({ projectRoot, contexts: running });
+  const selected = await selectComposerBatch({ projectRoot, contexts: running, resume: true });
   if (selected === undefined) return undefined;
   if (selected.contexts.length !== running.length) {
     throw new TypeError("running Composer tasks do not form one authorized batch");

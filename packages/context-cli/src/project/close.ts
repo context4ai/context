@@ -1,7 +1,13 @@
+import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
+import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
+import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import YAML from "yaml";
+import { readProcessedScopes } from "@c4a/context";
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
@@ -20,7 +26,6 @@ import {
   currentCodegraphEdges,
   type CodegraphRelationshipCoverage,
 } from "./codegraphRelationshipProjection.js";
-import { clearCompletedLifecycle } from "./lifecycleCleanup.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
@@ -227,6 +232,9 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
   compactFiles: ApprovedKnowledgeFile[];
 }> {
   const rawFiles = await approvedKnowledgeFiles(projectRoot);
+  const previousStructure = (await readKnowledgeStructure(projectRoot)).parsed;
+  const processedScopes = readProcessedScopes(previousStructure);
+  const approvedKnowledge = approvedKnowledgeSnapshotsFromStructure(previousStructure);
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   const files = rawFiles.map((file) => ({
     ...file,
@@ -353,6 +361,8 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       nodes,
       views: projectedViews,
       edges,
+      ...(approvedKnowledge.length === 0 ? {} : { approved_knowledge: approvedKnowledge.filter(snapshot => projectedViews.some(view => view.path === snapshot.path)) }),
+      ...(processedScopes.length === 0 ? {} : { processed_scopes: processedScopes }),
     },
     edgeWarnings,
     compactFiles,
@@ -437,7 +447,9 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
       views: Array.isArray(record.views) ? record.views.filter(isApprovedStructureRecord) : [],
       edges: Array.isArray(record.edges) ? record.edges.filter(isApprovedStructureRecord) : [],
     });
-    return recorded === inputHash
+    const delivery = await readIndexerDelivery(projectRoot);
+    const deliveryNeedsClose = ((delivery?.current.length ?? 0) > 0 || delivery?.partial !== undefined) && delivery?.closed !== true;
+    return recorded === inputHash && !deliveryNeedsClose
       ? { state: "ready", inputHash, relationshipCoverage, diagnostics: [] }
       : { state: "stale", inputHash, relationshipCoverage, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
   } catch (error) {
@@ -451,10 +463,14 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
 
 export async function closeProjectWorkspace(projectRoot: string): Promise<ProjectCloseResult> {
   return withProjectWriteLock(projectRoot, "close-knowledge", async () => {
-    const draftCandidates = (await readCandidateRecords(projectRoot)).filter((candidate) =>
+    const candidates = await readCandidateRecords(projectRoot);
+    const draftCandidates = candidates.filter((candidate) =>
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
-    if (draftCandidates.length > 0) {
+    const delivery = await readIndexerDelivery(projectRoot);
+    if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
+    else await assertRequiredArticlesReviewed(projectRoot, candidates);
+    if (draftCandidates.length > 0 && !delivery?.partial) {
       throw new ContextError(ExitCode.WorkspaceStateError, "close is blocked while draft candidates still need Review", {
         category: ErrorCategory.WorkspaceStateInvalid,
         code: "close-draft-candidates-pending",
@@ -501,7 +517,8 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await mkdir(dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
-    await clearCompletedLifecycle(projectRoot);
+    const { readTaskRollback } = await import("./taskRollback.js");
+    if (!await readTaskRollback(projectRoot)) await closeIndexerDelivery(projectRoot);
     return {
       action: "closed",
       projectRoot,

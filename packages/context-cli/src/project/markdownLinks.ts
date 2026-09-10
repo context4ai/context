@@ -9,11 +9,42 @@ interface MdastPoint {
 interface MdastNode {
   type?: string;
   alt?: string;
+  identifier?: string;
+  url?: string;
   children?: MdastNode[];
   position?: {
     start?: MdastPoint;
     end?: MdastPoint;
   };
+}
+
+/** Reader link occurrences, including reference-style links. Unlike destination
+ * rewrites, a presentation projection replaces the whole link with its label. */
+export function markdownReaderLinks(content: string): Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> {
+  const links: Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> = markdownInlineLinks(content);
+  const tree = unified().use(remarkParse).parse(content) as MdastNode;
+  const definitions = new Map<string, string>();
+  const walk = (node: MdastNode, visit: (node: MdastNode) => void): void => {
+    visit(node);
+    for (const child of node.children ?? []) walk(child, visit);
+  };
+  walk(tree, (node) => {
+    if (node.type === "definition" && node.identifier !== undefined && node.url !== undefined && !definitions.has(node.identifier)) {
+      definitions.set(node.identifier, node.url);
+    }
+  });
+  walk(tree, (node) => {
+    if (node.type !== "linkReference" && node.type !== "imageReference") return;
+    const start = node.position?.start?.offset;
+    const end = node.position?.end?.offset;
+    const target = definitions.get(node.identifier ?? "");
+    if (start === undefined || end === undefined || target === undefined) return;
+    const labelStart = node.children?.[0]?.position?.start?.offset;
+    const labelEnd = node.children?.at(-1)?.position?.end?.offset;
+    links.push({ image: node.type === "imageReference", start, end, target,
+      label: labelStart === undefined || labelEnd === undefined ? node.alt ?? "" : content.slice(labelStart, labelEnd) });
+  });
+  return links.sort((left, right) => left.start - right.start);
 }
 
 export interface MarkdownInlineLink {

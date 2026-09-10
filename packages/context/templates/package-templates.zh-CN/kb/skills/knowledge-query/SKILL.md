@@ -36,7 +36,7 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 | 架构、流程、FAQ、决策或故障 | 从 `{{guidesRoot}}/index.md` 开始。 |
 | 标准、约束、验收或测试 | 从 `{{rulesRoot}}/index.md` 开始。 |
 | 关系或影响范围 | 检查类型化边，再读取两端页面。 |
-| 已知页面中的细节 | 读取对应 `context:section`。 |
+| 已知页面中的细节 | 读取相关 Markdown 标题及其正文。 |
 | 覆盖范围或缺口 | 检查根索引和 `context-build-inventory.json`。 |
 
 ## 证据契约
@@ -44,13 +44,13 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 | 证据 | 可支持的内容 |
 |---|---|
 | 页面路径 | 页面身份和引用位置。 |
-| frontmatter 的标题、描述、稳定节点标识和标签 | 导航和范围选择。 |
-| `context:section` 的 id、kind、`source_ref` | 章节身份、引用位置和来源边界。 |
+| frontmatter 的标题、描述和标签 | 导航和范围选择。 |
+| Markdown 标题 | 定位和引用页面中的章节。 |
 | 读者可见的章节正文 | 事实结论的主要依据。 |
 | `context-build-inventory.json` 的边记录 | 类型化关系证据。 |
 | 根索引和构建清单 | 包的范围和覆盖情况。 |
 
-不要根据页面同时出现来推断关系。如果 `source_ref` 指向未随包分发的来源，只能引用已经过审核的可见章节，不能扩展到正文没有表达的内容。
+不要根据页面同时出现来推断关系。发布页不需要生产标识或来源记账字段才能使用，直接引用可读路径和标题；不要寻找已经移除的技术元数据，也不要要求用户补齐。关系、覆盖问题，或维护者需要通过 `dist_path` → `approved_path` 定位原批准页时，才读取构建清单。原始来源归因留在生产工作区的 `knowledge/`，不要求写入发布页。原始材料未随包分发时，只根据已批准的可见正文回答并说明边界。
 
 ## 搜索兜底
 
@@ -70,8 +70,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 
 ```text
 页面：     <结论> [<root>/path/page.md]
-章节：     <结论> [<root>/path/page.md#section-id]
-来源绑定： <结论> [<root>/path/page.md#section-id, source_ref]
+章节：     <结论> [<root>/path/page.md, 标题：<可见标题>]
 关系：     <结论> [context-build-inventory.json#structure.edge_records edge:<type>]
 覆盖：     <结论> [context-build-inventory.json]
 ```
@@ -81,7 +80,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 ```text
 缺口：本知识包没有包含 <缺失点> 的证据。
 已检查：<索引、页面或构建产物>。
-下一步来源：<已知时填写来源、页面或 source_ref>。
+下一步来源：<已知时填写来源文档或页面>。
 ```
 
 “本包没有证据”不等于“事实不成立”。禁止使用模型记忆、旧对话或包外源码填补缺口。
@@ -94,6 +93,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 
 已批准知识文件：`{{knowledgeCount}}`
 
-## 模板作者建议
+{{!-- 模板作者建议（不进入分发的查询 Skill）：
 
 这是可直接工作的通用查询 Skill。正式发布前，如果知识包存在专用术语、常见用户意图、推荐入口、已知边界或固定任务流程，作者应修改 description、路由表和包边界说明；如果通用行为已经足够，应在 Context 的包模板 Review 中明确接受未修改模板。
+--}}

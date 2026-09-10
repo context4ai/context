@@ -1,6 +1,13 @@
+import { projectAuthorWritingBrief } from "./indexerAuthorWritingBrief.js";
+import { supportsPrimaryArtifact, primaryIntentKey, type PrimaryArtifactPolicy, type PrimaryArtifactIntent } from "./indexerPrimaryArtifactPolicy.js";
+import { buildPartitionNavigation } from "./indexerPartitionNavigation.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { approvedKnowledgeWorksetSource, type ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
+import { assertApprovedKnowledgeInputCurrent } from "./approvedKnowledgeInput.js";
 import {
   hostActionInputDigest,
   validateHostActionResult,
@@ -17,7 +24,6 @@ import {
   canonicalIndexerJson,
   indexerInventoryMembersDigest,
   indexerProtocolDigest,
-  loadIndexerRegistry,
   validateIndexerAuthorizedWorksetProjection,
   type IndexerAuthorizedWorksetView,
   type IndexerAuthorizedWorksetViewProjection,
@@ -59,11 +65,23 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
     }
   }
   const workset = spec.request.workset;
-  return JSON.parse(canonicalIndexerJson({
+  return JSON.parse(canonicalIndexerJson(projectAuthorWritingBrief({
     expected_subject_key: spec.validation.expected_subject_key,
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
     allowed_artifact_intents: spec.validation.allowed_artifact_intents,
+    primary_artifact_options: (spec.validation.artifact_policy_eligibility as { eligible_variants: PrimaryArtifactPolicy[] }).eligible_variants.map(policy => ({
+      policy: policy.id,
+      artifact_intents: (spec.validation.allowed_artifact_intents as PrimaryArtifactIntent[])
+        .filter(intent => supportsPrimaryArtifact(intent.artifact_kind, policy)).map(primaryIntentKey),
+    })),
+    primary_artifact_guidance: "Semantic Author follows page_plan.articles when present and emits one artifact per submitted planned article; legacy single-page plans emit one artifact. Choose each article intent from its accepted plan and the compatible policy. An accepted plan with a different artifact kind is normalized only to a unique policy-compatible kind with the same source role, document kind and reader goal; the result records that normalization. Do not duplicate prose to satisfy required kinds.",
+    ...(spec.validation.page_guidance === undefined ? {} : { page_guidance: spec.validation.page_guidance }),
+    ...(spec.validation.article_guidance === undefined ? {} : { article_guidance: spec.validation.article_guidance }),
+    ...(spec.validation.article_templates === undefined ? {} : { article_templates: spec.validation.article_templates }),
+    ...(spec.validation.page_plan === undefined ? {} : { page_plan: spec.validation.page_plan }),
+    ...(spec.validation.page_template === undefined ? {} : { page_template: spec.validation.page_template }),
+    ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates }),
     allowed_question_targets: (spec.validation.allowed_question_targets as Array<{
       question_target_key: string;
       question_ref: string;
@@ -79,7 +97,7 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
           ...(entry.state === "resolved" ? { subject_key: entry.subject_key } : {}),
         }))
       : [],
-  })) as IndexerJson;
+  }))) as IndexerJson;
 }
 
 export interface IndexerWorksetViewMaterializationRequest {
@@ -122,6 +140,16 @@ function requestDigest(
     execution_request_digest: value.execution_request_digest,
     view_digest: value.view_digest,
     payload_digest: value.payload_digest,
+  });
+}
+
+export function rebindIndexerWorksetViewResource(
+  request: IndexerWorksetViewMaterializationRequest,
+  resourceId: string,
+): IndexerWorksetViewMaterializationRequest {
+  const payload = { ...validateIndexerWorksetViewMaterializationRequest(request), resource_id: resourceId };
+  return validateIndexerWorksetViewMaterializationRequest({
+    ...payload, request_digest: requestDigest(payload),
   });
 }
 
@@ -258,7 +286,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   const spec = normalizeRunSpec(input.run_spec);
   const request = spec.request;
   const loadedRegistry = await loadIndexerRegistry(input.projectRoot);
-  if (loadedRegistry.requirementSetDigest !== request.workset.requirement_set_digest) {
+  if (!hasCurrentIndexerRegistryProjection(loadedRegistry.registry, request.workset)) {
     throw new TypeError("main Indexer workset targets a stale Requirement set");
   }
   const requirementId = request.workset.requirement_ref.slice("requirement:".length);
@@ -281,6 +309,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       },
       value: {
         id: requirement.id,
+        ...(requirement.purpose === undefined ? {} : { purpose: requirement.purpose }),
         reader_goals: requirement.reader_goals,
         coverage_domains: requirement.coverage_domains,
         target_scope: requirement.target_scope,
@@ -290,7 +319,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           : { questions: requirement.questions }),
         ...(requirement.exclusions === undefined
           ? {}
-          : { exclusions: requirement.exclusions }),
+          : { exclusions: requirement.exclusions.map(({ paths, ...exclusion }) => ({ ...exclusion, ...(paths === undefined ? {} : { paths }) })) }),
       },
     }],
   });
@@ -325,6 +354,9 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           },
           value: {
             base_subject_key: request.workset.partition_subject_key,
+            ...(spec.validation.available_artifact_intents === undefined ? {} : { available_artifact_intents: spec.validation.available_artifact_intents as IndexerJson }),
+            ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates as IndexerJson }),
+            subject_entry_guidance: "Use distinct subjects for different public entrypoints or incompatible current/deprecated contracts. Short subjects owned entirely by a deprecated directory receive a deprecated- prefix. Use an explicit SubjectKey for an intentional cross-entry migration or comparison page. Public API coverage does not require one page per symbol.",
             ...(spec.validation.subject_key_contract === undefined
               ? {}
               : {
@@ -350,6 +382,9 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
           value: {
             target_ref: request.workset.repair_intent.target_ref,
             instruction: request.workset.repair_intent.instruction,
+            ...(request.workset.repair_intent.current_markdown === undefined ? {} : {
+              current_markdown: request.workset.repair_intent.current_markdown,
+            }),
           },
         }],
       })
@@ -370,6 +405,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   assertProjectIndexerMainSourceBinding({
     workset: request.workset,
     binding,
+    partition_projection: spec.validation.partition_projection,
     ...(request.workset.stage === "author"
       ? { dependency_view: spec.validation.dependency_view }
       : {}),
@@ -469,6 +505,7 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
   const mainSources = buildIndexerMainRunWorksetViewSources({
     request,
     source_projection_sources: [
+      ...(request.workset.stage === "partition" ? [await buildPartitionNavigation(input.projectRoot, spec)] : []),
       requirementProjection,
       ...(partitionAuthorityProjection === null ? [] : [partitionAuthorityProjection]),
       ...(authorAuthorityProjection === null ? [] : [authorAuthorityProjection]),
@@ -476,6 +513,11 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       ...sourceProjectionSources,
       ...supplementaryProjectionSources,
       ...inspectorProjectionSources,
+      ...(spec.validation.knowledge_input === undefined ? [] : [await (async () => {
+        const knowledge = spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput;
+        await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
+        return approvedKnowledgeWorksetSource({ request, dependency_view: spec.validation.dependency_view, knowledge });
+      })()]),
       ...(input.additional_projection_sources ?? []),
     ],
     canonical_inventory_members: inventoryMembers,

@@ -1,3 +1,4 @@
+import { createReviewCodeCodec } from "./reviewCode.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -31,6 +32,7 @@ import {
 import { readCandidateRecords } from "./candidateLedger.js";
 import { htmlReportReference, openLocalFile } from "./localHtmlReport.js";
 import { findContextProjectRoot } from "./workspace.js";
+import type { ReviewContinuation } from "./workflow/workflowContinuation.js";
 
 export { applyReviewDecisions } from "./reviewApply.js";
 export { collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
@@ -154,13 +156,19 @@ function parsePayloadValues(parsed: unknown[]): ReviewPayload {
       category: ErrorCategory.UserInputInvalid,
     });
   }
-  const defaultStatus = parseReviewStatus(first.default, "review payload default");
-  const decisions = parsed.slice(1).map((item, index) => parsePayloadLineDecision(item, index + 2));
+  const defaultStatus = first.default === undefined ? undefined : parseReviewStatus(first.default, "review payload default");
+  if (first.decisions !== undefined && (!Array.isArray(first.decisions) || parsed.length > 1)) {
+    throw new ContextError(ExitCode.UserError, "review decisions must be an array and cannot be mixed with JSONL decisions", {
+      category: ErrorCategory.UserInputInvalid,
+    });
+  }
+  const decisions = (first.decisions ?? parsed.slice(1) as unknown[]) as unknown[];
+  const validatedDecisions = decisions.map((item, index) => parsePayloadLineDecision(item, index + 2));
   return {
-    decisions,
+    decisions: validatedDecisions,
     ...(typeof first.note === "string" ? { note: first.note } : {}),
     ...(collection !== undefined ? { collection } : {}),
-    default: defaultStatus,
+    ...(defaultStatus === undefined ? {} : { default: defaultStatus }),
     ...(scope !== undefined ? { scope } : {}),
   };
 }
@@ -212,10 +220,24 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
       next: "Pass the JSON or JSONL review Payload copied from the review HTML page.",
     });
   }
+  if (raw.trim().startsWith("CR")) {
+    try {
+      const decoded = createReviewCodeCodec().decode(raw);
+      const collection = decoded.scope === "all" ? undefined : assertCollection(decoded.scope);
+      return { decisions: [], encoded_statuses: decoded.statuses, ...(collection === undefined ? {} : { collection }),
+        scope: { kind: collection === undefined ? "all" : "collection", ...(collection === undefined ? {} : { collection }),
+          count: decoded.count, ids_sha256: decoded.idsHash, candidates_sha256: decoded.contentHash } };
+    } catch (error) {
+      throw new ContextError(ExitCode.UserError, error instanceof Error ? error.message : String(error), {
+        category: ErrorCategory.UserInputInvalid,
+        next: "Copy all review code segments unchanged from the current HTML report into one input file, one per line; apply only after all segments are present.",
+      });
+    }
+  }
   return parseReviewPayloadText(raw);
 }
 
-function formatApplyResult(result: ApplyReviewDecisionsResult, format: ReviewFormat): string {
+function formatApplyResult(result: ApplyReviewDecisionsResult & { continuation?: Awaited<ReturnType<ReviewContinuation>> }, format: ReviewFormat): string {
   if (format === "json") return `${JSON.stringify(result, null, 2)}\n`;
   return formatFeedback({
     symbol: "✓",
@@ -230,6 +252,7 @@ function formatApplyResult(result: ApplyReviewDecisionsResult, format: ReviewFor
       `unchanged: ${result.unchanged}`,
       `candidate file: ${result.candidateFileUpdated ? "updated" : "unchanged"}`,
       ...result.pages.map((page) => `page: ${page}`),
+      ...(result.continuation === undefined ? [] : [`workflow: ${result.continuation.state}`, result.continuation.stop.message]),
     ],
   });
 }
@@ -426,12 +449,14 @@ export async function runReviewApplyCommand(input: {
   cwd: string;
   payloadInput: string;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   const projectRoot = projectRootFromCwd(input.cwd);
   const payloadPath = isAbsolute(input.payloadInput) ? input.payloadInput : resolve(input.cwd, input.payloadInput);
   const payload = await readReviewPayloadFile(payloadPath);
   const result = await applyReviewDecisions({ projectRoot, payload });
-  process.stdout.write(formatApplyResult(result, input.format ?? "text"));
+  const continuation = await input.afterApply?.(projectRoot);
+  process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
 
 export async function runReviewApproveAllCommand(input: {
@@ -442,6 +467,7 @@ export async function runReviewApproveAllCommand(input: {
   force?: boolean;
   verbose?: boolean;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   if (input.managed === true && input.force === true) {
     throw new ContextError(ExitCode.UserError, "review approve-all accepts either --managed or --force, not both", {
@@ -478,6 +504,7 @@ export async function runReviewApproveAllCommand(input: {
       scope: scoped.scope,
     },
   });
+  const continuation = await input.afterApply?.(projectRoot);
   if ((input.format ?? "text") === "json") {
     const { visible_candidate_ids: visibleCandidateIds, ...compactScope } = scoped.scope;
     process.stdout.write(`${JSON.stringify({
@@ -491,6 +518,7 @@ export async function runReviewApproveAllCommand(input: {
       unchanged: result.unchanged,
       removed: result.removed,
       candidate_file_updated: result.candidateFileUpdated,
+      ...(continuation === undefined ? {} : { continuation }),
       details: input.verbose === true
         ? {
             visible_candidate_ids: visibleCandidateIds ?? [],
@@ -515,6 +543,7 @@ export async function runReviewApproveAllCommand(input: {
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,
+      ...(continuation === undefined ? [] : [`workflow: ${continuation.state}`, continuation.stop.message]),
     ],
   }));
 }
@@ -526,6 +555,7 @@ export async function runReviewMarkCommand(input: {
   collection?: string;
   all?: boolean;
   format?: ReviewFormat;
+  afterApply?: ReviewContinuation;
 }): Promise<void> {
   const projectRoot = projectRootFromCwd(input.cwd);
   const scope = await reviewCommandScope({
@@ -541,7 +571,8 @@ export async function runReviewMarkCommand(input: {
       scope: scope.scope,
     },
   });
-  process.stdout.write(formatApplyResult(result, input.format ?? "text"));
+  const continuation = await input.afterApply?.(projectRoot);
+  process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
 
 export async function runReviewRePinCommand(input: {

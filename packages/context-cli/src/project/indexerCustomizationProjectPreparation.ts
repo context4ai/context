@@ -114,7 +114,7 @@ async function loadCustomizationViews(input: {
     }
     const manifest = await loadIndexerProviderManifest(resolved.staged.stage_path);
     return loadIndexerCustomization({
-      workspaceRoot: stageRoot,
+      workspaceRoot: indexer.id === input.validated.indexer_id ? stageRoot : input.projectRoot,
       projectRef: input.validated.project_ref,
       indexer,
       manifest,

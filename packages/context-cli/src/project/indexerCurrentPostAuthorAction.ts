@@ -1,3 +1,5 @@
+import { submittedProgressSlice } from "./indexerProgressScopes.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
 import {
   indexerPostAuthorSemanticInputSchema,
   indexerProtocolDigest,
@@ -9,9 +11,11 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import type { ContextWorkflowAuthority } from "./workflow/workflowTypes.js";
 import { readCurrentIndexerComposerBatch } from "./indexerCurrentComposer.js";
-import { advanceCurrentIndexerFinalization } from "./indexerCurrentFinalization.js";
+import { advanceCurrentIndexerLifecycle } from "./indexerCurrentLifecycle.js";
 import { currentIndexerProgress } from "./indexerCurrentProgress.js";
 import { resolveCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
+import { collectProjectStatus } from "./status.js";
+import { actionWorkflowSummary } from "./actionWorkflowSummary.js";
 import {
   persistIndexerSemanticResult,
   schemaFailure,
@@ -33,7 +37,7 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
   authorities: readonly ContextWorkflowAuthority[];
   inject_next_preparation_failure?: () => void | Promise<void>;
 }) {
-  const current = await readCurrentIndexerComposerBatch(input.projectRoot);
+  const current = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.read-current` }, () => readCurrentIndexerComposerBatch(input.projectRoot));
   if (current === undefined) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
@@ -151,10 +155,10 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
     committed: false,
   })));
   if (completions.length > 0) {
-    const stored = await completeIndexerPostAuthorRunsStore({
+    const stored = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.commit-results` }, () => completeIndexerPostAuthorRunsStore({
       projectRoot: input.projectRoot,
       runs: completions.map((completion) => completion.store),
-    });
+    }));
     for (const completion of completions) {
       const context = completion.task.context;
       const storedOutcome = stored.outcomes.find((outcome) =>
@@ -173,34 +177,44 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
           : { message: storedOutcome.message }),
       });
       if (!storedOutcome.committed) continue;
-      await persistIndexerSemanticResult({
+      await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.persist-semantic` }, () => persistIndexerSemanticResult({
         projectRoot: input.projectRoot,
         requestDigest: context.request.request_digest,
         semantic: completion.semantic,
-      });
+      }));
     }
   }
   let next: Awaited<ReturnType<typeof resolveCurrentIndexerWorkflowRoute>> = undefined;
   let revisionAfter: string | null = null;
   let progress: Awaited<ReturnType<typeof currentIndexerProgress>> | null = null;
   let nextPreparation: { outcome: "failed"; message: string; command: string } | undefined;
+  let workflowSummary: Awaited<ReturnType<typeof actionWorkflowSummary>> | undefined;
   try {
     await input.inject_next_preparation_failure?.();
-    await advanceCurrentIndexerFinalization(input.projectRoot);
-    next = await resolveCurrentIndexerWorkflowRoute({
+    await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.advance` }, () => advanceCurrentIndexerLifecycle(input.projectRoot));
+    next = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.route` }, () => resolveCurrentIndexerWorkflowRoute({
       projectRoot: input.projectRoot,
       managed: input.managed,
       authorities: input.authorities,
-    });
+    }));
     revisionAfter = next?.revision ?? null;
     progress = await currentIndexerProgress({
       projectRoot: input.projectRoot,
       ...(next === undefined ? {} : { route: next }),
     });
+    if (next === undefined) {
+      const status = await measureContextDebugOperation({ projectRoot: input.projectRoot, operation: `indexer.completion.${"post-author"}.status` }, () => collectProjectStatus(input.projectRoot, {
+        managed: input.managed, authorities: input.authorities,
+      }));
+      next = status.workflow.current;
+      revisionAfter = status.workflow.revision;
+      progress = status.indexerProgress ?? null;
+      workflowSummary = await actionWorkflowSummary(input.projectRoot, status.workflow.status);
+    }
   } catch (error) {
     nextPreparation = {
       outcome: "failed",
-      message: error instanceof Error ? error.message : String(error),
+      message: `${outcomes.filter((outcome) => outcome.committed).length} task(s) were saved. Do not resubmit committed outcomes. Only preparation of the next step failed: ${error instanceof Error ? error.message : String(error)}. Run the recovery command to continue; stage progress is not workspace completion.`,
       command: `context run${input.managed ? " --managed" : ""} --format json`,
     };
     progress = await currentIndexerProgress({ projectRoot: input.projectRoot });
@@ -208,7 +222,8 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
   return {
     protocol: "context.indexer.current-action-completion/v2" as const,
     stage: input.semantic.stage,
-    outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
+    submitted_slice: submittedProgressSlice(input.semantic.stage, outcomes),
+      outcomes: outcomes.sort((left, right) => left.task_key.localeCompare(right.task_key)),
     revision_before: input.revision,
     revision_after: revisionAfter,
     revision_advanced: revisionAfter === null
@@ -216,6 +231,14 @@ export async function completeCurrentIndexerPostAuthorAction(input: {
       : revisionAfter !== input.revision,
     next: next ?? null,
     progress,
+    workflow_summary: workflowSummary,
+    composer_result: {
+      accepted_tasks: outcomes.filter(outcome => outcome.outcome === "accepted").length,
+      proposals: input.semantic.results.filter(submitted => outcomes.some(outcome =>
+        outcome.task_key === submitted.task_key && outcome.outcome === "accepted"))
+        .reduce((count, submitted) => count + indexerPostAuthorSemanticInputSchema.parse(submitted.result).proposals.length, 0),
+      guidance: "Composer acceptance records derivation decisions, not approved-page regeneration. Empty proposals do not rewrite delivered pages; when the registered workflow is complete without new delivery content, another Review/build is not required.",
+    },
     ...(nextPreparation === undefined ? {} : { next_preparation: nextPreparation }),
   };
 }

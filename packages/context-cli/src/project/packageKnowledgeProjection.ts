@@ -8,6 +8,7 @@ const CONTEXT_SECTION_OPEN_RE = /^[ \t]*<!--\s*context:section\b[^>]*-->[ \t]*(?
 const CONTEXT_SECTION_CLOSE_RE = /(?:\r?\n)?^[ \t]*<!--\s*\/context:section\s*-->[ \t]*(?:\r?\n){0,2}/gimu;
 const LARK_RESOURCE_LOCATOR_COMMENT_RE = /[ \t]*<!--\s*lark:[^>\r\n]+-->[ \t]*/giu;
 const PACKAGE_OMITTED_FIELDS = [
+  "artifact_ref",
   "node_ref",
   "view_ref",
   "structure_digest",
@@ -86,6 +87,10 @@ function projectedTags(frontmatter: Record<string, unknown>): string[] {
 
 export function packageKnowledgeDescription(value: unknown): unknown {
   if (typeof value !== "string") return value;
+  // A description is a short text field, not a second Markdown body.
+  // Use the existing paragraph projection for structural Markdown, without
+  // judging the meaning of the author's summary.
+  if (/^\s*(?:\||#{1,6}\s|```|~~~)/mu.test(value)) return markdownDescription(value);
   const normalized = value.trim().replace(/\s+/gu, " ");
   if (/^(?:content|contract|catalog) Artifact from .+indexer\.$/iu.test(normalized)) return undefined;
   const withoutGeneratedInventory = normalized.replace(
@@ -132,6 +137,7 @@ function markdownDescription(markdown: string): string | undefined {
     }
     if (
       /^#{1,6}\s/u.test(line) ||
+      /^<a\s+(?:id|name)=(?:"[^"]*"|'[^']*')\s*><\/a>$/u.test(line) ||
       /^(?:[-*_]){3,}$/u.test(line) ||
       /^\|/u.test(line) ||
       /^[-*+]\s/u.test(line) ||
@@ -195,9 +201,13 @@ export function projectPackageKnowledgeMarkdown(content: string): string {
   const body = content
     .slice(match[0].length)
     .replace(CONTEXT_METADATA_BLOCK_RE, "")
-    .replace(CONTEXT_SECTION_OPEN_RE, "")
+    .replace(CONTEXT_SECTION_OPEN_RE, opening => {
+      const key = /\bid="([a-zA-Z0-9_-]+)"/u.exec(opening)?.[1];
+      return key === undefined ? "" : `<a id="section-${encodeURIComponent(key)}"></a>\n\n`;
+    })
     .replace(CONTEXT_SECTION_CLOSE_RE, "\n")
-    .replace(LARK_RESOURCE_LOCATOR_COMMENT_RE, "");
+    .replace(LARK_RESOURCE_LOCATOR_COMMENT_RE, "")
+    .replace(/<!--\s*(?:context:visual [A-Za-z0-9+/=]+|\/context:visual)\s*-->[ \t]*(?:\r?\n)?/gu, "");
   const title = typeof frontmatter.title === "string" ? frontmatter.title : undefined;
   const projected = packageKnowledgeFrontmatter(frontmatter);
   projected.description = readerKnowledgeDescription({
@@ -206,6 +216,6 @@ export function projectPackageKnowledgeMarkdown(content: string): string {
     ...(title === undefined ? {} : { title }),
   });
   const yaml = stringifyYaml(projected).trimEnd();
-  const readerBody = title === undefined ? body : `\n${ensureMarkdownPageTitle(body, title)}\n`;
+  const readerBody = title === undefined ? body : `\n${ensureMarkdownPageTitle(body, title).trimEnd()}\n`;
   return `---\n${yaml}\n---\n${readerBody}`;
 }

@@ -579,11 +579,17 @@ export function observeIndexerPostAuthorState(input: {
   status: IndexerPostAuthorStatus;
   expected_envelope: IndexerComposedResultEnvelope | null;
 } {
-  const ledger = recoverIndexerPostAuthorRunLedger({
-    plan: input.plan,
-    previous_ledger: input.ledger,
-    validator_contract_digest: input.validator_contract_digest,
-  });
+  const previous = validateIndexerPostAuthorRunLedger(input.ledger);
+  // Observation is not startup recovery. Acceptance and preparation validate
+  // fragments; observing the same workset must not restart running tasks or
+  // revalidate already committed content. Changed worksets still need recovery.
+  const ledger = previous.workset_set_digest === input.plan.workset_set.workset_set_digest
+    ? previous
+    : recoverIndexerPostAuthorRunLedger({
+        plan: input.plan,
+        previous_ledger: previous,
+        validator_contract_digest: input.validator_contract_digest,
+      });
   const effectiveSet = validateIndexerEffectiveComposerSet(
     input.effective_composer_set,
   );
@@ -643,7 +649,7 @@ export function observeIndexerPostAuthorState(input: {
     };
   }
   const counts = {
-    pending: ledger.entries.filter((entry) => entry.state === "pending").length,
+    pending: ledger.entries.filter((entry) => entry.state === "pending" || entry.state === "running").length,
     accepted: ledger.entries.filter((entry) => entry.state === "accepted").length,
     failed: ledger.entries.filter((entry) => entry.state === "failed").length,
     stale: ledger.entries.filter((entry) => entry.state === "stale").length,

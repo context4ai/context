@@ -1,8 +1,19 @@
 {
   "name": "c4a",
   "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
-  "version": "0.7.5",
-  "author": { "name": "c4a" },
+  "version": "0.7.8",
+  "author": {
+    "name": "c4a"
+  },
   "license": "MIT",
-  "keywords": ["context", "knowledge-base", "wiki", "claude-plugin", "c4a"]
+  "keywords": [
+    "context",
+    "knowledge-base",
+    "wiki",
+    "claude-plugin",
+    "c4a"
+  ],
+  "skills": [
+    "./skills/context-indexer-create"
+  ]
 }

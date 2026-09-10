@@ -94,18 +94,19 @@ describe("accepted extension fact dependencies", () => {
   test("does not accept an extension fact without its accepted composition", () => {
     const { composition_input: _composition, ...input } = fixture();
     void _composition;
-    expect(() => buildIndexerArtifactDependencySet(input)).toThrow("absent or stale");
+    expect(() => buildIndexerArtifactDependencySet(input)).toThrow("not available in the current task");
   });
 
-  test("rejects changed output values and evidence", () => {
+  test("records current output values but rejects a detached source", () => {
     const changed = fixture();
-    changed.result.facts[0]!.value = { framework: "invented" };
+    changed.result.facts[0]!.value = { framework: "sample", configuration_files: ["app.config.ts"],
+      locator: { path: "app.config.ts", end_line: 12 } };
     rehashArtifactResult(changed.result);
-    expect(() => buildIndexerArtifactDependencySet(changed)).toThrow("absent or stale");
+    expect(() => buildIndexerArtifactDependencySet(changed)).not.toThrow();
     const missing = fixture();
     missing.result.facts[0]!.evidence_refs = [];
     rehashArtifactResult(missing.result);
-    expect(() => buildIndexerArtifactDependencySet(missing)).toThrow("absent or stale");
+    expect(() => buildIndexerArtifactDependencySet(missing)).toThrow("different source");
   });
 
   test("rejects unknown backing facts, another subject and another workset", () => {

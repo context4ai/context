@@ -23,10 +23,10 @@ it knows which decision is current.
 
 The ordinary path also selects short mode guidance after workspace creation
 and source capture. Explain that ordinary review is the default, provides HTML
-reports at review decisions, and is currently estimated to take about 40%
-longer overall depending on scope and response time. Offer fully managed mode
-for the current conversation while explaining that it gives the user fewer
-opportunities to adjust intermediate content.
+reports at review decisions, and waits for user responses there. Offer fully
+managed mode for the current conversation when appropriate: the Agent performs
+delegatable reviews and reports results without requiring per-batch approval.
+Do not promise a fixed time saving; it depends on scope and response time.
 
 ## Stable Principles
 
@@ -39,8 +39,9 @@ opportunities to adjust intermediate content.
   use concise A/B/C choices with one impact sentence each.
 - Use semantic labels such as “Agent knowledge-base package” rather than SDK
   factory names such as `kbPackage`.
-- Do not infer a decision from a filename, URL, repository layout, example, or
-  previous conversation.
+- Reuse explicit decisions that still apply to this task. Do not infer a new
+  decision from a filename, URL, repository layout or example, and do not turn
+  another conversation's managed authority into current authorization.
 - Keep transition reports short: what changed, the current state, and the next
   decision or action.
 
@@ -58,6 +59,15 @@ question. A Gate may keep its ordinary inspection Action and dialogue resources
 while replacing them with a direct revision-bound resolution path only for a
 session-authority Route. Necessary evidence inspection remains selected for
 semantic scope or classification work. This authority is not project
-configuration and must not be persisted or reused in another conversation. It cannot choose source boundaries,
-authorize unread external sources or external operations, or bypass validation
-and verification.
+configuration and must not be persisted or reused in another conversation.
+Managed mode by itself does not authorize expanding sources or performing remote
+writes, and never bypasses validation. An explicit instruction to collect named
+documents already establishes that read scope; do not ask for the same permission
+again. Resolve essential missing goals or source boundaries before production.
+
+`grill-me` is targeted clarification, not a fixed questionnaire. Research what the
+available material can answer, then ask about consequential unknowns. A required
+schema field is not automatically a question for the user. For substantial new
+work, the opening report summarizes the agreed purpose, scope and first delivery;
+invite the user to read it unless they waived that pause. A report should not
+silently substitute guessed decisions for unanswered questions.

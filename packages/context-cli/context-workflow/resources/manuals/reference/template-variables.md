@@ -25,7 +25,7 @@ Approved pages: {{knowledgeCount}}
 Values support dotted paths:
 
 ```md
-{{context.package}}
+{{buildInventory.package.name}}
 ```
 
 ### Loop
@@ -108,7 +108,7 @@ Read node_modules/@c4a/context/docs/reference/template-variables.md.
 | `skillPath` | string | Final package-relative `SKILL.md` path for the Skill currently being rendered. Empty outside a Skill template. |
 | `knowledgeCount` | number | Selected approved Markdown file count. |
 | `knowledgeTimestamp` | string | Latest selected approved Markdown `timestamp`, or epoch when empty. |
-| `knowledge` | string | Concatenated selected approved Markdown bundle. Use carefully; it can be large. |
+| `knowledge` | string | Concatenated consumer projection of selected approved pages, with path headings. It omits lifecycle metadata and can be large. |
 | `approvedKnowledge` | string | Alias for `knowledge`. |
 | `knowledgeItems` | array | One record per selected approved Markdown page. |
 | `knowledgeGroups` | array | Selected pages grouped by OKF root and the first directory segment under that root; each item also exposes `internal_collection`. |
@@ -137,7 +137,7 @@ Each item contains:
 
 | Field | Meaning |
 |---|---|
-| `path` | Package-relative OKF path, for example `wikis/component-lib/symbol/button.md`. |
+| `path` | Package-relative OKF path, for example `guides/architecture/entity/button.md`. |
 | `sourcePath` | Approved knowledge path before OKF output mapping, for example `architecture/entity/button.md`. |
 | `approved_path` | Alias for `sourcePath`. |
 | `dist_path` | Alias for `path`. |
@@ -148,11 +148,11 @@ Each item contains:
 | `okf_root_path` | Final flat package-relative OKF root. |
 | `node_ref` | Stable NodeRef from approved frontmatter, for example `entity/button`. |
 | `view_ref` | Stable ViewRef from approved frontmatter, for example `architecture:entity/button`. |
-| `pathWithinCollection` | Path below the OKF root, for example `component-lib/symbol/button.md`. |
+| `pathWithinCollection` | Path below the OKF root, for example `architecture/entity/button.md`. |
 | `href` | Link relative to the template file currently being rendered. Use this in custom templates. |
 | `hrefFromTemplate` | Alias for `href`. |
-| `hrefFromPackageRoot` | Link from a package-root file such as `AGENTS.md`, for example `./wikis/component-lib/symbol/button.md`. |
-| `hrefFromCollectionIndex` | Link from the current OKF root index, for example `./component-lib/symbol/button.md` for a `wikis` item. |
+| `hrefFromPackageRoot` | Link from a package-root file such as `AGENTS.md`, for example `./guides/architecture/entity/button.md`. |
+| `hrefFromCollectionIndex` | Link from the current OKF root index, for example `./architecture/entity/button.md` for a `guides` item. |
 | `title` | Page title from frontmatter, or a title derived from the file name. |
 | `type` | OKF `type` from frontmatter. |
 | `description` | OKF `description` from frontmatter, when present. |
@@ -188,7 +188,7 @@ Each group contains:
 | `count` | Number of selected pages in this group. |
 | `hasIndex` | Whether the active package navigation policy generates `indexPath`. |
 | `has_index` | Alias for `hasIndex`. |
-| `indexPath` | OKF-root-aware index path, for example `wikis/component-lib/index.md`, `guides/component-lib/index.md`, or `rules/index.md` for a root group. |
+| `indexPath` | OKF-root-aware index path, for example `wikis/codeindex/index.md`, `guides/architecture/index.md`, or `rules/index.md` for a root group. |
 | `indexHrefFromTemplate` | Link from the template file currently being rendered to `indexPath`. Check `hasIndex` before rendering it. |
 | `indexHrefFromCollectionIndex` | Link from the OKF root index to `indexPath`. |
 | `items` | `knowledgeItems` in the group. |

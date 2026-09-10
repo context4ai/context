@@ -67,6 +67,10 @@ const CODE_PROFILE_SPECS: readonly BundledIndexerProfileSpec[] = [
     subjectKind: "component",
     namespaceOperator: "canonical-source-module-namespace",
     localKeyOperator: "canonical-export-family",
+    additionalSubjectKinds: [
+      { id: "library", localKeyOperator: "canonical-module-identity" },
+      { id: "design-system", localKeyOperator: "canonical-module-identity" },
+    ],
     parserCapabilities: [
       "parser.typescript",
       "parser.javascript",

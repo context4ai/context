@@ -6,7 +6,7 @@ description: Resolve the exact validated customization selection and stage its C
 # Prepare Indexer customization project
 
 Read
-`node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`
+the `context.indexer.provider-guide` resource at the exact path in the current Route
 before staging a project proposal. If validation reports an invalid local
 resource or upstream drift, preserve the exact
 `indexer-customization-invalid`/`indexer-customization-upstream-changed`

@@ -92,6 +92,7 @@ const layoutProposalPayloadSchema = z.object({
     subject_key: indexerSubjectKeySchema,
   }).strict(),
   artifacts: z.array(layoutArtifactSchema),
+  delivery_artifact_ids: z.array(z.string().min(1)).min(1).optional(),
 }).strict();
 
 export const indexerLayoutProposalSchema = layoutProposalPayloadSchema.extend({
@@ -152,7 +153,7 @@ export function indexerLayoutSectionRef(
   })}`;
 }
 
-function viewRef(currentArtifactRef: string, collection: KnowledgeCollection): string {
+export function indexerLayoutViewRef(currentArtifactRef: string, collection: KnowledgeCollection): string {
   return `view:artifact:${indexerProtocolDigest({
     protocol: "context.indexer.internal-view-identity/v1",
     artifact_ref: currentArtifactRef,
@@ -214,11 +215,13 @@ interface MaterializedSection {
 function structuredSections(
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>,
   facts: IndexerArtifactResult["facts"],
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>>,
 ): MaterializedSection[] {
   return artifact.sections.map((section) => {
     const contentBlocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
       facts,
+      render_cache,
     });
     const evidenceRefs = [...new Set(contentBlocks.flatMap((block) => block.evidence_refs))]
       .sort(compareIndexerCanonicalText);
@@ -301,6 +304,7 @@ function templateSections(input: {
 
 export function resolveIndexerLayout(input: {
   artifact_result: unknown;
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
   post_author_envelope?: unknown | null;
   profile: string;
   profile_contract: unknown;
@@ -308,6 +312,7 @@ export function resolveIndexerLayout(input: {
   subject_key_schema_set: unknown;
   shared_artifact_fingerprint: unknown;
   rendered_artifacts?: readonly IndexerRenderedArtifact[];
+  delivery_artifact_ids?: readonly string[] | undefined;
 }): IndexerLayoutProposal {
   const result = validateArtifactResultIdentity(input.artifact_result);
   const effective = materializeIndexerEffectiveArtifactSet({
@@ -378,7 +383,7 @@ export function resolveIndexerLayout(input: {
       throw new TypeError(`Artifact ${artifact.artifact_id} is absent from its closed Bundle`);
     }
     const sections = artifact.representation === "sections"
-      ? structuredSections(artifact, result.facts)
+      ? structuredSections(artifact, result.facts, input.render_cache)
       : (() => {
         const rendered = renderedById.get(artifact.artifact_id);
         if (rendered === undefined) {
@@ -417,7 +422,7 @@ export function resolveIndexerLayout(input: {
       node_ref: nodeRef,
       artifact_id: artifact.artifact_id,
       artifact_kind: artifact.artifact_kind,
-      internal_view_ref: viewRef(currentArtifactRef, collection),
+      internal_view_ref: indexerLayoutViewRef(currentArtifactRef, collection),
       collection,
       output_path: outputPath({
         collection,
@@ -465,6 +470,14 @@ export function resolveIndexerLayout(input: {
   if (new Set(sectionIdentities).size !== sectionIdentities.length) {
     throw new TypeError("layout resolver produced colliding logical Section identities");
   }
+  if (input.delivery_artifact_ids !== undefined) {
+    const selected = new Set(input.delivery_artifact_ids);
+    const available = new Set(artifacts.map((artifact) => artifact.artifact_id));
+    if (selected.size !== input.delivery_artifact_ids.length || selected.size === 0 ||
+        [...selected].some((id) => !available.has(id))) {
+      throw new TypeError("delivery layout requires unique, available Artifact identities");
+    }
+  }
   const payload = layoutProposalPayloadSchema.parse({
     protocol: "context.indexer.layout-proposal/v1",
     indexer_id: result.indexer_id,
@@ -480,7 +493,11 @@ export function resolveIndexerLayout(input: {
       node_ref: nodeRef,
       subject_key: result.logical_unit.subject_key,
     },
-    artifacts,
+    artifacts: input.delivery_artifact_ids === undefined ? artifacts
+      : artifacts.filter((artifact) => input.delivery_artifact_ids!.includes(artifact.artifact_id)),
+    ...(input.delivery_artifact_ids === undefined ? {} : {
+      delivery_artifact_ids: [...input.delivery_artifact_ids].sort(compareIndexerCanonicalText),
+    }),
   });
   return indexerLayoutProposalSchema.parse({
     ...payload,
@@ -491,6 +508,7 @@ export function resolveIndexerLayout(input: {
 export function validateIndexerLayoutProposal(input: {
   proposal: unknown;
   artifact_result: unknown;
+  render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
   post_author_envelope?: unknown | null;
   profile_contract: unknown;
   operator_contract: unknown;
@@ -500,12 +518,14 @@ export function validateIndexerLayoutProposal(input: {
   const proposal = indexerLayoutProposalSchema.parse(input.proposal);
   const expected = resolveIndexerLayout({
     artifact_result: input.artifact_result,
+    render_cache: input.render_cache,
     post_author_envelope: input.post_author_envelope,
     profile: proposal.profile,
     profile_contract: input.profile_contract,
     operator_contract: input.operator_contract,
     subject_key_schema_set: input.subject_key_schema_set,
     shared_artifact_fingerprint: proposal.shared_artifact_fingerprint,
+    delivery_artifact_ids: proposal.delivery_artifact_ids,
     ...(input.rendered_artifacts === undefined
       ? {}
       : { rendered_artifacts: input.rendered_artifacts }),

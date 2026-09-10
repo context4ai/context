@@ -24,16 +24,17 @@ import {
   validateIndexerRestrictedSelector,
 } from "./indexerRestrictedSelector.js";
 
-const canonicalParametersSchema: z.ZodType<IndexerJson> = z.lazy(() =>
-  z.union([
+// Recursive values share one immutable schema graph. Parsing still validates
+// each input; no parsed value or authorization decision is cached here.
+const canonicalParametersSchema: z.ZodType<IndexerJson> = z.lazy(() => canonicalParameterVariantsSchema);
+const canonicalParameterVariantsSchema = z.union([
     z.null(),
     z.boolean(),
     z.number().finite(),
     z.string(),
     z.array(canonicalParametersSchema),
     z.record(canonicalParametersSchema),
-  ])
-);
+  ]);
 
 export const indexerOperatorContractSchema = z.object({
   protocol: z.literal("context.indexer.operator-contract/v1"),

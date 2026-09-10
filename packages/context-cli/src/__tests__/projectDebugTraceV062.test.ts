@@ -223,3 +223,44 @@ describe("Context observational debug trace", () => {
     }
   });
 });
+
+
+test("help version and command parsing failures have terminal debug events", async () => {
+  const root = mkdtempSync(join(tmpdir(), "context-debug-exits-"));
+  try {
+    await Bun.write(join(root, "package.json"), JSON.stringify({ context: { project: true, debug: true } }));
+    for (const args of [["--help"], ["--version"], ["route"], ["action", "complete-current", "--not-an-option"]]) {
+      const result = await runCli(root, args);
+      const log = events(root);
+      const invoked = log.filter(event => event.kind === "cli.invoked").at(-1)!;
+      const ended = log.filter(event => event.kind === "cli.completed" && event.invocation_id === invoked.invocation_id);
+      expect(ended).toHaveLength(1);
+      expect(ended[0]!.data).toMatchObject({ outcome: result.code === 0 ? "success" : "error" });
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 20_000);
+
+test("catchable termination records aborted once while forced termination remains unmatched", async () => {
+  const root = mkdtempSync(join(tmpdir(), "context-debug-signals-"));
+  try {
+    await Bun.write(join(root, "package.json"), JSON.stringify({ context: { project: true, debug: true } }));
+    const modulePath = resolve(import.meta.dir, "../project/debugTrace.ts");
+    const script = join(root, "wait.ts");
+    await Bun.write(script, `import { withDebugCliInvocation } from ${JSON.stringify(modulePath)};\nawait withDebugCliInvocation(process.argv, async () => { console.log('ready'); await new Promise(() => setInterval(() => {}, 1000)); });\n`);
+    for (const signal of ["SIGTERM", "SIGINT", "SIGKILL"] as const) {
+      const child = Bun.spawn([process.execPath, script], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      try {
+        const reader = child.stdout.getReader();
+        const first = await reader.read();
+        expect(new TextDecoder().decode(first.value)).toContain("ready");
+        reader.releaseLock();
+        const invoked = events(root).filter(event => event.kind === "cli.invoked").at(-1)!;
+        child.kill(signal);
+        await child.exited;
+        const ended = events(root).filter(event => event.kind === "cli.completed" && event.invocation_id === invoked.invocation_id);
+        expect(ended).toHaveLength(signal === "SIGKILL" ? 0 : 1);
+        if (signal !== "SIGKILL") expect(ended[0]!.data).toMatchObject({ outcome: "aborted", signal });
+      } finally { child.kill(); await child.exited; }
+    }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+}, 20_000);

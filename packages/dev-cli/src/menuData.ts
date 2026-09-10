@@ -18,9 +18,8 @@ export const menuTree: MenuItem[] = [
     label: "test",
     description: "Test & verification",
     children: [
-      { id: "verify:fast", label: "verify:fast", description: "typecheck + lint + test" },
-      { id: "verify", label: "verify", description: "verify:fast + E2E" },
-      { id: "verify:full", label: "verify:full", description: "Full verification" },
+      { id: "verify", label: "verify", description: "Workspace typecheck + lint + tests" },
+      { id: "verify:full", label: "verify:full", description: "Workspace checks + Node dist smoke (build first)" },
     ],
   },
   { id: "__quit__", label: "exit", description: "Exit CLI" },
@@ -34,8 +33,7 @@ export const helpDescriptions: Record<string, string> = {
   "bump-version": "Batch update version in root and all workspace package.json files. Usage: bump <version>.",
   publish: "One-click publish: bump version -> build -> npm publish for context SDK, core, extract packages, and context CLI.",
   test: "Press -> to expand submenu. 测试与验收。",
-  "verify:fast": "快速验证: typecheck + lint + unit test",
-  verify: "标准验证: verify:fast",
-  "verify:full": "全量验证: verify:fast",
+  verify: "Workspace typecheck, lint and tests. For local edits, run the affected package and test files directly.",
+  "verify:full": "Workspace checks plus Node dist smoke tests. Build the required artifacts first.",
   __quit__: "Exit the developer CLI.",
 };

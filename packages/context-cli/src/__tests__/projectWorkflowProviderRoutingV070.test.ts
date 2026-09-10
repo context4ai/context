@@ -39,7 +39,6 @@ describe("Context workflow 0.7.0 routing", () => {
               factory: "kbPackage",
             }),
             expect.objectContaining({ id: "llm-text", factory: "llmsPackage" }),
-            expect.objectContaining({ id: "none", factory: null }),
           ],
           resource_delivery: {
             applies_to: "agent-knowledge-base",

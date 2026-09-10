@@ -1,3 +1,11 @@
+import { readReadingStructure } from "./readingStructure.js";
+import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
+import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
+import { writePackageReadingStructure } from "./packageReadingStructure.js";
+import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
+import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
+import { withStagedPackageOutput } from "./packageBuildStage.js";
+import { completeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -34,6 +42,8 @@ import {
   packageOutputFingerprint,
   packageOutputSnapshot,
   walkPackageFiles,
+  parsePackageLinkWarnings,
+  type PackageBuildLinkWarning,
   type PackageBuildSummary,
   type PackageOutputFile,
 } from "./packageBuildReceipt.js";
@@ -98,11 +108,12 @@ interface PackageBuildManifest {
   outputFiles: number;
   outputs: PackageOutputFile[];
   assetDelivery?: PackageAssetDeliverySummary;
+  linkWarnings: PackageBuildLinkWarning[];
 }
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v19-current-indexer";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v22-article-link-diagnostics";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -215,6 +226,7 @@ async function packageInputFingerprint(input: {
     : null;
   return stableHash({
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
+    readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
     package: {
       kind: input.pkg.kind,
       name: input.pkg.name,
@@ -224,6 +236,7 @@ async function packageInputFingerprint(input: {
       template: input.pkg.template,
       outDir: input.pkg.outDir,
     },
+    readingStructure: await readReadingStructure(input.projectRoot) ?? null,
     knowledgeStructure: input.structure.parsed,
     knowledge: input.selected.map((file) => ({
       path: file.relPath,
@@ -251,6 +264,7 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
         output_files?: unknown;
         outputs?: unknown;
         asset_delivery?: unknown;
+        link_warnings?: unknown;
       };
       if (typeof candidate.builder_protocol === "string" &&
         typeof candidate.fingerprint === "string" &&
@@ -273,6 +287,7 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
           outputFingerprint: candidate.output_fingerprint,
           outputFiles: candidate.output_files,
           outputs,
+          linkWarnings: parsePackageLinkWarnings(candidate.link_warnings),
           ...(assetDelivery === undefined ? {} : { assetDelivery }),
         };
       }
@@ -291,6 +306,7 @@ async function writePackageFingerprint(input: {
   outputFiles: number;
   outputs: readonly PackageOutputFile[];
   assetDelivery: PackageAssetDeliverySummary;
+  linkWarnings: readonly PackageBuildLinkWarning[];
 }): Promise<void> {
   const filePath = packageFingerprintPath(input.projectRoot, input.pkg);
   await mkdir(dirname(filePath), { recursive: true });
@@ -303,6 +319,7 @@ async function writePackageFingerprint(input: {
     output_files: input.outputFiles,
     outputs: input.outputs,
     asset_delivery: input.assetDelivery,
+    link_warnings: input.linkWarnings,
     built_at: new Date().toISOString(),
   }, null, 2)}\n`, "utf8");
 }
@@ -321,7 +338,7 @@ export async function collectPackageFreshness(
   projectRoot: string,
   packages: readonly PackageDefinition[],
 ): Promise<PackageFreshness[]> {
-  const approved = await listApprovedKnowledge(projectRoot);
+  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
   return Promise.all(packages.map(async (pkg) => {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);
@@ -397,7 +414,17 @@ export async function collectPackageFreshness(
   }));
 }
 
-export async function buildProjectPackages(projectRoot: string): Promise<ProjectBuildResult> {
+export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
+  try { return await buildProjectPackagesInternal(projectRoot, options); }
+  catch (error) {
+    if (options.delivery !== false && (await readIndexerDelivery(projectRoot))?.current.length) {
+      await interruptDeliveryCadence(projectRoot);
+    }
+    throw error;
+  }
+}
+
+async function buildProjectPackagesInternal(projectRoot: string, options: { delivery?: boolean }): Promise<ProjectBuildResult> {
   if (await legacyCodeIndexMigrationRequired(projectRoot)) {
     throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
       category: ErrorCategory.WorkspaceStateInvalid,
@@ -413,7 +440,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       next: "Declare kbPackage() or llmsPackage() in src/index.ts, then rerun context build.",
     });
   }
-  const approved = await listApprovedKnowledge(projectRoot);
+  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
   const templateReviews = await inspectPackageTemplateReviews(projectRoot, packages);
   const unresolvedTemplateReviews = templateReviews.filter((review) =>
     review.state === "review-required" || review.state === "invalid"
@@ -485,6 +512,20 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       templateFiles,
     });
     const previousManifest = await readPackageManifest(projectRoot, pkg);
+    if (previousManifest?.builderProtocol === PACKAGE_BUILDER_PROTOCOL_VERSION &&
+        previousManifest.fingerprint === fingerprint && previousManifest.assetDelivery !== undefined) {
+      const existingOutput = await packageOutputFingerprint(projectRoot, pkg);
+      if (existingOutput.fingerprint === previousManifest.outputFingerprint) {
+        summaries.push({ name: pkg.name, kind: packageKind(pkg), outDir: pkg.outDir,
+          inputs: selected.length, files: existingOutput.files, state: "unchanged",
+          linkWarnings: previousManifest.linkWarnings,
+          changes: { added: [], updated: [], removed: [] }, resources: {
+            files: previousManifest.assetDelivery.outputFiles, bytes: previousManifest.assetDelivery.outputBytes,
+            delivery: previousManifest.assetDelivery,
+          } });
+        continue;
+      }
+    }
     const knowledgeGroups = knowledgeOutputGroups(pkg, selected);
     const previousOutput = await packageOutputSnapshot(
       projectRoot,
@@ -512,40 +553,43 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       files: selected,
       ...(assetProcessor === undefined ? {} : { assetProcessor }),
     });
-    await rm(join(projectRoot, pkg.outDir), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-    await mkdir(join(projectRoot, pkg.outDir), { recursive: true });
-    const rendered = await writeRenderedPackageTemplate({
-      projectRoot,
-      pkg,
-      files: templateFiles,
-      bundle,
-      knowledgeTimestamp,
-      selected,
-      buildInventory,
-      knowledgeStructure: structure.parsed,
+    const writtenKnowledge = await withStagedPackageOutput(projectRoot, pkg, async (stagedPkg) => {
+      const rendered = await writeRenderedPackageTemplate({
+        projectRoot,
+        pkg: stagedPkg,
+        files: templateFiles,
+        bundle,
+        knowledgeTimestamp,
+        selected,
+        buildInventory,
+        knowledgeStructure: structure.parsed,
+      });
+      const writtenKnowledge = await writeSelectedPackageKnowledge({
+        projectRoot,
+        pkg: stagedPkg,
+        files: selected,
+        ...(assetProcessor === undefined ? {} : { assetProcessor }),
+        prepared: preparedKnowledge,
+      });
+      await writeKnowledgeDirectoryIndexes({
+        projectRoot,
+        pkg: stagedPkg,
+        selected,
+        knowledgeTimestamp,
+      });
+      await writePackageReadingStructure({ projectRoot, pkg: stagedPkg, selected, structure: await readReadingStructure(projectRoot) });
+      await writePackageBuildInventory({ projectRoot, pkg: stagedPkg, inventory: buildInventory });
+      await appendLlmsKnowledge({
+        projectRoot,
+        pkg: stagedPkg,
+        bundle,
+        knowledgeCount: selected.length,
+        templateConsumesKnowledge: rendered.consumesKnowledge,
+      });
+      const linkWarnings: PackageBuildLinkWarning[] = [...writtenKnowledge.linkWarnings,
+        ...await inspectPackageMarkdownDirectory(join(projectRoot, stagedPkg.outDir))];
+      return { ...writtenKnowledge, linkWarnings };
     });
-    const writtenKnowledge = await writeSelectedPackageKnowledge({
-      projectRoot,
-      pkg,
-      files: selected,
-      ...(assetProcessor === undefined ? {} : { assetProcessor }),
-      prepared: preparedKnowledge,
-    });
-    await writeKnowledgeDirectoryIndexes({
-      projectRoot,
-      pkg,
-      selected,
-      knowledgeTimestamp,
-    });
-    await writePackageBuildInventory({ projectRoot, pkg, inventory: buildInventory });
-    await appendLlmsKnowledge({
-      projectRoot,
-      pkg,
-      bundle,
-      knowledgeCount: selected.length,
-      templateConsumesKnowledge: rendered.consumesKnowledge,
-    });
-    await validatePackageIndexLinks({ projectRoot, pkg });
     const output = await packageOutputFingerprint(projectRoot, pkg);
     const currentOutput = await packageOutputSnapshot(projectRoot, pkg, knowledgeGroups);
     const changes = packageBuildChanges(previousOutput, currentOutput);
@@ -558,6 +602,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       outputFiles: output.files,
       outputs: currentOutput,
       assetDelivery: writtenKnowledge.assetDelivery,
+      linkWarnings: writtenKnowledge.linkWarnings,
     });
     summaries.push({
       name: pkg.name,
@@ -565,6 +610,7 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       outDir: pkg.outDir,
       inputs: selected.length,
       files: output.files,
+      linkWarnings: writtenKnowledge.linkWarnings,
       resources: {
         files: writtenKnowledge.resources,
         bytes: writtenKnowledge.resourceBytes,
@@ -573,6 +619,22 @@ export async function buildProjectPackages(projectRoot: string): Promise<Project
       state: changedFiles === 0 ? "unchanged" : previousOutput.length === 0 ? "created" : "updated",
       changes,
     });
+  }
+  if (summaries.length > 0 && options.delivery !== false) {
+    const { readTaskRollback } = await import("./taskRollback.js");
+    const { readMaintenance } = await import("./maintenanceStorage.js");
+    const maintenanceActive = !!(await readMaintenance(projectRoot)).active;
+    if ((!maintenanceActive || (await readIndexerDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+    const { finishApprovedRevision } = await import("./approvedRevision.js");
+    await finishApprovedRevision(projectRoot);
+    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
+    const { readApprovedRevision } = await import("./approvedRevision.js");
+    const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+    if (!maintenanceActive && !await readTaskRollback(projectRoot) && !await currentLedger(projectRoot) && !await readApprovedRevision(projectRoot) &&
+        !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
+      const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
+      await clearCompletedLifecycle(projectRoot);
+    }
   }
   return { projectRoot, packages: summaries, agent_hints: agentHints };
 }
@@ -644,14 +706,7 @@ function summarizePackageChanges(
   };
 }
 
-export async function runProjectBuildCommand(input: {
-  cwd: string;
-  format?: "text" | "json";
-  verbose?: boolean;
-}): Promise<boolean> {
-  const found = findContextProjectRoot(input.cwd);
-  if (found === null) return false;
-  const result = await buildProjectPackages(found.projectRoot);
+export function queueProjectBuildCompletedEvent(result: ProjectBuildResult): void {
   queueContextRuntimeEvent({
     cwd: result.projectRoot,
     kind: "package.build.completed",
@@ -664,6 +719,17 @@ export async function runProjectBuildCommand(input: {
       resource_file_count: result.packages.reduce((total, pkg) => total + pkg.resources.files, 0),
     },
   });
+}
+
+export async function runProjectBuildCommand(input: {
+  cwd: string;
+  format?: "text" | "json";
+  verbose?: boolean;
+}): Promise<boolean> {
+  const found = findContextProjectRoot(input.cwd);
+  if (found === null) return false;
+  const result = await buildProjectPackages(found.projectRoot);
+  queueProjectBuildCompletedEvent(result);
   const deliveryHint = runtimeEventPendingAgentHint(
     await flushQueuedContextRuntimeEvents(result.projectRoot),
   );

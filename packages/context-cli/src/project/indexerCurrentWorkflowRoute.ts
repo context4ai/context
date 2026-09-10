@@ -1,4 +1,9 @@
-import { indexerProtocolDigest, loadIndexerRegistry } from "@c4a/context";
+import { prepareAuthorScaffoldResource } from "./indexerAuthorScaffold.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { indexerBatchStagePolicy } from "./indexerCurrentBatchPlanner.js";
+import { indexerDeliveryGuidance } from "./indexerDeliveryGuidance.js";
+import { contextWorkflowAuthorities } from "./workflow/workflowFacts.js";
+import { indexerProtocolDigest, } from "@c4a/context";
 import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
 import type { JsonValue, Route } from "@c4a/agent-graph";
 import { basename } from "node:path";
@@ -16,9 +21,8 @@ import {
   authorityCommandOptions,
   loadContextWorkflowProvider,
   projectWorkflowRouteAction,
-  projectWorkflowResourceLocation,
 } from "./workflow/workflowProvider.js";
-import { currentIndexerStructureReview } from "./indexerStructureReview.js";
+import { currentIndexerStructureReview, materializeCurrentIndexerStructurePreview } from "./indexerStructureReview.js";
 import type {
   ContextResolvedWorkflowRoute,
   ContextWorkflowAuthority,
@@ -42,7 +46,7 @@ const INDEXER_GRAPH_ID = "indexer";
 const CURRENT_INDEXER_ENTRY = "current-lifecycle";
 const CURRENT_ACTION_OUTPUT_SCHEMA_FILE = "indexer-agent-step-result.schema.json";
 
-function projectCurrentIndexerGateResolution(input: {
+export function projectCurrentIndexerGateResolution(input: {
   resolved: Route;
   revision: string;
   authorities: readonly ContextWorkflowAuthority[];
@@ -84,7 +88,7 @@ function projectCurrentIndexerGateResolution(input: {
   return { ...projected, effect: source.effect };
 }
 
-function projectCurrentIndexerGate(
+export function projectCurrentIndexerGate(
   resolved: Route,
   resolutionAction: NonNullable<
     NonNullable<ContextResolvedWorkflowRoute["gate"]>["resolution_action"]
@@ -115,23 +119,27 @@ async function resolveCurrentIndexerGraphNode(input: {
     readProjectIndexerCandidateCompileStatus(input.projectRoot),
   ]);
   const runningEntries = ledger?.entries.filter((entry) => entry.state === "running") ?? [];
-  const composer = finalization?.state === "composer-required"
+  const observedComposer = ledger?.entries.some((entry) => entry.stage === "author" && entry.state === "accepted")
     ? await readCurrentIndexerComposerBatch(input.projectRoot)
     : undefined;
+  const composer = finalization?.state === "composer-required" &&
+    observedComposer?.batch_digest === finalization.revision ? observedComposer : undefined;
   const failedEntry = ledger?.entries.find((entry) => entry.state === "failed");
-  const blocked = failedEntry !== undefined || finalization?.state === "blocked" ||
-    (finalization?.state === "composer-required" && composer === undefined);
+  const blocked = failedEntry !== undefined || finalization?.state === "blocked";
   const structureReviewRequired = structure !== undefined && !structure.approved;
   const layoutRequired = finalization?.state === "layout-confirmation-required";
   const candidateCurrent = compile.state === "current";
+  const { planManagedSourceKnowledgeUpdate } = await import("./managedSourceKnowledgeUpdate.js");
+  const managedSourceUpdatePending = (await planManagedSourceKnowledgeUpdate(input.projectRoot)).length > 0;
   const authorityChanged = await hasChangedIndexerWorksetAuthority(input.projectRoot, ledger);
-  const advanceRequired = authorityChanged || (!blocked && runningEntries.length === 0 &&
+  const advanceRequired = managedSourceUpdatePending || authorityChanged || (!blocked && runningEntries.length === 0 &&
     composer === undefined && !structureReviewRequired && !layoutRequired && !candidateCurrent);
   const facts = {
     indexer_current: {
       advance_complete: !advanceRequired,
       agent_complete: runningEntries.length === 0,
       structure_review_complete: !structureReviewRequired,
+      obsolete_scope_confirmed: !structureReviewRequired || structure?.preview.obsolete_scope?.requires_confirmation !== true,
       composer_complete: composer === undefined,
       blockers_clear: !blocked,
       layout_confirmed: !layoutRequired,
@@ -234,7 +242,14 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
   authorities: readonly ContextWorkflowAuthority[];
   managed: boolean;
 }): Promise<ContextResolvedWorkflowRoute | undefined> {
+  input = { ...input, authorities: contextWorkflowAuthorities(input) };
+  const { knowledgeMaintenanceRoute } = await import("./knowledgeMaintenanceRoute.js");
+  const maintenance = await knowledgeMaintenanceRoute(input);
+  if (maintenance) return maintenance;
   if (input.route?.node !== OUTER_INDEXER_NODE) return input.route;
+  const { buildApprovedRevisionRoute } = await import("./approvedRevisionRoute.js");
+  const approvedRevisionRoute = await buildApprovedRevisionRoute(input);
+  if (approvedRevisionRoute !== undefined) return approvedRevisionRoute;
   const providerContinuation = await buildCurrentIndexerProviderContinuationRoute({
     projectRoot: input.projectRoot,
     authorities: input.authorities,
@@ -255,11 +270,19 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         ...input.route,
         configuration: {
           file: "src/indexers.yaml",
-          action: "Declare the confirmed knowledge requirements for the registered sources, with indexers: []. Then re-evaluate the workflow for Provider selection.",
+          action: "Read the required context.indexer.provider-guide and context.indexer.registry-bootstrap resources at their current Route paths. Write the confirmed requirements using the initial registry example, the registered source boundaries, and indexers: []. Then re-evaluate the workflow for Provider selection; this file is not a complete-current payload.",
         },
       };
     }
     throw error;
+  }
+  const { unassignedManagedSources } = await import("./managedSourceKnowledgeUpdate.js");
+  const unassigned = await unassignedManagedSources(input.projectRoot, loadedRegistry.registry);
+  if (unassigned.length) {
+    return { ...input.route, configuration: {
+      file: "src/indexers.yaml",
+      action: `Selected saved sources have no requirement scope: ${unassigned.join(", ")}. Reuse a suitable existing requirement or add the confirmed reader topic; use target_scope for independent knowledge and evidence_source_scope for supporting material. Preserve unrelated requirements and bindings. Complete this configuration before running production, then follow the Provider selection Route using existing compatible Providers.`,
+    } };
   }
   if (await indexerRegistryNeedsProviderSelection(input.projectRoot, loadedRegistry.registry)) {
     return buildCurrentIndexerProviderSelectionRoute({
@@ -277,7 +300,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
     if (selected.current === undefined) {
       throw new TypeError("current Indexer graph selected an unavailable Agent workset");
     }
-    return (await buildIndexerAgentStepRoute({
+    const route = (await buildIndexerAgentStepRoute({
       run_requests: selected.current.specs.map((spec) => spec.request),
       instruction_request: selected.current.instructionRequest,
       workset_view_requests: selected.current.descriptor.tasks.map((task) =>
@@ -296,6 +319,20 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       authorities: input.authorities,
       managed: input.managed,
     })).route;
+    const batch = selected.current.descriptor;
+    route.batch_budget = { ...(batch.stage === "partition" ? { input_bytes_scope: "required-reading-excludes-optional-details" as const } : {}), tasks: batch.tasks.length, input_bytes: batch.input_bytes,
+      output_reserve_bytes: batch.output_reserve_bytes, view_items: batch.view_item_count,
+      task_limit: indexerBatchStagePolicy(batch.stage).max_tasks, packing_limits: batch.packing_limits ?? [],
+      shared_instruction_bytes: batch.shared_instruction_bytes, deduplicated_input_bytes: batch.deduplicated_input_bytes };
+    if (selected.current.descriptor.stage === "author") {
+      route.resources.recommended.push(await prepareAuthorScaffoldResource({
+        projectRoot: input.projectRoot, revision: route.revision,
+        tasks: selected.current.specs.map((spec, index) => ({ spec, descriptor: batch.tasks[index]! })),
+      }));
+      const delivery = await indexerDeliveryGuidance(input.projectRoot, input.authorities);
+      if (delivery) route.delivery = delivery;
+    }
+    return route;
   }
   if (selected.node === "run-current-indexer-composer") {
     const composer = selected.composer;
@@ -305,7 +342,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
     ) {
       throw new TypeError("current Indexer graph selected an unavailable Composer workset");
     }
-      return (await buildIndexerPostAuthorAgentStepRoute({
+      const route = (await buildIndexerPostAuthorAgentStepRoute({
         fragment_requests: composer.tasks.map((task) => task.context.request),
         instruction_request: composer.instruction_request,
         ready_instruction: {
@@ -321,6 +358,11 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         authorities: input.authorities,
         managed: input.managed,
       })).route;
+      route.batch_budget = { tasks: composer.tasks.length, input_bytes: composer.input_bytes,
+        output_reserve_bytes: composer.output_reserve_bytes, view_items: composer.view_item_count,
+        task_limit: indexerBatchStagePolicy("post-author").max_tasks, packing_limits: composer.packing_limits ?? [],
+        shared_instruction_bytes: composer.shared_instruction_bytes };
+      return route;
   }
   if (selected.node === "confirm-current-indexer-layout") {
       const finalization = selected.finalization;
@@ -364,7 +406,7 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         after_action: { evaluate: true },
       };
   }
-  if (selected.node === "review-current-indexer-structure") {
+  if (selected.node === "review-current-indexer-structure" || selected.node === "confirm-current-indexer-obsolete-scope") {
       const structure = selected.structure;
       const resolved = selected.resolved;
       if (structure === undefined || structure.approved || resolved === undefined) {
@@ -372,21 +414,16 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       }
       const authorityOptions = authorityCommandOptions(input.authorities, "workflow");
       const completion = `context${authorityOptions} action complete-current --revision '${structure.revision}'${input.managed ? " --managed" : ""} --input - --format json`;
-      const location = projectWorkflowResourceLocation({
-        schema: "agent-graph.resource-location.host-action.v1",
+      const readyPreview = await materializeCurrentIndexerStructurePreview({
+        projectRoot: input.projectRoot, expectedRevision: structure.revision,
+      });
+      const location: ContextResolvedWorkflowRoute["resources"]["required"][number] = {
         id: "indexer-semantic-structure-preview",
         kind: "procedure",
-        mediaType: "application/json",
+        media_type: "application/json",
         revision: structure.revision,
-        materialize: {
-          handler: "context.materialize-indexer-structure-preview/v1",
-          input: {
-            schema: "context.indexer.semantic-structure-preview-request/v1",
-            value: { revision: structure.revision },
-          },
-          output_schema: "context.indexer.semantic-structure-preview/v1",
-        },
-      }, structure.revision, input.authorities);
+        path: readyPreview.path, digest: readyPreview.digest, read_state: "read-required",
+      };
       const resolutionAction = projectCurrentIndexerGateResolution({
         resolved,
         revision: structure.revision,
@@ -402,6 +439,9 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
         revision: structure.revision,
         node: resolved.node,
         reason_code: resolved.reasonCode,
+        ...(selected.node === "confirm-current-indexer-obsolete-scope" ? {
+          summary: "Resolve obsolete scope using an applicable explicit user decision or explicit scope delegation. Managed review permission alone does not choose scope. If unresolved, ask the user and wait; this is not a CLI failure. Review the full structure before applying the supplied action.",
+        } : {}),
         availability: resolved.availability,
         commands: [{
           command: completion,
@@ -431,6 +471,9 @@ export async function projectCurrentIndexerWorkflowRoute(input: {
       node: "resolve-current-indexer-block",
       reason_code: "route.indexer.recovery-required",
       summary: diagnostic,
+      ...(selected.finalization?.scope_recovery === undefined ? {} : {
+        configuration: { file: selected.finalization.scope_recovery.file, action: selected.finalization.scope_recovery.action },
+      }),
       availability: "requires-user",
       commands: [{
         command: `context${authorityOptions} run${input.managed ? " --managed" : ""} --format json`,

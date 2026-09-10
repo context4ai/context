@@ -22,11 +22,10 @@ import { readRouteMetadataFiles, routeEvidenceSnapshot, routeForDocument, type R
 import { detectDocumentSiteFiles, documentSiteConfigHint } from "./documentSiteDetection.js";
 import { documentSourceAddCommand, resolveDocumentPhaseSource } from "./documentRun.js";
 import {
-  findDocumentSnapshotForSource,
-  readDocumentManifestFile,
   renderDocumentManifestFile,
   updateDocumentManifestFile,
 } from "./documentBatchManifest.js";
+import { readDocumentManifestForCapture } from "./documentManifestRecovery.js";
 import {
   workspaceRouteReevaluation,
   type WorkspaceRouteReevaluation,
@@ -533,6 +532,8 @@ async function runCaptureFilePhaseUnlocked(input: {
     });
   }
 
+  const { assertSourceInputMutable } = await import("./sourceInputMutation.js");
+  await assertSourceInputMutable(input.projectRoot, `file:${resolved.sourceName}`);
   const entry = resolved.entry as FileSourceRegistryEntry;
   assertFileSnapshotMaterializedAt(entry);
   if (entry.local === undefined || entry.local.trim().length === 0) {
@@ -619,10 +620,9 @@ async function runCaptureFilePhaseUnlocked(input: {
       : {}),
   } satisfies Parameters<typeof createDocumentSnapshotManifest>[0];
   const manifest = createDocumentSnapshotManifest(manifestInput);
-  const currentManifestFile = await readDocumentManifestFile(manifestAbsPath);
-  const previousManifest = currentManifestFile === null
-    ? null
-    : findDocumentSnapshotForSource(currentManifestFile, resolved.sourceName);
+  const { current: currentManifestFile, previous: previousManifest, recovery } = await readDocumentManifestForCapture({
+    projectRoot: input.projectRoot, manifestPath, sourceType: "file", sourceName: resolved.sourceName,
+  });
   const changed = previousManifest?.snapshot_hash !== manifest.snapshot_hash;
   const manifestToWrite = changed || previousManifest === null
     ? manifest
@@ -686,7 +686,7 @@ async function runCaptureFilePhaseUnlocked(input: {
     },
     documents,
     ...(metadataFiles.length > 0 ? { metadata_files: metadataFiles } : {}),
-    diagnostics: siteConfigHint !== null ? [siteConfigHint] : [],
+    diagnostics: [...(siteConfigHint !== null ? [siteConfigHint] : []), ...(recovery === undefined ? [] : [recovery.diagnostic])],
     next_action: workspaceRouteReevaluation(input.phase.id),
   };
 }

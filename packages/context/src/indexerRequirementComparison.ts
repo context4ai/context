@@ -155,7 +155,7 @@ function compareCoverageDomains(
 
 function exclusionCells(requirement: IndexRequirement): Set<string> {
   return new Set((requirement.exclusions ?? []).flatMap((exclusion) =>
-    [...targetCellSet(exclusion.scope.targets)].map((cell) => `${exclusion.id}\u0000${cell}`)
+    [...targetCellSet(exclusion.scope.targets)].map((cell) => `${exclusion.id}\u0000${cell}\u0000${JSON.stringify([...(exclusion.paths ?? [])].sort())}`)
   ));
 }
 
@@ -357,6 +357,10 @@ export function compareIndexRequirementContraction(
     throw new TypeError("Requirement comparator cannot replace a requirement identity");
   }
   const changes: RequirementComparisonChange[] = [];
+  if (oldRequirement.purpose !== newRequirement.purpose) {
+    addChange(changes, { area: "reader-goals", path: "purpose", relation: "incomparable",
+      detail: "reader purpose changed; its semantic relationship requires the stated user decision" });
+  }
   compareSetArea({
     oldValues: targetCellSet(oldRequirement.target_scope.targets),
     newValues: targetCellSet(newRequirement.target_scope.targets),

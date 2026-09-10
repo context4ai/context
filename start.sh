@@ -41,7 +41,7 @@ case "${COMMAND}" in
     shift
     "${BUN_BIN}" run --cwd packages/context-cli src/cli.ts "$@"
     ;;
-  build|typecheck|test|lint|verify|verify:fast|verify:full)
+  build|typecheck|test|lint|verify|verify:full)
     "${BUN_BIN}" run "${COMMAND}"
     ;;
   link|unlink|bump|bump-version|publish)

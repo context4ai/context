@@ -1,3 +1,6 @@
+import { configureDeliveryCadence, readDeliveryCadence, deliveryWaveSize } from "./indexerDeliveryCadence.js";
+import { indexerDeliveryGuidance } from "./indexerDeliveryGuidance.js";
+import { requestIndexerEarlyDelivery } from "./indexerDelivery.js";
 import { advanceCurrentIndexerLifecycle } from "./indexerCurrentLifecycle.js";
 import { advanceCurrentIndexerProviderFinalizationIfReady } from
   "./indexerCurrentProviderContinuation.js";
@@ -22,7 +25,11 @@ export async function runCurrentIndexerLifecycle(input: {
   managed: boolean;
   authorities: readonly ContextWorkflowAuthority[];
   dryRun?: boolean;
+  deliver?: boolean;
+  deliverySize?: string;
 }) {
+  if (input.deliverySize !== undefined && input.dryRun !== true) await configureDeliveryCadence(input.projectRoot, input.deliverySize);
+  if (input.deliver === true && input.dryRun !== true) await requestIndexerEarlyDelivery(input.projectRoot);
   let status = await collectProjectStatus(input.projectRoot, input);
   const route = status.workflow.current;
   let advanced = false;
@@ -49,6 +56,8 @@ export async function runCurrentIndexerLifecycle(input: {
   return {
     protocol: "context.indexer.lifecycle-advance/v1" as const,
     advanced,
+    ...(input.deliverySize === undefined ? {} : { delivery_policy: { next_wave_target: deliveryWaveSize(await readDeliveryCadence(input.projectRoot)), applies_to: "next-planning-wave" } }),
+    ...(input.deliver === true ? { delivery: await indexerDeliveryGuidance(input.projectRoot, input.authorities) } : {}),
     state: lifecycleState(status.workflow),
     workflow: status.workflow,
   };

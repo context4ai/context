@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "operation"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$"
+    },
+    "operation": {
+      "enum": [
+        "revise",
+        "regenerate",
+        "rebuild"
+      ]
+    },
+    "timing": {
+      "enum": [
+        "after-batch",
+        "priority"
+      ],
+      "default": "after-batch"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "instruction"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "instruction": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "rebuild"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "targets": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "required": [
+          "targets"
+        ],
+        "properties": {
+          "targets": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}

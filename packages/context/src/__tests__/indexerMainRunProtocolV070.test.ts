@@ -320,7 +320,7 @@ describe("main Indexer run protocol", () => {
       },
     });
     expect(validated.operation_result).toEqual(result.result.result);
-    expect(validated.authoring_audit).toBeNull();
+    expect(validated).not.toHaveProperty("authoring_audit");
     expect(validated.artifact_dependency_set).toBeNull();
   });
 
@@ -353,12 +353,7 @@ describe("main Indexer run protocol", () => {
       },
     });
     expect(validated.operation_result).toEqual(artifact);
-    expect(validated.authoring_audit).toMatchObject({
-      protocol: "context.indexer.generated-authoring-audit/v1",
-      hard_findings: [],
-      agent_review_required: false,
-      semantic_prose_review_targets: [],
-    });
+    expect(validated).not.toHaveProperty("authoring_audit");
     expect(validated.artifact_dependency_set).toMatchObject({
       protocol: "context.indexer.artifact-dependency-set/v1",
       result_digest: artifact.output_digest,

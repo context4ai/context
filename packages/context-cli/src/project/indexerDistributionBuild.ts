@@ -1,3 +1,4 @@
+import { validateManagedIndexerDistribution } from "./indexerDistributionManagedValidation.js";
 import { createHash } from "node:crypto";
 import {
   cp,
@@ -79,27 +80,35 @@ export async function collectIndexerBundleFiles(
   root: string,
   path = root,
 ): Promise<Array<{ path: string; digest: string }>> {
-  const entries = await readdir(path, { withFileTypes: true });
+  const pending = (await readdir(path)).map(name => join(path, name));
   const files: Array<{ path: string; digest: string }> = [];
-  for (const entry of entries.sort((left, right) =>
-    compareIndexerCanonicalText(left.name, right.name)
-  )) {
-    const absolute = join(path, entry.name);
-    const status = await lstat(absolute);
-    if (status.isSymbolicLink()) {
-      throw new TypeError(`bundled Indexer assets must not contain symlinks: ${absolute}`);
+  // Keep all byte and symlink checks, but avoid a filesystem round-trip per
+  // resource in series. The queue caps concurrent I/O across all directories.
+  while (pending.length > 0) {
+    const batch = pending.splice(0, 16);
+    const results = await Promise.allSettled(batch.map(async absolute => {
+      const status = await lstat(absolute);
+      if (status.isSymbolicLink()) {
+        throw new TypeError(`bundled Indexer assets must not contain symlinks: ${absolute}`);
+      }
+      if (status.isDirectory()) {
+        return { children: (await readdir(absolute)).map(name => join(absolute, name)) };
+      }
+      if (!status.isFile()) {
+        throw new TypeError(`bundled Indexer asset must be a regular file: ${absolute}`);
+      }
+      return { file: {
+        path: relative(root, absolute).split(sep).join("/"),
+        digest: sha256(await readFile(absolute)),
+      } };
+    }));
+    const failure = results.find(result => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      if (result.value.children) pending.push(...result.value.children);
+      if (result.value.file) files.push(result.value.file);
     }
-    if (status.isDirectory()) {
-      files.push(...await collectIndexerBundleFiles(root, absolute));
-      continue;
-    }
-    if (!status.isFile()) {
-      throw new TypeError(`bundled Indexer asset must be a regular file: ${absolute}`);
-    }
-    files.push({
-      path: relative(root, absolute).split(sep).join("/"),
-      digest: sha256(await readFile(absolute)),
-    });
   }
   return files.sort((left, right) => compareIndexerCanonicalText(left.path, right.path));
 }
@@ -131,14 +140,15 @@ export async function materializeBundledIndexerDistribution(input: {
   const sourceEntries = (await readdir(sourceRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  const communityEntries = ["context", ...EXPECTED_BUNDLES.map((bundle) => bundle.id)];
+  const nonProviderEntries = ["context", "context-inspect-search", "context-indexer-create"];
+  const communityEntries = [...nonProviderEntries, ...EXPECTED_BUNDLES.map((bundle) => bundle.id)];
   const missingCommunityEntries = communityEntries.filter((entry) => !sourceEntries.includes(entry));
   if (missingCommunityEntries.length > 0) {
     throw new TypeError(
       `root plugin Skill directory set is missing CLI base contract entries: ${missingCommunityEntries.join(", ")}`,
     );
   }
-  const providerEntries = sourceEntries.filter((name) => name !== "context")
+  const providerEntries = sourceEntries.filter((name) => !nonProviderEntries.includes(name))
     .sort(compareIndexerCanonicalText);
 
   const operators = bundledIndexerOperatorContract();
@@ -251,6 +261,7 @@ export async function materializeBundledIndexerDistribution(input: {
         manifest,
       });
     }
+    await validateManagedIndexerDistribution({ source, manifest, profileContract: profiles, operatorContract: operators });
     const files = await collectIndexerBundleFiles(source);
     if (expected?.codeAuthoring) {
       await validateBundledIndexerPortableVocabulary({

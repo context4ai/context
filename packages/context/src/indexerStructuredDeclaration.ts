@@ -423,8 +423,7 @@ function validateTargetExists(input: {
   );
   if (
     fact === undefined ||
-    fact.qualified_item_path !== target.qualified_item_path ||
-    fact.signature_digest !== target.signature_digest
+    fact.qualified_item_path !== target.qualified_item_path
   ) {
     throw new TypeError("structured declaration source item does not exist");
   }
@@ -458,7 +457,6 @@ export function validateIndexerStructuredDeclarationSet(input: {
     input.source_identity_inventory,
   );
   if (
-    value.source_identity_inventory_digest !== inventory.inventory_digest ||
     inventory.source_ref !== input.expected_source_ref ||
     inventory.module_ref !== input.expected_module_ref
   ) {

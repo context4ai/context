@@ -31,7 +31,19 @@ conversation contains the required confirmation, write one JSON payload
 matching the selected schema to that exact path. Do not run the command before confirmation and do not replace
 it with a command remembered from another route.
 
-Context source identity has two parts:
+For an already saved `note` or `sessions` source, the batch registration schema
+is not applicable. After the user selects that material for new knowledge work,
+add its exact typed reference to `sources` in `src/index.ts`, preserving existing
+sources, phases and packages. For example, import `source` from the project's
+Context SDK and use `source("20260908/selected.md", { type: "note" })`; use
+`type: "sessions"` for a saved conversation summary. Use the actual saved name,
+not the example. Re-evaluate with `context status --format json` to obtain the
+initial requirement configuration Route. Do not create a capture phase or a
+second source registry for saved text. Saving alone is not this selection;
+material only supporting an existing page stays in that page's authorized
+reading scope.
+
+For repo/file/lark registration, source identity has two parts:
 
 - a calendar date identifies one capture batch and directory;
 - a module identifies one concrete repository, local document boundary, or

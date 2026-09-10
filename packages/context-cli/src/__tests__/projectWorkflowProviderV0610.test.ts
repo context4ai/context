@@ -259,7 +259,9 @@ describe("Context workflow Provider", () => {
       },
     });
     expect(snapshot.route?.resources.required.map((resource) => resource.id))
-      .toEqual(["skill.context-run-indexer-lifecycle"]);
+      .toEqual(expect.arrayContaining([
+        "skill.context-run-indexer-lifecycle", "context.source-boundary", "context.indexer.registry-bootstrap",
+      ]));
     expect(snapshot.route?.action?.output_schema).toBeUndefined();
   });
 
@@ -364,6 +366,8 @@ describe("Context workflow Provider", () => {
         resolution: "user",
       },
     });
+    expect(ordinary.route?.resources.required.some((resource) => resource.id === "context.review-current")).toBe(false);
+    expect(ordinary.route?.resources.recommended.some((resource) => resource.id === "context.review-current")).toBe(true);
     expect(ordinary.route?.commands).toContainEqual(expect.objectContaining({
       command: expect.stringContaining("review approve-all architecture --force"),
       availability: "after-human-confirmation",
@@ -383,12 +387,13 @@ describe("Context workflow Provider", () => {
       },
     });
     expect(managed.route?.commands).toContainEqual(expect.objectContaining({
-      command: expect.stringContaining("review approve-all architecture --managed"),
+      command: expect.stringContaining("review apply"),
       availability: "immediate",
     }));
     expect(managed.route?.commands.some((item) =>
       item.command.includes("review html")
     )).toBe(false);
+    expect(managed.route?.resources.required.some((resource) => resource.id === "context.review-current")).toBe(true);
     expect(managed.route?.gate?.inspection_action).toBeUndefined();
     expect(managed.route?.resources.required).toContainEqual(
       expect.objectContaining({ id: "context.review-current" }),

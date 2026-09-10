@@ -5,6 +5,7 @@ import type {
   IndexerProjectProposal,
 } from "@c4a/context";
 import {
+  canonicalIndexerJson,
   indexerProgramIdentityDigest,
   indexerProtocolDigest,
   validateIndexerCapabilityGapProof,
@@ -181,10 +182,15 @@ export function validateIndexerProjectCustomizationGap(input: {
   }
   for (const indexer of declared) {
     const view = customized.get(indexer.id);
+    const previous = gapInput.route_input.registry.indexers.find((entry) => entry.id === indexer.id);
+    // An unchanged customization keeps its own selection rationale. Only the
+    // Indexers changed by this proposal must consume the current gap proof.
+    const changed = canonicalIndexerJson(previous ?? null) !== canonicalIndexerJson(indexer) ||
+      input.proposal.targets.some((target) => target.path.startsWith(`src/indexer/${indexer.id}/`));
     if (
       view === undefined ||
       view.mode !== indexer.customization?.mode ||
-      view.plan.capability_gap_digest !== proof.gap_digest
+      (changed && view.plan.capability_gap_digest !== proof.gap_digest)
     ) {
       throw new TypeError("customization plan does not consume the current CLI capability gap");
     }

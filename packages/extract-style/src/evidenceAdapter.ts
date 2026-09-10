@@ -53,7 +53,7 @@ function analyzedFacts(document: StyleDocumentCatalog, invocation: StyleEvidence
     facts.push(fact({ invocation, document, moduleRef, locator, kind, signature, payload }));
   };
   const root: StyleLocator = { path: document.path, line: 1, column: 1, qualified_item_path: "file" };
-  add(root, "source-file", { catalog: document.syntax, tier: "lightweight-evidence" }, { path: document.path, syntax: document.syntax });
+  add(root, "source-file", { catalog: document.syntax, tier: "lightweight-evidence" }, { path: document.path, syntax: document.syntax, lines: document.lines });
   for (const item of document.imports) add(item.locator, "style-import", { import_ref: item.import_ref, kind: item.kind, specifier_digest: item.specifier_digest, resolution: item.resolution, resolved_path: item.resolved_path }, item);
   for (const item of document.tokens) add(item.locator, "style-token", { token_ref: item.token_ref, name: item.name, syntax: item.syntax, configurable: item.configurable, value_digest: item.value_digest }, item);
   for (const item of document.token_references) add(item.locator, "style-token-reference", { reference_ref: item.reference_ref, name: item.name, owner: item.owner_qualified_item_path }, item);

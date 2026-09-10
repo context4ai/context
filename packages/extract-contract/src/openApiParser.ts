@@ -1,4 +1,5 @@
 import { posix } from "node:path";
+import { openApiFields, openApiOperationFields } from "./openApiFields.js";
 import { LineCounter, isNode, parseDocument, type Document } from "yaml";
 import type {
   ContractDocumentCatalog,
@@ -124,6 +125,7 @@ function schemaTypes(parsed: ParsedYaml, root: JsonRecord): ContractType[] {
       name,
       extension: false,
       field_names: Object.keys(record(schema?.properties) ?? {}).sort(),
+      fields: openApiFields(schema, 0, root),
       locator: yamlLocator(parsed, path, `schema:${name}`),
     };
   });
@@ -154,6 +156,7 @@ function pathCatalog(parsed: ParsedYaml, root: JsonRecord, key: "paths" | "webho
         name: operationId,
         parent,
         deprecated: operation.deprecated === true,
+        fields: openApiOperationFields(pathItem, operation, root),
         locator: yamlLocator(parsed, [key, route, method], `operation:${method.toLowerCase()}:${parent}`),
       });
     }

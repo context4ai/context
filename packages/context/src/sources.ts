@@ -1,14 +1,15 @@
+import { discoverManagedDocuments, type ManagedDocumentSourceEntry, type ManagedDocumentSourceType } from "./managedSources.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 
-export type SourceType = "repo" | "file" | "lark";
-export type DocumentSourceType = Extract<SourceType, "file" | "lark">;
+export type SourceType = "repo" | "file" | "lark" | "note" | "sessions";
+export type DocumentSourceType = Exclude<SourceType, "repo">;
 export const DEFAULT_REPO_SOURCES_REGISTRY_PATH = "sources/repo/index.yaml";
 export const DEFAULT_FILE_SOURCES_REGISTRY_PATH = "sources/file/index.yaml";
 export const DEFAULT_LARK_SOURCES_REGISTRY_PATH = "sources/lark/index.yaml";
-const SOURCE_TYPES: readonly SourceType[] = ["repo", "file", "lark"];
+const SOURCE_TYPES: readonly SourceType[] = ["repo", "file", "lark", "note", "sessions"];
 const SOURCE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 const REPO_DATE_NAMESPACE_PATTERN = /^\d{8}$/u;
 
@@ -75,7 +76,7 @@ export type SourceReference<TType extends SourceType = SourceType> = TypedSource
 export type RepoSourceReference = RegistrySourceReference | TypedSourceReference<"repo">;
 export type FileSourceReference = RegistrySourceReference | TypedSourceReference<"file">;
 export type LarkSourceReference = RegistrySourceReference | TypedSourceReference<"lark">;
-export type DocumentSourceReference = FileSourceReference | LarkSourceReference;
+export type DocumentSourceReference = FileSourceReference | LarkSourceReference | TypedSourceReference<ManagedDocumentSourceType>;
 
 export type SourceCollectionReference<TType extends SourceType = SourceType> = {
   kind: "source.collection";
@@ -144,6 +145,8 @@ export type SourcesRegistry = {
   repos: readonly RepoSourceRegistryEntry[];
   files: readonly FileSourceRegistryEntry[];
   larks: readonly LarkSourceRegistryEntry[];
+  notes: readonly ManagedDocumentSourceEntry[];
+  sessions: readonly ManagedDocumentSourceEntry[];
 };
 
 export type LoadSourcesRegistryOptions = {
@@ -173,6 +176,7 @@ function assertSourceType(value: string, field: string): asserts value is Source
   }
 }
 
+export function source(name: string, options: { type: ManagedDocumentSourceType }): TypedSourceReference<ManagedDocumentSourceType>;
 export function source(name: string): RegistrySourceReference;
 export function source(namespace: string, module: string): RepoSourceReference;
 export function source(namespace: string, module: string, options: { type: "repo" }): RepoSourceReference;
@@ -637,6 +641,8 @@ export const loadSourcesRegistry = async (
     repos: repoRegistry.repos,
     files,
     larks,
+    notes: await discoverManagedDocuments(rootDir, "note"),
+    sessions: await discoverManagedDocuments(rootDir, "sessions"),
   };
   assertGlobalSourceUniqueness(registry);
   return registry;

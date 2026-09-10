@@ -6,6 +6,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
+import { approvedKnowledgeRevisionInputSchema, type ApprovedKnowledgeRevisionInput } from "./approvedKnowledgeRevisionInput.js";
 
 export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
@@ -71,6 +72,7 @@ export interface CandidateRecord {
   fingerprint: string;
   review: CandidateReviewSummary;
   updated: string;
+  approved_revision?: { request_digest: string; base_digest: string | null; previous_path?: string; knowledge_input?: ApprovedKnowledgeRevisionInput };
 }
 
 const KNOWLEDGE_COLLECTION_SET = new Set<KnowledgeCollection>(KNOWLEDGE_COLLECTIONS);
@@ -80,6 +82,7 @@ const RECORD_FIELDS = new Set([
   "candidate_type", "kind", "visibility", "module", "path",
   "structure_digest", "source_refs", "body", "indexer_candidate",
   "fingerprint", "review", "updated",
+  "approved_revision",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -312,14 +315,28 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
   const path = stringField(value, "path", line);
   const structureDigest = stringField(value, "structure_digest", line);
   const fingerprint = stringField(value, "fingerprint", line);
+  let approvedRevision: CandidateRecord["approved_revision"];
+  if (value.approved_revision !== undefined) {
+    if (!isRecord(value.approved_revision)) throw schemaError(line, "approved_revision must be an object");
+    assertExactFields(value.approved_revision, new Set(["request_digest", "base_digest", "previous_path", "knowledge_input"]), "approved_revision", line);
+    approvedRevision = {
+      request_digest: stringField(value.approved_revision, "request_digest", line),
+      ...(value.approved_revision.knowledge_input === undefined ? {} : { knowledge_input: approvedKnowledgeRevisionInputSchema.parse(value.approved_revision.knowledge_input) }),
+      ...(value.approved_revision.previous_path === undefined ? {} : { previous_path: stringField(value.approved_revision, "previous_path", line) }),
+      base_digest: value.approved_revision.base_digest === null ? null : stringField(value.approved_revision, "base_digest", line),
+    };
+    if ([approvedRevision.request_digest, approvedRevision.base_digest].some((digest) => digest !== null && !/^sha256:[a-f0-9]{64}$/u.test(digest))) {
+      throw schemaError(line, "approved_revision requires content digests");
+    }
+  }
   const expectedCandidateId = indexerCandidateId(binding.file_digest);
   if (candidateId !== expectedCandidateId) {
     throw schemaError(line, `field candidate_id must bind Indexer file digest: ${expectedCandidateId}`);
   }
-  if (!/^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef)) {
+  if (approvedRevision === undefined && !/^node:subject:sha256:[a-f0-9]{64}$/u.test(nodeRef)) {
     throw schemaError(line, "field node_ref must be a canonical Indexer Subject ref");
   }
-  if (!/^view:artifact:sha256:[a-f0-9]{64}$/u.test(viewRef)) {
+  if (approvedRevision === undefined && !/^view:artifact:sha256:[a-f0-9]{64}$/u.test(viewRef)) {
     throw schemaError(line, "field view_ref must be a canonical Indexer Artifact view ref");
   }
   if (!isSafeKnowledgeTargetPath(collection, path)) {
@@ -346,6 +363,7 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
     source_refs: stringArray(value.source_refs, "source_refs", line),
     body: stringField(value, "body", line),
     indexer_candidate: binding,
+    ...(approvedRevision === undefined ? {} : { approved_revision: approvedRevision }),
     fingerprint,
     review: reviewField(value.review, line),
     updated: stringField(value, "updated", line),

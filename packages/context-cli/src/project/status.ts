@@ -1,3 +1,5 @@
+import { readIndexerDelivery } from "./indexerDelivery.js";
+import { assertPreparationComplete } from "./workspacePreparation.js";
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
 import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
@@ -38,14 +40,12 @@ import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateComp
 import {
   pendingDocumentCaptureCommands,
   readIndexerWorkflowRegistryStatus,
-  resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
 import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
 import { currentIndexerProgress } from "./indexerCurrentProgress.js";
 
 export {
   pendingDocumentCaptureCommands,
-  resourcePlaceholderRepairTargets,
 } from "./statusRouting.js";
 
 export type {
@@ -106,6 +106,7 @@ async function collectProjectStatusSnapshotInternal(
   projectRoot: string,
   options: CollectProjectStatusOptions = {},
 ): Promise<ProjectStatusSnapshot> {
+  await assertPreparationComplete(projectRoot);
   const authorities = contextWorkflowAuthorities({
     managed: options.managed === true,
     ...(options.authorities === undefined ? {} : { authorities: options.authorities }),
@@ -118,29 +119,24 @@ async function collectProjectStatusSnapshotInternal(
   const capturedDocumentSources = documentSources.filter((source) => source.snapshotReady).length;
   const readySources = readyRepoSources + capturedDocumentSources;
   const draftStatus = await readDraftCandidateStatus(projectRoot);
+  const collectionsWithPages = new Set<string>();
   const approvedPages = await countFiles(
     join(projectRoot, "knowledge"),
-    (rel) => isApprovedKnowledgeMarkdownPath(rel) && !rel.startsWith("assets/"),
+    (rel) => {
+      if (!isApprovedKnowledgeMarkdownPath(rel) || rel.startsWith("assets/")) return false;
+      collectionsWithPages.add(rel.split("/")[0]!);
+      return true;
+    },
   );
-  const approvedCollections = (await Promise.all(
-    KNOWLEDGE_COLLECTIONS.map(async (collection) => ({
-      collection,
-      count: await countFiles(
-        join(projectRoot, "knowledge", collection),
-        (rel) => isApprovedKnowledgeMarkdownPath(rel),
-      ),
-    })),
-  )).filter((item) => item.count > 0).map((item) => item.collection);
+  const approvedCollections = KNOWLEDGE_COLLECTIONS.filter((collection) => collectionsWithPages.has(collection));
   const closeStatus = await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
   const verifyStatus = draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(projectRoot)
     : { issues: [], diagnostics: [] };
-  const resourceRepair = resourcePlaceholderRepairTargets(verifyStatus.issues);
   const pendingCapture = pendingDocumentCaptureCommands({
     phases,
     documentSources,
-    recaptureSourceKeys: resourceRepair.sourceKeys,
   });
   const packageFreshnessStatus = phaseStatus.projectEntryValid
     ? await readPackageFreshnessStatus(projectRoot, packages)
@@ -160,7 +156,11 @@ async function collectProjectStatusSnapshotInternal(
   const evidenceWarnings = evidenceWarningState(verifyStatus.issues);
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
   const indexerRegistry = await readIndexerWorkflowRegistryStatus(projectRoot);
+  const { planManagedSourceKnowledgeUpdate } = await import("./managedSourceKnowledgeUpdate.js");
+  const managedSourceUpdatePending = phaseStatus.projectEntryValid && indexerRegistry.state === "current" &&
+    (await planManagedSourceKnowledgeUpdate(projectRoot)).length > 0;
   const indexerCandidateCompile = await readProjectIndexerCandidateCompileStatus(projectRoot);
+  const indexerDelivery = await readIndexerDelivery(projectRoot);
   const indexerDrafts = indexerCandidateCompile.state === "current"
     ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "draft")
     : [];
@@ -171,6 +171,12 @@ async function collectProjectStatusSnapshotInternal(
   const codeIndexMigrationRequired = phaseStatus.projectEntryValid
     ? await legacyCodeIndexMigrationRequired(projectRoot)
     : false;
+  const { readMaintenance } = await import("./maintenanceStorage.js");
+  const maintenance = (await readMaintenance(projectRoot)).active;
+  // Output-only maintenance owns this evaluation; an unfinished production
+  // ledger must not hide package configuration/Review recovery gates.
+  const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
+    (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
   const observation: ContextWorkflowObservation = {
     projectRoot,
     projectEntryValid: phaseStatus.projectEntryValid,
@@ -208,7 +214,11 @@ async function collectProjectStatusSnapshotInternal(
     approvedPages,
     close: closeStatus,
     indexerRegistry,
-    indexerCandidateCompile: { state: indexerCandidateCompile.state },
+    indexerCandidateCompile: { partial_delivery: indexerDelivery?.partial !== undefined, state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
+      managed_source_pending: !maintenanceOutputOnly && managedSourceUpdatePending,
+      ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
+      ...(!maintenanceOutputOnly && indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
+      ...(maintenanceOutputOnly || indexerDelivery === undefined ? {} : { delivery_pending: true }) },
   };
   const workflowSnapshot = await evaluateContextWorkflow({
     observation,
@@ -232,6 +242,7 @@ async function collectProjectStatusSnapshotInternal(
     ...baseWorkflow,
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+    ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
   };
   const indexerProgress = await currentIndexerProgress({
     projectRoot,
@@ -272,7 +283,10 @@ async function collectProjectStatusSnapshotInternal(
     close: closeStatus,
     codeIndexMigrationRequired,
     indexerRegistry: { state: indexerRegistry.state },
-    indexerCandidateCompile: { state: indexerCandidateCompile.state },
+    indexerCandidateCompile: { state: indexerCandidateCompile.state,
+      ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
+      ...(indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
+      ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
     ...(indexerProgress === undefined ? {} : { indexerProgress }),
     packageCount: packages.length,
     verifyErrors,
@@ -320,11 +334,11 @@ export async function collectProjectStatusSnapshot(
   projectRoot: string,
   options: CollectProjectStatusOptions = {},
 ): Promise<ProjectStatusSnapshot> {
-  return measureContextDebugOperation({
+  return withCommandReadCache(() => measureContextDebugOperation({
     projectRoot,
     operation: "status.snapshot-build",
     counters: { status_rebuild_count: 1 },
-  }, () => collectProjectStatusSnapshotInternal(projectRoot, options));
+  }, () => collectProjectStatusSnapshotInternal(projectRoot, options)));
 }
 
 export async function reevaluateProjectStatusWorkflow(input: {
@@ -356,6 +370,7 @@ export async function reevaluateProjectStatusWorkflow(input: {
     ...baseWorkflow,
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
+    ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
   };
   await recordWorkflowEvaluation(input.snapshot.observation.projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({
@@ -384,3 +399,4 @@ export async function collectProjectStatus(
 ): Promise<ProjectStatus> {
   return (await collectProjectStatusSnapshot(projectRoot, options)).status;
 }
+import { withCommandReadCache } from "./commandReadCache.js";

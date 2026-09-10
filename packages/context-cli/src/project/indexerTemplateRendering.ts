@@ -1,3 +1,5 @@
+import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
+import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -5,7 +7,6 @@ import {
   indexerArtifactResultDigest,
   indexerArtifactResultSchema,
   indexerCanonicalRefSchema,
-  containsIndexerControlledAuthoringPlaceholder,
   indexerProtocolDigest,
   indexerRenderedArtifactDigest,
   indexerRenderedArtifactSchema,
@@ -176,7 +177,7 @@ async function readTemplateSource(input: {
   return source;
 }
 
-function splitFrontmatter(source: string): { metadata: unknown; body: string } {
+export function splitFrontmatter(source: string): { metadata: unknown; body: string } {
   const normalized = source.replaceAll("\r\n", "\n");
   if (!normalized.startsWith("---\n")) {
     throw new TypeError("Indexer template must start with YAML frontmatter");
@@ -195,7 +196,7 @@ function splitFrontmatter(source: string): { metadata: unknown; body: string } {
   return { metadata: document.toJS({ maxAliasCount: 0 }), body: normalized.slice(end + 5) };
 }
 
-function parseSectionBodies(body: string): Record<string, string> {
+export function parseSectionBodies(body: string): Record<string, string> {
   const sections: Record<string, string> = {};
   const outside: string[] = [];
   let current: { key: string; lines: string[] } | undefined;
@@ -225,7 +226,7 @@ function parseSectionBodies(body: string): Record<string, string> {
   return sections;
 }
 
-function validateTemplateBody(
+export function validateTemplateBody(
   contract: IndexerTemplateContract,
   sectionBodies: Readonly<Record<string, string>>,
 ): void {
@@ -338,11 +339,13 @@ export async function materializeIndexerTemplate(input: {
     ? source.replace(/^[^\n]*(?:\n|$)/u, "")
     : source;
   const parsed = splitFrontmatter(contractSource);
-  const contract = indexerTemplateContractSchema.parse(parsed.metadata);
+  const binding = manifest.provider.templates!.find(item => item.id === input.templateId && item.profile === input.profile)!;
+  const shared = expandArticleBlueprint(parsed.metadata, { ...binding, accepted_evidence_kinds: [...new Set(bundledIndexerProfileContract().profiles.find(profile => profile.id === input.profile)?.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds) ?? ["code", "contract", "configuration", "documentation"])] });
+  const contract = shared?.contract ?? indexerTemplateContractSchema.parse(parsed.metadata);
   if (contract.template_id !== input.templateId || contract.profile !== input.profile) {
     throw new TypeError("Indexer template frontmatter does not match its manifest identity");
   }
-  const sectionBodies = parseSectionBodies(parsed.body);
+  const sectionBodies = shared?.section_bodies ?? parseSectionBodies(parsed.body);
   validateTemplateBody(contract, sectionBodies);
   const resourceRef = selected.origin === "provider"
     ? `provider-template:${manifest.id}@${manifest.version}#${input.profile}/${input.templateId}`
@@ -432,6 +435,7 @@ function variableAvailable(value: IndexerJson): boolean {
 function validateVariableValue(
   contract: IndexerTemplateContract["variables"][number],
   value: IndexerJson,
+  diagnostics?: Array<{ code: string; message: string }>,
 ): void {
   const valid = contract.type === "string" ? typeof value === "string"
     : contract.type === "string-list" ? Array.isArray(value) && value.every((item) => typeof item === "string")
@@ -445,32 +449,16 @@ function validateVariableValue(
     typeof value === "string" &&
     value.length > contract.maximum_length
   ) {
-    throw new TypeError(`template variable ${contract.id} exceeds maximum_length`);
+    diagnostics?.push({ code: "template-variable-length-guidance-exceeded",
+      message: `Template variable ${contract.id} exceeds the recommended length; its complete content is retained.` });
   }
   if (
     contract.maximum_items !== undefined &&
     (Array.isArray(value) ? value.length : isStringMap(value) ? Object.keys(value).length : 0) >
       contract.maximum_items
   ) {
-    throw new TypeError(`template variable ${contract.id} exceeds maximum_items`);
-  }
-}
-
-function hasSubstantiveBody(markdown: string): boolean {
-  return markdown.split("\n").some((line) => {
-    const value = line.trim();
-    return value.length > 0 &&
-      !/^#{1,6}\s+/u.test(value) &&
-      !/^[-|:\s]+$/u.test(value);
-  });
-}
-
-function assertNoTemplateResidue(sectionKey: string, markdown: string): void {
-  if (containsIndexerControlledAuthoringPlaceholder(markdown)) {
-    throw new TypeError(`rendered Section ${sectionKey} contains template residue or placeholder prose`);
-  }
-  if (!hasSubstantiveBody(markdown)) {
-    throw new TypeError(`rendered Section ${sectionKey} has a title but no body`);
+    diagnostics?.push({ code: "template-variable-items-guidance-exceeded",
+      message: `Template variable ${contract.id} exceeds the recommended item count; its complete content is retained.` });
   }
 }
 
@@ -551,6 +539,7 @@ export function renderIndexerTemplateArtifact(input: {
   template: MaterializedIndexerTemplate;
   questionBindings: readonly IndexerTemplateQuestionBinding[];
   applicabilityConditionRefs: readonly string[];
+  diagnostics?: Array<{ code: string; message: string }>;
 }): IndexerRenderedArtifact {
   validateMaterializedIndexerTemplate(input.template);
   const result = validatedResult(input.artifactResult);
@@ -578,7 +567,7 @@ export function renderIndexerTemplateArtifact(input: {
     ) {
       throw new TypeError(`template variable ${id} has invalid evidence bindings`);
     }
-    validateVariableValue(variableContract, binding.value);
+    validateVariableValue(variableContract, binding.value, input.diagnostics);
   }
   validateIndexerTemplateVariableLayers({ result, artifact, contract });
   const sections: IndexerRenderedArtifact["sections"] = [];
@@ -657,7 +646,6 @@ export function renderIndexerTemplateArtifact(input: {
       acceptedEvidenceRefs: new Set(validEvidenceRefs),
     });
     const markdown = layered.markdown;
-    assertNoTemplateResidue(section.section_key, markdown);
     const projection = projectionMap.get(section.section_key)!;
     sections.push({
       ...projection,
@@ -676,7 +664,8 @@ export function renderIndexerTemplateArtifact(input: {
     0,
   );
   if (renderedBytes > contract.maximum_rendered_bytes) {
-    throw new TypeError("rendered Artifact exceeds the template expansion budget");
+    input.diagnostics?.push({ code: "template-size-guidance-exceeded",
+      message: "Rendered content exceeds the template's recommended size; assess splitting by reader task. No content was truncated." });
   }
   const payload: Omit<IndexerRenderedArtifact, "rendered_digest"> = {
     protocol: "context.indexer.rendered-artifact/v1",

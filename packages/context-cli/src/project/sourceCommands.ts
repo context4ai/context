@@ -38,7 +38,7 @@ import { findContextProjectRoot } from "./workspace.js";
 type DataFormat = "json" | "yaml" | "table";
 
 const DATA_FORMATS = ["json", "yaml", "table"] as const;
-const SOURCE_TYPES = ["repo", "file", "lark"] as const;
+const SOURCE_TYPES = ["repo", "file", "lark", "note", "sessions"] as const;
 const SOURCE_STATUSES = ["active", "registered"] as const;
 
 function assertChoice<const T extends readonly string[]>(
@@ -214,6 +214,10 @@ async function listProjectSources(projectRoot: string, options: Record<string, u
     })),
     ...registry.files.map(fileSourceAgentView),
     ...registry.larks.map(larkSourceAgentView),
+    ...([ ["note", registry.notes], ["sessions", registry.sessions] ] as const).flatMap(([type, entries]) =>
+      entries.map((entry) => ({ type, id: `${type}:${entry.name}`, name: entry.name,
+        materializedAt: entry.materializedAt, status: "active", content: entry.materializedAt,
+        ...(entry.changes === undefined ? {} : { changes: entry.changes }) }))),
   ];
   return sources.filter((source) =>
     (type === undefined || source.type === type) &&
@@ -248,6 +252,24 @@ async function getProjectSource(projectRoot: string, id: string): Promise<Record
 
 export function registerProjectSourceCommands(program: Command): void {
   const source = program.command("source").description("Read or update project source registries");
+  source.command("import")
+    .description("Import managed Markdown or prefetched Lark content, singly or in a batch")
+    .requiredOption("--input <file>", "JSON/YAML type, name, markdown and optional base_digest; - for stdin")
+    .option("--format <format>", "output format: json", "json")
+    .action(async (options: { input: string; format: string }) => {
+      assertChoice(options.format, ["json"] as const, "--format");
+      const { assertActionInputWorkspace } = await import("./actionInputWorkspace.js");
+      assertActionInputWorkspace(process.cwd(), options.input);
+      const root = findContextProjectRoot(process.cwd());
+      if (!root) throw new ContextError(ExitCode.WorkspaceStateError, "source import requires a Context workspace", { category: ErrorCategory.WorkspaceNotFound });
+      const { importSourceDocuments } = await import("./sourceDocumentImport.js");
+      const value = await readYamlOrJsonInput({ path: options.input, label: "source import",
+        missingNext: "Provide type, name and markdown.", readFailureNext: "Fix the workspace input path.",
+        parseFailureNext: "Supply valid JSON or YAML." });
+      const result = await importSourceDocuments(root.projectRoot, value);
+      if ("outcome" in result && result.outcome === "partial") process.exitCode = 1;
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    });
   const sourceAdd = source.command("add").description("Add a project source");
 
   sourceAdd.command("batch [date]")
@@ -482,6 +504,21 @@ one uniquely named Git directory at <project-root>/<module> or ../<module>.
       const projectSource = await getProjectSource(projectRoot, id);
       const format = assertChoice(options.format, ["json", "yaml"] as const, "--format");
       writeFormatted(projectSource, format);
+    });
+
+  source.command("rename <id>")
+    .description("Preview or rename one managed note/session and synchronize its existing references")
+    .requiredOption("--name <name>", "new YYYYMMDD/semantic-name.md")
+    .option("--yes", "apply the previewed rename")
+    .option("--plan-digest <digest>", "exact preview digest")
+    .option("--format <format>", "output format: json | yaml | table", "json")
+    .action(async (id: string, ...args: unknown[]) => {
+      const options = actionOptions(...args);
+      const { renameManagedDocument } = await import("./managedDocumentRename.js");
+      writeFormatted(await renameManagedDocument({ projectRoot: requireProjectRoot(process.cwd(), "source rename"),
+        source_ref: id, name: String(options.name), apply: options.yes === true,
+        ...(typeof options.planDigest === "string" ? { plan_digest: options.planDigest } : {}) }),
+      assertChoice(options.format, DATA_FORMATS, "--format"));
     });
 
   source.command("remove <id>")

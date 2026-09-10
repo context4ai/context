@@ -9,7 +9,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import YAML from "yaml";
-import { closeProjectWorkspace } from "../project/close.js";
+import { closeProjectWorkspace, readProjectCloseStatus } from "../project/close.js";
 import { projectKnowledgeAssets } from "../project/knowledgeAssets.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
 import { approvedContextSectionsInMarkdown } from "../project/verifyContextSections.js";
@@ -124,6 +124,26 @@ describe("0.6.2 approved section source_ref validation", () => {
         views: 1,
         verifyErrors: 0,
       });
+
+      const structurePath = join(projectRoot, "knowledge/structure.yaml");
+      const structure = YAML.parse(await readFile(structurePath, "utf8"));
+      const processedScopes = [{ requirement_ref: "reference-guide", source_ref: "file:docs",
+        processed_version: "sha256:" + "a".repeat(64) }];
+      await writeFile(structurePath, YAML.stringify({ ...structure, processed_scopes: processedScopes }));
+      // A baseline is retained through projection/cleanup, but does not make
+      // unchanged reader content stale or imply that a newer capture was used.
+      expect((await readProjectCloseStatus(projectRoot)).state).toBe("ready");
+      await rm(join(projectRoot, ".tmp"), { recursive: true, force: true });
+      await closeProjectWorkspace(projectRoot);
+      const restored = YAML.parse(await readFile(structurePath, "utf8"));
+      expect(restored.processed_scopes).toEqual(processedScopes);
+      expect(restored.input_hash).toBe(structure.input_hash);
+
+      const invalidStructure = YAML.stringify({ ...restored, processed_scopes: [...processedScopes, ...processedScopes] });
+      await writeFile(structurePath, invalidStructure);
+      await expect(closeProjectWorkspace(projectRoot)).rejects.toThrow("one latest version");
+      expect(await readFile(structurePath, "utf8")).toBe(invalidStructure);
+      await writeFile(structurePath, YAML.stringify(restored));
 
       const changed = (await readFile(approvedPath, "utf8")).replace("See [Reference]", "Changed [Reference]");
       await writeFile(approvedPath, changed, "utf8");

@@ -1,3 +1,5 @@
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { excludedIndexerSourcePath, selectedIndexerExclusions } from "./indexerScopeExclusions.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
@@ -6,7 +8,6 @@ import { basename, extname, join, relative, resolve } from "node:path";
 import {
   INDEXER_PARSER_CAPABILITY_SPECS,
   indexerProtocolDigest,
-  loadIndexerRegistry,
   loadSourcesRegistry,
   type IndexerProfileContract,
   type IndexerRegistryEntry,
@@ -18,7 +19,7 @@ import {
   projectIndexerReadTargets,
   type ProjectIndexerReadTarget,
 } from "./indexerReadScopeAuthorization.js";
-import { indexerRequirementSourceBoundaryDigest } from "./indexerRequirementProject.js";
+import { scopedIndexerSourceBoundaryDigest } from "./indexerSourceBoundary.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -67,7 +68,7 @@ async function trackedPaths(root: string, ref: string): Promise<string[]> {
   return Buffer.from(stdout).toString("utf8").split("\0").filter(Boolean).sort();
 }
 
-async function assertPinnedSource(root: string, ref: string): Promise<void> {
+export async function assertPinnedSource(root: string, ref: string): Promise<void> {
   try {
     await execFileAsync("git", ["diff", "--quiet", ref, "--", "."], { cwd: root });
   } catch (error) {
@@ -128,6 +129,7 @@ async function filesForTarget(input: {
   source: RepoSourceRegistryEntry;
   target: ProjectIndexerReadTarget;
   candidateNames: ReadonlySet<string>;
+  requirements: ReturnType<typeof selectedIndexerExclusions>;
 }): Promise<IndexerParserAuthorizedFile[]> {
   const root = join(input.projectRoot, input.source.materializedAt);
   const rootStat = await lstat(root);
@@ -140,7 +142,8 @@ async function filesForTarget(input: {
     );
   }
   const paths = (await trackedPaths(root, input.source.ref)).filter((path) =>
-    isParserCandidate(path, input.candidateNames)
+    isParserCandidate(path, input.candidateNames) && !excludedIndexerSourcePath({ requirements: input.requirements,
+      source_ref: input.target.source_ref, module_ref: input.target.module_refs[0] ?? null, path })
   );
   const moduleRef = input.target.module_refs[0] ?? null;
   const files: IndexerParserAuthorizedFile[] = [];
@@ -208,7 +211,7 @@ export async function inspectProjectIndexerParserSourceAuthority(input: {
   return {
     indexer_digest: indexerProtocolDigest(indexer),
     profile_id: indexer.profile.primary.id,
-    source_registry_digest: indexerRequirementSourceBoundaryDigest(sources),
+    source_registry_digest: scopedIndexerSourceBoundaryDigest(sources, targets, selectedIndexerExclusions(loadedRegistry.registry, input.indexer_id)),
   };
 }
 
@@ -247,6 +250,7 @@ export async function materializeProjectIndexerParserFiles(input: {
       source,
       target,
       candidateNames,
+      requirements: selectedIndexerExclusions(loadedRegistry.registry, input.indexer_id),
     }));
   }
   return {

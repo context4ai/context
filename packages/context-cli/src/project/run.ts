@@ -70,8 +70,6 @@ function resourceLabel(resource: PhaseResourceReference): string {
       return `knowledge:${resource.collection}:approved`;
     case "knowledge.approved":
       return "knowledge:approved";
-    case "knowledge.decisions":
-      return "knowledge:decisions";
     case "package.template":
       return `template:${resource.path}`;
     case "review.payload":
@@ -122,7 +120,6 @@ function phaseResourcePlan(resource: PhaseResourceReference): ProjectPhaseResour
         status: resource.status,
       };
     case "knowledge.approved":
-    case "knowledge.decisions":
     case "package.template":
     case "review.payload":
       return {
@@ -258,6 +255,8 @@ function customPhaseContext(input: {
 export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
+  deliver?: boolean;
+  deliverySize?: string;
   list?: boolean;
   dryRun?: boolean;
   managed?: boolean;
@@ -291,6 +290,8 @@ export async function runProjectPhaseCommand(input: {
       managed: input.managed === true,
       authorities: input.authorities ?? [],
       ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
+      ...(input.deliver === undefined ? {} : { deliver: input.deliver }),
+      ...(input.deliverySize === undefined ? {} : { deliverySize: input.deliverySize }),
     });
     if (format === "json") {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

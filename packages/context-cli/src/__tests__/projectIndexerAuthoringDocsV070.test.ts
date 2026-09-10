@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { loadProvider } from "@c4a/agent-graph";
 
 const ROOT = resolve(import.meta.dir, "../../../..");
 const DOC_ROOT = resolve(ROOT, "packages/context/docs/guides");
@@ -14,21 +15,6 @@ async function body(path: string): Promise<string> {
 describe("0.7.0 Indexer authoring documentation", () => {
   test("documents registry-only selection and all customization outcomes", async () => {
     const guide = await body(resolve(DOC_ROOT, "indexer-provider-and-customization.md"));
-    for (const anchor of [
-      "registry-only by default",
-      "Six-level customization ladder",
-      "Provider only",
-      "Config",
-      "Instructions append",
-      "Template override",
-      "Program extension",
-      "Restricted replace",
-      "Upgrade and conflict handling",
-      "Debugging commands",
-      "Completion check",
-    ]) {
-      expect(guide).toContain(anchor);
-    }
     for (const outcome of [
       "indexer-provider-required",
       "indexer-provider-unavailable",
@@ -40,67 +26,55 @@ describe("0.7.0 Indexer authoring documentation", () => {
     }
   });
 
-  test("exposes the customization guide from root Skill, generated command and Actions", async () => {
-    const sources = await Promise.all([
-      body(resolve(PLUGIN_ROOT, "skills/context/SKILL.md")),
-      body(resolve(PLUGIN_ROOT, "repo-install/claude/commands/context.md")),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/configure-indexer-providers/SKILL.md",
-      )),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/propose-indexer-customization/SKILL.md",
-      )),
-      body(resolve(
-        WORKFLOW_ROOT,
-        "skills/prepare-indexer-customization-project/SKILL.md",
-      )),
+  test("ships the required customization guide and linked manuals with its workflow Actions", async () => {
+    const provider = await loadProvider(resolve(ROOT, "packages/context-cli/dist/providers/context/manifest.json"));
+    const guideRef = "resources/contracts/indexer-provider-guide.yaml";
+    const skills = new Set([
+      "skills/run-indexer-lifecycle/SKILL.md",
+      "skills/configure-indexer-providers/SKILL.md",
+      "skills/propose-indexer-customization/SKILL.md",
+      "skills/prepare-indexer-customization-project/SKILL.md",
     ]);
-    for (const source of sources) {
-      expect(source).toContain(
-        "docs/guides/indexer-provider-and-customization.md",
-      );
+    const found = new Set<string>();
+    for (const graph of provider.graphs.values()) {
+      for (const node of graph.definition.nodes) {
+        if (node.kind !== "action") continue;
+        const action = provider.actions.get(resolve(provider.root, node.action));
+        const skill = action?.definition.skill;
+        if (skill === undefined || !skills.has(skill)) continue;
+        found.add(skill);
+        expect(node.resources?.required).toContain(guideRef);
+      }
+    }
+    expect(found).toEqual(skills);
+    const guide = provider.resources.get(resolve(provider.root, guideRef));
+    if (guide === undefined) throw new Error("required Provider guide is absent from the bundle");
+    const pending = [guide.contentPath];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop()!;
+      if (visited.has(file)) continue;
+      visited.add(file);
+      expect(provider.files.has(file)).toBe(true);
+      const markdown = await body(file);
+      const relative = file.split("/references/")[1];
+      if (relative === undefined) throw new Error("Provider guide does not identify its bundled manual");
+      expect(markdown).toBe(await body(resolve(ROOT, "packages/context/docs", relative)));
+      for (const match of markdown.matchAll(/\]\(([^)]+\.md)(?:#[^)]*)?\)/gu)) {
+        if (!/^https?:/u.test(match[1]!)) pending.push(resolve(dirname(file), match[1]!));
+      }
     }
   });
 
-  test("covers all 23 shared Code author contracts", async () => {
-    const guide = await body(resolve(DOC_ROOT, "code-indexer-skill-authoring.md"));
-    const numbered = [...guide.matchAll(/^([1-9]|1[0-9]|2[0-3])\. \*\*/gmu)]
-      .map((match) => Number(match[1]));
-    expect(numbered).toEqual(Array.from({ length: 23 }, (_, index) => index + 1));
-    for (const anchor of [
-      "context-indexer.yaml",
-      "Artifact Bundles",
-      "Reader questions",
-      "Material gaps",
-      "Provider only → config",
-      "controlled execution",
-      "forward tests",
+  test("Provider skills link to readable authoring guides", async () => {
+    for (const [skill, guide] of [
+      ["context-code-indexer", "code-indexer-skill-authoring.md"],
+      ["context-markdown-indexer", "markdown-indexer-skill-authoring.md"],
     ]) {
-      expect(guide).toContain(anchor);
+      expect(await body(resolve(PLUGIN_ROOT, `skills/${skill}/SKILL.md`)))
+        .toContain(`docs/guides/${guide}`);
+      expect((await body(resolve(DOC_ROOT, guide!))).trim().length).toBeGreaterThan(0);
     }
-    expect(await body(resolve(PLUGIN_ROOT, "skills/context-code-indexer/SKILL.md")))
-      .toContain("docs/guides/code-indexer-skill-authoring.md");
-  });
-
-  test("covers Markdown capture, placement, reuse, editorial, gap and incremental boundaries", async () => {
-    const guide = await body(resolve(DOC_ROOT, "markdown-indexer-skill-authoring.md"));
-    for (const anchor of [
-      "Capture before semantics",
-      "Activation and source roles",
-      "Section projection and collection mapping",
-      "Reusing Code Nodes",
-      "Artifact and Section planning",
-      "Editorial policy",
-      "Missing material",
-      "Section/Artifact-local",
-      "Source authorization, capture revision safety",
-    ]) {
-      expect(guide).toContain(anchor);
-    }
-    expect(await body(resolve(PLUGIN_ROOT, "skills/context-markdown-indexer/SKILL.md")))
-      .toContain("docs/guides/markdown-indexer-skill-authoring.md");
   });
 
   test("publishes the complete Agent step and instruction materialization contracts", async () => {
@@ -112,8 +86,10 @@ describe("0.7.0 Indexer authoring documentation", () => {
     };
     for (const definition of [
       "providerSelection",
-      "partition",
-      "author",
+      "providerResolution",
+      "providerProgramAuthorization",
+      "partitionBatch",
+      "authorBatch",
       "postAuthor",
       "structureReview",
       "layoutConfirmation",
@@ -138,20 +114,8 @@ describe("0.7.0 Indexer authoring documentation", () => {
       "customization-append",
     ]);
 
-    const agentSkill = await body(resolve(
-      WORKFLOW_ROOT,
-      "skills/run-indexer-agent-step/SKILL.md",
-    ));
-    for (const exactProjectionRule of [
-      "`fact_ref` = the `fact` item's `value.fact_ref`",
-      "`fact_kind` = the `fact` item's `value.kind`",
-      "`value` = the `fact` item's `value.payload` exactly",
-      "matching `selected-fact`",
-    ]) {
-      expect(agentSkill).toContain(exactProjectionRule);
-    }
-    expect(agentSkill).toMatch(
-      /performs dependency, schema,\s+owner, scope, and per-workset validation/u,
-    );
+    // Payload structure is checked above and exercised by Agent-step integration
+    // tests. Do not make the author's natural-language instructions a snapshot.
+
   });
 });

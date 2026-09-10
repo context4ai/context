@@ -1,0 +1,281 @@
+[
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-domain-reference",
+    "anonymized": true,
+    "profile": "domain-reference",
+    "source_role": "authoritative-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-domain-reference",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-purpose"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-domain-reference-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-domain-reference-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-product-requirements",
+    "anonymized": true,
+    "profile": "product-requirements",
+    "source_role": "authoritative-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-product-requirements",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-purpose"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-product-requirements-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-product-requirements-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-technical-guide",
+    "anonymized": true,
+    "profile": "technical-guide",
+    "source_role": "authoritative-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-technical-guide",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-structure"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-technical-guide-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-technical-guide-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-user-and-developer-guide",
+    "anonymized": true,
+    "profile": "user-and-developer-guide",
+    "source_role": "supporting-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-user-and-developer-guide",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-operation"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-user-and-developer-guide-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-user-and-developer-guide-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-runbook",
+    "anonymized": true,
+    "profile": "runbook",
+    "source_role": "operational-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-runbook",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-operation"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-runbook-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-runbook-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-faq-support",
+    "anonymized": true,
+    "profile": "faq-support",
+    "source_role": "supporting-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-faq-support",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-purpose"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-faq-support-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-faq-support-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-decision-record",
+    "anonymized": true,
+    "profile": "decision-record",
+    "source_role": "decision-record",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-decision-record",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-purpose"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-decision-record-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-decision-record-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-incident-review",
+    "anonymized": true,
+    "profile": "incident-review",
+    "source_role": "operational-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-incident-review",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-operation"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-incident-review-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-incident-review-source"
+    ]
+  },
+  {
+    "protocol": "context.indexer.authoring-fixture/v1",
+    "id": "anonymous-note-test-validation",
+    "anonymized": true,
+    "profile": "test-validation",
+    "source_role": "authoritative-document",
+    "logical_unit_id": "reader-subject",
+    "logical_unit_ref": "node:anonymous-test-validation",
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
+    "artifact_policy_variant": "standard",
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:reader-operation"
+        ],
+        "evidence_refs": [
+          "evidence:anonymous-test-validation-source"
+        ]
+      }
+    ],
+    "evidence_refs": [
+      "evidence:anonymous-test-validation-source"
+    ]
+  }
+]

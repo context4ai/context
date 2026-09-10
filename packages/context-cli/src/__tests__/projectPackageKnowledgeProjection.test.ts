@@ -13,6 +13,17 @@ function frontmatter(content: string): Record<string, unknown> {
 }
 
 describe("package knowledge consumer projection", () => {
+  test("preserves an opening title behind a projected section anchor", () => {
+    const projected = projectPackageKnowledgeMarkdown([
+      "---", "title: Guide", "---", "",
+      '<!-- context:section id="opening" -->', "# Guide", "", "Body.",
+      "<!-- /context:section -->",
+    ].join("\n"));
+    expect(projected).toContain('<a id="section-opening"></a>');
+    expect(projected.match(/^# Guide$/gmu)).toHaveLength(1);
+    expect(frontmatter(projected).description).toBe("Body.");
+    expect(projectPackageKnowledgeMarkdown(projected)).toBe(projected);
+  });
   test("keeps reader metadata while moving graph and provenance metadata out of pages", () => {
     const input = [
       "---",

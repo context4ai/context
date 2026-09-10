@@ -1,6 +1,7 @@
 export interface StyleLocator {
   path: string;
   line: number;
+  end_line?: number;
   column: number;
   qualified_item_path: string;
 }
@@ -72,6 +73,7 @@ export interface StyleDiagnostic {
 
 export interface StyleDocumentCatalog {
   path: string;
+  lines?: number;
   syntax: "css" | "scss" | "excluded";
   disposition: "analyzed" | "unsupported" | "excluded";
   imports: StyleImport[];

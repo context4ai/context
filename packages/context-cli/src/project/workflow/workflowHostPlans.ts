@@ -57,9 +57,7 @@ function reviewApproveCommand(
   ) {
     return undefined;
   }
-  return observation.draftCollections.length === 1
-    ? `context review approve-all ${observation.draftCollections[0]} --managed --format json`
-    : "context review approve-all --all --managed --format json";
+  return "context review apply '<review-decisions-file>' --format json";
 }
 
 function reviewForceApproveCommand(
@@ -225,11 +223,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
             factory: "llmsPackage",
             required: ["name", "template"],
             defaults: { template: "src/package-templates/llms" },
-          },
-          {
-            id: "none",
-            factory: null,
-            required: [],
           },
         ],
         resource_delivery: {

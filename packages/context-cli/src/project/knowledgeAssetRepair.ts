@@ -41,13 +41,13 @@ function sourceLocators(frontmatter: Record<string, unknown>): string[] {
 }
 
 function moduleSourceIdentity(source: string): {
-  sourceType: "file" | "lark";
+  sourceType: "file" | "lark" | "note" | "sessions";
   sourceName: string;
 } | null {
-  const match = /^(file|lark):(.+)$/u.exec(source);
+  const match = /^(file|lark|note|sessions):(.+)$/u.exec(source);
   if (match?.[1] === undefined || match[2] === undefined) return null;
   return {
-    sourceType: match[1] as "file" | "lark",
+    sourceType: match[1] as "file" | "lark" | "note" | "sessions",
     sourceName: match[2],
   };
 }
@@ -174,7 +174,7 @@ export async function repairApprovedKnowledgeAssetProjections(
     if (unprojectedSourceAssetLinks(content).length > 0) affected.push({ ...file, content });
   }
   if (affected.length === 0) {
-    return { repairedPages: [], writtenAssets: [], removedAssets: [] };
+    return { repairedPages: [], writtenAssets: [], removedAssets: await removeOrphanKnowledgeAssets(projectRoot) };
   }
 
   const sourceRegistry = await validSourceRegistry(projectRoot);

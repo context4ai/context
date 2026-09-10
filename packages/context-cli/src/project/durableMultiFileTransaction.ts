@@ -74,7 +74,7 @@ async function syncDirectory(path: string): Promise<void> {
   }
 }
 
-async function safeProjectTarget(projectRoot: string, targetPath: string): Promise<string> {
+export async function safeProjectTarget(projectRoot: string, targetPath: string): Promise<string> {
   if (isAbsolute(targetPath) || targetPath.length === 0) {
     throw new TypeError("multi-file transaction target must be a relative path");
   }

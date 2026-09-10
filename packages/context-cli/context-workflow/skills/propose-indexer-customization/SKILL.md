@@ -10,7 +10,7 @@ metadata:
 # Propose Indexer Customization
 
 Read
-`node_modules/@c4a/context/docs/guides/indexer-provider-and-customization.md`
+the `context.indexer.provider-guide` resource at the exact path in the current Route
 and follow its six-level ladder. This Action handles the
 `indexer-customization-required` outcome only; it must not reinterpret
 `indexer-customization-invalid` or

@@ -13,7 +13,8 @@ knowledge are not produced by project phases in `src/index.ts`.
 ## Project boundary
 
 ```text
-sources/*/index.yaml       registered source boundaries
+sources/{repo,file,lark}/index.yaml   registered source boundaries
+sources/{note,sessions}/YYYYMMDD/*.md saved notes and conversation summaries
 src/index.ts               capture and package declarations
 src/indexers.yaml          knowledge-authoring authority
 knowledge/                 approved, human-readable knowledge
@@ -38,7 +39,7 @@ import {
   source,
 } from "@c4a/context";
 
-const docs = source("product-docs", { type: "file" });
+const docs = source("20260901/product-docs", { type: "file" });
 
 export default defineProject({
   sources: [docs],
@@ -64,7 +65,7 @@ never enter knowledge identity or package output.
 | API | Purpose |
 |---|---|
 | `defineProject()` | Declares the project boundary. |
-| `source()` / `allSources()` | References registered repo, file, or Lark sources. |
+| `source()` / `allSources()` | References registered repo/file/Lark sources or explicitly selects saved Note/Sessions. |
 | `captureFile()` / `captureLark()` | Creates deterministic document snapshots. |
 | `mdxJsonDocs()` | Configures the MDX/JSON documentation capture processor. |
 | `customPhase()` | Runs non-knowledge project orchestration. |
@@ -102,7 +103,10 @@ available from `node_modules/@c4a/context/templates/package-templates/`.
 Do not directly edit lifecycle files under `.tmp/context-runtime/`. The CLI
 owns Candidate state, Review application, recovery, close, verification, and
 build. Source registries, `src/index.ts`, `src/indexers.yaml`, approved
-`knowledge/`, and package templates are the durable project inputs.
+`knowledge/`, saved Note/Sessions and package templates are durable inputs.
+`structure.yaml` retains scope-level update baselines. Optional session commit/MR
+associations stay in the source file, not copied into knowledge headers. Saving
+a source alone does not start indexing.
 
 ## Documentation
 
@@ -113,3 +117,7 @@ build. Source registries, `src/index.ts`, `src/indexers.yaml`, approved
 - [Indexer Provider Protocol](./docs/reference/indexer-provider-protocol.md)
 - [Package Outputs](./docs/guides/package-outputs.md)
 - [Package Templates](./docs/reference/package-templates.md)
+
+- [Update existing knowledge](./docs/guides/knowledge-updates.md)
+- [Prepare notes](./docs/guides/note.md)
+- [Prepare conversation summaries](./docs/guides/sessions.md)

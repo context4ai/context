@@ -9,6 +9,12 @@ mediaType: text/markdown
 Use the current route facts and Context SDK documentation to make only the
 declaration requested by the route in `src/index.ts`.
 
+Complete the required readings and run their `acknowledge-current` / `after_read`
+command **before editing**. Use the resulting current configuration Route for the
+edit. Editing changes the revision: afterwards refresh status, never run an
+acknowledgement bound to the pre-edit revision. Reading acknowledgement confirms
+the inputs, not approval or completion of the configuration change.
+
 - Do not invent sources, modules, collections, or output types.
 - Ask for a user decision when the route is gated and no current-session
   authority is present.

@@ -1,3 +1,6 @@
+import { reuseCommandFileRead } from "./commandReadCache.js";
+import { INDEXER_CURRENT_FINALIZATION_PATH, composerFinalizationState,
+  type ComposerBatchFinalization } from "./indexerComposerFinalization.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -207,11 +210,11 @@ export async function readPostAuthorCurrentState(
   projectRoot: string,
   authorWorksetDigest: string,
 ): Promise<PostAuthorRuntimeState | undefined> {
-  const value = await readPostAuthorJsonMaybe(
-    projectRoot,
-    postAuthorCurrentStatePath(authorWorksetDigest),
-  );
-  return value === undefined ? undefined : validateState(value);
+  const path = postAuthorCurrentStatePath(authorWorksetDigest);
+  return reuseCommandFileRead({ key: "validated-post-author-state", paths: [join(projectRoot, path)], read: async () => {
+    const value = await readPostAuthorJsonMaybe(projectRoot, path);
+    return value === undefined ? undefined : validateState(value);
+  } });
 }
 
 function validateEnvelopeRecord(value: unknown): PostAuthorEnvelopeRecord {
@@ -356,12 +359,22 @@ export async function persistPostAuthorStates(input: {
   operation: IndexerPostAuthorStoreReceipt["operation"];
   transaction_kind: string;
   states: readonly PostAuthorStatePersistenceInput[];
+  composer_batch?: ComposerBatchFinalization;
   inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<DurableMultiFileTransactionReceipt | null> {
   if (input.states.length === 0) return null;
-  const targets = canonicalTargets((await Promise.all(input.states.map((state) =>
+  const stateTargets = (await Promise.all(input.states.map((state) =>
     postAuthorStateTargets({ projectRoot: input.projectRoot, ...state })
-  ))).flat());
+  ))).flat();
+  if (input.composer_batch !== undefined) {
+    const target = await writeTarget({
+      projectRoot: input.projectRoot,
+      path: INDEXER_CURRENT_FINALIZATION_PATH,
+      value: composerFinalizationState(input.composer_batch),
+    });
+    if (target !== undefined) stateTargets.push(target);
+  }
+  const targets = canonicalTargets(stateTargets);
   if (targets.length === 0) return null;
   return runDurableMultiFileTransaction({
     projectRoot: input.projectRoot,

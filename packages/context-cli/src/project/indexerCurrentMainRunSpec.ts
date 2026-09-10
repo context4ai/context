@@ -1,3 +1,8 @@
+import type { IndexerArticlePlan } from "@c4a/context";
+import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
+import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
+import { supportsPrimaryArtifact } from "./indexerPrimaryArtifactPolicy.js";
+import type { IndexerPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerMainRunRequest,
   buildIndexerRunEnvironment,
@@ -82,10 +87,12 @@ function assertCurrentAuthority(input: {
   binding: ProjectIndexerMainSourceBinding;
   authority: CurrentPrimaryAuthority;
   dependency_view?: unknown;
+  partition_projection?: IndexerConsumerWorksetProjection;
 }): void {
   assertProjectIndexerMainSourceBinding({
     workset: input.workset,
     binding: input.binding,
+    ...(input.partition_projection === undefined ? {} : { partition_projection: input.partition_projection }),
     ...(input.dependency_view === undefined
       ? {}
       : { dependency_view: input.dependency_view }),
@@ -114,17 +121,6 @@ function finalAuthority(authority: CurrentPrimaryAuthority) {
   };
 }
 
-function sourcePrecedenceDigest(input: {
-  binding: ProjectIndexerMainSourceBinding;
-}): string {
-  return input.binding.adapter === "parser-facts"
-    ? input.binding.parser_binding.source_merge_digest
-    : indexerProtocolDigest({
-        source_snapshot_digest: input.binding.source_snapshot_digest,
-        source_identity_inventory_digest:
-          input.binding.source_identity_inventory.inventory_digest,
-      });
-}
 
 function allowedArtifactIntents(input: {
   authority: CurrentPrimaryAuthority;
@@ -172,14 +168,25 @@ function allowedArtifactIntents(input: {
   return intents;
 }
 
+function sourcePrecedenceDigest(binding: ProjectIndexerMainSourceBinding): string {
+  return binding.adapter === "parser-facts"
+    ? binding.parser_binding.source_merge_digest
+    : indexerProtocolDigest({
+        source_snapshot_digest: binding.source_snapshot_digest,
+        source_identity_inventory_digest: binding.source_identity_inventory.inventory_digest,
+      });
+}
+
 function runEnvironment(input: {
   workset: ReturnType<typeof validateIndexerMainWorkset>;
   binding: ProjectIndexerMainSourceBinding;
   authority: CurrentPrimaryAuthority;
   dependency_view: ReturnType<typeof validateIndexerAuthorDependencyView> | null;
 }) {
+  const scopedPartition = input.workset.stage === "partition" &&
+    input.workset.source_binding_digest !== input.binding.source_binding_digest;
   const sourceSnapshotDigest = input.dependency_view === null
-    ? input.binding.source_snapshot_digest
+    ? (scopedPartition ? input.workset.source_binding_digest : input.binding.source_snapshot_digest)
     : indexerProtocolDigest({
         source_ref: input.dependency_view.source_ref,
         module_ref: input.dependency_view.module_ref,
@@ -190,7 +197,7 @@ function runEnvironment(input: {
         ),
       });
   const sourcePrecedence = input.dependency_view === null
-    ? sourcePrecedenceDigest({ binding: input.binding })
+    ? (scopedPartition ? input.workset.source_binding_digest : sourcePrecedenceDigest(input.binding))
     : indexerProtocolDigest({
         selected_facts: input.dependency_view.positive_nodes.flatMap((node) =>
           node.kind === "selected-fact"
@@ -232,7 +239,7 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
   if (workset.stage !== "partition") {
     throw new TypeError("partition run preparation only accepts partition worksets");
   }
-  assertCurrentAuthority({ workset, binding, authority });
+  assertCurrentAuthority({ workset, binding, authority, ...(input.partition_projection === undefined ? {} : { partition_projection: input.partition_projection }) });
   const strategies = authority.partition_strategies.strategies.map((strategy) => ({
     strategy_ref: strategy.strategy_ref,
     strategy_digest: strategy.strategy_digest,
@@ -284,11 +291,19 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
       previous_attempt_digest: null,
     },
   });
+  const dependencyDigest = partitionDependencyDigest(binding, input.partition_projection);
   return normalizeRunSpec({
     protocol: "context.indexer.main-run-spec/v1",
     request,
     validation: {
       stage: "partition",
+      available_artifact_intents: authority.profile.layout_mappings.flatMap((mapping) =>
+        mapping.source_roles.includes(request.run_environment.source_role) ? mapping.artifact_kinds.filter(kind =>
+          authority.profile.artifact_policy_variants.some(policy => supportsPrimaryArtifact(kind, { id: policy.id, required_artifact_kinds: policy.artifact_kinds.required, discretionary_artifact_kinds: policy.artifact_kinds.discretionary })))
+          .map((kind) => [request.run_environment.source_role, mapping.document_kind, mapping.reader_goal, kind].join("/")) : []
+      ),
+      available_templates: (authority.manifest.provider.templates ?? []).filter((template) => template.profile === authority.profile.id),
+      ...(dependencyDigest === undefined ? {} : { partition_dependency_digest: dependencyDigest }),
       canonical_inventory_members: canonicalInventory,
       authorized_source_refs: [workset.source_ref],
       authorized_strategies: strategies,
@@ -310,6 +325,7 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   dependency_view: unknown;
   canonical_inventory_members: readonly IndexerInventoryMember[];
   expected_subject_key: unknown;
+  knowledge_input?: ApprovedKnowledgeAuthorInput;
   artifact_policy_eligibility: unknown;
   allowed_question_targets: readonly {
     question_target_key: string;
@@ -317,6 +333,21 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   }[];
   enrichment?: CurrentIndexerExtensionFacts;
   supplementary_sources?: readonly AuthorSupplementarySource[];
+  page_template?: IndexerPageTemplate | undefined;
+  article_templates?: Record<string, IndexerPageTemplate> | undefined;
+  page_guidance?: { template_id: string; content: string } | undefined;
+  article_guidance?: Record<string, { template_id: string; content: string }> | undefined;
+  page_plan?: {
+    articles?: IndexerArticlePlan[];
+    scope_change?: { removed_member_ids: string[] };
+    reader_task?: string;
+    outline?: string[];
+    artifact_intent?: string;
+    template_id?: string;
+    priority?: number;
+    delivery_boundary?: boolean;
+    ready_for_author?: boolean;
+  };
 }): MainRunSpec {
   const workset = validateIndexerMainWorkset(input.workset);
   if (workset.stage !== "author") {
@@ -411,9 +442,16 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     request,
     validation: {
       stage: "author",
+      ...(input.page_guidance === undefined ? {} : { page_guidance: input.page_guidance }),
+      ...(input.article_guidance === undefined ? {} : { article_guidance: input.article_guidance }),
+      ...(input.article_templates === undefined ? {} : { article_templates: input.article_templates }),
+      ...(input.page_template === undefined ? {} : { page_template: input.page_template }),
+      ...(input.page_plan === undefined ? {} : { page_plan: input.page_plan }),
+      available_templates: (input.authority.manifest.provider.templates ?? []).filter((template) => template.profile === input.authority.profile.id),
       dependency_view: dependencyView,
       canonical_inventory_members: canonicalInventory,
       expected_subject_key: input.expected_subject_key,
+      ...(input.knowledge_input === undefined ? {} : { knowledge_input: input.knowledge_input }),
       artifact_policy_eligibility: eligibility,
       allowed_artifact_intents: artifactIntents,
       allowed_source_roles: [request.run_environment.source_role],

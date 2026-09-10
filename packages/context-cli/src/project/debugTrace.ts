@@ -1,9 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { appendFile, mkdir, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { DebugPerformanceSummary, type DebugPerformanceInput } from "./debugPerformanceSummary.js";
 
 export const CONTEXT_DEBUG_EVENT_SCHEMA = "context.debug.event.v1";
 export const CONTEXT_DEBUG_REPLAY_SCHEMA = "context.debug.replay.v1";
@@ -30,6 +31,7 @@ interface DebugInvocationContext {
   invocationId: string;
   parentInvocationId?: string;
   projectRoot: string;
+  performance: DebugPerformanceSummary;
 }
 
 interface DebugGraphState {
@@ -239,6 +241,10 @@ export async function initializeContextDebug(projectRoot: string): Promise<void>
   await appendEvent(projectRoot, "debug.enabled", { source: "init" }, { force: true });
 }
 
+export function currentDebugProjectRoot(): string | undefined {
+  return invocationStorage.getStore()?.projectRoot;
+}
+
 export function currentDebugInvocationId(): string | undefined {
   return invocationStorage.getStore()?.invocationId;
 }
@@ -257,29 +263,52 @@ export async function withDebugCliInvocation<T>(
   const invocation: DebugInvocationContext = {
     invocationId: randomUUID(),
     projectRoot,
+    performance: new DebugPerformanceSummary(),
     ...(process.env.CONTEXT_DEBUG_PARENT_INVOCATION_ID === undefined
       ? {}
       : { parentInvocationId: process.env.CONTEXT_DEBUG_PARENT_INVOCATION_ID }),
   };
   const started = Date.now();
   return invocationStorage.run(invocation, async () => {
+    let artifact: Record<string, unknown> = {};
+    try {
+      const path = resolve(argv[1]!);
+      artifact = { executable: path, sha256: createHash("sha256").update(readFileSync(path)).digest("hex") };
+    } catch { /* An embedded invocation may have no executable file. */ }
     await appendEvent(projectRoot, "cli.invoked", {
-      argv: sanitizeArgv(argv),
+      argv: sanitizeArgv(argv), artifact,
+    });
+    let terminal = false;
+    const finish = async (data: Record<string, unknown>) => {
+      if (terminal) return;
+      terminal = true;
+      await appendEvent(projectRoot, "cli.completed", {
+        duration_ms: Date.now() - started, performance: invocation.performance.snapshot(), ...data,
+      }, { force: true });
+    };
+    // Capture only signals whose default process termination we can preserve.
+    // Do not supersede an embedding host's own signal handlers.
+    const signals = (["SIGINT", "SIGTERM"] as const).filter(signal => process.listenerCount(signal) === 0);
+    const handlers = signals.map(signal => {
+      const handler = () => {
+        void invocationStorage.run(invocation, () => finish({ outcome: "aborted", signal })).finally(() => {
+          process.removeListener(signal, handler);
+          process.kill(process.pid, signal);
+        });
+      };
+      process.once(signal, handler);
+      return { signal, handler };
     });
     try {
       const result = await action();
-      await appendEvent(projectRoot, "cli.completed", {
-        duration_ms: Date.now() - started,
-        outcome: "success",
-      }, { force: true });
+      await finish({ outcome: "success" });
       return result;
     } catch (error) {
-      await appendEvent(projectRoot, "cli.completed", {
-        duration_ms: Date.now() - started,
-        outcome: "error",
-        error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
-      }, { force: true });
+      await finish({ outcome: "error",
+        error: error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000) });
       throw error;
+    } finally {
+      for (const { signal, handler } of handlers) process.removeListener(signal, handler);
     }
   });
 }
@@ -324,6 +353,10 @@ export async function recordWorkflowExecutionScope(input: {
   phase: "opened" | "closed";
   data: Record<string, unknown>;
 }): Promise<void> {
+  // The lock already records duration and failures. Its normal open/close pair
+  // carries no additional diagnostic information.
+  if (input.data.executor === "project-write" &&
+      !(typeof input.data.release_errors === "number" && input.data.release_errors > 0)) return;
   await appendEvent(
     input.projectRoot,
     input.phase === "opened" ? "workflow.scope-opened" : "workflow.scope-closed",
@@ -342,14 +375,9 @@ export async function recordWorkflowStop(projectRoot: string, data: Record<strin
   await appendEvent(projectRoot, "workflow.stopped", data);
 }
 
-export async function recordContextDebugPerformance(input: {
-  projectRoot: string;
-  operation: string;
-  durationMs: number;
-  outcome: "success" | "error";
-  counters?: Readonly<Record<string, number>>;
-  data?: Readonly<Record<string, unknown>>;
-}): Promise<void> {
+export async function recordContextDebugPerformance(input: DebugPerformanceInput): Promise<void> {
+  const invocation = invocationStorage.getStore();
+  if (invocation?.projectRoot === resolve(input.projectRoot) && invocation.performance.add(input)) return;
   await appendEvent(input.projectRoot, "performance.measurement", {
     operation: input.operation,
     duration_ms: Math.max(0, Math.round(input.durationMs * 1_000) / 1_000),
@@ -421,12 +449,17 @@ export async function contextDebugStatus(projectRoot: string): Promise<Record<st
     return result;
   }, {});
   const state = await readDebugState(debugPaths(projectRoot).state);
+  const terminated = new Set(events.filter(event => event.kind === "cli.completed").map(event => event.invocation_id));
   return {
     protocol: "context.debug.status.v1",
     enabled: isContextDebugEnabled(projectRoot),
     trace_id: state?.traceId,
     event_count: events.length,
     counts,
+    unmatched_invocations: events.filter(event => event.kind === "cli.invoked" &&
+      !terminated.has(event.invocation_id))
+      .map(event => ({ invocation_id: event.invocation_id, at: event.at, argv: event.data.argv,
+        next: "No terminal event. Inspect current Route and accepted receipts before retrying; do not infer failure." })),
     paths: {
       events: CONTEXT_DEBUG_EVENTS,
       state: CONTEXT_DEBUG_STATE,

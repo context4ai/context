@@ -86,6 +86,10 @@ function relationSourceFile(
   symbols: readonly SymbolInfo[],
   filePaths: ReadonlySet<string>,
 ): string | null {
+  // New parser output carries authoritative provenance. If it points at a
+  // file outside the extraction scope, keep it unresolved rather than
+  // silently falling back to a same-named symbol from another file.
+  if (relation.file !== undefined) return filePaths.has(relation.file) ? relation.file : null;
   if (filePaths.has(relation.from)) return relation.from;
   const candidates = symbols.filter((symbol) => symbol.name === relation.from);
   if (candidates.length === 1) return candidates[0]!.file;

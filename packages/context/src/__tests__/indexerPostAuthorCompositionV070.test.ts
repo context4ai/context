@@ -592,6 +592,14 @@ describe("post-author runtime ledger and completion predicate", () => {
       composer_ref: currentPlan.worksets[0]!.composer_ref,
     });
     expect(started.ledger.entries[0]?.state).toBe("running");
+    const observed = observeIndexerPostAuthorState({
+      plan: currentPlan, ledger: started.ledger,
+      effective_composer_set: effectiveSet(["examples"]),
+      validator_contract_digest: VALIDATOR_DIGEST,
+      accepted_input_view_digest: INPUT_VIEW_DIGEST,
+    });
+    expect(observed.ledger).toEqual(started.ledger);
+    expect(observed.status).toMatchObject({ pending_count: 1, can_reconcile: false });
     const recovered = recoverIndexerPostAuthorRunLedger({
       plan: currentPlan,
       previous_ledger: started.ledger,

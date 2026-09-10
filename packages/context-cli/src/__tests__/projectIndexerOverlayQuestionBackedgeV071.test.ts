@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -654,9 +655,15 @@ describe("validated overlay question amendment back-edge", () => {
       "after-transaction-remove",
       "after-transaction-remove-dir-fsync",
     ];
+    // Selection/rebind is covered above. Reuse its immutable result here;
+    // each crash still exercises real journals, fsync, rename and recovery.
+    const baseline = await fixture();
+    const prepared = await prepareCoupledProposal(baseline);
     for (const failurePoint of failurePoints) {
-      const sample = await fixture();
-      const prepared = await prepareCoupledProposal(sample);
+      const projectRoot = await mkdtemp(join(tmpdir(), "context-overlay-crash-"));
+      temporaryRoots.push(projectRoot);
+      await cp(baseline.projectRoot, projectRoot, { recursive: true });
+      const sample = { ...baseline, projectRoot };
       await stageIndexerOverlayQuestionRegistryApplyProposal({
         projectRoot: sample.projectRoot,
         proposal: prepared.proposal,

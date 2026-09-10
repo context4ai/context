@@ -1,3 +1,4 @@
+import type { IndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerArtifactResultSchema,
@@ -8,10 +9,6 @@ import {
   buildIndexerArtifactDependencySet,
   type IndexerArtifactDependencySet,
 } from "./indexerArtifactDependencies.js";
-import {
-  buildIndexerGeneratedAuthoringAudit,
-  type IndexerGeneratedAuthoringAudit,
-} from "./indexerGeneratedAuthoringAudit.js";
 import {
   indexerLayerCompositionInputSchema,
   validateIndexerLayerCompositionInput,
@@ -172,6 +169,7 @@ interface PartitionValidationContext {
 }
 
 interface AuthorValidationContext {
+  page_plan?: { articles?: IndexerArticlePlan[] };
   stage: "author";
   dependency_view: unknown;
   expected_subject_key: unknown;
@@ -200,7 +198,6 @@ export function validateIndexerMainRunResult(input: {
   request: IndexerMainRunRequest;
   result: IndexerMainRunResult;
   operation_result: IndexerPartitionPlan | IndexerArtifactResult;
-  authoring_audit: IndexerGeneratedAuthoringAudit | null;
   artifact_dependency_set: IndexerArtifactDependencySet | null;
   run_envelope: IndexerRunEnvelope;
 } {
@@ -216,7 +213,6 @@ export function validateIndexerMainRunResult(input: {
     throw new TypeError("main run Result does not match its request/stage/input view");
   }
   let operationResult: IndexerPartitionPlan | IndexerArtifactResult;
-  let authoringAudit: IndexerGeneratedAuthoringAudit | null = null;
   let artifactDependencySet: IndexerArtifactDependencySet | null = null;
   const runEnvelope = buildIndexerRunEnvelope({
     workset: request.workset,
@@ -265,6 +261,7 @@ export function validateIndexerMainRunResult(input: {
       expected_provider: request.final_authority,
       expected_input_digest: request.execution_request_digest,
       expected_subject_key: input.validation.expected_subject_key,
+      ...(input.validation.page_plan?.articles === undefined ? {} : { planned_articles: input.validation.page_plan.articles }),
       artifact_policy_eligibility: input.validation.artifact_policy_eligibility,
       allowed_source_roles: input.validation.allowed_source_roles,
       ...(input.validation.authorized_evidence_targets === undefined
@@ -287,7 +284,6 @@ export function validateIndexerMainRunResult(input: {
     if (operationResult.source_role !== request.run_environment.source_role) {
       throw new TypeError("author Result source role does not match the run environment");
     }
-    authoringAudit = buildIndexerGeneratedAuthoringAudit(operationResult);
     artifactDependencySet = buildIndexerArtifactDependencySet({
       result: operationResult,
       workset: request.workset as IndexerMainAuthorWorkset,
@@ -308,7 +304,6 @@ export function validateIndexerMainRunResult(input: {
     request,
     result,
     operation_result: operationResult,
-    authoring_audit: authoringAudit,
     artifact_dependency_set: artifactDependencySet,
     run_envelope: runEnvelope,
   };

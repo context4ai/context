@@ -28,22 +28,34 @@ preload the whole manual set.
 | Author or inspect an Indexer Provider protocol | [Indexer Provider Protocol](./reference/indexer-provider-protocol.md) |
 | Select or customize an Indexer Provider | [Provider Selection and Customization](./guides/indexer-provider-and-customization.md) |
 | Author a Code or Markdown Indexer Skill | [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md) and [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md) |
+| Update approved pages, adjust current work, or roll back | [Knowledge Updates](./guides/knowledge-updates.md) |
+| Prepare, commit or restore a workspace | [Prepare](./guides/workspace-prepare.md), [Commit](./guides/workspace-commit.md), [Restore](./guides/workspace-restore.md) |
+| Save and use a note | [Note](./guides/note.md) |
+| Save a conversation summary with optional commit/MR associations | [Sessions](./guides/sessions.md) |
 | Choose a code extraction path | [Code Extractor Selection](./reference/code-extractors.md) |
 | Choose an Agent package or LLM document | [Package Outputs](./guides/package-outputs.md) |
 | Customize package files and indexes | [Package Templates](./reference/package-templates.md) and [Template Variables](./reference/template-variables.md) |
 | Preserve Lark images and embedded resources | [Lark Resource Materialization](./guides/lark-resources.md) |
+
+The defaults include Code, Markdown, Note and Sessions Indexers. The Host owns
+installation and skill switches; the Agent selects a compatible visible Provider,
+including a business replacement. Shared protocol does not mean shared editorial
+policy: read the selected skill's source-specific resources, not all source guides.
 
 ## Complete reference
 
 - [Getting Started](./getting-started.md) — end-to-end component-library flow.
 - [Agent Guide](./guides/agent-guide.md) — what an agent should do, and what it should not inspect manually.
 - [Agent Dialogue](./guides/agent-dialogue.md) — stable dialogue principles and how route-selected gate resources are discovered.
+- [Knowledge Updates](./guides/knowledge-updates.md) — page revisions, source updates, adjustment and rollback.
+- [Note](./guides/note.md) — originals, excerpts and summaries versus reader knowledge.
+- [Sessions](./guides/sessions.md) — conversation summaries, optional code links and independent topics.
 - [Package Outputs](./guides/package-outputs.md) — how to choose between an agent knowledge-base package, LLM text, or no package output.
 - [Lark Resource Materialization](./guides/lark-resources.md) — how embedded resources move from source evidence to approved knowledge and package assets.
 - [Project API](./reference/project-api.md) — `defineProject`, sources, capture, Indexers, and packages.
 - [Indexer Provider Protocol](./reference/indexer-provider-protocol.md) — manifest, controlled execution, detector/inspector I/O, customization, and staged project apply.
 - [Provider Selection and Customization](./guides/indexer-provider-and-customization.md) — registry-only selection, the six-level customization ladder, upgrade conflicts, debugging, and completion conditions.
-- [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md) — the 23-point Provider Skill release contract and anonymous fixture expectations.
+- [Code Indexer Authoring](./guides/code-indexer-skill-authoring.md) — the Provider Skill release contract and anonymous fixture expectations.
 - [Markdown Indexer Authoring](./guides/markdown-indexer-skill-authoring.md) — capture/semantic boundaries, Section placement, material answers, editorial policy, and local incremental behavior.
 - [Code Extractor Selection](./reference/code-extractors.md) — inspect module technology signals and choose a built-in extractor, reusable structural package, or project adapter.
 - [Package Templates](./reference/package-templates.md) — `kbPackage`, `llmsPackage`, template variables, and examples.

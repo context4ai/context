@@ -73,7 +73,7 @@ describe("current registry changes invalidate workset authority", () => {
       value: { stage: "partition", results: [{ task_key: "task-001", result: {
         stage: "partition", outcome: "complete", groups: [], excluded: [], unsupported: [],
       } }] },
-    })).rejects.toThrow("current Indexer batch changed");
+    })).rejects.toThrow("revision does not match the current Indexer route");
 
     await advanceCurrentIndexerLifecycle(root);
     const next = await route();

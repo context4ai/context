@@ -85,3 +85,26 @@ describe("Indexer Fact/content layer protocol", () => {
     })).toThrow("digest");
   });
 });
+
+
+test("supporting defaults retain their evidence and cannot read unrelated subjects", () => {
+  const props: IndexerArtifactFact = { ...fact("fact:props", ""), subject_key: SUBJECT, value: {
+    name: "Props", kind: "type", file: "view.tsx", visibility: "exported", members: [
+      { name: "enabled", kind: "prop", typeAnnotation: "boolean", defaultValue: "false" },
+    ],
+  } };
+  const component: IndexerArtifactFact = { ...fact("fact:component", ""), subject_key: SUBJECT, value: {
+    name: "View", kind: "component", file: "view.tsx", visibility: "exported", propsType: "Props",
+    members: [{ name: "enabled", kind: "prop", typeAnnotation: "boolean", defaultValue: "true" }],
+  } };
+  const block = { block_id: "api", layer: "deterministic-block" as const, renderer: "public-contract-table" as const, fact_refs: [props.fact_ref] };
+  const rendered = materializeIndexerStructuredContent({ blocks: [block], facts: [props, component] })[0]!;
+  expect(rendered.markdown).toContain("| true |");
+  expect(rendered.markdown).not.toContain("| View | enabled |");
+  expect(rendered.fact_refs).toEqual(["fact:component", "fact:props"]);
+  expect(rendered.evidence_refs).toEqual(["evidence:component", "evidence:props"]);
+  const unrelated = { ...component, subject_key: { ...SUBJECT, local_key: "other" } };
+  const isolated = materializeIndexerStructuredContent({ blocks: [block], facts: [props, unrelated] })[0]!;
+  expect(isolated.markdown).toContain("| false |");
+  expect(isolated.fact_refs).toEqual(["fact:props"]);
+});

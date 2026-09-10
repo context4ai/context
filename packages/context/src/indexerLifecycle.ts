@@ -2,7 +2,7 @@ export * from "./indexerArtifactResult.js";
 export * from "./indexerCapabilityGroupEvidence.js";
 export * from "./indexerInventoryDisposition.js";
 export * from "./indexerStructuredDeclaration.js";
-export * from "./indexerGeneratedAuthoringAudit.js";
+export * from "./indexerStructuredClaims.js";
 export * from "./indexerExampleIdentity.js";
 export * from "./indexerExampleIdentityAudit.js";
 export * from "./indexerExampleDecision.js";

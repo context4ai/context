@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildIndexerAuthorDependencyView } from "@c4a/context";
-import { readIndexerAuthorSourceText } from "../project/indexerAuthorSourceText.js";
+import { INDEXER_AUTHOR_SOURCE_TEXT_MAX_BYTES, readIndexerAuthorSourceText } from "../project/indexerAuthorSourceText.js";
+import { indexerBatchStagePolicy } from "../project/indexerCurrentBatchPlanner.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -44,6 +45,15 @@ describe("authorized Author source text", () => {
     expect(await readIndexerAuthorSourceText({ ...input, spans: [...input.spans].reverse() })).toEqual(read);
   });
 
+  test("counts the whole file even when only one line is selected", async () => {
+    for (const trailing of ["", "\n"]) {
+      const text = Array.from({ length: 801 }, () => "x").join("\n") + trailing;
+      const read = await readIndexerAuthorSourceText(await fixture(text, [[1, 1]]));
+      expect(read.line_count).toBe(801);
+      expect(read.spans[0]!.text).toBe("x\n");
+    }
+  });
+
   test("rejects changed files and mismatched span identities", async () => {
     const input = await fixture("export const count = 1;\n", [[1, 1]]);
     await writeFile(join(input.source_root, input.path), "export const count = 2;\n");
@@ -51,11 +61,40 @@ describe("authorized Author source text", () => {
     await expect(readIndexerAuthorSourceText({ ...input, content_digest: fake })).rejects.toThrow("file identity");
   });
 
-  test("does not truncate oversized material or silently clamp invalid ranges", async () => {
+  test("delivers complete lightweight source bodies from old point-only anchors", async () => {
+    const source = '@use "theme";\n$primary: #123456;\n.theme-light {\n  color: $primary;\n}\n';
+    const input = await fixture(source, [[1, 1], [2, 2]]);
+    const original = structuredClone(input.spans);
+    const read = await readIndexerAuthorSourceText({ ...input, whole_file: true });
+    expect(read.spans).toHaveLength(1);
+    expect(read.spans[0]).toMatchObject({ start_line: 1, end_line: 6, text: source });
+    expect(read.spans[0]!.source_span_refs).toHaveLength(2);
+    expect(input.spans).toEqual(original);
+    // Delivery never drops the file snapshot/safety checks, even during resume.
+    await expect(readIndexerAuthorSourceText({ ...input, whole_file: true, max_bytes: 10 }))
+      .rejects.toThrow("source memory safety limit");
+    await writeFile(join(input.source_root, input.path), source.replace("123456", "654321"));
+    await expect(readIndexerAuthorSourceText({ ...input, whole_file: true }))
+      .rejects.toThrow("changed since Parser");
+  });
+
+  test("repairs stale line ranges without blocking source delivery", async () => {
     const input = await fixture("export const count = 1;\n", [[1, 4]]);
-    await expect(readIndexerAuthorSourceText(input)).rejects.toThrow("outside its pinned file");
+    await expect(readIndexerAuthorSourceText(input)).resolves.toMatchObject({
+      spans: [{ start_line: 1, end_line: 2, text: "export const count = 1;\n" }],
+    });
+    const omitted = await readIndexerAuthorSourceText(await fixture("export const count = 1;\n", [[4, 4]]));
+    expect(omitted.spans).toEqual([]);
     const valid = await fixture("export const count = 1;\n", [[1, 1]]);
-    await expect(readIndexerAuthorSourceText({ ...valid, max_bytes: 5 })).rejects.toThrow("batch input budget");
+    await expect(readIndexerAuthorSourceText({ ...valid, max_bytes: 5 })).rejects.toThrow("source memory safety limit");
+  });
+
+  test("retains one complete source range larger than the soft packing target", async () => {
+    const text = `export const documentation = '${"a".repeat(indexerBatchStagePolicy("author").max_input_bytes)}';\n`;
+    const input = await fixture(text, [[1, 1]]);
+    const read = await readIndexerAuthorSourceText({ ...input, max_bytes: INDEXER_AUTHOR_SOURCE_TEXT_MAX_BYTES });
+    expect(read.spans[0]!.text).toBe(text);
+    expect(read.bytes).toBe(Buffer.byteLength(text));
   });
 
   test("rejects escaping paths and symlinked source files", async () => {

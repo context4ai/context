@@ -108,11 +108,11 @@ function manifest(input: {
       completion_checks: ["artifact-bundle"],
     },
     customization: {
+      // This Provider declares neither a config_schema nor a program, so it can
+      // only advertise the two text hooks.
       supports: [
-        "config",
         "instructions-append",
         "template-override",
-        "program-extend",
       ],
       guide: "references/customization.md",
     },
@@ -278,9 +278,7 @@ describe("Agent-visible Skill capability", () => {
       }],
       logical_units: [{ id: "component", identity: "subject-key" }],
       customization_capabilities: [
-        "config",
         "instructions-append",
-        "program-extend",
         "template-override",
       ],
     });

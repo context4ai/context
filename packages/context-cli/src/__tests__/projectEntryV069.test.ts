@@ -6,6 +6,25 @@ import { resolveContextEntry } from "../project/entryCommand.js";
 import { initContextProject } from "../project/workspace.js";
 
 describe("single Context agent entry", () => {
+  test("resolves an existing VS Code workspace file to its containing directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-entry-workspace-file-"));
+    try {
+      const workspaceFile = join(root, "sample.code-workspace");
+      await writeFile(workspaceFile, "{}\n", "utf8");
+      const entry = resolveContextEntry({
+        cwd: root,
+        projectDir: workspaceFile,
+        language: "zh-CN",
+        dev: true,
+        debug: true,
+      });
+      expect(entry.workspace.root).toBe(root);
+      expect(entry.next_action.command).toContain(`context init ${workspaceFile}`);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("plans default initialization outside a workspace", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-entry-init-"));
     try {
@@ -68,8 +87,9 @@ describe("single Context agent entry", () => {
       }, null, 2)}\n`, "utf8");
       const entry = resolveContextEntry({ cwd: root, language: "en", managed: true });
       expect(entry.state).toBe("workspace-relocation-required");
+      expect(entry.next_action.effect).toBe("read");
       expect(entry.next_action.command).toBe(
-        `cd ${join(root, "knowledge")} && context run --managed --until blocked-or-complete --format json`,
+        `cd ${join(root, "knowledge")} && context status --format json --managed`,
       );
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -92,6 +112,26 @@ describe("single Context agent entry", () => {
       expect(entry.next_action.command).toBe(
         "context init custom --language zh-CN --name 'Docs KB' --dev --debug",
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("managed entry stays read-only and relocates from nested directories", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-entry-read-only-"));
+    try {
+      await initContextProject({ cwd: root, projectDir: "context", language: "en", dev: true });
+      const workspace = join(root, "context");
+      const child = join(workspace, "src");
+      for (const cwd of [workspace, child]) {
+        const entry = resolveContextEntry({ cwd, language: "en", managed: true,
+          authorities: ["context.knowledge-review"] });
+        expect(entry.next_action.effect).toBe("read");
+        expect(entry.next_action.command).toContain("context status --format json --managed");
+        expect(entry.next_action.command).toContain("--authority context.knowledge-review");
+        expect(entry.next_action.command).not.toContain("context run");
+        expect(entry.state).toBe(cwd === workspace ? "workspace-ready" : "workspace-relocation-required");
+      }
     } finally {
       await rm(root, { recursive: true, force: true });
     }

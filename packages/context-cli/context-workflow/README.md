@@ -100,12 +100,11 @@ The Provider is considered valid only when all of the following are true:
     Output interception, child processes, timers, and write locks are released
     deterministically; knowledge mutations remain revision-checked,
     write-locked, and atomically committed by their existing command handlers.
-16. Every complete code-index batch receives one Agent semantic audit before
-    knowledge Review. CLI signals remain advisory evidence, but the Agent must
-    choose accept, revise, or request-input. Fully managed work revises real
-    issues and repeats Preview/extraction/audit until accepted. The complete
-    report stays in the workspace; package inventory carries only a compact
-    audit summary and no report file is published.
+16. Content assessment belongs to the existing Agent or user Review. Context
+    does not scan prose, comments, headings or template-like syntax to assign a
+    quality verdict. Suspected unfilled placeholders are review hints, not
+    another CLI gate. Do not create a separate content-audit report or require
+    an Agent to rewrite valid content solely to clear a heuristic signal.
 17. The Indexer graph advances from partition to author work only through
     CLI-validated workset-set Facts. Exact SubjectKey resolution happens before
     authoring; post-author composers receive only a bounded PrimaryResultView,

@@ -21,6 +21,7 @@ import { ExitCode } from "../types/exitCode.js";
 import { recordWorkflowStop } from "../project/debugTrace.js";
 import { WorkspaceExecutionRuntime } from "../project/workflow/workflowExecutionRuntime.js";
 import { createWorkflowInProcessExecutor } from "../project/workflow/workflowInProcessActions.js";
+import { workflowRouteOutput, workflowRunResultFile } from "../project/workflow/workflowRouteOutput.js";
 
 type ProjectRunInput = Parameters<typeof runProjectPhaseCommand>[0];
 
@@ -66,7 +67,6 @@ function assertUntilOptions(
   }
   const incompatible = [
     "list",
-    "verbose",
   ].filter((key) =>
     options[key] !== undefined && options[key] !== false
   );
@@ -93,6 +93,8 @@ function projectPhaseRunInput(input: {
     cwd: input.cwd,
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
+    ...(input.options.deliver === true ? { deliver: true } : {}),
+    ...(typeof input.options.deliverySize === "string" ? { deliverySize: input.options.deliverySize } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
     ...(input.managed ? { managed: true } : {}),
     ...(input.workflowRevision === undefined
@@ -109,7 +111,7 @@ function projectPhaseRunInput(input: {
   };
 }
 
-async function runManagedUntil(input: {
+async function runProjectUntil(input: {
   cwd: string;
   cliModuleUrl: string;
   phaseId?: string;
@@ -127,18 +129,11 @@ async function runManagedUntil(input: {
       { category: ErrorCategory.UserInputInvalid },
     );
   }
-  if (!input.managed) {
-    throw new ContextError(
-      ExitCode.UserError,
-      "--until blocked-or-complete requires explicit --managed authority in the current conversation",
-      { category: ErrorCategory.UserInputInvalid },
-    );
-  }
   const found = findContextProjectRoot(input.cwd);
   if (found === null) {
     throw new ContextError(
       ExitCode.WorkspaceStateError,
-      "managed workflow execution requires a context project",
+      "workflow execution requires a context project",
       { category: ErrorCategory.WorkspaceNotFound },
     );
   }
@@ -158,7 +153,7 @@ async function runManagedUntil(input: {
     result = await runWorkflowUntilBlockedOrComplete({
       observe: () =>
         collectProjectStatus(found.projectRoot, {
-          managed: true,
+          managed: input.managed,
           authorities: input.authorities,
           ...(resourceReceipts === undefined ? {} : { resourceReceipts }),
           ...(input.resourceReceiptsReference === undefined
@@ -171,6 +166,7 @@ async function runManagedUntil(input: {
         max: 100,
       }),
       dryRun: input.options.dryRun === true,
+      managed: input.managed,
     });
   } finally {
     await runtime.close();
@@ -187,7 +183,14 @@ async function runManagedUntil(input: {
       reason_code: result.workflow.current?.reason_code,
     },
   });
-  process.stdout.write(formatWorkflowRunResult(result, input.format));
+  if (input.format === "json" && input.options.verbose !== true) {
+    process.stdout.write(`${JSON.stringify({ protocol: "context.workflow.run-summary/v1", state: result.state, stop: result.stop,
+      result_file: await workflowRunResultFile(found.projectRoot, result),
+      steps_completed: result.steps.length,
+      workflow: { status: result.workflow.status, revision: result.workflow.revision },
+      next_route: await workflowRouteOutput(found.projectRoot, result.workflow.current),
+    }, null, 2)}\n`);
+  } else process.stdout.write(formatWorkflowRunResult(result, input.format));
 }
 
 
@@ -199,6 +202,8 @@ export function registerProjectRunCommand(
     .command("run [phase-id]")
     .description("Inspect or run a declared project phase")
     .option("--list", "list declared phases")
+    .option("--delivery-size <size>", "set future delivery waves to auto or a fixed 1–50 themes for this task")
+    .option("--deliver", "request an early page delivery after current Author work finishes")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
@@ -206,7 +211,7 @@ export function registerProjectRunCommand(
         .argParser(collectWorkflowAuthorityOption)
         .default([]),
     )
-    .option("--until <condition>", "with --managed and no phase id, execute deterministic routes until blocked-or-complete")
+    .option("--until <condition>", "with no phase id, execute deterministic routes until blocked-or-complete; --managed only delegates authorized gates")
     .option("--max-steps <n>", "maximum deterministic routes for --until", "25")
     .option("--verbose", "include phase contracts and repeated source metadata in JSON output")
     .option("--format <format>", "output format: text | json", "text")
@@ -214,6 +219,9 @@ export function registerProjectRunCommand(
       phaseId: string | undefined,
       options: Record<string, unknown>,
     ) => {
+      if ((options.deliver === true || options.deliverySize !== undefined) && (phaseId !== undefined || options.until !== undefined || options.list === true)) {
+        throw new ContextError(ExitCode.UserError, "--deliver and --delivery-size apply to the current Indexer lifecycle without a phase id, --list or --until.");
+      }
       const format = projectRunFormat(options.format);
       const rootOptions = program.opts() as Record<string, unknown>;
       const managed = options.managed === true ||
@@ -227,7 +235,7 @@ export function registerProjectRunCommand(
         : undefined;
       const cwd = workflowResourceReceiptCwd(resourceReceiptsReference, process.cwd());
       if (options.until !== undefined) {
-        await runManagedUntil({
+        await runProjectUntil({
           cwd,
           cliModuleUrl,
           ...(phaseId === undefined ? {} : { phaseId }),

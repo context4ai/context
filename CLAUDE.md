@@ -51,7 +51,25 @@ bun run --filter @c4a/context-cli build
 bun run --filter @c4a/dev-cli start
 ```
 
-## Notes
+## Verification scope
+
+- Local edits: run the affected package's typecheck/lint and relevant test files.
+  Shared test fixtures require all their consumers; SDK/schema changes include
+  affected downstream checks. Do not rerun the whole workspace for every edit.
+- `bun run verify` runs workspace static checks and tests, including CLI
+  integration tests. It is not a fast unit-only gate.
+- `bun run verify:full` adds Node dist smoke checks; build required artifacts first.
+  These commands are alternative scopes, not a ladder to execute in sequence.
+- Reuse applicable passing results until inputs change. Collect failures once,
+  fix them together and rerun the selected scope. Keep the current result summary
+  separate from historical logs under `.tmp/`.
+- Build and tests reading the same dist must not overlap. Prefer existing
+  `build:workflow`, `build:plugin` or `build:indexers` scripts for resource-only
+  changes; a full CLI build is still required when its bundled runtime changes.
+- Test behavior, schemas, resolvable resources and safe recovery, not exact prose,
+  document lengths or source-code spelling. Keep mutation fixtures isolated.
+
+## Repository boundary
 
 - This repository is developed and released independently from any parent
   monorepo or downstream distribution.

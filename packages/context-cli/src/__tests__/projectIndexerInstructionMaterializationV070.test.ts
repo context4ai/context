@@ -429,13 +429,11 @@ describe("resolved-indexer-instructions materialization", () => {
 
     expect(request.handler).toBe("context.materialize-indexer-instructions/v1");
     expect(request.resource_id).toBe("resolved-indexer-instructions");
-    expect(result.resources).toHaveLength(2);
-    expect(result.resources.map((resource) => resource.kind)).toEqual([
-      "provider",
-      "template",
-    ]);
-    expect(result.resources[0]?.content).toContain("For partition work");
-    expect(result.resources[1]?.content).toContain("Component library template");
+    expect(new Set(result.resources.map((resource) => resource.resource_ref)).size).toBe(result.resources.length);
+    expect(result.resources.some((resource) => resource.kind === "provider")).toBe(true);
+    expect(result.resources.filter((resource) => resource.kind === "template")).toHaveLength(1);
+    expect(result.resources.some((resource) => resource.content.includes("For partition work"))).toBe(true);
+    expect(result.resources.find((resource) => resource.kind === "template")?.content).toContain("Component library template");
     expect(JSON.stringify(result)).not.toContain(staged.stage_path);
     expect(JSON.stringify(result)).not.toContain(bundle.transport.path);
     validateMaterializedIndexerInstructions(result, request);
@@ -464,13 +462,9 @@ describe("resolved-indexer-instructions materialization", () => {
       workspaceRoot: root,
     });
     expect(input.request.composer_id).toBe("public-contract");
-    expect(result.resources.map((resource) => resource.kind)).toEqual([
-      "provider",
-      "template",
-      "composer",
-    ]);
-    expect(result.resources[2]?.content).toContain("Public contract composer");
-    expect(result.resources[2]?.content).toContain("fragments: []");
+    expect(result.resources.filter((resource) => resource.kind === "composer")).toHaveLength(1);
+    expect(result.resources.find((resource) => resource.kind === "composer")?.content).toContain("Public contract composer");
+    expect(result.resources.find((resource) => resource.kind === "composer")?.content).toContain("fragments: []");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("keeps semantic request/payload stable across transports while receipts remain delivery-specific", async () => {
@@ -547,12 +541,8 @@ describe("resolved-indexer-instructions materialization", () => {
     });
 
     expect(after.request.instruction_set_digest).not.toBe(before.request.instruction_set_digest);
-    expect(result.resources.map((resource) => resource.kind)).toEqual([
-      "provider",
-      "template",
-      "customization-append",
-    ]);
-    expect(result.resources[2]?.content).toContain("stable source refs");
+    expect(result.resources.filter((resource) => resource.kind === "customization-append")).toHaveLength(1);
+    expect(result.resources.find((resource) => resource.kind === "customization-append")?.content).toContain("stable source refs");
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects stale request, changed stage bytes, and forged output payload", async () => {
@@ -738,6 +728,7 @@ describe("resolved-indexer-instructions materialization", () => {
         digest: worksetViewHost.managed_output.digest,
       },
     });
+    await writeFile(join(root, "ready-instructions.json"), JSON.stringify(instructionHost.materialized));
     const initial = await buildIndexerAgentStepRoute({
       run_requests: [runRequest],
       instruction_request: input.request,
@@ -766,9 +757,11 @@ describe("resolved-indexer-instructions materialization", () => {
     );
     expect(instructions).toMatchObject({
       read_state: "read-required",
-      path: join(root, "ready-instructions.json"),
-      digest: instructionHost.materialized.payload_digest,
+      media_type: "text/markdown",
     });
+    const reading = await readFile(instructions!.path!, "utf8");
+    expect(reading).toContain("#");
+    expect(instructions?.digest).toBe(`sha256:${createHash("sha256").update(reading).digest("hex")}`);
     expect(instructions?.command).toBeUndefined();
     expect(instructions?.materialize).toBeUndefined();
     expect(JSON.stringify(initial.route)).not.toContain("__runtime__");
@@ -778,8 +771,7 @@ describe("resolved-indexer-instructions materialization", () => {
       resource.id === "authorized-indexer-workset-view/task-001"
     )).toMatchObject({
       read_state: "read-required",
-      path: worksetViewHost.managed_output.file_path,
-      digest: worksetView.request.payload_digest,
+      media_type: "text/markdown",
     });
     expect(initial.route.resources.required.some((resource) =>
       resource.command?.includes("resource materialize") === true

@@ -8,6 +8,7 @@ import {
 import {
   indexerBatchStagePolicy,
   planIndexerCurrentBatch,
+  restoreIndexerCurrentBatch,
 } from "../project/indexerCurrentBatchPlanner.js";
 
 const SOURCE_REF = "repo:20260904/batch-fixture";
@@ -108,37 +109,75 @@ describe("0.7.5 current Indexer batch planner", () => {
     });
 
     expect(first.candidates).toHaveLength(taskLimit);
+    expect(first.packing_limits).toContain("task-limit");
     expect(first.candidates.map((item) => item.workset.workset_digest)).toEqual(
       candidates.slice(0, taskLimit)
         .map((item) => item.workset.workset_digest),
     );
     expect(second).toEqual(first);
-    expect(first.oversized_single_task).toBe(false);
   });
 
-  test("stops at the first budget boundary without truncating a task", () => {
+  test("skips a non-fitting later task while preserving the oldest task and complete bodies", () => {
     const planned = planIndexerCurrentBatch({
       candidates: [
-        candidate(0, { input_bytes: 3 * 1024 * 1024 }),
-        candidate(1, { input_bytes: 3 * 1024 * 1024 }),
+        candidate(0, { input_bytes: indexerBatchStagePolicy("partition").max_input_bytes / 2 }),
+        candidate(1, { input_bytes: indexerBatchStagePolicy("partition").max_input_bytes / 2 }),
         candidate(2),
       ],
-      shared_instruction_bytes: 1024 * 1024,
+      shared_instruction_bytes: 1024,
     });
 
-    expect(planned.candidates).toHaveLength(1);
+    expect(planned.candidates).toHaveLength(2);
     expect(planned.candidates[0]?.workset.workset_digest).toBe(workset(0).workset_digest);
-    expect(planned.oversized_single_task).toBe(false);
+    expect(planned.candidates[1]?.workset.workset_digest).toBe(workset(2).workset_digest);
   });
 
-  test("marks an oversized semantic task instead of silently clipping it", () => {
+  test("delivers an oversized semantic task alone without clipping it", () => {
     const planned = planIndexerCurrentBatch({
-      candidates: [candidate(0, { input_bytes: 6 * 1024 * 1024 })],
+      candidates: [candidate(0, { input_bytes: 6 * 1024 * 1024 }), candidate(1)],
       shared_instruction_bytes: 1,
     });
 
     expect(planned.candidates).toHaveLength(1);
-    expect(planned.oversized_single_task).toBe(true);
+    expect(planned.input_bytes).toBe(6 * 1024 * 1024 + 1);
+    expect(planned.packing_limits).toContain("input-budget");
+    expect(planned.candidates[0]!.workset).toEqual(workset(0));
+  });
+
+  test("Author starts even when shared instructions, output estimates or item counts exceed packing targets", () => {
+    const policy = indexerBatchStagePolicy("author");
+    for (const overrides of [
+      { input_bytes: 252_334 },
+      { output_reserve_bytes: policy.max_output_reserve_bytes + 1 },
+      { view_item_count: policy.max_view_items + 1 },
+    ]) {
+      const first = { ...candidate(0, overrides), workset: authorWorkset(0) };
+      const planned = planIndexerCurrentBatch({
+        candidates: [first, { ...candidate(1), workset: authorWorkset(1) }],
+        shared_instruction_bytes: 20_049,
+      });
+      expect(planned.candidates).toEqual([first]);
+      expect(planned.input_bytes).toBe(first.input_bytes + 20_049);
+    }
+  });
+
+  test("restores all running tasks when packing targets or delivery costs change", () => {
+    const candidates = Array.from({ length: 3 }, (_, index) => ({
+      ...candidate(index, { input_bytes: 300_000, view_item_count: 900 }),
+      workset: authorWorkset(index),
+    }));
+    const input = { candidates, shared_instruction_bytes: 300_000 };
+    expect(planIndexerCurrentBatch(input).candidates).toHaveLength(1);
+    const restored = restoreIndexerCurrentBatch(input);
+    expect(restored.candidates).toEqual(candidates);
+    expect(restored.input_bytes).toBe(1_200_000);
+    expect(restored.view_item_count).toBe(2_700);
+    expect(restoreIndexerCurrentBatch(input)).toEqual(restored);
+    expect(() => restoreIndexerCurrentBatch({ ...input, candidates: [candidates[0]!, candidate(5)] }))
+      .toThrow("one authorized batch");
+    expect(() => restoreIndexerCurrentBatch({ ...input, candidates: [
+      candidates[0]!, { ...candidates[1]!, instruction_identity: digest("different") },
+    ] })).toThrow("one authorized batch");
   });
 
   test("never mixes later-stage work into the current-stage batch", () => {

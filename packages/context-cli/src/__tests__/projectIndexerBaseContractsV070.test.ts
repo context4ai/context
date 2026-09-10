@@ -66,6 +66,12 @@ describe("bundled Indexer base contracts", () => {
       id: "capability",
       local_key: { operator: "canonical-export-family" },
     }]);
+    const componentSubjects = contract.subject_key_schemas.find(schema => schema.profile === "component-library")!;
+    expect(componentSubjects.kinds).toEqual(expect.arrayContaining([
+      { id: "component", local_key: { operator: "canonical-export-family" } },
+      { id: "library", local_key: { operator: "canonical-module-identity" } },
+      { id: "design-system", local_key: { operator: "canonical-module-identity" } },
+    ]));
     expect(component.reader_question_contracts.map((question) => question.ref)).toContain(
       "question:examples-and-usage",
     );

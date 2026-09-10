@@ -28,6 +28,7 @@
 
 - **CLI 负责流程，Agent 负责语义**：CLI 决定 stage / route / allowed actions / next_action / view 预算 / repair 路径；Agent 只读 evidence、做语义归类、生成 source-bound payload。能由 schema / mount matrix / raw/source_ref 指针 / coverage / contiguity / citation eligibility 判定的规则必须由 CLI 强制，不要在 skill 里重写一遍。
 - **硬约束优先于提示词**：同一条规则不要在 skill checklist 和 CLI validate 里写两遍。能用 CLI hard gate / typed diagnostic 表达的全部下沉；skill 只保留入口说明、evidence boundary 和 next_action 跟随契约。
+- **正文内容不由 CLI 评分或拦截**：措辞、JSX、模板语法示例、注释、标题、占位词、句式和篇幅不构成内容质量硬门禁。未填写的占位可在现有审核中提醒，但不硬阻塞、不要求信号消除回执。内容判断归 Agent／用户，CLI 只检查结构、真实引用和安全写入；模板程序解析与正文判断分开。
 - **能自愈就自愈，该阻塞才阻塞**：不改变语义、可机械验证、可审计的修复直接自动应用并记录到 `auto_repaired[]`；需要语义判断、用户确认、可能改变知识内容时才返回 blocking question / review。
 - **错误输出就是恢复入口**：任何拒绝必须带 typed `reason_code` + 最小诊断 + canonical `next_action.command` + `input_schema`。Agent 不从历史 prompt 反推下一步，stdout 里看到的就是修复路径。不允许 “出错了请重新读 skill” 这种 dead-end。
 - **协议幻觉用 guard，证据要求不松动**：协议层（command/flag/schema/view 预算/分页/source-ref 形态）的幻觉用 CLI 硬 guard 兜底；source evidence、coverage、contiguity、citation eligibility、mount matrix 这些内容质量硬约束**不**为流程顺滑而松动。view-count 不能替代 raw/source_ref 指针。
@@ -67,11 +68,11 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 ### V1 Agent 入口与写入契约
 
-- 公开 Agent 入口只保留 `/c4a:context`。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
+- 生产工作流入口是 `/c4a:context`；独立只读查询与来源归因入口是显式触发的 `/c4a:context-inspect-search`，不消费生产 Route 的写动作。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
 - `/c4a:context` 是对话式入口，不是同名 CLI primitive。它先运行只读 `context entry --format json`，只执行返回的 `next_action.command`；工作区就绪后把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。**不要新增或调用 `context continue`**。
-- 用户在当前会话明确授权全托管后，默认先调用 `context run --managed --until blocked-or-complete --format json`，不要由 Agent 手工重复 status/action。它不是第二个路由入口：只能执行唯一、immediate、非 read 命令，每步后必须重新求值；遇到语义读取、配置、诊断、权限缺口或多命令时立即返回当前 `workflow.current`。
+- 用户在当前会话明确授权全托管后，默认先调用 `context run --managed --until blocked-or-complete --format json`，不要由 Agent 手工重复 status/action。它不是第二个路由入口：只能执行唯一、immediate、非 read 命令，每步后必须重新求值；遇到语义读取、配置、权限缺口或多命令时返回当前 `workflow.current`。诊断描述状态，是否可自动修复由同一 Graph 的 Route 决定，不在执行循环里按 error 级别重复阻断已选定的机械修复。
 - 普通模式与全托管模式复用同一 Gate，并完整保留普通模式的 Inspection 与 Resolution 能力。只在 Graph Gate 的 `delegated` 策略中声明全托管可跳过的冗余 inspection、可替换的对话 Resource，以及需要时由 authority 选择的专用 Resolution Action；不要在 Facts、TypeScript 或入口提示词中把 Authority 伪装成已完成业务事实。普通模式在工作区创建后和来源采集完成后通过 Route-selected dialogue 说明模式差异。
-- Agent 不得只复述 Route 的机械命令。`availability=immediate` 时读取 required 资源后执行；`gate` 未解析时先执行 read 命令并向用户解释决定；`configuration` 存在时只修改指定项目文件。动作后重新 status，phase-local `next_action` 不得替代 workspace Route。
+- Agent 不得只复述 Route 的机械命令。`availability=immediate` 时读取 required 资源后执行；`gate` 未解析时读取已提供的预览并向用户解释决定；`configuration` 存在时只修改指定项目文件。动作返回 workspace Route 后直接继续，只有配置修改或缺少 Route 才重新 status；phase-local `next_action` 不得替代 workspace Route。普通模式也允许 `run --until blocked-or-complete` 执行机械步骤，但不隐式取得 managed 权限。Review 明确批准后沿同一 Graph 自动收尾，遇到未授权的 Gate 或 Agent 内容任务仍停下。
 - `missing-source` 不是自动探索信号。不要根据 cwd、父目录、monorepo 结构、package 名、`git remote` 自行决定 source;用户明确给出 source 名称/路径/ref 后,才运行 `context source add repo ...`。
 - `needs-extract-phase` 表示 extract phase 尚未声明。不要扫描源仓库来替用户选 include/exclude;先问用户要摄取哪个已登记 source、哪些目录/包/符号范围,再按 `workflow.current.configuration` 编辑 `src/index.ts`。
 - 底层 CLI 命令可以保留，但只作为 `/c4a:context` 驱动的机械动作。默认用户不需要知道命令清单。
@@ -373,7 +374,7 @@ Use the packaged Context shell and follow `workflow.current`.
 
 - frontmatter 三字段齐全（`description` / `argument-hint` / `allowed-tools`）；缺字段时 runtime 可能静默丢命令。
 - `allowed-tools` 按最小权限列；纯 CLI 代理命令通常只需 `Bash(context:*)`。
-- 单一 `context` agent-driven command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
+- `context` 生产 command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
 - command md 不写 `${CLAUDE_PLUGIN_ROOT}/skills/...`，只指向打包后的 Context shell。
 - command md 只负责流程入口；schema、mount matrix、source_ref 规则通过当前 Graph resource 或 CLI View 发现。
 

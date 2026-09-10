@@ -40,6 +40,7 @@ export function renderApprovedIndexerMarkdown(input: {
   record: CandidateRecord;
   timestamp: string;
 }): string {
+  if (input.record.approved_revision !== undefined) return input.record.body;
   const binding = input.record.indexer_candidate;
   if (input.record.candidate_type !== "indexer-artifact" || binding === undefined) {
     throw new TypeError("Indexer approved renderer requires an indexer-artifact Candidate");
@@ -70,6 +71,7 @@ export function renderApprovedIndexerMarkdown(input: {
   const frontmatter = YAML.stringify({
     title,
     type: okfTypeForCollection(input.record.collection),
+    artifact_ref: binding.artifact_ref,
     node_ref: input.record.node_ref,
     view_ref: input.record.view_ref,
     node_type: "entity",

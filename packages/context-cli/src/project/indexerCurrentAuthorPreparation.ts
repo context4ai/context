@@ -1,5 +1,19 @@
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { readApprovedKnowledgeInput } from "./approvedKnowledgeInput.js";
+import { resolveApprovedKnowledgeSources } from "./approvedKnowledgeSources.js";
+import { withApprovedKnowledgeDependencies, type ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
+import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
+import { streamingAuthorBase } from "./indexerStreamingAuthorBase.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
+import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
+import { loadSelectedArticleGuidance, loadSelectedPageTemplate } from "./indexerPageTemplate.js";
 import {
   buildIndexerMainAuthorWorksets,
+  buildIndexerMainWorkset,
+  buildIndexerMainWorksetSet,
+  canonicalIndexerNodeRef, indexerArtifactRef, validateIndexerKnowledgeDependencyGraph, IndexerKnowledgeDependencyCycleError,
+  type IndexerKnowledgeDependency,
   canonicalIndexerInventoryMembers,
   indexerPartitionGroupBindingDigest,
   indexerPartitionGroupRef,
@@ -12,17 +26,18 @@ import {
   type IndexerRegistry,
 } from "@c4a/context";
 import {
-  assertProjectIndexerMainSourceBinding,
   type ProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
 import { createIndexerAuthorSourceResolver, mergeIndexerAuthorSourceBindings } from "./indexerAuthorSources.js";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
+import { currentExecutionWorksetFields, reuseCurrentIndexerRuns } from "./indexerRunContinuation.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
 import { buildCurrentProjectIndexerAuthorRunSpec } from
   "./indexerCurrentMainRunSpec.js";
 import { materializeCurrentIndexerExtensionFacts } from "./indexerCurrentInspector.js";
 import { buildProjectIndexerAuthorDependencyView } from "./indexerAuthorDependencyView.js";
+import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
 import {
   resolveProjectIndexerAuthorQuestionTargets,
   takeProjectIndexerGroupTargetView,
@@ -134,8 +149,8 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       throw new TypeError("failed PartitionPlan cannot produce author worksets");
     }
     if (
-      partition.workset.question_target_inventory_digest !== inventory.inventory_digest ||
-      partition.workset.requirement_set_digest !== inventory.requirement_set_digest
+      !hasCurrentIndexerRegistryProjection(input.registry, partition.workset) ||
+      partition.workset.allowed_question_target_refs.some((ref) => !inventory.items.some((item) => item.target_ref === ref))
     ) {
       throw new TypeError("author workset input targets a stale question inventory");
     }
@@ -206,6 +221,9 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     });
   }
 
+  // Authority is resolved once per Indexer above. Its logical-unit policy is
+  // identical across source shards; validate it once within this preparation.
+  const eligibilityByUnit = new Map<string, ReturnType<typeof resolveIndexerArtifactPolicyEligibility>>();
   const preparations = partitions.flatMap((partition) => {
     if (partition.plan.status !== "complete") return [];
     const plan = partition.plan;
@@ -218,13 +236,15 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     if (artifactPolicy === undefined) {
       throw new TypeError("Author logical unit requires an Artifact policy");
     }
-    const eligibility = resolveIndexerArtifactPolicyEligibility({
+    const eligibilityKey = JSON.stringify([partition.workset.indexer_id, logicalUnit.id]);
+    const eligibility = eligibilityByUnit.get(eligibilityKey) ?? resolveIndexerArtifactPolicyEligibility({
       profile_id: authority.profile.id,
       canonical_facts: { target: { eligible: true } },
       provider_supported_variants: artifactPolicy.supported_policy_variants,
       profile_contract: authority.profile_contract,
       operator_contract: authority.operator_contract,
     });
+    eligibilityByUnit.set(eligibilityKey, eligibility);
     return plan.groups.map((group) => {
       const members = groupMembers({
         partition,
@@ -232,11 +252,14 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
         group,
       });
       const origins = originsForGroup({ partition, group });
+      const scopeChange = [...new Set(origins.flatMap((origin) => origin.group.scope_change?.removed_member_ids ?? []))].sort();
       const binding = mergeIndexerAuthorSourceBindings(origins.filter((origin) =>
         origin.binding.source_ref === partition.workset.source_ref &&
         origin.binding.module_ref === partition.workset.module_ref
       ).map((origin) => origin.binding));
-      assertProjectIndexerMainSourceBinding({ workset: partition.workset, binding });
+      // Each origin was checked against its exact Partition projection by the
+      // source resolver. The merged source binding covers several shards and
+      // must not be compared to the first shard's local dependency digest.
       const view = buildProjectIndexerAuthorDependencyView({
         primary_binding: binding,
         synthetic_plan: plan,
@@ -254,6 +277,7 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
         authority,
         binding,
         group,
+        scopeChange,
         members,
         dependency_view: view,
         supplementary_sources: origins.flatMap((origin) =>
@@ -275,6 +299,10 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
           authority,
           group,
         }),
+        articles: group.articles?.map(article => ({ ...article, question_targets: resolveProjectIndexerAuthorQuestionTargets({
+          registry: input.registry, inventory, authority,
+          group: { ...group, question_target_bindings: group.question_target_bindings.filter(binding => article.question_targets.includes(binding.target_ref)) },
+        }).map(target => target.question_target_key) })),
         group_context: {
           partition_workset_digest: partition.workset.workset_digest,
           group_key: group.group_key,
@@ -292,6 +320,89 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
   });
   if (views.size > 0) {
     throw new TypeError("target resolution views contain unknown partition groups");
+  }
+  const knowledgeByPreparation = new Map<(typeof preparations)[number], ApprovedKnowledgeAuthorInput>();
+  const withKnowledge = preparations.filter(item => item.articles?.some(article => article.knowledge_dependencies?.length));
+  if (withKnowledge.length) {
+    const snapshots = approvedKnowledgeSnapshotsFromStructure((await readKnowledgeStructure(input.projectRoot)).parsed);
+    const graph = new Map(snapshots
+      .map(snapshot => [snapshot.artifact_ref, { artifact_ref: snapshot.artifact_ref, dependencies: snapshot.dependencies }]));
+    for (const prepared of preparations) for (const article of prepared.articles ?? []) {
+      const ref = indexerArtifactRef(canonicalIndexerNodeRef(prepared.group.subject_key), {
+        artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
+      });
+      graph.set(ref, { artifact_ref: ref, dependencies: article.knowledge_dependencies ?? [] });
+    }
+    const cyclic = new Set<string>();
+    // Preserve the review/adjustment route for an invalid dependency plan.
+    // Identity/schema errors still fail normally; a cycle cannot be repaired
+    // by merely waiting for an upstream article to finish.
+    try { validateIndexerKnowledgeDependencyGraph([...graph.values()]); }
+    catch (error) {
+      if (!(error instanceof IndexerKnowledgeDependencyCycleError)) throw error;
+      for (const ref of error.artifact_refs) cyclic.add(ref);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const node of graph.values()) if (!cyclic.has(node.artifact_ref) && node.dependencies.some(dependency => cyclic.has(dependency.artifact_ref))) {
+          cyclic.add(node.artifact_ref); changed = true;
+        }
+      }
+    }
+    for (const prepared of withKnowledge) {
+      const dependencies = new Map<string, IndexerKnowledgeDependency>();
+      for (const article of prepared.articles ?? []) for (const dependency of article.knowledge_dependencies ?? []) {
+        const previous = dependencies.get(dependency.artifact_ref);
+        dependencies.set(dependency.artifact_ref, previous ? { ...dependency, required: previous.required || dependency.required,
+          section_refs: previous.section_refs.length && dependency.section_refs.length
+            ? [...new Set([...previous.section_refs, ...dependency.section_refs])].sort() : [] } : dependency);
+      }
+      const authorizedTargets = projectIndexerReadTargets({ registry: input.registry, indexer_id: prepared.partition.workset.indexer_id });
+      const sources = await resolveApprovedKnowledgeSources({ projectRoot: input.projectRoot, registry: input.registry,
+        authorized_targets: authorizedTargets, snapshots: snapshots.filter(snapshot => dependencies.has(snapshot.artifact_ref)),
+        current: sourcePartitions.flatMap(partition => {
+          const binding = bindingByPartition.get(partition.workset.workset_digest);
+          return binding ? [{ indexer_id: partition.workset.indexer_id, binding }] : [];
+        }),
+      });
+      const ownRefs = new Set((prepared.articles ?? []).map(article => indexerArtifactRef(canonicalIndexerNodeRef(prepared.group.subject_key), {
+        artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
+      })));
+      const planningIssues = [...dependencies.values()].flatMap(dependency => {
+        const reason = cyclic.has(dependency.artifact_ref) ? "dependency-cycle" as const
+          : ownRefs.has(dependency.artifact_ref) ? "same-group-dependency" as const : undefined;
+        // Cycles violate the accepted graph contract. A non-cyclic optional
+        // sibling can be omitted: waiting for the same atomic group would
+        // otherwise prevent useful direct-source articles from being written.
+        return reason ? [{ artifact_ref: dependency.artifact_ref, required: reason === "dependency-cycle" || dependency.required, reason }] : [];
+      });
+      const affected = new Set(planningIssues.map(issue => issue.artifact_ref));
+      const knowledge = await readApprovedKnowledgeInput({ projectRoot: input.projectRoot,
+        dependencies: [...dependencies.values()].filter(dependency => !affected.has(dependency.artifact_ref)),
+        subject_key: prepared.group.subject_key, authorized_targets: authorizedTargets,
+        bindings: sources.map(source => source.binding),
+        evidence_kinds: new Set(prepared.authority.profile.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds)),
+      });
+      knowledge.pending.push(...planningIssues);
+      knowledge.status = knowledge.pending.some(item => item.required) ? "waiting" : "ready";
+      knowledgeByPreparation.set(prepared, knowledge);
+      const view = withApprovedKnowledgeDependencies(prepared.dependency_view, knowledge);
+      prepared.dependency_view = view;
+      prepared.group_context.group_dependency_view_digest = view.view_digest;
+      // Include supporting files in the primary material projection, without
+      // changing the group's owned member denominator.
+      prepared.binding = mergeIndexerAuthorSourceBindings(sources.map(source => source.binding).filter(binding =>
+        binding.source_ref === prepared.binding.source_ref && binding.module_ref === prepared.binding.module_ref &&
+        binding.profile_contract_digest === prepared.binding.profile_contract_digest));
+      for (const { indexer_id, binding } of sources) {
+        if (binding.source_ref === prepared.binding.source_ref && binding.module_ref === prepared.binding.module_ref) continue;
+        if (!knowledge.evidence_bindings.some(evidence => evidence.source_ref === binding.source_ref && evidence.module_ref === binding.module_ref)) continue;
+        if (!prepared.supplementary_sources.some(source => source.source_ref === binding.source_ref && source.module_ref === binding.module_ref)) {
+          prepared.supplementary_sources.push({ indexer_id, source_ref: binding.source_ref, module_ref: binding.module_ref,
+            profile_contract_digest: binding.profile_contract_digest, source_binding_digest: binding.source_binding_digest });
+        }
+      }
+    }
   }
   const built = buildIndexerMainAuthorWorksets({
     partitions: input.partitions,
@@ -329,11 +440,20 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
   if (preparationByGroup.size !== preparations.length) {
     throw new TypeError("author preparation contains duplicate group identities");
   }
-  const runSpecs = await Promise.all(built.worksets.map(async (workset) => {
-    const prepared = preparationByGroup.get(groupIdentity(workset));
+  const stream = await readPartitionStream(input.projectRoot);
+  const approvedStructure = stream ? await readKnowledgeStructure(input.projectRoot) : undefined;
+  const runSpecs = await Promise.all(built.worksets.map(async (partitionWorkset) => {
+    const prepared = preparationByGroup.get(groupIdentity(partitionWorkset));
     if (prepared === undefined) {
-      throw new TypeError(`author run preparation is missing ${workset.group_key}`);
+      throw new TypeError(`author run preparation is missing ${partitionWorkset.group_key}`);
     }
+    // The accepted grouping stays intact. A newly prepared Author request uses
+    // current instructions without pretending its parent used the same bundle.
+    const base = stream ? await streamingAuthorBase(input.projectRoot, partitionWorkset.logical_unit_ref, approvedStructure) : undefined;
+    const workset = buildIndexerMainWorkset({ ...currentExecutionWorksetFields({
+      workset: partitionWorkset, execution: prepared.authority.primary_execution,
+    }), ...(base === undefined ? {} : { repair_intent: base }) });
+    if (workset.stage !== "author") throw new TypeError("expected author workset");
     const selectedFactRefs = prepared.dependency_view.positive_nodes.flatMap((node) =>
       node.kind === "selected-fact" && prepared.binding.adapter === "parser-facts" &&
           prepared.binding.parser_fact_index.has(node.fact_ref)
@@ -367,15 +487,52 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       dependency_view: prepared.dependency_view,
       canonical_inventory_members: prepared.members,
       expected_subject_key: prepared.group.subject_key,
+      ...(knowledgeByPreparation.has(prepared) ? { knowledge_input: knowledgeByPreparation.get(prepared)! } : {}),
+      page_guidance: await loadSelectedArticleGuidance({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.scopeChange.length ? undefined : prepared.group.template_id }),
+      page_template: await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.scopeChange.length ? undefined : prepared.group.template_id }),
+      article_guidance: Object.fromEntries((await Promise.all((prepared.scopeChange.length ? [] : prepared.group.articles ?? []).map(async article => {
+        const guidance = await loadSelectedArticleGuidance({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: article.template_id });
+        return guidance === undefined ? [] : [[article.key, guidance] as const];
+      }))).flat()),
+      article_templates: Object.fromEntries((await Promise.all((prepared.scopeChange.length ? [] : prepared.group.articles ?? []).map(async article => {
+        const template = await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: article.template_id });
+        return template === undefined ? [] : [[article.key, template] as const];
+      }))).flat()),
+      page_plan: Object.fromEntries(Object.entries({
+        reader_task: prepared.group.reader_task,
+        articles: prepared.scopeChange.length ? undefined : prepared.articles,
+        outline: prepared.group.outline,
+        artifact_intent: prepared.scopeChange.length ? undefined : prepared.group.artifact_intent,
+        template_id: prepared.scopeChange.length ? undefined : prepared.group.template_id,
+        scope_change: prepared.scopeChange.length ? { removed_member_ids: prepared.scopeChange } : undefined,
+        priority: prepared.group.priority,
+        delivery_boundary: prepared.group.delivery_boundary,
+        ready_for_author: prepared.group.ready_for_author,
+      }).filter(([, value]) => value !== undefined)),
       artifact_policy_eligibility: prepared.eligibility,
       allowed_question_targets: prepared.allowed_question_targets,
       ...(enrichment === undefined ? {} : { enrichment }),
       supplementary_sources: prepared.supplementary_sources,
     });
   }));
+  const currentRuns = await reuseCurrentIndexerRuns({ projectRoot: input.projectRoot, specs: runSpecs });
+  const currentWorksets = currentRuns.map((spec) => {
+    if (spec.request.workset.stage !== "author") throw new TypeError("expected author workset");
+    return spec.request.workset;
+  });
   return {
     requirement_set_digest: inventory.requirement_set_digest,
-    ...built,
-    run_specs: runSpecs,
+    obsolete_scope: summarizeIndexerObsoleteScope(currentRuns, {
+      titles: new Map(preparations.map((item) => [item.group.group_key, item.group.label])),
+      deprecated_member_ids: new Set(preparations.flatMap((item) => item.members.flatMap((member) => {
+        if (item.binding.adapter !== "parser-facts") return [];
+        const payload = item.binding.parser_fact_index.get(member.member_id)?.fact.payload;
+        return payload !== null && typeof payload === "object" && !Array.isArray(payload) && payload.deprecated === true
+          ? [member.member_id] : [];
+      }))),
+    }),
+    worksets: currentWorksets,
+    workset_set: buildIndexerMainWorksetSet(currentWorksets),
+    run_specs: currentRuns,
   };
 }

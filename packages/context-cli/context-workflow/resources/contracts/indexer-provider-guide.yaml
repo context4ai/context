@@ -1,0 +1,6 @@
+schema: agent-graph.resource.file.v1
+id: context.indexer.provider-guide
+kind: procedure
+mediaType: text/markdown
+path: skills/configure-indexer-providers/references/guides/indexer-provider-and-customization.md
+description: Current registry examples, Provider selection and customization instructions with bundled linked manuals.

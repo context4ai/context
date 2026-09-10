@@ -3,6 +3,7 @@ id: workspace
 description: Fact-grounded lifecycle for a Context knowledge workspace.
 entrypoints:
   context: repair-project-entry
+  rollback: close-rollback
 nodes:
   - id: repair-project-entry
     kind: action
@@ -28,6 +29,9 @@ nodes:
       required:
         - resources/diagnostics/workspace-state.md
         - resources/views/workspace-current.yaml
+      recommended:
+        - resources/procedures/workspace-prepare.md
+        - resources/procedures/workspace-restore.md
 
   - id: repair-verification
     kind: action
@@ -82,10 +86,9 @@ nodes:
       - path: close.current
         equals: true
     resources:
-      required:
+      recommended:
         - resources/procedures/close-and-build.md
         - resources/views/verification-current.yaml
-      recommended:
         - resources/diagnostics/projection-stale.md
 
   - id: choose-source-boundary
@@ -186,6 +189,14 @@ nodes:
     kind: action
     reasonCode: route.indexer.lifecycle-required
     action: actions/run-indexer-lifecycle.yaml
+    resources:
+      required:
+        - resources/contracts/indexer-registry-bootstrap.yaml
+        - resources/contracts/indexer-provider-guide.yaml
+        - resources/views/source-boundary.yaml
+      recommended:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
     satisfiedBy:
       - path: indexer.lifecycle_current
         equals: true
@@ -215,6 +226,7 @@ nodes:
         - resources/procedures/knowledge-review.md
         - resources/dialogue/human-gates.md
         - resources/dialogue/knowledge-review.md
+      recommended:
         - resources/views/review-current.yaml
 
   - id: choose-package-output
@@ -288,7 +300,8 @@ nodes:
       - path: packages.current
         equals: true
     resources:
-      required:
+      recommended:
+        - resources/procedures/workspace-commit.md
         - resources/procedures/close-and-build.md
         - resources/views/package-current.yaml
 
@@ -302,6 +315,31 @@ nodes:
     resources:
       required:
         - resources/procedures/runtime-event-delivery.md
+
+  - id: close-rollback
+    kind: action
+    reasonCode: route.rollback.close-required
+    action: actions/close-approved-knowledge.yaml
+    satisfiedBy:
+      - path: close.current
+        equals: true
+
+  - id: build-rollback
+    kind: action
+    reasonCode: route.rollback.build-required
+    action: actions/build-next.yaml
+    satisfiedBy:
+      - path: packages.current
+        equals: true
+
+  - id: finish-rollback
+    kind: action
+    reasonCode: route.rollback.cleanup-required
+    action: actions/finish-rollback.yaml
+
+  - id: rollback-complete
+    kind: terminal
+    terminalOutcome: completed
 
   - id: current-scope-complete
     kind: terminal
@@ -326,3 +364,6 @@ edges:
   - { from: review-package-template, to: build-next, kind: gatedBy }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }
+  - { from: close-rollback, to: build-rollback }
+  - { from: build-rollback, to: finish-rollback }
+  - { from: finish-rollback, to: rollback-complete }

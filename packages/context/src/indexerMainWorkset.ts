@@ -102,6 +102,7 @@ export function validateIndexerTargetResolutionView(
 const indexerRepairIntentPayloadSchema = z.object({
   target_ref: z.string().min(1),
   instruction: z.string().trim().min(1),
+  current_markdown: z.string().optional(),
 }).strict();
 
 export const indexerRepairIntentSchema = indexerRepairIntentPayloadSchema.extend({
@@ -113,6 +114,7 @@ export type IndexerRepairIntent = z.infer<typeof indexerRepairIntentSchema>;
 export function buildIndexerRepairIntent(input: {
   target_ref: string;
   instruction: string;
+  current_markdown?: string;
 }): IndexerRepairIntent {
   const payload = indexerRepairIntentPayloadSchema.parse(input);
   return indexerRepairIntentSchema.parse({

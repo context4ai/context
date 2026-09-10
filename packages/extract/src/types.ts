@@ -25,6 +25,17 @@ const packageKindSchema = z.enum(Object.values(PackageKind) as [PackageKind, ...
 export const symbolParamSchema = z.object({
   name: z.string().min(1),
   type: z.string().min(1).nullable(),
+  optional: z.boolean().optional(),
+  rest: z.boolean().optional(),
+  defaultValue: z.string().optional(),
+});
+
+const registrationSchema = z.object({
+  kind: z.enum(["http", "schedule", "event"]),
+  key: z.string(),
+  handler: z.string(),
+  method: z.string().optional(),
+  middleware: z.array(z.string()),
 });
 
 export type SymbolInfo = {
@@ -35,7 +46,15 @@ export type SymbolInfo = {
   line: number;
   endLine: number;
   members?: SymbolInfo[] | undefined;
-  params?: Array<{ name: string; type: string | null }> | undefined;
+  params?: z.infer<typeof symbolParamSchema>[] | undefined;
+  optional?: boolean | undefined;
+  readonly?: boolean | undefined;
+  defaultValue?: string | undefined;
+  typeParameters?: string | undefined;
+  overloads?: string[] | undefined;
+  publicEntrypoints?: string[] | undefined;
+  contractResolution?: "resolved" | "declaration-only" | undefined;
+  registration?: z.infer<typeof registrationSchema> | undefined;
   returnType?: string | null | undefined;
   typeAnnotation?: string | null | undefined;
   extends?: string | null | undefined;
@@ -57,6 +76,14 @@ export const symbolInfoSchema: z.ZodType<SymbolInfo> = z.lazy(() =>
     endLine: z.number().int().positive(),
     members: z.array(symbolInfoSchema).optional(),
     params: z.array(symbolParamSchema).optional(),
+    optional: z.boolean().optional(),
+    readonly: z.boolean().optional(),
+    defaultValue: z.string().optional(),
+    typeParameters: z.string().optional(),
+    overloads: z.array(z.string()).optional(),
+    publicEntrypoints: z.array(z.string()).optional(),
+    contractResolution: z.enum(["resolved", "declaration-only"]).optional(),
+    registration: registrationSchema.optional(),
     returnType: z.string().min(1).nullable().optional(),
     typeAnnotation: z.string().min(1).nullable().optional(),
     extends: z.string().min(1).nullable().optional(),
@@ -73,6 +100,10 @@ export const relationInfoSchema = z.object({
   type: relationTypeSchema,
   from: z.string().min(1),
   to: z.string().min(1),
+  // The parser knows which file produced a relation even when `from` is a
+  // local variable name (or a module-level call). Keep that provenance on
+  // the relation instead of making consumers guess from a symbol name.
+  file: z.string().min(1).optional(),
   isExternal: z.boolean(),
   grounding: groundingSchema,
   confidence: z.number().min(0).max(1),

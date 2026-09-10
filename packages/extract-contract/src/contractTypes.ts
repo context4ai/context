@@ -19,6 +19,7 @@ export interface ContractOperation {
   name: string;
   parent: string;
   deprecated: boolean;
+  fields?: ContractField[];
   locator: ContractLocator;
 }
 
@@ -29,7 +30,19 @@ export interface ContractType {
   name: string;
   extension: boolean;
   field_names: string[];
+  fields?: ContractField[];
   locator: ContractLocator;
+}
+
+export interface ContractField {
+  name: string;
+  type: string;
+  optional: boolean;
+  location?: string;
+  defaultValue?: string;
+  description?: string;
+  fields?: ContractField[];
+  constraints?: Record<string, unknown>;
 }
 
 export interface ContractReference {

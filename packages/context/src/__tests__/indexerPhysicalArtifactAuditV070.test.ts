@@ -280,7 +280,7 @@ describe("physical Artifact manifest and audit", () => {
       artifact_bundles: [unit.bundle],
       files: [{
         ...fileFor(unit.proposal, "overview"),
-        markdown: "---\ntitle: Empty\n---\n# Empty\n<!-- no reader content -->\n",
+        markdown: "---\ntitle: Empty\n---\n \n",
       }, {
         output_path: "knowledge/codeindex/orphan.md",
         markdown: "# Orphan\n\nThis file has no registered owner.\n",
@@ -305,6 +305,20 @@ describe("physical Artifact manifest and audit", () => {
       artifact_bundles: [unit.bundle],
     })).toThrow(/empty-physical-artifact/);
   });
+
+  test.each(["# Heading", "<!-- annotation -->", "[TODO]", "```jsx\n<View style={{ opacity }} />\n```"])(
+    "does not infer empty knowledge from body syntax: %s", (markdown) => {
+      const unit = logicalUnit("anonymous-body", [{ id: "overview", kind: "overview", purpose: "required" }]);
+      const layoutSet = buildIndexerLayoutProposalSet([unit.proposal]);
+      const result = auditIndexerPhysicalArtifacts({
+        layout_proposal_set: layoutSet,
+        artifact_bundles: [unit.bundle],
+        files: [{ ...fileFor(unit.proposal, "overview"), markdown }],
+      });
+      expect(result.audit.state).toBe("passed");
+      expect(result.manifest.files[0]!.empty).toBe(false);
+    },
+  );
 
   test("keeps material-gap Artifacts blocked even when a file is supplied", () => {
     const unit = logicalUnit("anonymous-gap", [{

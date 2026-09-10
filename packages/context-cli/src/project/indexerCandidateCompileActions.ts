@@ -1,3 +1,9 @@
+import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
+import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
+import { measureContextDebugOperation } from "./debugTrace.js";
+import { readIndexerDelivery, recordIndexerDeliveryLinks } from "./indexerDelivery.js";
+import { createDeliveryLinkProjection } from "./indexerDeliveryLinks.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -7,8 +13,7 @@ import {
   indexerCandidateCompileSchema,
   indexerArtifactResultSchema,
   indexerProtocolDigest,
-  indexerRegistryDigests,
-  loadIndexerRegistry,
+  validateIndexerLayoutProposalSet,
   type IndexerAcceptedAuthorResultInput,
 } from "@c4a/context";
 import {
@@ -19,8 +24,8 @@ import {
   readCandidateRecords,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
-import { readCurrentIndexerPostAuthorEnvelopeForResult } from "./indexerPostAuthorRunStore.js";
+import { readCurrentIndexerPostAuthorEnvelopesForResults } from "./indexerPostAuthorRunStore.js";
+import { readIndexerCandidateCompileStaleDiagnostic } from "./indexerCandidateCompileFreshness.js";
 import {
   durableContentDigest,
 } from "./durableSingleFileTransaction.js";
@@ -66,46 +71,6 @@ interface AcceptedAuthorRecord {
   post_author_envelope?: unknown | null;
 }
 
-async function currentRegistryStaleDiagnostic(
-  projectRoot: string,
-  records: readonly AcceptedAuthorRecord[],
-): Promise<string | undefined> {
-  let loaded: Awaited<ReturnType<typeof loadIndexerRegistry>>;
-  try {
-    loaded = await loadIndexerRegistry(projectRoot);
-  } catch (error) {
-    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return undefined;
-    }
-    throw error;
-  }
-  const requirementSetDigest = indexerRegistryDigests(loaded.registry).requirementSetDigest;
-  for (const item of records) {
-    const request = record(item.request, "accepted author request");
-    const workset = record(request.workset, "accepted author request workset");
-    if (workset.requirement_set_digest !== requirementSetDigest) {
-      return "Accepted author Results do not bind the current requirement set.";
-    }
-    if (typeof workset.indexer_id !== "string") {
-      return "Accepted author Result is missing its Indexer identity.";
-    }
-    let currentProjection;
-    try {
-      currentProjection = (await resolveCurrentProjectIndexerPrimaryAuthority({
-        projectRoot,
-        registry: loaded.registry,
-        indexer_id: workset.indexer_id,
-      })).primary_registry;
-    } catch {
-      return `Accepted author Result references inactive Indexer ${workset.indexer_id}.`;
-    }
-    if (workset.primary_registry_projection_digest !== currentProjection.projection_digest) {
-      return `Accepted author Results for ${workset.indexer_id} do not bind its current registry selection.`;
-    }
-  }
-  return undefined;
-}
-
 function record(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -133,19 +98,21 @@ async function withCurrentPostAuthorEnvelopes(
   projectRoot: string,
   records: readonly AcceptedAuthorRecord[],
 ): Promise<AcceptedAuthorRecord[]> {
-  const resolved: AcceptedAuthorRecord[] = [];
-  for (const item of records) {
-    const accepted = record(item.accepted_record, "accepted author record");
-    resolved.push({
-      ...item,
-      post_author_envelope: await readCurrentIndexerPostAuthorEnvelopeForResult({
-        projectRoot,
+  const envelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({
+    projectRoot,
+    results: records.map((item) => {
+      const accepted = record(item.accepted_record, "accepted author record");
+      return {
         author_workset_digest: String(accepted.workset_digest ?? ""),
         primary_result_digest: String(accepted.result_digest ?? ""),
-      }),
-    });
-  }
-  return resolved;
+      };
+    }),
+  });
+  return records.map((item, index) => ({
+    request: item.request, run_result: item.run_result, accepted_record: item.accepted_record,
+    artifact_result: item.artifact_result, run_envelope: item.run_envelope,
+    post_author_envelope: envelopes[index],
+  }));
 }
 
 async function currentContractAuthority(input: {
@@ -225,6 +192,8 @@ function renderedByResult(value: unknown): Map<string, unknown[]> {
 }
 
 export function buildProjectIndexerCandidateCompileFromRecords(input: {
+  markdown_projection?: Parameters<typeof buildIndexerCandidateCompile>[0]["markdown_projection"];
+  render_cache?: Parameters<typeof buildIndexerCandidateCompile>[0]["render_cache"];
   value: unknown;
   records: readonly AcceptedAuthorRecord[];
   operator_contract: unknown;
@@ -257,6 +226,8 @@ export function buildProjectIndexerCandidateCompileFromRecords(input: {
     throw new TypeError("Candidate compile contains rendered output for an unaccepted Result");
   }
   return buildIndexerCandidateCompile({
+    markdown_projection: input.markdown_projection,
+    render_cache: input.render_cache,
     layout_proposal_set: value.layout_proposal_set,
     layout_transition: value.layout_transition,
     layout_change_confirmations: array(
@@ -391,6 +362,8 @@ function validatePersistedCompile(value: unknown): IndexerCandidateCompile {
 }
 
 export interface ProjectIndexerCandidateCompileStatus {
+  rollback_pending?: boolean;
+  revision_pending?: boolean;
   state: "missing" | "current" | "stale" | "invalid";
   compile?: IndexerCandidateCompile;
   candidates: CandidateRecord[];
@@ -400,10 +373,35 @@ export interface ProjectIndexerCandidateCompileStatus {
 export async function readProjectIndexerCandidateCompileStatus(
   projectRoot: string,
 ): Promise<ProjectIndexerCandidateCompileStatus> {
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const localRevision = await readApprovedRevision(projectRoot);
+  if (localRevision) {
+    const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+    return observeApprovedRevisionBatch(projectRoot, localRevision);
+  }
   const raw = await readMaybe(join(projectRoot, INDEXER_CANDIDATE_COMPILE_CURRENT_PATH));
-  if (raw === undefined) return { state: "missing", candidates: [] };
+  if (raw === undefined) {
+    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
+    const ledger = await currentLedger(projectRoot);
+    let pending = ledger?.entries.some((entry) => entry.state === "stale") === true;
+    if (ledger?.entries.length && ledger.entries.every((entry) => entry.stage === "partition" && entry.state === "accepted")) {
+      const { hasApprovedEmptyIndexerStructure } = await import("./indexerStructureReview.js");
+      pending ||= await hasApprovedEmptyIndexerStructure(projectRoot);
+    }
+    return { state: "missing", candidates: [], ...(pending ? { revision_pending: true } : {}) };
+  }
   try {
-    const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
+    const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
+    const { readTaskRollback } = await import("./taskRollback.js");
+    if (await readTaskRollback(projectRoot)) return { state: "current", candidates: [], rollback_pending: true };
+    if (await readKnowledgeUpdate(projectRoot)) return { state: "missing", candidates: [], revision_pending: true };
+    const { parseApprovedRevision } = await import("./approvedRevision.js");
+    const revision = parseApprovedRevision(JSON.parse(raw));
+    if (revision !== undefined) {
+      const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+      return observeApprovedRevisionBatch(projectRoot, revision);
+    }
+    const compile = validatePersistedCompile(JSON.parse(raw!) as unknown);
     const readinessRaw = await readMaybe(join(projectRoot, INDEXER_CURRENT_READINESS_PATH));
     const readiness = readinessRaw === undefined
       ? undefined
@@ -416,59 +414,13 @@ export async function readProjectIndexerCandidateCompileStatus(
         diagnostic: "Candidate compile has not completed the current mechanical readiness checks.",
       };
     }
-    const accepted = await withCurrentPostAuthorEnvelopes(
-      projectRoot,
-      await readAcceptedIndexerMainAuthorResultRecords(projectRoot),
-    );
-    const registryDiagnostic = await currentRegistryStaleDiagnostic(projectRoot, accepted);
-    if (registryDiagnostic !== undefined) {
+    const staleDiagnostic = await readIndexerCandidateCompileStaleDiagnostic(projectRoot, compile);
+    if (staleDiagnostic !== undefined) {
       return {
         state: "stale",
         compile,
         candidates: [],
-        diagnostic: registryDiagnostic,
-      };
-    }
-    const currentRefs = accepted.map(currentResultRef)
-      .sort((left, right) => canonicalIndexerJson(left).localeCompare(canonicalIndexerJson(right)));
-    const compileRefs = compile.result_bindings.map((binding) => ({
-      workset_digest: binding.workset_digest,
-      execution_request_digest: binding.execution_request_digest,
-      acceptance_digest: binding.acceptance_digest,
-      artifact_result_digest: binding.artifact_result_digest,
-    })).sort((left, right) => canonicalIndexerJson(left).localeCompare(canonicalIndexerJson(right)));
-    if (canonicalIndexerJson(currentRefs) !== canonicalIndexerJson(compileRefs)) {
-      return {
-        state: "stale",
-        compile,
-        candidates: [],
-        diagnostic: "Candidate compile does not bind the exact current accepted author Result set.",
-      };
-    }
-    const currentCompositions = accepted.map((item) => ({
-      artifact_result_digest: indexerArtifactResultSchema.parse(item.artifact_result)
-        .output_digest,
-      post_author_composition_fingerprint: item.post_author_envelope === null ||
-          item.post_author_envelope === undefined
-        ? null
-        : String(record(item.post_author_envelope, "post-author envelope")
-          .composition_fingerprint ?? ""),
-    })).sort((left, right) => left.artifact_result_digest.localeCompare(
-      right.artifact_result_digest,
-    ));
-    const compileCompositions = compile.result_bindings.map((binding) => ({
-      artifact_result_digest: binding.artifact_result_digest,
-      post_author_composition_fingerprint:
-        binding.post_author_composition_fingerprint,
-    })).sort((left, right) => left.artifact_result_digest.localeCompare(
-      right.artifact_result_digest,
-    ));
-    if (canonicalIndexerJson(currentCompositions) !== canonicalIndexerJson(compileCompositions)) {
-      return {
-        state: "stale",
-        compile,
-        candidates: [],
-        diagnostic: "Candidate compile does not bind the current post-author composition.",
+        diagnostic: staleDiagnostic,
       };
     }
     const rows = (await readCandidateRecords(projectRoot))
@@ -519,7 +471,7 @@ export async function readProjectIndexerCandidateCompileStatus(
 export async function assertProjectIndexerCandidateCurrent(input: {
   projectRoot: string;
   record: CandidateRecord;
-}): Promise<IndexerCandidateCompile["files"][number]> {
+}): Promise<IndexerCandidateCompile["files"][number] | undefined> {
   const index = await loadProjectIndexerCandidateCompileIndex(input.projectRoot);
   return assertProjectIndexerCandidateInCompileIndex({
     index,
@@ -528,19 +480,27 @@ export async function assertProjectIndexerCandidateCurrent(input: {
 }
 
 export interface ProjectIndexerCandidateCompileIndex {
-  compile: IndexerCandidateCompile;
+  compile: Pick<IndexerCandidateCompile, "compile_digest">;
+  approvedRevisionCandidates?: CandidateRecord[];
   filesByDigest: ReadonlyMap<string, IndexerCandidateCompile["files"][number]>;
 }
 
 export async function loadProjectIndexerCandidateCompileIndex(
   projectRoot: string,
 ): Promise<ProjectIndexerCandidateCompileIndex> {
-  const raw = await readMaybe(join(
-    projectRoot,
-    INDEXER_CANDIDATE_COMPILE_CURRENT_PATH,
-  ));
-  if (raw === undefined) throw new TypeError("Indexer Candidate compile is missing");
-  const compile = validatePersistedCompile(JSON.parse(raw) as unknown);
+  const { readApprovedRevision } = await import("./approvedRevision.js");
+  const revision = await readApprovedRevision(projectRoot);
+  const raw = await readMaybe(join(projectRoot, INDEXER_CANDIDATE_COMPILE_CURRENT_PATH));
+  if (raw === undefined && revision === undefined) throw new TypeError("Indexer Candidate compile is missing");
+  if (revision !== undefined) {
+    if (!revision.review_ready && !revision.candidate) throw new TypeError("Complete the current Author batch before Review");
+    const { observeApprovedRevisionBatch } = await import("./approvedRevisionBatch.js");
+    const observed = await observeApprovedRevisionBatch(projectRoot, revision);
+    if (observed.state !== "current") throw new TypeError("Revision batch is not current for Review");
+    return { compile: { compile_digest: revision.revision }, filesByDigest: new Map(),
+      approvedRevisionCandidates: [...(revision.batch_candidates ?? []), ...(revision.candidate ? [revision.candidate] : [])] };
+  }
+  const compile = validatePersistedCompile(JSON.parse(raw!) as unknown);
   const filesByDigest = new Map<string, IndexerCandidateCompile["files"][number]>();
   for (const file of compile.files) {
     if (!filesByDigest.has(file.file_digest)) filesByDigest.set(file.file_digest, file);
@@ -554,7 +514,14 @@ export async function loadProjectIndexerCandidateCompileIndex(
 export function assertProjectIndexerCandidateInCompileIndex(input: {
   index: ProjectIndexerCandidateCompileIndex;
   record: CandidateRecord;
-}): IndexerCandidateCompile["files"][number] {
+}): IndexerCandidateCompile["files"][number] | undefined {
+  if (input.record.approved_revision !== undefined) {
+    const expected = input.index.approvedRevisionCandidates?.find((item) => item.candidate_id === input.record.candidate_id);
+    if (!expected || canonicalIndexerJson({ ...input.record, status: "draft", updated: expected.updated }) !== canonicalIndexerJson(expected)) {
+      throw new TypeError("Approved revision Candidate is not part of the current compile");
+    }
+    return undefined;
+  }
   const fileDigest = input.record.indexer_candidate?.file_digest;
   const file = fileDigest === undefined
     ? undefined
@@ -650,18 +617,44 @@ export async function compileProjectIndexerCandidates(input: {
     COMPILE_TRANSACTION,
     async () => {
       await recoverDurableMultiFileTransactions(input.projectRoot);
-      const currentRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+      const delivery = await readIndexerDelivery(input.projectRoot);
+      const allRecords = await readDeliverableAuthorRecords(input.projectRoot);
+      const currentRecords = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
+        (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
       const authority = await currentContractAuthority({
         projectRoot: input.projectRoot,
         records: currentRecords,
       });
       const records = await withCurrentPostAuthorEnvelopes(input.projectRoot, currentRecords);
-      const compile = buildProjectIndexerCandidateCompileFromRecords({
+      const layout = validateIndexerLayoutProposalSet(record(input.value, "Candidate compile input").layout_proposal_set);
+      const currentPaths = new Set(layout.proposals.flatMap((proposal) => proposal.artifacts.map((artifact) => artifact.output_path)));
+      const links = delivery?.current.length ? createDeliveryLinkProjection(input.projectRoot, currentPaths) : undefined;
+      const renderCache = await loadCandidateRenderCache(input.projectRoot);
+      const renderCounters = { result_count: records.length, page_count: currentPaths.size, rendered_sections: 0, reused_sections: 0 };
+      const compile = await measureContextDebugOperation({ projectRoot: input.projectRoot,
+        operation: "indexer.candidate-render", counters: renderCounters },
+      async () => {
+        const result = buildProjectIndexerCandidateCompileFromRecords({
+        render_cache: renderCache.entries,
         value: input.value,
         records,
         operator_contract: authority.operator_contract,
         profile_contract: authority.profile_contract,
+        markdown_projection: links?.project,
+        });
+        renderCounters.rendered_sections = renderCache.entries.misses;
+        renderCounters.reused_sections = renderCache.entries.hits;
+        return result;
       });
+      await saveCandidateRenderCache(input.projectRoot, renderCache);
+      if (delivery?.current.length) {
+        const expected = new Set(delivery.current.map((page) => page.ref));
+        const actual = new Set(compile.files.map((file) => file.artifact_ref));
+        if (expected.size !== actual.size || [...expected].some((ref) => !actual.has(ref))) {
+          throw new TypeError("Candidate compile must contain exactly the active delivery pages");
+        }
+      }
+      if (links !== undefined) await recordIndexerDeliveryLinks(input.projectRoot, links.targets, currentPaths);
       const content = `${JSON.stringify(JSON.parse(canonicalIndexerJson(compile)), null, 2)}\n`;
       const candidates = await projectIndexerCandidates({
         projectRoot: input.projectRoot,

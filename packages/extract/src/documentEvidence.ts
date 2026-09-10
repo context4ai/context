@@ -25,7 +25,7 @@ export const DOCUMENT_EVIDENCE_NORMALIZER_VERSION = "document-evidence-normalize
 export const DOCUMENT_SNAPSHOT_MANIFEST_SCHEMA_VERSION = "document.snapshot.v2";
 export const DEFAULT_SOURCE_SPAN_HASH_LENGTH = 12;
 
-export type DocumentSourceType = "file" | "lark";
+export type DocumentSourceType = "file" | "lark" | "note" | "sessions";
 
 export interface LogicalRawHashFile {
   path: string;
@@ -135,7 +135,7 @@ const BOM = "\uFEFF";
 const HASH_ID_RE = /^(?:sha256:)?[a-f0-9]{64}$/u;
 const SOURCE_SPAN_HASH_RE = /^[a-f0-9]{8,64}$/u;
 const DOCUMENT_SOURCE_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/u;
-const DOCUMENT_SOURCE_BATCH_RE = /^\d{8}\/[a-z0-9][a-z0-9._-]*$/u;
+const DOCUMENT_SOURCE_BATCH_RE = /^\d{8}\/[^/\\\x00-\x1f:#?]+$/u;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -159,8 +159,8 @@ function normalizeHashId(value: string): string {
 }
 
 function assertDocumentSourceType(value: string): asserts value is DocumentSourceType {
-  if (value !== "file" && value !== "lark") {
-    throw new TypeError(`document source_type must be file or lark: ${value}`);
+  if (value !== "file" && value !== "lark" && value !== "note" && value !== "sessions") {
+    throw new TypeError(`document source_type must be file, lark, note or sessions: ${value}`);
   }
 }
 
@@ -219,8 +219,15 @@ export function decodeSnapshotLocatorPath(path: string): string {
 }
 
 export function parseDocumentSourceLocator(source: string): DocumentSourceLocator | null {
-  const match = /^(file|lark):(.+)$/u.exec(source);
+  const match = /^(file|lark|note|sessions):(.+)$/u.exec(source);
   if (match?.[1] === undefined || match[2] === undefined) return null;
+  if (match[1] === "note" || match[1] === "sessions") {
+    try {
+      const sourceName = normalizeDocumentSourceName(match[2]);
+      if (!sourceName.endsWith(".md") || !/^\d{8}\//u.test(sourceName)) return null;
+      return { sourceType: match[1], sourceName, documentPath: sourceName.slice(9) };
+    } catch { return null; }
+  }
   const segments = match[2].split("/");
   const batched = /^\d{8}$/u.test(segments[0] ?? "") && segments.length >= 3;
   const sourceName = batched ? `${segments[0]}/${segments[1]}` : segments[0];

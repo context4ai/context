@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import Handlebars from "handlebars";
+import YAML from "yaml";
 import { renderAgents } from "../project/workspaceGuidanceTemplates.js";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -97,29 +99,32 @@ describe("plugin and workflow workspace guard", () => {
       "utf8",
     );
     expect(workflow).toContain("context entry");
-    expect(workflow).toContain("context status --resource-receipts");
+    expect(workflow).toContain("next_action.command");
+    expect(workflow).toContain("resources.after_read.command");
     expect(workflow).toContain("workflow.current");
     expect(workflow).toContain("resources.required");
-    expect(workflow).toContain("Execute only `commands` returned by the Route");
-    expect(workflow).toContain("run status again");
+    expect(workflow).toContain("next_route.file");
     expect(workflow).not.toContain("| declared non-extract phase |");
     expect(workflow).not.toContain(RETIRED_CODEX_TOOL_NAME);
   });
 
-  test("managed mode is explicit, current-conversation-only, and bounded", async () => {
+  test("the explicit entry exposes authority controls and keeps review decisions in the Graph", async () => {
     const continuation = await readFile(ENTRY_PATH, "utf8");
     expect(continuation).toContain("--managed");
-    expect(continuation).toMatch(/(?:current|this) conversation|current-conversation/iu);
-    expect(continuation).toMatch(/never|only|unless/iu);
-    expect(continuation).toContain("never");
-    expect(continuation).toContain("repo sources");
-    const review = await readFile(
-      join(WORKFLOW_ROOT, "resources", "procedures", "knowledge-review.md"),
-      "utf8",
-    );
-    expect(review).toContain("explicit session-managed authority");
-    expect(review).toMatch(/current\s+conversation/u);
-    expect(review).toMatch(/complete\s+current scope atomically/u);
+    expect(continuation).toContain("--authority");
+    const invocation = YAML.parse(await readFile(
+      join(PLUGIN_ROOT, "skills", "context", "agents", "openai.yaml"), "utf8",
+    ));
+    expect(invocation.policy.allow_implicit_invocation).toBe(false);
+    const graph = YAML.parse(await readFile(join(WORKFLOW_ROOT, "graphs", "workspace.yaml"), "utf8")) as {
+      nodes: Array<{ id: string; gate?: { authority?: string; delegatable?: boolean } }>;
+    };
+    expect(graph.nodes.find(node => node.id === "review-current-batch")?.gate).toMatchObject({
+      authority: "context.knowledge-review", delegatable: true,
+    });
+    expect(graph.nodes.find(node => node.id === "authorize-document-capture")?.gate).toMatchObject({
+      authority: "context.source-read", delegatable: false,
+    });
   });
 
   test("generated workspace guidance stays concise and graph-led", async () => {
@@ -136,8 +141,10 @@ describe("plugin and workflow workspace guard", () => {
     expect(generated).not.toContain("exact phrase `强制批准`");
     expect(generated).not.toContain("Execute safe mechanical `next:` steps");
     const continuation = await readFile(ENTRY_PATH, "utf8");
-    expect(continuation).toContain("`execution.target` is `agent-host`");
-    expect(continuation).toMatch(/not inside a restricted child\s+sandbox/u);
+    // The entry references the Host execution contract; runtime dispatch and
+    // scope isolation are tested by the workflow execution suites, not wording.
+    expect(continuation).toContain("execution.target");
+    expect(continuation).toContain("agent-host");
   });
 
   test("retired semantic resource trees are absent from Skills and workflow source", async () => {
@@ -164,7 +171,7 @@ describe("plugin and workflow workspace guard", () => {
     expect(template).toContain("Start from `{{guidesRoot}}/index.md`");
     expect(template).toContain("Start from `{{rulesRoot}}/index.md`");
     expect(template).toContain("context-build-inventory.json");
-    expect(template).toContain("Template Author Recommendation");
+    expect(template).toContain("{{!-- Template author guidance");
     expect(template).toContain("edit it before publishing");
     expect(template).not.toContain("C4A");
 
@@ -181,9 +188,25 @@ describe("plugin and workflow workspace guard", () => {
       "utf8",
     );
     expect(localizedTemplate).toContain("## 知识根目录");
-    expect(localizedTemplate).toContain("## 模板作者建议");
+    expect(localizedTemplate).toContain("{{!-- 模板作者建议");
     expect(localizedTemplate).toContain("正式发布前");
     expect(localizedTemplate).not.toContain("C4A");
+    for (const queryTemplate of [template, localizedTemplate]) {
+      // Published pages intentionally omit production attribution. The default
+      // consumer Skill must work without asking for those removed fields.
+      expect(queryTemplate).not.toContain("context:section");
+      expect(queryTemplate).not.toContain("source_ref");
+      expect(queryTemplate).not.toContain("#section-id");
+      expect(queryTemplate).toContain("dist_path");
+      expect(queryTemplate).toContain("approved_path");
+      const published = Handlebars.compile(queryTemplate)({
+        name: "sample-library", knowledgeCount: 2,
+        wikisRoot: "wikis", guidesRoot: "guides", rulesRoot: "rules", featsRoot: "feats",
+      });
+      expect(published).not.toMatch(/Template author guidance|模板作者建议|edit it before publishing|正式发布前/u);
+      expect(published).toContain("context-build-inventory.json");
+      expect(published).not.toContain("{{");
+    }
   });
 
   test("agent-facing docs avoid collection-specific wiki wording and drifting version narratives", async () => {
@@ -205,21 +228,15 @@ describe("plugin and workflow workspace guard", () => {
       PACKAGE_ROOT,
       PLUGIN_ROOT,
     ];
+    // Distribution-specific identifiers are audited downstream. Community
+    // guards cover portable shipped paths; tests may use synthetic paths.
     const forbidden = [
-      /\bbytedance\b/iu,
-      /\btiktok\b/iu,
-      /\bcontext-code-indexer-bytedance\b/iu,
-      /\btux(?:-web)?\b/iu,
-      /\bttls(?:[-_ ]?(?:web|backend))?\b/iu,
-      /\blive[-_ ]?agency\b/iu,
-      /\bvmok\b/iu,
-      /\bttastra\b/iu,
-      /\bedenx\b/iu,
+      /\/Users\/[^/]+\//u,
     ];
     const currentFile = fileURLToPath(import.meta.url);
     const files = (await Promise.all(roots.map(listPublishableText)))
       .flat()
-      .filter((file) => file !== currentFile);
+      .filter((file) => file !== currentFile && !file.includes("/__tests__/"));
     for (const file of files) {
       const text = await readFile(file, "utf8");
       for (const pattern of forbidden) expect(text, file).not.toMatch(pattern);

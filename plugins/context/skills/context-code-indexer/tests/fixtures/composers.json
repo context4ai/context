@@ -5,7 +5,7 @@
     "anonymized": true,
     "composer": "public-contract",
     "profile": "component-library",
-    "primary_input": { "fact_kinds": ["public-surface"], "artifact_kinds": ["content"] },
+    "primary_input": { "fact_kinds": ["code-symbol"], "artifact_kinds": ["content"] },
     "expected_proposal": { "artifact_policy_variant": "standard", "artifact_kind": "contract" },
     "empty_result": { "protocol": "context.indexer.layer-fragment-result/v1", "fragments": [] }
   },

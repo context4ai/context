@@ -5,11 +5,12 @@ review lead with a recommended outcome; it is not authority to change facts,
 cross Section boundaries, or discard evidence. Preserve exact links, code,
 commands, identifiers, numbers, conditions, attachments, and source meaning.
 
-The community policy owns scenario interpretation and revision guidance. The
-Context plan may also report syntax, protected-value, or safety-baseline
-signals. Use the same decision discipline for both, while leaving detection,
-source spans, stale checks, protected values, revision persistence, and final
-validation to Context.
+The Agent owns scenario interpretation and content assessment. Context checks
+structured inputs, source references, protected values and safe writes; it does
+not infer content quality from words, punctuation, Markdown layout or table size.
+The catalog below is review guidance, not a CLI scanner or readiness checklist.
+Suspected unfilled placeholders may be mentioned during the existing Review;
+they do not create another gate or require a rewrite to make a counter pass.
 
 ## Signal catalog
 
@@ -42,9 +43,9 @@ fit. File length, page count, deadline, or effort never changes the outcome.
 
 ## Outcomes
 
-- `keep`: use when there is no actionable signal, or for a `review` signal only
-  with a Section-specific assessment that proves a false positive or explains
-  why the proposed edit would damage source fidelity.
+- `keep`: use when the Section already serves its reader, including when a
+  suggested edit would damage source fidelity. The presence of a signal name
+  does not require an assessment or prevent keeping the Section.
 - `repair`: make a local presentation correction without changing facts or
   protected values.
 - `reshape`: reorganize the same supported material without broadening,
@@ -61,22 +62,14 @@ routine review pause. Managed authority does not lower these rules and does not
 turn genuinely missing input into `keep`; ask once for the remaining batched
 input after completing the independent analysis.
 
-## Assessment contract
+## Content assessment
 
-An assessment is required only when keeping a reported `review` signal or when
-a repaired/reshaped result retains a review signal after rescan. It must:
-
-1. be Section-specific rather than copied across a batch;
-2. name every remaining signal code;
-3. cite concrete source evidence for a false positive, or state the exact
-   source fidelity loss the recommended edit would cause;
-4. explicitly say `false-positive` for a kept `request-input` signal;
-5. never cite time, cost, effort, workload, batch size, deadline, or progress.
-
-A `high` signal cannot be justified by assessment and kept unchanged; it must
-be resolved. A Section without a signal can be kept without an assessment.
-Every repair or reshape is subject to the same post-revision signal scan and
-protected-value validation; selecting an action is not proof of resolution.
+A Section-specific assessment can explain an editorial choice when useful; it
+is not a required signal-clearing receipt. Either confidence label is advisory.
+There is no CLI post-revision prose rescan, required keyword, or automatic
+failure for retaining a signal. Decide from source meaning and the reader task;
+keep legitimate examples, placeholders being documented, and historical facts.
+Protected-value and reference checks remain mechanical safeguards.
 
 ## Anonymous decision examples
 
@@ -97,10 +90,7 @@ protected-value validation; selecting an action is not proof of resolution.
 - A current rule followed by an undecided proposal: choose `reshape`, retain
   the rule, and isolate the proposal rather than omitting the whole Section.
 - Struck-through text that is the only surviving historical record may be kept
-  only with a Section-specific `strikethrough-only-block` assessment explaining
-  the exact source fidelity loss; ordinary obsolete-only prose should be
-  omitted.
+  when it has continuing reader value; no signal-specific receipt is required.
 
-Before returning a decision, confirm every Section has one outcome, every kept
-signal has a valid assessment, every omission has an eligible reason, and no
-revision changes authority, evidence, identity, or protected values.
+Before returning a decision, confirm every Section has one outcome and no
+revision accidentally changes authority, evidence, identity, or protected values.

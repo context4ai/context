@@ -184,7 +184,7 @@ describe("0.6.2 knowledge resource projection", () => {
     }
   });
 
-  test("verify reports missing projected resources and unresolved required placeholders", async () => {
+  test("verify reports missing files without judging quoted placeholder content", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "context-knowledge-assets-verify-"));
     try {
       const page = join(projectRoot, "knowledge", "guides", "example.md");
@@ -208,11 +208,13 @@ describe("0.6.2 knowledge resource projection", () => {
       ].join("\n"), "utf8");
       const result = await verifyProjectWorkspace(projectRoot);
       expect(result.issues.map((issue) => issue.code)).toContain("approved-resource-missing");
-      expect(result.issues.map((issue) => issue.code)).toContain("approved-resource-placeholder-unresolved");
-      expect(result.issues.find((issue) => issue.code === "approved-resource-placeholder-unresolved")).toMatchObject({
-        view_ref: "sop:action/example",
-        source_keys: ["lark:20260813/example"],
-      });
+      expect(result.issues.map((issue) => issue.code)).not.toContain("approved-resource-placeholder-unresolved");
+      const asset = join(projectRoot, "knowledge", "assets", "image", "missing.png");
+      await mkdir(dirname(asset), { recursive: true });
+      await writeFile(asset, Buffer.from("example-image", "utf8"));
+      const withExistingResource = await verifyProjectWorkspace(projectRoot);
+      expect(withExistingResource.issues.filter((issue) => issue.code.startsWith("approved-resource-")))
+        .toEqual([]);
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

@@ -1,10 +1,11 @@
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { Command, Option } from "commander";
+import { Command, CommanderError, Option } from "commander";
 import { redactIndexerOutput, redactIndexerOutputText } from "@c4a/core";
 import { registerContextWorkflowResourceCommands } from "./commands/resourceCommands.js";
 import { registerProjectRunCommand } from "./commands/runProject.js";
+import { continueAfterProjectReview } from "./project/workflow/workflowContinuation.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
 import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
@@ -37,6 +38,7 @@ import {
   workflowAuthorities,
 } from "./project/workflow/workflowCommandOptions.js";
 import { withDebugCliInvocation } from "./project/debugTrace.js";
+import { withCommandReadCache } from "./project/commandReadCache.js";
 import { withContextRuntimeEventDelivery } from "./runtimeEvents.js";
 import {
   registerProjectCloseAndBuildCommands,
@@ -47,29 +49,6 @@ import {
 } from "./registerProjectLifecycleCommands.js";
 import { registerPluginCommands } from "./registerPluginCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
-
-const TOP_LEVEL_COMMANDS = new Set([
-  "entry",
-  "init",
-  "plugin",
-  "status",
-  "run",
-  "review",
-  "close",
-  "build",
-  "source",
-  "indexer",
-  "verify",
-  "resource",
-  "package",
-  "clean-cache",
-  "debug",
-  "revise",
-  "migrate",
-  "logs",
-  "action",
-  "help",
-]);
 
 function inferErrorCategory(message: string): string {
   const lower = message.toLowerCase();
@@ -124,11 +103,12 @@ function quickstartHelpText(): string {
   ])}\n`;
 }
 
-function assertKnownTopLevelCommand(argv: string[]): void {
+function assertKnownTopLevelCommand(argv: string[], program: Command): void {
+  const commands = new Set(["help", ...program.commands.flatMap((command) => [command.name(), ...command.aliases()])]);
   for (const token of argv.slice(2)) {
     if (token === "-h" || token === "--help" || token === "-V" || token === "--version") return;
     if (token.startsWith("-")) return;
-    if (!TOP_LEVEL_COMMANDS.has(token)) {
+    if (!commands.has(token)) {
       throw new ContextError(ExitCode.UserError, `unknown command '${token}'`, {
         category: ErrorCategory.UserInputInvalid,
       });
@@ -282,7 +262,7 @@ export function createCliProgram(): Command {
 
   review
     .command("apply <payload-file>")
-    .description("Apply a copied review Payload from a JSON or JSONL file")
+    .description("Apply a copied review code (all segments in one file) or JSON/JSONL decisions")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (payloadInput: string, options: Record<string, unknown>) => {
       if (options.format !== "text" && options.format !== "json") {
@@ -294,6 +274,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         payloadInput,
         format: options.format === "json" ? "json" : "text",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
       });
     });
 
@@ -319,6 +303,10 @@ export function createCliProgram(): Command {
         force: options.force === true,
         verbose: options.verbose === true,
         format: options.format === "json" ? "json" : "text",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: options.managed === true || program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: options.managed === true || program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
       });
     });
 
@@ -338,6 +326,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         id,
         status: "approved",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
         ...(typeof options.collection === "string" ? { collection: options.collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         format: options.format === "json" ? "json" : "text",
@@ -360,6 +352,10 @@ export function createCliProgram(): Command {
         cwd: process.cwd(),
         id,
         status: "rejected",
+        afterApply: (projectRoot) => continueAfterProjectReview({ projectRoot, cliEntryPath: fileURLToPath(import.meta.url),
+          managed: program.opts().workflowManaged === true,
+          authorities: contextWorkflowAuthorities({ managed: program.opts().workflowManaged === true,
+            authorities: workflowAuthorities(program.opts().workflowAuthority) }) }),
         ...(typeof options.collection === "string" ? { collection: options.collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         format: options.format === "json" ? "json" : "text",
@@ -473,13 +469,22 @@ export function createCliProgram(): Command {
 }
 
 export async function cli_main(argv: string[] = process.argv): Promise<void> {
-  await withDebugCliInvocation(argv, async () => {
+  await withCommandReadCache(() => withDebugCliInvocation(argv, async () => {
     await withContextRuntimeEventDelivery(async () => {
-      assertKnownTopLevelCommand(argv);
       const program = createCliProgram();
-      await program.parseAsync(argv);
+      assertKnownTopLevelCommand(argv, program);
+      const overrideExit = (command: Command): void => {
+        command.exitOverride();
+        command.commands.forEach(overrideExit);
+      };
+      overrideExit(program);
+      try {
+        await program.parseAsync(argv);
+      } catch (error) {
+        if (!(error instanceof CommanderError && error.exitCode === 0)) throw error;
+      }
     });
-  });
+  }));
 }
 
 export function isDirectCliInvocation(metaUrl: string, argv1: string | undefined): boolean {

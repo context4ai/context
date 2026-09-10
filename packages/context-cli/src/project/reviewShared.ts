@@ -31,6 +31,7 @@ export interface ReviewDecision {
 }
 
 export interface ReviewPayload {
+  encoded_statuses?: Array<ReviewStatus | "pending">;
   decisions: ReviewDecision[];
   note?: string;
   collection?: KnowledgeCollection;
@@ -58,7 +59,7 @@ export interface CandidateSnapshot {
 export interface ParsedCanonicalProseRef {
   locator: string;
   spanBody: string;
-  sourceType: "file" | "lark";
+  sourceType: "file" | "lark" | "note" | "sessions";
   sourceName: string;
   documentPath: string;
 }

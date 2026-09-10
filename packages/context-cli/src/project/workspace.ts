@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, isAbsolute, join, parse, relative, resolve } from "node:path";
@@ -235,7 +235,17 @@ export function findContextProjectRoot(startDir: string = process.cwd()): Contex
 
 function normalizeProjectDir(cwd: string, projectDir: string | undefined): string {
   const raw = projectDir?.trim() || DEFAULT_PROJECT_DIR;
-  return raw === "." ? resolve(cwd) : resolve(cwd, raw);
+  const resolved = raw === "." ? resolve(cwd) : resolve(cwd, raw);
+  // Users commonly pass the VS Code workspace descriptor itself. Store the
+  // Context project beside that JSON file, not inside the regular file.
+  if (resolved.endsWith(".code-workspace") && existsSync(resolved)) {
+    try {
+      if (statSync(resolved).isFile()) return dirname(resolved);
+    } catch {
+      // Let the normal init path report any subsequent filesystem failure.
+    }
+  }
+  return resolved;
 }
 
 export function resolveContextProjectInitTarget(cwd: string, projectDir: string | undefined): string {
@@ -398,6 +408,7 @@ function renderPackageJson(
     context: {
       project: true,
       entry: DEFAULT_PROJECT_ENTRY,
+      convertVisuals: true,
       language,
       ...(debug === true ? { debug: true } : {}),
     },

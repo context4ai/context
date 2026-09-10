@@ -10,9 +10,11 @@ import {
   indexerProjectContentDigest,
   indexerProtocolDigest,
   indexerRegistryDigests,
+  loadIndexerProviderManifest,
   parseIndexerRegistry,
   validateFinalizedIndexerRegistry,
   type IndexerProviderSelectionSemanticInput,
+  type IndexerProviderRouteReport,
   type IndexerRegistry,
 } from "@c4a/context";
 import {
@@ -24,8 +26,8 @@ import { loadIndexerCustomization } from "./indexerCustomization.js";
 import {
   listCliBundledIndexers,
   loadCliIndexerBaseContracts,
+  defaultCliIndexerAssetsRoot,
 } from "./indexerCliBundledProvider.js";
-import { loadIndexerProviderManifest } from "@c4a/context";
 import {
   dispatchProjectIndexerProviderResolution,
   stageProjectIndexerProviderResolution,
@@ -59,6 +61,22 @@ import {
 } from "./indexerCurrentProviderState.js";
 import { readPackageVersion } from "../lib/packageVersion.js";
 import { currentIndexerProviderSelectionNeedsRefresh } from "./indexerCurrentProviderSelection.js";
+import { projectIndexerSelectionCatalog } from "./indexerProviderSelectionCatalog.js";
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
+
+export class IndexerProviderSelectionError extends ContextError {
+  constructor(report: IndexerProviderRouteReport) {
+    super(ExitCode.UserError, `Provider selection needs correction: ${report.route.outcome}`, {
+      category: ErrorCategory.UserInputInvalid,
+      reason: report.route.outcome,
+      unowned_required_owner_cells: report.unowned_required_owner_cells,
+      conflicting_owner_cells: report.conflicting_owner_cells,
+      capability_gaps: report.capability_gaps,
+    });
+  }
+}
 
 const INDEXER_GRAPH_ID = "indexer";
 const PROVIDER_SELECTION_ENTRY = "provider-selection";
@@ -92,6 +110,29 @@ export async function indexerRegistryNeedsProviderSelection(
     validateFinalizedIndexerRegistry(registry);
   } catch {
     return true;
+  }
+  const catalog = await listCliBundledIndexers();
+  const manifests = new Map<string, Awaited<ReturnType<typeof loadIndexerProviderManifest>>>();
+  for (const indexer of registry.indexers) {
+    for (const layer of indexer.providers) {
+      if (layer.distribution.kind !== "cli-bundled") continue;
+      const bundle = catalog.bundles.find((item) => item.skill === layer.skill &&
+        item.distribution.locator === layer.distribution.locator);
+      if (bundle === undefined) return true;
+      let manifest = manifests.get(bundle.skill);
+      if (manifest === undefined) {
+        manifest = await loadIndexerProviderManifest(join(defaultCliIndexerAssetsRoot(), "bundles", bundle.skill));
+        manifests.set(bundle.skill, manifest);
+      }
+      const profiles = [indexer.profile.primary, ...(indexer.profile.additional ?? [])]
+        .filter((binding) => binding.provider === layer.id);
+      if (profiles.some((binding) => !manifest.provides.profiles.includes(binding.id))) return true;
+      if (layer.role === "primary" && indexer.operations.some((operation) =>
+        !manifest.provides.operations.some((item) => item.id === operation)
+      )) return true;
+      const composers = indexer.profile.composers?.filter((binding) => binding.provider === layer.id) ?? [];
+      if (composers.some((binding) => !manifest!.provides.composers?.some((item) => item.id === binding.id))) return true;
+    }
   }
   return currentIndexerProviderSelectionNeedsRefresh({ projectRoot, registry });
 }
@@ -138,7 +179,8 @@ export async function buildCurrentIndexerProviderSelectionRoute(input: {
     input: {
       stage: "provider-selection",
       requirements: input.registry.requirements,
-      cli_bundled_providers: catalog.bundles,
+      existing_indexers: input.registry.indexers,
+      cli_bundled_providers: await projectIndexerSelectionCatalog(catalog),
     } as unknown as JsonValue,
   };
   const action = projectWorkflowRouteAction({
@@ -322,9 +364,7 @@ export async function completeCurrentIndexerProviderSelection(input: {
     value: routeInput,
   });
   if (route.route.graph_outcome !== "completed" || route.selection_proposal_input === null) {
-    throw new TypeError(
-      `Indexer Provider selection is not applicable: ${route.route.outcome}; revise the current selection`,
-    );
+    throw new IndexerProviderSelectionError(route);
   }
   const validation = await validateProjectIndexerSelectionProposal({
     projectRoot: input.projectRoot,

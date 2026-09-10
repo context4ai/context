@@ -2,6 +2,7 @@ import {
   Kind,
   Source,
   parse,
+  print,
   type DefinitionNode,
   type DocumentNode,
   type FieldDefinitionNode,
@@ -178,6 +179,9 @@ export function parseGraphQlSources(files: Readonly<Record<string, string>>): Ma
         name,
         extension,
         field_names: fields.map((field) => field.name.value).sort(),
+        fields: fields.map((field) => ({ name: field.name.value, type: print(field.type),
+          optional: field.type.kind !== Kind.NON_NULL_TYPE,
+          ...(field.description === undefined ? {} : { description: field.description.value }) })),
         locator: locator(document.path, definition, `type:${name}${extension ? ":extension" : ""}`),
       };
       catalog.types.push(type);
@@ -204,6 +208,11 @@ export function parseGraphQlSources(files: Readonly<Record<string, string>>): Ma
         const fieldName = field.name.value;
         const operation: ContractOperation = { operation_ref: `${document.path}#root:${name}:field:${fieldName}`, protocol: "graphql", operation_kind: operationKind, name: fieldName, parent: name, deprecated: deprecated(field), locator: locator(document.path, field, `operation:${operationKind}:${name}.${fieldName}`) };
         catalog.operations.push(operation);
+        operation.fields = [...(field.arguments ?? []).map((argument) => ({
+          name: argument.name.value, type: print(argument.type),
+          optional: argument.type.kind !== Kind.NON_NULL_TYPE || argument.defaultValue !== undefined,
+          location: "argument", ...(argument.defaultValue === undefined ? {} : { defaultValue: print(argument.defaultValue) }),
+        })), { name: "return", type: print(field.type), optional: field.type.kind !== Kind.NON_NULL_TYPE, location: "response" }];
       }
     }
   }

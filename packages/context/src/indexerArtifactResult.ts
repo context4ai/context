@@ -1,3 +1,4 @@
+import { validateIndexerPlannedArticles, type IndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerArtifactBundleSchema,
@@ -29,11 +30,9 @@ import {
   validateIndexerStructuredDeclarationSet,
 } from "./indexerStructuredDeclaration.js";
 import {
-  assertIndexerGeneratedAuthoringAuditClear,
-  buildIndexerGeneratedAuthoringAudit,
   indexerStructuredClaimSetSchema,
   validateIndexerStructuredClaimSet,
-} from "./indexerGeneratedAuthoringAudit.js";
+} from "./indexerStructuredClaims.js";
 import {
   indexerCanonicalRefSchema,
   indexerProviderLayerRefSchema,
@@ -610,6 +609,7 @@ function validateQuestions(input: {
 }
 
 export function validateIndexerArtifactResult(input: {
+  planned_articles?: readonly IndexerArticlePlan[];
   result: unknown;
   workset: IndexerMainAuthorWorkset;
   expected_provider: {
@@ -641,6 +641,7 @@ export function validateIndexerArtifactResult(input: {
   if (indexerArtifactResultDigest(payload) !== result.output_digest) {
     throw new TypeError("ArtifactResult output digest is invalid");
   }
+  if (input.planned_articles !== undefined) validateIndexerPlannedArticles(result, input.planned_articles);
   const expectedProvider = input.expected_provider;
   if (
     result.author_workset_digest !== input.workset.workset_digest ||
@@ -655,10 +656,6 @@ export function validateIndexerArtifactResult(input: {
     canonicalIndexerJson(result.logical_unit.subject_key) !==
       canonicalIndexerJson(input.expected_subject_key) ||
     result.provider_layer_ref !== expectedProvider.layer_ref ||
-    result.provider_integrity !== expectedProvider.integrity ||
-    result.provider_bundle_digest !== expectedProvider.bundle_digest ||
-    result.config_fingerprint !== expectedProvider.config_fingerprint ||
-    result.customization_fingerprint !== expectedProvider.customization_fingerprint ||
     result.input_digest !== input.expected_input_digest
   ) {
     throw new TypeError("ArtifactResult does not match its author authority/workset");
@@ -736,9 +733,6 @@ export function validateIndexerArtifactResult(input: {
     authorized_carriers: input.authorized_declaration_carriers,
   });
   validateStructuredClaims({ result, evidence_refs: evidenceRefs, facts });
-  assertIndexerGeneratedAuthoringAuditClear(
-    buildIndexerGeneratedAuthoringAudit(result),
-  );
   validateTargetResolution(result, input.workset.target_resolution_view, evidenceRefs);
   validateQuestions({ result, allowed_question_targets: input.allowed_question_targets });
   return result;

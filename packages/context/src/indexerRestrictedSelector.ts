@@ -20,8 +20,10 @@ export const indexerSelectorFactPathSchema = z.string().regex(
 );
 const scalarSchema = z.union([z.string(), z.number().finite(), z.boolean()]);
 
-const expressionSchema: z.ZodType<IndexerRestrictedSelectorExpression> = z.lazy(() =>
-  z.union([
+// Resolve recursion lazily, but allocate the validator graph only once. The
+// getter is called for every nested expression on every contract validation.
+const expressionSchema: z.ZodType<IndexerRestrictedSelectorExpression> = z.lazy(() => expressionVariantsSchema);
+const expressionVariantsSchema = z.union([
     z.object({
       op: z.enum(["all", "any"]),
       args: z.array(expressionSchema).min(1),
@@ -53,8 +55,7 @@ const expressionSchema: z.ZodType<IndexerRestrictedSelectorExpression> = z.lazy(
       fact: indexerSelectorFactPathSchema,
       value: z.number().finite(),
     }).strict(),
-  ])
-);
+  ]);
 
 export const indexerRestrictedSelectorSchema = z.object({
   protocol: z.literal("context.indexer.selector/v1"),

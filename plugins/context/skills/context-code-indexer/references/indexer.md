@@ -2,10 +2,11 @@
 
 Consume only the current workset authority and the single Authorized Workset View supplied by Context. Normalized parser facts, verified layer fragments, document evidence, and tool observations all arrive through that View; do not open source-specific evidence channels or manage their pagination and receipts.
 
-The reader is outside the indexed module. Give that reader a reliable route to
-the module's responsibility, supported entrypoints and interfaces, downstream
-handoffs, and the core state, failure, operation, ownership, and source-of-truth
-facts needed to use or attribute the capability correctly. Judge coverage by
+Use the bound requirement's `purpose` and open `reader_goals` to identify the
+reader's task. Integration guides prioritize imports, normal use, interfaces
+and relevant limitations. Maintenance guides retain implementation handoffs,
+identity and field transformations, actual failure handling, state and success
+conditions when these serve the requested task. Judge coverage by
 whether supported profile questions and stable capability boundaries are
 actually explained, never by symbol, file, relation, or evidence counts.
 
@@ -15,11 +16,89 @@ Classify each requested module from current manifests, stable entries, public co
 
 Read only the templates materialized for the selected profiles. Combine their questions into one deduplicated plan for the reader-visible capability; a template is guidance, not a source of facts, page counts, output paths, thresholds, or authority. Keep a repository container, public contract, runtime boundary, event flow, persistence boundary, adapter, generated-source provenance, and cross-module handoff separate when they answer different reader questions. Do not copy a template outline when source evidence does not support its sections.
 
+Partition selects permitted intents and templates from the current Provider
+catalog. A topic may contain several articles with distinct reader tasks and
+stable keys; members still have one primary owner. Use the applicable article
+catalog to select complementary articles, not every available type. Save the
+reader task, article outlines, priority and natural delivery boundary. Author
+reuses that accepted plan and receives only its selected writing blueprints. A selected page
+program renders declared API fields from current Facts in the same Artifact as
+the semantic prose. Do not transcribe its table or manufacture missing defaults.
+Optional `template_variables` supply only the program's declared semantic slots;
+write the remaining supported guidance as normal Sections.
+
+For websites, organize around page tasks and data boundaries; distinguish host
+and remote declarations from verified loading behavior. For services and BFFs,
+identify actual inbound registration or IDL before describing a remote API;
+an outbound client is not a server. For events and scheduled tasks, explain the
+registered trigger and source-confirmed completion, retry and failure behavior.
+No dedicated behavior Fact is required when authorized captured source answers
+the question. Ask for additional material only when that source is insufficient
+for the core reader task; do not block other complete pages on local uncertainty.
+
+Reuse accepted plans and Results across deliveries. Follow the current theme
+wave and page batch selected by Context through Review, close and build. A theme
+can span several page batches; continue its remaining articles after build.
+A readable first batch does not mean the whole source is finished.
+
 ## Partition and identity
+
+Use the complete scope/member overview first; inspect linked fact details and
+captured source only where necessary to resolve a theme. Check public entrypoints,
+shared types, wrappers and lifecycle boundaries before setting `ready_for_author`.
+Do not infer a whole repository from samples or automatically exclude internal,
+generated or deprecated paths. Every supplied member still needs a disposition.
+A ready theme may be written and delivered while other themes remain in planning.
+Preserve the accepted subject when subsequent material supplements it; start from
+its approved prose and retain unaffected content. Source details deferred during
+planning must be examined before corresponding behavior claims in Author.
+
+
+Public API coverage does not imply one page per exported symbol. Group simple
+helpers, related types and aliases under their caller-facing capability while
+retaining useful inputs, outputs and edge cases. Give an API its own page when
+it has an independent integration contract or reader task. Tests, fixtures and
+stories support those contracts; they are not reader targets merely because
+they are present in the inventory.
+
+Same names from different public entrypoints or incompatible current/deprecated
+contracts are different subjects. Qualify their semantic subject and title by
+entrypoint or lifecycle; do not merge them by name or let a legacy title describe
+a current API. An explicit migration/comparison page may relate both, but must
+explain which contract belongs to each entrypoint. Preserve already accepted
+subjects during continuation; do not repartition them for cosmetic grouping.
+For retained deprecated components, use the optional guidance in
+[the component-library profile](../templates/component-library.md#optional-guidance-for-deprecated-components).
+It guides source-backed differences, not mandatory columns or automatic migration advice.
+
+Actively assess useful coverage from available public entrypoints, maintained
+guidance, explicit lifecycle notices and representative source material. Identify
+what answers the reader's task, what is needed only to support it, and what may
+be outside it. This applies to code of any age: deprecated APIs can be essential
+for existing users, while current code may be irrelevant to this task. A legacy
+directory, generated file or test is a clue, not an automatic exclusion; examples,
+tests and generated contracts can contain necessary usage or interface facts.
+
+When a material new scope choice appears, explain the concrete region, available
+counting basis, recommendation and coverage consequences to the user before
+writing dependent pages. Unnecessary regions consume tokens and preparation,
+writing and review time, and can obscure useful guidance with duplicate or
+conflicting content. Do not trade required coverage for speed, invent savings,
+scan the whole repository just to count, or treat worksets as component/page counts.
+Follow Context's existing conversational scope clarification even in managed mode;
+reuse explicit decisions and do not invent a scope-confirmation Gate. Apply agreed
+member dispositions through the current Result; do not silently narrow scope,
+remove accepted pages or restart unrelated work. If lifecycle relevance is not yet
+checked, report that limitation rather than asserting there is no obsolete content.
 
 For partition work, close every inventory member as owned, excluded, or unsupported and use stable semantic subjects. Each member has exactly one primary owner; extension layers may enrich but cannot claim final authority. Do not create ordinal batches or infer identity from display titles, filenames, headings, or traversal order. If no defensible semantic grouping exists, return the protocol failure that permits the CLI-owned catalog fallback.
 
-Use only the ordered partition strategy materialized by Context for the current workset. The order is project-first and authority-bound; do not skip to a CLI builtin, substitute another strategy id, or recalculate an implementation digest. A strategy may group only the canonical members and profiles supplied with that workset.
+Apply the grouping principles below and the selected-profile guidance already
+present in `resolved-indexer-instructions` to the current View. Context owns
+strategy selection, ordering, retry, and catalog fallback; strategy identifiers
+and digests are internal bookkeeping, not additional material to retrieve or
+fields to submit. Return semantic groups and member dispositions only within
+the supplied inventory and subject contract.
 
 Group related identities by a capability, entrypoint, protocol boundary, lifecycle stage, state owner, or handoff. A granular catalog is appropriate only when the selected profile and reader goal require a public API, protocol, command, or registry reference. A cross-module chain requires an explicit trigger, source-backed joins on both sides of every boundary, transformations or state handoffs, and a terminal outcome; imports or similar names do not prove execution order.
 
@@ -59,6 +138,23 @@ operations or variants. Naming an internal validator, mapper, hook, or generic
 "validation" step does not explain the contract. Omit details that current facts
 cannot prove rather than inferring them from an implementation name.
 
+## Declaration, implementation and test boundaries
+
+Distinguish the declared API from the implementation reached through the actual
+entrypoint. Inherited properties, comments and names do not prove forwarding,
+defaults or behavior. Tests support only what their assertions and non-mocked
+dependencies exercise; DOM presence alone does not prove visibility, focus or
+accessibility. Separate source-confirmed behavior from runtime hypotheses that
+need execution, and keep different platforms and deprecated entrypoints distinct.
+
+Knowledge production is not an exhaustive defect audit. Explain a discovered
+limitation when it changes how the reader calls, integrates or migrates the
+capability; retain the normal usage and responsibility as the page's focus.
+Request missing material only when it is needed for that reader task. A supported
+implementation limitation is useful knowledge, not a Context tool failure or a
+reason to pause the workflow. Do not expand into browser testing, source fixes
+or a separate issue per suspected defect unless that work was requested.
+
 ## Author Result and evidence
 
 For author work, produce exactly one Result for the supplied logical unit. Keep deterministic catalogs separate from explanatory prose, bind every declaration and Section to current evidence, and select only an Artifact policy variant listed in the workset. Missing material must become a canonical question disposition; never invent an answer or emit placeholder knowledge.
@@ -72,11 +168,31 @@ return to requirement/registry planning when required coverage lacks authority.
 
 An inventory group with no reader-authorizing public export, contract, runtime registration, approved Subject, or Partition Subject is catalog-only. Close its inventory dispositions and return no reader Artifact; do not publish a page that merely says the unit exists. Conversely, when the workset supplies current contract facts such as public signatures, properties, events, defaults, variants, examples, or source roles, consume each applicable fact in the matching template question or give it an explicit legal disposition. A generic directory summary is not a substitute for supplied contract facts.
 
-For every Section, select the exact `document_kind`, `reader_goal`, and `artifact_kind` tuple declared by the current profile's unique layout mapping. Do not invent a tuple or return a collection name; Context resolves the collection mechanically from that mapping.
+Select `artifact_intent` from the current Author authority's allowed tuples. Context applies that tuple to the published sections and resolves the collection; do not submit per-section layout metadata or invent a collection name.
 
 When the same Authorized Workset View contains CLI-authorized captured documents or tool snapshots, treat them as ordinary input evidence for the current logical unit. Use that material to answer a supplied question only when its evidence contract permits; otherwise keep the canonical material-gap disposition. Do not create a second answer flow or inspect registered sources outside the View.
 
-Treat the CLI inventory as the complete denominator, not a sample. Parser facts may prove files, declarations, entries, contracts, and relationships; they do not by themselves prove business meaning, runtime defaults, failure behavior, or ownership. Every relationship must cite the concrete evidence for its own handoff. Do not repeat one whole-page evidence set across unrelated facts, and do not reduce a multi-source fact to one arbitrary primary file.
+Treat the CLI inventory as the complete denominator, not a sample. Parser facts may prove files, declarations, entries, contracts, relationships and written default expressions; they do not by themselves prove business meaning, evaluated runtime values, failure behavior, or ownership. Every relationship must cite the concrete evidence for its own handoff. Do not repeat one whole-page evidence set across unrelated facts, and do not reduce a multi-source fact to one arbitrary primary file.
+
+With a program-generated API table, let its bound facts supply the field rows,
+types and defaults. Author prose explains when to use the API, how to combine it,
+and relevant pitfalls or migration limits. Refer to individual parameters when
+needed for that explanation; do not duplicate the table or narrate every row.
+An incorrect generated value needs a field-specific source reference and the
+current repair flow, not a contradictory prose override. This does not remove
+fact coverage or source verification, and does not apply to APIs for which the
+selected template provides no suitable program block.
+
+For generated API content, separate the displayed API from the facts supporting
+it. Keep relevant implementation or inherited-type facts as supporting material
+even when they need no separate page; use the current catalog/section references,
+not an exclusion to suppress duplicate presentation. Establish associations from
+declared links, not matching names. Shared types can have different defaults for
+different callers. A written `resolveDefault()` is an expression, not its evaluated
+result; an unresolved import does not prove an empty API. Read available captured
+source when the reader's task requires more certainty. Request material only if
+it is absent; report an extraction or rendering discrepancy when the source is
+already available. Preserve supported content and explain the specific limit.
 
 Inventory closure is not a license to attach a convenient fallback binding to
 unrelated members. A `boundary-only` member still needs evidence that places
@@ -102,7 +218,7 @@ Explain stable responsibility, inputs, outputs, state and failure boundaries, th
 
 For a post-author workset, use only the effective composer named by Context and the matching composer instruction materialized beside this contract. Consume the complete workset-scoped `PrimaryResultView`; do not reopen discovery, expand scope, change Subject identity or ownership, or return another complete main Result. A composer may emit only the declared `derived-artifact-proposal` kind and Artifact policy.
 
-If a declared primary fact or Artifact requirement is absent, or the view does not support an independent reader question, return the ordinary `context.indexer.layer-fragment-result/v1` with `fragments: []` and the exact consumed view digest. This is a successful structured empty invocation, not a license to inspect temporary files or infer missing content.
+If a declared primary fact or Artifact requirement is absent, or the view does not support an independent reader question, return the current task's semantic result with `stage: post-author`, `outcome: complete`, `proposals: []`, and `diagnostics: []` in the usual `results[]` envelope. Context constructs internal fragments and digests. Do not inspect temporary files or infer missing content.
 
 ## Mechanical audit and revision
 
@@ -116,6 +232,11 @@ Profile metrics are authoring guidance, not a second readiness protocol. Use
 not alter wording, Markdown syntax, sentence counts, or partitions merely to
 influence a counter. Context does not accept an Agent-supplied score as proof
 that a Result is ready.
+
+Context does not judge prose quality or scan wording, JSX, comments or template
+syntax for rejection. Unfilled authoring placeholders can be noted during the
+existing content Review, but do not create a CLI failure or another gate. Do not
+rewrite a legitimate explanation solely to remove a marker or advisory.
 
 ## Two classes of evidence in a template Evidence pass
 
@@ -150,3 +271,58 @@ Do not return output paths, collection names, quality thresholds, pass/fail
 decisions, extra owners, ad hoc question contracts, or facts outside the
 supplied authority. Context validates deterministic structure, references,
 layout, freshness, reconciliation, and final Review independently.
+
+## Notes and conversation summaries as supporting material
+
+Use only the authorized excerpts or summaries and cite the material actually
+read. Distinguish quotations, paraphrases, confirmed decisions and proposals;
+write the explanation useful to the reader instead of copying the source.
+Use code for API definitions and implemented behavior; a conversation can
+explain the reasons behind them. A summary may record that participants reported an implementation or a passing
+test; attribute that report and retain its stated version and scope. Do not
+present it as independently verified in this task. Claims of direct validation
+need the actual relevant code, execution or test results in the authorized
+material. Discussion or a plan alone does not establish completion.
+
+Keep this Provider responsible for the existing page. If the host selects a
+Note/Sessions or business Provider extension, apply its supplied instructions
+to the same writing task. Do not load an unselected skill or create a second
+page solely because supporting material has a different source type. An
+independent reader task can use a dedicated Provider selected by the host.
+
+If the source is inaccurate, return the correction to the host source-input
+flow; do not edit it from the Indexer. If only the knowledge is misleading,
+revise the page from its approved text through Author/Review. Keep source
+associations in the source and page/section references in structure.yaml;
+do not add provenance fields to the knowledge header.
+
+## Source example candidates
+
+For source-grounded usage examples, submit the optional Author
+`example_candidates` collection using a stable `scenario_key` and one delivered
+`source_item` per file. Read the example before selecting it; story/demo names
+do not establish behavior or relevance. Keep full relative paths so examples
+from different directories do not collapse by basename. The host preserves
+source/version/evidence identity and can pass accepted candidates to the
+selected examples Composer. Explain setup, key calls, relevant arguments and
+expected behavior only where the supplied source supports them; a source
+example does not establish that it executed successfully.
+
+For multiple component articles in one library subject, select each article's
+own component, Props, handle and related nested-type facts. Do not bind the
+whole library inventory to every article: the deterministic API table uses the
+facts selected for that article, so broad bindings duplicate unrelated APIs.
+Keep library-wide inventory in the library entry and link to component details.
+The CLI validates the selected identities; the Agent decides their relevance.
+
+## Diagrams
+
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+
+## Existing source images and tables
+
+For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.
+
+## Reading selected article material
+
+Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI applies executable contracts and evidence bindings; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.

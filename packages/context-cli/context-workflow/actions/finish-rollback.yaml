@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: finish-rollback
+runner: command
+effect: write
+command: context task finish-rollback --format json

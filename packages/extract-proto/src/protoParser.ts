@@ -1,10 +1,11 @@
+import { protoFields, type ProtoField } from "./protoFields.js";
 import { posix } from "node:path";
 import { lexProto, ProtoSyntaxError, type ProtoToken } from "./protoLexer.js";
 
 export interface ProtoLocator { path: string; line: number; column: number }
 export interface ProtoImport { path: string; resolved_path: string; modifier: "normal" | "public" | "weak" | "option"; locator: ProtoLocator }
 export interface ProtoOption { owner: string; name: string; locator: ProtoLocator }
-export interface ProtoType { kind: "message" | "enum"; name: string; qualified_name: string; locator: ProtoLocator }
+export interface ProtoType { kind: "message" | "enum"; name: string; qualified_name: string; fields?: ProtoField[]; locator: ProtoLocator }
 export interface ProtoMethod { name: string; input_type: string; output_type: string; client_streaming: boolean; server_streaming: boolean; locator: ProtoLocator }
 export interface ProtoService { name: string; methods: ProtoMethod[]; locator: ProtoLocator }
 export interface ProtoDocument {
@@ -145,14 +146,17 @@ class ProtoDocumentParser {
     const kind = this.take().value as ProtoType["kind"];
     const name = this.identifier(`${kind} name`);
     const qualifiedName = prefix ? `${prefix}.${name.value}` : name.value;
-    this.document.types.push({ kind, name: name.value, qualified_name: qualifiedName, locator: { path: this.path, line: name.line, column: name.column } });
+    const declaration: ProtoType = { kind, name: name.value, qualified_name: qualifiedName, locator: { path: this.path, line: name.line, column: name.column } };
+    this.document.types.push(declaration);
     this.take("{");
+    const fieldStart = this.index;
     while (this.token() && this.token()!.value !== "}") {
       if (this.token()!.value === ";") { this.index += 1; continue; }
       if (this.token()!.value === "message" || this.token()!.value === "enum") { this.parseType(qualifiedName); continue; }
       if (this.token()!.value === "option") { this.parseOption(`type:${qualifiedName}`); continue; }
       this.skipDeclaration();
     }
+    declaration.fields = protoFields(this.tokens.slice(fieldStart, this.index), kind);
     this.take("}");
   }
 

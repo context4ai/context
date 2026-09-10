@@ -69,10 +69,14 @@ const requirementExclusionSchema = z.object({
   id: indexerIdSchema,
   scope: targetScopeSchema,
   reason: z.string().min(1),
+  paths: z.array(z.string().min(1).refine((path) => !path.startsWith("/") && !path.includes("\\") &&
+    !path.split("/").some((part) => part === ".." || part === ".") && !/[?*]/u.test(path),
+    "Use an exact repository-relative file or directory path, without globs or traversal")).min(1).optional(),
 }).strict();
 
 export const indexRequirementSchema = z.object({
   id: indexerIdSchema,
+  purpose: z.string().trim().min(1).optional(),
   reader_goals: z.array(indexerIdSchema).min(1),
   coverage_domains: z.record(
     indexerIdSchema,

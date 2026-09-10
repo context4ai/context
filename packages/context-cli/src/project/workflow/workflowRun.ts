@@ -43,6 +43,7 @@ export interface WorkflowAutomaticStep {
 }
 
 export interface WorkflowRunStop {
+  handoff?: { to: "agent" | "user" | "external" | "none"; message: string };
   reasonCode: string;
   message: string;
   revision: string;
@@ -54,7 +55,7 @@ export interface WorkflowRunResult {
   protocol: "context.workflow.run.v1";
   state: "complete" | "blocked" | "planned" | "failed" | "max-steps";
   projectRoot: string;
-  managed: true;
+  managed: boolean;
   steps: WorkflowAutomaticStep[];
   stop: WorkflowRunStop;
   workflow: ProjectStatus["workflow"];
@@ -79,9 +80,16 @@ function blockedStop(
   message: string,
   command?: string,
 ): WorkflowRunStop {
+  const agent = ["workflow.until.configuration-required", "workflow.until.agent-context-required", "workflow.until.agent-execution-required", "workflow.until.command-plan-not-unique"].includes(reasonCode);
+  const recipient = reasonCode === "workflow.until.complete" ? "none" : agent ? "agent"
+    : status.workflow.current?.availability === "requires-user" ? "user" : "external";
   return {
     reasonCode,
     message,
+    handoff: { to: recipient, message: recipient === "agent"
+      ? "Continue within the current authorized conversation using this Route. CLI return is an Agent handoff, not a request for the user to say continue. Reuse already-read unchanged resources by digest; read again if their content or available context changed."
+      : recipient === "none" ? "Registered scope completed; check any remaining user requests."
+      : "Explain the current decision or external recovery needed, preserving accepted work." },
     revision: status.workflow.revision,
     ...(status.workflow.current === undefined
       ? {}
@@ -105,27 +113,19 @@ export function selectAutomaticWorkflowCommand(
       ),
     };
   }
-  const blockingDiagnostic = status.workflow.diagnostics.find(
-    (diagnostic) => diagnostic.severity === "error",
-  );
-  if (blockingDiagnostic !== undefined) {
-    return {
-      state: "blocked",
-      stop: blockedStop(
-        status,
-        "workflow.until.diagnostic",
-        `${blockingDiagnostic.code}: ${blockingDiagnostic.message}`,
-      ),
-    };
-  }
+  // Diagnostics describe the observed state; the Graph decides how to repair
+  // it. Do not veto its immediate repair action with a second routing policy.
   const route = status.workflow.current;
   if (route === undefined) {
+    const diagnostic = status.workflow.diagnostics.find((item) => item.severity === "error");
     return {
       state: "blocked",
       stop: blockedStop(
         status,
-        "workflow.until.no-route",
-        "No legal workflow route is available.",
+        diagnostic === undefined ? "workflow.until.no-route" : "workflow.until.diagnostic",
+        diagnostic === undefined
+          ? "No legal workflow route is available."
+          : `${diagnostic.code}: ${diagnostic.message}`,
       ),
     };
   }
@@ -243,6 +243,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
   execute: WorkflowRunExecutor;
   maxSteps: number;
   dryRun: boolean;
+  managed?: boolean;
 }): Promise<WorkflowRunResult> {
   const steps: WorkflowAutomaticStep[] = [];
   const seen = new Set<string>();
@@ -254,7 +255,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: selected.state,
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: selected.stop,
         workflow: status.workflow,
@@ -267,7 +268,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "blocked",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -295,7 +296,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "planned",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps: [step],
         stop: blockedStop(
           status,
@@ -311,7 +312,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "max-steps",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -361,7 +362,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -395,7 +396,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,
@@ -421,7 +422,7 @@ export async function runWorkflowUntilBlockedOrComplete(input: {
         protocol: "context.workflow.run.v1",
         state: "failed",
         projectRoot: status.projectRoot,
-        managed: true,
+        managed: input.managed === true,
         steps,
         stop: blockedStop(
           status,

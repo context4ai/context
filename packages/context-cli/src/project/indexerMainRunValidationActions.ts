@@ -1,10 +1,11 @@
+import { assertApprovedKnowledgeInputCurrent, assertApprovedKnowledgeSourcesCurrent } from "./approvedKnowledgeInput.js";
+import type { AuthorSupplementarySource } from "./indexerCurrentMainRunSpec.js";
+import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import {
   buildIndexerSourceIdentityInventory,
   canonicalIndexerInventoryMembers,
   indexerMainRunResultSchema,
   indexerInventoryMembersDigest,
-  indexerSubjectKeySchemaDigest,
-  projectIndexerSourceIdentityInventory,
   validateAndRecordIndexerMainRun,
   validateIndexerAuthorDependencyView,
   validateIndexerSubjectKeyForContract,
@@ -16,8 +17,9 @@ import {
   assertProjectIndexerMainSourceBinding,
   resolveProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
-import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import { projectIndexerReadTargets, projectIndexerReadTargetAllows } from "./indexerReadScopeAuthorization.js";
 import { indexerParserTaskSelection } from "./indexerParserTaskSelection.js";
+import { authorSourceIdentityForView } from "./indexerAuthorMaterial.js";
 import {
   array,
   assertCurrentRequirement,
@@ -52,6 +54,7 @@ export async function validateProjectIndexerMainRun(input: {
   assertProjectIndexerMainSourceBinding({
     workset,
     binding,
+    partition_projection: validation.partition_projection,
     ...(workset.stage === "author"
       ? { dependency_view: validation.dependency_view }
       : {}),
@@ -73,13 +76,10 @@ export async function validateProjectIndexerMainRun(input: {
     if (profileSubjectSchema === undefined) {
       throw new TypeError(`missing partition SubjectKey contract for ${authority.profile.id}`);
     }
-    const { profile, ...subjectKeyContract } = profileSubjectSchema;
-    if (
-      indexerSubjectKeySchemaDigest(profile, subjectKeyContract) !==
-        workset.subject_key_schema_digest
-    ) {
-      throw new TypeError("partition validation uses a stale SubjectKey contract");
-    }
+    const { profile: _profile, ...subjectKeyContract } = profileSubjectSchema;
+    void _profile;
+    // Validate the actual subject against today's contract. A changed schema
+    // fingerprint alone does not make a previously valid subject unusable.
     const mainResult = indexerMainRunResultSchema.parse(value.result);
     if (mainResult.result.stage !== "partition") {
       throw new TypeError("partition validation requires a partition Result");
@@ -114,6 +114,27 @@ export async function validateProjectIndexerMainRun(input: {
     }
     validation.canonical_inventory_members = canonicalInventory;
   } else {
+    if (validation.knowledge_input !== undefined) {
+      const knowledge = validation.knowledge_input as ApprovedKnowledgeAuthorInput;
+      await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
+      const supporting = [binding];
+      const readTargets = projectIndexerReadTargets({ registry, indexer_id: workset.indexer_id });
+      for (const descriptor of (validation.supplementary_sources ?? []) as AuthorSupplementarySource[]) {
+        if (!knowledge.evidence_bindings.some(evidence => evidence.source_ref === descriptor.source_ref && evidence.module_ref === descriptor.module_ref)) continue;
+        if (!projectIndexerReadTargetAllows({ targets: readTargets, source_ref: descriptor.source_ref, module_ref: descriptor.module_ref })) {
+          throw new TypeError("Supporting source is outside the current Indexer read scope");
+        }
+        const resolved = await resolveProjectIndexerMainSourceBinding({ projectRoot: input.projectRoot, indexer_id: descriptor.indexer_id,
+          source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, profile_contract_digest: descriptor.profile_contract_digest,
+          parser_selection: indexerParserTaskSelection({ stage: "author", source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, validation }),
+        });
+        if (resolved.source_binding_digest !== descriptor.source_binding_digest) {
+          throw new TypeError("author supplementary source binding is stale; refresh the current Author task before submitting");
+        }
+        supporting.push(resolved);
+      }
+      assertApprovedKnowledgeSourcesCurrent(knowledge, supporting);
+    }
     const dependencyView = validateIndexerAuthorDependencyView(
       validation.dependency_view,
     );
@@ -129,13 +150,10 @@ export async function validateProjectIndexerMainRun(input: {
     ) {
       throw new TypeError("author validation uses stale inventory members");
     }
-    const selectedFactRefs = dependencyView.positive_nodes.flatMap((node) =>
-      node.kind === "selected-fact" ? [node.fact_ref] : []
-    );
     const scopedInventory = binding.adapter === "parser-facts"
-      ? projectIndexerSourceIdentityInventory({
+      ? authorSourceIdentityForView({
           inventory: binding.source_identity_inventory,
-          fact_refs: selectedFactRefs,
+          dependency_view: dependencyView,
         })
       : binding.source_identity_inventory;
     if (typeof scopedInventory.source_ref !== "string") {
@@ -150,14 +168,16 @@ export async function validateProjectIndexerMainRun(input: {
       source_input_digest: workset.source_binding_digest,
       files: scopedInventory.files,
     });
-    const provided = validation.source_identity_inventory;
-    if (
-      provided !== undefined &&
-      record(provided, "source_identity_inventory").inventory_digest !==
-        expectedSourceIdentityInventory.inventory_digest
-    ) {
-      throw new TypeError("author validation uses a stale source identity inventory");
+    const currentFiles = new Map(scopedInventory.files.map((file) => [file.normalized_path, file.content_digest]));
+    for (const node of dependencyView.positive_nodes) {
+      if (node.kind !== "source-span" || node.source_ref !== scopedInventory.source_ref ||
+          node.module_ref !== scopedInventory.module_ref) continue;
+      if (currentFiles.get(node.locator.path) !== node.content_digest) {
+        throw new TypeError(`Source file ${node.locator.path} changed or is missing; refresh the current task's source material`);
+      }
     }
+    // This is a derived lookup table, not Agent-owned input. Rebuild it from
+    // current scoped sources; Artifact validation still checks actual targets.
     validation.source_identity_inventory = expectedSourceIdentityInventory;
     validation.canonical_inventory_members = canonicalInventory;
     validation.authorized_evidence_targets = projectIndexerReadTargets({

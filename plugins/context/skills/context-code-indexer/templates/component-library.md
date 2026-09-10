@@ -34,9 +34,10 @@ When the Authorized Workset View supplies a public declaration together with
 structured props, events, defaults, variants, maintained examples, or source
 roles, the corresponding reader section must consume those facts or record an
 explicit supported omission/material-gap disposition. Do not replace available
-contract facts with a generic statement about the component directory. A group
-without any reader-authorizing public declaration remains catalog-only and does
-not produce an empty component page.
+contract facts with a generic statement about the component directory. A component group
+without a reader-authorizing public declaration remains catalog-only and does
+not produce an empty component page. Library and system subjects may instead be
+authorized by package entries, maintained documentation or public token sources.
 
 ## Questions the knowledge must answer
 
@@ -59,6 +60,21 @@ not produce an empty component page.
   defaults, override order, and compatibility.
 - **Migration or compatibility guide**: only when maintained sources describe
   version transitions or supported platform constraints.
+
+## Optional guidance for deprecated components
+
+Use this guidance only for deprecated APIs retained in the agreed scope. Reuse
+public-contract templates; deprecated status does not require a separate page.
+Explain why an existing user needs this content, cite the deprecation notice,
+and identify the exact supported import or legacy entrypoint. Let the generated
+API table carry props and defaults; prose covers component-specific constraints.
+
+Include styling passthrough, accessibility or migration advice only when relevant
+and supported by sources. Omit inapplicable sections. Do not infer a replacement,
+removal date or migration guarantee from a deprecated label. If migration is the
+reader's goal but supporting guidance is missing, state that gap. Shared migration
+background can live in one existing guide, with individual pages explaining their
+differences and linking to it; do not create a generic guide just to fill a template.
 
 ## Chapter blueprints
 
@@ -105,3 +121,24 @@ to disguise an enumeration-heavy index.
 - examples invent combinations that maintained usage does not support;
 - accessibility or provider requirements are asserted without evidence;
 - one-page-per-component expansion has no consumer-navigation justification.
+
+
+## Library and design-system subjects
+
+Use a library subject for a module's installation, package entries, shared
+providers, platform support and navigation (L05); it does not require inventing a
+component export. Keep individual public components or families in component
+subjects (L02). A design-system subject is appropriate when authorized token,
+theme, stylesheet or maintained specification material establishes a stable
+system boundary (L03), including a token-only package without React exports.
+Do not infer a whole design system from ordinary component styling.
+
+Owned members stay with one primary subject. Link shared configuration and
+approved component articles instead of copying their bodies. Where no independent
+library material exists, incorporate the useful entry into the parent map. Missing
+public declarations prevent invented component contracts, not a source-backed
+library or token entry. Preserve methods, refs, composition and nested types when
+available; use declared code facts for deterministic API values and explain usage
+with separately cited prose. Examples must come from read sources and retain
+platform/version applicability. Ordinary version differences and suggested
+chapters are advisory; assess compatibility as an Agent and preserve uncertainty.

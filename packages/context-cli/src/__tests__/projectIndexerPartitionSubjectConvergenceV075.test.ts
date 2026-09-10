@@ -107,6 +107,12 @@ function partition(
       subject_intent: options.subject_intent ?? "primary",
       logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
       label: "Button",
+      reader_task: `Integrate Button from ${suffix}`,
+      outline: ["Import", "Usage", "API"],
+      artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
+      template_id: "component-library-usage-guide",
+      priority: 2,
+      delivery_boundary: true,
       reader_question_refs: [options.reader_question_ref ?? "question:overview"],
       question_target_bindings: [{
         target_ref: "question-target:overview",
@@ -145,6 +151,16 @@ describe("0.7.5 partition Subject convergence", () => {
       );
       for (const inputs of [[primary, supplementary], [supplementary, primary]]) {
         const result = convergeIndexerPartitionSubjects(inputs);
+        const plan = result.partitions[0]!.plan;
+        if (plan.status !== "complete") throw new Error("expected complete plan");
+        expect(plan.groups[0]).toMatchObject({
+          reader_task: `Integrate Button from ${primarySuffix}`,
+          outline: ["Import", "Usage", "API"],
+          artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
+          template_id: "component-library-usage-guide",
+          priority: 2,
+          delivery_boundary: true,
+        });
         expect([...result.origins_by_group_ref.values()][0]?.[0]).toEqual({
           partition_workset_digest: primary.workset.workset_digest,
           group_key: `button-${primarySuffix}`,

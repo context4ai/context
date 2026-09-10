@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { join } from "node:path";
 import YAML from "yaml";
 import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
@@ -171,8 +172,10 @@ export async function readApprovedKnowledgeMetadataIndex(
   const path = join(projectRoot, STRUCTURE_PATH);
   if (!existsSync(path)) return approvedKnowledgeMetadataIndex(undefined);
   try {
-    const parsed = YAML.parse(await readFile(path, "utf8")) as unknown;
-    return approvedKnowledgeMetadataIndex(isRecord(parsed) ? parsed : undefined);
+    return await reuseCommandFileRead({ key: "approved-knowledge-metadata", paths: [path], read: async () => {
+      const parsed = YAML.parse(await readFile(path, "utf8")) as unknown;
+      return approvedKnowledgeMetadataIndex(isRecord(parsed) ? parsed : undefined);
+    } });
   } catch {
     return approvedKnowledgeMetadataIndex(undefined);
   }

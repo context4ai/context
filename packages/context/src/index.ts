@@ -724,3 +724,20 @@ export const llmsPackage = (definition: {
   kind: "package.llms",
   ...createPackageDefinitionBase("llms", definition),
 });
+
+export { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
+export { processedScopeSchema, processedScopesSchema, processedScopeKey,
+  readProcessedScopes, mergeProcessedScopes, processedVersionForScope, type ProcessedScope } from "./processedScopes.js";
+
+export { assertManagedDocumentName, assertManagedDocumentPath, discoverManagedDocuments } from "./managedSources.js";
+export type { ManagedDocumentSourceType, ManagedDocumentSourceEntry } from "./managedSources.js";
+
+export { sessionChangeSchema, sessionChangesSchema, readSessionChanges, writeSessionChanges } from "./sessionMetadata.js";
+export type { SessionChange } from "./sessionMetadata.js";
+
+export { indexerArticleKeySchema, indexerArticlePlanSchema, validateIndexerArticlePlan, indexerArticleSectionKey, validateIndexerPlannedArticles } from "./indexerArticlePlan.js";
+export type { IndexerArticlePlan } from "./indexerArticlePlan.js";
+
+export * from "./readingStructure.js";
+export * from "./indexerKnowledgeDependency.js";
+export * from "./indexerApprovedKnowledge.js";

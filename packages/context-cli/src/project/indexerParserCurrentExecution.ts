@@ -39,6 +39,7 @@ import {
   type IndexerParserSourceSelection,
 } from "./indexerParserRuntimeIndex.js";
 import { parserRuntimeReadCounters } from "./indexerParserRuntimeChunk.js";
+import { IndexerInputScopeError } from "./indexerInputScopeRecovery.js";
 
 const CACHE_ROOT = join(LIFECYCLE_ROOT, "indexer-parser-executions");
 const inFlight = new Map<string, Promise<IndexerParserRuntimeExecutionReceipt>>();
@@ -284,6 +285,7 @@ async function executeCurrent(input: {
     materialized,
   });
   if (preview.mappings.length === 0) {
+    if (materialized.files.length === 0) throw new IndexerInputScopeError(input.indexer_id);
     throw new TypeError(`Indexer ${input.indexer_id} has no applicable parser capability`);
   }
   const resolutions = await Promise.all(

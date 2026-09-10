@@ -20,6 +20,7 @@ function parseRoot(path: string, source: string, syntax: "css" | "scss"): Root {
 
 function parseStyleDocument(path: string, source: string, syntax: "css" | "scss", files: Readonly<Record<string, string>>): StyleDocumentCatalog {
   const document = empty(path, syntax, "analyzed");
+  document.lines = source.split("\n").length;
   let root: Root;
   try {
     root = parseRoot(path, source, syntax);

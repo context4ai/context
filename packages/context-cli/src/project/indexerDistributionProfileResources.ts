@@ -6,20 +6,21 @@ export function validateBundledIndexerProfileTemplates(input: {
   manifest: IndexerProviderManifest;
 }): void {
   const templates = input.manifest.provider.templates ?? [];
-  if (templates.length !== input.expectedProfiles.length) {
+  if (new Set(templates.map((template) => `${template.profile}/${template.id}`)).size !== templates.length) {
     throw new TypeError(
-      `${input.bundleId} must provide exactly one template for every profile`,
+      `${input.bundleId} contains duplicate profile/template identities`,
     );
   }
-  input.expectedProfiles.forEach((profile, index) => {
-    const template = templates[index];
-    if (
-      template?.id !== profile
-      || template.profile !== profile
-      || template.path !== `templates/${profile}.md`
-    ) {
+  if (input.bundleId === "context-code-indexer") for (const template of templates) {
+    if (template.kind !== "page-program" && template.kind !== "procedure" && (template.id !== template.profile ||
+        template.path !== `templates/${template.profile}.md`)) {
+      throw new TypeError(`${input.bundleId} profile ${template.profile} must use its own canonical template`);
+    }
+  }
+  input.expectedProfiles.forEach((profile) => {
+    if (!templates.some((template) => template.profile === profile)) {
       throw new TypeError(
-        `${input.bundleId} profile ${profile} must use its own canonical template`,
+        `${input.bundleId} profile ${profile} must provide at least one template`,
       );
     }
   });

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import YAML from "yaml";
 import type { IndexerRegistry } from "@c4a/context";
 import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
@@ -25,7 +25,9 @@ export function documentRevisionOuterIndexerRoute(): ContextResolvedWorkflowRout
 }
 
 export async function createDocumentRevisionWorkspace(
-  options: { debug?: boolean } = {},
+  options: { debug?: boolean; sourceCount?: number; purpose?: string;
+    sourceFiles?: Record<string, string>; packageJson?: Record<string, unknown>;
+    profile?: string; readerGoals?: string[] } = {},
 ): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "context-indexer-revise-"));
   const bundle = (await listCliBundledIndexers()).bundles.find((item) =>
@@ -36,7 +38,8 @@ export async function createDocumentRevisionWorkspace(
     protocol: "context.indexer.registry/v1",
     requirements: [{
       id: "workspace-knowledge",
-      reader_goals: ["understand-system"],
+      ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
+      reader_goals: options.readerGoals ?? ["understand-system"],
       coverage_domains: { architecture: "required" },
       target_scope: {
         targets: [{
@@ -61,7 +64,7 @@ export async function createDocumentRevisionWorkspace(
         role: "primary",
       }],
       read_scope: { refs: ["requirement:workspace-knowledge#target_scope"] },
-      profile: { primary: { id: "component-library", provider: "community" } },
+      profile: { primary: { id: options.profile ?? "component-library", provider: "community" } },
       providers: [{
         id: "community",
         role: "primary",
@@ -114,20 +117,33 @@ export async function createDocumentRevisionWorkspace(
     private: true,
     exports: {
       ".": "./src/index.ts",
-      "./secondary": "./src/secondary.ts",
+      ...((options.sourceCount ?? 2) >= 2 ? { "./secondary": "./src/secondary.ts" } : {}),
+      ...Object.fromEntries(Array.from({ length: Math.max(0, (options.sourceCount ?? 2) - 2) }, (_, index) =>
+        [`./extra${index}`, `./src/extra${index}.ts`])),
     },
+    ...options.packageJson,
   }, null, 2)}\n`);
-  await writeFile(join(sourceRoot, "src", "index.ts"), "export const answer = 42;\n");
-  await writeFile(
-    join(sourceRoot, "src", "secondary.ts"),
-    "export const secondaryAnswer = 84;\n",
-  );
+  if (options.sourceFiles !== undefined) {
+    for (const [path, content] of Object.entries(options.sourceFiles)) {
+      await mkdir(dirname(join(sourceRoot, path)), { recursive: true });
+      await writeFile(join(sourceRoot, path), content);
+    }
+  } else {
+    await writeFile(join(sourceRoot, "src", "index.ts"), "export const answer = 42;\n");
+    if ((options.sourceCount ?? 2) >= 2) await writeFile(
+      join(sourceRoot, "src", "secondary.ts"),
+      "export const secondaryAnswer = 84;\n",
+    );
+    for (let index = 0; index < (options.sourceCount ?? 2) - 2; index++) {
+      await writeFile(join(sourceRoot, "src", `extra${index}.ts`), `export const extra${index} = ${index};\n`);
+    }
+  }
   execFileSync("git", ["init", "-q"], { cwd: sourceRoot });
   execFileSync("git", ["config", "user.email", "context-test@example.test"], {
     cwd: sourceRoot,
   });
   execFileSync("git", ["config", "user.name", "Context Test"], { cwd: sourceRoot });
-  execFileSync("git", ["add", "package.json", "src/index.ts", "src/secondary.ts"], {
+  execFileSync("git", ["add", "package.json", ...(options.sourceFiles === undefined ? ["src"] : Object.keys(options.sourceFiles))], {
     cwd: sourceRoot,
   });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: sourceRoot });

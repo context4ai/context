@@ -1,3 +1,4 @@
+import { indexerArticlePlanSchema, validateIndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerCanonicalRefSchema,
@@ -70,6 +71,15 @@ const partitionGroupSchema = z.object({
   subject_intent: z.enum(["primary", "enrich-or-independent"]),
   logical_unit_ref: indexerCanonicalRefSchema,
   label: z.string().min(1),
+  scope_change: z.object({ removed_member_ids: z.array(indexerCanonicalRefSchema).min(1) }).strict().optional(),
+  reader_task: z.string().min(1).optional(),
+  outline: z.array(z.string().min(1)).optional(),
+  artifact_intent: z.string().min(1).optional(),
+  template_id: z.string().min(1).optional(),
+  articles: z.array(indexerArticlePlanSchema).min(1).optional(),
+  priority: z.number().int().nonnegative().optional(),
+  delivery_boundary: z.boolean().optional(),
+  ready_for_author: z.boolean().optional(),
   reader_question_refs: z.array(indexerCanonicalRefSchema),
   question_target_bindings: z.array(questionTargetBindingSchema),
   member_ids: z.array(indexerCanonicalRefSchema).min(1),
@@ -287,6 +297,7 @@ function validateGroups(
     if (targetRefs.some((ref) => !allowedTargets.has(ref))) {
       throw new TypeError(`partition group ${group.group_key} creates an unknown question target`);
     }
+    if (group.articles !== undefined) validateIndexerArticlePlan(group.articles, group.question_target_bindings.filter(binding => binding.role === "primary-carrier").map(binding => binding.target_ref));
     groups.set(group.group_key, group);
   }
   return groups;
@@ -416,9 +427,9 @@ export function validateIndexerPartitionPlan(input: {
   if (plan.status === "complete") {
     if (plan.groups.length === 0) {
       if (
-        plan.reader_question_refs.length > 0 ||
-        (input.required_question_target_refs ?? input.workset.allowed_question_target_refs)
-            .length > 0 ||
+        plan.reader_question_refs.length > 0 || input.workset.reader_question_refs.length > 0 ||
+        ((input.required_question_target_refs ?? input.workset.allowed_question_target_refs).length > 0 &&
+          !plan.member_dispositions.every((item) => item.inventory_disposition === "excluded-with-reason")) ||
         plan.member_dispositions.some((item) => item.inventory_disposition === "owned")
       ) {
         throw new TypeError(
@@ -426,10 +437,15 @@ export function validateIndexerPartitionPlan(input: {
         );
       }
     }
-    validateQuestionTargetClosure(
-      plan,
-      input.required_question_target_refs ?? input.workset.allowed_question_target_refs,
-    );
+    // All inventory has already been checked for exact closure above. With no
+    // reader questions and every member explicitly excluded, inherited targets
+    // have no in-scope content; do not invent a reader group to dispose them.
+    if (plan.groups.length > 0 || plan.member_dispositions.length === 0) {
+      validateQuestionTargetClosure(
+        plan,
+        input.required_question_target_refs ?? input.workset.allowed_question_target_refs,
+      );
+    }
   } else {
     const closed = new Set(plan.member_dispositions.map((item) => item.member_id));
     const expectedUnassigned = canonicalInventory

@@ -68,7 +68,7 @@ export async function bindCurrentCliBundle(
 }
 
 export async function project(
-  options: { rankedCodeInventory?: boolean } = {},
+  options: { rankedCodeInventory?: boolean; deprecatedEntry?: boolean } = {},
 ): Promise<{ root: string; requirementDigest: string }> {
   const root = await mkdtemp(join(tmpdir(), "context-indexer-main-lifecycle-"));
   const current = registry();
@@ -86,15 +86,18 @@ export async function project(
     await writeFile(join(sourceRoot, "package.json"), `${JSON.stringify({
       name: "ranked-code-inventory-fixture",
       private: true,
-      exports: "./src/area-02/index.ts",
+      exports: options.deprecatedEntry
+        ? { ".": "./src/area-02/index.ts", "./deprecated": "./src/deprecated/index.ts" }
+        : "./src/area-02/index.ts",
     }, null, 2)}\n`, "utf8");
     await mkdir(join(sourceRoot, "src", "area-00"), { recursive: true });
-    await mkdir(join(sourceRoot, "src", "area-01"), { recursive: true });
+    const optionalEntry = options.deprecatedEntry ? "deprecated" : "area-01";
+    await mkdir(join(sourceRoot, "src", optionalEntry), { recursive: true });
     await mkdir(join(sourceRoot, "src", "area-02"), { recursive: true });
     await writeFile(join(sourceRoot, "src", "area-00", "notes.ts"),
       "// Intentionally contains no parsed capability facts.\n", "utf8");
-    await writeFile(join(sourceRoot, "src", "area-01", "index.ts"),
-      "export const one = 1;\n", "utf8");
+    await writeFile(join(sourceRoot, "src", optionalEntry, "index.ts"),
+      `${options.deprecatedEntry ? "/** @deprecated Use the current entry. */\n" : ""}export const one = 1;\n`, "utf8");
     await writeFile(join(sourceRoot, "src", "area-02", "index.ts"), [
       "export const one = 1;",
       "export const two = 2;",

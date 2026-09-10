@@ -103,6 +103,13 @@ describe("Author source lookup", () => {
     expect(merged.module_ref).toBe(MODULE_REF);
     if (merged.adapter !== "parser-facts") throw new Error("expected parser binding");
     for (const ref of expectedFacts) expect(merged.parser_fact_index.has(ref)).toBe(true);
+    const projectedFacts = new Set(merged.parser_fact_view.files.flatMap(file => file.facts.map(fact => fact.fact_ref)));
+    const identityFacts = new Set(merged.source_identity_inventory.files.flatMap(file => file.facts.map(fact => fact.fact_ref)));
+    for (const binding of bindings) {
+      if (binding.adapter !== "parser-facts") throw new Error("expected parser binding");
+      for (const file of binding.parser_fact_view.files) for (const fact of file.facts) expect(projectedFacts.has(fact.fact_ref)).toBe(true);
+      for (const file of binding.source_identity_inventory.files) for (const fact of file.facts) expect(identityFacts.has(fact.fact_ref)).toBe(true);
+    }
     expect(merged.parser_fact_view.files.some((file) => file.normalized_path.endsWith("notes.ts"))).toBe(false);
     await expect(createIndexerAuthorSourceResolver({ projectRoot: root, projections: new Map() })(partitions[0]!))
       .rejects.toThrow("requires the current Partition consumer projection");

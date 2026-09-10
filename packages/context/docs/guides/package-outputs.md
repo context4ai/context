@@ -4,8 +4,10 @@ Package outputs are generated folders under `dist/`. They turn approved
 knowledge from `knowledge/` into a shape that another consumer can install,
 read, or import.
 
-Package output is a human decision gate. Do not add package declarations until
-the user chooses the intended consumer and output shape.
+Package output is a semantic decision: establish the intended consumer and output
+shape before declaring it. Reuse the user's existing choice. A current managed
+Route may delegate this decision to the Agent; it does not require a repeated
+permission question.
 
 Package build consumes approved and closed knowledge. If status reports that
 close is required, run deterministic close before build. Current close derives
@@ -68,26 +70,29 @@ Do not ask for another distribution namespace. Older workspaces may still
 contain `distribution.knowledgeNamespace`; Context accepts that legacy input
 without using it to shape the package.
 
-Skill names are separate. Ask whether the author wants a short optional Skill
-prefix, then maintain the complete final template directory name directly—for
+Skill names are separate. If a short prefix is useful, maintain the complete
+final template directory name directly—for
 example `skills/android-query/SKILL.md`. Package-root layout never renames a
 Skill.
 
 The default `knowledge-query` Skill is a complete generic query entry. It
 carries the structure-first query discipline: start from OKF directory indexes, use
 `context-build-inventory.json` edge records for package-visible relationships,
-inspect page `sources` / `context:section` source_ref metadata, cite
-page/section evidence, and report explicit gaps when the package does not cover
-a requested fact. It does not treat direct grep over bundled OKF root
+read candidate pages, cite their visible headings and relevant passages, and
+report gaps when the package does not cover a requested fact. Consumer pages
+omit `sources` and `context:section` metadata. For exact upstream attribution,
+a maintainer needs the original workspace page mapped by the inventory; a
+package-only reader must not claim to have read that source. It does not treat direct grep over bundled OKF root
 directories as the primary discovery path. When indexes do not narrow the
 scope, or a candidate page is too large to read directly, its bundled
 `scripts/search.mjs` provides deterministic BM25 ranking over mechanically
 bounded Markdown chunks. Search results are leads; page bodies and typed edge
-records remain the evidence. Its final template-author section
-requires package authors to replace or edit the generic routing when the
-package needs project-specific terminology, entry points, known limits, or
-task workflows. Authors may explicitly accept the generic default when it is
-intentionally sufficient.
+records establish what the package actually says. Package authors edit the source
+template when project-specific terminology, entry points or task workflows are
+needed. Authoring instructions should be template comments or separate guidance,
+not a final section addressed to authors in the delivered query Skill. The
+current template-review Route can accept an intentionally sufficient generic
+default under its applicable authority.
 
 When approved pages reference materialized resources, Context keeps their
 production copies in content-addressed `knowledge/assets/` paths and bundles
@@ -162,7 +167,7 @@ It links directly to pages in small child directories and to a child
 The default threshold is 50 selected knowledge pages. Use Handlebars variables such as
 `knowledgeGroups`, `knowledgeItems`, and `knowledgeTree` when a project needs
 custom navigation. Before customizing it, read
-`node_modules/@c4a/context/docs/reference/template-variables.md`.
+[Template Variables](../reference/template-variables.md).
 
 Newly initialized generic templates must be replaced, edited, or explicitly
 accepted before the first build. `context status` exposes that choice as a
@@ -259,11 +264,11 @@ Which one should I declare first?
 
 If the user chooses the Agent knowledge-base package, explain that its OKF
 roots are flat within `dist/<package-name>/`; do not ask for a second namespace.
-Ask whether its Skills need a short prefix. The author maintains final Skill
-names independently from package paths.
+If its Skills need a short prefix, the author maintains those final names
+independently from package paths; this is not a mandatory question.
 
-Do not offer `both` as a shortcut. If the user wants multiple outputs, add one
-package first, verify the shape, then add another package after confirmation.
+If the user requests multiple outputs, declare and verify each requested package.
+There is no additional confirmation just because two outputs were already chosen.
 The default adaptive index policy avoids one-page directory indexes. Configure
 `kbPackage().navigation` when a package needs a different inline-entry
 threshold or a fully expanded index at every directory.

@@ -4,7 +4,7 @@ description: Context-managed Provider for source-grounded code knowledge. Use on
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.1.2"
+  context-provider-version: "1.2.1"
 ---
 
 # Context Code Indexer
@@ -43,5 +43,14 @@ When a large module exposes stable route, capability, protocol, runtime, or
 storage boundaries, partition on those boundaries before authoring. Do not put
 the whole module in one catch-all logical unit, and do not replace semantic
 partitioning with numbered batches.
+
+When revising existing knowledge, start from the supplied current page and the
+confirmed reader purpose. Update changed API facts and parameter/type tables
+without replacing still-valid explanations or prior confirmed contributions.
+When code is unchanged, useful new context can be a local explanatory revision
+without partitioning the whole source again.
+Keep additions within the selected modules; identify newly public objects as
+well as changes to already documented ones. Recommend a retirement or move only
+for the affected content and explain the reader consequence.
 
 The machine-readable authority is `context-indexer.yaml`. Detailed authoring guidance is materialized by Context from the registered Bundle after its file ledger and integrity have been verified.

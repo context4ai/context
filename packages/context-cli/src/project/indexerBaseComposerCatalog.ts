@@ -51,7 +51,7 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "public-contract",
-      factKinds: ["public-surface"],
+      factKinds: ["code-symbol"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["contract"],
     }),

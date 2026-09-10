@@ -23,7 +23,8 @@ context plugin install
 
 Restart or refresh the Agent host after installation. One install creates the
 host-namespaced Context entry and projects `context-code-indexer` and
-`context-markdown-indexer` as unnamespaced lifecycle Provider Skills for
+`context-markdown-indexer`, `context-note-indexer` and
+`context-sessions-indexer` as unnamespaced lifecycle Provider Skills for
 Claude, Codex, and Cursor.
 
 The public community entry is `/c4a:context`. It creates a requested workspace,
@@ -100,6 +101,18 @@ conversation, the Agent uses:
 ```bash
 context run --managed --until blocked-or-complete --format json
 ```
+
+JSON output for this command is a compact stop receipt: `next_route.file`
+contains the complete executable Route, and `result_file` retains the full run
+history. Add `--verbose` to inline the full result. Likewise, `status --view summary
+--format json` returns progress and a `next_route.file` pointer; use `--view full`
+for the inline Route. Read the referenced Route before acting.
+
+`progress.indexer.task_completion` measures accepted tasks in the current stage,
+not overall delivery. Tasks, planned topics and emitted pages have different
+denominators; `pages.authored_not_delivered` counts only already-written pages.
+Complete resource acknowledgements before editing configuration, then refresh
+status after the edit instead of acknowledging its old revision.
 
 This collapses consecutive deterministic actions and delegated Gates, then
 stops when Agent reading, project configuration, additional permission,
@@ -192,7 +205,7 @@ for maintainers, automation, and diagnostics:
   complete CLI-owned question-target set; capability or material gaps cannot be
   reported as complete;
 - the `markdown-provider` Indexer Route starts only from exact current document
-  capture. Agent discovery reports visible `context-markdown-indexer*` Skills
+  capture. Agent discovery reports relevant Host-visible Indexer Skills with document capabilities
   without persisting the discovery list; the CLI recomputes the route and
   static validation, resolves and stages exact CLI-bundled Bundles, and stops
   external resolution or local customization at explicit Host/customization
@@ -253,3 +266,51 @@ direct-Git projection under `../../plugins/context/repo-install`; edit only
 ## License
 
 MIT.
+
+## Updating an existing workspace
+
+Start with `context entry --format json` and read the returned update guide when
+adding material or changing published knowledge. Entry and status only observe;
+they do not resume an earlier managed task before the new request is understood.
+
+- `context update --input <file>` accepts confirmed source/module scopes and fixed,
+  already acquired versions. The current Route asks which existing pages need
+  changes and whether additions need new pages.
+- `context revise <page> --instruction <text>` starts from the current approved
+  body. `--move-to <path>` preserves its identity and updates Markdown navigation
+  when the reviewed move is applied.
+- `context source import --input <file|->` saves `note`/`sessions` Markdown or
+  imports actual prefetched Lark responses. An array imports several documents
+  and reports each result; failed entries do not discard successful imports.
+- `context source rename <ref> --name <name>` previews a managed source rename;
+  apply its current plan digest to update existing references safely.
+- `context task adjust --input <file>` adjusts selected inputs within the current
+  task. `context task rollback --input <file>` previews explicitly supplied
+  recovery bytes; rollback still needs close, build and cleanup before a new task.
+
+The processed baseline is stored by requirement and source/module scope in
+`knowledge/structure.yaml`. It advances after all selected revisions and builds,
+not after acquisition or the first approved page. Losing temporary drafts calls
+for a fresh comparison against approved knowledge, not restoration of old runs.
+Remote writes, Git submission and publication remain separate explicit actions.
+
+### Maintenance during production
+
+`context revise <page> --instruction <text>` keeps current-batch repair behavior;
+approved pages outside the active batch can be queued without replacing its
+ledger. `--regenerate` explicitly prepares current programmatic API blocks even
+when the source version is unchanged. `--timing priority` requests early
+delivery of complete pages; it does not bypass Review.
+
+For multiple approved pages use `context task maintain --input <file> --format
+json` with `id`, `operation: revise | regenerate | rebuild`, optional `timing:
+after-batch | priority`, and `targets: [{ path, instruction }]`. Rebuild has no
+targets and packages approved content without completing production. Reuse the
+same id/input on retry. Status reports active and queued maintenance plus its
+waiting condition. Source refreshes remain explicit scope adjustments; this
+entry does not fetch remote sources or rerun every custom Composer.
+
+`context task maintenance-status --format json` exposes the request state and
+revision. `context task cancel-maintenance <id> --format json` cancels a pending
+request. Discarding an active maintenance draft additionally requires its current
+`--discard-revision`; it retains already approved pages and unrelated work.

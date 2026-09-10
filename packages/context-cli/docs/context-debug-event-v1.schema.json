@@ -21,7 +21,9 @@
         "workflow.action-completed",
         "workflow.scope-opened",
         "workflow.scope-closed",
-        "workflow.stopped"
+        "workflow.stopped",
+        "performance.measurement",
+        "runtime.telemetry"
       ]
     },
     "invocation_id": { "type": "string", "minLength": 1 },

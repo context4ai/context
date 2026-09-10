@@ -5,6 +5,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { ExecutionScope } from "./workflow/executionScope.js";
+import { withCommandReadCache } from "./commandReadCache.js";
 import {
   recordContextDebugPerformance,
   recordWorkflowExecutionScope,
@@ -165,7 +166,7 @@ export async function withProjectWriteLock<T>(
     // their existing revision checks and atomic commit semantics.
     result = await activeProjectWriteLocks.run(
       new Set([...(inheritedLocks ?? []), lockPath]),
-      action,
+      () => withCommandReadCache(action),
     );
   } catch (error) {
     actionError = error;

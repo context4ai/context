@@ -1,8 +1,9 @@
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { PackageDefinition } from "@c4a/context";
+import { readProcessedScopes, type PackageDefinition } from "@c4a/context";
 import { parse as parseYaml } from "yaml";
 import { isKnowledgeCollection, okfRootForCollection } from "./okfTypes.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
@@ -46,6 +47,14 @@ async function readOptionalText(path: string): Promise<string | null> {
 }
 
 export async function readKnowledgeStructure(projectRoot: string): Promise<KnowledgeStructureInfo> {
+  const snapshot = await reuseCommandFileRead({ key: "approved-knowledge-structure",
+    paths: [knowledgeStructurePath(projectRoot)], read: () => readKnowledgeStructureUncached(projectRoot) });
+  // Callers preparing a Review may edit their local parsed view. Sharing that
+  // mutable object would leak uncommitted changes into later status reads.
+  return { ...snapshot, parsed: structuredClone(snapshot.parsed), edgeContract: structuredClone(snapshot.edgeContract) };
+}
+
+async function readKnowledgeStructureUncached(projectRoot: string): Promise<KnowledgeStructureInfo> {
   const path = "knowledge/structure.yaml";
   const content = await readOptionalText(knowledgeStructurePath(projectRoot));
   if (content === null) {
@@ -55,6 +64,7 @@ export async function readKnowledgeStructure(projectRoot: string): Promise<Knowl
   const record = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : null;
+  readProcessedScopes(record);
   return {
     path,
     content,

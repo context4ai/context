@@ -7,6 +7,7 @@ import {
 } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
 import {
+  INDEXER_CUSTOMIZATION_LADDER_STEPS,
   buildIndexerCustomizationPlan,
   indexerProtocolDigest,
   validateIndexerCustomizationPlan,
@@ -243,10 +244,6 @@ function resolveCustomizationPlan(input: {
       introduces_external_dependencies: false,
     });
   }
-  if (input.declared === undefined) {
-    throw new TypeError("customized Indexer requires a minimal customization ladder plan");
-  }
-  const plan = validateIndexerCustomizationPlan(input.declared);
   const expectedStep = input.mode === "replace"
     ? "replace"
     : input.files.some((file) => file.capability === "program-extend")
@@ -254,6 +251,35 @@ function resolveCustomizationPlan(input: {
       : input.files.some((file) => file.capability === "template-override")
         ? "template-override"
         : "instructions-append";
+  if (input.declared === undefined &&
+    (expectedStep === "instructions-append" || expectedStep === "template-override")) {
+    // Text-only customization is already declared by the registry and validated
+    // files. Project that selection into the existing plan shape, as for config;
+    // do not require an Agent to manufacture a gap report or a saved ladder.
+    // This records the selected hook, not an assessment of the text's quality.
+    const selectionDigest = indexerProtocolDigest({
+      indexer_id: input.indexer.id,
+      provider_integrity: input.providerIntegrity,
+      files: input.files.map(({ path, digest, capability }) => ({ path, digest, capability })),
+    });
+    return buildIndexerCustomizationPlan({
+      project_ref: input.projectRef,
+      indexer_id: input.indexer.id,
+      provider_integrity: input.providerIntegrity,
+      capability_gap_digest: selectionDigest,
+      selected_step: expectedStep,
+      rejected_smaller_steps: INDEXER_CUSTOMIZATION_LADDER_STEPS
+        .slice(0, INDEXER_CUSTOMIZATION_LADDER_STEPS.indexOf(expectedStep))
+        .map((step) => ({ step, disposition: "insufficient" as const,
+          reason_code: "workspace-text-customization-selected", evidence_digest: selectionDigest })),
+      affected_scope_refs: input.indexer.read_scope.refs,
+      introduces_external_dependencies: false,
+    });
+  }
+  if (input.declared === undefined) {
+    throw new TypeError("executable customization requires a minimal customization ladder plan");
+  }
+  const plan = validateIndexerCustomizationPlan(input.declared);
   if (
     plan.project_ref !== input.projectRef ||
     plan.indexer_id !== input.indexer.id ||
@@ -333,8 +359,13 @@ export async function loadIndexerCustomization(input: {
   customizationPlan?: IndexerCustomizationPlan;
 }): Promise<IndexerCustomizationView> {
   if (!isAbsolute(input.workspaceRoot)) throw new TypeError("workspace root must be absolute");
-  const primary = input.indexer.providers.find((provider) => provider.role === "primary");
-  if (primary === undefined) throw new TypeError("Indexer has no primary Provider");
+  const registered = input.indexer.providers.find((provider) => provider.role === "primary");
+  if (registered === undefined) throw new TypeError("Indexer has no primary Provider");
+  // A CLI-bundled Provider follows the installed release. Registry pins describe
+  // the original selection, not a ban on resuming after a tool update.
+  const primary = registered.distribution.kind === "cli-bundled"
+    ? { ...registered, version: input.manifest.version, integrity: input.providerIntegrity }
+    : registered;
   if (
     primary.skill !== input.manifest.id ||
     primary.version !== input.manifest.version ||

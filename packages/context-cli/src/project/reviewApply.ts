@@ -18,15 +18,14 @@ import {
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
+import { prepareApprovedKnowledgeSnapshotTarget } from "./approvedKnowledgeSnapshots.js";
 import {
   assertProjectIndexerCandidateInCompileIndex,
   loadProjectIndexerCandidateCompileIndex,
   type ProjectIndexerCandidateCompileIndex,
 } from "./indexerCandidateCompileActions.js";
 import {
-  readRejectedDecisions,
-  rejectedDecisionsContent,
-  REVIEW_DECISIONS_FILE,
+  LEGACY_REVIEW_DECISIONS_FILE,
 } from "./reviewDecisions.js";
 import {
   type DurableMultiFileFailureInjector,
@@ -51,6 +50,7 @@ import {
 interface PreparedApprovedPage {
   id: string;
   relPath: string;
+  previous?: { path: string; content: string };
   existing?: string;
   content: string;
   changed: boolean;
@@ -95,7 +95,9 @@ async function prepareApprovedPage(input: {
     input.record.view_ref,
     input.approvedPageIndex,
   );
-  if (existingView !== undefined && existingView.relPath !== relPath) {
+  const previousPath = input.record.approved_revision?.previous_path;
+  if (previousPath !== undefined && !isSafeKnowledgeTargetPath(input.record.collection, previousPath)) throw new TypeError("Unsafe original page path in a move");
+  if (existingView !== undefined && existingView.relPath !== relPath && existingView.relPath !== (previousPath === undefined ? undefined : `knowledge/${previousPath}`)) {
     throw new ContextError(ExitCode.WorkspaceStateError, `approved page already exists for view_ref at a different path: ${input.record.view_ref}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       candidate_id: input.record.candidate_id,
@@ -107,6 +109,18 @@ async function prepareApprovedPage(input: {
   }
   const absPath = join(input.projectRoot, relPath);
   const existing = existsSync(absPath) ? await readFile(absPath, "utf8") : undefined;
+  let previous: PreparedApprovedPage["previous"];
+  if (previousPath !== undefined) {
+    if (existing !== undefined || existingView?.relPath !== `knowledge/${previousPath}`) throw new TypeError("Page move destination or original identity changed; refresh its revision.");
+    previous = { path: `knowledge/${previousPath}`, content: await readFile(join(input.projectRoot, "knowledge", previousPath), "utf8") };
+  }
+  if (input.record.approved_revision !== undefined) {
+    const base = previous?.content ?? existing;
+    const { durableContentDigest } = await import("./durableSingleFileTransaction.js");
+    if ((base === undefined ? null : durableContentDigest(base)) !== input.record.approved_revision.base_digest) {
+      throw new TypeError("Approved page changed before apply; restart its revision from the current page.");
+    }
+  }
   if (existing !== undefined) {
     const frontmatter = input.approvedPageIndex.byRelPath.get(relPath)?.frontmatter ??
       parseFrontmatterLoose(existing);
@@ -141,6 +155,7 @@ async function prepareApprovedPage(input: {
   return {
     id: input.record.candidate_id,
     relPath,
+    ...(previous === undefined ? {} : { previous }),
     ...(existing === undefined ? {} : { existing }),
     content: renderApprovedIndexerMarkdown({
       record: input.record,
@@ -190,6 +205,20 @@ function reviewFileTarget(input: {
   };
 }
 
+function expandEncodedReviewDecisions(payload: ReviewPayload, scopedIds: string[]): ReviewDecision[] {
+  if (payload.scope?.candidates_sha256 === undefined || payload.encoded_statuses!.length !== scopedIds.length ||
+    payload.decisions.length !== 0 || payload.default !== undefined ||
+    payload.encoded_statuses!.some((status) => status !== "approved" && status !== "rejected" && status !== "pending")) {
+    throw new ContextError(ExitCode.UserError, "Invalid scoped review code decisions", {
+      category: ErrorCategory.UserInputInvalid, next: "Copy a fresh complete review code from the current HTML report.",
+    });
+  }
+  return scopedIds.flatMap((candidate_id, index) => {
+    const status = payload.encoded_statuses![index]!;
+    return status === "pending" ? [] : [{ candidate_id, status }];
+  });
+}
+
 function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRecord[]): ReviewDecision[] {
   const scopedRows = payload.scope?.kind === "all"
     ? rows.filter((row) => row.status === "draft")
@@ -210,7 +239,7 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
   const actualHash = candidateIdsHash(scopedIds);
   const actualCandidatesHash = candidateSetHash(scopedRows);
   const visibleIds = payload.scope.visible_candidate_ids;
-  if (payload.scope.kind === "all" && visibleIds === undefined) {
+  if (payload.scope.kind === "all" && visibleIds === undefined && payload.encoded_statuses === undefined) {
     throw new ContextError(ExitCode.UserError, "all-scope review payload requires scope.visible_candidate_ids", {
       category: ErrorCategory.UserInputInvalid,
       expected: {
@@ -240,6 +269,7 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
     });
   }
 
+  if (payload.encoded_statuses !== undefined) return expandEncodedReviewDecisions(payload, scopedIds);
   if (payload.default === undefined) {
     const scopedSet = new Set(scopedIds);
     for (const decision of payload.decisions) {
@@ -297,10 +327,9 @@ export async function applyReviewDecisions(input: {
     );
     const rejectedDecisionsBase = await readProjectFileMaybe(
       input.projectRoot,
-      REVIEW_DECISIONS_FILE,
+      LEGACY_REVIEW_DECISIONS_FILE,
     );
     const rows = await readCandidateRecords(input.projectRoot);
-    const rejectedDecisions = await readRejectedDecisions(input.projectRoot);
     const nextRows = [...rows];
     const decisions = expandReviewPayload(input.payload, rows);
     const approvesAnyCandidate = decisions.some((decision) =>
@@ -326,7 +355,6 @@ export async function applyReviewDecisions(input: {
     let unchanged = 0;
     let materialized = 0;
     let candidateFileUpdated = false;
-    let decisionsUpdated = false;
 
     for (const decision of decisions) {
       assertSafeEntityId(decision.candidate_id);
@@ -384,7 +412,6 @@ export async function applyReviewDecisions(input: {
           });
         }
         seenApprovedPaths.set(approvedPath, row.candidate_id);
-        if (rejectedDecisions.delete(row.candidate_id)) decisionsUpdated = true;
         const page = await prepareApprovedPage({
           projectRoot: input.projectRoot,
           record: row,
@@ -415,13 +442,27 @@ export async function applyReviewDecisions(input: {
         candidateFileUpdated = true;
         rejected++;
       }
-      if (rejectedDecisions.get(row.candidate_id) !== row.fingerprint) {
-        rejectedDecisions.set(row.candidate_id, row.fingerprint);
-        decisionsUpdated = true;
-      }
     }
 
+    const moved = new Map(pagesToWrite.flatMap((page) => page.previous === undefined ? []
+      : [[page.previous.path.replace(/^knowledge\//u, ""), page.relPath.replace(/^knowledge\//u, "")] as const]));
+    const navigationTargets: Array<IndexerProjectFileTarget | undefined> = [];
+    if (moved.size) {
+      const { moveKnowledgeLinkTargets } = await import("./approvedPageMove.js");
+      for (const path of approvedPageIndex.byRelPath.keys()) {
+        if (pagesToWrite.some((page) => page.relPath === path || page.previous?.path === path)) continue;
+        const before = await readFile(join(input.projectRoot, path), "utf8");
+        const local = path.replace(/^knowledge\//u, "");
+        const after = moveKnowledgeLinkTargets(before, local, local, moved);
+        navigationTargets.push(reviewFileTarget({ path, baseContent: before, targetContent: after }));
+      }
+    }
     const targets = [
+      await prepareApprovedKnowledgeSnapshotTarget({ projectRoot: input.projectRoot, pages: pagesToWrite, candidates: rows }),
+      ...navigationTargets,
+      ...pagesToWrite.flatMap((page) => page.previous === undefined ? [] : [reviewFileTarget({
+        path: page.previous.path, baseContent: page.previous.content,
+      })]),
       ...pagesToWrite
         .filter((page) => page.changed)
         .map((page) => reviewFileTarget({
@@ -436,11 +477,10 @@ export async function applyReviewDecisions(input: {
             targetContent: candidateRecordsContent(nextRows),
           })]
         : []),
-      ...(decisionsUpdated
+      ...(rejectedDecisionsBase !== undefined
         ? [reviewFileTarget({
-            path: REVIEW_DECISIONS_FILE,
+            path: LEGACY_REVIEW_DECISIONS_FILE,
             baseContent: rejectedDecisionsBase,
-            targetContent: rejectedDecisionsContent(rejectedDecisions),
           })]
         : []),
     ].filter((target): target is IndexerProjectFileTarget => target !== undefined)

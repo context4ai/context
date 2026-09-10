@@ -1,3 +1,4 @@
+import YAML from "yaml";
 import { describe, expect, test } from "bun:test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -11,7 +12,17 @@ import {
   bundledIndexerProfileContract,
 } from "../project/indexerBaseContracts.js";
 import { resolveCliBundledIndexerProvider } from "../project/indexerCliBundledProvider.js";
-import { materializeBundledIndexerDistribution } from "../project/indexerDistributionBuild.js";
+import { BUNDLED_CODE_COMPOSER_SPECS } from "../project/indexerBaseComposerCatalog.js";
+import { validateBundledIndexerComposers } from "../project/indexerDistributionComposerValidation.js";
+import {
+  validateBundledIndexerCodeChapterFixtures,
+  validateBundledIndexerCodeTemplateReferences,
+  validateBundledIndexerPortableVocabulary,
+} from "../project/indexerDistributionCodeAuthoringValidation.js";
+import { validateBundledIndexerMarkdownEditorialFixtures } from
+  "../project/indexerDistributionMarkdownEditorialValidation.js";
+import { validateBundledIndexerMarkdownMigrationFixtures } from
+  "../project/indexerDistributionMarkdownMigrationValidation.js";
 import { validateBundledIndexerAuthoringFixtures } from
   "../project/indexerDistributionFixtureValidation.js";
 import { validateBundledIndexerMarkdownRoutingFixtures } from
@@ -201,7 +212,7 @@ describe("CLI bundled Indexer release validation", () => {
     })).toThrow(/must use its own canonical template/);
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("rejects Markdown editorial fixture drift before release materialization", async () => {
+  test("does not rescore authored Markdown examples with content heuristics", async () => {
     const root = await createTemporaryRoot("context-cli-editorial-invalid-");
     const sourceRoot = join(root, "skills");
     await cp(resolve(PACKAGE_ROOT, "../..", "plugins/context/skills"), sourceRoot, {
@@ -219,11 +230,12 @@ describe("CLI bundled Indexer release validation", () => {
     };
     fixture.cases[0]!.source_markdown = "This Section contains a complete supported answer.";
     await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "invalid-editorial-output"),
-    })).rejects.toThrow(/drifted from runtime signal/);
+    const source = join(sourceRoot, "context-markdown-indexer");
+    await expect(validateBundledIndexerMarkdownEditorialFixtures({
+      source,
+      expectedProfiles: BUNDLED_MARKDOWN_PROFILE_IDS,
+      manifest: await loadIndexerProviderManifest(source),
+    })).resolves.toBeUndefined();
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects Markdown migration-equivalence authority drift before release", async () => {
@@ -244,21 +256,21 @@ describe("CLI bundled Indexer release validation", () => {
     };
     fixture.cases[0]!.authority = "context-layout";
     await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "invalid-markdown-migration-output"),
-    })).rejects.toThrow(/wrong authority/);
+    const source = join(sourceRoot, "context-markdown-indexer");
+    const input = {
+      source,
+      expectedProfiles: BUNDLED_MARKDOWN_PROFILE_IDS,
+      manifest: await loadIndexerProviderManifest(source),
+    };
+    await expect(validateBundledIndexerMarkdownMigrationFixtures(input))
+      .rejects.toThrow(/wrong authority/);
 
     fixture.cases[0]!.authority = "community-instructions";
     fixture.cases[0]!.source_shape =
       "The answer is copied from https://private.example.internal/project/source.";
     await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "private-markdown-migration-output"),
-    })).rejects.toThrow(/not community-anonymous/);
+    await expect(validateBundledIndexerMarkdownMigrationFixtures(input))
+      .rejects.toThrow(/not community-anonymous/);
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects incomplete chapter fixtures and private literals in runtime resources", async () => {
@@ -276,10 +288,14 @@ describe("CLI bundled Indexer release validation", () => {
     );
     const fixtures = JSON.parse(await readFile(fixturePath, "utf8")) as unknown[];
     await writeFile(fixturePath, `${JSON.stringify(fixtures.slice(1), null, 2)}\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "missing-chapter-output"),
+    const source = join(sourceRoot, "context-code-indexer");
+    const operatorContract = bundledIndexerOperatorContract();
+    await expect(validateBundledIndexerCodeChapterFixtures({
+      source,
+      expectedProfiles: BUNDLED_CODE_PROFILE_IDS,
+      manifest: await loadIndexerProviderManifest(source),
+      operatorContract,
+      profileContract: bundledIndexerProfileContract(operatorContract),
     })).rejects.toThrow(/cover every profile exactly once/);
 
     await cp(
@@ -295,10 +311,9 @@ describe("CLI bundled Indexer release validation", () => {
     );
     const template = await readFile(templatePath, "utf8");
     await writeFile(templatePath, `${template}\n@context-private project-specific-name\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "private-literal-output"),
+    await expect(validateBundledIndexerPortableVocabulary({
+      source,
+      paths: ["templates/web-application.md"],
     })).rejects.toThrow(/non-portable private literal/);
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
@@ -329,12 +344,13 @@ describe("CLI bundled Indexer release validation", () => {
         error: /contains legacy template token `material-required`/,
       },
     ];
-    for (const [index, mutation] of mutations.entries()) {
+    const source = join(sourceRoot, "context-code-indexer");
+    const manifest = await loadIndexerProviderManifest(source);
+    for (const mutation of mutations) {
       await writeFile(templatePath, `${original}${mutation.suffix}`, "utf8");
-      await expect(materializeBundledIndexerDistribution({
-        packageRoot: PACKAGE_ROOT,
-        sourceRoot,
-        outputRoot: join(root, `invalid-template-output-${index}`),
+      await expect(validateBundledIndexerCodeTemplateReferences({
+        source,
+        manifest,
       })).rejects.toThrow(mutation.error);
     }
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
@@ -354,10 +370,12 @@ describe("CLI bundled Indexer release validation", () => {
     );
     const fixtures = JSON.parse(await readFile(fixturePath, "utf8")) as unknown[];
     await writeFile(fixturePath, `${JSON.stringify(fixtures.slice(0, -1), null, 2)}\n`, "utf8");
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "missing-composer-fixture-output"),
+    const source = join(sourceRoot, "context-code-indexer");
+    await expect(validateBundledIndexerComposers({
+      source,
+      bundleId: "context-code-indexer",
+      manifest: await loadIndexerProviderManifest(source),
+      expected: BUNDLED_CODE_COMPOSER_SPECS,
     })).rejects.toThrow(/cover every composer exactly once/);
 
     await cp(
@@ -366,16 +384,16 @@ describe("CLI bundled Indexer release validation", () => {
       { force: true },
     );
     const manifestPath = join(sourceRoot, "context-code-indexer", "context-indexer.yaml");
-    const manifest = await readFile(manifestPath, "utf8");
-    await writeFile(
-      manifestPath,
-      manifest.replace("fact_kinds: [public-surface]", "fact_kinds: [public-surface-drift]"),
-      "utf8",
-    );
-    await expect(materializeBundledIndexerDistribution({
-      packageRoot: PACKAGE_ROOT,
-      sourceRoot,
-      outputRoot: join(root, "composer-contract-drift-output"),
+    const manifest = YAML.parse(await readFile(manifestPath, "utf8"));
+    const composer = manifest.provides.composers.find((item: { id: string }) => item.id === "public-contract");
+    expect(composer.contract.primary_requirements.fact_kinds).toContain("code-symbol");
+    composer.contract.primary_requirements.fact_kinds = ["public-surface-drift"];
+    await writeFile(manifestPath, YAML.stringify(manifest), "utf8");
+    await expect(validateBundledIndexerComposers({
+      source,
+      bundleId: "context-code-indexer",
+      manifest: await loadIndexerProviderManifest(source),
+      expected: BUNDLED_CODE_COMPOSER_SPECS,
     })).rejects.toThrow(/composer public-contract contract drifted/);
   });
 });

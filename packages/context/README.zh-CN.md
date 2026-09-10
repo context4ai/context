@@ -12,7 +12,8 @@ Profile、范围和定制。`src/index.ts` 中的项目阶段不再负责生产�
 ## 项目边界
 
 ```text
-sources/*/index.yaml       已登记的来源边界
+sources/{repo,file,lark}/index.yaml   已登记的来源边界
+sources/{note,sessions}/YYYYMMDD/*.md 保存的笔记与会话总结
 src/index.ts               采集与知识包声明
 src/indexers.yaml          知识生产的唯一权威配置
 knowledge/                 已批准、可读的知识
@@ -37,7 +38,7 @@ import {
   source,
 } from "@c4a/context";
 
-const docs = source("product-docs", { type: "file" });
+const docs = source("20260901/product-docs", { type: "file" });
 
 export default defineProject({
   sources: [docs],
@@ -61,7 +62,7 @@ Context 生命周期负责发现或更新 `src/indexers.yaml`，以有界批次�
 | API | 用途 |
 |---|---|
 | `defineProject()` | 声明项目边界。 |
-| `source()` / `allSources()` | 引用已登记的代码仓库、本地文件或飞书来源。 |
+| `source()` / `allSources()` | 引用已登记的代码/文件/飞书来源，或明确选择保存的 Note/Sessions。 |
 | `captureFile()` / `captureLark()` | 生成确定性的文档快照。 |
 | `mdxJsonDocs()` | 配置 MDX/JSON 文档采集处理器。 |
 | `customPhase()` | 执行不生产知识的项目编排。 |
@@ -94,7 +95,9 @@ knowledge/architecture/product-guides/component-input-fields.md
 
 不要直接修改 `.tmp/context-runtime/` 下的生命周期文件。Candidate 状态、审核应用、
 恢复、close、验证与构建由 CLI 管理。来源注册表、`src/index.ts`、
-`src/indexers.yaml`、批准后的 `knowledge/` 和知识包模板才是长期项目输入。
+`src/indexers.yaml`、批准后的 `knowledge/`、保存的 Note/Sessions 和知识包模板是长期项目输入。
+`structure.yaml` 保留范围级更新基线；会话的可选 commit/MR 关联放在来源文件，
+不重复添加到知识页头部。保存来源不会自动开始索引。
 
 ## 参考文档
 
@@ -105,3 +108,7 @@ knowledge/architecture/product-guides/component-input-fields.md
 - [Indexer Provider 协议](./docs/reference/indexer-provider-protocol.md)
 - [知识包输出](./docs/guides/package-outputs.md)
 - [知识包模板](./docs/reference/package-templates.md)
+
+- [更新已有知识](./docs/guides/knowledge-updates.md)
+- [准备 Note](./docs/guides/note.md)
+- [准备 Sessions](./docs/guides/sessions.md)

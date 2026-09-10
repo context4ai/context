@@ -1,7 +1,11 @@
+import { encodeTemplateSnapshots, hydrateTemplateSnapshots } from "./indexerTemplateSnapshots.js";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   canonicalIndexerJson,
+  buildIndexerRunEnvelope,
+  buildIndexerArtifactDependencySet,
   indexerProtocolDigest,
   validateAndRecordIndexerMainRun,
   validateIndexerMainAcceptedRecord,
@@ -10,6 +14,7 @@ import {
   type IndexerMainAcceptedRecord,
   type IndexerMainRunLedger,
   type IndexerMainRunRequest,
+  type IndexerMainRunResult,
   type IndexerProjectFileTarget,
 } from "@c4a/context";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
@@ -166,25 +171,36 @@ export function validateAcceptedCacheEnvelope(input: {
   return { ...payload, cache_digest: cacheDigest };
 }
 
-export function validateAcceptedCache(input: {
+export function readAcceptedCache(input: {
   cache: unknown;
   spec: MainRunSpec;
 }): ReturnType<typeof validateAndRecordIndexerMainRun> {
   const cached = validateAcceptedCacheEnvelope(input);
-  const validated = validateAndRecordIndexerMainRun({
-    request: input.spec.request,
-    result: cached.result,
-    validation: input.spec.validation as unknown as Parameters<
-      typeof validateAndRecordIndexerMainRun
-    >[0]["validation"],
-  });
-  if (
-    canonicalIndexerJson(validated.accepted_record) !==
-      canonicalIndexerJson(cached.accepted_record)
-  ) {
-    throw new TypeError("main accepted cache record does not match its validated result");
-  }
-  return validated;
+  // Submission already validated this immutable result. Reading it must not
+  // rerun content/contract acceptance against a newer CLI implementation.
+  const request = input.spec.request;
+  const result = cached.result as IndexerMainRunResult;
+  const runEnvelope = buildIndexerRunEnvelope(request);
+  let dependencies: ReturnType<typeof buildIndexerArtifactDependencySet> | null | undefined;
+  return {
+    request, result, operation_result: result.result.result,
+    accepted_record: cached.accepted_record, run_envelope: runEnvelope,
+    // Only incremental-impact consumers need this derived graph.
+    get artifact_dependency_set() {
+      if (dependencies !== undefined) return dependencies;
+      dependencies = request.workset.stage === "author" && result.result.stage === "author"
+        ? buildIndexerArtifactDependencySet({ result: result.result.result, workset: request.workset,
+            run_envelope: runEnvelope, dependency_view: input.spec.validation.dependency_view,
+            composition_input: request.composition_input,
+            ...(input.spec.validation.authorized_evidence_targets === undefined ? {} : {
+              authorized_evidence_targets: input.spec.validation.authorized_evidence_targets as
+                NonNullable<Parameters<typeof buildIndexerArtifactDependencySet>[0]["authorized_evidence_targets"]>,
+            }),
+          })
+        : null;
+      return dependencies;
+    },
+  };
 }
 
 export async function currentLedger(
@@ -198,13 +214,17 @@ export async function currentSpec(input: {
   projectRoot: string;
   request_digest: string;
 }): Promise<MainRunSpec> {
+  return reuseCommandFileRead({ key: "validated-main-run-spec", paths: [join(input.projectRoot, runSpecPath(input.request_digest))],
+    read: async () => {
   const value = await readJsonMaybe(input.projectRoot, runSpecPath(input.request_digest));
   if (value === undefined) throw new TypeError("main run request cache is missing");
-  const spec = normalizeRunSpec(value);
+  const spec = normalizeRunSpec(await hydrateTemplateSnapshots(input.projectRoot, value));
   if (spec.request.execution_request_digest !== input.request_digest) {
     throw new TypeError("main run request cache path does not match its request digest");
   }
   return spec;
+    },
+  });
 }
 
 async function writeTarget(input: {
@@ -213,8 +233,10 @@ async function writeTarget(input: {
   value: unknown;
   immutable?: boolean;
 }): Promise<IndexerProjectFileTarget | undefined> {
-  const content = jsonContent(input.value);
   const existing = await readMaybe(input.projectRoot, input.path);
+  // Preserve unchanged legacy inline records without rewriting their history.
+  if (existing === jsonContent(input.value)) return undefined;
+  const content = jsonContent(await encodeTemplateSnapshots(input.projectRoot, input.value));
   if (existing === content) return undefined;
   if (input.immutable === true && existing !== undefined) {
     throw new TypeError(`content-addressed Indexer runtime record is immutable: ${input.path}`);
@@ -234,9 +256,16 @@ export async function persistLedger(input: {
   transaction_kind: string;
   ledger: IndexerMainRunLedger;
   immutable_records?: readonly { path: string; value: unknown }[];
+  mutable_records?: readonly { path: string; value: unknown }[];
+  delete_records?: readonly string[];
   inject_failure?: DurableMultiFileFailureInjector;
 }): Promise<IndexerMainRunStoreReceipt> {
   const candidates = await Promise.all([
+    ...(input.delete_records ?? []).map(async (path): Promise<IndexerProjectFileTarget | undefined> => {
+      const content = await readMaybe(input.projectRoot, path);
+      return content === undefined ? undefined : { path, operation: "delete", base_digest: durableContentDigest(content), target_digest: null };
+    }),
+    ...(input.mutable_records ?? []).map((record) => writeTarget({ projectRoot: input.projectRoot, ...record })),
     ...(input.immutable_records ?? []).map((record) => writeTarget({
       projectRoot: input.projectRoot,
       path: record.path,

@@ -266,9 +266,14 @@ const instructionResourceSchema = z.object({
 });
 
 const templateResourceSchema = z.object({
+  kind: z.enum(["procedure", "page-program"]).optional(),
   id: indexerIdSchema,
   profile: indexerIdSchema,
   path: portableIndexerPathSchema,
+  reader_goal: indexerIdSchema.optional(),
+  guidance_path: portableIndexerPathSchema.optional(),
+  // Existing providers deliver profile templates by default; article catalogs opt in on selection.
+  delivery: z.enum(["profile", "selected"]).optional(),
 }).strict();
 
 const providerResourcesSchema = z.object({
@@ -462,6 +467,26 @@ export const indexerProviderManifestSchema = z.object({
       });
     }
   });
+  // An advertised customization capability that the Provider cannot back already
+  // fails, but only once someone uses it: a non-empty config is rejected while
+  // validating the selection, and program-extend is rejected while preparing the
+  // customization project. Reject the same inconsistency here so the manifest,
+  // rather than a later step, reports it.
+  const supports = value.customization?.supports ?? [];
+  if (supports.includes("config") && value.provider.config_schema === undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "customization supports config but the Provider declares no config_schema",
+      path: ["customization", "supports"],
+    });
+  }
+  if (supports.includes("program-extend") && value.provider.program === undefined) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "customization supports program-extend but the Provider declares no program",
+      path: ["customization", "supports"],
+    });
+  }
 });
 
 export type IndexerExecution = z.infer<typeof indexerExecutionSchema>;
@@ -504,7 +529,7 @@ function referencedProviderPaths(manifest: IndexerProviderManifest): string[] {
       ? []
       : [manifest.provider.program.execution.entry]),
     ...(manifest.provider.instructions ?? []).map((item) => item.path),
-    ...(manifest.provider.templates ?? []).map((item) => item.path),
+    ...(manifest.provider.templates ?? []).flatMap((item) => [item.path, ...(item.guidance_path === undefined ? [] : [item.guidance_path])]),
     ...(manifest.provides.composers ?? []).flatMap((item) =>
       item.contract === undefined ? [] : [item.contract.instruction]
     ),

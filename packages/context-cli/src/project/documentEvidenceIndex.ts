@@ -208,6 +208,7 @@ function canonicalDocumentLocator(input: {
   sourceName: string;
   documentPath: string;
 }): string {
+  if (input.sourceType === "note" || input.sourceType === "sessions") return `${input.sourceType}:${normalizeDocumentSourceName(input.sourceName)}`;
   return `${input.sourceType}:${normalizeDocumentSourceName(input.sourceName)}/${input.documentPath.split("/").map(encodeURIComponent).join("/")}`;
 }
 
@@ -268,12 +269,15 @@ export async function buildCommittedEvidenceIndex(input: {
       source: `${input.sourceType}:${input.sourceName}`,
     });
   }
-  const materializedAt = input.materializedAt ?? join("sources", input.sourceType, sourceName);
-  const manifestRelPath = input.manifestPath ?? committedManifestRelativePath(input.sourceType, sourceName);
+  const managed = input.sourceType === "note" || input.sourceType === "sessions"
+    ? await (await import("./managedDocumentSnapshot.js")).readManagedDocumentSnapshot(input.projectRoot, input.sourceType, sourceName)
+    : undefined;
+  const materializedAt = managed?.materializedAt ?? input.materializedAt ?? join("sources", input.sourceType, sourceName);
+  const manifestRelPath = managed ? `sources/${input.sourceType}/${sourceName}` : input.manifestPath ?? committedManifestRelativePath(input.sourceType, sourceName);
   const manifestAbsPath = join(input.projectRoot, manifestRelPath);
   let manifest: DocumentSnapshotManifest;
   try {
-    manifest = parseDocumentSnapshotForSource(await readJsonFile(
+    manifest = managed?.manifest ?? parseDocumentSnapshotForSource(await readJsonFile(
       manifestAbsPath,
       `rerun context run capture:${input.sourceType}:${sourceName} or restore ${manifestRelPath}`,
     ), sourceName);
