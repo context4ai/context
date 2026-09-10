@@ -21,11 +21,85 @@ close is required, run deterministic close before build. Current close derives
 final verify gate without rewriting approved Markdown. References, changelog,
 package index, and section fingerprint rebuilds are not current close output.
 
-## Recommended First Output: Agent Knowledge-Base Package
+## Default New-Workspace Outputs: Knowledge Base + Website
 
-Choose an agent knowledge-base package first when the knowledge should help
-Coding Agents work with the project. After the user chooses this semantic
-output shape, implement it with `kbPackage()`.
+Output channels support multiple selection. In a new workspace without explicit
+preferences, the Agent proposes and configures KB + website as the default. Honor
+user feedback, session authority and existing workspace declarations; LLMS is an
+additional selectable channel. This is an Agent configuration default, not an SDK
+change that silently enables websites for existing packages.
+
+### Static documentation website
+
+To include the default browser-readable site, enable `site` on the same
+package. The normal `context build` produces both the Agent KB and a standalone
+`dist/<base>-site/` directory containing `index.html`, article HTML,
+local search, scripts, styles and the selected bundled resources.
+
+`<base>` is the package name with one trailing `-kb` removed, when present.
+For example, `project-kb` produces `dist/project-kb/` and `dist/project-site/`;
+`project` produces `dist/project/` and `dist/project-site/`. Output directories
+must not collide with another package or website. `site.base` controls URL
+prefixes only, not filesystem output paths.
+
+```ts
+kbPackage({
+  name: "project-kb",
+  template: "src/package-templates/kb",
+  site: { title: "Project knowledge", lang: "en-US", base: "/" },
+});
+```
+
+`site` is opt-in; omission keeps the existing KB-only output. Optional fields
+are `title` (defaults to the package name), `description`, `lang` (defaults to
+`en-US`), and `base` (defaults to `/`; use `/docs/` when hosted under that path).
+The website uses a full-width VitePress theme with system fonts, compact navigation,
+a wide reading area and a smaller article outline. It starts in
+light mode regardless of the operating system; an explicit reader choice is
+remembered in browser storage. Search runs locally, without a search service.
+Mermaid renders in the browser with a restrained theme; invalid diagrams retain
+their source instead of blocking publication. Code samples and raw HTML are
+displayed as content, not executed as Vue components or scripts.
+
+The accepted `src/knowledge-map.yaml` controls sidebar organization. Entries
+bind to `artifact_ref` and optionally `section_key`; the builder resolves these
+against this package's selected approved articles. Navigation labels and parent
+groups do not determine website paths. One article may have several navigation
+placements while keeping one URL. Pending/excluded targets generate warnings
+and no invented link. Every selected article with an artifact identity must have
+a valid reading target before packaging, including packages without a website.
+Missing bindings or invalid section references block the staged output and
+return the missing article list plus a navigation-only task adjustment input.
+Category nodes can remain empty while future articles are planned. The builder
+does not infer business categories or alter article content.
+
+Top navigation contains the first-level reading directories. Selecting
+a section shows only its descendants in the left sidebar; opening an article
+directly selects its section. Skills and their Markdown references remain
+reachable as linked read-only pages, but have no automatically added navigation
+section. A reader-facing usage guide can link them where appropriate.
+Section landing pages have stable URLs separate from article URLs.
+
+`dist/<base>-site/context-site-map.json` records each article's approved path, KB path and
+site path, plus the projected menu and unresolved targets. URLs are derived from
+article identity; legacy pages without `artifact_ref` use their approved path,
+so moving those legacy files changes their URL. The shared knowledge map,
+KB layout and production Markdown remain unchanged.
+
+Article pages include a small source footer from recorded article source references and the source registry. Repository entries link to the recorded revision and module (or an explicitly referenced file); document entries link to their registered HTTP(S) URL. Unrecorded associations are not inferred from prose. Source-footer changes participate in the website build fingerprint without modifying knowledge Markdown.
+
+The website reuses resource delivery already performed for the KB: bundled
+resources are copied into the site's `resources/`; Git raw links remain remote,
+and explicit resource omission remains omission. It does not copy source trees
+or capture audits. Website generation completes in a sibling staging directory
+before either output is published, so a failed website build preserves the
+previous KB and website. The website is not included in the KB directory.
+Disabling the option removes the old site on the next successful package build.
+
+Preview through an HTTP static server. Deploy the **contents of `dist/<base>-site/`** using
+the user's chosen static hosting tool; no hosting SDK, login, deployment or
+platform-specific skill is part of Context's build. Keep hosting credentials
+out of package templates and published content.
 
 Typical output:
 
@@ -211,7 +285,9 @@ Typical output:
 
 ```text
 dist/<package-name>/
-└── llms.txt
+├── llms.txt                  # knowledge-map index
+├── llms-full.txt             # consolidated approved text
+└── llms/pages/<identity>.txt # individual approved articles
 ```
 
 Choose this when the user wants:
@@ -232,49 +308,139 @@ knowledge/
 └── ...
 ```
 
-## How To Ask The User
+## Agent configuration and delivery recipe
 
-When `workflow.current.reason_code` is `route.package.output-required`,
-explain the choices with the output tree. Do not ask the user to pick from
-unexplained labels.
-Use the host's native multi-choice tool when available. If unavailable, fall
-back to a short Markdown A/B/C question. The option labels should be:
-agent knowledge-base package, LLM text bundle, and skip package output for now.
+Use this guide when the user asks to generate a documentation website, selects
+outputs in the work-start report, or the current Route asks for package output.
+Read the current Route and existing `src/index.ts` first. Reuse settled choices;
+follow its configuration/read-acknowledgement contract rather than replaying a
+previous revision. The Agent edits SDK configuration; the user need not write code.
 
-Recommended question shape:
+1. Record all selected channels together. For new workspaces with no explicit
+   preference, use KB + website. Preserve existing declarations and explicit
+   KB-only, LLMS-only or deferred-delivery choices.
+2. Configure the existing KB declaration below, substituting the actual name,
+   title and workspace language. Retain its sources, phases, selection and resource
+   policy. This is one KB package with an additional website channel, not two KBs.
+3. If LLMS is selected, add its declaration and import in the same edit. Ensure
+   both template directories exist and resolve generic-template review using the
+   current Route. Do not independently ask approval for each already selected channel.
+4. Refresh `context status --format json`. Follow the returned continuation for
+   knowledge-map adjustment, required review, close, verification and build.
+   Missing article bindings require explicit targets from current CLI diagnostics;
+   do not classify articles from `wikis/` or `codeindex/` directory names alone.
+5. Run `context build` when ready. Verify each selected output and report its
+   actual location; a failed selected website is not completed delivery.
+6. Preview the generated website directory through a local HTTP server. Verify HTTP succeeds
+   before giving its URL. Publishing requires the user's chosen hosting tool and
+   authorization; do not install a hosting SDK merely to build the website.
 
-```text
-The reviewed knowledge is approved. The next decision is how to package it.
+```ts
+import { defineProject, kbPackage, llmsPackage } from "@c4a/context";
 
-Recommended: agent knowledge-base package
-dist/<name>-kb/
-├── AGENTS.md
-├── skills/knowledge-query/SKILL.md
-└── wikis/
-    ├── index.md
-    ├── <group-page>.md
-    └── <large-group>/index.md
-
-This is best if agents should use the knowledge as a reusable knowledge base.
-
-Alternative: LLM text bundle
-dist/<name>-llms/
-└── llms.txt
-
-This is best if you need one text bundle for model/RAG import.
-
-We can also skip package output for now and keep only knowledge/.
-
-Which one should I declare first?
+// Edit only the packages field of the existing defineProject declaration.
+// Keep the actual project's other declarations intact.
+const packages = [
+  kbPackage({
+    name: "project-kb",
+    template: "src/package-templates/kb",
+    site: { title: "Project knowledge", lang: "en-US", base: "/" },
+  }),
+  // Include this entry only when LLMS text is selected.
+  llmsPackage({ name: "project-llms", template: "src/package-templates/llms" }),
+];
+// Existing defineProject({ ...existing declarations, packages }).
 ```
 
-If the user chooses the Agent knowledge-base package, explain that its OKF
-roots are flat within `dist/<package-name>/`; do not ask for a second namespace.
-If its Skills need a short prefix, the author maintains those final names
-independently from package paths; this is not a mandatory question.
+The configuration is a small source edit, not custom frontend implementation.
+Website output reuses approved articles, knowledge map and packaged assets;
+rendering/search generation adds build time and size, not another indexing pass.
+Measure actual cost instead of quoting a universal estimate.
 
-If the user requests multiple outputs, declare and verify each requested package.
-There is no additional confirmation just because two outputs were already chosen.
-The default adaptive index policy avoids one-page directory indexes. Configure
-`kbPackage().navigation` when a package needs a different inline-entry
-threshold or a fully expanded index at every directory.
+| User request | Agent action |
+| --- | --- |
+| KB + website | One `kbPackage` with `site` enabled |
+| KB only / disable website | Omit `site` on that KB and rebuild; old site output is removed |
+| Add website later | Add `site` to existing KB, repair missing reading bindings, rebuild |
+| Website only for distribution | Explain the KB is still built; share only the sibling website directory |
+| Also produce LLMS | Add `llmsPackage` alongside the KB in the same change |
+| Keep current knowledge only | Postpone packaging; do not label it completed package delivery |
+
+```sh
+python3 -m http.server 8000 --bind 127.0.0.1 --directory dist/project-site
+```
+
+The completion report lists KB root, website directory and LLMS file separately,
+with generated/failed/not-selected status. Include website navigation coverage,
+verified preview URL when running, and any remaining errors. The website contains
+source cards and article update times; it does not imply an article history browser.
+
+## How To Present The Choice
+
+Include a compact multi-select list in the work-start report, and reuse it later:
+
+- [x] Agent knowledge-base package — default for a new workspace.
+- [x] Documentation website — default with the KB, local preview or later hosting.
+- [ ] LLMS text — optional model-context or RAG input.
+
+Explicit choices override defaults. When current Route authority requires a user
+decision, ask once for the combination rather than a sequence of mutually exclusive
+questions. If the host tool supports only single selection, let the user state the
+combination in text instead of presenting it as multi-select. There is no `both`
+factory, separate website skill, or second permission per selected output.
+
+## Website deployment handoff after every successful build
+
+After every successful website build, including intermediate delivery and an
+unchanged output reused by build, tell the user the website can be deployed with
+a deployment skill. Include the actual `dist/<base>-site/` directory and whether
+it contains only the currently delivered scope. This notice does not wait for the
+whole knowledge task to finish and does not block its next Route.
+
+Reuse existing publishing configuration and the user's chosen target. Otherwise,
+inspect the available deployment skills, recommend a compatible static-site skill,
+or let the user specify one. Do not invent installed skills or a deployed URL.
+If no compatible skill is available, report that and provide the site directory
+for the user's deployment tool. Do not install a deployment dependency by default.
+
+When publishing is already authorized for that target, follow the selected skill
+with the built site directory; otherwise offer deployment and wait for the user's
+publishing instruction. Preserve the configured base path; rebuild if the target
+requires a different base. Pass only the website output, not sources, private
+workspace state or the entire KB package. Report success only after checking the
+hosting result and published URL. A failed deployment leaves the local build valid;
+report the deployment failure and its next step separately.
+
+
+### Persistent knowledge map and report proposals
+
+`src/knowledge-map.yaml` is the persistent knowledge map; retain it after delivery.
+Its protocol is `context.knowledge-map/v1`; structure and adjustment inputs use
+`knowledge_map`, and SDK functions use `KnowledgeMap` naming. It organizes website
+navigation and LLMS without changing article identities or section bindings.
+
+The work-start report explains the proposed directory and chapters, followed by
+a text wireframe of the website. Material changes are communicated with the updated
+report link and a short explanation. This does not build a temporary website or
+create a persistent article-plan file. Website packaging uses the accepted knowledge map
+and approved articles; the report is not a configuration input.
+
+### Website LLM Docs
+
+Every website build also builds LLMS from the same selected approved articles and
+knowledge map. The final top-navigation item is always **LLM Docs**, opening
+`llms/index.html`. This page links to `llms.txt`, the structured index,
+`llms-full.txt`, the complete approved text, and raw Markdown text articles under
+`llms/pages/`. These files ship inside the sibling website directory and use the configured site base.
+No separate LLMS package declaration or additional build command is required.
+Website LLMS text files include a UTF-8 BOM so browsers can identify the encoding
+when a static host omits the charset. Hosting should serve them as
+`text/plain; charset=utf-8`. The HTML landing page shows one index/full-text
+toolbar followed by the knowledge map; Changelog is available in the site navbar.
+
+The index preserves knowledge-map grouping, order and repeated placements. The
+full text includes each selected article only once, in first-placement order.
+Only approved selected content is exported. A map or article change invalidates
+both website and LLMS outputs; failure preserves the previous staged package.
+Standalone `llmsPackage()` uses the same map organization and supplies the full
+text and raw article files alongside its template-rendered `llms.txt` index.

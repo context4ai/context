@@ -65,6 +65,51 @@ worksets, Candidate creation, Review application and delivery. Code, Markdown,
 Note and Sessions Providers can use authorized supporting documents without
 creating a second capture or knowledge pipeline.
 
+### Batch capture from the source registry
+
+When all registered Lark documents are intended for this project and share capture
+settings, read the registry once instead of copying its module names into
+`src/index.ts`. For the standard `src/index.ts` entry:
+
+```ts
+import { fileURLToPath } from "node:url";
+import {
+  allSources, captureLark, defineProject, loadSourcesRegistry, source,
+} from "@c4a/context";
+
+const workspaceRoot = fileURLToPath(new URL("../", import.meta.url));
+const registry = await loadSourcesRegistry({ rootDir: workspaceRoot });
+const documents = registry.larks.map(entry =>
+  source(entry.name, { type: "lark" }),
+);
+
+export default defineProject({
+  sources: [...allSources("repo"), ...documents],
+  phases: documents.map(document => captureLark({ source: document })),
+  packages: [],
+});
+```
+
+Merge this pattern into existing declarations; preserve unrelated phases and
+package outputs. Adjust the root calculation if the entry lives elsewhere.
+Registry loading only reads local registrations; it does not fetch documents.
+
+- `sources/lark/index.yaml` owns document identities, URLs and titles. The project
+  selects those identities and declares capture settings. This example includes
+  future registrations too; use it only when the entire registered set is intended.
+- For a subset, filter registry entries by the intended namespace or names before
+  mapping. Apply exceptional resource settings within the same map instead of
+  declaring a second phase for the same document.
+- File documents use `registry.files`, `source(entry.name, { type: "file" })`
+  and `captureFile`. Group by actual processor needs; do not apply `mdxJsonDocs()`
+  indiscriminately to all file sources.
+- `allSources("lark")` selects a collection; its array contains a collection
+  reference, not individual documents. It neither expands capture phases nor
+  supports mapping its entries into `captureLark`.
+- The map declares one phase per document. It does not fetch URLs, change capture
+  permissions, or request parallel execution. Run the declared phases through the
+  existing CLI flow so each document retains independent refresh and retry behavior.
+
 ## `customPhase`
 
 ```ts
@@ -83,6 +128,7 @@ kbPackage({
   name: "component-kb",
   template: "src/package-templates/kb",
   select: { collections: ["codeindex", "architecture"] },
+  site: { title: "Component knowledge", lang: "en-US", base: "/" },
 });
 
 llmsPackage({
@@ -94,6 +140,13 @@ llmsPackage({
 
 Package selection reads approved `knowledge/` only. `dist/` is generated and
 may be rebuilt; it is not an authoring source.
+
+`kbPackage.site` optionally adds a VitePress website at `dist/<base>-site/` in
+the same build, beside the KB directory. `<base>` removes one trailing `-kb`
+from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,
+`lang` and a deployment `base` path. Knowledge map is projected from
+`src/knowledge-map.yaml` independently of KB directories; see
+[Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 
 ## Indexer registry
 

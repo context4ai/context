@@ -1,3 +1,4 @@
+import { inheritAuthorTaskGroup } from "./indexerAuthorTaskDefaults.js";
 import { ZodError } from "zod";
 import { scaffoldAuthorTask } from "./indexerAuthorScaffold.js";
 import { indexerAgentStepInputSchema, indexerAuthorSemanticInputSchema, materializeIndexerStructuredContent, validateAndRecordIndexerMainRun } from "@c4a/context";
@@ -77,11 +78,11 @@ export async function previewAuthorBatch(input: { projectRoot: string; revision:
     let inputValidated = false;
     try {
       if (counts.get(row.task_key) !== 1) throw new TypeError("duplicate task key");
-      const semantic = indexerAuthorSemanticInputSchema.parse(row.result);
-      inputValidated = true;
-      if (semantic.outcome === "request-material") throw new TypeError("Material requests require the normal completion command; preview does not expand a task");
       const task = await loadCurrentIndexerBatchTask({ projectRoot: input.projectRoot,
         descriptor: input.descriptor, taskKey: row.task_key });
+      const semantic = indexerAuthorSemanticInputSchema.parse(inheritAuthorTaskGroup(row.result, task));
+      inputValidated = true;
+      if (semantic.outcome === "request-material") throw new TypeError("Material requests require the normal completion command; preview does not expand a task");
       const prepared = await prepareIndexerAuthorSubmission({ projectRoot: input.projectRoot, task, semantic, preview: true });
       validateAndRecordIndexerMainRun({ request: prepared.task.spec.request, result: prepared.result,
         validation: prepared.task.spec.validation as unknown as Parameters<typeof validateAndRecordIndexerMainRun>[0]["validation"] });

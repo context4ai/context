@@ -1,3 +1,5 @@
+import { mapParserWork } from "./parserConcurrency.js";
+import { planningInventoryShards } from "./indexerPlanningInventory.js";
 import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import {
   buildIndexerMainPartitionWorksets,
@@ -51,6 +53,7 @@ function assertClosedOwnerCohorts(
   const authorities = ownerCells(registry);
   for (const workset of worksets) {
     const expected = authorities.filter((owner) =>
+      owner.obligation !== "out-of-scope" &&
       owner.requirement_ref === workset.requirement_ref &&
       owner.source_ref === workset.source_ref &&
       owner.module_ref === workset.module_ref &&
@@ -211,6 +214,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     questionTargets.requirement_set_digest,
   );
   const currentOwners = ownerCells(registry).filter((owner) =>
+    owner.obligation !== "out-of-scope" &&
     !(owner.owner_indexer_ids.length === 0 && owner.obligation === "optional")
   );
   for (const owner of currentOwners) {
@@ -243,7 +247,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       indexer_id: indexerId,
     }));
   }));
-  const prepared = (await Promise.all([...ownerGroups.values()].map(async (owners) => {
+  const prepared = (await mapParserWork([...ownerGroups.values()], 1, async (owners) => {
     const first = owners[0]!;
     const indexerId = first.owner_indexer_ids[0]!;
     const authority = authorities.get(indexerId);
@@ -254,6 +258,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       source_ref: first.source_ref,
       module_ref: first.module_ref,
       profile_contract_digest: authority.profile_contract.contract_digest,
+      inventory_only: ["web-application", "api-service", "event-consumer"].includes(authority.profile.id),
     });
     const ownerCellRefs = owners.map((owner) => owner.owner_cell_ref).sort();
     const ownerCellSet = new Set(ownerCellRefs);
@@ -332,7 +337,8 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     if (primaryStrategy === undefined) {
       throw new TypeError(`missing partition strategy for ${indexerId}`);
     }
-    const shards = partitionInventoryShards({
+    const shards = binding.adapter === "parser-facts" && binding.inventory_only
+      ? planningInventoryShards(binding) : partitionInventoryShards({
       binding,
       profile: authority.profile,
       strategyId: primaryStrategy.strategy_id,
@@ -353,7 +359,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
         binding,
       };
     });
-  }))).flat();
+  })).flat();
   const worksets: Parameters<typeof buildIndexerMainPartitionWorksets>[0] =
     prepared.map((item) => item.input);
   const built = buildIndexerMainPartitionWorksets(
@@ -369,7 +375,7 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     if (item === undefined) {
       throw new TypeError("partition run preparation lost its current authority binding");
     }
-    const enrichment = item.binding.adapter === "parser-facts"
+    const enrichment = item.binding.adapter === "parser-facts" && !item.binding.inventory_only
       ? await materializeCurrentIndexerExtensionFacts({
           projectRoot: input.projectRoot,
           authority: item.authority,

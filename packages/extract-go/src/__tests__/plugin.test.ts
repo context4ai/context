@@ -118,4 +118,24 @@ func privateHelper() {}
     const fs = new DirectoryFileSystem(tmpdir());
     await expect(plugin.extractSymbols([], fs)).rejects.toThrow("requires detectEntries");
   });
+
+  test("same-named functions retain call provenance across independent source files", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "extract-go-provenance-"));
+    const source = 'package api\nimport "fmt"\nfunc init() { fmt.Println("ready") }\n';
+    await writeFile(path.join(root, "a.go"), source);
+    await writeFile(path.join(root, "b.go"), source);
+    const fs = new DirectoryFileSystem(root);
+    const plugin = new GoPlugin();
+    const detected = await plugin.detectEntries({ type: "go.mod", path: "go.mod", content: { raw: "module example.org/api\n" } }, fs);
+    const extracted = await plugin.extractSymbols(detected.entries, fs);
+    const evidence = goExtractionToEvidenceAdapterResult(extracted, {
+      adapter: { id: "extract-go", package: "@c4a/extract-go", export: "goExtractionToEvidenceAdapterResult", version: "0.7.0", digest: DIGEST_A },
+      authorized_scope: { source_ref: "repo:catalog", module_refs: ["module:api"], scope_digest: DIGEST_B },
+      module_ref: "module:api", input_digest: DIGEST_B, precedence: 100,
+    });
+    for (const file of evidence.files) {
+      expect(file.facts.filter(fact => fact.kind === "code-relation").length).toBe(2);
+    }
+    expect(extracted.relations.filter(relation => relation.type === EdgeType.Calls).map(relation => relation.file).sort()).toEqual(["a.go", "b.go"]);
+  });
 });

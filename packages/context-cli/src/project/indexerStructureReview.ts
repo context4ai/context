@@ -1,7 +1,8 @@
-import { acceptStructureDecision, readReadingStructure } from "./readingStructure.js";
+import { approvedKnowledgeMapTargets, knowledgeMapCoverage } from "./knowledgeMapCoverage.js";
+import { acceptStructureDecision, readKnowledgeMap } from "./knowledgeMap.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
-import type { ReadingStructure, ReadingStructureUpdate } from "@c4a/context";
+import type { KnowledgeMap, KnowledgeMapUpdate } from "@c4a/context";
 import { deliveryWaveSize, readDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { authorStreamRecord, PARTITION_STREAM_PATH, partitionAuthorBinding, partitionStreamRecord, readPartitionStream, reopenPartitionStream } from "./indexerPartitionStream.js";
@@ -105,7 +106,7 @@ export interface IndexerSemanticStructurePreview {
 }
 
 export interface CurrentIndexerStructureReview {
-  reading_structure?: ReadingStructure | null;
+  knowledge_map?: KnowledgeMap | null;
   preview: IndexerSemanticStructurePreview;
   revision: string;
   approved: boolean;
@@ -195,7 +196,7 @@ export async function currentIndexerStructureReview(
   if (!planIsCurrent) return undefined;
   return {
     preview: stored.preview,
-    reading_structure: await readReadingStructure(projectRoot) ?? null,
+    knowledge_map: await readKnowledgeMap(projectRoot) ?? null,
     revision: stored.revision,
     approved: await reviewDecision(projectRoot, stored.revision),
   };
@@ -407,8 +408,9 @@ export async function materializeCurrentIndexerStructurePreview(input: {
   }
   const path = join(input.projectRoot, STRUCTURE_ROOT, "preview.json");
   const existing = await readJsonMaybe(input.projectRoot, join(STRUCTURE_ROOT, "preview.json"));
-  const projection = { ...current.preview, reading_structure: current.reading_structure ?? null,
-    reading_structure_guidance: "Carry agreed reader organization into reading_structure.upsert/remove on approval. Use expected_revision from reading_structure (null for a new workspace). Preserve entries from other waves. Bind targets to article_targets artifact_ref and optional section_keys; pending targets are not published links. This is organization, not source ownership or evidence." };
+  const projection = { ...current.preview, knowledge_map: current.knowledge_map ?? null,
+    knowledge_map_coverage: knowledgeMapCoverage(current.knowledge_map ?? undefined, [...await approvedKnowledgeMapTargets(input.projectRoot), ...current.preview.topics.flatMap(topic => topic.article_targets ?? [])]),
+    knowledge_map_guidance: "knowledge_map is required on approval. Every approved or current article must have a target binding. Category-only nodes and empty updates do not cover articles. Carry agreed reader organization into knowledge_map.upsert/remove on approval. Use expected_revision from knowledge_map (null for a new workspace). Preserve entries from other waves. Bind targets to article_targets artifact_ref and optional section_keys; pending targets are not published links. This is organization, not source ownership or evidence." };
   if (JSON.stringify(existing) !== JSON.stringify(projection)) {
     await atomicWriteFile(path, `${JSON.stringify(projection, null, 2)}\n`);
   }
@@ -591,7 +593,7 @@ type StructureReviewCompletion = {
   revision: string;
   decision: "approved" | "exclude-obsolete" | "request-adjustment";
   feedback?: string;
-  reading_structure?: ReadingStructureUpdate;
+  knowledge_map?: KnowledgeMapUpdate;
 };
 export async function completeCurrentIndexerStructureReview(input: StructureReviewCompletion): Promise<"author" | "partition"> {
   return withProjectWriteLock(input.projectRoot, "complete-indexer-structure-review", () => completeStructureReviewUnlocked(input));
@@ -645,7 +647,8 @@ async function completeStructureReviewUnlocked(input: StructureReviewCompletion)
   }
   if (input.decision === "approved" || input.decision === "exclude-obsolete") {
     await acceptStructureDecision({ projectRoot: input.projectRoot, decisionPath: DECISION_PATH, revision: current.revision,
-      ...(input.reading_structure === undefined ? {} : { reading_structure: input.reading_structure }) });
+      article_targets: current.preview.topics.flatMap(topic => topic.article_targets ?? []),
+      ...(input.knowledge_map === undefined ? {} : { knowledge_map: input.knowledge_map }) });
     const feedback = await readJsonMaybe(input.projectRoot, FEEDBACK_PATH) as
       { excluded_member_ids?: string[] } | undefined;
     if (feedback?.excluded_member_ids === undefined) {
@@ -654,6 +657,13 @@ async function completeStructureReviewUnlocked(input: StructureReviewCompletion)
     const ledger = await currentLedger(input.projectRoot);
     if (ledger?.entries.every((entry) => entry.stage === "partition") === true) {
       await prepareCurrentIndexerAuthorStage(input.projectRoot);
+    }
+    // Recovery is auxiliary; inability to save a checkpoint must not block Author.
+    try {
+      const { saveRecoveryCheckpoint } = await import("./taskRecoveryCheckpoint.js");
+      await saveRecoveryCheckpoint(input.projectRoot, current.revision);
+    } catch {
+      process.stderr.write("[context recovery] Accepted-plan checkpoint unavailable; production can continue. Use task recover if repair is needed.\n");
     }
     const authorLedger = await currentLedger(input.projectRoot);
     const first = authorLedger?.entries.find((entry) =>

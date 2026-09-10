@@ -460,163 +460,197 @@
               "providers": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
-                    },
-                    "role": {
-                      "type": "string",
-                      "enum": [
-                        "primary",
-                        "extension"
-                      ],
-                      "default": "primary"
-                    },
-                    "skill": {
-                      "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
-                    },
-                    "version": {
-                      "type": "string",
-                      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
-                    },
-                    "integrity": {
-                      "type": "string",
-                      "pattern": "^sha256:[a-f0-9]{64}$"
-                    },
-                    "distribution": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "const": "cli-bundled"
-                            },
-                            "locator": {
-                              "type": "string",
-                              "pattern": "^cli-bundled:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "locator"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "const": "bundled"
-                            },
-                            "locator": {
-                              "type": "string",
-                              "pattern": "^plugin:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "locator"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "const": "workspace"
-                            },
-                            "locator": {
-                              "type": "string",
-                              "pattern": "^workspace:\\/\\/[A-Za-z0-9._~-]+(?:\\/[A-Za-z0-9._~-]+)*$"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "locator"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "const": "package"
-                            },
-                            "locator": {
-                              "type": "string",
-                              "pattern": "^package:\\/\\/[a-z0-9][a-z0-9._-]*\\/[^/#\\s]+#[A-Za-z0-9._~-]+(?:\\/[A-Za-z0-9._~-]+)*$"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "locator"
-                          ],
-                          "additionalProperties": false
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "const": "marketplace"
-                            },
-                            "locator": {
-                              "type": "string",
-                              "pattern": "^marketplace:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "locator"
-                          ],
-                          "additionalProperties": false
-                        }
-                      ]
-                    },
-                    "config": {
+                  "anyOf": [
+                    {
                       "type": "object",
-                      "additionalProperties": {
-                        "anyOf": [
-                          {
-                            "type": "null"
-                          },
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "number"
-                          },
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "array",
-                            "items": {
-                              "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/providers/items/properties/config/additionalProperties"
-                            }
-                          },
-                          {
-                            "type": "object",
-                            "additionalProperties": {
-                              "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/providers/items/properties/config/additionalProperties"
-                            }
+                      "properties": {
+                        "id": {
+                          "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "primary",
+                            "extension"
+                          ],
+                          "default": "primary"
+                        },
+                        "catalog_skill": {
+                          "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
+                        },
+                        "config": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/providers/items/anyOf/0/properties/config/additionalProperties"
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/providers/items/anyOf/0/properties/config/additionalProperties"
+                                }
+                              }
+                            ]
                           }
-                        ]
-                      }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "catalog_skill"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "primary",
+                            "extension"
+                          ],
+                          "default": "primary"
+                        },
+                        "skill": {
+                          "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/id"
+                        },
+                        "version": {
+                          "type": "string",
+                          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+                        },
+                        "integrity": {
+                          "type": "string",
+                          "pattern": "^sha256:[a-f0-9]{64}$"
+                        },
+                        "distribution": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "cli-bundled"
+                                },
+                                "locator": {
+                                  "type": "string",
+                                  "pattern": "^cli-bundled:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "locator"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "bundled"
+                                },
+                                "locator": {
+                                  "type": "string",
+                                  "pattern": "^plugin:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "locator"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "workspace"
+                                },
+                                "locator": {
+                                  "type": "string",
+                                  "pattern": "^workspace:\\/\\/[A-Za-z0-9._~-]+(?:\\/[A-Za-z0-9._~-]+)*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "locator"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "package"
+                                },
+                                "locator": {
+                                  "type": "string",
+                                  "pattern": "^package:\\/\\/[a-z0-9][a-z0-9._-]*\\/[^/#\\s]+#[A-Za-z0-9._~-]+(?:\\/[A-Za-z0-9._~-]+)*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "locator"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "marketplace"
+                                },
+                                "locator": {
+                                  "type": "string",
+                                  "pattern": "^marketplace:\\/\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*\\/[a-z0-9][a-z0-9._-]*$"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "locator"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "config": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/$defs/providerSelection/properties/indexers/items/properties/providers/items/anyOf/0/properties/config/additionalProperties"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "skill",
+                        "version",
+                        "integrity"
+                      ],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": [
-                    "id",
-                    "skill",
-                    "version",
-                    "integrity"
-                  ],
-                  "additionalProperties": false
+                  ]
                 },
                 "minItems": 1
               },
@@ -1164,7 +1198,8 @@
                       },
                       "group_key": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "description": "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it."
                       },
                       "outcome": {
                         "type": "string",
@@ -1549,7 +1584,6 @@
                     },
                     "required": [
                       "stage",
-                      "group_key",
                       "outcome",
                       "title",
                       "summary",
@@ -1565,7 +1599,8 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/stage"
                       },
                       "group_key": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key",
+                        "description": "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it."
                       },
                       "outcome": {
                         "type": "string",
@@ -1615,7 +1650,6 @@
                     },
                     "required": [
                       "stage",
-                      "group_key",
                       "outcome",
                       "articles",
                       "member_dispositions"
@@ -1629,7 +1663,8 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/stage"
                       },
                       "group_key": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key",
+                        "description": "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it."
                       },
                       "outcome": {
                         "type": "string",
@@ -1680,7 +1715,6 @@
                     },
                     "required": [
                       "stage",
-                      "group_key",
                       "outcome",
                       "member_dispositions"
                     ],
@@ -1693,7 +1727,8 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/stage"
                       },
                       "group_key": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key",
+                        "description": "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it."
                       },
                       "outcome": {
                         "type": "string",
@@ -1738,7 +1773,6 @@
                     },
                     "required": [
                       "stage",
-                      "group_key",
                       "outcome",
                       "member_dispositions"
                     ],
@@ -1751,7 +1785,8 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/stage"
                       },
                       "group_key": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key",
+                        "description": "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it."
                       },
                       "outcome": {
                         "type": "string",
@@ -1796,7 +1831,6 @@
                     },
                     "required": [
                       "stage",
-                      "group_key",
                       "outcome",
                       "member_dispositions"
                     ],
@@ -2063,7 +2097,7 @@
               "type": "string",
               "const": "structure-review"
             },
-            "reading_structure": {
+            "knowledge_map": {
               "type": "object",
               "properties": {
                 "expected_revision": {
@@ -2162,8 +2196,8 @@
             "stage": {
               "$ref": "#/$defs/structureReview/anyOf/0/properties/stage"
             },
-            "reading_structure": {
-              "$ref": "#/$defs/structureReview/anyOf/0/properties/reading_structure"
+            "knowledge_map": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/knowledge_map"
             },
             "decision": {
               "type": "string",
@@ -2185,8 +2219,8 @@
             "stage": {
               "$ref": "#/$defs/structureReview/anyOf/0/properties/stage"
             },
-            "reading_structure": {
-              "$ref": "#/$defs/structureReview/anyOf/0/properties/reading_structure"
+            "knowledge_map": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/knowledge_map"
             },
             "decision": {
               "type": "string",

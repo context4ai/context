@@ -6,22 +6,20 @@ mediaType: text/markdown
 
 # Workflow mode after workspace creation
 
-After the workspace is created, explain the two execution modes only when the
-conversation has not already selected a mode and no earlier mode question was
-asked. If the entry plan or initialization confirmation already resolved this
-choice, continue without asking again.
+Explain the modes only when the conversation has no explicit choice and no mode
+question has already been asked. Reuse an explicit choice in a task brief the
+user asked you to execute, including fully managed authorization. Do not repeat
+the choice after capture or continuation, or persist session authority in files.
 
-- Ordinary review mode is the default. Context pauses at review decisions and
-  provides HTML reports for the user to inspect. The current product estimate is
-  that these review rounds make the overall workflow about 40% slower, with the
-  exact difference depending on workspace size and user response time.
-- Fully managed mode skips delegatable content-review surfaces and continues
-  with the same revision-bound resolution Actions. It is faster, but gives the
-  user fewer opportunities to control or adjust intermediate content.
+Describe both modes neutrally in the user's language:
 
-Make clear that fully managed mode does not bypass source boundaries, external
-permissions, hard validation, evidence checks, verification failures, or other
-non-delegatable safety boundaries. Ask whether the user wants to keep the
-default ordinary review mode or authorize fully managed operation for the
-current conversation. This is a one-time conversation choice: do not repeat it
-after capture or resume, and do not persist it in project files.
+- Ordinary review pauses at review decisions and provides HTML reports, giving
+  the user opportunities to inspect content, catch deviations and adjust direction.
+- Fully managed operation delegates eligible reviews to the Agent and continues
+  with the same revision-bound Actions, reducing manual involvement. The user
+  has fewer opportunities to inspect intermediate results before delivery.
+
+Neither mode bypasses source boundaries, external permissions, evidence checks,
+verification failures or non-delegatable decisions. Do not promise a percentage
+speed difference. When a choice is needed, ask which mode the user prefers for
+this conversation.

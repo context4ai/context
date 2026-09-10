@@ -17,6 +17,7 @@ import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } fr
 import { readingObjects } from "./indexerReading.fixture.js";
 import { renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from "../project/indexerWorksetViewMaterialization.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 
 const roots: string[] = [];
 const authorities = contextWorkflowAuthorities({ managed: true });
@@ -53,8 +54,9 @@ async function authorFixture() {
   }
   await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
     managed: true, authorities, value: { stage: "partition", results } });
-  await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
-    managed: true, authorities, value: { stage: "structure-review", decision: "approved" } });
+  const review = await currentIndexerStructureReview(root);
+  if (!review) throw new Error("expected structure review");
+  await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision, decision: "approved" });
   const author = await resolveCurrentIndexerAgentContext(root);
   if (!author || author.descriptor.stage !== "author") throw new Error("expected Author");
   const tasks = await Promise.all(author.descriptor.tasks.map((descriptor) => loadCurrentIndexerBatchTask({

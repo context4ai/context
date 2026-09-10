@@ -4,7 +4,7 @@ graph: workspace
 entry: context
 state:
   facts:
-    workspace: { project_entry_valid: true, state_valid: false }
+    workspace: { task_start_authorized: true, project_entry_valid: true, state_valid: false }
 expect:
   statusCode: actionable
   primaryNode: repair-workspace-state

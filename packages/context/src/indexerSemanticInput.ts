@@ -1,8 +1,22 @@
 import { indexerIdSchema } from "./indexerProtocolCommon.js";
-import { readingStructureUpdateSchema } from "./readingStructure.js";
+import { knowledgeMapUpdateSchema } from "./knowledgeMap.js";
 import { indexerArticleKeySchema, indexerArticlePlanSchema } from "./indexerArticlePlan.js";
 import { z } from "zod";
-import { indexerRegistryEntrySchema } from "./indexerRegistry.js";
+import { indexerRegistryEntryInputSchema, indexerJsonSchema } from "./indexerRegistry.js";
+
+const catalogProviderSelectionSchema = z.object({
+  id: indexerIdSchema,
+  role: z.enum(["primary", "extension"]).default("primary"),
+  catalog_skill: indexerIdSchema,
+  config: z.record(indexerJsonSchema).optional(),
+}).strict();
+
+const providerSelectionEntrySchema = indexerRegistryEntryInputSchema.extend({
+  providers: z.array(z.union([
+    catalogProviderSelectionSchema,
+    indexerRegistryEntryInputSchema.shape.providers.element,
+  ])).min(1),
+});
 
 const providerObservationSchema = z.object({
   skill: z.string().min(1),
@@ -18,7 +32,7 @@ const providerObservationSchema = z.object({
 export const indexerProviderSelectionSemanticInputSchema = z.object({
   stage: z.literal("provider-selection"),
   host_visible_skills: z.array(providerObservationSchema).default([]),
-  indexers: z.array(indexerRegistryEntrySchema).min(1),
+  indexers: z.array(providerSelectionEntrySchema).min(1),
 }).strict();
 
 export type IndexerProviderSelectionSemanticInput = z.infer<
@@ -337,12 +351,15 @@ const indexerPostAuthorBatchSemanticInputSchema = z.object({
 
 const structureReviewBaseSchema = z.object({
   stage: z.literal("structure-review"),
-  reading_structure: readingStructureUpdateSchema.optional(),
+  knowledge_map: knowledgeMapUpdateSchema.optional(),
   decision: z.enum(["approved", "exclude-obsolete", "request-adjustment"]),
   feedback: z.string().min(1).optional(),
 }).strict();
 
 export const indexerStructureReviewInputSchema = z.discriminatedUnion("decision", [
+  // The current review route determines whether a map is required. Source-update
+  // reviews preserve their task and edit navigation separately; initial structure
+  // acceptance enforces map coverage against its planned articles in the CLI.
   structureReviewBaseSchema.extend({ decision: z.literal("approved") }),
   structureReviewBaseSchema.extend({ decision: z.literal("exclude-obsolete") }),
   structureReviewBaseSchema.extend({

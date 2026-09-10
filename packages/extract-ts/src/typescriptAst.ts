@@ -25,6 +25,7 @@ export const treeSitterCompatibleJsxSource = (
   sourceFile: ts.SourceFile,
   source: string,
 ): string => {
+  if (!source.includes("&")) return source;
   const characters = source.split("");
   let changed = false;
   const visit = (node: ts.Node): void => {

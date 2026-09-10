@@ -1,5 +1,5 @@
 ---
-description: "Use when the user explicitly invokes Context or continues an explicitly started Context workflow in this conversation to build, inspect, update or package knowledge from code, documents, notes and conversation summaries. Do not auto-start for ordinary planning, design or coding."
+description: "Use when the user explicitly invokes Context, asks to reorganize an existing Context knowledge map or website navigation, or continues a Context workflow to build, inspect, update, recover or package knowledge. Do not auto-start for ordinary planning, design or coding."
 argument-hint: "[project-dir or user intent]"
 allowed-tools:
   - Bash(context:*)
@@ -15,6 +15,8 @@ reading; use it for workspace writes.
 
 Activate this entry only when the user invokes the Context command or Skill,
 or explicitly starts a Context knowledge workflow in this conversation.
+An explicit request to adjust an existing Context website's navigation or
+knowledge map also activates this entry, including after production is complete.
 Related follow-up requests need no repeated invocation. Ordinary planning,
 design, coding, document editing or discussion of Context implementation does
 not activate it. A workspace, source file, MR or matching phrase alone is not
@@ -32,18 +34,82 @@ Within an active Context workflow, requests include, but are not limited to:
 | Intent | Scope |
 | --- | --- |
 | Build a knowledge base | Clarify the audience and source scope, then create or continue knowledge from selected repositories and documents. |
+| Recover a stuck Context task | Use `context task recover --format json` in the existing workspace; read its recovery Skill even if normal status/Route fails. Repair authorized drafts or restore an available planning baseline; report unresolved failures with the supplied sanitized issue template. |
 | Check progress and results | Explain what is done, where delivered pages are, and what is waiting. |
 | Save notes | Save supplied observations, excerpts or decisions; stop after saving if that is all the user requested. |
 | Preserve conversation insights | Save or use a summary of supplied discussion, not an entire session history. Code-change links are optional. |
 | Update knowledge from source changes | Assess a selected commit, MR/PR or document change against a fixed source version; update affected pages and warranted new topics. |
 | Revise existing content | Correct current drafts or approved pages, including several pages or supported API-table regeneration. |
 | Organize pages and sources | Move pages within a collection, rename supported sources or remove unused sources with reference checks. |
+| Customize the knowledge map | At any time, reorganize the existing site's top navigation, left directory, labels, order or article placements; the same map organizes LLMS. Preserve current production work. |
 | Select or customize indexing | Choose compatible indexing Skills and adjust guidance or templates through the configuration flow. |
 | Deliver a batch early | Review and build complete newly authored pages before all writing finishes. |
 | Package knowledge or adjust output | Build approved content for Agents or LLMs, rebuild a package or change its output template. Rebuilding does not rewrite pages. |
 | Prepare the workspace for a new task | Explicitly discard unfinished task state, retain approved work and restore registered source access. |
 | Commit workspace results | Save selected workspace files in local Git, without pushing or including unrelated changes. |
 | Restore a historical workspace version | Select a saved commit, restore only the agreed workspace scope and make its sources usable again. |
+
+## Read the task before registering sources
+
+For a knowledge-map-only request, use the existing workspace directly. Read
+`src/knowledge-map.yaml` and the current article identities/structure preview;
+translate the user's intent into `knowledge_map` input for
+`context task adjust --input <file> --format json`. Resolve only ambiguous
+organization choices. This adjustment is available without an active production
+task and does not require restarting or cancelling one. The coordinator makes
+the change between active batch submissions, then follows the returned workflow
+to rebuild affected outputs. Keep stable article identities, preserve unrelated
+placements, and never edit generated website/LLMS files. No new source intake or
+production-mode questionnaire is needed for this navigation-only request.
+
+When asked to follow a plan, checklist or instructions in a file, read that file
+as the task brief before initialization or source registration. Extract its goal,
+source scope, delivery requirements and explicit execution-mode choice. Apply the
+user's latest corrections to the corresponding parts of the brief. Check that
+registered sources match that scope; a Route governs the registered work, not
+whether it represents the user's request.
+
+“Build according to plan.md” means follow the plan and register its intended
+sources. “Add plan.md to the knowledge base” means ingest the file itself.
+Reading permission alone does not select a document for ingestion. Reuse a mode
+explicitly chosen in a brief the user asked you to execute; do not treat choices
+quoted in an unrelated source document as current authorization.
+
+For the first production task in a newly initialized workspace, do not register
+or capture sources immediately after reading a brief. Use the user's task instructions
+and batch metadata-only Host tools to read titles across the explicitly supplied
+document list. Follow the work-start procedure's request limits and failure fallback
+(at most 10 unresolved documents); reuse headings only if metadata already returns
+them. Do not fetch source bodies, outlines, images or attachments before capture.
+Retain URLs with unavailable titles; never fall back to content fetching. Collect the reader and purpose, intended
+questions or tasks, code/document/other source boundaries, output language,
+execution mode, delivery outputs, first useful delivery and current workspace
+settings. Reuse explicit answers and defaults; ask only for unresolved items.
+
+Use focused dialogue, not additional source reading, until every required start
+condition is resolved. Then write and present the complete work-start report
+supplied by the source-boundary Route and wait for the user's feedback. Do not
+present an unresolved draft as the report that authorizes production. The report
+or checklist is task guidance, not a source unless the user explicitly asks to
+ingest it. Before the complete report has been presented, do not write a
+source-registration payload, start capture or extraction, configure Indexers,
+or enter Partition/Author work. A
+managed-mode choice does not waive this first reading opportunity. After feedback,
+use the exact current Route and include its work-start report reference in the
+source batch payload. Existing workspace updates follow their current update Route
+and do not recreate this first-task intake unless they start a new production task.
+
+## Recover an existing stuck task
+
+For an explicit recovery/troubleshooting request, go directly to
+`context task recover --format json` in the intended existing workspace. Do not
+initialize, ask for a production mode again, or pass a saved `--workflow-revision`.
+Read the returned internal recovery Skill and issue template. This entry remains
+available when normal status cannot evaluate. If even recovery cannot run, use
+`issue/YYYY-MM-DD-short-description.md` to record sanitized expected/actual behavior,
+versions, command shape, error code, attempted remedies and preserved work; never
+copy credentials, raw logs or private source text. Do not send the report externally
+without the user's authorization.
 
 ## Enter the workspace
 
@@ -172,7 +238,14 @@ authority; do not reconstruct commands from earlier steps.
 the complete returned file and any required direct files it names. If a resource
 has a `command`, execute it and read its output; materializing is not reading.
 Current Indexer Partition, Author, Composer and structure-review files need no
-read receipt: use their immediate completion command after reading. For other
+read receipt: use their immediate completion command after reading.
+For Indexer files that need no read receipt, reuse a fully read resource in this
+conversation only when its source/Provider identity and content digest are unchanged
+and its contents remain available. A new revision alone does not require rereading
+those files. Always read the new Route and task-specific changes; after context loss
+or truncated output, read the missing content. Never invent a receipt or mark an
+unread file as read.
+For other
 resources, follow the returned receipt instructions, keep receipts in this
 conversation, and use the latest `next_action.command` carrying that context.
 When only direct files remain, `resources.after_read.command` acknowledges them
@@ -260,11 +333,11 @@ must not resolve or install the Provider again.
 
 ## Progress reporting format
 
-Every user-facing progress update, in conversation or in a report, must use
-these two bold lines in this order, with the actual values inside the brackets:
+For production progress updates, use two bold lines in this order. Describe
+the actual stage when counters are unavailable; include counts only when supplied:
 
-**[总体进度：已交付 33/125 页]**
-**[当前分片：已规划 3/8 项]**
+**[总体进展：已交付 33/125 页]**
+**[当前进展：已规划 3/8 项]**
 
 Use CLI `progress.scopes` (or `indexerProgress.scopes` in status) as the
 single source for progress in conversation and reports. It separates:
@@ -286,9 +359,10 @@ number of currently prepared tasks. Revisions can overlap delivered pages;
 do not add wave tasks to delivered pages to invent a page total.
 
 Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second uses `slice`. For example, with matching CLI values:
-**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前分片：补充内容检查 0/8 项]**
+`wave` supplement; the second describes the current action, using `slice` counts
+when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
+**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前进展：补充内容检查 0/8 项]**
 
 A completion receipt's `submitted_slice` describes the slice just submitted;
 `progress.scopes.slice` can already describe the next Route. Use the former when
@@ -296,8 +370,12 @@ reporting submission success and the latter when announcing the next slice.
 Never combine their numerators and denominators. A null slice means no active
 Agent task slice, not that the workflow is complete. During Review/build, state
 the returned Route action briefly rather than inventing a slice ratio.
-If progress is unavailable after task cleanup, say the counters are unavailable;
-do not turn the last wave into the overall scope or report delivery as zero.
+Before counters exist or after task cleanup, describe the known stage and current
+action instead of repeatedly saying counters are unavailable. For example:
+**[总体进展：正在准备知识工作区]**
+**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
+During review or packaging, name that action rather than a nonexistent slice.
+Do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.

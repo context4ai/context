@@ -10,6 +10,7 @@ import {
   type IndexerProfileContract,
   type IndexerOverlayQuestionAuthorityProof,
   type IndexerRegistry,
+  type IndexerRegistryEntry,
 } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { collectIndexerBundleFiles } from "./indexerDistributionBuild.js";
@@ -139,6 +140,14 @@ function matchesRegistry(state: CurrentIndexerProviderSelection, registry: Index
     state.final_report.requirement_set_digest === digests.requirementSetDigest;
 }
 
+/** Keep routing and execution aligned on which configurations need saved resolution. */
+export function requiresCurrentIndexerProviderSelection(indexer: IndexerRegistryEntry): boolean {
+  const primary = indexer.providers.find(provider =>
+    provider.id === indexer.profile.primary.provider && provider.role === "primary");
+  return indexer.providers.length > 1 || indexer.customization !== undefined ||
+    primary?.distribution.kind !== "cli-bundled";
+}
+
 /** Check only the saved selection identity; routing must not rescan staged bundles. */
 export async function currentIndexerProviderSelectionNeedsRefresh(input: {
   projectRoot: string;
@@ -149,7 +158,9 @@ export async function currentIndexerProviderSelectionNeedsRefresh(input: {
     raw = await readFile(join(input.projectRoot, CURRENT_PROVIDER_SELECTION_PATH), "utf8");
   } catch (error) {
     // A finalized, directly configured bundled registry need not have a setup snapshot.
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return input.registry.indexers.some(requiresCurrentIndexerProviderSelection);
+    }
     throw error;
   }
   return !matchesRegistry(parseState(JSON.parse(raw) as unknown), input.registry);

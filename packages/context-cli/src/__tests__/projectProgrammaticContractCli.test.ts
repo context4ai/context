@@ -64,7 +64,13 @@ export const Panel = ({ showHeading = true, locale = 'en-US', enabled = true, se
   const review = await currentIndexerStructureReview(root);
   if (!review) throw new Error("missing fixture structure review");
   await completeCurrentIndexerAction({ cwd: root, revision: review.revision,
-    value: { stage: "structure-review", decision: "approved" }, managed: true,
+    value: { stage: "structure-review", decision: "approved", knowledge_map: {
+      expected_revision: review.knowledge_map?.revision ?? null, remove: [],
+      upsert: review.preview.topics.flatMap(topic => topic.article_targets ?? []).map(article => ({
+        key: `reader:${article.artifact_ref}`, parent: null, title: article.artifact_ref, order: 0,
+        target: { artifact_ref: article.artifact_ref },
+      })),
+    } }, managed: true,
     authorities: contextWorkflowAuthorities({ managed: true }) });
   return root;
 }

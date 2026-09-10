@@ -101,7 +101,32 @@ function replaceWithCount(
   });
 }
 
+const SECRET_TEXT_KEY = "(?:[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|credential|cookie)[A-Za-z0-9_.-]*|api[-_]?key|access[-_]?(?:key|token)|private[-_]?key|client[-_]?secret|authorization)";
+const SECRET_TEXT_ASSIGNMENT = "(?:=\\s*|:\\s+(?=\\S)|:\\s*(?=[\"']))";
+
+const AUTHORIZATION_TEXT_PATTERN = new RegExp(
+  `(\\bauthorization\\s*:\\s*(?:bearer|basic)\\s+)` +
+    `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^\\s,;]+`,
+  "giu",
+);
+const QUERY_SECRET_TEXT_PATTERN = new RegExp(
+  `([?&](?:access_token|refresh_token|api_key|password|secret)=)` +
+    `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^&#\\s]+`,
+  "giu",
+);
+const ASSIGNMENT_SECRET_TEXT_PATTERN = new RegExp(
+  `((?:["']?${SECRET_TEXT_KEY}["']?)\\s*${SECRET_TEXT_ASSIGNMENT})` +
+    `(?!["']?${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})` +
+    `(?:"(?:\\\\.|[^"])*"|'(?:\\\\.|[^'])*'|[^\\s,;}\\]]+)`,
+  "giu",
+);
+
 function redactKnownText(value: string, count: MutableCount): string {
+  // Every supported text pattern contains a separator or a PEM opening marker.
+  // Identifiers, paths and ordinary scalar facts need no regex construction/scans.
+  if (!value.includes(":") && !value.includes("=") && !value.includes("-----BEGIN ")) {
+    return value;
+  }
   let output = value;
   output = replaceWithCount(
     output,
@@ -111,11 +136,7 @@ function redactKnownText(value: string, count: MutableCount): string {
   );
   output = replaceWithCount(
     output,
-    new RegExp(
-      `(\\bauthorization\\s*:\\s*(?:bearer|basic)\\s+)` +
-        `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^\\s,;]+`,
-      "giu",
-    ),
+    AUTHORIZATION_TEXT_PATTERN,
     (_match, prefix) => `${prefix}${INDEXER_OUTPUT_REDACTION_MARKER}`,
     count,
   );
@@ -127,24 +148,13 @@ function redactKnownText(value: string, count: MutableCount): string {
   );
   output = replaceWithCount(
     output,
-    new RegExp(
-      `([?&](?:access_token|refresh_token|api_key|password|secret)=)` +
-        `(?!${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})[^&#\\s]+`,
-      "giu",
-    ),
+    QUERY_SECRET_TEXT_PATTERN,
     (_match, prefix) => `${prefix}${INDEXER_OUTPUT_REDACTION_MARKER}`,
     count,
   );
-  const key = "(?:[A-Za-z0-9_.-]*(?:password|passwd|pwd|secret|token|credential|cookie)[A-Za-z0-9_.-]*|api[-_]?key|access[-_]?(?:key|token)|private[-_]?key|client[-_]?secret|authorization)";
-  const assignment = "(?:=\\s*|:\\s+(?=\\S)|:\\s*(?=[\"']))";
   output = replaceWithCount(
     output,
-    new RegExp(
-      `((?:["']?${key}["']?)\\s*${assignment})` +
-        `(?!["']?${escapeRegExp(INDEXER_OUTPUT_REDACTION_MARKER)})` +
-        `(?:"(?:\\\\.|[^"])*"|'(?:\\\\.|[^'])*'|[^\\s,;}\\]]+)`,
-      "giu",
-    ),
+    ASSIGNMENT_SECRET_TEXT_PATTERN,
     (_match, prefix) => `${prefix}"${INDEXER_OUTPUT_REDACTION_MARKER}"`,
     count,
   );

@@ -1,3 +1,4 @@
+import { mapParserWork } from "./parserConcurrency.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { excludedIndexerSourcePath, selectedIndexerExclusions } from "./indexerScopeExclusions.js";
 import { createHash } from "node:crypto";
@@ -130,6 +131,7 @@ async function filesForTarget(input: {
   target: ProjectIndexerReadTarget;
   candidateNames: ReadonlySet<string>;
   requirements: ReturnType<typeof selectedIndexerExclusions>;
+  paths?: readonly string[];
 }): Promise<IndexerParserAuthorizedFile[]> {
   const root = join(input.projectRoot, input.source.materializedAt);
   const rootStat = await lstat(root);
@@ -142,6 +144,7 @@ async function filesForTarget(input: {
     );
   }
   const paths = (await trackedPaths(root, input.source.ref)).filter((path) =>
+    (input.paths === undefined || input.paths.includes(path)) &&
     isParserCandidate(path, input.candidateNames) && !excludedIndexerSourcePath({ requirements: input.requirements,
       source_ref: input.target.source_ref, module_ref: input.target.module_refs[0] ?? null, path })
   );
@@ -219,6 +222,7 @@ export async function materializeProjectIndexerParserFiles(input: {
   projectRoot: string;
   indexer_id: string;
   profile_contract: IndexerProfileContract;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
 }): Promise<ProjectIndexerParserFilesMaterialization> {
   const [loadedRegistry, sources] = await Promise.all([
     loadIndexerRegistry(input.projectRoot),
@@ -237,8 +241,18 @@ export async function materializeProjectIndexerParserFiles(input: {
     registry: loadedRegistry.registry,
     indexer_id: input.indexer_id,
   });
+  // Read scope is an authorization ceiling, not a requirement to parse every source.
+  const selectedTargets = input.source_scope === undefined ? targets : targets.filter(target =>
+    target.source_ref === input.source_scope!.source_ref &&
+    (target.module_refs.length === 0 ||
+      (input.source_scope!.module_ref !== null && target.module_refs.includes(input.source_scope!.module_ref)))
+  ).map(target => ({ ...target, module_refs: input.source_scope!.module_ref === null
+    ? target.module_refs : [input.source_scope!.module_ref] }));
+  if (input.source_scope !== undefined && selectedTargets.length === 0) {
+    throw new TypeError("parser source slice is outside the authorized read scope");
+  }
   const files: IndexerParserAuthorizedFile[] = [];
-  for (const target of targets) {
+  for (const target of selectedTargets) {
     const name = sourceRefName(target.source_ref);
     if (name === null) continue;
     const source = sources.repos.find((candidate) =>
@@ -251,7 +265,14 @@ export async function materializeProjectIndexerParserFiles(input: {
       target,
       candidateNames,
       requirements: selectedIndexerExclusions(loadedRegistry.registry, input.indexer_id),
+      ...(input.source_scope?.paths === undefined ? {} : { paths: input.source_scope.paths }),
     }));
+  }
+  if (input.source_scope?.paths !== undefined) {
+    const included = new Set(files.map(file => file.normalized_path));
+    if (input.source_scope.paths.some(path => !included.has(path))) {
+      throw new TypeError("Requested parser files are missing or outside the registered selection; refresh scope or correct the paths.");
+    }
   }
   return {
     indexer,
@@ -282,7 +303,7 @@ function normalizedVirtualPath(path: string): string {
   return normalized.length === 0 ? "." : normalized;
 }
 
-function sourceFileSystem(root: string, tracked: readonly string[]) {
+function sourceFileSystem(root: string, tracked: readonly string[], texts: Record<string, string>) {
   const files = new Set(tracked.map(normalizedVirtualPath));
   const directories = new Map<string, Set<string>>([[".", new Set()]]);
   for (const file of files) {
@@ -307,7 +328,10 @@ function sourceFileSystem(root: string, tracked: readonly string[]) {
     return normalized;
   };
   return {
-    readFile: (path: string) => readFile(safeSourcePath(root, assertTrackedFile(path)), "utf8"),
+    readFile: async (path: string) => {
+      const normalized = assertTrackedFile(path);
+      return Object.hasOwn(texts, normalized) ? texts[normalized]! : readFile(safeSourcePath(root, normalized), "utf8");
+    },
     async readdir(path: string) {
       const normalized = normalizedVirtualPath(path);
       const children = directories.get(normalized);
@@ -320,7 +344,7 @@ function sourceFileSystem(root: string, tracked: readonly string[]) {
     },
     async readJson<T = unknown>(path: string): Promise<T> {
       return JSON.parse(
-        await readFile(safeSourcePath(root, assertTrackedFile(path)), "utf8"),
+        await this.readFile(path),
       ) as T;
     },
   };
@@ -333,8 +357,9 @@ async function preparedInput(input: {
   scopedPaths: string[];
   trackedPaths: string[];
   loadedModule: Record<string, unknown>;
+  texts: Record<string, string>;
 }): Promise<unknown> {
-  const fs = sourceFileSystem(input.root, input.trackedPaths);
+  const fs = sourceFileSystem(input.root, input.trackedPaths, input.texts);
   if (input.capability === "parser.typescript" || input.capability === "parser.javascript") {
     const Plugin = input.loadedModule.TypeScriptPlugin;
     if (typeof Plugin !== "function") throw new TypeError(`${input.capability} package has no TypeScriptPlugin`);
@@ -352,9 +377,10 @@ async function preparedInput(input: {
         content: await fs.readJson(manifestPath),
       }, fs)
       : { entries: [] };
-    const allowed = new Set(input.scopedPaths);
     return plugin.extractSymbolsInScope(
-      detected.entries.filter((entry) => allowed.has(entry.path)),
+      // Public identity belongs to the registered package, not the reading
+      // batch. Trace its real entries but only analyze selected declarations.
+      detected.entries,
       input.scopedPaths,
       fs,
     );
@@ -415,10 +441,10 @@ export async function materializeProjectIndexerParserEntryInput(input: {
       throw new TypeError(`parser plan references an untracked source file: ${path}`);
     }
   }
-  const files = Object.fromEntries(await Promise.all(input.normalized_paths.map(async (path) => [
+  const files = Object.fromEntries(await mapParserWork(input.normalized_paths, 8, async (path) => [
     path,
     await readFile(safeSourcePath(root, path), "utf8"),
-  ])));
+  ]));
   const needsPrepared = [
     "parser.typescript",
     "parser.javascript",
@@ -437,6 +463,7 @@ export async function materializeProjectIndexerParserEntryInput(input: {
             scopedPaths: input.normalized_paths,
             trackedPaths: tracked,
             loadedModule: input.loaded_module,
+            texts: files,
           }),
         }
       : {}),

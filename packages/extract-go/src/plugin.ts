@@ -105,6 +105,7 @@ export class GoPlugin implements ExtractionPlugin {
         relations.push({
           type: EdgeType.Imports,
           from: entry.path,
+          file: entry.path,
           to: imported.path,
           isExternal: true,
           grounding: Grounding.Code,
@@ -118,6 +119,7 @@ export class GoPlugin implements ExtractionPlugin {
         relations.push({
           type: EdgeType.Calls,
           from: call.enclosingSymbol,
+          file: entry.path,
           to: call.callee,
           isExternal: call.importPath !== undefined,
           grounding: Grounding.Code,

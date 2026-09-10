@@ -6,6 +6,14 @@ mediaType: text/markdown
 
 # Source-boundary dialogue
 
+For the first production task in a new workspace, use the required work-start
+procedure before presenting this source registration action. Read a supplied
+plan as task guidance, read batch metadata titles under that procedure's limits and
+10-document failure fallback (no bodies or outlines; retain URLs when titles are unavailable),
+resolve every required start condition, present the report and wait for feedback.
+Do not register the plan itself or begin capture merely because it contains source
+paths. Once confirmed, include the report path required by the current input schema.
+
 Describe the boundary in user terms before showing a registration command. For
 code, distinguish a whole repository/subspace from one concrete package or
 subdirectory. For documents, distinguish one file, a local document directory,
@@ -23,7 +31,9 @@ Do not invent `-A`, `-B`, or sequence suffixes. If today's batch exists, append
 the newly confirmed module to it.
 
 When the current request already lists exact local modules or documents, do not
-repeat the source-boundary question in either ordinary or fully managed mode.
+repeat those source names as a separate question in either ordinary or fully managed
+mode. Their presence does not by itself settle reader purpose, output language,
+delivery choices or other required work-start information.
 Resolve each named module to one unique existing local path inside the
 user-scoped root, then pass that path in the batch payload. Repository paths are
 relative to the Context project root; the CLI may mechanically read their Git

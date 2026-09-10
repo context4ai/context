@@ -1,9 +1,10 @@
+import { placeApprovedReadingFixture } from "./knowledgeMapReview.fixture.js";
 import { expect, test } from "bun:test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
@@ -22,6 +23,7 @@ test("a successful package build retains body anchor diagnostics on unchanged re
     await completeAuthorStage(root, { markdown: "Use the public entry point. [Old section](#removed-section)" });
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     const first = (await buildProjectPackages(root)).packages[0]!;
     expect(first.linkWarnings).toContainEqual({ code: "package-link-anchor-unresolved", path: expect.any(String), target: "#removed-section" });

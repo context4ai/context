@@ -96,11 +96,17 @@ delivery batches do complete their applicable content review, close and build;
 they are distinct from Partition transport batches. The first delivery normally
 contains 1–3 pages, followed by 30–50-page batches or a smaller remaining tail.
 
-For substantial new work, follow the selected opening-report procedure after
-research and necessary questions, before Partition. Explain what the first pages
-will help the reader do and invite them to read the report, unless that pause was
-explicitly waived. Neither the report nor an invitation creates a new approval
-state; fully managed mode still reports its decisions and delivered page paths.
+For the first production task in a new workspace, follow the selected work-start
+report procedure using the user's task instructions and batch metadata titles for
+the supplied list, falling back to at most 10 unresolved title lookups if unavailable.
+Do not fetch source bodies or outlines before
+capture; missing titles may remain unknown. Detailed plans are provisional until
+captured evidence is available.
+Resolve its required start conditions, present it and wait for feedback before
+source registration or capture. Reuse explicit answers and defaults instead of
+asking a fixed questionnaire. Existing-workspace lightweight changes may keep a
+short conversational summary. The source-boundary Gate remains the confirmation
+authority; fully managed mode does not bypass the first report handoff.
 
 ## Quality bar
 

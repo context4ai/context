@@ -13,8 +13,8 @@ import { prepareProjectIndexerWorksetViewMaterialization } from "../project/inde
 import { buildIndexerPartitionRunResultFromSemantic } from "../project/indexerSemanticPartitionResult.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "../project/indexerCurrentPrimaryAuthority.js";
 import { persistIndexerSemanticResult } from "../project/indexerCurrentActionShared.js";
-import { completeCurrentIndexerStructureReview, prepareCurrentIndexerStructurePlan,
-  prepareCurrentIndexerAuthorStage } from "../project/indexerStructureReview.js";
+import { prepareCurrentIndexerStructurePlan, prepareCurrentIndexerAuthorStage } from "../project/indexerStructureReview.js";
+import { completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { excludeIndexerPartitionMembers } from "../project/indexerPartitionScope.js";
 import type { IndexerConsumerWorksetProjection } from "../project/indexerConsumerWorksetPlanner.js";
 import type { IndexerPartitionValidationInput } from "@c4a/context";

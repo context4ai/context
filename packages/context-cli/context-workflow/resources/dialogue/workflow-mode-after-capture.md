@@ -6,20 +6,20 @@ mediaType: text/markdown
 
 # Workflow mode after source capture
 
-When source capture has completed, ask about execution mode only if the
-conversation still has no explicit choice and no earlier mode question was
-asked. If ordinary review or fully managed operation was already selected,
-continue without a reminder or another confirmation. When a choice is still
-needed, explain in the user's current conversation language that ordinary
-review pauses at review decisions and provides HTML reports for inspection.
-The current product estimate is that ordinary review makes the overall workflow
-about 40% slower, with the exact difference depending on scope and response
-time.
+Explain the modes only when the conversation has no explicit choice and no mode
+question has already been asked. Reuse an explicit choice in a task brief the
+user asked you to execute, including fully managed authorization. Do not repeat
+the choice after capture or continuation, or persist session authority in files.
 
-Offer fully managed operation for the rest of the current conversation. Explain
-that it skips delegatable content-review surfaces and is faster, but reduces the
-user's ability to control or adjust intermediate content. It does not bypass
-source boundaries, external permissions, hard validation, evidence checks,
-verification failures, or other non-delegatable safety boundaries. Do not ask
-again after this one-time conversation choice, and never persist it in project
-files.
+Describe both modes neutrally in the user's language:
+
+- Ordinary review pauses at review decisions and provides HTML reports, giving
+  the user opportunities to inspect content, catch deviations and adjust direction.
+- Fully managed operation delegates eligible reviews to the Agent and continues
+  with the same revision-bound Actions, reducing manual involvement. The user
+  has fewer opportunities to inspect intermediate results before delivery.
+
+Neither mode bypasses source boundaries, external permissions, evidence checks,
+verification failures or non-delegatable decisions. Do not promise a percentage
+speed difference. When a choice is needed, ask which mode the user prefers for
+this conversation.

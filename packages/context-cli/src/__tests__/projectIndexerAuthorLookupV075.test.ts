@@ -1,3 +1,5 @@
+import { acceptedPartitionMaterialBaseline } from "../project/indexerPartitionSourceBaseline.js";
+import { ensureCurrentProjectIndexerParserExecution } from "../project/indexerParserCurrentExecution.js";
 import { afterEach, describe, expect, test } from "bun:test";
 import { dirname, join } from "node:path";
 import { readFile, rm, writeFile } from "node:fs/promises";
@@ -27,6 +29,8 @@ describe("Author source lookup", () => {
   test("reuses Partition projections through convergence without reading excluded files", async () => {
     const { root, requirementDigest } = await project({ rankedCodeInventory: true });
     roots.push(root);
+    // Exercise accepted deep Partition receipts, including the global cache used by existing workspaces.
+    await ensureCurrentProjectIndexerParserExecution({ projectRoot: root, indexer_id: "component-library" });
     const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
       projectRoot: root, registry: (await loadIndexerRegistry(root)).registry, indexer_id: "component-library",
     });
@@ -91,6 +95,22 @@ describe("Author source lookup", () => {
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     const chunks = join(dirname(manifestPath), "chunks");
     const metadata = JSON.parse(await readFile(join(chunks, manifest.sources[0].chunk.file), "utf8"));
+    const original = partitions[0]!;
+    const oldBinding = metadata.source_binding;
+    const legacy = { ...original, workset: { ...original.workset,
+      source_binding_digest: oldBinding.binding_digest,
+      partition_input_digests: [oldBinding.eligible_inventory_digest, oldBinding.source_merge_digest,
+        oldBinding.source_toolchain_digest, oldBinding.source_identity_inventory.inventory_digest],
+    } };
+    const baseline = await acceptedPartitionMaterialBaseline({ projectRoot: root, partition: legacy,
+      projection: projections.get(original.workset.workset_digest) });
+    expect(baseline).toMatch(/^sha256:/);
+    expect(await acceptedPartitionMaterialBaseline({ projectRoot: root,
+      partition: { ...legacy, workset: { ...legacy.workset, source_binding_digest: `sha256:${"e".repeat(64)}` } },
+      projection: projections.get(original.workset.workset_digest) })).toBeUndefined();
+    expect(await acceptedPartitionMaterialBaseline({ projectRoot: root,
+      partition: { ...legacy, workset: { ...legacy.workset, partition_input_digests: [] } },
+      projection: projections.get(original.workset.workset_digest) })).toBeUndefined();
     const ignored = metadata.files.find((file: { normalized_path: string }) => file.normalized_path.endsWith("notes.ts"));
     expect(ignored).toBeDefined();
     const ignoredPath = join(chunks, ignored.chunk.file);
@@ -99,6 +119,13 @@ describe("Author source lookup", () => {
     const resolver = createIndexerAuthorSourceResolver({ projectRoot: root, projections });
     const bindings = await Promise.all(partitions.map(resolver));
     const merged = mergeIndexerAuthorSourceBindings(bindings);
+    const sliced = bindings.map((binding, index) => ({ ...binding, source_binding_digest: `slice-${index}` }));
+    expect(mergeIndexerAuthorSourceBindings(sliced).source_identity_inventory.files).toEqual(merged.source_identity_inventory.files);
+    expect(() => mergeIndexerAuthorSourceBindings([bindings[0]!, { ...bindings[0]!, module_ref: "module:other" }]))
+      .toThrow("crosses source authority");
+    const changed = structuredClone(bindings[0]!);
+    changed.source_identity_inventory.files[0]!.content_digest = `sha256:${"f".repeat(64)}`;
+    expect(() => mergeIndexerAuthorSourceBindings([bindings[0]!, changed])).toThrow("conflicting file versions");
     expect(merged.source_ref).toBe(SOURCE_REF);
     expect(merged.module_ref).toBe(MODULE_REF);
     if (merged.adapter !== "parser-facts") throw new Error("expected parser binding");

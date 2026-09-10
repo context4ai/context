@@ -15,7 +15,7 @@ import {
   projectCurrentIndexerWorkflowRoute,
   resolveCurrentIndexerAgentContext,
 } from "../project/indexerCurrentWorkflowRoute.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 import { collectProjectStatusSnapshot } from "../project/status.js";
@@ -387,6 +387,8 @@ describe("0.7.4 Markdown current workflow", () => {
     await runCliInDir(projectRoot, [
       "package", "template", "accept", "--all", "--format", "json",
     ]);
+    await (await import("./knowledgeMapReview.fixture.js")).placeApprovedReadingFixture(projectRoot);
+    await (await import("./workspaceVersionDelivery.fixture.js")).recordFixtureVersionIfRequired(projectRoot);
     const built = JSON.parse(await runCliInDir(projectRoot, [
       "build", "--format", "json",
     ])) as { packages: Array<{ name: string; state: string; files: number }> };

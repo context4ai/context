@@ -4,6 +4,21 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.9 - 2026-09-11
+
+- Unify website navigation and LLMS ordering around the editable knowledge map,
+  retain newly approved pages, and publish websites beside knowledge packages.
+- Add workspace SemVer and source-attributed changelog cards, recording versions
+  before final builds and returning the next workflow Route directly.
+- Fix LLMS browser UTF-8 detection, duplicate landing links and deployment-base
+  paths; preserve consistent layout for LLM Docs and Changelog.
+- Support bounded parallel knowledge production with isolated worker outputs,
+  coordinator-owned writes and recovery back to serial execution.
+- Reduce intake and Provider-selection overhead with batch title metadata and
+  validated compact selections; improve task recovery and parser preparation.
+
+## Earlier unreleased work
+
 - Replaced the parallel Indexer authoring and review paths with one current-action
   workflow covering Provider setup, Partition, Author, Composer, Layout, final
   Review, close, recovery, and targeted revision.

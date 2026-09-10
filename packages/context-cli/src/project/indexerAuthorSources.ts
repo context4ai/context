@@ -1,8 +1,10 @@
+import { acceptedPartitionMaterialBaseline } from "./indexerPartitionSourceBaseline.js";
 import {
   buildIndexerPartitionInventoryFromParserFactView,
   buildIndexerSourceIdentityInventory,
   indexerProtocolDigest,
   type IndexerPartitionValidationInput,
+  type IndexerPartitionPlan,
 } from "@c4a/context";
 import {
   assertProjectIndexerMainSourceBinding,
@@ -52,6 +54,7 @@ export function createIndexerAuthorSourceResolver(input: {
       module_ref: workset.module_ref, profile_contract_digest: workset.profile_contract_digest,
       selection: selection ?? null,
     });
+    const baseline = await acceptedPartitionMaterialBaseline({ ...input, partition, projection });
     let pending = bindings.get(key);
     if (pending === undefined) {
       pending = resolveProjectIndexerMainSourceBinding({
@@ -63,12 +66,31 @@ export function createIndexerAuthorSourceResolver(input: {
       bindings.set(key, pending);
     }
     const binding = await pending;
-    assertProjectIndexerMainSourceBinding({ workset, binding, partition_projection: projection });
+    assertProjectIndexerMainSourceBinding({ workset, binding, partition_projection: projection,
+      ...(baseline === undefined ? {} : { accepted_partition_material_digest: baseline }) });
     if (binding.adapter === "parser-facts") {
       validateIndexerConsumerWorksetProjection({
         value: projection, factView: binding.parser_fact_view,
         inventory: partition.canonical_inventory_members,
       });
+      if (binding.inventory_only) {
+        // Partition owns file identities; deep facts are prepared only for its
+        // accepted reading batch and enter Author through the normal dependency view.
+        // The caller validated source partitions before resolving their material.
+        const plan = partition.plan as IndexerPartitionPlan;
+        const owned = new Set(plan.status === "complete"
+          ? plan.groups.flatMap(group => group.member_ids) : []);
+        const paths = binding.parser_fact_view.files.filter(file => owned.has(file.file_ref))
+          .map(file => file.normalized_path);
+        if (paths.length === 0) return binding;
+        const deep = await resolveProjectIndexerMainSourceBinding({
+          projectRoot: input.projectRoot, indexer_id: workset.indexer_id,
+          source_ref: workset.source_ref, module_ref: workset.module_ref,
+          profile_contract_digest: workset.profile_contract_digest,
+          parser_selection: { paths },
+        });
+        return { ...deep, source_binding_digest: binding.source_binding_digest };
+      }
     }
     return binding;
   };
@@ -83,7 +105,7 @@ export function mergeIndexerAuthorSourceBindings(
   for (const binding of bindings) {
     if (binding.adapter !== first.adapter || binding.source_ref !== first.source_ref ||
         binding.module_ref !== first.module_ref ||
-        binding.source_binding_digest !== first.source_binding_digest ||
+        (first.adapter !== "parser-facts" && binding.source_binding_digest !== first.source_binding_digest) ||
         binding.profile_contract_digest !== first.profile_contract_digest) {
       throw new TypeError("Author source union crosses source authority");
     }
@@ -110,19 +132,35 @@ export function mergeIndexerAuthorSourceBindings(
   const files = [...filesByRef.values()].sort((left, right) =>
     left.file_ref < right.file_ref ? -1 : left.file_ref > right.file_ref ? 1 : 0
   );
+  const sameBinding = bindings.every(binding => binding.source_binding_digest === first.source_binding_digest);
+  const identity = buildIndexerSourceIdentityInventory({
+    ...first.source_identity_inventory,
+    source_input_digest: sameBinding ? first.source_identity_inventory.source_input_digest : indexerProtocolDigest([...identityFiles.values()].map(file => ({
+      path: file.normalized_path, digest: file.content_digest,
+    })).sort((a, b) => a.path.localeCompare(b.path))),
+    files: [...identityFiles.values()].sort((a, b) => a.normalized_path.localeCompare(b.normalized_path)),
+  });
   const { view_digest: _digest, ...header } = first.parser_fact_view;
   void _digest;
   const payload = {
     ...header, files,
+    ...(!sameBinding ? { inventory_digest: identity.inventory_digest,
+      origin_result_digests: [...new Set(bindings.flatMap(binding => binding.adapter === "parser-facts"
+        ? binding.parser_fact_view.origin_result_digests : []))].sort() } : {}),
     fact_set_digest: indexerProtocolDigest(files.map((file) => ({ file_ref: file.file_ref, facts: file.facts }))),
   };
   const view = { ...payload, view_digest: indexerProtocolDigest(payload) };
+  const { parser_binding: previousBinding, ...base } = first;
+  void previousBinding;
   return {
-    ...first, parser_fact_view: view, parser_fact_index: factIndex,
-    source_identity_inventory: buildIndexerSourceIdentityInventory({
-      ...first.source_identity_inventory,
-      files: [...identityFiles.values()],
-    }),
+    ...base, parser_fact_view: view, parser_fact_index: factIndex,
+    ...(sameBinding && previousBinding ? { parser_binding: previousBinding } : {}),
+    source_binding_digest: sameBinding ? first.source_binding_digest : indexerProtocolDigest({ source_ref: first.source_ref, module_ref: first.module_ref,
+      profile_contract_digest: first.profile_contract_digest, inventory: identity.inventory_digest, view: view.view_digest }),
+    source_snapshot_digest: sameBinding ? first.source_snapshot_digest : identity.source_input_digest,
+    ...(bindings.some(binding => binding.adapter === "parser-facts" && binding.analysis_scopes !== undefined)
+      ? { analysis_scopes: bindings.flatMap(binding => binding.adapter === "parser-facts" ? binding.analysis_scopes ?? [] : []) } : {}),
+    source_identity_inventory: identity,
     partition_inventory: buildIndexerPartitionInventoryFromParserFactView(view),
   };
 }

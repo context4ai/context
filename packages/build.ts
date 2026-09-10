@@ -64,6 +64,8 @@ const RUNTIME_EXTERNALS = [
   // vite is only used at dev-time via dynamic import in serve.ts (C4A_DEV=1).
   // Must stay external so Bun.build() doesn't try to bundle it.
   "vite",
+  // Static website compiler retains its own Vue, Vite and theme assets.
+  "vitepress",
   // ws (WebSocket client) must stay external when running under bun runtime.
   // bun's native WebSocket conflicts with the bundled ws package.
   "ws",

@@ -6,6 +6,22 @@ mediaType: text/markdown
 
 # Close and build
 
+At completed-scope delivery, follow the version-recording Route. The coordinator
+writes the semantic changelog from formal diffs and the conversation, including
+the triggering source and an explicitly known user (Git name is the default).
+Record after Close and package/template approval, before the final build, so the
+selected outputs are built with the new version once. Build records hashes without
+increasing versions. Never count temporary progress or a build retry as a change.
+
+Before an authorized external publication, run `context version publish-check
+--format json`. If `needs_version` is true, inspect with `context version inspect
+--publish --format json`, record a patch changelog using a `dist` trigger, and
+rebuild. Do not increment again if the workspace version already changed.
+If `unchanged` is true, there is no new delivery. Only after a successful external
+publication, use `context version published --hash <checked-hash> --receipt
+<successful-publication-reference> --format json`. Failure does not advance that
+baseline. These commands do not upload, publish or grant publishing authority.
+
 Close deterministically reconciles approved Markdown and current relationship
 inputs into `knowledge/structure.yaml`. It compacts repeated machine fields out
 of each Markdown page and validates the hydrated result. When an approved page
@@ -39,3 +55,39 @@ review decision in this conversation, together with its reviewed scope. Omit
 the section when no report was user-reviewed. Do not reconstruct it by scanning
 `.tmp`, invent a shareable URL, or classify fully managed or force approval as
 user review.
+
+Report every selected output separately: KB root, website `dist/<base>-site/`,
+and LLMS file when selected. Distinguish generated, failed and not selected; do not
+claim the whole delivery complete if a selected channel is missing. For a website,
+include a local preview command (or a URL only after verifying the server), reading
+navigation coverage, and the directory a separate hosting tool would deploy.
+Preview example: `python3 -m http.server 8000 --bind 127.0.0.1 --directory dist/<base>-site/`.
+Provide this command without starting a server unless the user requests a running
+preview. Use the build receipt for output paths and validation results; extra
+HTTP probes, ad hoc manifest queries and another verify are diagnostic tools,
+not mandatory version-recording or successful-build steps. Follow the returned
+Route directly instead of polling status after every successful action.
+Explain that users may request website output later; it reuses existing approved
+articles rather than requiring a new workspace or full source indexing.
+
+## Website deployment handoff after every successful build
+
+After every successful website build, including intermediate delivery and an
+unchanged output reused by build, tell the user the website can be deployed with
+a deployment skill. Include the actual `dist/<base>-site/` directory and whether
+it contains only the currently delivered scope. This notice does not wait for the
+whole knowledge task to finish and does not block its next Route.
+
+Reuse existing publishing configuration and the user's chosen target. Otherwise,
+inspect the available deployment skills, recommend a compatible static-site skill,
+or let the user specify one. Do not invent installed skills or a deployed URL.
+If no compatible skill is available, report that and provide the site directory
+for the user's deployment tool. Do not install a deployment dependency by default.
+
+When publishing is already authorized for that target, follow the selected skill
+with the built site directory; otherwise offer deployment and wait for the user's
+publishing instruction. Preserve the configured base path; rebuild if the target
+requires a different base. Pass only the website output, not sources, private
+workspace state or the entire KB package. Report success only after checking the
+hosting result and published URL. A failed deployment leaves the local build valid;
+report the deployment failure and its next step separately.

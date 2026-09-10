@@ -57,6 +57,8 @@ describe("0.6.2 document source and capture status routing", () => {
       expect(status.workflow.current?.resources.required.map((resource) => resource.id)).toEqual(
         expect.arrayContaining([
           "procedure.source-boundary",
+          "procedure.work-start-report",
+          "template.work-start-report",
           "context.source-current",
         ]),
       );

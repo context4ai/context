@@ -10,7 +10,11 @@ export function indexerParserTaskSelection(input: {
 }): IndexerParserSourceSelection {
   if (input.stage === "author") {
     const view = validateIndexerAuthorDependencyView(input.validation.dependency_view);
-    return { paths: [...new Set(view.positive_nodes.flatMap((node) =>
+    const scopes = input.validation.parser_analysis_scopes as {
+      source_ref: string; module_ref: string | null; scopes: string[][];
+    } | undefined;
+    return { ...(scopes?.source_ref === input.source_ref && scopes.module_ref === input.module_ref
+      ? { analysis_scopes: scopes.scopes } : {}), paths: [...new Set(view.positive_nodes.flatMap((node) =>
       node.kind === "source-span" && node.source_ref === input.source_ref && node.module_ref === input.module_ref
         ? [node.locator.path]
         : []
@@ -20,9 +24,9 @@ export function indexerParserTaskSelection(input: {
     input.validation.canonical_inventory_members as Parameters<typeof canonicalIndexerInventoryMembers>[0],
   );
   const projection = input.validation.partition_projection as {
-    file_refs?: string[]; fact_items?: Array<{ fact_ref: string }>;
+    family_key?: string; file_refs?: string[]; fact_items?: Array<{ fact_ref: string }>;
   } | undefined;
-  return { member_refs: [...new Set([
+  return { ...(projection?.family_key?.startsWith("source-inventory:") ? { inventory_only: true } : {}), member_refs: [...new Set([
     ...members.map((member) => member.member_id),
     ...(projection?.file_refs ?? []),
     ...(projection?.fact_items ?? []).map((item) => item.fact_ref),

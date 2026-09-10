@@ -69,6 +69,9 @@ const DEFAULT_INTERNAL_FIELDS = [
   "prompt_path",
   "packageDir",
   "package_dir",
+  "package_path",
+  "site_path",
+  "site_dir",
   "manifestPath",
   "manifest",
   "base_manifest",
@@ -120,6 +123,9 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "program_path" ||
     field === "bundle_root" ||
     field === "content_path" ||
+    field === "package_path" ||
+    field === "site_path" ||
+    field === "site_dir" ||
     field.startsWith("output") ||
     field === "out_dir" ||
     field === "index_path" ||
@@ -136,6 +142,10 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
 }
 
 function semanticReplacementFor(field: string): string {
+  if (field === "site_dir") return "Explicit website build output for an authorized deployment handoff; use package_name for identity and never infer source or runtime paths.";
+  if (field === "package_path" || field === "site_path") {
+    return "Relative delivery coordinates in the website mapping manifest; use artifact_ref for article identity and resolve these paths only within the package output.";
+  }
   if (["project_root", "input_project_root", "input_file"].includes(field)) {
     return "Explicit command workspace and supplied input locators for mismatch recovery; never use them as semantic identities or infer a different workspace from source references.";
   }

@@ -5,7 +5,6 @@ import {
   buildIndexerDependencyIntentSet,
   buildIndexerProjectProposal,
   buildIndexerProviderRouteInput,
-  canonicalIndexerJson,
   deriveIndexerProgramExecutionPolicy,
   indexerProjectContentDigest,
   indexerProtocolDigest,
@@ -27,6 +26,7 @@ import {
   listCliBundledIndexers,
   loadCliIndexerBaseContracts,
   defaultCliIndexerAssetsRoot,
+  type CliBundledIndexerCatalog,
 } from "./indexerCliBundledProvider.js";
 import {
   dispatchProjectIndexerProviderResolution,
@@ -61,7 +61,7 @@ import {
 } from "./indexerCurrentProviderState.js";
 import { readPackageVersion } from "../lib/packageVersion.js";
 import { currentIndexerProviderSelectionNeedsRefresh } from "./indexerCurrentProviderSelection.js";
-import { projectIndexerSelectionCatalog } from "./indexerProviderSelectionCatalog.js";
+import { projectIndexerSelectionCatalog, expandIndexerSelectionCatalog } from "./indexerProviderSelectionCatalog.js";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -138,12 +138,13 @@ export async function indexerRegistryNeedsProviderSelection(
 }
 
 export async function buildCurrentIndexerProviderSelectionRoute(input: {
+  catalog?: CliBundledIndexerCatalog;
   projectRoot: string;
   registry: IndexerRegistry;
   authorities: readonly ContextWorkflowAuthority[];
   managed: boolean;
 }): Promise<ContextResolvedWorkflowRoute> {
-  const catalog = await listCliBundledIndexers();
+  const catalog = input.catalog ?? await listCliBundledIndexers();
   const provider = await loadContextWorkflowProvider();
   const evaluated = evaluateGraph(provider, INDEXER_GRAPH_ID, PROVIDER_SELECTION_ENTRY);
   const primary = evaluated.evaluation.primaryRoute;
@@ -334,18 +335,15 @@ export async function finalizeCurrentIndexerProviderSetup(input: {
 }
 
 export async function completeCurrentIndexerProviderSelection(input: {
+  catalog?: CliBundledIndexerCatalog;
   projectRoot: string;
   currentRegistry: IndexerRegistry;
   semantic: IndexerProviderSelectionSemanticInput;
 }): Promise<
   "selection-applied" | "provider-resolution-required" | "provider-authorization-required"
 > {
-  const catalog = await listCliBundledIndexers();
-  const registry = parseIndexerRegistry(canonicalIndexerJson({
-    protocol: "context.indexer.registry/v1",
-    requirements: input.currentRegistry.requirements,
-    indexers: input.semantic.indexers,
-  }));
+  const catalog = input.catalog ?? await listCliBundledIndexers();
+  const registry = expandIndexerSelectionCatalog(input.semantic, input.currentRegistry, catalog);
   const routeInput = buildIndexerProviderRouteInput({
     project_ref: projectRef(input.projectRoot),
     registry,

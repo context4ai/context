@@ -102,6 +102,7 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
     profileContract.subject_key_schemas.map((schema) => [schema.profile, schema]),
   );
   const currentOwners = ownerCells(registry).filter((owner) =>
+    owner.obligation !== "out-of-scope" &&
     !(owner.owner_indexer_ids.length === 0 && owner.obligation === "optional")
   );
   const sourceInventoryDigests = new Set<string>();
@@ -140,6 +141,7 @@ export async function buildProjectIndexerQuestionTargetInventory(input: {
         source_ref: owner.source_ref,
         module_ref: owner.module_ref,
         profile_contract_digest: profileContract.contract_digest,
+        inventory_only: true,
       });
       bindingCache.set(bindingKey, binding);
     }

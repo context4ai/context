@@ -1,3 +1,4 @@
+import { TASK_PREPARATION_PATH, taskPreparationRecord } from "./taskResumption.js";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
@@ -78,10 +79,17 @@ export async function prepareWorkspace(input: { projectRoot: string; apply?: boo
       catch { failure("preparation-binary-state", `Unexpected binary task state: ${path}`, "Inspect and preserve this file outside the task-state directory, then preview again."); }
       targets.push({ path, operation: "delete", base_digest: durableContentDigest(content), target_digest: null });
     }
+    const markerContent = JSON.stringify(taskPreparationRecord("cleared"));
+    let oldMarker: string | undefined;
+    try { oldMarker = await readFile(join(input.projectRoot, TASK_PREPARATION_PATH), "utf8"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+    if (oldMarker !== markerContent) targets.push({ path: TASK_PREPARATION_PATH, operation: "write",
+      base_digest: oldMarker === undefined ? null : durableContentDigest(oldMarker),
+      target_digest: durableContentDigest(markerContent), content: markerContent });
     targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
     const revision = indexerProtocolDigest({ kind: KIND, targets });
     if (!input.apply) return { action: "preview", revision,
-      discard_files: targets.map(target => target.path), file_count: targets.length,
+      discard_files: targets.filter(target => target.operation === "delete").map(target => target.path), file_count: targets.filter(target => target.operation === "delete").length,
       preserves: ["approved knowledge", "source records and snapshots", "configuration", "repository checkouts", "other .tmp files", "existing output (not revalidated)"],
       next: applyCommand(revision) };
     if (input.plan_digest !== revision) failure("preparation-stale", "Task state changed since the preparation preview; nothing was discarded.", previewCommand);
@@ -92,5 +100,6 @@ export async function prepareWorkspace(input: { projectRoot: string; apply?: boo
 
 function prepared(revision: string) {
   return { action: "task-state-cleared", revision, source_readiness: "not-checked",
+    resume_command: "context task resume --format json",
     next: "Use the workspace preparation guide to inspect and restore registered sources. Stop when ready for the next user task; do not run production merely because status offers an Author route." };
 }

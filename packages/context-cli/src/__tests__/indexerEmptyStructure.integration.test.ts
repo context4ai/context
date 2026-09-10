@@ -10,7 +10,8 @@ import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { projectCurrentIndexerWorkflowRoute, resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
 import { prepareIndexerMainRunStore } from "../project/indexerMainRunStore.js";
-import { completeCurrentIndexerStructureReview, currentIndexerStructureReview, prepareCurrentIndexerAuthorStage } from "../project/indexerStructureReview.js";
+import { prepareCurrentIndexerAuthorStage } from "../project/indexerStructureReview.js";
+import { completeCurrentIndexerStructureReview, currentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { hasChangedIndexerWorksetAuthority } from "../project/indexerCurrentRegistryFreshness.js";
 import { readProjectIndexerCandidateCompileStatus } from "../project/indexerCandidateCompileActions.js";
 import { readProjectCloseStatus } from "../project/close.js";
@@ -79,7 +80,7 @@ test("an entirely excluded scope remains reviewable and completes without fake A
   expect((await currentLedger(root))!.entries).toHaveLength(0);
   await advanceCurrentIndexerLifecycle(root);
   expect((await currentIndexerStructureReview(root))?.revision).toBe(review.revision);
-  await completeCurrentIndexerAction({ cwd: root, revision: review.revision, managed: true, value: { stage: "structure-review", decision: "approved" } });
+  await completeCurrentIndexerAction({ cwd: root, revision: review.revision, managed: true, value: { stage: "structure-review", decision: "approved", knowledge_map: { expected_revision: null, upsert: [], remove: [] } } });
   expect(await currentLedger(root)).toBeUndefined();
   expect((await readProjectCloseStatus(root)).state).toBe("ready");
   expect((await readProjectIndexerCandidateCompileStatus(root)).candidates).toHaveLength(0);

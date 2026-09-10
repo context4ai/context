@@ -1,3 +1,4 @@
+import { acceptIndexerMainPartitionRunsStore } from "../project/indexerMainRunBatchStore.js";
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
@@ -80,13 +81,18 @@ const PRIMARY_EXECUTION_PROJECTION = buildIndexerPrimaryExecutionProjection({
   }],
 });
 
-function workset(requirementSetDigest = digest("2")): IndexerMainPartitionWorkset {
+function sourceInventory(sourceRef = "repo:sample@revision") {
+  return INVENTORY.map(member => ({ ...member,
+    member_id: sourceRef === "repo:sample@revision" ? member.member_id : `${member.member_id}-supplement` }));
+}
+
+function workset(requirementSetDigest = digest("2"), sourceRef = "repo:sample@revision"): IndexerMainPartitionWorkset {
   const value = buildIndexerMainWorkset({
     stage: "partition",
     indexer_id: "sample",
     requirement_ref: "requirement:knowledge",
     owner_cell_refs: ["owner-cell:knowledge#architecture"],
-    source_ref: "repo:sample@revision",
+    source_ref: sourceRef,
     module_ref: "module:sample",
     primary_registry_projection_digest: digest("1"),
     requirement_set_digest: requirementSetDigest,
@@ -108,7 +114,7 @@ function workset(requirementSetDigest = digest("2")): IndexerMainPartitionWorkse
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:knowledge"],
     partition_input_digests: [digest("c")],
-    partition_inventory_digest: indexerInventoryMembersDigest(INVENTORY),
+    partition_inventory_digest: indexerInventoryMembersDigest(sourceInventory(sourceRef)),
     allowed_question_target_refs: [TARGET_REF],
   });
   if (value.stage !== "partition") throw new Error("expected partition workset");
@@ -153,10 +159,10 @@ function plan(
       label: "Sample module",
       reader_question_refs: current.reader_question_refs,
       question_target_bindings: [{ target_ref: TARGET_REF, role: "primary-carrier" as const }],
-      member_ids: [MEMBER_REF],
+      member_ids: [sourceInventory(current.source_ref)[0]!.member_id],
     }],
     member_dispositions: [{
-      member_id: MEMBER_REF,
+      member_id: sourceInventory(current.source_ref)[0]!.member_id,
       member_kind: "project" as const,
       inventory_disposition: "owned" as const,
       group_key: "module:sample",
@@ -166,8 +172,8 @@ function plan(
   return { ...payload, canonical_hash: indexerPartitionPlanCanonicalHash(payload) };
 }
 
-function fixture(requirementSetDigest = digest("2")) {
-  const current = workset(requirementSetDigest);
+function fixture(requirementSetDigest = digest("2"), sourceRef?: string) {
+  const current = workset(requirementSetDigest, sourceRef);
   const request = buildIndexerMainRunRequest({
     workset: current,
     partition_strategy_attempt: {
@@ -215,7 +221,7 @@ function fixture(requirementSetDigest = digest("2")) {
     request,
     validation: {
       stage: "partition",
-      canonical_inventory_members: INVENTORY,
+      canonical_inventory_members: sourceInventory(current.source_ref),
       authorized_source_refs: [current.source_ref],
       authorized_strategies: STRATEGIES,
       required_question_target_refs: [TARGET_REF],
@@ -655,5 +661,37 @@ describe("project main Indexer runtime store", () => {
       status: { pending_count: 0, accepted_count: 1 },
       convergence: { user_gate_required: false },
     });
+  });
+});
+
+
+describe("Partition admission across sources", () => {
+  for (const batch of [false, true]) test(`rejects conflicting ownership before commit (${batch ? "batch" : "single"})`, async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-partition-admission-"));
+    try {
+      const a = fixture();
+      const b = fixture(undefined, "repo:supplement@revision");
+      await prepareIndexerMainRunStore({ projectRoot: root,
+        workset_set: buildIndexerMainWorksetSet([a.current, b.current]), run_specs: [a.spec, b.spec] });
+      for (const f of [a, b]) await startIndexerMainRunStore({ projectRoot: root, workset_digest: f.current.workset_digest });
+      if (batch) {
+        const result = await acceptIndexerMainPartitionRunsStore({ projectRoot: root, runs: [a, b].map(f => ({ workset_digest: f.current.workset_digest, result: f.result })) });
+        expect(result.outcomes.map(o => [o.outcome, o.committed])).toEqual([["accepted", true], ["failed", false]]);
+        expect(result.outcomes[1]!.message).toContain("partition-subject-conflict");
+      } else {
+        await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: a.current.workset_digest, result: a.result });
+        await expect(acceptIndexerMainRunStore({ projectRoot: root, workset_digest: b.current.workset_digest, result: b.result })).rejects.toThrow("partition-subject-conflict");
+      }
+      const records = await readAcceptedIndexerMainPartitionResultRecords(root, true);
+      expect(records.map(r => r.request.execution_request_digest)).toEqual([a.request.execution_request_digest]);
+      const payload = b.result.result.result;
+      if (payload.status !== "complete") throw new Error("expected complete plan");
+      const { canonical_hash: _hash, ...fields } = payload;
+      void _hash;
+      const repaired = { ...fields, groups: fields.groups.map(g => ({ ...g, subject_intent: "enrich-or-independent" as const })) };
+      b.result.result.result = { ...repaired, canonical_hash: indexerPartitionPlanCanonicalHash(repaired) };
+      await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: b.current.workset_digest, result: b.result });
+      expect(await readAcceptedIndexerMainPartitionResultRecords(root)).toHaveLength(2);
+    } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

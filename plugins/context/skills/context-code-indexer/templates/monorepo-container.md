@@ -122,3 +122,12 @@ but should not override declared workspace ownership or package boundaries.
 - child ownership or source-of-truth boundaries are ambiguous;
 - generated/cache/vendor directories dominate projected output;
 - dependencies are inferred solely from names without manifest or graph proof.
+
+## Uneven depth without losing navigation
+
+Give important modules a concrete responsibility and first source entry; group
+less central modules into a categorized directory map with lookup instructions.
+State which were inspected deeply and which only have inventory/manifest evidence.
+Do not force all modules to have equally long pages or fabricate handler, DAO,
+configuration or test directories from framework conventions. Keep this shared
+map as the topology owner; child articles explain their differences and link back.

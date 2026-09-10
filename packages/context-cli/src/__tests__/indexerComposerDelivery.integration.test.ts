@@ -4,7 +4,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { indexerAgentStepInputSchema, type IndexerInventoryMember } from "@c4a/context";
 import * as reading from "../project/indexerAgentReading.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { readCurrentIndexerComposerBatch } from "../project/indexerCurrentComposer.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";

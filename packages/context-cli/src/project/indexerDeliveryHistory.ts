@@ -23,17 +23,23 @@ export async function readDeliverableAuthorRecords(projectRoot: string) {
   const stream = await readPartitionStream(projectRoot);
   if (stream === undefined || stream.completed_bindings.length === 0) return current;
   const order = new Map(stream.completed_bindings.map((binding, index) => [binding, index]));
+  const receiptOrder = new Map<string, number>();
+  for (const [binding, receipts] of Object.entries(stream.completed_receipts ?? {})) {
+    const rank = order.get(binding);
+    if (rank !== undefined) for (const receipt of receipts) receiptOrder.set(receipt, rank);
+  }
   const history = await readAcceptedIndexerMainAuthorResultHistory({ projectRoot,
     include: spec => {
       const binding = partitionAuthorBinding(spec);
       const receipts = stream.completed_receipts?.[binding];
-      return order.has(binding) && (receipts === undefined || receipts.includes(spec.request.execution_request_digest));
+      return receiptOrder.has(spec.request.execution_request_digest) ||
+        (order.has(binding) && receipts === undefined);
     } });
   const selected = new Map<string, AuthorRecord[]>();
   const latest = new Map<string, number>();
   for (const record of history) {
     const key = subjectAuthority(record);
-    const rank = order.get(partitionAuthorBinding(record))!;
+    const rank = receiptOrder.get(record.request.execution_request_digest) ?? order.get(partitionAuthorBinding(record))!;
     const previous = latest.get(key);
     if (previous === undefined || rank > previous) {
       latest.set(key, rank);

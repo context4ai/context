@@ -197,6 +197,9 @@ function parserDependencyView(input: {
     if (file === undefined) {
       throw new TypeError(`author group references unknown parser member ${member.member_id}`);
     }
+    if (input.parser_projection.family_key.startsWith("source-inventory:")) {
+      for (const fact of file.facts) selectedFacts.set(fact.fact_ref, fact);
+    }
     if (file.disposition !== "analyzed") {
       // A parser may deliberately classify a file as unsupported or catalog-only.
       // The Author stage still needs its source identity so it can account for the

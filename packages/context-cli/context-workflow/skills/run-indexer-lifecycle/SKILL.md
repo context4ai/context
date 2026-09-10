@@ -9,6 +9,12 @@ metadata:
 
 # Run The Indexer Lifecycle
 
+Before dependent bulk work, follow
+[the shared homogeneous-source review](../../resources/procedures/homogeneous-source-review.md).
+Reuse explicit group decisions; when a newly observed group needs user choice,
+present its concrete scope and pause before parsing or submitting dependent work.
+
+
 This Action continues the sole registry-and-Provider indexing route. Use the
 current Indexer subroute for semantic partitioning, structure review, authoring,
 composition, layout, Candidate compilation, and repair. Existing approved
@@ -79,16 +85,14 @@ or delete existing knowledge to implement a proposed scope reduction.
 Read authorized captured sources before raising material gaps; only unresolved
 core questions requiring new sources or human knowledge need another question.
 
-After those decisions, use the Route's `procedure.work-start-report` and
-`template.work-start-report` Resources for substantial new work or material
-choices worth preserving. Write the readable report at `.tmp/work-start-report.md`
-before semantic planning, using the existing requirement reference and actual
-settings. Lightweight work keeps a short conversational summary. This is a scratch
-document written with the Host file tool, not another Gate or Action payload;
-follow the procedure's first-report reading invitation and conversational pause,
-including in managed mode unless the user explicitly waived that pause. Then
-continue the same Route; do not add a report approval state or polling loop.
-Reuse it on continuation rather than generating a report for every batch.
+The first production task in a new workspace already has a work-start report from
+the source-boundary Gate. Reuse and update that report with the confirmed
+requirements, actual Provider choices and later task inventory before semantic
+planning. Do not replace it or create another report per Indexer or batch. For an
+existing workspace task that legitimately had no first-task report, follow the
+Route's `procedure.work-start-report` and `template.work-start-report` when the
+task is substantial or preserves material choices. The source-boundary Gate owns
+the initial user feedback; do not add a second report approval state here.
 
 When the current subroute is a Gate, follow `gate.resolution_action` rather
 than looking for a top-level `action`. Read its Skill and output schema, use its
@@ -203,9 +207,10 @@ number of currently prepared tasks. Revisions can overlap delivered pages;
 do not add wave tasks to delivered pages to invent a page total.
 
 Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second uses `slice`. For example, with matching CLI values:
-**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前分片：补充内容检查 0/8 项]**
+`wave` supplement; the second describes the current action, using `slice` counts
+when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
+**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前进展：补充内容检查 0/8 项]**
 
 A completion receipt's `submitted_slice` describes the slice just submitted;
 `progress.scopes.slice` can already describe the next Route. Use the former when
@@ -213,8 +218,12 @@ reporting submission success and the latter when announcing the next slice.
 Never combine their numerators and denominators. A null slice means no active
 Agent task slice, not that the workflow is complete. During Review/build, state
 the returned Route action briefly rather than inventing a slice ratio.
-If progress is unavailable after task cleanup, say the counters are unavailable;
-do not turn the last wave into the overall scope or report delivery as zero.
+Before counters exist or after task cleanup, describe the known stage and current
+action instead of repeatedly saying counters are unavailable. For example:
+**[总体进展：正在准备知识工作区]**
+**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
+During review or packaging, name that action rather than a nonexistent slice.
+Do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.

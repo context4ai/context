@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: resume-workspace-task
+runner: command
+effect: write
+command: context task resume --format json

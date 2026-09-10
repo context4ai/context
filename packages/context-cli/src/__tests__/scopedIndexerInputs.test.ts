@@ -98,7 +98,7 @@ test("same-task source adjustment invalidates selected worksets and retains acce
   await symlink(join(root, "fixture-source"), join(root, "sources/repo/20260903/peer"));
   await completePartitionStage(root);
   const { currentIndexerStructureReview } = await import("../project/indexerStructureReview.js");
-  const { completeCurrentIndexerAction } = await import("../project/indexerCurrentAction.js");
+  const { completeCurrentIndexerAction } = await import("./knowledgeMapReview.fixture.js");
   const structure = (await currentIndexerStructureReview(root))!;
   await completeCurrentIndexerAction({ cwd: root, revision: structure.revision, managed: true,
     value: { stage: "structure-review", decision: "approved" } });

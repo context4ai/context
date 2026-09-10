@@ -8,7 +8,7 @@ import type { ArticleScenario } from "./articleCodeScenarios.fixture.js";
 import { createArticleDocumentWorkspace } from "./articleDocumentWorkspace.fixture.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
@@ -20,7 +20,7 @@ import { buildProjectPackages } from "../project/packageBuilder.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { collectProjectStatus } from "../project/status.js";
 import { splitFrontmatter } from "../project/indexerTemplateRendering.js";
-import { readReadingStructure } from "../project/readingStructure.js";
+import { readKnowledgeMap } from "../project/knowledgeMap.js";
 
 export async function runArticleScenario(scenario: ArticleScenario, options: { organization?: { proposed: string; accepted: string } } = {}) {
   const provider = scenario.sourceType === "file" ? "markdown" : scenario.sourceType ?? "code";
@@ -61,9 +61,9 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
       const structure = await currentIndexerStructureReview(root);
       if (structure && !structure.approved) {
         const organization = options.organization;
-        const previous = organization ? await readReadingStructure(root) : undefined;
+        const previous = organization ? await readKnowledgeMap(root) : undefined;
         await completeCurrentIndexerStructureReview({ projectRoot: root, revision: structure.revision, decision: "approved",
-          ...(organization ? { reading_structure: { expected_revision: previous?.revision ?? null, remove: [], upsert: [
+          ...(organization ? { knowledge_map: { expected_revision: previous?.revision ?? null, remove: [], upsert: [
             { key: "reader-root", parent: null, title: organization.accepted, order: 0 },
             ...structure.preview.topics.flatMap(topic => (topic.article_targets ?? []).map((target, index) => ({
               key: target.article_key, parent: "reader-root", title: scenario.articles.find(article => (article.key ?? article.type) === target.article_key)!.title,
@@ -118,6 +118,7 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
         await approveCandidates(root, candidates);
         await closeProjectWorkspace(root);
         await acceptStarterPackageTemplates({ projectRoot: root });
+        await (await import("./workspaceVersionDelivery.fixture.js")).recordFixtureVersionIfRequired(root);
         await buildProjectPackages(root);
       }
       if ((await collectProjectStatus(root, { managed: true })).workflow.status === "complete") break;
@@ -126,9 +127,9 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
     expect(new Set(delivered.map(page => page.key))).toEqual(new Set(scenario.articles.map(article => article.key ?? article.type)));
     expect((await collectProjectStatus(root, { managed: true })).workflow.status).toBe("complete");
     if (options.organization) {
-      const reading = (await readReadingStructure(root))!;
+      const reading = (await readKnowledgeMap(root))!;
       expect(reading.entries.find(entry => entry.key === "reader-root")?.title).toBe(options.organization.accepted);
-      const output = JSON.parse(await readFile(join(root, "dist/scenario-kb/context-reading-structure.json"), "utf8"));
+      const output = JSON.parse(await readFile(join(root, "dist/scenario-kb/context-knowledge-map.json"), "utf8"));
       expect(output.entries[0].title).toBe(options.organization.accepted);
       expect(output.entries[0].children).toHaveLength(scenario.articles.length);
       for (const entry of output.entries[0].children as Array<{ href?: string }>) {
@@ -138,7 +139,7 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
       }
       expect(await readFile(join(root, ".tmp/work-start-report.md"), "utf8")).toContain(options.organization.proposed);
       await buildProjectPackages(root);
-      expect((await readReadingStructure(root))?.revision).toBe(reading.revision);
+      expect((await readKnowledgeMap(root))?.revision).toBe(reading.revision);
     }
     for (const page of delivered) {
       const article = scenario.articles.find(article => (article.key ?? article.type) === page.key)!;

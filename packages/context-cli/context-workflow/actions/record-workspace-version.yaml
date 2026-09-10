@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: record-workspace-version
+runner: agent
+effect: write
+skill: skills/record-workspace-version/SKILL.md

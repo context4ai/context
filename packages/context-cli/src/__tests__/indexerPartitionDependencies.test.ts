@@ -32,7 +32,7 @@ test("partition reuse ignores unrelated module changes but retains selected sour
   expect(partitionDependencyDigest(source("new"), projection)).toBe(digest);
   expect(partitionDependencyDigest(source("old", "changed"), projection)).not.toBe(digest);
   expect(partitionDependencyDigest(source("old", "same", "changed"), projection)).not.toBe(digest);
-  expect(partitionDependencyDigest(source(), { ...projection, unresolved: true })).toBeUndefined();
+  expect(partitionDependencyDigest(source(), { ...projection, unresolved: true })).toBe(digest);
   expect(partitionDependencyDigest(source(), { ...projection, file_refs: ["missing"] })).toBeUndefined();
 });
 
@@ -65,4 +65,23 @@ test("submission accepts exact shard dependencies after a peer change and reject
   expect(() => assertProjectIndexerMainSourceBinding({ workset, binding: source("same", "changed"), partition_projection: projection })).toThrow("stale source adapter binding");
   expect(() => assertProjectIndexerMainSourceBinding({ workset, binding })).toThrow("stale source adapter binding");
   expect(() => assertProjectIndexerMainSourceBinding({ workset: { ...workset, partition_input_digests: [] }, binding, partition_projection: projection })).toThrow("omits source adapter input digests");
+});
+
+
+test("accepted global-bound partitions require proven selected material equivalence", () => {
+  const binding = source("current"), unresolved = { ...projection, unresolved: true };
+  const baseline = partitionDependencyDigest(source("historical"), unresolved)!;
+  const workset = { stage: "partition", source_ref: binding.source_ref, module_ref: binding.module_ref,
+    profile_contract_digest: binding.profile_contract_digest, source_binding_digest: "historical",
+    partition_input_digests: ["historical-input"] };
+  expect(() => assertProjectIndexerMainSourceBinding({ workset, binding, partition_projection: unresolved,
+    accepted_partition_material_digest: baseline })).not.toThrow();
+  expect(() => assertProjectIndexerMainSourceBinding({ workset, binding: source("current", "changed"),
+    partition_projection: unresolved, accepted_partition_material_digest: baseline })).toThrow("stale source adapter binding");
+  try { assertProjectIndexerMainSourceBinding({ workset, binding, partition_projection: unresolved }); }
+  catch (error) { expect(error).toMatchObject({ code: 2, detail: {
+    reason_code: "indexer-source-binding-stale", source_ref: "repo:test",
+    next_action: { command: "context status --format json" },
+  } }); return; }
+  throw new Error("unproven baseline must not authorize rebinding");
 });

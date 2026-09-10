@@ -5,7 +5,7 @@ import YAML from "yaml";
 import { loadIndexerRegistry } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { approvedKnowledgeContentDigest, approvedKnowledgeSnapshotsFromStructure } from "../project/approvedKnowledgeSnapshots.js";

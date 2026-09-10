@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { approveCandidates, completePartitionStage, completeAuthorStage } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";

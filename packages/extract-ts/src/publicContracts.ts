@@ -111,8 +111,11 @@ export async function enrichPublicContracts(input: {
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => "\n",
   };
-  const program = ts.createProgram([...sources.keys()], options, host);
   for (const source of sources.values()) input.symbols.push(...runtimeRegistrations(source), ...federationContracts(source));
+  // Internal source directories often have no public contract to resolve.
+  // Registration extraction above remains syntax-based and must still run.
+  if (!input.symbols.some(symbol => symbol.visibility === Visibility.Exported)) return;
+  const program = ts.createProgram([...sources.keys()], options, host);
   const checker = program.getTypeChecker();
   const diagnosticsByFile = new Map<string, readonly ts.Diagnostic[]>();
   for (const symbol of input.symbols) {

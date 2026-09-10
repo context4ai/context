@@ -1,7 +1,7 @@
 {
   "name": "c4a",
   "displayName": "C4A Context",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
   "author": {
     "name": "Context4AI",

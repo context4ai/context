@@ -33,11 +33,14 @@ describe("Context workflow 0.7.0 routing", () => {
         file: "src/index.ts",
         contract: {
           target: "package-output",
+          selection: "multiple",
+          recommended_choices: ["agent-knowledge-base", "documentation-website"],
           choices: [
             expect.objectContaining({
               id: "agent-knowledge-base",
               factory: "kbPackage",
             }),
+            expect.objectContaining({ id: "documentation-website", factory: "kbPackage", defaults: expect.objectContaining({ site: {} }) }),
             expect.objectContaining({ id: "llm-text", factory: "llmsPackage" }),
           ],
           resource_delivery: {

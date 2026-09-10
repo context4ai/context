@@ -456,7 +456,10 @@ export async function contextDebugStatus(projectRoot: string): Promise<Record<st
     trace_id: state?.traceId,
     event_count: events.length,
     counts,
+    // The observer has not emitted its terminal event yet. Keep other incomplete
+    // invocations (including earlier status commands) visible for diagnosis.
     unmatched_invocations: events.filter(event => event.kind === "cli.invoked" &&
+      event.invocation_id !== currentDebugInvocationId() &&
       !terminated.has(event.invocation_id))
       .map(event => ({ invocation_id: event.invocation_id, at: event.at, argv: event.data.argv,
         next: "No terminal event. Inspect current Route and accepted receipts before retrying; do not infer failure." })),

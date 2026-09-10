@@ -1,3 +1,4 @@
+import { resolveWaveReceiptBindings } from "./indexerWaveReceiptBinding.js";
 import { settleDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { rm } from "node:fs/promises";
@@ -81,11 +82,15 @@ async function settledReceipts(root: string, state: PartitionStream, ledger: Ind
   const { currentSpec } = await import("./indexerMainRunStoreRecords.js");
   const receipts = { ...state.completed_receipts };
   for (const binding of state.active_bindings) receipts[binding] = [];
-  for (const entry of ledger.entries) {
-    const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
-    const binding = partitionAuthorBinding(spec);
-    if (!state.active_bindings.includes(binding)) throw new TypeError("Settled Author receipt is outside the active wave");
-    receipts[binding]!.push(entry.execution_request_digest);
+  const specs = await Promise.all(ledger.entries.map(entry =>
+    currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest })));
+  const bindings = await resolveWaveReceiptBindings(root, state.active_bindings, specs);
+  for (const spec of specs) {
+    const receipt = spec.request.execution_request_digest;
+    receipts[bindings.get(receipt)!]!.push(receipt);
+  }
+  if (state.active_bindings.some(binding => receipts[binding]!.length === 0)) {
+    throw new TypeError("author-receipt-wave-mismatch: active wave has a missing accepted receipt; preserve the workspace for recovery");
   }
   return receipts;
 }
@@ -114,11 +119,12 @@ async function resumePartitionStreamUnlocked(root: string): Promise<boolean> {
     if (!ledger?.entries.every(entry => entry.stage === "author" && entry.state === "accepted")) {
       throw new TypeError("Cannot resume planning before the active Author wave has settled");
     }
+    const receipts = await settledReceipts(root, state, ledger);
     if (state.active_bindings.length) await settleDeliveryCadence(root, indexerProtocolDigest(state.active_bindings));
     const { digest: previousDigest, ...previous } = state; void previousDigest;
     state = partitionStreamRecord({ ...previous, phase: "resuming",
       completed_bindings: [...new Set([...state.completed_bindings, ...state.active_bindings])],
-      completed_receipts: await settledReceipts(root, state, ledger),
+      completed_receipts: receipts,
       active_bindings: [],
     });
     await atomicWriteFile(join(root, PARTITION_STREAM_PATH), JSON.stringify(state));
@@ -153,12 +159,13 @@ export function finishPartitionStream(root: string): Promise<boolean> {
         !state.partition_ledger.entries.every(entry => entry.state === "accepted")) return false;
     const ledger = await currentLedger(root);
     if (!ledger?.entries.every(entry => entry.stage === "author" && entry.state === "accepted")) return false;
+    const receipts = await settledReceipts(root, state, ledger);
     if (state.active_bindings.length) await settleDeliveryCadence(root, indexerProtocolDigest(state.active_bindings));
     const { digest: _digest, ...payload } = state; void _digest;
     await atomicWriteFile(join(root, PARTITION_STREAM_PATH), JSON.stringify(partitionStreamRecord({
       ...payload, phase: "planning", active_bindings: [],
       completed_bindings: [...new Set([...state.completed_bindings, ...state.active_bindings])],
-      completed_receipts: await settledReceipts(root, state, ledger),
+      completed_receipts: receipts,
     })));
     return true;
   });

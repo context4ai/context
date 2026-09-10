@@ -1,7 +1,11 @@
-import { readReadingStructure } from "./readingStructure.js";
+import { readKnowledgeMap } from "./knowledgeMap.js";
+import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
+import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
+import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
+import { workspaceVersionFingerprint, writePackageVersion, recordWorkspaceBuild } from "./workspaceBuildVersion.js";
 import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
 import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
-import { writePackageReadingStructure } from "./packageReadingStructure.js";
+import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
 import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
 import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
@@ -10,7 +14,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import type { PackageDefinition } from "@c4a/context";
+import { loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
+import { siteArticleSources } from "./packageSiteSources.js";
 import { parse as parseYaml } from "yaml";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -90,7 +95,13 @@ export interface ProjectBuildResult {
   agent_hints: PackageBuildAgentHint[];
 }
 
-export type PackageBuildAgentHint = RuntimeEventPendingAgentHint;
+export type PackageBuildAgentHint = RuntimeEventPendingAgentHint | {
+  reason_code: "website-deployment-ready";
+  severity: "info";
+  package_name: string;
+  site_dir: string;
+  message: string;
+};
 
 export interface PackageFreshness {
   name: string;
@@ -113,7 +124,7 @@ interface PackageBuildManifest {
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v22-article-link-diagnostics";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v23-sibling-site-output";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -224,7 +235,10 @@ async function packageInputFingerprint(input: {
         ...(input.pkg.assets === undefined ? {} : { definition: input.pkg.assets }),
       })
     : null;
+  const siteRegistry = input.pkg.kind === "package.kb" && input.pkg.site
+    ? await loadSourcesRegistry({ rootDir: input.projectRoot }) : undefined;
   return stableHash({
+    siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.content, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
     package: {
@@ -233,10 +247,13 @@ async function packageInputFingerprint(input: {
       select: input.pkg.select ?? null,
       navigation: input.pkg.kind === "package.kb" ? packageNavigation(input.pkg) : null,
       assets: input.pkg.kind === "package.kb" ? input.pkg.assets ?? null : null,
+      ...(input.pkg.kind === "package.kb" && input.pkg.site ? { site: { ...input.pkg.site, renderer: PACKAGE_SITE_VERSION } } : {}),
       template: input.pkg.template,
       outDir: input.pkg.outDir,
     },
-    readingStructure: await readReadingStructure(input.projectRoot) ?? null,
+    knowledgeMap: await readKnowledgeMap(input.projectRoot) ?? null,
+    workspaceVersion: await workspaceVersionFingerprint(input.projectRoot),
+    llmsRenderer: PACKAGE_LLMS_VERSION,
     knowledgeStructure: input.structure.parsed,
     knowledge: input.selected.map((file) => ({
       path: file.relPath,
@@ -327,7 +344,7 @@ async function writePackageFingerprint(input: {
 async function removeOrphanPackageDirs(projectRoot: string, packages: readonly PackageDefinition[]): Promise<void> {
   const distRoot = join(projectRoot, "dist");
   if (!existsSync(distRoot)) return;
-  const declaredNames = new Set(packages.map((pkg) => pkg.name));
+  const declaredNames = new Set(packages.flatMap(pkg => packageOutputDirs(pkg).map(path => path.slice("dist/".length))));
   const entries = await readdir(distRoot, { withFileTypes: true });
   await Promise.all(entries
     .filter((entry) => entry.isDirectory() && !declaredNames.has(entry.name))
@@ -338,6 +355,7 @@ export async function collectPackageFreshness(
   projectRoot: string,
   packages: readonly PackageDefinition[],
 ): Promise<PackageFreshness[]> {
+  assertDistinctPackageOutputs(packages);
   const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
   return Promise.all(packages.map(async (pkg) => {
     assertPackageOutputDir(pkg);
@@ -415,7 +433,11 @@ export async function collectPackageFreshness(
 }
 
 export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
-  try { return await buildProjectPackagesInternal(projectRoot, options); }
+  try {
+    const result = await buildProjectPackagesInternal(projectRoot, options);
+    await recordWorkspaceBuild(projectRoot);
+    return result;
+  }
   catch (error) {
     if (options.delivery !== false && (await readIndexerDelivery(projectRoot))?.current.length) {
       await interruptDeliveryCadence(projectRoot);
@@ -434,6 +456,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
   }
   const loaded = await loadContextProjectModule(projectRoot);
   const packages = loaded.project.packages;
+  assertDistinctPackageOutputs(packages);
   if (packages.length === 0) {
     throw new ContextError(ExitCode.UserError, "no packages are declared in src/index.ts", {
       category: ErrorCategory.UserInputInvalid,
@@ -486,7 +509,6 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
   }
   const summaries: PackageBuildSummary[] = [];
   const agentHints: PackageBuildAgentHint[] = [];
-  await removeOrphanPackageDirs(projectRoot, packages);
   for (const pkg of packages) {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);
@@ -517,6 +539,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       const existingOutput = await packageOutputFingerprint(projectRoot, pkg);
       if (existingOutput.fingerprint === previousManifest.outputFingerprint) {
         summaries.push({ name: pkg.name, kind: packageKind(pkg), outDir: pkg.outDir,
+          ...(pkg.kind === "package.kb" && pkg.site ? { siteOutDir: packageSiteOutputDir(pkg) } : {}),
           inputs: selected.length, files: existingOutput.files, state: "unchanged",
           linkWarnings: previousManifest.linkWarnings,
           changes: { added: [], updated: [], removed: [] }, resources: {
@@ -577,7 +600,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         selected,
         knowledgeTimestamp,
       });
-      await writePackageReadingStructure({ projectRoot, pkg: stagedPkg, selected, structure: await readReadingStructure(projectRoot) });
+      await writePackageKnowledgeMap({ projectRoot, pkg: stagedPkg, selected, structure: await readKnowledgeMap(projectRoot) });
       await writePackageBuildInventory({ projectRoot, pkg: stagedPkg, inventory: buildInventory });
       await appendLlmsKnowledge({
         projectRoot,
@@ -586,6 +609,15 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         knowledgeCount: selected.length,
         templateConsumesKnowledge: rendered.consumesKnowledge,
       });
+      const reading = await readKnowledgeMap(projectRoot);
+      if (stagedPkg.kind === "package.llms") {
+        const articles = await Promise.all(llmsArticles(stagedPkg, selected).map(async article => ({ ...article,
+          content: await readFile(join(projectRoot, stagedPkg.outDir, article.path), "utf8") })));
+        await writeLlmsDocuments(join(projectRoot, stagedPkg.outDir), buildLlmsDocuments({ title: stagedPkg.name,
+          articles, ...(reading ? { map: reading } : {}) }), { preserveIndex: true });
+      }
+      await writePackageVersion(projectRoot, join(projectRoot, stagedPkg.outDir));
+      await writePackageSite({ projectRoot, pkg: stagedPkg, selected, ...(reading ? { structure: reading } : {}) });
       const linkWarnings: PackageBuildLinkWarning[] = [...writtenKnowledge.linkWarnings,
         ...await inspectPackageMarkdownDirectory(join(projectRoot, stagedPkg.outDir))];
       return { ...writtenKnowledge, linkWarnings };
@@ -606,6 +638,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     });
     summaries.push({
       name: pkg.name,
+      ...(pkg.kind === "package.kb" && pkg.site ? { siteOutDir: packageSiteOutputDir(pkg) } : {}),
       kind: packageKind(pkg),
       outDir: pkg.outDir,
       inputs: selected.length,
@@ -620,6 +653,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       changes,
     });
   }
+  await removeOrphanPackageDirs(projectRoot, packages);
   if (summaries.length > 0 && options.delivery !== false) {
     const { readTaskRollback } = await import("./taskRollback.js");
     const { readMaintenance } = await import("./maintenanceStorage.js");
@@ -635,6 +669,14 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(projectRoot);
     }
+  }
+  for (const summary of summaries) {
+    if (!packages.some((pkg) => pkg.name === summary.name && "site" in pkg && pkg.site)) continue;
+    agentHints.push({
+      reason_code: "website-deployment-ready", severity: "info",
+      package_name: summary.name, site_dir: packageSiteOutputDir(summary),
+      message: "Website output is ready, including intermediate or unchanged builds. Tell the user it can be deployed with a deployment skill. Reuse existing publishing configuration; otherwise discover available deployment skills and recommend a compatible one, or follow the user's choice. Deploy only within the user's authorization, pass the site directory, and verify the published URL before reporting success.",
+    });
   }
   return { projectRoot, packages: summaries, agent_hints: agentHints };
 }
@@ -653,6 +695,7 @@ function formatProjectBuildResult(
         kind: pkg.kind,
         outDir: pkg.outDir,
         state: pkg.state,
+        ...(pkg.siteOutDir ? { siteOutDir: pkg.siteOutDir } : {}),
         inputs: pkg.inputs,
         files: pkg.files,
         resources: pkg.resources,
@@ -669,7 +712,9 @@ function formatProjectBuildResult(
     action: "built",
     subject: "project packages",
     headline: `${result.packages.length} package(s)`,
-    body: result.packages.flatMap((pkg) => formatPackageBuildSummary(pkg)),
+    body: [...result.packages.flatMap((pkg) => formatPackageBuildSummary(pkg)),
+      ...result.agent_hints.filter((hint) => hint.reason_code === "website-deployment-ready")
+        .map((hint) => `${hint.site_dir}: ${hint.message}`)],
   });
 }
 

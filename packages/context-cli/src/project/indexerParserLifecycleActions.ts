@@ -21,10 +21,9 @@ import {
   executeProjectIndexerParserPlan,
   type IndexerParserRuntimeExecutionReceipt,
 } from "./indexerParserRuntimeExecution.js";
-import { collectReusableIndexerParserSources } from "./indexerParserRuntimeReuse.js";
-import { loadProjectIndexerParser } from "./indexerParserRuntimeImport.js";
+import { prepareParserEntry } from "./indexerParserEntryWorker.js";
+import { cachedParserPreparation } from "./parserPreparationCache.js";
 import {
-  materializeProjectIndexerParserEntryInput,
   materializeProjectIndexerParserFiles,
   type ProjectIndexerParserFilesMaterialization,
 } from "./indexerParserSourceMaterialization.js";
@@ -121,38 +120,6 @@ export async function executeProjectIndexerParserPlanAction(input: {
   );
   const mappingByCapability = new Map(mappings.map((mapping) => [mapping.capability, mapping]));
   const lockByCapability = new Map(locks.map((lock) => [lock.capability, lock]));
-  const reusableSources = collectReusableIndexerParserSources({
-    ...(input.previous_execution === undefined
-      ? {}
-      : { previous_execution: input.previous_execution }),
-    entries: plan.entries,
-    locks,
-    profile_contract_digest: plan.profile_contract_digest,
-  });
-  const entryInputs = [];
-  for (const entry of plan.entries) {
-    const sourceKey = `${entry.source_ref}\u0000${entry.module_ref ?? ""}`;
-    if (reusableSources.has(sourceKey)) continue;
-    const requirement = requirementByCapability.get(entry.capability);
-    const mapping = mappingByCapability.get(entry.capability);
-    const lock = lockByCapability.get(entry.capability);
-    if (requirement === undefined || mapping === undefined || lock === undefined) {
-      throw new TypeError(`parser runtime resolution set does not satisfy ${entry.capability}`);
-    }
-    const loaded = await loadProjectIndexerParser({
-      requirement,
-      mapping,
-      lock,
-    });
-    entryInputs.push(await materializeProjectIndexerParserEntryInput({
-      projectRoot: input.projectRoot,
-      entry_digest: indexerParserExecutionEntryDigest(entry),
-      capability: entry.capability,
-      source_ref: entry.source_ref,
-      normalized_paths: entry.files.map((file) => file.normalized_path),
-      loaded_module: loaded.module,
-    }));
-  }
   return executeProjectIndexerParserPlan({
     projectRoot: input.projectRoot,
     profile_contract: profileContract,
@@ -161,7 +128,31 @@ export async function executeProjectIndexerParserPlanAction(input: {
     dependencies: value.dependencies,
     mappings,
     locks,
-    entry_inputs: entryInputs,
+    entry_inputs: [],
+    load_entry_input: async (entry) => {
+      const requirement = requirementByCapability.get(entry.capability);
+      const mapping = mappingByCapability.get(entry.capability);
+      const lock = lockByCapability.get(entry.capability);
+      if (requirement === undefined || mapping === undefined || lock === undefined) {
+        throw new TypeError(`parser runtime resolution set does not satisfy ${entry.capability}`);
+      }
+      const preparation = {
+        projectRoot: input.projectRoot,
+        entry_digest: indexerParserExecutionEntryDigest(entry),
+        capability: entry.capability,
+        source_ref: entry.source_ref,
+        normalized_paths: entry.files.map((file) => file.normalized_path),
+        requirement, mapping, lock,
+      };
+      return cachedParserPreparation({
+        projectRoot: input.projectRoot,
+        slot: { source: entry.source_ref, module: entry.module_ref, capability: entry.capability },
+        identity: { preparation, source_boundary: sourceBoundaryDigest },
+        entryDigest: preparation.entry_digest,
+        prepare: () => prepareParserEntry(preparation),
+        onHit: () => { process.stderr.write(`[context parser] ${entry.capability}: preparation cache hit (${entry.files.length} files)\n`); },
+      });
+    },
     ...(input.previous_execution === undefined
       ? {}
       : { previous_execution: input.previous_execution }),

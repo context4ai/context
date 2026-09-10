@@ -14,6 +14,23 @@ function inputDefinition(name: keyof typeof indexerCurrentActionInputDefinitions
       effectStrategy: "input",
     },
   );
+  if (name === "authorBatch") {
+    // The CLI resolves the current task before parsing each Author result.
+    // Standalone SDK semantic inputs retain their required group identity.
+    const inheritGroup = (value: unknown): void => {
+      if (value === null || typeof value !== "object") return;
+      if (Array.isArray(value)) { value.forEach(inheritGroup); return; }
+      const node = value as Record<string, unknown>;
+      const properties = node.properties as Record<string, unknown> | undefined;
+      if (properties?.group_key !== undefined && Array.isArray(node.required)) {
+        node.required = node.required.filter(key => key !== "group_key");
+        properties.group_key = { ...(properties.group_key as object),
+          description: "May be omitted in a CLI batch to inherit the current task's group. An explicit value must match; standalone SDK results still require it." };
+      }
+      Object.values(node).forEach(inheritGroup);
+    };
+    inheritGroup(schema);
+  }
   return schema;
 }
 

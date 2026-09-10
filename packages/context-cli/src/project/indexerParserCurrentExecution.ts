@@ -40,6 +40,7 @@ import {
 } from "./indexerParserRuntimeIndex.js";
 import { parserRuntimeReadCounters } from "./indexerParserRuntimeChunk.js";
 import { IndexerInputScopeError } from "./indexerInputScopeRecovery.js";
+import { parserProgress } from "./parserProgress.js";
 
 const CACHE_ROOT = join(LIFECYCLE_ROOT, "indexer-parser-executions");
 const inFlight = new Map<string, Promise<IndexerParserRuntimeExecutionReceipt>>();
@@ -63,6 +64,8 @@ function parserPackageSetDigest(packages: readonly InstalledIndexerParserPackage
 async function readAuthorizedIndex(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   profile_contract_digest: string;
   require_current_sources?: boolean;
 }): Promise<IndexerParserRuntimeIndexManifest | undefined> {
@@ -98,6 +101,8 @@ async function readAuthorizedIndex(input: {
 async function readReusableExecution(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   profile_contract_digest: string;
   parser_packages: readonly InstalledIndexerParserPackage[];
 }): Promise<IndexerParserRuntimeExecutionReceipt | undefined> {
@@ -122,6 +127,8 @@ async function readReusableExecution(input: {
 async function readCachedExecution(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   profile_contract_digest: string;
 }): Promise<IndexerParserRuntimeExecutionReceipt | undefined> {
   const started = performance.now();
@@ -168,6 +175,8 @@ async function readCachedExecution(input: {
 async function readCachedSourceSlice(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   profile_contract_digest: string;
   source_ref: string;
   module_ref: string | null;
@@ -261,11 +270,14 @@ function uniquePackageCoordinates(mappings: readonly IndexerParserCoordinateMapp
 async function executeCurrent(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
 }): Promise<IndexerParserRuntimeExecutionReceipt> {
   const profileContract = bundledIndexerProfileContract();
   const cached = await readCachedExecution({
     projectRoot: input.projectRoot,
     indexer_id: input.indexer_id,
+    ...(input.cache_key === undefined ? {} : { cache_key: input.cache_key }),
     profile_contract_digest: profileContract.contract_digest,
   });
   if (cached !== undefined) return cached;
@@ -273,6 +285,7 @@ async function executeCurrent(input: {
     projectRoot: input.projectRoot,
     indexer_id: input.indexer_id,
     profile_contract: profileContract,
+    ...(input.source_scope === undefined ? {} : { source_scope: input.source_scope }),
   });
   const dependencyInput = {
     protocol: "context.indexer.parser-dependency-intent-input/v1",
@@ -294,6 +307,7 @@ async function executeCurrent(input: {
   const previousExecution = await readReusableExecution({
     projectRoot: input.projectRoot,
     indexer_id: input.indexer_id,
+    ...(input.cache_key === undefined ? {} : { cache_key: input.cache_key }),
     profile_contract_digest: profileContract.contract_digest,
     parser_packages: resolutions,
   });
@@ -322,7 +336,6 @@ async function executeCurrent(input: {
       parser_locks: locked.locks,
     },
     materialized,
-    ...(previousExecution === undefined ? {} : { previous_execution: previousExecution }),
   });
   const execution = await executeProjectIndexerParserPlanAction({
     projectRoot: input.projectRoot,
@@ -335,6 +348,7 @@ async function executeCurrent(input: {
       locks: locked.locks,
     },
     materialized,
+    ...(previousExecution === undefined ? {} : { previous_execution: previousExecution }),
   });
   const parserPackages = [...resolutions].sort((left, right) =>
     left.package.localeCompare(right.package)
@@ -342,6 +356,7 @@ async function executeCurrent(input: {
   await writeIndexerParserRuntimeIndex({
     projectRoot: input.projectRoot,
     indexer_id: input.indexer_id,
+    ...(input.cache_key === undefined ? {} : { cache_key: input.cache_key }),
     indexer_digest: indexerProtocolDigest(materialized.indexer),
     source_registry_digest: plan.source_registry_digest,
     parser_packages: parserPackages,
@@ -358,11 +373,20 @@ async function executeCurrent(input: {
 export async function ensureCurrentProjectIndexerParserExecution(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
 }): Promise<IndexerParserRuntimeExecutionReceipt> {
-  const key = `${input.projectRoot}\u0000${input.indexer_id}`;
+  const key = `${input.projectRoot}\u0000${input.cache_key ?? input.indexer_id}`;
   const active = inFlight.get(key);
   if (active !== undefined) return active;
-  const next = executeCurrent(input).finally(() => inFlight.delete(key));
+  const progress = parserProgress(`${input.source_scope?.source_ref ?? input.indexer_id}: inventory / parse / cache`);
+  const next = executeCurrent(input).then(result => {
+    progress.close();
+    return result;
+  }, error => {
+    progress.close("failed; resume from current Route");
+    throw error;
+  }).finally(() => inFlight.delete(key));
   inFlight.set(key, next);
   return next;
 }
@@ -370,6 +394,8 @@ export async function ensureCurrentProjectIndexerParserExecution(input: {
 export async function ensureCurrentProjectIndexerParserSourceSlice(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   source_ref: string;
   module_ref: string | null;
   profile_contract_digest: string;
@@ -377,13 +403,21 @@ export async function ensureCurrentProjectIndexerParserSourceSlice(input: {
 }): Promise<IndexerParserRuntimeSourceSlice> {
   const cached = await readCachedSourceSlice(input);
   if (cached !== undefined) return cached;
-  const execution = await ensureCurrentProjectIndexerParserExecution({
-    projectRoot: input.projectRoot,
-    indexer_id: input.indexer_id,
-  });
+  const scopedInput = {
+    ...input,
+    cache_key: `${input.indexer_id}:source:${indexerProtocolDigest({
+      source_ref: input.source_ref, module_ref: input.module_ref,
+      ...(input.selection?.paths === undefined ? {} : { paths: [...new Set(input.selection.paths)].sort() }),
+    })}`,
+    source_scope: { source_ref: input.source_ref, module_ref: input.module_ref,
+      ...(input.selection?.paths === undefined ? {} : { paths: input.selection.paths }) },
+  };
+  const scopedCached = await readCachedSourceSlice(scopedInput);
+  if (scopedCached !== undefined) return scopedCached;
+  const execution = await ensureCurrentProjectIndexerParserExecution(scopedInput);
   if (input.selection !== undefined) {
-    const manifest = await readIndexerParserRuntimeIndexManifest(input);
-    return readIndexerParserRuntimeSourceSlice({ ...input, manifest });
+    const manifest = await readIndexerParserRuntimeIndexManifest(scopedInput);
+    return readIndexerParserRuntimeSourceSlice({ ...scopedInput, manifest });
   }
   const sourceBinding = execution.source_bindings.find((binding) =>
     binding.source_ref === input.source_ref && binding.module_ref === input.module_ref
@@ -408,6 +442,8 @@ export async function ensureCurrentProjectIndexerParserSourceSlice(input: {
 export async function ensureCurrentProjectIndexerParserSourceIdentity(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
+  source_scope?: { source_ref: string; module_ref: string | null; paths?: readonly string[] };
   source_ref: string;
   module_ref: string | null;
   profile_contract_digest: string;
@@ -429,8 +465,24 @@ export async function ensureCurrentProjectIndexerParserSourceIdentity(input: {
       // A corrupt identity chunk must be rebuilt from the current source authority.
     }
   }
-  await ensureCurrentProjectIndexerParserExecution(input);
-  manifest = await readIndexerParserRuntimeIndexManifest(input);
-  const metadata = await readIndexerParserRuntimeSourceMetadata({ ...input, manifest, counters });
-  return metadata.source_binding.source_identity_inventory;
+  const scopedInput = {
+    ...input,
+    cache_key: `${input.indexer_id}:source:${indexerProtocolDigest({
+      source_ref: input.source_ref, module_ref: input.module_ref,
+    })}`,
+    source_scope: { source_ref: input.source_ref, module_ref: input.module_ref },
+  };
+  manifest = await readAuthorizedIndex(scopedInput);
+  if (manifest === undefined) {
+    await ensureCurrentProjectIndexerParserExecution(scopedInput);
+    manifest = await readIndexerParserRuntimeIndexManifest(scopedInput);
+  }
+  try {
+    const metadata = await readIndexerParserRuntimeSourceMetadata({ ...scopedInput, manifest, counters });
+    return metadata.source_binding.source_identity_inventory;
+  } catch {
+    // Slice continuation validates and repairs corrupt chunks before reuse.
+    const slice = await ensureCurrentProjectIndexerParserSourceSlice(input);
+    return slice.source_binding.source_identity_inventory;
+  }
 }

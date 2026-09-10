@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: inspect-task-recovery
+runner: agent
+effect: read
+skill: skills/recover-workspace/SKILL.md

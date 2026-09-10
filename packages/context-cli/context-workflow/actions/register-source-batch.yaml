@@ -1,6 +1,6 @@
 schema: agent-graph.action.v1
 id: register-source-batch
-description: Register the source batch explicitly confirmed in the current conversation.
+description: Register the source batch after the complete work-start report was presented and the boundary was explicitly confirmed.
 runner: command
 effect: write
 command: context source add batch --input .tmp/agent-payloads/source-batch.json --format json

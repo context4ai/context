@@ -1,10 +1,11 @@
+import { placeApprovedReadingFixture } from "./knowledgeMapReview.fixture.js";
 import { test, expect } from "bun:test";
 import { cp, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { configureDeliveryCadence } from "../project/indexerDeliveryCadence.js";
 import { readPartitionStream } from "../project/indexerPartitionStream.js";
 import { readCurrentIndexerFinalization } from "../project/indexerCurrentFinalization.js";
@@ -51,12 +52,16 @@ test("all planned Indexers can deliver an early Author wave before global respon
       if ((await readPartitionStream(root))?.final_wave === false) sawEarlyDelivery = true;
       await approveCandidates(root, candidates);
       await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
       await acceptStarterPackageTemplates({ projectRoot: root });
+      await (await import("./workspaceVersionDelivery.fixture.js")).recordFixtureVersionIfRequired(root);
       await buildProjectPackages(root);
       if ((await collectProjectStatus(root, { managed: true })).workflow.status === "complete") break;
       await advanceCurrentIndexerLifecycle(root);
     }
     expect(sawEarlyDelivery).toBe(true);
     expect((await collectProjectStatus(root, { managed: true })).workflow.status).toBe("complete");
+    const { readWorkspaceChangelog } = await import("../project/workspaceChangelog.js");
+    expect(await readWorkspaceChangelog(root)).toHaveLength(1);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 90000);

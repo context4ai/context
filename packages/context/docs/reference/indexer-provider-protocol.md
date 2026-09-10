@@ -47,6 +47,25 @@ Writing style, chapter drift and ordinary Provider version differences remain
 guidance. Changed source/approval identities invalidate an in-flight supporting
 projection; they are not semantic content judgments.
 
+## Current CLI Author batches
+
+Use the current Route's task keys and supplied scaffold. Within a CLI batch,
+`group_key` may be omitted: preview and completion inherit it from the selected
+current task. An explicitly different group is rejected. Standalone SDK semantic
+results still require `group_key`. Intent and eligible policy use the existing
+page-plan defaults; changing a page's purpose is not a metadata repair.
+
+The inventory reading joins exact member/fact identities to parser names, kinds
+and explicit `propsType` values. These are navigation references, not proof that
+a symbol is public or a member has been covered. Keep semantic dispositions and
+source evidence explicit.
+
+On a stale revision, the CLI exposes a current Route snapshot and current tasks,
+plus accepted identities available from the current main ledger and its Composers.
+Task keys are local to each Route. Compare stable workset/request identities,
+read the new Route and do not replay accepted work. Missing historical records
+are not evidence that old work is unaccepted.
+
 ## Resources and execution
 
 A Provider may contain a controlled program, profile-bound instructions,

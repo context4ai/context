@@ -1,3 +1,4 @@
+import { prepareIndexerBatchRecovery } from "./indexerBatchRecovery.js";
 import { assertProjectWorkflowRevisionValue } from "./statusCommand.js";
 import { resolveCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
 import { ContextError } from "../lib/errors.js";
@@ -18,6 +19,9 @@ export async function assertCurrentIndexerBatchRevision(input: {
     ` --workflow-authority '${authority}'`
   ).join("");
   const command = `context${authorityOptions} status${input.managed ? " --managed" : ""} --view summary --format json`;
+  // Diagnostic I/O must not replace the original stale error if storage is unavailable.
+  let recovery: Awaited<ReturnType<typeof prepareIndexerBatchRecovery>> | undefined;
+  try { recovery = await prepareIndexerBatchRecovery(input.projectRoot, route); } catch { /* Keep the refresh command. */ }
   throw new ContextError(
     ExitCode.WorkspaceStateError,
     `The supplied revision does not match the current Indexer route. Re-run \`${command}\` and use the new route.`,
@@ -27,6 +31,7 @@ export async function assertCurrentIndexerBatchRevision(input: {
       expected_revision: input.expectedRevision,
       current_revision: route?.revision ?? null,
       revision_advanced: false,
+      ...(recovery === undefined ? {} : { recovery }),
       next_action: {
         kind: "refresh_workflow_route",
         cwd: input.projectRoot,

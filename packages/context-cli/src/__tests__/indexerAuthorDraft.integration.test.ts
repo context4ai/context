@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { indexerAuthorSemanticInputSchema } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext, resolveCurrentIndexerWorkflowRoute } from "../project/indexerCurrentWorkflowRoute.js";
 import { scaffoldCurrentAuthor } from "../project/indexerAuthorDraft.js";
 import { scaffoldAuthorTask } from "../project/indexerAuthorScaffold.js";
@@ -41,7 +41,12 @@ test("Author grouped draft validates without changing acceptance, then commits t
         member_dispositions: [{ items: skeleton.result.member_dispositions.map(item => item.item), state: "covered", section: "overview" }],
       } });
     }
-    const value = { stage: "author", results };
+    // Exercise CLI inheritance through both preview and real acceptance.
+    const value = { stage: "author", results: results.map(row => {
+      const { group_key: _group, ...result } = row.result;
+      void _group;
+      return { ...row, result };
+    }) };
     const route = (await resolveCurrentIndexerWorkflowRoute({ projectRoot: root, authorities, managed: true }))!;
     const before = JSON.stringify(await currentLedger(root));
     const scaffold = await scaffoldCurrentAuthor({ projectRoot: root, revision: route.revision, managed: true, authorities });
@@ -54,7 +59,7 @@ test("Author grouped draft validates without changing acceptance, then commits t
     expect(resource.digest).toBe(`sha256:${createHash("sha256").update(scaffoldText).digest("hex")}`);
     const repeated = (await resolveCurrentIndexerWorkflowRoute({ projectRoot: root, authorities, managed: true }))!;
     expect(repeated.resources.recommended.find(item => item.id === resource.id)).toEqual(resource);
-    const binary = join(import.meta.dir, "../../dist/cli.js");
+    const binary = process.env.CONTEXT_TEST_CLI ?? join(import.meta.dir, "../../dist/cli.js");
     const cli = await promisify(execFile)("node", [binary,
       ...authorities.flatMap(authority => ["--workflow-authority", authority]),
       "action", "scaffold-current", "--revision", route.revision, "--managed", "--format", "json"],
@@ -66,6 +71,10 @@ test("Author grouped draft validates without changing acceptance, then commits t
       throw new Error("Expected stale revision");
     } catch (error) {
       if (!(error instanceof ContextError)) throw error;
+      const recovery = error.detail?.recovery as { current_route: { file: string }; current_tasks: unknown[]; accepted_receipts: { file: string; count: number } };
+      expect(JSON.parse(await readFile(recovery.current_route.file, "utf8")).revision).toBe(route.revision);
+      expect(recovery.current_tasks).toHaveLength(current.descriptor.tasks.length);
+      expect(JSON.parse(await readFile(recovery.accepted_receipts.file, "utf8")).accepted).toHaveLength(recovery.accepted_receipts.count);
       const action = error.detail?.next_action as { cwd: string; command: string };
       expect(action.cwd).toBe(root);
       const args = action.command.match(/'[^']*'|\S+/gu)!.slice(1).map(arg => arg.replace(/^'|'$/gu, ""));
@@ -75,6 +84,25 @@ test("Author grouped draft validates without changing acceptance, then commits t
       expect(JSON.parse(refreshed.stdout)).toBeDefined();
       expect(JSON.stringify(await currentLedger(root))).toBe(before);
     }
+    const wrongGroup = { stage: "author", results: value.results.map(row => ({ ...row,
+      result: { ...row.result, group_key: "another-group" } })) };
+    const wrongPreview = await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
+      authorities, value: wrongGroup, preview: true });
+    expect(wrongPreview).toMatchObject({ valid: false, committed_count: 0 });
+    const wrongComplete = await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
+      authorities, value: wrongGroup });
+    if (!("outcomes" in wrongComplete)) throw new Error("Expected failed outcomes");
+    expect(wrongComplete.outcomes.every(item => item.outcome === "failed")).toBe(true);
+    expect(JSON.stringify(await currentLedger(root))).toBe(before);
+    const nodePreview = await new Promise<string>((resolve, reject) => {
+      const child = execFile("node", [binary, ...authorities.flatMap(authority => ["--workflow-authority", authority]),
+        "action", "complete-current", "--preview", "--revision", route.revision, "--managed", "--input", "-", "--format", "json"],
+        { cwd: root, env: { ...process.env, CONTEXT_RUNTIME_EVENTS_DISABLED: "1" }, maxBuffer: 4 * 1024 * 1024 },
+        (error, stdout) => error ? reject(error) : resolve(stdout));
+      child.stdin!.end(JSON.stringify(value));
+    });
+    expect(JSON.parse(nodePreview)).toMatchObject({ valid: true, committed_count: 0 });
+    expect(JSON.stringify(await currentLedger(root))).toBe(before);
     const preview = await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true, authorities, value, preview: true });
     if (!("validation_results" in preview)) throw new Error("Expected Author preview");
     expect(preview).toMatchObject({ valid: true });

@@ -52,7 +52,7 @@ describe("current Indexer workflow Route contract", () => {
       "utf8",
     )) as object;
     const accepted = [
-      { stage: "structure-review", decision: "approved" },
+      { stage: "structure-review", decision: "approved", knowledge_map: { expected_revision: null, upsert: [], remove: [] } },
       {
         stage: "structure-review",
         decision: "request-adjustment",

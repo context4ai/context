@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { canonicalIndexerNodeRef, indexerArtifactRef, indexerAuthorSemanticInputSchema } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
@@ -87,6 +87,7 @@ test("a required cross-topic article waits for approval, receives supporting fac
       await approveCandidates(root, await readCandidateRecords(root));
       await closeProjectWorkspace(root);
       await acceptStarterPackageTemplates({ projectRoot: root });
+      await (await import("./workspaceVersionDelivery.fixture.js")).recordFixtureVersionIfRequired(root);
       await buildProjectPackages(root);
       if ((await collectProjectStatus(root, { managed: true })).workflow.status === "complete") { waves++; break; }
       await advanceCurrentIndexerLifecycle(root);

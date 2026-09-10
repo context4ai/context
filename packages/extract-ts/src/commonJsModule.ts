@@ -286,8 +286,8 @@ const collectDynamicDiagnostics = (sourceFile: ts.SourceFile): ExtractionDiagnos
 export const analyzeCommonJsModule = (
   source: string,
   filePath: string,
+  sourceFile: ts.SourceFile = createEcmaScriptSourceFile(source, filePath),
 ): CommonJsModuleAnalysis => {
-  const sourceFile = createEcmaScriptSourceFile(source, filePath);
   const bindings = collectBindings(sourceFile);
   const bindingMap = new Map(bindings.map((binding) => [binding.localName, binding]));
   const result: CommonJsModuleAnalysis = {

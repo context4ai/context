@@ -170,7 +170,7 @@ function allowedArtifactIntents(input: {
 
 function sourcePrecedenceDigest(binding: ProjectIndexerMainSourceBinding): string {
   return binding.adapter === "parser-facts"
-    ? binding.parser_binding.source_merge_digest
+    ? binding.parser_binding?.source_merge_digest ?? binding.source_identity_inventory.inventory_digest
     : indexerProtocolDigest({
         source_snapshot_digest: binding.source_snapshot_digest,
         source_identity_inventory_digest: binding.source_identity_inventory.inventory_digest,
@@ -442,6 +442,9 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     request,
     validation: {
       stage: "author",
+      ...(input.binding.adapter === "parser-facts" && input.binding.analysis_scopes !== undefined
+        ? { parser_analysis_scopes: { source_ref: input.binding.source_ref,
+            module_ref: input.binding.module_ref, scopes: input.binding.analysis_scopes } } : {}),
       ...(input.page_guidance === undefined ? {} : { page_guidance: input.page_guidance }),
       ...(input.article_guidance === undefined ? {} : { article_guidance: input.article_guidance }),
       ...(input.article_templates === undefined ? {} : { article_templates: input.article_templates }),

@@ -3,23 +3,30 @@
   "$id": "https://context4ai.dev/schemas/context-source-batch-input.v1.json",
   "title": "Context source batch input",
   "description": "One confirmed batch of repository, local document, and Lark document source boundaries.",
-  "oneOf": [
-    {
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "work_start_report",
+    "sources"
+  ],
+  "properties": {
+    "work_start_report": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "sources"
+        "path"
       ],
       "properties": {
-        "sources": {
-          "$ref": "#/$defs/sources"
+        "path": {
+          "const": ".tmp/work-start-report.md"
         }
-      }
+      },
+      "description": "The complete report already presented at the first-task source-boundary gate."
     },
-    {
+    "sources": {
       "$ref": "#/$defs/sources"
     }
-  ],
+  },
   "$defs": {
     "module": {
       "type": "string",

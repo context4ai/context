@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -9,7 +11,10 @@ import {
   isDateSourceNamespace,
 } from "./documentSourceRegistration.js";
 import { addRepoSourceUnlocked } from "./repoSources.js";
+import { safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { withProjectWriteLock } from "./writeLock.js";
+
+const WORK_START_REPORT_PATH = ".tmp/work-start-report.md";
 
 type SourceBatchItem =
   | { type: "repo"; module: string; local?: string; remote?: string; ref?: string }
@@ -146,16 +151,81 @@ function parseBatchPayload(payload: unknown): SourceBatchItem[] {
   return items;
 }
 
+async function verifyWorkStartReport(input: {
+  projectRoot: string;
+  payload: unknown;
+  required: boolean;
+}): Promise<{ path: string; digest: string } | undefined> {
+  if (Array.isArray(input.payload)) {
+    if (!input.required) return undefined;
+    throw inputError("source registration from the current Route requires work_start_report", {
+      path: "work_start_report",
+      next: "Complete and present the work-start report, then use the current source-boundary schema.",
+    });
+  }
+  const payload = recordAt(input.payload, "payload");
+  if (payload.work_start_report === undefined) {
+    if (!input.required) return undefined;
+    throw inputError("source registration from the current Route requires work_start_report", {
+      path: "work_start_report",
+      next: "Complete and present the work-start report, then use the current source-boundary schema.",
+    });
+  }
+  const report = recordAt(payload.work_start_report, "work_start_report");
+  const unknown = Object.keys(report).filter((key) => key !== "path");
+  if (unknown.length > 0) {
+    throw inputError(`work_start_report has unsupported field(s): ${unknown.join(", ")}`, {
+      path: "work_start_report",
+      fields: unknown,
+    });
+  }
+  const path = requiredString(report, "path", "work_start_report");
+  if (path !== WORK_START_REPORT_PATH) {
+    throw inputError(`work_start_report.path must be ${WORK_START_REPORT_PATH}`, {
+      path: "work_start_report.path",
+    });
+  }
+  const absolute = await safeProjectTarget(input.projectRoot, path);
+  let content: Buffer;
+  try {
+    content = await readFile(absolute);
+  } catch (error) {
+    if (error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      throw inputError(`work-start report does not exist: ${path}`, {
+        path,
+        next: "Resolve the required start conditions, write and present the report, then retry source registration.",
+      });
+    }
+    throw error;
+  }
+  if (content.toString("utf8").trim().length === 0) {
+    throw inputError(`work-start report is empty: ${path}`, {
+      path,
+      next: "Resolve the required start conditions, write and present the report, then retry source registration.",
+    });
+  }
+  return {
+    path,
+    digest: `sha256:${createHash("sha256").update(content).digest("hex")}`,
+  };
+}
+
 export async function registerSourceBatch(input: {
   projectRoot: string;
   namespace: string;
   payload: unknown;
+  requireWorkStartReport?: boolean;
 }): Promise<Record<string, unknown>> {
   if (!isDateSourceNamespace(input.namespace)) {
     throw inputError(`source add batch date must be a valid YYYYMMDD date: ${input.namespace}`, {
       path: "date",
     });
   }
+  const workStartReport = await verifyWorkStartReport({
+    projectRoot: input.projectRoot,
+    payload: input.payload,
+    required: input.requireWorkStartReport === true,
+  });
   const items = parseBatchPayload(input.payload);
   return withProjectWriteLock(input.projectRoot, "source-add-batch", async () => {
     const registered: Record<string, unknown>[] = [];
@@ -197,6 +267,7 @@ export async function registerSourceBatch(input: {
       namespace: input.namespace,
       total: registered.length,
       registered,
+      ...(workStartReport === undefined ? {} : { work_start_report: workStartReport }),
     };
   });
 }
