@@ -43,6 +43,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
     "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --max-concurrency=1 --timeout=120000",
+    "test:full": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full --max-concurrency=1 --timeout=1200000",
+    "test:full-only": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full-only --max-concurrency=1 --timeout=1200000",
     "lint": "eslint src --cache --cache-location .tmp/eslint-cache",
     "clean-cache": "bun run src/cli.ts clean-cache"
   },

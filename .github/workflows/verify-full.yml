@@ -1,0 +1,64 @@
+name: Sharded verification
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      full:
+        default: true
+        type: boolean
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Release tag or commit to verify
+        required: true
+        type: string
+      full:
+        description: Include full-only tests and Node artifact verification
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  verify-full:
+    name: Verify shard ${{ matrix.shard }}/4
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CONTEXT_TEST_SHARD: ${{ matrix.shard }}/4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build workspace
+        run: bun run build
+      - name: Verification
+        env:
+          VERIFY_SCRIPT: ${{ inputs.full && 'verify:full' || 'verify' }}
+        run: |
+          mkdir -p .tmp
+          set -o pipefail
+          bun run "$VERIFY_SCRIPT" 2>&1 | tee .tmp/verify-full.log
+      - name: Preserve full verification log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ inputs.full }}-${{ github.run_id }}-${{ matrix.shard }}
+          path: .tmp/verify-full.log
+          if-no-files-found: warn

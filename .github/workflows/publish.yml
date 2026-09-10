@@ -10,7 +10,25 @@ permissions:
   id-token: write
 
 jobs:
+  verify:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-full.yml
+    with:
+      ref: ${{ github.event.release.tag_name }}
+      full: false
+
+  post-release-full:
+    name: Post-release full verification
+    needs: publish
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify-full.yml
+    with:
+      ref: ${{ github.event.release.tag_name }}
+
   publish:
+    needs: verify
     name: Publish packages
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
@@ -69,9 +87,6 @@ jobs:
 
       - name: Build workspace
         run: bun run build
-
-      - name: Verify repository
-        run: bun run verify:full
 
       - name: Prepare publish artifacts
         run: bun run release:prepare

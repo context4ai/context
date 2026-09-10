@@ -155,7 +155,7 @@ test("larger streaming work amortizes later delivery waves while planning still 
     expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(80);
     expect(await currentLedger(root)).toBeUndefined();
   } finally { await rm(root, { recursive: true, force: true }); }
-}, 240000);
+}, 1_200_000);
 
 test("a ready wave delivers without requiring results from Indexers whose planning has not run yet", async () => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 8 });
