@@ -1,4 +1,5 @@
 import { expect } from "bun:test";
+import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import YAML from "yaml";
@@ -29,7 +30,8 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
     const id = `${scenario.profile}-${article.type}-page`;
     const selected = manifest.provider.templates.find((template: { id: string }) => template.id === id);
     if (!selected) throw new Error(`Scenario lacks a registered template: ${id}`);
-    const contract = indexerTemplateContractSchema.parse(splitFrontmatter(await readFile(join(providerRoot, selected.path), "utf8")).metadata);
+    const metadata = splitFrontmatter(await readFile(join(providerRoot, selected.path), "utf8")).metadata;
+    const contract = expandArticleBlueprint(metadata, selected)?.contract ?? indexerTemplateContractSchema.parse(metadata);
     for (const key of Object.keys(article.slots)) expect(contract.variables.some(variable => variable.id === key)).toBe(true);
     return { article, contract };
   }));

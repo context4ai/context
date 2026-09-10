@@ -1,3 +1,4 @@
+import { projectAuthorWritingBrief } from "./indexerAuthorWritingBrief.js";
 import { compactReadingMembers, MEMBER_ROWS_GUIDANCE } from "./indexerReadingMemberRows.js";
 import { compactAuthorFact, readingDetail } from "./indexerAuthorCompactReading.js";
 import { authorOptionalSource, authorRecordRows, projectAuthorAuthority, projectAuthorStyleNames, reuseAuthorMembers } from "./indexerAuthorReadingProjection.js";
@@ -140,7 +141,12 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
           "Current page — revise the requested content and preserve still-correct sections:", "",
           readingBlock(current_markdown, "markdown"), "");
       } else {
-        let displayed = { ...value };
+        let displayed = workset.stage === "author" && category === "author-authority"
+          ? projectAuthorWritingBrief(value) : { ...value };
+        if (typeof displayed.writing_brief === "string") {
+          material.push({ section: "Writing brief", identity: "selected-article-writing", markdown: displayed.writing_brief });
+          delete displayed.writing_brief;
+        }
         if (workset.stage === "author" && category === "author-authority" && displayed.page_template) {
           material.push({ section: "Selected page template", identity: JSON.stringify({ source: view.source_ref, category: "page-template" }),
             markdown: readingBlock(displayed.page_template) });
@@ -181,7 +187,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
         if (Array.isArray(targets) && targets.length === 0) {
           output.push("No reader-question targets are required: leave sections[].answers empty. If essential source content is genuinely missing, use outcome=request-material with a plain-language material_gaps[].question and source_hints from this task. Context keeps the task pending; no question ID is needed. Do not request material already present in Source material below.", "");
         }
-        output.push("For publish with page_plan.articles, return articles with their accepted keys and article-specific sections; use article_guidance for each selected blueprint. Otherwise inherit page_plan.artifact_intent (or omit artifact_intent to use that plan) and use page_guidance when supplied. Suggested chapters and ordinary version differences are advisory; preserve evidence and a useful next step. primary_artifact_options lists permitted primary forms and policies; other allowed intents may belong to derived pages. Do not duplicate the page to satisfy multiple forms.", "");
+        output.push("For publish with page_plan.articles, return articles with their accepted keys and article-specific sections; use the selected writing brief for each blueprint. Otherwise inherit page_plan.artifact_intent (or omit artifact_intent to use that plan) and use the supplied writing brief or legacy page_guidance. Suggested chapters and ordinary version differences are advisory; preserve evidence and a useful next step. primary_artifact_options lists permitted primary forms and policies; other allowed intents may belong to derived pages. Do not duplicate the page to satisfy multiple forms.", "");
       }
       if (workset.stage === "partition" || category === "index-requirement" || category === "source-access") {
         material.push({ section: "Goal and constraints",

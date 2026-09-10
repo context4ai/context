@@ -1,3 +1,4 @@
+import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -337,11 +338,13 @@ export async function materializeIndexerTemplate(input: {
     ? source.replace(/^[^\n]*(?:\n|$)/u, "")
     : source;
   const parsed = splitFrontmatter(contractSource);
-  const contract = indexerTemplateContractSchema.parse(parsed.metadata);
+  const binding = manifest.provider.templates!.find(item => item.id === input.templateId && item.profile === input.profile)!;
+  const shared = expandArticleBlueprint(parsed.metadata, binding);
+  const contract = shared?.contract ?? indexerTemplateContractSchema.parse(parsed.metadata);
   if (contract.template_id !== input.templateId || contract.profile !== input.profile) {
     throw new TypeError("Indexer template frontmatter does not match its manifest identity");
   }
-  const sectionBodies = parseSectionBodies(parsed.body);
+  const sectionBodies = shared?.section_bodies ?? parseSectionBodies(parsed.body);
   validateTemplateBody(contract, sectionBodies);
   const resourceRef = selected.origin === "provider"
     ? `provider-template:${manifest.id}@${manifest.version}#${input.profile}/${input.templateId}`

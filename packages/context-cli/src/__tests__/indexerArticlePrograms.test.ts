@@ -1,3 +1,4 @@
+import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
@@ -14,8 +15,9 @@ for (const provider of ["context-code-indexer", "context-markdown-indexer", "con
     expect(programs.length).toBeGreaterThan(0);
     for (const entry of programs) {
       const source = splitFrontmatter(await readFile(join(root, entry.path), "utf8"));
-      const contract = indexerTemplateContractSchema.parse(source.metadata);
-      const template = { contract, section_bodies: parseSectionBodies(source.body) };
+      const shared = expandArticleBlueprint(source.metadata, entry);
+      const contract = shared?.contract ?? indexerTemplateContractSchema.parse(source.metadata);
+      const template = shared ?? { contract, section_bodies: parseSectionBodies(source.body) };
       validateTemplateBody(contract, template.section_bodies);
       expect(contract.profile).toBe(entry.profile);
       expect(contract.reader_goal).toBe(entry.reader_goal);

@@ -1,15 +1,20 @@
+import YAML from "yaml";
+import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
-import { indexerTemplateContractSchema, renderIndexerDeterministicFacts, type IndexerArtifactFact, type IndexerArtifactResult } from '@c4a/context';
+import { renderIndexerDeterministicFacts, type IndexerArtifactFact, type IndexerArtifactResult } from '@c4a/context';
 import { applySelectedPageTemplate } from '../project/indexerPageTemplate.js';
-import { splitFrontmatter, parseSectionBodies } from '../project/indexerTemplateRendering.js';
+import { splitFrontmatter } from '../project/indexerTemplateRendering.js';
 import { readerKnowledgeDescription } from '../project/packageKnowledgeProjection.js';
 
 for (const name of ['web-application-f03', 'api-service-s02', 'api-service-s03', 'sdk-library-l01', 'component-library-l02']) {
   test(`${name} renders authorized contract facts without inventing unavailable contracts`, async () => {
-    const raw = splitFrontmatter(await readFile(join(import.meta.dir, '../../../../plugins/context/skills/context-code-indexer/templates/article-programs', `${name}-page.md`), 'utf8'));
-    const template = { contract: indexerTemplateContractSchema.parse(raw.metadata), section_bodies: parseSectionBodies(raw.body) };
+    const root = join(import.meta.dir, '../../../../plugins/context/skills/context-code-indexer');
+    const manifest = YAML.parse(await readFile(join(root, 'context-indexer.yaml'), 'utf8'));
+    const binding = manifest.provider.templates.find((item: { id: string }) => item.id === `${name}-page`);
+    const raw = splitFrontmatter(await readFile(join(root, binding.path), 'utf8'));
+    const template = expandArticleBlueprint(raw.metadata, binding)!;
     const make = (): Extract<IndexerArtifactResult['artifacts'][number], {representation: 'sections'}> => ({
       artifact_id: 'entry', artifact_kind: 'content', artifact_policy_variant: 'standard', representation: 'sections',
       sections: [{ section_key: 'entry--intro', owner_indexer_id: 'sample', document_kind: 'reference', reader_goal: template.contract.reader_goal,

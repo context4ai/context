@@ -1099,336 +1099,336 @@ provider:
       delivery: selected
     - id: domain-reference-c01-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/c01.md
     - id: technical-guide-c01-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/c01.md
     - id: domain-reference-c02-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-c02-page.md
+      path: templates/articles/c02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/c02.md
     - id: product-requirements-c02-page
       profile: product-requirements
-      path: templates/article-programs/product-requirements-c02-page.md
+      path: templates/articles/c02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/c02.md
     - id: user-and-developer-guide-c02-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-c02-page.md
+      path: templates/articles/c02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/c02.md
     - id: domain-reference-c03-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/c03.md
     - id: product-requirements-c03-page
       profile: product-requirements
-      path: templates/article-programs/product-requirements-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/c03.md
     - id: technical-guide-c04-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/c04.md
     - id: faq-support-c05-page
       profile: faq-support
-      path: templates/article-programs/faq-support-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: resolve-reader-question
       guidance_path: templates/articles/c05.md
     - id: runbook-c05-page
       profile: runbook
-      path: templates/article-programs/runbook-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system
       guidance_path: templates/articles/c05.md
     - id: incident-review-c05-page
       profile: incident-review
-      path: templates/article-programs/incident-review-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: learn-from-incident
       guidance_path: templates/articles/c05.md
     - id: decision-record-c06-page
       profile: decision-record
-      path: templates/article-programs/decision-record-c06-page.md
+      path: templates/articles/c06.md
       kind: page-program
       delivery: selected
       reader_goal: understand-decision-and-tradeoffs
       guidance_path: templates/articles/c06.md
     - id: incident-review-c06-page
       profile: incident-review
-      path: templates/article-programs/incident-review-c06-page.md
+      path: templates/articles/c06.md
       kind: page-program
       delivery: selected
       reader_goal: learn-from-incident
       guidance_path: templates/articles/c06.md
     - id: technical-guide-c07-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/c07.md
     - id: domain-reference-d01-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-d01-page.md
+      path: templates/articles/d01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/d01.md
     - id: technical-guide-d01-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-d01-page.md
+      path: templates/articles/d01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/d01.md
     - id: domain-reference-d02-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/d02.md
     - id: technical-guide-d02-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/d02.md
     - id: domain-reference-d03-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-d03-page.md
+      path: templates/articles/d03.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/d03.md
     - id: runbook-d04-page
       profile: runbook
-      path: templates/article-programs/runbook-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system
       guidance_path: templates/articles/d04.md
     - id: technical-guide-d04-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/d04.md
     - id: technical-guide-f01-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-f01-page.md
+      path: templates/articles/f01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/f01.md
     - id: technical-guide-f06-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-f06-page.md
+      path: templates/articles/f06.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/f06.md
     - id: technical-guide-f08-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-f08-page.md
+      path: templates/articles/f08.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/f08.md
     - id: runbook-f09-page
       profile: runbook
-      path: templates/article-programs/runbook-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system
       guidance_path: templates/articles/f09.md
     - id: user-and-developer-guide-f09-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: complete-reader-task
       guidance_path: templates/articles/f09.md
     - id: user-and-developer-guide-l01-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-l01-page.md
+      path: templates/articles/l01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/l01.md
     - id: user-and-developer-guide-l02-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-l02-page.md
+      path: templates/articles/l02.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/l02.md
     - id: technical-guide-l03-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-l03-page.md
+      path: templates/articles/l03.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/l03.md
     - id: user-and-developer-guide-l03-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-l03-page.md
+      path: templates/articles/l03.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/l03.md
     - id: technical-guide-l04-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-l04-page.md
+      path: templates/articles/l04.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/l04.md
     - id: user-and-developer-guide-l05-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-l05-page.md
+      path: templates/articles/l05.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/l05.md
     - id: test-validation-q01-page
       profile: test-validation
-      path: templates/article-programs/test-validation-q01-page.md
+      path: templates/articles/q01.md
       kind: page-program
       delivery: selected
       reader_goal: verify-behavior-or-acceptance
       guidance_path: templates/articles/q01.md
     - id: domain-reference-q01-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-q01-page.md
+      path: templates/articles/q01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/q01.md
     - id: test-validation-q02-page
       profile: test-validation
-      path: templates/article-programs/test-validation-q02-page.md
+      path: templates/articles/q02.md
       kind: page-program
       delivery: selected
       reader_goal: verify-behavior-or-acceptance
       guidance_path: templates/articles/q02.md
     - id: test-validation-q03-page
       profile: test-validation
-      path: templates/article-programs/test-validation-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: verify-behavior-or-acceptance
       guidance_path: templates/articles/q03.md
     - id: test-validation-q04-page
       profile: test-validation
-      path: templates/article-programs/test-validation-q04-page.md
+      path: templates/articles/q04.md
       kind: page-program
       delivery: selected
       reader_goal: verify-behavior-or-acceptance
       guidance_path: templates/articles/q04.md
     - id: test-validation-q05-page
       profile: test-validation
-      path: templates/article-programs/test-validation-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: verify-behavior-or-acceptance
       guidance_path: templates/articles/q05.md
     - id: runbook-q05-page
       profile: runbook
-      path: templates/article-programs/runbook-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system
       guidance_path: templates/articles/q05.md
     - id: runbook-q06-page
       profile: runbook
-      path: templates/article-programs/runbook-q06-page.md
+      path: templates/articles/q06.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system
       guidance_path: templates/articles/q06.md
     - id: user-and-developer-guide-q06-page
       profile: user-and-developer-guide
-      path: templates/article-programs/user-and-developer-guide-q06-page.md
+      path: templates/articles/q06.md
       kind: page-program
       delivery: selected
       reader_goal: understand-product-intent
       guidance_path: templates/articles/q06.md
     - id: incident-review-q07-page
       profile: incident-review
-      path: templates/article-programs/incident-review-q07-page.md
+      path: templates/articles/q07.md
       kind: page-program
       delivery: selected
       reader_goal: learn-from-incident
       guidance_path: templates/articles/q07.md
     - id: faq-support-q07-page
       profile: faq-support
-      path: templates/article-programs/faq-support-q07-page.md
+      path: templates/articles/q07.md
       kind: page-program
       delivery: selected
       reader_goal: resolve-reader-question
       guidance_path: templates/articles/q07.md
     - id: technical-guide-s01-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/s01.md
     - id: domain-reference-s04-page
       profile: domain-reference
-      path: templates/article-programs/domain-reference-s04-page.md
+      path: templates/articles/s04.md
       kind: page-program
       delivery: selected
       reader_goal: understand-domain
       guidance_path: templates/articles/s04.md
     - id: technical-guide-s05-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-s05-page.md
+      path: templates/articles/s05.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/s05.md
     - id: technical-guide-s06-page
       profile: technical-guide
-      path: templates/article-programs/technical-guide-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: understand-technical-design
       guidance_path: templates/articles/s06.md
     - id: runbook-s07-page
       profile: runbook
-      path: templates/article-programs/runbook-s07-page.md
+      path: templates/articles/s07.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-recover-system

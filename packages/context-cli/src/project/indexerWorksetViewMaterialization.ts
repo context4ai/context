@@ -1,3 +1,4 @@
+import { projectAuthorWritingBrief } from "./indexerAuthorWritingBrief.js";
 import { supportsPrimaryArtifact, primaryIntentKey, type PrimaryArtifactPolicy, type PrimaryArtifactIntent } from "./indexerPrimaryArtifactPolicy.js";
 import { buildPartitionNavigation } from "./indexerPartitionNavigation.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
@@ -64,7 +65,7 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
     }
   }
   const workset = spec.request.workset;
-  return JSON.parse(canonicalIndexerJson({
+  return JSON.parse(canonicalIndexerJson(projectAuthorWritingBrief({
     expected_subject_key: spec.validation.expected_subject_key,
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
@@ -96,7 +97,7 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
           ...(entry.state === "resolved" ? { subject_key: entry.subject_key } : {}),
         }))
       : [],
-  })) as IndexerJson;
+  }))) as IndexerJson;
 }
 
 export interface IndexerWorksetViewMaterializationRequest {

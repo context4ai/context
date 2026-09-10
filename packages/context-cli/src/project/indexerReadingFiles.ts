@@ -15,9 +15,12 @@ export function planIndexerReadingFiles(tasks: readonly IndexerTaskReading[]) {
     }
     return key;
   };
+  // Small one-task guidance belongs in its reading, not another round trip.
+  // Repeated material is still grouped once within a batch; substantial stable
+  // references retain digest-based reuse across batches.
   const stable = (block: IndexerTaskReading["material"][number]) =>
-    block.section === "Selected page template" ||
-    (block.section === "Goal and constraints" && /^### (index-requirement|source-access)\n/mu.test(block.markdown));
+    Buffer.byteLength(block.markdown) > 8 * 1024 && (block.section === "Selected page template" ||
+    (block.section === "Goal and constraints" && /^### (index-requirement|source-access)\n/mu.test(block.markdown)));
   const owners = new Map<string, Set<string>>();
   for (const task of tasks) for (const key of new Set(task.material.map(keyOf))) {
     const keys = owners.get(key) ?? new Set<string>();

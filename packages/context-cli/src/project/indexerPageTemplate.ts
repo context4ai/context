@@ -1,3 +1,4 @@
+import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerArticleSectionKey, indexerTemplateContractSchema, projectIndexerFactValue, projectIndexerPublicContractTable, type IndexerTemplateContract,
@@ -50,6 +51,8 @@ export async function loadSelectedPageTemplate(input: Parameters<typeof loadSele
   const source = await loadSelectedPageSource(input);
   if (source === undefined) return undefined;
   const { template, authority, parsed } = source;
+  const shared = template.kind === "page-program" ? expandArticleBlueprint(parsed.metadata, template) : undefined;
+  if (shared !== undefined) return shared;
   // Procedure resources guide prose; executable resources additionally render
   // fields. Keep that distinction explicit in the current Provider catalog.
   if ((parsed.metadata as { kind?: unknown })?.kind === "procedure") return undefined;

@@ -1,3 +1,4 @@
+import { encodeTemplateSnapshots, hydrateTemplateSnapshots } from "./indexerTemplateSnapshots.js";
 import { reuseCommandFileRead } from "./commandReadCache.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -217,7 +218,7 @@ export async function currentSpec(input: {
     read: async () => {
   const value = await readJsonMaybe(input.projectRoot, runSpecPath(input.request_digest));
   if (value === undefined) throw new TypeError("main run request cache is missing");
-  const spec = normalizeRunSpec(value);
+  const spec = normalizeRunSpec(await hydrateTemplateSnapshots(input.projectRoot, value));
   if (spec.request.execution_request_digest !== input.request_digest) {
     throw new TypeError("main run request cache path does not match its request digest");
   }
@@ -232,8 +233,10 @@ async function writeTarget(input: {
   value: unknown;
   immutable?: boolean;
 }): Promise<IndexerProjectFileTarget | undefined> {
-  const content = jsonContent(input.value);
   const existing = await readMaybe(input.projectRoot, input.path);
+  // Preserve unchanged legacy inline records without rewriting their history.
+  if (existing === jsonContent(input.value)) return undefined;
+  const content = jsonContent(await encodeTemplateSnapshots(input.projectRoot, input.value));
   if (existing === content) return undefined;
   if (input.immutable === true && existing !== undefined) {
     throw new TypeError(`content-addressed Indexer runtime record is immutable: ${input.path}`);

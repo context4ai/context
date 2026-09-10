@@ -1,3 +1,4 @@
+import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { describe, expect, test } from "bun:test";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
@@ -113,7 +114,7 @@ describe("plugin prompt and workflow resource contract", () => {
 
   test("code-index archetype templates live only in the Provider Bundle", async () => {
     const manifest = YAML.parse(await read(CODE_INDEXER_ROOT, "context-indexer.yaml")) as {
-      provider: { templates: Array<{ path: string; kind: string }> };
+      provider: { templates: Array<{ id: string; profile: string; reader_goal?: string; path: string; kind: string }> };
     };
     expect(manifest.provider.templates.length).toBeGreaterThan(0);
     for (const template of manifest.provider.templates) {
@@ -121,7 +122,7 @@ describe("plugin prompt and workflow resource contract", () => {
       expect(content.trim().length, template.path).toBeGreaterThan(0);
       if (template.kind === "page-program") {
         // Parse executable material; prose headings and formatting are not contracts.
-        expect(() => indexerTemplateContractSchema.parse(splitFrontmatter(content).metadata),
+        expect(() => indexerTemplateContractSchema.parse(expandArticleBlueprint(splitFrontmatter(content).metadata, template)?.contract ?? splitFrontmatter(content).metadata),
           template.path).not.toThrow();
       }
     }

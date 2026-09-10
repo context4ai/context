@@ -33,7 +33,8 @@ test("selected article program binds semantic slots through Author and produces 
     expect(validation.article_templates?.["component-guide"]?.contract.template_id).toBe("component-library-l02-page");
     const guidance = task.spec.validation.article_guidance as Record<string, { content: string }>;
     const reading = renderIndexerWorksetReading({ view: task.view, workset, task_key: current.descriptor.tasks[0]!.task_key });
-    expect(reading).toContain(JSON.stringify(guidance["component-guide"]!.content));
+    expect(reading).toContain(guidance["component-guide"]!.content.trim());
+    expect(reading).not.toContain("minimum_evidence_items");
     expect(reading).toContain('"template_id": "component-library-l02-page"');
     const fact = task.view.items.find(item => item.category === "fact")!;
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key,

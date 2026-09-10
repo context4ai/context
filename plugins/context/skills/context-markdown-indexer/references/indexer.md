@@ -107,3 +107,7 @@ Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies th
 ## Existing source images and tables
 
 For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.
+
+## Reading selected article material
+
+Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI applies executable contracts and evidence bindings; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.

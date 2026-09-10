@@ -83,9 +83,9 @@ test("shared instruction identity survives batch changes and isolates changed co
     const input = authorReadingFixture(index, 0);
     const requirement = input.view.items.find(item => item.category === "index-requirement")!;
     requirement.ref = "requirement:stable";
-    requirement.value = { purpose: "Stable public goal" };
+    requirement.value = { purpose: "Stable public goal", retained_reference: "Source-backed detailed guidance. ".repeat(400) };
     const authority = input.view.items.find(item => item.category === "author-authority")!;
-    authority.value = { page_plan: { title: input.task_key }, page_template: { id: "public", sections: ["overview"] } };
+    authority.value = { page_plan: { title: input.task_key }, page_template: { id: "public", sections: ["overview"], retained_reference: "Detailed template instructions. ".repeat(400) } };
     return input;
   };
   const a = make(0), b = make(1), c = make(2);

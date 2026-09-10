@@ -220,7 +220,11 @@ export async function resolveCurrentProjectIndexerPrimaryAuthority(input: {
         .filter((item) => activeProfiles.includes(item.profile))
         .map((item) => ({ kind: "template", path: item.path })),
     ];
-    return declared.map((resource) => {
+    // Several profile/template IDs may bind one immutable source document.
+    // Execution authority records that physical resource once, while the
+    // manifest retains every allowed template identity.
+    const unique = [...new Map(declared.map(resource => [JSON.stringify([resource.kind, resource.path]), resource])).values()];
+    return unique.map((resource) => {
       const digest = fileDigest.get(resource.path);
       if (digest === undefined) {
         throw new TypeError(`Indexer ${indexer.id} Provider resource ${resource.path} is missing`);

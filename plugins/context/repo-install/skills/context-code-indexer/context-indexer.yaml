@@ -1732,1505 +1732,1505 @@ provider:
       delivery: selected
     - id: monorepo-container-c01-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: web-application-c01-page
       profile: web-application
-      path: templates/article-programs/web-application-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/c01.md
     - id: component-library-c01-page
       profile: component-library
-      path: templates/article-programs/component-library-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: sdk-library-c01-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: cli-tool-c01-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: plugin-extension-c01-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: api-service-c01-page
       profile: api-service
-      path: templates/article-programs/api-service-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: gateway-facade-c01-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: domain-service-c01-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: background-runtime-c01-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c01.md
     - id: event-consumer-c01-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c01.md
     - id: data-sync-reconciliation-c01-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c01.md
     - id: storage-repository-c01-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: adapter-integration-c01-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c01.md
     - id: contract-source-c01-page
       profile: contract-source
-      path: templates/article-programs/contract-source-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: derived-generated-source-c01-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-c01-page.md
+      path: templates/articles/c01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c01.md
     - id: web-application-c02-page
       profile: web-application
-      path: templates/article-programs/web-application-c02-page.md
+      path: templates/articles/c02.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/c02.md
     - id: domain-service-c02-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c02-page.md
+      path: templates/articles/c02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c02.md
     - id: monorepo-container-c03-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: web-application-c03-page
       profile: web-application
-      path: templates/article-programs/web-application-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/c03.md
     - id: component-library-c03-page
       profile: component-library
-      path: templates/article-programs/component-library-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: sdk-library-c03-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: cli-tool-c03-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: plugin-extension-c03-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: api-service-c03-page
       profile: api-service
-      path: templates/article-programs/api-service-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: gateway-facade-c03-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: domain-service-c03-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: background-runtime-c03-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c03.md
     - id: event-consumer-c03-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c03.md
     - id: data-sync-reconciliation-c03-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c03.md
     - id: storage-repository-c03-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: adapter-integration-c03-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c03.md
     - id: contract-source-c03-page
       profile: contract-source
-      path: templates/article-programs/contract-source-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: derived-generated-source-c03-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-c03-page.md
+      path: templates/articles/c03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c03.md
     - id: monorepo-container-c04-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: web-application-c04-page
       profile: web-application
-      path: templates/article-programs/web-application-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/c04.md
     - id: component-library-c04-page
       profile: component-library
-      path: templates/article-programs/component-library-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: sdk-library-c04-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: cli-tool-c04-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: plugin-extension-c04-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: api-service-c04-page
       profile: api-service
-      path: templates/article-programs/api-service-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: gateway-facade-c04-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: domain-service-c04-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: background-runtime-c04-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c04.md
     - id: event-consumer-c04-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c04.md
     - id: data-sync-reconciliation-c04-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/c04.md
     - id: storage-repository-c04-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: adapter-integration-c04-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/c04.md
     - id: contract-source-c04-page
       profile: contract-source
-      path: templates/article-programs/contract-source-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: derived-generated-source-c04-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-c04-page.md
+      path: templates/articles/c04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c04.md
     - id: monorepo-container-c05-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: web-application-c05-page
       profile: web-application
-      path: templates/article-programs/web-application-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: component-library-c05-page
       profile: component-library
-      path: templates/article-programs/component-library-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: sdk-library-c05-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: cli-tool-c05-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: plugin-extension-c05-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: api-service-c05-page
       profile: api-service
-      path: templates/article-programs/api-service-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: gateway-facade-c05-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: domain-service-c05-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: background-runtime-c05-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: event-consumer-c05-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: data-sync-reconciliation-c05-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: storage-repository-c05-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: adapter-integration-c05-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c05.md
     - id: contract-source-c05-page
       profile: contract-source
-      path: templates/article-programs/contract-source-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c05.md
     - id: derived-generated-source-c05-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-c05-page.md
+      path: templates/articles/c05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c05.md
     - id: monorepo-container-c07-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: web-application-c07-page
       profile: web-application
-      path: templates/article-programs/web-application-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: component-library-c07-page
       profile: component-library
-      path: templates/article-programs/component-library-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: sdk-library-c07-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: cli-tool-c07-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: plugin-extension-c07-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: api-service-c07-page
       profile: api-service
-      path: templates/article-programs/api-service-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: gateway-facade-c07-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: domain-service-c07-page
       profile: domain-service
-      path: templates/article-programs/domain-service-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: background-runtime-c07-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: event-consumer-c07-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: data-sync-reconciliation-c07-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: storage-repository-c07-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: adapter-integration-c07-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/c07.md
     - id: contract-source-c07-page
       profile: contract-source
-      path: templates/article-programs/contract-source-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c07.md
     - id: derived-generated-source-c07-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-c07-page.md
+      path: templates/articles/c07.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/c07.md
     - id: monorepo-container-d01-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-d01-page.md
+      path: templates/articles/d01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/d01.md
     - id: web-application-d02-page
       profile: web-application
-      path: templates/article-programs/web-application-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/d02.md
     - id: api-service-d02-page
       profile: api-service
-      path: templates/article-programs/api-service-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d02.md
     - id: gateway-facade-d02-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d02.md
     - id: domain-service-d02-page
       profile: domain-service
-      path: templates/article-programs/domain-service-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d02.md
     - id: background-runtime-d02-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/d02.md
     - id: event-consumer-d02-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/d02.md
     - id: data-sync-reconciliation-d02-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/d02.md
     - id: storage-repository-d02-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d02.md
     - id: adapter-integration-d02-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-d02-page.md
+      path: templates/articles/d02.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/d02.md
     - id: domain-service-d03-page
       profile: domain-service
-      path: templates/article-programs/domain-service-d03-page.md
+      path: templates/articles/d03.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d03.md
     - id: web-application-d03-page
       profile: web-application
-      path: templates/article-programs/web-application-d03-page.md
+      path: templates/articles/d03.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d03.md
     - id: monorepo-container-d04-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: web-application-d04-page
       profile: web-application
-      path: templates/article-programs/web-application-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: component-library-d04-page
       profile: component-library
-      path: templates/article-programs/component-library-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: sdk-library-d04-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: cli-tool-d04-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: plugin-extension-d04-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: api-service-d04-page
       profile: api-service
-      path: templates/article-programs/api-service-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: gateway-facade-d04-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: domain-service-d04-page
       profile: domain-service
-      path: templates/article-programs/domain-service-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: background-runtime-d04-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: event-consumer-d04-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: data-sync-reconciliation-d04-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: storage-repository-d04-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: adapter-integration-d04-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/d04.md
     - id: contract-source-d04-page
       profile: contract-source
-      path: templates/article-programs/contract-source-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d04.md
     - id: derived-generated-source-d04-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-d04-page.md
+      path: templates/articles/d04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/d04.md
     - id: web-application-f01-page
       profile: web-application
-      path: templates/article-programs/web-application-f01-page.md
+      path: templates/articles/f01.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f01.md
     - id: web-application-f02-page
       profile: web-application
-      path: templates/article-programs/web-application-f02-page.md
+      path: templates/articles/f02.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f02.md
     - id: web-application-f03-page
       profile: web-application
-      path: templates/article-programs/web-application-f03-page.md
+      path: templates/articles/f03.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f03.md
     - id: web-application-f04-page
       profile: web-application
-      path: templates/article-programs/web-application-f04-page.md
+      path: templates/articles/f04.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f04.md
     - id: web-application-f05-page
       profile: web-application
-      path: templates/article-programs/web-application-f05-page.md
+      path: templates/articles/f05.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f05.md
     - id: web-application-f06-page
       profile: web-application
-      path: templates/article-programs/web-application-f06-page.md
+      path: templates/articles/f06.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f06.md
     - id: contract-source-f06-page
       profile: contract-source
-      path: templates/article-programs/contract-source-f06-page.md
+      path: templates/articles/f06.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/f06.md
     - id: derived-generated-source-f06-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-f06-page.md
+      path: templates/articles/f06.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/f06.md
     - id: web-application-f07-page
       profile: web-application
-      path: templates/article-programs/web-application-f07-page.md
+      path: templates/articles/f07.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f07.md
     - id: web-application-f08-page
       profile: web-application
-      path: templates/article-programs/web-application-f08-page.md
+      path: templates/articles/f08.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f08.md
     - id: monorepo-container-f09-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: web-application-f09-page
       profile: web-application
-      path: templates/article-programs/web-application-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: component-library-f09-page
       profile: component-library
-      path: templates/article-programs/component-library-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: sdk-library-f09-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: cli-tool-f09-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: plugin-extension-f09-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: api-service-f09-page
       profile: api-service
-      path: templates/article-programs/api-service-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: gateway-facade-f09-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: domain-service-f09-page
       profile: domain-service
-      path: templates/article-programs/domain-service-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: background-runtime-f09-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: event-consumer-f09-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: data-sync-reconciliation-f09-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: storage-repository-f09-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: adapter-integration-f09-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/f09.md
     - id: contract-source-f09-page
       profile: contract-source
-      path: templates/article-programs/contract-source-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/f09.md
     - id: derived-generated-source-f09-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-f09-page.md
+      path: templates/articles/f09.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/f09.md
     - id: web-application-f10-page
       profile: web-application
-      path: templates/article-programs/web-application-f10-page.md
+      path: templates/articles/f10.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-host-and-remote
       guidance_path: templates/articles/f10.md
     - id: monorepo-container-f11-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-f11-page.md
+      path: templates/articles/f11.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/f11.md
     - id: web-application-f11-page
       profile: web-application
-      path: templates/article-programs/web-application-f11-page.md
+      path: templates/articles/f11.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f11.md
     - id: web-application-f12-page
       profile: web-application
-      path: templates/article-programs/web-application-f12-page.md
+      path: templates/articles/f12.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/f12.md
     - id: sdk-library-l01-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-l01-page.md
+      path: templates/articles/l01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l01.md
     - id: cli-tool-l01-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-l01-page.md
+      path: templates/articles/l01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l01.md
     - id: plugin-extension-l01-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-l01-page.md
+      path: templates/articles/l01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l01.md
     - id: adapter-integration-l01-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-l01-page.md
+      path: templates/articles/l01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l01.md
     - id: component-library-l02-page
       profile: component-library
-      path: templates/article-programs/component-library-l02-page.md
+      path: templates/articles/l02.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l02.md
     - id: component-library-l03-page
       profile: component-library
-      path: templates/article-programs/component-library-l03-page.md
+      path: templates/articles/l03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l03.md
     - id: sdk-library-l03-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-l03-page.md
+      path: templates/articles/l03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l03.md
     - id: plugin-extension-l04-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-l04-page.md
+      path: templates/articles/l04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l04.md
     - id: adapter-integration-l04-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-l04-page.md
+      path: templates/articles/l04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l04.md
     - id: sdk-library-l04-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-l04-page.md
+      path: templates/articles/l04.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l04.md
     - id: gateway-facade-l04-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-l04-page.md
+      path: templates/articles/l04.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/l04.md
     - id: component-library-l05-page
       profile: component-library
-      path: templates/article-programs/component-library-l05-page.md
+      path: templates/articles/l05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/l05.md
     - id: monorepo-container-q03-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: web-application-q03-page
       profile: web-application
-      path: templates/article-programs/web-application-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/q03.md
     - id: component-library-q03-page
       profile: component-library
-      path: templates/article-programs/component-library-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: sdk-library-q03-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: cli-tool-q03-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: plugin-extension-q03-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: api-service-q03-page
       profile: api-service
-      path: templates/article-programs/api-service-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: gateway-facade-q03-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: domain-service-q03-page
       profile: domain-service
-      path: templates/article-programs/domain-service-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: background-runtime-q03-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q03.md
     - id: event-consumer-q03-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q03.md
     - id: data-sync-reconciliation-q03-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q03.md
     - id: storage-repository-q03-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: adapter-integration-q03-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q03.md
     - id: contract-source-q03-page
       profile: contract-source
-      path: templates/article-programs/contract-source-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: derived-generated-source-q03-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-q03-page.md
+      path: templates/articles/q03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q03.md
     - id: monorepo-container-q05-page
       profile: monorepo-container
-      path: templates/article-programs/monorepo-container-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: web-application-q05-page
       profile: web-application
-      path: templates/article-programs/web-application-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: develop-page-task
       guidance_path: templates/articles/q05.md
     - id: component-library-q05-page
       profile: component-library
-      path: templates/article-programs/component-library-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: sdk-library-q05-page
       profile: sdk-library
-      path: templates/article-programs/sdk-library-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: cli-tool-q05-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: plugin-extension-q05-page
       profile: plugin-extension
-      path: templates/article-programs/plugin-extension-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: api-service-q05-page
       profile: api-service
-      path: templates/article-programs/api-service-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: gateway-facade-q05-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: domain-service-q05-page
       profile: domain-service
-      path: templates/article-programs/domain-service-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: background-runtime-q05-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q05.md
     - id: event-consumer-q05-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q05.md
     - id: data-sync-reconciliation-q05-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/q05.md
     - id: storage-repository-q05-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: adapter-integration-q05-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q05.md
     - id: contract-source-q05-page
       profile: contract-source
-      path: templates/article-programs/contract-source-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: derived-generated-source-q05-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-q05-page.md
+      path: templates/articles/q05.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/q05.md
     - id: cli-tool-q06-page
       profile: cli-tool
-      path: templates/article-programs/cli-tool-q06-page.md
+      path: templates/articles/q06.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/q06.md
     - id: api-service-s01-page
       profile: api-service
-      path: templates/article-programs/api-service-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s01.md
     - id: gateway-facade-s01-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s01.md
     - id: domain-service-s01-page
       profile: domain-service
-      path: templates/article-programs/domain-service-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s01.md
     - id: background-runtime-s01-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/s01.md
     - id: event-consumer-s01-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/s01.md
     - id: data-sync-reconciliation-s01-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/s01.md
     - id: storage-repository-s01-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s01.md
     - id: adapter-integration-s01-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-s01-page.md
+      path: templates/articles/s01.md
       kind: page-program
       delivery: selected
       reader_goal: integrate-capability
       guidance_path: templates/articles/s01.md
     - id: api-service-s02-page
       profile: api-service
-      path: templates/article-programs/api-service-s02-page.md
+      path: templates/articles/s02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s02.md
     - id: gateway-facade-s02-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-s02-page.md
+      path: templates/articles/s02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s02.md
     - id: contract-source-s02-page
       profile: contract-source
-      path: templates/article-programs/contract-source-s02-page.md
+      path: templates/articles/s02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s02.md
     - id: derived-generated-source-s02-page
       profile: derived-generated-source
-      path: templates/article-programs/derived-generated-source-s02-page.md
+      path: templates/articles/s02.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s02.md
     - id: api-service-s03-page
       profile: api-service
-      path: templates/article-programs/api-service-s03-page.md
+      path: templates/articles/s03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s03.md
     - id: gateway-facade-s03-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-s03-page.md
+      path: templates/articles/s03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s03.md
     - id: domain-service-s03-page
       profile: domain-service
-      path: templates/article-programs/domain-service-s03-page.md
+      path: templates/articles/s03.md
       kind: page-program
       delivery: selected
       reader_goal: look-up-public-contract
       guidance_path: templates/articles/s03.md
     - id: domain-service-s04-page
       profile: domain-service
-      path: templates/article-programs/domain-service-s04-page.md
+      path: templates/articles/s04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s04.md
     - id: web-application-s04-page
       profile: web-application
-      path: templates/article-programs/web-application-s04-page.md
+      path: templates/articles/s04.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s04.md
     - id: storage-repository-s05-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-s05-page.md
+      path: templates/articles/s05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s05.md
     - id: domain-service-s05-page
       profile: domain-service
-      path: templates/article-programs/domain-service-s05-page.md
+      path: templates/articles/s05.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s05.md
     - id: api-service-s06-page
       profile: api-service
-      path: templates/article-programs/api-service-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: gateway-facade-s06-page
       profile: gateway-facade
-      path: templates/article-programs/gateway-facade-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: domain-service-s06-page
       profile: domain-service
-      path: templates/article-programs/domain-service-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: background-runtime-s06-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: event-consumer-s06-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: data-sync-reconciliation-s06-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: storage-repository-s06-page
       profile: storage-repository
-      path: templates/article-programs/storage-repository-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: adapter-integration-s06-page
       profile: adapter-integration
-      path: templates/article-programs/adapter-integration-s06-page.md
+      path: templates/articles/s06.md
       kind: page-program
       delivery: selected
       reader_goal: modify-or-diagnose-module
       guidance_path: templates/articles/s06.md
     - id: background-runtime-s07-page
       profile: background-runtime
-      path: templates/article-programs/background-runtime-s07-page.md
+      path: templates/articles/s07.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/s07.md
     - id: event-consumer-s07-page
       profile: event-consumer
-      path: templates/article-programs/event-consumer-s07-page.md
+      path: templates/articles/s07.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task
       guidance_path: templates/articles/s07.md
     - id: data-sync-reconciliation-s07-page
       profile: data-sync-reconciliation
-      path: templates/article-programs/data-sync-reconciliation-s07-page.md
+      path: templates/articles/s07.md
       kind: page-program
       delivery: selected
       reader_goal: operate-or-extend-task

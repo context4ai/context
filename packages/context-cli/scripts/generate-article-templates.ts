@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import YAML from "yaml";
-import { indexerTemplateContractSchema } from "../../context/src/indexerTemplateRendering.js";
+
 import { bundledIndexerProfileContract } from "../src/project/indexerBaseContracts.js";
 import { ARTICLE_BLUEPRINT_SLOTS } from "./indexerArticleBlueprints.js";
 
@@ -64,27 +64,18 @@ for (const provider of providers) {
     const includeApi = ["f03", "s02", "s03", "l01", "l02"].includes(blueprint) && provider === "context-code-indexer";
     const apiVariable = blueprint === "l02" ? "api" : "contract_api";
     if (blueprint === "l02" && !includeApi) slots.splice(3, 0, { key: "api", heading: "API 与公开契约" });
-    const variables = slots.map(slot => ({ id: slot.key, type: "string", content_layer: "semantic-prose", required: false, evidence_required: true }));
-    const sections = slots.map(slot => ({ section_key: slot.key, presence: "optional", question_ref: `question:${blueprint}-${slot.key}`,
-      reader_goal: goal, variable_ids: [slot.key], deterministic_block_ids: [], accepted_evidence_kinds: ["code", "contract", "configuration", "documentation"],
-      minimum_evidence_items: 0, on_missing: "omit", deletion_condition: "Omit when not applicable or no supported value is supplied." }));
-    const blocks = includeApi ? [{id: "api-table", renderer: "public-contract-table", source_variable_id: apiVariable}] : [];
-    if (includeApi) sections.splice(3, 0, { ...sections[0]!, section_key: apiVariable, question_ref: "question:public-contract", variable_ids: [apiVariable], deterministic_block_ids: ["api-table"] });
-    const contract = indexerTemplateContractSchema.parse({ protocol: "context.indexer.template/v1", template_id: id, profile: ref.profile, reader_goal: goal,
-      applicability: { artifact_policy_variants: profile.artifact_policy_variants.map(item => item.id), condition_refs: [] },
-      variables: [...variables, ...(includeApi ? [{id: apiVariable, type: "json", content_layer: "deterministic-fact", required: false, evidence_required: true}] : [])],
-      deterministic_blocks: blocks,
-      sections,
-      page_policy: {split_suggestion: "Split by independently useful reader task when supported; preserve stable article identities.", semantic_boundaries: ["reader-task", "source-boundary"], keep_single_page_conditions: ["one-reader-subject"]},
-      anonymous_section_examples: ["A source-backed explanation that names an entry and the next investigation step."],
-      anti_examples: ["Invented relationships or current runtime values inferred from names alone."],
-      forbidden_outputs: ["Unresolved internal identifiers in reader-facing prose."], maximum_rendered_bytes: 1048576 });
-    const resource = `templates/article-programs/${id}.md`;
-    await mkdir(join(skill, "templates/article-programs"), {recursive: true});
-    const bodies = slots.map(slot => `<!-- context:indexer-section ${slot.key} -->\n## ${slot.heading}\n\n{{variable:${slot.key}}}\n<!-- /context:indexer-section -->`);
-    if (includeApi) bodies.splice(3, 0, `<!-- context:indexer-section ${apiVariable} -->\n## API\n\n{{block:api-table}}\n<!-- /context:indexer-section -->`);
-    const body = bodies.join("\n\n");
-    await writeFile(join(skill, resource), `---\n${JSON.stringify(contract, null, 2)}\n---\n${body}\n`);
+    // The article is the single authoring source: prose, examples and compact
+    // section declarations. Profile-specific identities stay in the manifest.
+    const articlePath = join(skill, ref.path);
+    const rawArticle = await readFile(articlePath, "utf8");
+    const end = rawArticle.indexOf("\n---\n", 4);
+    const metadata = YAML.parse(rawArticle.slice(4, end));
+    metadata.program = { article: blueprint,
+      policies: profile.artifact_policy_variants.map(item => item.id),
+      sections: Object.fromEntries(slots.map(slot => [slot.key, slot.heading])),
+      ...(includeApi ? { contract_table: apiVariable } : {}) };
+    await writeFile(articlePath, `---\n${YAML.stringify(metadata)}---\n${rawArticle.slice(end + 5)}`);
+    const resource = ref.path;
     const registration = { id, profile: ref.profile, path: resource, kind: "page-program", delivery: "selected", reader_goal: goal, guidance_path: ref.path };
     const index = manifest.provider.templates.findIndex((item: {id: string}) => item.id === id);
     if (index < 0) manifest.provider.templates.push(registration); else manifest.provider.templates[index] = registration;
@@ -97,6 +88,7 @@ for (const provider of providers) {
     }
     count++;
   }
+  await rm(join(skill, "templates/article-programs"), { recursive: true, force: true });
   await writeFile(manifestPath, YAML.stringify(JSON.parse(JSON.stringify(manifest)), {lineWidth: 120}));
 }
 process.stdout.write(`Generated ${count} profile-bound article programs.\n`);
