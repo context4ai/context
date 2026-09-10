@@ -1,3 +1,4 @@
+import { refreshApprovedKnowledgeRevisionSupport } from "../project/approvedKnowledgeRevision.js";
 import { expect, test } from "bun:test";
 import { buildIndexerApprovedKnowledge, indexerProtocolDigest, indexerEvidenceBindingDigest, projectIndexerApprovedKnowledge,
   indexerKnowledgeDependencyFingerprint, type IndexerApprovedKnowledge } from "@c4a/context";
@@ -72,4 +73,17 @@ test("queued support refresh preserves page identity and exposes newly authorize
   expect(result.markdown).toContain("repo:example");
   expect(result.markdown.endsWith("Body remains unchanged.\n")).toBe(true);
   expect(target.source_refs).toEqual(["repo:original"]);
+});
+
+
+test("support refresh retains distinct ranges in one source file", () => {
+  const old = snapshot("ranges");
+  const first = old.evidence_bindings[0]!;
+  const second = { ...first, evidence_ref: "evidence:second", locator: { ...first.locator, start_line: 10, end_line: 12 } };
+  const previous = { ...old, evidence_bindings: [first, second], sections: [old.sections[0]!, { ...old.sections[0]!, section_key: "second", evidence_refs: [second.evidence_ref] }] };
+  const replacement = [first, second].map((binding, index) => ({ ...binding, evidence_ref: `evidence:new-${index}` }));
+  const result = refreshApprovedKnowledgeRevisionSupport(previous, { status: "ready", pending: [], facts: [], evidence_bindings: replacement,
+    versions: [], reading_sections: [], dependency_fingerprint: indexerKnowledgeDependencyFingerprint([]) });
+  expect(result.sections.map(section => section.evidence_refs)).toEqual([["evidence:new-0"], ["evidence:new-1"]]);
+  expect(result.evidence_bindings.map(binding => binding.locator)).toEqual([first.locator, second.locator]);
 });

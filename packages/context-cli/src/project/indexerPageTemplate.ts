@@ -51,7 +51,7 @@ export async function loadSelectedPageTemplate(input: Parameters<typeof loadSele
   const source = await loadSelectedPageSource(input);
   if (source === undefined) return undefined;
   const { template, authority, parsed } = source;
-  const shared = template.kind === "page-program" ? expandArticleBlueprint(parsed.metadata, template) : undefined;
+  const shared = template.kind === "page-program" ? expandArticleBlueprint(parsed.metadata, { ...template, accepted_evidence_kinds: [...new Set(authority.profile.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds))] }) : undefined;
   if (shared !== undefined) return shared;
   // Procedure resources guide prose; executable resources additionally render
   // fields. Keep that distinction explicit in the current Provider catalog.

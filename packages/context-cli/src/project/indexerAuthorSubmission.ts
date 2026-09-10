@@ -15,7 +15,11 @@ export async function prepareIndexerAuthorSubmission(input: {
   preview?: boolean;
 }) {
   let task = input.task;
-  const paths = [...new Set(input.semantic.sections.flatMap((section) => section.source_items))]
+  const articles = input.semantic.articles ?? [];
+  const sections = [...input.semantic.sections, ...articles.flatMap(article => article.sections)];
+  const variables = [input.semantic.template_variables, ...articles.map(article => article.template_variables)];
+  const paths = [...new Set([...sections.flatMap(section => section.source_items),
+    ...variables.flatMap(values => Object.values(values ?? {}).flatMap(value => typeof value === "string" ? [] : value.source_items))])]
     .filter((ref) => !ref.includes(":"));
   const material = paths.length === 0 || !task.spec.request.workset.source_ref.startsWith("repo:")
     ? undefined : await prepareIndexerAuthorMaterial({

@@ -1,3 +1,4 @@
+import { prepareIndexerAuthorSubmission } from "../project/indexerAuthorSubmission.js";
 import { renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -36,21 +37,21 @@ test("selected article program binds semantic slots through Author and produces 
     expect(reading).toContain(guidance["component-guide"]!.content.trim());
     expect(reading).not.toContain("minimum_evidence_items");
     expect(reading).toContain('"template_id": "component-library-l02-page"');
-    const fact = task.view.items.find(item => item.category === "fact")!;
+    const facts = task.view.items.filter(item => item.category === "fact").map(item => item.ref);
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key,
       outcome: "publish", policy: "standard", articles: [{
         key: "component-guide", title: "Component guide", summary: "Public component entry.",
-        sections: [{ key: "purpose", heading: "Purpose", markdown: "Original supported entry.", facts: [fact.ref], answers: validation.page_plan!.articles![0]!.question_targets }],
+        sections: [{ key: "purpose", heading: "Purpose", markdown: "Original supported entry.", facts, source_items: ["src/index.ts"], answers: validation.page_plan!.articles![0]!.question_targets }],
         template_variables: {
-          purpose: { value: "Use the exported component entry.", facts: [fact.ref] },
-          setup: { value: "Inspect the source export before choosing integration options.", facts: [fact.ref] },
+          purpose: { value: "Use the exported component entry.", facts, source_items: ["src/index.ts"] },
+          setup: { value: "Inspect the source export before choosing integration options.", source_items: ["package.json"] },
         },
       }], member_dispositions: validation.canonical_inventory_members.map(member => ({
         item: member.member_id, state: "covered", article: "component-guide", section: "purpose",
       })) });
-    const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
-    const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] });
-    expect(accepted.outcomes[0]?.outcome).toBe("accepted");
+    const { result, task: prepared } = await prepareIndexerAuthorSubmission({ projectRoot: root, task, semantic });
+    const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: prepared.spec.request.workset.workset_digest, result }] });
+    expect(accepted.outcomes.map(item => [item.outcome, item.message])).toEqual([["accepted", undefined]]);
     await advanceCurrentIndexerLifecycle(root);
     const candidates = await readCandidateRecords(root);
     expect(candidates).toHaveLength(1);

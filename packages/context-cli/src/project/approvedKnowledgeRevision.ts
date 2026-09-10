@@ -1,4 +1,4 @@
-import { IndexerKnowledgeDependencyCycleError, validateIndexerKnowledgeDependencyGraph, type IndexerApprovedKnowledge, type IndexerRegistry } from "@c4a/context";
+import { canonicalIndexerJson, IndexerKnowledgeDependencyCycleError, validateIndexerKnowledgeDependencyGraph, type IndexerApprovedKnowledge, type IndexerRegistry } from "@c4a/context";
 import type { ApprovedKnowledgeRevisionInput, ApprovedKnowledgeRebinding } from "./approvedKnowledgeRevisionInput.js";
 import { rebindApprovedKnowledgeSupport } from "./approvedKnowledgeRebinding.js";
 import { readApprovedKnowledgeInput, assertApprovedKnowledgeInputCurrent } from "./approvedKnowledgeInput.js";
@@ -79,8 +79,8 @@ export async function assertApprovedKnowledgeRevisionCurrent(root: string, path:
 export function refreshApprovedKnowledgeRevisionSupport(previous: IndexerApprovedKnowledge, input: ApprovedKnowledgeRevisionInput) {
   if (input.rebinding) return rebindApprovedKnowledgeSupport(previous, input);
   if (input.status !== "ready") return previous;
-  const replacement = new Map(input.evidence_bindings.map(binding => [JSON.stringify([binding.source_ref, binding.module_ref, binding.locator.path]), binding]));
-  const evidence = previous.evidence_bindings.map(binding => replacement.get(JSON.stringify([binding.source_ref, binding.module_ref, binding.locator.path])) ?? binding);
+  const replacement = new Map(input.evidence_bindings.map(binding => [canonicalIndexerJson([binding.source_ref, binding.module_ref, binding.locator]), binding]));
+  const evidence = previous.evidence_bindings.map(binding => replacement.get(canonicalIndexerJson([binding.source_ref, binding.module_ref, binding.locator])) ?? binding);
   const byOldRef = new Map(previous.evidence_bindings.map((binding, index) => [binding.evidence_ref, evidence[index]!]));
   const replacedArticles = new Set(input.versions.map(version => version.artifact_ref));
   const facts = previous.facts.filter(fact => {

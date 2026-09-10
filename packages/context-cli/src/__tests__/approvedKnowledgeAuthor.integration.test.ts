@@ -1,3 +1,4 @@
+import { validateProjectIndexerMainRun } from "../project/indexerMainRunValidationActions.js";
 import { expect, test } from "bun:test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -71,6 +72,14 @@ test("a required cross-topic article waits for approval, receives supporting fac
           member_dispositions: validation.canonical_inventory_members.map(member => ({ item: member.member_id, state: "covered", article: "overview", section: "entry" })),
         });
         const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+        const descriptors = task.spec.validation.supplementary_sources as Array<{ source_binding_digest: string }> | undefined;
+        if (descriptors?.length) {
+          const stale = structuredClone(task.spec.validation);
+          (stale.supplementary_sources as Array<{ source_binding_digest: string }>)[0]!.source_binding_digest = `sha256:${"0".repeat(64)}`;
+          await expect(validateProjectIndexerMainRun({ projectRoot: root, value: {
+            protocol: "context.indexer.main-run-validation-input/v1", request: task.spec.request, result, validation: stale,
+          } })).rejects.toThrow("supplementary source binding is stale");
+        }
         const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] });
         expect(accepted.outcomes).toMatchObject([{ outcome: "accepted" }]);
       }

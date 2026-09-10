@@ -124,10 +124,14 @@ export async function validateProjectIndexerMainRun(input: {
         if (!projectIndexerReadTargetAllows({ targets: readTargets, source_ref: descriptor.source_ref, module_ref: descriptor.module_ref })) {
           throw new TypeError("Supporting source is outside the current Indexer read scope");
         }
-        supporting.push(await resolveProjectIndexerMainSourceBinding({ projectRoot: input.projectRoot, indexer_id: descriptor.indexer_id,
+        const resolved = await resolveProjectIndexerMainSourceBinding({ projectRoot: input.projectRoot, indexer_id: descriptor.indexer_id,
           source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, profile_contract_digest: descriptor.profile_contract_digest,
           parser_selection: indexerParserTaskSelection({ stage: "author", source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, validation }),
-        }));
+        });
+        if (resolved.source_binding_digest !== descriptor.source_binding_digest) {
+          throw new TypeError("author supplementary source binding is stale; refresh the current Author task before submitting");
+        }
+        supporting.push(resolved);
       }
       assertApprovedKnowledgeSourcesCurrent(knowledge, supporting);
     }

@@ -1,3 +1,4 @@
+import { bundledIndexerProfileContract } from "../project/indexerBaseContracts.js";
 import { indexerTemplateContractSchema } from "@c4a/context";
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -95,4 +96,20 @@ test("writing brief preserves procedure-only and distinct same-ID guidance in mi
   expect(result.writing_brief).toContain("First custom guidance");
   expect(result.writing_brief).toContain("Second custom guidance");
   expect(result.writing_brief).toContain("Legacy collaboration example");
+});
+
+
+test("shared programs retain profile-approved decision and operational evidence", () => {
+  for (const [profileId, article, expected] of [
+    ["decision-record", "c06", ["decision-record"]],
+    ["background-runtime", "s07", ["runbook", "test-result", "runtime-observation"]],
+    ["background-runtime", "d04", ["runbook", "test-result", "runtime-observation"]],
+  ] as const) {
+    const profile = bundledIndexerProfileContract().profiles.find(profile => profile.id === profileId)!;
+    const allowed = [...new Set(profile.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds))];
+    const expanded = expandArticleBlueprint({ program: { article, policies: ["standard"], sections: { explanation: "Source-backed explanation" } } },
+      { id: `${profileId}-${article}-page`, profile: profileId, reader_goal: profile.layout_mappings[0]!.reader_goal, accepted_evidence_kinds: allowed })!;
+    expect(expanded.contract.sections[0]!.accepted_evidence_kinds).toEqual(allowed);
+    for (const kind of expected) expect(expanded.contract.sections[0]!.accepted_evidence_kinds).toContain(kind);
+  }
 });

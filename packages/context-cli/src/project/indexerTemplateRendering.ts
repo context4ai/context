@@ -1,3 +1,4 @@
+import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
 import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
@@ -339,7 +340,7 @@ export async function materializeIndexerTemplate(input: {
     : source;
   const parsed = splitFrontmatter(contractSource);
   const binding = manifest.provider.templates!.find(item => item.id === input.templateId && item.profile === input.profile)!;
-  const shared = expandArticleBlueprint(parsed.metadata, binding);
+  const shared = expandArticleBlueprint(parsed.metadata, { ...binding, accepted_evidence_kinds: [...new Set(bundledIndexerProfileContract().profiles.find(profile => profile.id === input.profile)?.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds) ?? ["code", "contract", "configuration", "documentation"])] });
   const contract = shared?.contract ?? indexerTemplateContractSchema.parse(parsed.metadata);
   if (contract.template_id !== input.templateId || contract.profile !== input.profile) {
     throw new TypeError("Indexer template frontmatter does not match its manifest identity");

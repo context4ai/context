@@ -94,3 +94,20 @@ Compaction validation: CLI typecheck, lint and build passed (40 existing lint wa
 The related regression run passed 64 tests; the expanded article/organization
 scenario run passed 63 tests after updating its shared fixture to expand compact
 declarations. Neither run is an autonomous writing-quality evaluation.
+
+
+## Review corrections
+
+Source citations in Author submissions are collected from single-page and
+per-article sections and structured template variables before materialization.
+Approved support refresh matches complete source locators, including line ranges.
+Supplementary bindings are checked again at submission, not only when constructing
+the Author view. Shared executable templates inherit the profile's accepted
+reader-question evidence kinds; decision and operational evidence are no longer
+silently narrowed to four generic types. Existing explicit full-template contracts
+and user overrides retain their own evidence policies.
+
+The earlier 374-binding equivalence check describes the compaction baseline.
+This later correction intentionally changes expanded evidence-kind lists. Writing
+and ordinary version guidance remains advisory; source authorization and freshness
+are integrity checks. These changes do not establish autonomous writing quality.

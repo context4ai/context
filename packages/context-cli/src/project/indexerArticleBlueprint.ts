@@ -10,7 +10,7 @@ interface ArticleProgram {
 /** A profile binding selects a shared blueprint; it does not change its prose.
  * Legacy full template contracts remain supported by their existing loader. */
 export function expandArticleBlueprint(metadata: unknown, binding: {
-  id: string; profile: string; reader_goal?: string | undefined;
+  id: string; profile: string; reader_goal?: string | undefined; accepted_evidence_kinds?: string[];
 }): { contract: IndexerTemplateContract; section_bodies: Record<string, string> } | undefined {
   const program = (metadata as { program?: ArticleProgram } | null)?.program;
   if (program === undefined) return undefined;
@@ -26,7 +26,7 @@ export function expandArticleBlueprint(metadata: unknown, binding: {
   const sections = slots.map(([key]) => ({
     section_key: key, presence: "optional", question_ref: `question:${program.article}-${key}`,
     reader_goal: binding.reader_goal, variable_ids: [key], deterministic_block_ids: [] as string[],
-    accepted_evidence_kinds: ["code", "contract", "configuration", "documentation"],
+    accepted_evidence_kinds: binding.accepted_evidence_kinds ?? ["code", "contract", "configuration", "documentation"],
     minimum_evidence_items: 0, on_missing: "omit",
     deletion_condition: "Omit when not applicable or no supported value is supplied.",
   }));
