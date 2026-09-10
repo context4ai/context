@@ -33,7 +33,17 @@ type AuthorInputIssue = {
 };
 
 function inputIssues(error: ZodError, result: unknown): AuthorInputIssue[] {
-  const issues = error.issues.flatMap(issue => {
+  const root = result && typeof result === "object" ? result as Record<string, unknown> : undefined;
+  const branchIssues = error.issues.flatMap(issue => {
+    if (issue.code !== "invalid_union" || issue.path.length !== 0 || root === undefined) return [issue];
+    // Preserve field-level recovery guidance for both supported Author forms.
+    // Choose the explicit shape, never a branch based on prose or quality.
+    const branch = root.outcome === "publish" ? (Array.isArray(root.articles) ? 1 : 0)
+      : root.outcome === "catalog-only" ? 2 : root.outcome === "request-material" ? 3
+      : root.outcome === "unsupported" ? 4 : undefined;
+    return branch === undefined ? [issue] : issue.unionErrors[branch]?.issues ?? [issue];
+  });
+  const issues = branchIssues.flatMap(issue => {
     // This union accepts either an item or an items group. Select only the
     // explicitly supplied form; ambiguous input keeps the original union error.
     if (issue.code !== "invalid_union" || issue.path[0] !== "member_dispositions") return [issue];
@@ -44,11 +54,13 @@ function inputIssues(error: ZodError, result: unknown): AuthorInputIssue[] {
   });
   return issues.map(issue => {
     const path = issue.path;
-    const root = result as Record<string, unknown> | undefined;
     const collection = root && typeof root === "object" ? root[String(path[0])] : undefined;
     const row = Array.isArray(collection) && typeof path[1] === "number" ? collection[path[1]] : undefined;
+    const articleSection = path[0] === "articles" && path[2] === "sections" && Array.isArray(row?.sections)
+      && typeof path[3] === "number" ? row.sections[path[3]] : undefined;
     return { path: ["result", ...path], code: issue.code, message: issue.message,
       ...(path[0] === "sections" && typeof row?.key === "string" ? { section_key: row.key } : {}),
+      ...(typeof articleSection?.key === "string" ? { section_key: articleSection.key } : {}),
       ...(path[0] === "member_dispositions" && typeof row?.item === "string" ? { member_id: row.item } : {}),
     };
   });

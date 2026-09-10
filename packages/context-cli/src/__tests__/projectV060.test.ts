@@ -103,6 +103,7 @@ describe("0.6.0 project init and source ensure", () => {
           project?: boolean;
           entry?: string;
           language?: string;
+          convertVisuals?: boolean;
         };
         dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
@@ -111,6 +112,7 @@ describe("0.6.0 project init and source ensure", () => {
         version: string;
       };
       expect(pkg.context).toEqual({
+        convertVisuals: true,
         project: true,
         entry: "src/index.ts",
         language: "en",

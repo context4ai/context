@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerTemplateContractSchema, projectIndexerFactValue, projectIndexerPublicContractTable, type IndexerTemplateContract,
+import { indexerArticleSectionKey, indexerTemplateContractSchema, projectIndexerFactValue, projectIndexerPublicContractTable, type IndexerTemplateContract,
   type IndexerArtifactResult, type IndexerArtifactFact } from "@c4a/context";
 import { loadIndexerCustomization } from "./indexerCustomization.js";
 import type { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
@@ -12,11 +12,11 @@ export interface IndexerPageTemplate {
   section_bodies: Record<string, string>;
 }
 
-export async function loadSelectedPageTemplate(input: {
+async function loadSelectedPageSource(input: {
   projectRoot: string;
   authority: Awaited<ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>>;
   templateId?: string | undefined;
-}): Promise<IndexerPageTemplate | undefined> {
+}) {
   if (input.templateId === undefined) return undefined;
   const { authority } = input;
   const template = authority.manifest.provider.templates?.find((item) =>
@@ -32,12 +32,33 @@ export async function loadSelectedPageTemplate(input: {
   const raw = await readFile(path, "utf8");
   const source = override === undefined ? raw : raw.replace(/^[^\n]*(?:\n|$)/u, "");
   const parsed = splitFrontmatter(source);
+  return { template, authority, parsed };
+}
+
+export async function loadSelectedArticleGuidance(input: Parameters<typeof loadSelectedPageSource>[0]) {
+  const source = await loadSelectedPageSource(input);
+  if (source === undefined) return undefined;
+  if (source.template.guidance_path !== undefined) {
+    const raw = await readFile(join(source.authority.bundle_root, source.template.guidance_path), "utf8");
+    return { template_id: source.template.id, content: splitFrontmatter(raw).body };
+  }
+  if ((source.parsed.metadata as { kind?: unknown })?.kind !== "procedure") return undefined;
+  return { template_id: source.template.id, content: source.parsed.body };
+}
+
+export async function loadSelectedPageTemplate(input: Parameters<typeof loadSelectedPageSource>[0]): Promise<IndexerPageTemplate | undefined> {
+  const source = await loadSelectedPageSource(input);
+  if (source === undefined) return undefined;
+  const { template, authority, parsed } = source;
   // Procedure resources guide prose; executable resources additionally render
   // fields. Keep that distinction explicit in the current Provider catalog.
   if ((parsed.metadata as { kind?: unknown })?.kind === "procedure") return undefined;
   const contract = indexerTemplateContractSchema.parse(parsed.metadata);
   if (contract.template_id !== template.id || contract.profile !== authority.profile.id) {
     throw new TypeError("selected template program has a mismatched identity");
+  }
+  if (template.reader_goal !== undefined && template.reader_goal !== contract.reader_goal) {
+    throw new TypeError("selected template program differs from its registered reader goal");
   }
   const section_bodies = parseSectionBodies(parsed.body);
   validateTemplateBody(contract, section_bodies);
@@ -51,7 +72,10 @@ export function applySelectedPageTemplate(input: {
   template: IndexerPageTemplate;
   facts: readonly IndexerArtifactFact[];
   supportingFacts?: readonly IndexerArtifactFact[];
-  semanticVariables?: Readonly<Record<string, string>> | undefined;
+  semanticVariables?: Readonly<Record<string, string | { value: string; evidence_refs: string[] }>> | undefined;
+  authorizedEvidenceRefs?: ReadonlySet<string> | undefined;
+  articleKey?: string | undefined;
+  diagnostics?: Array<{ code: string; message: string }> | undefined;
 }): IndexerArtifactFact[] {
   const { artifact, template } = input;
   if (!template.contract.applicability.artifact_policy_variants.includes(artifact.artifact_policy_variant)) {
@@ -68,26 +92,44 @@ export function applySelectedPageTemplate(input: {
   const semanticEvidence = [...new Set(artifact.sections.flatMap((section) => section.blocks.flatMap((block) =>
     block.layer === "semantic-prose" ? block.evidence_refs : [])))].sort();
   const variables: Extract<IndexerArtifactResult["artifacts"][number], { representation: "template" }>["variables"] = {};
-  for (const [id, value] of Object.entries(input.semanticVariables ?? {})) {
+  for (const [id, binding] of Object.entries(input.semanticVariables ?? {})) {
     const definition = template.contract.variables.find((variable) => variable.id === id);
-    if (definition?.content_layer !== "semantic-prose") {
+    if (definition === undefined) {
+      input.diagnostics?.push({ code: "template-unknown-writing-slot",
+        message: `Template ${template.contract.template_id} has no writing slot ${id}; that value was not applied. Existing Author sections are retained. Use a current slot or keep useful text in an evidence-backed Author section.` });
+      continue;
+    }
+    if (definition.content_layer !== "semantic-prose") {
       throw new TypeError(`template variable ${id} is not an authorized semantic-prose variable`);
     }
-    variables[id] = { value, fact_refs: [], evidence_refs: semanticEvidence };
+    const slotKeys = new Set(template.contract.sections.filter(section => section.variable_ids.includes(id))
+      .map(section => input.articleKey === undefined ? section.section_key : indexerArticleSectionKey(input.articleKey, section.section_key)));
+    const slotEvidence = typeof binding !== "string" ? [...new Set(binding.evidence_refs)].sort()
+      : input.articleKey === undefined ? semanticEvidence : [...new Set(artifact.sections.filter(section => slotKeys.has(section.section_key))
+      .flatMap(section => section.blocks.flatMap(block => block.layer === "semantic-prose" ? block.evidence_refs : [])))].sort();
+    const permitted = input.authorizedEvidenceRefs ?? new Set([...semanticEvidence, ...availableFacts.flatMap(fact => fact.evidence_refs)]);
+    if (slotEvidence.some(ref => !permitted.has(ref))) throw new TypeError(`template variable ${id} references unauthorized evidence`);
+    if (!slotEvidence.length && definition.evidence_required) throw new TypeError("template variable " + id + " needs evidence in its own section; add authorized source bindings to that section");
+    variables[id] = { value: typeof binding === "string" ? binding : binding.value, fact_refs: [], evidence_refs: slotEvidence };
   }
   const evidence = [...new Set(contractFacts.flatMap((fact) => fact.evidence_refs))].sort();
-  if (contractFacts.length > 0) {
-    variables.api = { value: projectIndexerFactValue(contractFacts),
+  for (const block of template.contract.deterministic_blocks) {
+    if (contractFacts.length === 0 || block.renderer !== "public-contract-table") continue;
+    variables[block.source_variable_id] = { value: projectIndexerFactValue(contractFacts),
       fact_refs: contractFacts.map((fact) => fact.fact_ref), evidence_refs: evidence };
   }
-  const acceptedEvidence = [...new Set([...availableFacts.flatMap(fact => fact.evidence_refs), ...semanticEvidence])];
+  const acceptedEvidence = [...new Set([...availableFacts.flatMap(fact => fact.evidence_refs), ...semanticEvidence,
+    ...Object.values(variables).flatMap(variable => variable.evidence_refs)])];
   let renderedBytes = 0;
+  let sizeWarningEmitted = false;
   let usesContractFact = false;
   for (const definition of template.contract.sections) {
     const missing = definition.variable_ids.filter((id) => variables[id] === undefined);
     if (missing.length > 0) {
       if (definition.presence === "optional" && definition.on_missing === "omit") continue;
-      throw new TypeError(`selected template section ${definition.section_key} requires variables: ${missing.join(", ")}`);
+      input.diagnostics?.push({ code: "template-section-not-rendered",
+        message: `Template ${template.contract.template_id} section ${definition.section_key} was not rendered because variables are absent: ${missing.join(", ")}. Existing Author sections are preserved; assess applicability or supply source-backed values when useful.` });
+      continue;
     }
     const body = template.section_bodies[definition.section_key]!;
     const rendered = renderIndexerTemplateSectionLayers({
@@ -101,8 +143,13 @@ export function applySelectedPageTemplate(input: {
     });
     usesContractFact ||= rendered.contentBlocks.some((block) => contractFacts.some((fact) => block.fact_refs.includes(fact.fact_ref)));
     renderedBytes += new TextEncoder().encode(rendered.markdown).byteLength;
-    if (renderedBytes > template.contract.maximum_rendered_bytes) throw new TypeError("selected page template exceeds its rendered byte limit");
-    const sectionKey = `${template.contract.template_id}-${definition.section_key}`;
+    if (renderedBytes > template.contract.maximum_rendered_bytes && !sizeWarningEmitted) {
+      sizeWarningEmitted = true;
+      input.diagnostics?.push({ code: "template-size-guidance-exceeded",
+        message: `Template ${template.contract.template_id} exceeds its recommended rendered size. Content is preserved; consider splitting by reader task when useful.` });
+    }
+    const sectionKey = input.articleKey === undefined ? `${template.contract.template_id}-${definition.section_key}` : indexerArticleSectionKey(input.articleKey, definition.section_key);
+    if (input.articleKey !== undefined) artifact.sections = artifact.sections.filter(section => section.section_key !== sectionKey);
     if (artifact.sections.some((section) => section.section_key === sectionKey)) {
       throw new TypeError("semantic section conflicts with a selected template section");
     }

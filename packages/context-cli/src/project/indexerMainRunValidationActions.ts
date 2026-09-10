@@ -1,3 +1,6 @@
+import { assertApprovedKnowledgeInputCurrent, assertApprovedKnowledgeSourcesCurrent } from "./approvedKnowledgeInput.js";
+import type { AuthorSupplementarySource } from "./indexerCurrentMainRunSpec.js";
+import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import {
   buildIndexerSourceIdentityInventory,
   canonicalIndexerInventoryMembers,
@@ -14,7 +17,7 @@ import {
   assertProjectIndexerMainSourceBinding,
   resolveProjectIndexerMainSourceBinding,
 } from "./indexerMainSourceAdapter.js";
-import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
+import { projectIndexerReadTargets, projectIndexerReadTargetAllows } from "./indexerReadScopeAuthorization.js";
 import { indexerParserTaskSelection } from "./indexerParserTaskSelection.js";
 import { authorSourceIdentityForView } from "./indexerAuthorMaterial.js";
 import {
@@ -111,6 +114,23 @@ export async function validateProjectIndexerMainRun(input: {
     }
     validation.canonical_inventory_members = canonicalInventory;
   } else {
+    if (validation.knowledge_input !== undefined) {
+      const knowledge = validation.knowledge_input as ApprovedKnowledgeAuthorInput;
+      await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
+      const supporting = [binding];
+      const readTargets = projectIndexerReadTargets({ registry, indexer_id: workset.indexer_id });
+      for (const descriptor of (validation.supplementary_sources ?? []) as AuthorSupplementarySource[]) {
+        if (!knowledge.evidence_bindings.some(evidence => evidence.source_ref === descriptor.source_ref && evidence.module_ref === descriptor.module_ref)) continue;
+        if (!projectIndexerReadTargetAllows({ targets: readTargets, source_ref: descriptor.source_ref, module_ref: descriptor.module_ref })) {
+          throw new TypeError("Supporting source is outside the current Indexer read scope");
+        }
+        supporting.push(await resolveProjectIndexerMainSourceBinding({ projectRoot: input.projectRoot, indexer_id: descriptor.indexer_id,
+          source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, profile_contract_digest: descriptor.profile_contract_digest,
+          parser_selection: indexerParserTaskSelection({ stage: "author", source_ref: descriptor.source_ref, module_ref: descriptor.module_ref, validation }),
+        }));
+      }
+      assertApprovedKnowledgeSourcesCurrent(knowledge, supporting);
+    }
     const dependencyView = validateIndexerAuthorDependencyView(
       validation.dependency_view,
     );

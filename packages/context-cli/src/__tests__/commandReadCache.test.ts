@@ -1,10 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reuseCommandFileRead, withCommandReadCache } from "../project/commandReadCache.js";
 
 describe("command-local file reads", () => {
+  test("approved structure reads isolate draft edits and observe committed replacement or removal", async () => {
+    const { readKnowledgeStructure } = await import("../project/packageBuildInventory.js");
+    const root = await mkdtemp(join(tmpdir(), "context-structure-cache-"));
+    try {
+      await mkdir(join(root, "knowledge"));
+      const path = join(root, "knowledge/structure.yaml");
+      await writeFile(path, "nodes: []\nviews: []\nedges: []\n");
+      await withCommandReadCache(async () => {
+        const first = await readKnowledgeStructure(root);
+        first.parsed!.views = [{ path: "uncommitted.md" }];
+        expect((await readKnowledgeStructure(root)).parsed!.views).toEqual([]);
+        await writeFile(join(root, "replacement.yaml"), "nodes: []\nviews: [{path: committed.md}]\nedges: []\n");
+        await rename(join(root, "replacement.yaml"), path);
+        expect((await readKnowledgeStructure(root)).parsed!.views).toEqual([{ path: "committed.md" }]);
+        await rm(path);
+        expect((await readKnowledgeStructure(root)).parsed).toBeNull();
+      });
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("keeps a completed aggregate reusable when its many child reads exceed the cache bound", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-command-aggregate-"));
     try {

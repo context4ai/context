@@ -1,3 +1,7 @@
+import { acceptStructureDecision, readReadingStructure } from "./readingStructure.js";
+import { withProjectWriteLock } from "./writeLock.js";
+import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
+import type { ReadingStructure, ReadingStructureUpdate } from "@c4a/context";
 import { deliveryWaveSize, readDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { authorStreamRecord, PARTITION_STREAM_PATH, partitionAuthorBinding, partitionStreamRecord, readPartitionStream, reopenPartitionStream } from "./indexerPartitionStream.js";
@@ -10,6 +14,9 @@ import {
   buildIndexerMainWorksetSet,
   invalidateIndexerMainRunWorksets,
   canonicalIndexerJson,
+  canonicalIndexerNodeRef,
+  indexerArtifactRef,
+  indexerArticleSectionKey,
   indexerPartitionGroupRef,
   indexerProtocolDigest,
   validateIndexerPartitionSemanticInput,
@@ -19,6 +26,7 @@ import {
   type IndexerPartitionValidationInput,
   type IndexerMainPartitionWorkset,
   type IndexerSubjectKey,
+  type IndexerArticlePlan,
 } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import {
@@ -79,6 +87,8 @@ export interface IndexerSemanticStructurePreview {
     reader_task: string;
     scope_change?: { removed_member_ids: string[] };
     outline: string[];
+    articles?: IndexerArticlePlan[];
+    article_targets?: Array<{ article_key: string; artifact_ref: string; section_keys: string[] }>;
     subject_key?: IndexerSubjectKey;
     members: string[];
     questions: string[];
@@ -90,10 +100,12 @@ export interface IndexerSemanticStructurePreview {
   excluded: Array<{ item: string; reason_code: string }>;
   unsupported: Array<{ item: string; missing_capabilities: string[] }>;
   obsolete_scope?: ReadableObsoleteScope;
+  pending_knowledge?: Array<{ group_key: string; dependencies: ApprovedKnowledgeAuthorInput["pending"] }>;
   preview_digest: string;
 }
 
 export interface CurrentIndexerStructureReview {
+  reading_structure?: ReadingStructure | null;
   preview: IndexerSemanticStructurePreview;
   revision: string;
   approved: boolean;
@@ -183,6 +195,7 @@ export async function currentIndexerStructureReview(
   if (!planIsCurrent) return undefined;
   return {
     preview: stored.preview,
+    reading_structure: await readReadingStructure(projectRoot) ?? null,
     revision: stored.revision,
     approved: await reviewDecision(projectRoot, stored.revision),
   };
@@ -247,7 +260,10 @@ export async function prepareCurrentIndexerStructurePlan(
   const stream = await readPartitionStream(projectRoot);
   const completed = new Set(stream?.completed_bindings ?? []);
   const allPlanned = ledger.entries.every(entry => entry.state === "accepted");
+  const remaining = prepared.author.run_specs.filter(spec => !completed.has(partitionAuthorBinding(spec)));
+  const waiting = remaining.filter(spec => (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput | undefined)?.status === "waiting");
   const available = prepared.author.run_specs.filter(spec =>
+    (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput | undefined)?.status !== "waiting" &&
     !completed.has(partitionAuthorBinding(spec)) && (allPlanned ||
       (spec.validation.page_plan as { ready_for_author?: boolean } | undefined)?.ready_for_author === true))
     .sort((left, right) => {
@@ -259,6 +275,9 @@ export async function prepareCurrentIndexerStructurePlan(
   const selected = !allPlanned && available.length < target
     ? [] : available.slice(0, target);
   const selectedKeys = new Set(selected.map(spec => spec.request.workset.stage === "author" ? spec.request.workset.group_key : ""));
+  // An unresolved required dependency is a planning task, never an empty wave
+  // that can be approved and silently counted as finished.
+  if (!selected.length) for (const spec of waiting) if (spec.request.workset.stage === "author") selectedKeys.add(spec.request.workset.group_key);
   prepared.author.obsolete_scope = summarizeIndexerObsoleteScope(selected, {
     pending_planning: !allPlanned,
     deprecated_member_ids: new Set(prepared.author.obsolete_scope.affected.flatMap(item => item.member_ids)),
@@ -279,6 +298,10 @@ export async function prepareCurrentIndexerStructurePlan(
   }));
   const payload = {
     protocol: "context.indexer.semantic-structure-preview/v1" as const,
+    ...(waiting.length ? { pending_knowledge: waiting.map(spec => ({
+      group_key: spec.request.workset.stage === "author" ? spec.request.workset.group_key : "",
+      dependencies: (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput).pending,
+    })) } : {}),
     obsolete_scope: {
       ...prepared.author.obsolete_scope,
       affected: prepared.author.obsolete_scope.affected.map((item) => ({
@@ -309,6 +332,11 @@ export async function prepareCurrentIndexerStructurePlan(
           title: authored?.title ?? group.label,
           reader_task: authored?.reader_task ?? `Browse ${group.label}.`,
           outline: authored?.outline ?? [group.label],
+          ...(group.articles === undefined ? {} : { articles: group.articles,
+            article_targets: group.articles.map(article => ({ article_key: article.key,
+              artifact_ref: indexerArtifactRef(canonicalIndexerNodeRef(group.subject_key), {
+                artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
+              }), section_keys: article.sections.map(section => indexerArticleSectionKey(article.key, section.key)) })) }),
           subject_key: group.subject_key,
           members: group.member_ids,
           questions: group.reader_question_refs,
@@ -349,7 +377,7 @@ export async function prepareCurrentIndexerStructurePlan(
     partition_results: records.map((record) => record.accepted_record.result_digest).sort(),
   });
   const planPayload = {
-    final_wave: allPlanned && selected.length === available.length,
+    final_wave: allPlanned && selected.length === remaining.length,
     revision,
     preview,
     workset_set: prepared.author.workset_set,
@@ -379,10 +407,12 @@ export async function materializeCurrentIndexerStructurePreview(input: {
   }
   const path = join(input.projectRoot, STRUCTURE_ROOT, "preview.json");
   const existing = await readJsonMaybe(input.projectRoot, join(STRUCTURE_ROOT, "preview.json"));
-  if (JSON.stringify(existing) !== JSON.stringify(current.preview)) {
-    await atomicWriteFile(path, `${JSON.stringify(current.preview, null, 2)}\n`);
+  const projection = { ...current.preview, reading_structure: current.reading_structure ?? null,
+    reading_structure_guidance: "Carry agreed reader organization into reading_structure.upsert/remove on approval. Use expected_revision from reading_structure (null for a new workspace). Preserve entries from other waves. Bind targets to article_targets artifact_ref and optional section_keys; pending targets are not published links. This is organization, not source ownership or evidence." };
+  if (JSON.stringify(existing) !== JSON.stringify(projection)) {
+    await atomicWriteFile(path, `${JSON.stringify(projection, null, 2)}\n`);
   }
-  return { path, digest: current.preview.preview_digest };
+  return { path, digest: indexerProtocolDigest(projection) };
 }
 
 export async function readPendingIndexerStructureFeedback(input: {
@@ -556,15 +586,24 @@ export async function prepareCurrentIndexerAuthorStage(projectRoot: string): Pro
   });
 }
 
-export async function completeCurrentIndexerStructureReview(input: {
+type StructureReviewCompletion = {
   projectRoot: string;
   revision: string;
   decision: "approved" | "exclude-obsolete" | "request-adjustment";
   feedback?: string;
-}): Promise<"author" | "partition"> {
+  reading_structure?: ReadingStructureUpdate;
+};
+export async function completeCurrentIndexerStructureReview(input: StructureReviewCompletion): Promise<"author" | "partition"> {
+  return withProjectWriteLock(input.projectRoot, "complete-indexer-structure-review", () => completeStructureReviewUnlocked(input));
+}
+async function completeStructureReviewUnlocked(input: StructureReviewCompletion): Promise<"author" | "partition"> {
   let current = await currentIndexerStructureReview(input.projectRoot);
   if (current === undefined || current.revision !== input.revision) {
     throw new TypeError("semantic structure review revision is stale");
+  }
+  if (input.decision === "approved" && current.preview.pending_knowledge?.length &&
+      current.preview.topics.every(topic => current!.preview.pending_knowledge!.some(pending => pending.group_key === topic.key))) {
+    throw new TypeError("Supporting article plan is not ready. Use this structure review's request-adjustment decision with feedback: dependency-cycle needs an acyclic plan; same-group-dependency needs a separate upstream group or direct source evidence; other pending dependencies need their upstream articles planned or refreshed. No Author work has been marked complete.");
   }
   if (input.decision === "exclude-obsolete") {
     const scope = current.preview.obsolete_scope;
@@ -605,10 +644,8 @@ export async function completeCurrentIndexerStructureReview(input: {
     current = await prepareCurrentIndexerStructurePlan(input.projectRoot);
   }
   if (input.decision === "approved" || input.decision === "exclude-obsolete") {
-    await atomicWriteFile(join(input.projectRoot, DECISION_PATH), canonicalIndexerJson({
-      revision: current.revision,
-      decision: "approved",
-    }));
+    await acceptStructureDecision({ projectRoot: input.projectRoot, decisionPath: DECISION_PATH, revision: current.revision,
+      ...(input.reading_structure === undefined ? {} : { reading_structure: input.reading_structure }) });
     const feedback = await readJsonMaybe(input.projectRoot, FEEDBACK_PATH) as
       { excluded_member_ids?: string[] } | undefined;
     if (feedback?.excluded_member_ids === undefined) {
@@ -630,6 +667,7 @@ export async function completeCurrentIndexerStructureReview(input: {
   if (input.feedback === undefined) {
     throw new TypeError("structure adjustment requires feedback");
   }
+  await rm(join(input.projectRoot, DECISION_PATH), { force: true });
   const feedbackDigest = indexerProtocolDigest({ feedback: input.feedback });
   await atomicWriteFile(join(input.projectRoot, FEEDBACK_PATH), canonicalIndexerJson({
     feedback: input.feedback,

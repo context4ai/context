@@ -766,6 +766,107 @@
                               "type": "string",
                               "minLength": 1
                             },
+                            "articles": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "reader_task": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "artifact_intent": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "template_id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "sections": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "key": {
+                                          "$ref": "#/$defs/partitionBatch/properties/results/items/properties/result/anyOf/0/properties/groups/items/properties/articles/items/properties/key"
+                                        },
+                                        "heading": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "required": {
+                                          "type": "boolean"
+                                        }
+                                      },
+                                      "required": [
+                                        "key",
+                                        "heading",
+                                        "required"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    "minItems": 1
+                                  },
+                                  "question_targets": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "default": []
+                                  },
+                                  "knowledge_dependencies": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "artifact_ref": {
+                                          "type": "string",
+                                          "pattern": "^[a-z][a-z0-9.-]*:[\\p{L}\\p{N}][\\p{L}\\p{N}._~:/#@+-]*$"
+                                        },
+                                        "section_refs": {
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/$defs/partitionBatch/properties/results/items/properties/result/anyOf/0/properties/groups/items/properties/articles/items/properties/knowledge_dependencies/items/properties/artifact_ref"
+                                          },
+                                          "default": []
+                                        },
+                                        "required": {
+                                          "type": "boolean",
+                                          "default": true
+                                        }
+                                      },
+                                      "required": [
+                                        "artifact_ref"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "title",
+                                  "reader_task",
+                                  "artifact_intent",
+                                  "required",
+                                  "sections"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "minItems": 1
+                            },
                             "priority": {
                               "type": "integer",
                               "minimum": 0
@@ -1069,14 +1170,210 @@
                         "type": "string",
                         "const": "publish"
                       },
+                      "articles": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "summary": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "artifact_intent": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "template_variables": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "value": {
+                                        "type": "string"
+                                      },
+                                      "source_items": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "default": []
+                                      },
+                                      "facts": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "default": []
+                                      }
+                                    },
+                                    "required": [
+                                      "value"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ]
+                              }
+                            },
+                            "sections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "key": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "heading": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "visuals": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "resource": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "also_read": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          }
+                                        },
+                                        "context": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "default": []
+                                        },
+                                        "requirements": {
+                                          "type": "string",
+                                          "default": ""
+                                        },
+                                        "disposition": {
+                                          "type": "string",
+                                          "enum": [
+                                            "converted",
+                                            "retained"
+                                          ]
+                                        },
+                                        "format": {
+                                          "type": "string",
+                                          "enum": [
+                                            "mermaid",
+                                            "table",
+                                            "original"
+                                          ]
+                                        },
+                                        "markdown": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "resource",
+                                        "disposition",
+                                        "format"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  },
+                                  "markdown": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "source_items": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "default": []
+                                  },
+                                  "facts": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "default": []
+                                  },
+                                  "answers": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "default": []
+                                  }
+                                },
+                                "required": [
+                                  "key",
+                                  "heading",
+                                  "markdown"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "minItems": 1
+                            }
+                          },
+                          "required": [
+                            "key",
+                            "title",
+                            "summary",
+                            "sections"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "minItems": 1
+                      },
                       "artifact_intent": {
                         "type": "string",
                         "minLength": 1
                       },
                       "template_variables": {
-                        "type": "object",
-                        "additionalProperties": {
-                          "type": "string"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles/items/properties/template_variables"
+                      },
+                      "example_candidates": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "scenario_key": {
+                              "type": "string",
+                              "pattern": "^[a-z0-9][a-z0-9._/-]*$"
+                            },
+                            "source_item": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "scenario_key",
+                            "source_item"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "policy": {
@@ -1124,51 +1421,7 @@
                       "sections": {
                         "type": "array",
                         "items": {
-                          "type": "object",
-                          "properties": {
-                            "key": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "heading": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "markdown": {
-                              "type": "string",
-                              "minLength": 1
-                            },
-                            "source_items": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "default": []
-                            },
-                            "facts": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "default": []
-                            },
-                            "answers": {
-                              "type": "array",
-                              "items": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "default": []
-                            }
-                          },
-                          "required": [
-                            "key",
-                            "heading",
-                            "markdown"
-                          ],
-                          "additionalProperties": false
+                          "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles/items/properties/sections/items"
                         },
                         "minItems": 1
                       },
@@ -1195,6 +1448,9 @@
                                   "type": "string",
                                   "minLength": 1
                                 },
+                                "article": {
+                                  "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles/items/properties/key"
+                                },
                                 "reason_code": {
                                   "type": "string",
                                   "minLength": 1
@@ -1214,6 +1470,9 @@
                                 },
                                 "section": {
                                   "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/section"
+                                },
+                                "article": {
+                                  "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/article"
                                 },
                                 "reason_code": {
                                   "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions/items/anyOf/0/properties/reason_code"
@@ -1310,13 +1569,83 @@
                       },
                       "outcome": {
                         "type": "string",
-                        "const": "catalog-only"
+                        "const": "publish"
+                      },
+                      "articles": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles"
                       },
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
                       },
                       "template_variables": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
+                      "example_candidates": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/example_candidates"
+                      },
+                      "policy": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
+                      },
+                      "target_resolutions": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/target_resolutions"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "sections": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles/items/properties/sections/items"
+                        },
+                        "maxItems": 0,
+                        "default": []
+                      },
+                      "member_dispositions": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions"
+                      },
+                      "material_gaps": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/material_gaps"
+                      },
+                      "diagnostics": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/diagnostics"
+                      }
+                    },
+                    "required": [
+                      "stage",
+                      "group_key",
+                      "outcome",
+                      "articles",
+                      "member_dispositions"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "stage": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/stage"
+                      },
+                      "group_key": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/group_key"
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "const": "catalog-only"
+                      },
+                      "articles": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles"
+                      },
+                      "artifact_intent": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
+                      },
+                      "template_variables": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
+                      "example_candidates": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/example_candidates"
                       },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
@@ -1335,7 +1664,7 @@
                       "sections": {
                         "type": "array",
                         "items": {
-                          "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/sections/items"
+                          "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles/items/properties/sections/items"
                         },
                         "default": []
                       },
@@ -1370,11 +1699,17 @@
                         "type": "string",
                         "const": "request-material"
                       },
+                      "articles": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles"
+                      },
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
                       },
                       "template_variables": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
+                      "example_candidates": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/example_candidates"
                       },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
@@ -1383,13 +1718,13 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/target_resolutions"
                       },
                       "title": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/title"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/title"
                       },
                       "summary": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/summary"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/summary"
                       },
                       "sections": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/sections"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/sections"
                       },
                       "member_dispositions": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions"
@@ -1422,11 +1757,17 @@
                         "type": "string",
                         "const": "unsupported"
                       },
+                      "articles": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/articles"
+                      },
                       "artifact_intent": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/artifact_intent"
                       },
                       "template_variables": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/template_variables"
+                      },
+                      "example_candidates": {
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/example_candidates"
                       },
                       "policy": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/policy"
@@ -1435,13 +1776,13 @@
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/target_resolutions"
                       },
                       "title": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/title"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/title"
                       },
                       "summary": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/summary"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/summary"
                       },
                       "sections": {
-                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/1/properties/sections"
+                        "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/2/properties/sections"
                       },
                       "member_dispositions": {
                         "$ref": "#/$defs/authorBatch/properties/results/items/properties/result/anyOf/0/properties/member_dispositions"
@@ -1541,6 +1882,63 @@
                                   "heading": {
                                     "type": "string",
                                     "minLength": 1
+                                  },
+                                  "visuals": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "resource": {
+                                          "type": "string",
+                                          "minLength": 1
+                                        },
+                                        "also_read": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "minLength": 1
+                                          }
+                                        },
+                                        "context": {
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string"
+                                          },
+                                          "default": []
+                                        },
+                                        "requirements": {
+                                          "type": "string",
+                                          "default": ""
+                                        },
+                                        "disposition": {
+                                          "type": "string",
+                                          "enum": [
+                                            "converted",
+                                            "retained"
+                                          ]
+                                        },
+                                        "format": {
+                                          "type": "string",
+                                          "enum": [
+                                            "mermaid",
+                                            "table",
+                                            "original"
+                                          ]
+                                        },
+                                        "markdown": {
+                                          "type": "string"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "resource",
+                                        "disposition",
+                                        "format"
+                                      ],
+                                      "additionalProperties": false
+                                    }
                                   },
                                   "markdown": {
                                     "type": "string",
@@ -1665,6 +2063,84 @@
               "type": "string",
               "const": "structure-review"
             },
+            "reading_structure": {
+              "type": "object",
+              "properties": {
+                "expected_revision": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "upsert": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "parent": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "order": {
+                        "type": "number",
+                        "default": 0
+                      },
+                      "target": {
+                        "type": "object",
+                        "properties": {
+                          "artifact_ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "section_key": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "artifact_ref"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "parent",
+                      "title"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "default": []
+                },
+                "remove": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "default": []
+                }
+              },
+              "required": [
+                "expected_revision"
+              ],
+              "additionalProperties": false
+            },
             "decision": {
               "type": "string",
               "const": "approved"
@@ -1686,6 +2162,9 @@
             "stage": {
               "$ref": "#/$defs/structureReview/anyOf/0/properties/stage"
             },
+            "reading_structure": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/reading_structure"
+            },
             "decision": {
               "type": "string",
               "const": "exclude-obsolete"
@@ -1705,6 +2184,9 @@
           "properties": {
             "stage": {
               "$ref": "#/$defs/structureReview/anyOf/0/properties/stage"
+            },
+            "reading_structure": {
+              "$ref": "#/$defs/structureReview/anyOf/0/properties/reading_structure"
             },
             "decision": {
               "type": "string",

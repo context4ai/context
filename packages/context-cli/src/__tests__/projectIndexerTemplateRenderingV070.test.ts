@@ -634,7 +634,8 @@ describe("Indexer template materialization and rendering", () => {
       applicabilityConditionRefs: CONDITIONS,
     })).toThrow("does not equal its Fact projection");
 
-    expect(() => renderIndexerTemplateArtifact({
+    const diagnostics: Array<{ code: string; message: string }> = [];
+    const longProse = renderIndexerTemplateArtifact({
       artifactResult: boundArtifactResult(setupValue.materialized, {
         summary: "x".repeat(2001),
       }),
@@ -642,7 +643,11 @@ describe("Indexer template materialization and rendering", () => {
       template: setupValue.materialized,
       questionBindings: QUESTION_BINDINGS,
       applicabilityConditionRefs: CONDITIONS,
-    })).toThrow("maximum_length");
+      diagnostics,
+    });
+    expect(longProse.review_ready).toBe(true);
+    expect(longProse.sections.some(section => section.markdown.includes("x".repeat(2001)))).toBe(true);
+    expect(diagnostics.map(item => item.code)).toContain("template-variable-length-guidance-exceeded");
 
     const wrongEvidenceKind = boundArtifactResult(setupValue.materialized, {
       summary: "A summary with the wrong evidence kind.",

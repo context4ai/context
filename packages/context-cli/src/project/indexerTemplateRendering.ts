@@ -431,6 +431,7 @@ function variableAvailable(value: IndexerJson): boolean {
 function validateVariableValue(
   contract: IndexerTemplateContract["variables"][number],
   value: IndexerJson,
+  diagnostics?: Array<{ code: string; message: string }>,
 ): void {
   const valid = contract.type === "string" ? typeof value === "string"
     : contract.type === "string-list" ? Array.isArray(value) && value.every((item) => typeof item === "string")
@@ -444,14 +445,16 @@ function validateVariableValue(
     typeof value === "string" &&
     value.length > contract.maximum_length
   ) {
-    throw new TypeError(`template variable ${contract.id} exceeds maximum_length`);
+    diagnostics?.push({ code: "template-variable-length-guidance-exceeded",
+      message: `Template variable ${contract.id} exceeds the recommended length; its complete content is retained.` });
   }
   if (
     contract.maximum_items !== undefined &&
     (Array.isArray(value) ? value.length : isStringMap(value) ? Object.keys(value).length : 0) >
       contract.maximum_items
   ) {
-    throw new TypeError(`template variable ${contract.id} exceeds maximum_items`);
+    diagnostics?.push({ code: "template-variable-items-guidance-exceeded",
+      message: `Template variable ${contract.id} exceeds the recommended item count; its complete content is retained.` });
   }
 }
 
@@ -532,6 +535,7 @@ export function renderIndexerTemplateArtifact(input: {
   template: MaterializedIndexerTemplate;
   questionBindings: readonly IndexerTemplateQuestionBinding[];
   applicabilityConditionRefs: readonly string[];
+  diagnostics?: Array<{ code: string; message: string }>;
 }): IndexerRenderedArtifact {
   validateMaterializedIndexerTemplate(input.template);
   const result = validatedResult(input.artifactResult);
@@ -559,7 +563,7 @@ export function renderIndexerTemplateArtifact(input: {
     ) {
       throw new TypeError(`template variable ${id} has invalid evidence bindings`);
     }
-    validateVariableValue(variableContract, binding.value);
+    validateVariableValue(variableContract, binding.value, input.diagnostics);
   }
   validateIndexerTemplateVariableLayers({ result, artifact, contract });
   const sections: IndexerRenderedArtifact["sections"] = [];
@@ -656,7 +660,8 @@ export function renderIndexerTemplateArtifact(input: {
     0,
   );
   if (renderedBytes > contract.maximum_rendered_bytes) {
-    throw new TypeError("rendered Artifact exceeds the template expansion budget");
+    input.diagnostics?.push({ code: "template-size-guidance-exceeded",
+      message: "Rendered content exceeds the template's recommended size; assess splitting by reader task. No content was truncated." });
   }
   const payload: Omit<IndexerRenderedArtifact, "rendered_digest"> = {
     protocol: "context.indexer.rendered-artifact/v1",

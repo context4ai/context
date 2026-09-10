@@ -1,3 +1,4 @@
+import { approvedRevisionKnowledgeContext } from "./approvedRevisionKnowledgeContext.js";
 import { projectCurrentIndexerGate, projectCurrentIndexerGateResolution } from "./indexerCurrentWorkflowRoute.js";
 import { approvedRevisionContext } from "./approvedRevisionContext.js";
 import { approvedRevisionRecovery } from "./approvedRevisionRecovery.js";
@@ -38,10 +39,11 @@ export async function buildApprovedRevisionRoute(input: {
   }
   if (resolved.action === undefined) throw new TypeError("Approved revision Graph action is unavailable");
   const revision = (update ?? request)!.revision;
+  const knowledgeContext = request ? await approvedRevisionKnowledgeContext(input.projectRoot, request.target.previous_path ?? request.target.path) : undefined;
   const writingContext = request ? await approvedRevisionContext(input.projectRoot, request.target) : undefined;
   const action = projectWorkflowRouteAction({ action: { ...resolved.action,
-    input: (update ? { stage: "source-update", ...update } : { stage: "approved-revision", instruction: request!.instruction, writing_context: writingContext, program_blocks: request!.program_blocks ?? [],
-      target: request!.target, ...(recovery ? { merge_context: recovery.request.merge_context, recovery: "Merge the latest approved content with the prior draft. Preserve concurrent edits; ask the user when their intent conflicts. Submit the merged Markdown through this exact revision. Review still applies." } : {}), ...(request!.refresh_sources ? { refresh_sources: request!.refresh_sources, next: "Import these explicitly selected sources, then context task adjust --input <input-with-refresh-true> --format json; do not submit page content yet." } : {}), ...(request!.requirements === undefined ? {} : { requirements: request!.requirements }) }) as unknown as JsonValue }, revision, authorities: input.authorities });
+    input: (update ? { stage: "source-update", ...update } : { stage: "approved-revision", instruction: request!.instruction, ...(knowledgeContext ? { knowledge_adjustment: knowledgeContext } : {}), writing_context: writingContext, program_blocks: request!.program_blocks ?? [],
+      target: request!.target, ...(request!.knowledge_input === undefined ? {} : { knowledge_input: request!.knowledge_input }), ...(recovery ? { merge_context: recovery.request.merge_context, recovery: "Merge the latest approved content with the prior draft. Preserve concurrent edits; ask the user when their intent conflicts. Submit the merged Markdown through this exact revision. Review still applies." } : {}), ...(request!.refresh_sources ? { refresh_sources: request!.refresh_sources, next: "Import these explicitly selected sources, then context task adjust --input <input-with-refresh-true> --format json; do not submit page content yet." } : {}), ...(request!.requirements === undefined ? {} : { requirements: request!.requirements }) }) as unknown as JsonValue }, revision, authorities: input.authorities });
   return { protocol: "context.workflow.route.v1", id: resolved.routeId, node: resolved.node,
     reason_code: resolved.reasonCode, revision, availability: resolved.availability,
     commands: [{ command: `context${authorityCommandOptions(input.authorities, "workflow")} action complete-current --revision '${revision}'${input.managed ? " --managed" : ""} --input - --format json`,

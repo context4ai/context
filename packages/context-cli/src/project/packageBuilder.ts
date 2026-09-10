@@ -1,3 +1,8 @@
+import { readReadingStructure } from "./readingStructure.js";
+import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
+import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
+import { writePackageReadingStructure } from "./packageReadingStructure.js";
+import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
 import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
 import { completeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
@@ -37,6 +42,8 @@ import {
   packageOutputFingerprint,
   packageOutputSnapshot,
   walkPackageFiles,
+  parsePackageLinkWarnings,
+  type PackageBuildLinkWarning,
   type PackageBuildSummary,
   type PackageOutputFile,
 } from "./packageBuildReceipt.js";
@@ -101,11 +108,12 @@ interface PackageBuildManifest {
   outputFiles: number;
   outputs: PackageOutputFile[];
   assetDelivery?: PackageAssetDeliverySummary;
+  linkWarnings: PackageBuildLinkWarning[];
 }
 
 const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
-const PACKAGE_BUILDER_PROTOCOL_VERSION = "v20-incremental-delivery";
+const PACKAGE_BUILDER_PROTOCOL_VERSION = "v22-article-link-diagnostics";
 
 function packageAssetDeliverySummary(value: unknown): PackageAssetDeliverySummary | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -218,6 +226,7 @@ async function packageInputFingerprint(input: {
     : null;
   return stableHash({
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
+    readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
     package: {
       kind: input.pkg.kind,
       name: input.pkg.name,
@@ -227,6 +236,7 @@ async function packageInputFingerprint(input: {
       template: input.pkg.template,
       outDir: input.pkg.outDir,
     },
+    readingStructure: await readReadingStructure(input.projectRoot) ?? null,
     knowledgeStructure: input.structure.parsed,
     knowledge: input.selected.map((file) => ({
       path: file.relPath,
@@ -254,6 +264,7 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
         output_files?: unknown;
         outputs?: unknown;
         asset_delivery?: unknown;
+        link_warnings?: unknown;
       };
       if (typeof candidate.builder_protocol === "string" &&
         typeof candidate.fingerprint === "string" &&
@@ -276,6 +287,7 @@ async function readPackageManifest(projectRoot: string, pkg: PackageDefinition):
           outputFingerprint: candidate.output_fingerprint,
           outputFiles: candidate.output_files,
           outputs,
+          linkWarnings: parsePackageLinkWarnings(candidate.link_warnings),
           ...(assetDelivery === undefined ? {} : { assetDelivery }),
         };
       }
@@ -294,6 +306,7 @@ async function writePackageFingerprint(input: {
   outputFiles: number;
   outputs: readonly PackageOutputFile[];
   assetDelivery: PackageAssetDeliverySummary;
+  linkWarnings: readonly PackageBuildLinkWarning[];
 }): Promise<void> {
   const filePath = packageFingerprintPath(input.projectRoot, input.pkg);
   await mkdir(dirname(filePath), { recursive: true });
@@ -306,6 +319,7 @@ async function writePackageFingerprint(input: {
     output_files: input.outputFiles,
     outputs: input.outputs,
     asset_delivery: input.assetDelivery,
+    link_warnings: input.linkWarnings,
     built_at: new Date().toISOString(),
   }, null, 2)}\n`, "utf8");
 }
@@ -324,7 +338,7 @@ export async function collectPackageFreshness(
   projectRoot: string,
   packages: readonly PackageDefinition[],
 ): Promise<PackageFreshness[]> {
-  const approved = await listApprovedKnowledge(projectRoot);
+  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
   return Promise.all(packages.map(async (pkg) => {
     assertPackageOutputDir(pkg);
     const selected = selectPackageKnowledge(approved, pkg);
@@ -426,7 +440,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       next: "Declare kbPackage() or llmsPackage() in src/index.ts, then rerun context build.",
     });
   }
-  const approved = await listApprovedKnowledge(projectRoot);
+  const approved = await withPackageKnowledgeAdvisories(projectRoot, await listApprovedKnowledge(projectRoot));
   const templateReviews = await inspectPackageTemplateReviews(projectRoot, packages);
   const unresolvedTemplateReviews = templateReviews.filter((review) =>
     review.state === "review-required" || review.state === "invalid"
@@ -504,6 +518,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       if (existingOutput.fingerprint === previousManifest.outputFingerprint) {
         summaries.push({ name: pkg.name, kind: packageKind(pkg), outDir: pkg.outDir,
           inputs: selected.length, files: existingOutput.files, state: "unchanged",
+          linkWarnings: previousManifest.linkWarnings,
           changes: { added: [], updated: [], removed: [] }, resources: {
             files: previousManifest.assetDelivery.outputFiles, bytes: previousManifest.assetDelivery.outputBytes,
             delivery: previousManifest.assetDelivery,
@@ -562,6 +577,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         selected,
         knowledgeTimestamp,
       });
+      await writePackageReadingStructure({ projectRoot, pkg: stagedPkg, selected, structure: await readReadingStructure(projectRoot) });
       await writePackageBuildInventory({ projectRoot, pkg: stagedPkg, inventory: buildInventory });
       await appendLlmsKnowledge({
         projectRoot,
@@ -570,7 +586,9 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         knowledgeCount: selected.length,
         templateConsumesKnowledge: rendered.consumesKnowledge,
       });
-      return writtenKnowledge;
+      const linkWarnings: PackageBuildLinkWarning[] = [...writtenKnowledge.linkWarnings,
+        ...await inspectPackageMarkdownDirectory(join(projectRoot, stagedPkg.outDir))];
+      return { ...writtenKnowledge, linkWarnings };
     });
     const output = await packageOutputFingerprint(projectRoot, pkg);
     const currentOutput = await packageOutputSnapshot(projectRoot, pkg, knowledgeGroups);
@@ -584,6 +602,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       outputFiles: output.files,
       outputs: currentOutput,
       assetDelivery: writtenKnowledge.assetDelivery,
+      linkWarnings: writtenKnowledge.linkWarnings,
     });
     summaries.push({
       name: pkg.name,
@@ -591,6 +610,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       outDir: pkg.outDir,
       inputs: selected.length,
       files: output.files,
+      linkWarnings: writtenKnowledge.linkWarnings,
       resources: {
         files: writtenKnowledge.resources,
         bytes: writtenKnowledge.resourceBytes,

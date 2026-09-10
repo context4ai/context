@@ -380,17 +380,20 @@ export async function prepareAndStartNextIndexerBatch(
   const shared = await sharedBatchAuthority({ projectRoot, spec: specs[0]! });
   const prepared: Awaited<ReturnType<typeof prepareCandidates>> = [];
   let planned: PlannedIndexerCurrentBatch | undefined;
-  // Materializing a View can decode megabytes of parser cache. Grow the batch
-  // in order and stop at the first candidate that cannot join it; a later task
-  // must not make complete-current pre-read the rest of a large queue. The one
-  // rejected lookahead remains pending and is rebuilt as the next batch head.
+  // Bound expensive lookahead while allowing a smaller task after one large
+  // candidate to fill the batch. Skipped work stays pending for the next head.
+  let skippedLookahead = 0;
   for (const [index, spec] of specs.entries()) {
     prepared.push(...await prepareCandidates({ projectRoot, specs: [spec],
       instructionRequest: shared.instructionRequest, task_offset: index }));
     const next = planIndexerCurrentBatch({ candidates: prepared.map((candidate) => candidate.candidate),
       shared_instruction_bytes: shared.instructionBytes, measure_reading: batchReadingMeasure(prepared) });
     const latest = prepared.at(-1)!.candidate.workset.workset_digest;
-    if (planned !== undefined && !next.candidates.some((candidate) => candidate.workset.workset_digest === latest)) break;
+    if (planned !== undefined && !next.candidates.some((candidate) => candidate.workset.workset_digest === latest)) {
+      if (++skippedLookahead >= 2) break;
+      continue;
+    }
+    skippedLookahead = 0;
     planned = next;
     if (planned.candidates.length >= policy.max_tasks || planned.input_bytes >= policy.max_input_bytes ||
         planned.output_reserve_bytes >= policy.max_output_reserve_bytes || planned.view_item_count >= policy.max_view_items) break;

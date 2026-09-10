@@ -100,6 +100,14 @@ async function writeProviderBundle(root: string): Promise<void> {
 }
 
 describe("context.indexer.provider/v1", () => {
+  test("keeps legacy template delivery unspecified and accepts explicit selected delivery", () => {
+    const legacy = parseIndexerProviderManifest(providerManifest());
+    expect(legacy.provider.templates?.[0]?.delivery).toBeUndefined();
+    const selected = parseIndexerProviderManifest(providerManifest().replace(
+      "path: templates/guide.md }", "path: templates/guide.md, delivery: selected }"));
+    expect(selected.provider.templates?.[0]?.delivery).toBe("selected");
+  });
+
   test("uses one manifest field tree for Code and Markdown providers", () => {
     const code = parseIndexerProviderManifest(providerManifest("code"));
     const markdown = parseIndexerProviderManifest(providerManifest("markdown"));

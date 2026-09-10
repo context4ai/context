@@ -582,17 +582,33 @@ export async function readAcceptedIndexerMainAuthorResultHistory(input: {
     } catch (error) {
       if (!(error !== null && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
     }
-    const records = [];
-    for (const name of names.sort()) {
-      if (!/^[a-f0-9]{64}\.json$/u.test(name)) continue;
-      const requestDigest = `sha256:${name.slice(0, -5)}`;
-      const spec = await currentSpec({ projectRoot: input.projectRoot, request_digest: requestDigest });
-      if (spec.request.workset.stage !== "author" || !input.include(spec)) continue;
-      const cache = await readJsonMaybe(input.projectRoot, acceptedCachePath(requestDigest));
-      if (cache === undefined) throw new TypeError("accepted main author result cache is missing");
-      records.push(acceptedMainResultRecord(spec, readAcceptedCache({ cache, spec })));
-    }
-    return records;
+    const requests = names.sort().filter(name => /^[a-f0-9]{64}\.json$/u.test(name))
+      .map(name => `sha256:${name.slice(0, -5)}`);
+    // Cache the aggregate as well as its children. Large histories exceed the
+    // bounded command cache and otherwise evict every child before the next
+    // delivery/status read. Paths and nanosecond file stamps remain authority.
+    const specs = await reuseCommandFileRead({ key: "author-history-specs",
+      paths: requests.map(digest => join(input.projectRoot, runSpecPath(digest))),
+      read: async () => {
+        const values: MainRunSpec[] = [];
+        for (const digest of requests) values.push(await currentSpec({ projectRoot: input.projectRoot, request_digest: digest }));
+        return values;
+      },
+    });
+    const selected = specs.filter(spec => spec.request.workset.stage === "author" && input.include(spec));
+    return reuseCommandFileRead({ key: "author-history-records",
+      paths: selected.flatMap(spec => [runSpecPath(spec.request.execution_request_digest), acceptedCachePath(spec.request.execution_request_digest)]
+        .map(path => join(input.projectRoot, path))),
+      read: async () => {
+        const records = [];
+        for (const spec of selected) {
+          const cache = await readJsonMaybe(input.projectRoot, acceptedCachePath(spec.request.execution_request_digest));
+          if (cache === undefined) throw new TypeError("accepted main author result cache is missing");
+          records.push(acceptedMainResultRecord(spec, readAcceptedCache({ cache, spec })));
+        }
+        return records;
+      },
+    });
   });
 }
 

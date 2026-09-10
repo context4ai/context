@@ -9,8 +9,7 @@ activation:
     - sessions-set
   required_signals:
     - id: durable-sessions
-      description: An authorized bounded conversation summary is available; a code
-        change is optional.
+      description: An authorized bounded conversation summary is available; a code change is optional.
   supporting_signals:
     - id: reader-purpose
       description: The material answers a reader question or improves existing knowledge.
@@ -18,10 +17,9 @@ activation:
     - id: unavailable-original
       description: Only a pointer to unread material exists; do not invent its content.
   agent_questions:
-    - Does this material improve an existing page, justify an independent reader
-      topic, or only need saving?
+    - Does this material improve an existing page, justify an independent reader topic, or only need saving?
 provides:
-  profiles: &a1
+  profiles:
     - domain-reference
     - product-requirements
     - technical-guide
@@ -525,15 +523,274 @@ composition:
 provider:
   instructions:
     - path: references/indexer.md
-      profiles: *a1
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
     - path: references/classification.md
-      profiles: *a1
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
     - path: references/writing.md
-      profiles: *a1
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
     - path: references/updates-and-composition.md
-      profiles: *a1
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
     - path: references/extension-placement.md
       profiles:
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
+    - path: references/article-catalog/domain-reference-article-catalog.md
+      profiles:
+        - domain-reference
+    - path: references/article-catalog/product-requirements-article-catalog.md
+      profiles:
+        - product-requirements
+    - path: references/article-catalog/technical-guide-article-catalog.md
+      profiles:
+        - technical-guide
+    - path: references/article-catalog/user-and-developer-guide-article-catalog.md
+      profiles:
+        - user-and-developer-guide
+    - path: references/article-catalog/runbook-article-catalog.md
+      profiles:
+        - runbook
+    - path: references/article-catalog/faq-support-article-catalog.md
+      profiles:
+        - faq-support
+    - path: references/article-catalog/decision-record-article-catalog.md
+      profiles:
+        - decision-record
+    - path: references/article-catalog/incident-review-article-catalog.md
+      profiles:
+        - incident-review
+    - path: references/article-catalog/test-validation-article-catalog.md
+      profiles:
+        - test-validation
+    - path: references/diagrams.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
+        - sessions/monorepo-container
+        - sessions/web-application
+        - sessions/component-library
+        - sessions/sdk-library
+        - sessions/cli-tool
+        - sessions/plugin-extension
+        - sessions/api-service
+        - sessions/gateway-facade
+        - sessions/domain-service
+        - sessions/background-runtime
+        - sessions/event-consumer
+        - sessions/data-sync-reconciliation
+        - sessions/storage-repository
+        - sessions/adapter-integration
+        - sessions/contract-source
+        - sessions/derived-generated-source
+        - sessions/domain-reference
+        - sessions/product-requirements
+        - sessions/technical-guide
+        - sessions/user-and-developer-guide
+        - sessions/public-api-reference
+        - sessions/runbook
+        - sessions/faq-support
+        - sessions/standard-policy
+        - sessions/decision-record
+        - sessions/incident-review
+        - sessions/test-validation
+        - sessions/release-migration-guide
+        - sessions/documentation-site
+    - path: references/visual-source-processing.md
+      profiles:
+        - domain-reference
+        - product-requirements
+        - technical-guide
+        - user-and-developer-guide
+        - runbook
+        - faq-support
+        - decision-record
+        - incident-review
+        - test-validation
         - sessions/monorepo-container
         - sessions/web-application
         - sessions/component-library
@@ -600,6 +857,582 @@ provider:
       profile: test-validation
       path: templates/test-validation.md
       kind: procedure
+    - id: domain-reference-c01
+      profile: domain-reference
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-c01
+      profile: technical-guide
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-c02
+      profile: domain-reference
+      path: templates/articles/c02.md
+      kind: procedure
+      delivery: selected
+    - id: product-requirements-c02
+      profile: product-requirements
+      path: templates/articles/c02.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-c02
+      profile: user-and-developer-guide
+      path: templates/articles/c02.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-c03
+      profile: domain-reference
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: product-requirements-c03
+      profile: product-requirements
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-c04
+      profile: technical-guide
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: faq-support-c05
+      profile: faq-support
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-c05
+      profile: runbook
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: incident-review-c05
+      profile: incident-review
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: decision-record-c06
+      profile: decision-record
+      path: templates/articles/c06.md
+      kind: procedure
+      delivery: selected
+    - id: incident-review-c06
+      profile: incident-review
+      path: templates/articles/c06.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-c07
+      profile: technical-guide
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-d01
+      profile: domain-reference
+      path: templates/articles/d01.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-d01
+      profile: technical-guide
+      path: templates/articles/d01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-d02
+      profile: domain-reference
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-d02
+      profile: technical-guide
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-d03
+      profile: domain-reference
+      path: templates/articles/d03.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-d04
+      profile: runbook
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-d04
+      profile: technical-guide
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-f01
+      profile: technical-guide
+      path: templates/articles/f01.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-f06
+      profile: technical-guide
+      path: templates/articles/f06.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-f08
+      profile: technical-guide
+      path: templates/articles/f08.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-f09
+      profile: runbook
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-f09
+      profile: user-and-developer-guide
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-l01
+      profile: user-and-developer-guide
+      path: templates/articles/l01.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-l02
+      profile: user-and-developer-guide
+      path: templates/articles/l02.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-l03
+      profile: technical-guide
+      path: templates/articles/l03.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-l03
+      profile: user-and-developer-guide
+      path: templates/articles/l03.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-l04
+      profile: technical-guide
+      path: templates/articles/l04.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-l05
+      profile: user-and-developer-guide
+      path: templates/articles/l05.md
+      kind: procedure
+      delivery: selected
+    - id: test-validation-q01
+      profile: test-validation
+      path: templates/articles/q01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-q01
+      profile: domain-reference
+      path: templates/articles/q01.md
+      kind: procedure
+      delivery: selected
+    - id: test-validation-q02
+      profile: test-validation
+      path: templates/articles/q02.md
+      kind: procedure
+      delivery: selected
+    - id: test-validation-q03
+      profile: test-validation
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: test-validation-q04
+      profile: test-validation
+      path: templates/articles/q04.md
+      kind: procedure
+      delivery: selected
+    - id: test-validation-q05
+      profile: test-validation
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-q05
+      profile: runbook
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-q06
+      profile: runbook
+      path: templates/articles/q06.md
+      kind: procedure
+      delivery: selected
+    - id: user-and-developer-guide-q06
+      profile: user-and-developer-guide
+      path: templates/articles/q06.md
+      kind: procedure
+      delivery: selected
+    - id: incident-review-q07
+      profile: incident-review
+      path: templates/articles/q07.md
+      kind: procedure
+      delivery: selected
+    - id: faq-support-q07
+      profile: faq-support
+      path: templates/articles/q07.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-s01
+      profile: technical-guide
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-s04
+      profile: domain-reference
+      path: templates/articles/s04.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-s05
+      profile: technical-guide
+      path: templates/articles/s05.md
+      kind: procedure
+      delivery: selected
+    - id: technical-guide-s06
+      profile: technical-guide
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: runbook-s07
+      profile: runbook
+      path: templates/articles/s07.md
+      kind: procedure
+      delivery: selected
+    - id: domain-reference-c01-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/c01.md
+    - id: technical-guide-c01-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/c01.md
+    - id: domain-reference-c02-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-c02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/c02.md
+    - id: product-requirements-c02-page
+      profile: product-requirements
+      path: templates/article-programs/product-requirements-c02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/c02.md
+    - id: user-and-developer-guide-c02-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-c02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/c02.md
+    - id: domain-reference-c03-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/c03.md
+    - id: product-requirements-c03-page
+      profile: product-requirements
+      path: templates/article-programs/product-requirements-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/c03.md
+    - id: technical-guide-c04-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/c04.md
+    - id: faq-support-c05-page
+      profile: faq-support
+      path: templates/article-programs/faq-support-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: resolve-reader-question
+      guidance_path: templates/articles/c05.md
+    - id: runbook-c05-page
+      profile: runbook
+      path: templates/article-programs/runbook-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/c05.md
+    - id: incident-review-c05-page
+      profile: incident-review
+      path: templates/article-programs/incident-review-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: learn-from-incident
+      guidance_path: templates/articles/c05.md
+    - id: decision-record-c06-page
+      profile: decision-record
+      path: templates/article-programs/decision-record-c06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-decision-and-tradeoffs
+      guidance_path: templates/articles/c06.md
+    - id: incident-review-c06-page
+      profile: incident-review
+      path: templates/article-programs/incident-review-c06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: learn-from-incident
+      guidance_path: templates/articles/c06.md
+    - id: technical-guide-c07-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/c07.md
+    - id: domain-reference-d01-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-d01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/d01.md
+    - id: technical-guide-d01-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-d01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/d01.md
+    - id: domain-reference-d02-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/d02.md
+    - id: technical-guide-d02-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/d02.md
+    - id: domain-reference-d03-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-d03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/d03.md
+    - id: runbook-d04-page
+      profile: runbook
+      path: templates/article-programs/runbook-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/d04.md
+    - id: technical-guide-d04-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/d04.md
+    - id: technical-guide-f01-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-f01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/f01.md
+    - id: technical-guide-f06-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-f06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/f06.md
+    - id: technical-guide-f08-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-f08-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/f08.md
+    - id: runbook-f09-page
+      profile: runbook
+      path: templates/article-programs/runbook-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/f09.md
+    - id: user-and-developer-guide-f09-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: complete-reader-task
+      guidance_path: templates/articles/f09.md
+    - id: user-and-developer-guide-l01-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-l01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/l01.md
+    - id: user-and-developer-guide-l02-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-l02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/l02.md
+    - id: technical-guide-l03-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-l03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/l03.md
+    - id: user-and-developer-guide-l03-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-l03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/l03.md
+    - id: technical-guide-l04-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-l04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/l04.md
+    - id: user-and-developer-guide-l05-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-l05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/l05.md
+    - id: test-validation-q01-page
+      profile: test-validation
+      path: templates/article-programs/test-validation-q01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: verify-behavior-or-acceptance
+      guidance_path: templates/articles/q01.md
+    - id: domain-reference-q01-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-q01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/q01.md
+    - id: test-validation-q02-page
+      profile: test-validation
+      path: templates/article-programs/test-validation-q02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: verify-behavior-or-acceptance
+      guidance_path: templates/articles/q02.md
+    - id: test-validation-q03-page
+      profile: test-validation
+      path: templates/article-programs/test-validation-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: verify-behavior-or-acceptance
+      guidance_path: templates/articles/q03.md
+    - id: test-validation-q04-page
+      profile: test-validation
+      path: templates/article-programs/test-validation-q04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: verify-behavior-or-acceptance
+      guidance_path: templates/articles/q04.md
+    - id: test-validation-q05-page
+      profile: test-validation
+      path: templates/article-programs/test-validation-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: verify-behavior-or-acceptance
+      guidance_path: templates/articles/q05.md
+    - id: runbook-q05-page
+      profile: runbook
+      path: templates/article-programs/runbook-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/q05.md
+    - id: runbook-q06-page
+      profile: runbook
+      path: templates/article-programs/runbook-q06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/q06.md
+    - id: user-and-developer-guide-q06-page
+      profile: user-and-developer-guide
+      path: templates/article-programs/user-and-developer-guide-q06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-product-intent
+      guidance_path: templates/articles/q06.md
+    - id: incident-review-q07-page
+      profile: incident-review
+      path: templates/article-programs/incident-review-q07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: learn-from-incident
+      guidance_path: templates/articles/q07.md
+    - id: faq-support-q07-page
+      profile: faq-support
+      path: templates/article-programs/faq-support-q07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: resolve-reader-question
+      guidance_path: templates/articles/q07.md
+    - id: technical-guide-s01-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/s01.md
+    - id: domain-reference-s04-page
+      profile: domain-reference
+      path: templates/article-programs/domain-reference-s04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-domain
+      guidance_path: templates/articles/s04.md
+    - id: technical-guide-s05-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-s05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/s05.md
+    - id: technical-guide-s06-page
+      profile: technical-guide
+      path: templates/article-programs/technical-guide-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: understand-technical-design
+      guidance_path: templates/articles/s06.md
+    - id: runbook-s07-page
+      profile: runbook
+      path: templates/article-programs/runbook-s07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-recover-system
+      guidance_path: templates/articles/s07.md
   forbidden_fallbacks:
     - transcript-as-knowledge
     - inferred-approval

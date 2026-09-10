@@ -12,7 +12,7 @@ export function validateBundledIndexerProfileTemplates(input: {
     );
   }
   if (input.bundleId === "context-code-indexer") for (const template of templates) {
-    if (template.kind !== "page-program" && (template.id !== template.profile ||
+    if (template.kind !== "page-program" && template.kind !== "procedure" && (template.id !== template.profile ||
         template.path !== `templates/${template.profile}.md`)) {
       throw new TypeError(`${input.bundleId} profile ${template.profile} must use its own canonical template`);
     }

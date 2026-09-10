@@ -101,6 +101,18 @@ export class GoPlugin implements ExtractionPlugin {
       const indexed = indexGoSource(source, entry.path, { exportedOnly: false });
       files.push({ path: entry.path, language: "go", lines: indexed.lines });
       symbols.push(...indexed.symbols.map((symbol) => symbolInfo(entry.path, symbol)));
+      for (const imported of indexed.imports) {
+        relations.push({
+          type: EdgeType.Imports,
+          from: entry.path,
+          to: imported.path,
+          isExternal: true,
+          grounding: Grounding.Code,
+          confidence: 1,
+          source: EdgeSource.Ast,
+          ...(imported.location === undefined ? {} : { line: imported.location.startLine }),
+        });
+      }
       for (const call of indexed.calls) {
         if (!call.enclosingSymbol) continue;
         relations.push({

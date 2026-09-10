@@ -121,3 +121,9 @@ update or failed build does not advance the whole range's processed version.
 Session commit/MR associations stay in the saved source frontmatter, not copied
 into every knowledge page. Use the CLI to adjust or roll back current work;
 do not edit these baselines or remove runtime files to simulate completion.
+
+## Source visual conversion preference
+
+Workspace `package.json` accepts `context.convertVisuals` (boolean, default `true`). Initialization writes it explicitly; older workspaces without the field also default to enabled. This lets a capable Author Agent attempt faithful structural diagram/table conversion. Explicit session instructions override the saved preference. It does not disable native table capture or existing Mermaid when false.
+
+Diagram style follows the workspace’s editable `AGENTS.md`; newly initialized workspaces default to minimal theme-aware diagrams without decorative colors. If the Agent cannot read the image or cannot preserve its meaning, it retains the original through the existing asset workflow. Source-based reuse avoids rereading unchanged visuals; file integrity and package hashes continue to reflect actual output changes.

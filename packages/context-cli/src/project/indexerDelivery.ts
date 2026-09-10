@@ -1,3 +1,4 @@
+import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
 import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { finishPartitionStream, readPartitionStream, resumePartitionStream } from "./indexerPartitionStream.js";
 import { reuseCommandValue } from "./commandReadCache.js";
@@ -14,7 +15,6 @@ import { indexerArtifactResultSchema, indexerLayoutArtifactRef, indexerProtocolD
   materializeIndexerEffectiveArtifactSet, type IndexerArtifact, type IndexerArtifactResult } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
-import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import { readCurrentIndexerPostAuthorEnvelopesForResults } from "./indexerPostAuthorRunStore.js";
 import { clearCompletedLifecycle } from "./lifecycleCleanup.js";
 
@@ -107,7 +107,7 @@ export function deliveryPageContentDigest(artifact: IndexerArtifact, result: Pic
 
 export async function acceptedDeliveryPages(projectRoot: string, includeLinks = true): Promise<DeliveryPage[]> {
   const delivery = includeLinks ? await readIndexerDelivery(projectRoot) : undefined;
-  const records = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+  const records = await readDeliverableAuthorRecords(projectRoot);
   const envelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({ projectRoot,
     allow_pending: true,
     results: records.map((record) => ({ author_workset_digest: record.accepted_record.workset_digest,
@@ -142,6 +142,8 @@ async function finishDeliveryIfReady(projectRoot: string, state: IndexerDelivery
   if (await resolveCurrentIndexerComposerBatch(projectRoot)) return;
   const pages = await acceptedDeliveryPages(projectRoot);
   if (pages.some((page) => state.delivered[page.ref] !== page.content_digest)) return;
+  const stream = await readPartitionStream(projectRoot);
+  if (stream?.phase === "author" && stream.final_wave !== true && await resumePartitionStream(projectRoot)) return;
   assertDeliveryLinksComplete(projectRoot, state, pages);
   if (!await finishPartitionStream(projectRoot) && await resumePartitionStream(projectRoot)) return;
   await clearCompletedLifecycle(projectRoot);

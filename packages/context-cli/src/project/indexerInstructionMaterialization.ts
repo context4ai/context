@@ -223,7 +223,7 @@ async function instructionDescriptors(input: {
     })
     .sort((left, right) => left.resource_ref < right.resource_ref ? -1 : 1);
   const templates = (manifest.provider.templates ?? [])
-    .filter((template) => template.kind !== "page-program" && template.profile === input.profile)
+    .filter((template) => template.kind !== "page-program" && template.delivery !== "selected" && template.profile === input.profile)
     .map((template) => {
       const overridePath = `templates/${template.id}.md`;
       const override = input.customization.files.find((candidate) =>

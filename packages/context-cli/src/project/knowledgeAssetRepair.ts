@@ -174,7 +174,7 @@ export async function repairApprovedKnowledgeAssetProjections(
     if (unprojectedSourceAssetLinks(content).length > 0) affected.push({ ...file, content });
   }
   if (affected.length === 0) {
-    return { repairedPages: [], writtenAssets: [], removedAssets: [] };
+    return { repairedPages: [], writtenAssets: [], removedAssets: await removeOrphanKnowledgeAssets(projectRoot) };
   }
 
   const sourceRegistry = await validSourceRegistry(projectRoot);

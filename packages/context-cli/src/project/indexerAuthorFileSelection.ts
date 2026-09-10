@@ -12,7 +12,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 
 function supporting(path: string): boolean {
-  return /(^|\/)(__mocks__|__tests__|examples?|fixtures?|tests?|stories)(\/|$)|[._](test|spec|stories)\.[^/]+$/iu.test(path);
+  return /(^|\/)(__mocks__|__tests__|examples?|fixtures?|tests?|stories|docs?|documentation)(\/|$)|[._](test|spec|stories|doc)\.[^/]+$|\.mdx?$/iu.test(path);
 }
 
 function stem(path: string): string {
@@ -44,19 +44,26 @@ export function selectIndexerAuthorFiles(input: {
     if (directory === "." || owned.some((owner) => owner.normalized_path.startsWith(`${directory}/`))) selected.add(file.normalized_path);
   }
   const resolve = (from: string, target: string): string | undefined => {
-    const base = target.startsWith(".") ? posix.normalize(posix.join(posix.dirname(from), target)) : target;
-    const candidates = [base, ...["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs", "scss", "css"]
+    // Import query flags select a loader, not a different captured file. Never
+    // execute that loader or follow an uncaptured path.
+    const pathname = target.split(/[?#]/u)[0]!;
+    const base = pathname.startsWith(".") ? posix.normalize(posix.join(posix.dirname(from), pathname)) : pathname;
+    const candidates = [base, ...["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs", "scss", "css", "mdx", "md", "json"]
       .flatMap((ext) => [`${base}.${ext}`, `${base}/index.${ext}`])];
     // TS source often imports its emitted .js spelling.
     if (/\.[cm]?js$/u.test(base)) candidates.push(base.replace(/\.js$/u, ".ts"), base.replace(/\.js$/u, ".tsx"));
     return candidates.find((path) => byPath.has(path));
   };
+  const rawImports = new Set<string>();
   const imports = new Map(input.files.map((file) => [file.normalized_path,
     file.facts.flatMap((fact) => {
       const payload = record(fact.payload);
-      if (fact.kind !== "code-relation" || !/^imports(?:[-_]?type)?$/iu.test(String(payload.type ?? payload.kind ?? "")) ||
-          typeof payload.to !== "string" || payload.isExternal === true) return [];
-      const path = resolve(file.normalized_path, payload.to);
+      const target = fact.kind === "mdx-esm-import" ? payload.source_module
+        : fact.kind === "code-relation" && /^imports(?:[-_]?type)?$/iu.test(String(payload.type ?? payload.kind ?? ""))
+          && payload.isExternal !== true ? payload.to : undefined;
+      if (typeof target !== "string") return [];
+      const path = resolve(file.normalized_path, target);
+      if (path !== undefined && /[?&](?:raw|source)(?:[=&]|$)/u.test(target)) rawImports.add(`${file.normalized_path}\0${path}`);
       return path === undefined ? [] : [path];
     }),
   ]));
@@ -75,7 +82,7 @@ export function selectIndexerAuthorFiles(input: {
   const queue = [...selected];
   for (let i = 0; i < queue.length; i += 1) {
     for (const path of imports.get(queue[i]!) ?? []) {
-      if (supporting(path) || selected.has(path)) continue;
+      if (selected.has(path) || (supporting(path) && !supporting(queue[i]!) && !rawImports.has(`${queue[i]!}\0${path}`))) continue;
       selected.add(path);
       if (stem(path) !== "index") queue.push(path);
     }

@@ -11,6 +11,7 @@ export interface GoSourceLocation {
 export interface GoImport {
   alias: string;
   path: string;
+  location?: GoSourceLocation;
 }
 
 export interface GoSymbol {

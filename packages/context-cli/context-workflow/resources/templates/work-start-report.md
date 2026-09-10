@@ -85,6 +85,59 @@ work needed to estimate it and when you can revisit it. An internal stage name i
 not an explanation. Do not invent counts, imply that a check happened, or scan more
 material just to fill a number. Explain the delivery order after the first pages.
 
+## Suggested reading organization
+
+Recommend one main reading route from representative material and the reader's
+purpose. Combine these starting points when useful; they are not required
+folders, a closed classification or additional source profiles.
+
+| Starting point | Reading route | When supported |
+| --- | --- | --- |
+| Business scenarios | Overview → scenario/domain → rules, frontend and backend entries → investigation | Shared reader tasks across code and product materials |
+| Engineering modules | Application/service map → module → entry and specialized articles | Maintenance and implementation questions |
+| Component or public library | Getting started → capability/component families → reference → migration | Public APIs or reusable UI, with shared configuration written once |
+| Product | Overview → users/scenarios → operations → rules → support and acceptance | Product documents; no technical chapters required without code material |
+| Design system | Principles → foundations/tokens → themes/platforms → components → adoption | Actual system materials, not an inferred system from component code alone |
+| Operations and quality | Task/problem entry → procedure/investigation → tools → validation/cases | Operational instructions and real quality evidence |
+
+Use article responsibilities when explaining the proposed chapters: business
+navigation combines C01–C03 and D01–D04 with linked F/S/Q entries; engineering
+maps combine C01, F01–F12 and S01–S07; public UI libraries use L05/L02, while
+SDKs use L01/L04 without UI-only chapters. Product material uses the selected
+product, guide and policy profiles, with supported QA articles; design systems
+use L03 and link L05/L02 implementations; operations use C05, D04 and Q01–Q07
+alongside supported SOP, FAQ or incident articles. IDs are optional explanatory
+references, not a questionnaire for the user.
+
+Select a primary route from actual reader tasks, source kinds and existing
+knowledge; repository count does not determine the menu. Distinguish a link-only
+navigation group from a sourced overview and a separately useful specialist
+article. Reuse the same article under multiple groups. If detailed evidence is
+missing, retain a truthful source map or a tentative proposal, never an empty
+published page. A pure product workspace needs no frontend/backend hierarchy;
+a business workspace may include an internal library without becoming two
+workspaces. Explain meaningful alternatives only when a tradeoff exists.
+
+Show a compact directory tree or a table with proposed entries, article types,
+suggested chapters, supporting material and initial priority. Distinguish navigation
+groups from proposed articles. For repeated modules expand one representative,
+then point to the known module list; do not pretend sampling completed planning.
+Explain why an article deserves its own page or could be combined. Suggestions
+are not delivered links, confirmed page counts or a reason to create empty pages.
+
+Keep this proposal inside this report. User feedback changes the proposal and
+subsequent formal planning through existing actions. Reuse settled choices and
+honor an explicit waiver of the first feedback wait. CLI does not parse this
+Markdown to infer approval, source ownership or runtime configuration.
+
+Reading organization is independent of knowledge collections and KB packaging.
+The same article can appear under several reader groups without duplicate bodies;
+output channels resolve their own paths. Moving a menu entry does not cancel a
+required question, move source files or require parsing again. Record material
+scope changes using the existing requirements flow. Suggested headings, writing
+style and ordinary version differences are advisory; let the Agent judge content
+and preserve source coordinates and a useful next investigation step.
+
 ## What could be misrepresented
 
 For one to three actual pitfalls, name the objects that could be confused or the

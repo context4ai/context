@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { approvedKnowledgeDependencyWarnings } from "./approvedKnowledgeDependencyWarnings.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
@@ -194,6 +195,7 @@ export async function verifyProjectWorkspace(
     issues,
     ...(options.approvedStructureOverride !== undefined ? { structureOverride: options.approvedStructureOverride } : {}),
   });
+  issues.push(...await approvedKnowledgeDependencyWarnings(projectRoot, options.approvedStructureOverride));
 
   return {
     ok: issues.every((issue) => issue.severity !== "error"),

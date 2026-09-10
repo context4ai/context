@@ -6,6 +6,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
+import { approvedKnowledgeRevisionInputSchema, type ApprovedKnowledgeRevisionInput } from "./approvedKnowledgeRevisionInput.js";
 
 export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
@@ -71,7 +72,7 @@ export interface CandidateRecord {
   fingerprint: string;
   review: CandidateReviewSummary;
   updated: string;
-  approved_revision?: { request_digest: string; base_digest: string | null; previous_path?: string };
+  approved_revision?: { request_digest: string; base_digest: string | null; previous_path?: string; knowledge_input?: ApprovedKnowledgeRevisionInput };
 }
 
 const KNOWLEDGE_COLLECTION_SET = new Set<KnowledgeCollection>(KNOWLEDGE_COLLECTIONS);
@@ -317,9 +318,10 @@ export function parseCandidateRecord(value: unknown, line: number): CandidateRec
   let approvedRevision: CandidateRecord["approved_revision"];
   if (value.approved_revision !== undefined) {
     if (!isRecord(value.approved_revision)) throw schemaError(line, "approved_revision must be an object");
-    assertExactFields(value.approved_revision, new Set(["request_digest", "base_digest", "previous_path"]), "approved_revision", line);
+    assertExactFields(value.approved_revision, new Set(["request_digest", "base_digest", "previous_path", "knowledge_input"]), "approved_revision", line);
     approvedRevision = {
       request_digest: stringField(value.approved_revision, "request_digest", line),
+      ...(value.approved_revision.knowledge_input === undefined ? {} : { knowledge_input: approvedKnowledgeRevisionInputSchema.parse(value.approved_revision.knowledge_input) }),
       ...(value.approved_revision.previous_path === undefined ? {} : { previous_path: stringField(value.approved_revision, "previous_path", line) }),
       base_digest: value.approved_revision.base_digest === null ? null : stringField(value.approved_revision, "base_digest", line),
     };

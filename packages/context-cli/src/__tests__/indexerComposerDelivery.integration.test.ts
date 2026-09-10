@@ -10,7 +10,7 @@ import { readCurrentIndexerComposerBatch } from "../project/indexerCurrentCompos
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
 import { projectCurrentIndexerWorkflowRoute, resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
-import { readIndexerDelivery } from "../project/indexerDelivery.js";
+import { readIndexerDelivery, requestIndexerEarlyDelivery } from "../project/indexerDelivery.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } from "./projectDocumentRevisionV074.fixture.js";
@@ -40,7 +40,9 @@ test("each successful Composer batch advances; an early delivery reaches Candida
       managed: true, authorities, value });
   };
   await advanceCurrentIndexerLifecycle(root);
+  while (true) {
   const partition = await route();
+  if (partition.node !== "run-indexer-agent-step") break;
   const input = indexerAgentStepInputSchema.parse(partition.action?.input);
   if (input.stage !== "partition") throw new Error("expected Partition");
   const results = [];
@@ -50,7 +52,7 @@ test("each successful Composer batch advances; an early delivery reaches Candida
     const workset = input.transport.worksets.find((item) => item.workset_digest === task.workset_digest)!;
     if (workset.stage !== "partition") throw new Error("expected Partition workset");
     results.push({ task_key: task.task_key, result: { stage: "partition", outcome: "complete",
-      groups: [{ key: task.task_key, title: "Public constants", subject: task.task_key,
+      groups: [{ key: workset.workset_digest.slice(-12), title: "Public constants", subject: workset.workset_digest.slice(-12),
         subject_intent: "primary", reader_task: "Read exported constants.",
         members: readingItems(text, "consumer-anchor", task.task_key).map((item) => item.ref),
         questions: workset.reader_question_refs,
@@ -58,6 +60,7 @@ test("each successful Composer batch advances; an early delivery reaches Candida
         outline: ["Exports"] }], excluded: [], unsupported: [] } });
   }
   await complete({ stage: "partition", results });
+  }
   // Force separate Author transport batches, with real work still pending at delivery.
   const build = reading.buildIndexerTaskReading;
   const spy = spyOn(reading, "buildIndexerTaskReading").mockImplementation((...args) => {
@@ -83,6 +86,7 @@ test("each successful Composer batch advances; an early delivery reaches Candida
     const resource = current.resources.required.find((item) => item.id === `authorized-indexer-workset-view/${descriptor.task_key}`)!;
     const source = readingObjects(await readFile(resource.path!, "utf8")).find((item) => Array.isArray(item.source_items))!;
     const intent = validation.allowed_artifact_intents[0]!;
+    await requestIndexerEarlyDelivery(root);
     const authored = await complete({ stage: "author", results: [{ task_key: descriptor.task_key, result: {
       stage: "author", group_key: workset.group_key, outcome: "publish",
       artifact_intent: [intent.source_role, intent.document_kind, intent.reader_goal, intent.artifact_kind].join("/"),
@@ -98,8 +102,8 @@ test("each successful Composer batch advances; an early delivery reaches Candida
       material_gaps: [], diagnostics: [],
     } }] });
     expect(authored).toMatchObject({ outcomes: [{ outcome: "accepted", committed: true }] });
-    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending")).toBe(true);
-    expect(await readIndexerDelivery(root)).toBeUndefined();
+    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending" || entry.state === "running")).toBe(true);
+    expect((await readIndexerDelivery(root))?.current ?? []).toHaveLength(0);
     // The example prerequisite is absent: its empty result is settled by the
     // runtime. The actual code-symbol facts still delegate public-contract.
     for (const composer of ["public-contract"]) {
@@ -126,6 +130,6 @@ test("each successful Composer batch advances; an early delivery reaches Candida
     expect(await readCurrentIndexerComposerBatch(root)).toBeUndefined();
     expect((await readIndexerDelivery(root))?.current).toHaveLength(1);
     expect(await readCandidateRecords(root)).toHaveLength(1);
-    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending")).toBe(true);
+    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending" || entry.state === "running")).toBe(true);
   } finally { spy.mockRestore(); }
 }, 45_000);

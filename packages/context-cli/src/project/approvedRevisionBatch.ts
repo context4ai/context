@@ -25,6 +25,7 @@ export async function prepareRevisionBatchContinuation(root: string, request: Ap
   if (selectDeliveryPages({ pages, delivered, hasPriorDelivery, allAuthorsAccepted: false }).length > 0) return undefined;
   const prepared = await prepareApprovedRevision({ projectRoot: root, replace_current: true, persist: false,
     selector: next.path, instruction: next.instruction, pending_targets: remaining, batch_candidates: batch,
+    ...(next.knowledge_rebinding ? { knowledge_rebinding: next.knowledge_rebinding } : {}),
     ...(next.regenerate ? { regenerate: true } : {}),
     ...(next.target ? { target: next.target } : {}),
     ...(next.create ? { create: next.create } : {}), ...(next.supporting_sources ? { supporting_sources: next.supporting_sources } : {}),

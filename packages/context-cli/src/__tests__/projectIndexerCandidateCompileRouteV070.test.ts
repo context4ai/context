@@ -382,7 +382,6 @@ describe("Indexer Candidate compile Route", () => {
     });
     expect(schema.required).toContain("accepted_result_refs");
     expect(schema.required).toContain("layout_transition");
-    expect(source).toContain("readAcceptedIndexerMainAuthorResultRecords");
     expect(source).not.toMatch(/default[_ -]?plan|alignProse|compileProse|MarkdownCollectionSlice/u);
     expect(YAML.parse(impactActionRaw)).toMatchObject({
       runner: "command",

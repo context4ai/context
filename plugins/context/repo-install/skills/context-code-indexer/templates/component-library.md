@@ -34,9 +34,10 @@ When the Authorized Workset View supplies a public declaration together with
 structured props, events, defaults, variants, maintained examples, or source
 roles, the corresponding reader section must consume those facts or record an
 explicit supported omission/material-gap disposition. Do not replace available
-contract facts with a generic statement about the component directory. A group
-without any reader-authorizing public declaration remains catalog-only and does
-not produce an empty component page.
+contract facts with a generic statement about the component directory. A component group
+without a reader-authorizing public declaration remains catalog-only and does
+not produce an empty component page. Library and system subjects may instead be
+authorized by package entries, maintained documentation or public token sources.
 
 ## Questions the knowledge must answer
 
@@ -120,3 +121,24 @@ to disguise an enumeration-heavy index.
 - examples invent combinations that maintained usage does not support;
 - accessibility or provider requirements are asserted without evidence;
 - one-page-per-component expansion has no consumer-navigation justification.
+
+
+## Library and design-system subjects
+
+Use a library subject for a module's installation, package entries, shared
+providers, platform support and navigation (L05); it does not require inventing a
+component export. Keep individual public components or families in component
+subjects (L02). A design-system subject is appropriate when authorized token,
+theme, stylesheet or maintained specification material establishes a stable
+system boundary (L03), including a token-only package without React exports.
+Do not infer a whole design system from ordinary component styling.
+
+Owned members stay with one primary subject. Link shared configuration and
+approved component articles instead of copying their bodies. Where no independent
+library material exists, incorporate the useful entry into the parent map. Missing
+public declarations prevent invented component contracts, not a source-backed
+library or token entry. Preserve methods, refs, composition and nested types when
+available; use declared code facts for deterministic API values and explain usage
+with separately cited prose. Examples must come from read sources and retain
+platform/version applicability. Ordinary version differences and suggested
+chapters are advisory; assess compatibility as an Agent and preserve uncertainty.

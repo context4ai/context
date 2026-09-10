@@ -107,7 +107,7 @@ export function currentCliInstructionDescriptors(input: {
         };
       }));
     descriptors.push(...(layer.manifest.provider.templates ?? [])
-      .filter((template) => template.kind !== "page-program" && activeProfiles.includes(template.profile))
+      .filter((template) => template.kind !== "page-program" && template.delivery !== "selected" && activeProfiles.includes(template.profile))
       .map((template) => {
         const override = layer.layer.role === "primary"
           ? customization.files.find((file) => file.path === `templates/${template.id}.md`)

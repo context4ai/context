@@ -5,6 +5,8 @@ import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFre
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { approvedKnowledgeWorksetSource, type ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
+import { assertApprovedKnowledgeInputCurrent } from "./approvedKnowledgeInput.js";
 import {
   hostActionInputDigest,
   validateHostActionResult,
@@ -72,7 +74,10 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
       artifact_intents: (spec.validation.allowed_artifact_intents as PrimaryArtifactIntent[])
         .filter(intent => supportsPrimaryArtifact(intent.artifact_kind, policy)).map(primaryIntentKey),
     })),
-    primary_artifact_guidance: "Semantic Author emits one primary artifact. Choose a primary_artifact_options intent and its policy. An accepted plan with a different artifact kind is normalized only to a unique policy-compatible kind with the same source role, document kind and reader goal; the result records that normalization. Do not duplicate prose to satisfy required kinds.",
+    primary_artifact_guidance: "Semantic Author follows page_plan.articles when present and emits one artifact per submitted planned article; legacy single-page plans emit one artifact. Choose each article intent from its accepted plan and the compatible policy. An accepted plan with a different artifact kind is normalized only to a unique policy-compatible kind with the same source role, document kind and reader goal; the result records that normalization. Do not duplicate prose to satisfy required kinds.",
+    ...(spec.validation.page_guidance === undefined ? {} : { page_guidance: spec.validation.page_guidance }),
+    ...(spec.validation.article_guidance === undefined ? {} : { article_guidance: spec.validation.article_guidance }),
+    ...(spec.validation.article_templates === undefined ? {} : { article_templates: spec.validation.article_templates }),
     ...(spec.validation.page_plan === undefined ? {} : { page_plan: spec.validation.page_plan }),
     ...(spec.validation.page_template === undefined ? {} : { page_template: spec.validation.page_template }),
     ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates }),
@@ -507,6 +512,11 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       ...sourceProjectionSources,
       ...supplementaryProjectionSources,
       ...inspectorProjectionSources,
+      ...(spec.validation.knowledge_input === undefined ? [] : [await (async () => {
+        const knowledge = spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput;
+        await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
+        return approvedKnowledgeWorksetSource({ request, dependency_view: spec.validation.dependency_view, knowledge });
+      })()]),
       ...(input.additional_projection_sources ?? []),
     ],
     canonical_inventory_members: inventoryMembers,

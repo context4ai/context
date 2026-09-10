@@ -283,3 +283,103 @@ do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.
+
+### Planned articles
+
+When the current Partition authority supports an article plan, keep one subject
+and one inventory owner for the topic. Plan stable article keys, the reader task,
+allowed intent and template, required or optional articles and sections, and one
+required article responsible for each primary question target. A shared source
+member may support several articles without being owned several times.
+
+For an accepted `page_plan.articles`, submit per-article content using those keys
+and the current Author question identifiers. Keep the group member dispositions
+unique; a covered member identifies its article and section. Follow the current
+schema and returned diagnostics when a required article or its evidence is
+missing. Change the accepted plan through the existing structure adjustment
+route before adding articles or changing their purpose. Legacy single-page
+plans continue to use the single-page submission.
+
+For a selected page program, use the current variable catalog and its linked
+article guidance. A semantic `template_variables` value may bind its own
+`value`, `source_items` and `facts`; use current reading-view aliases. This lets
+you supply a supported chapter without writing another copy merely to attach
+evidence. Plain strings retain the existing section-evidence binding behavior.
+Do not populate deterministic variables with prose: the runtime projects them
+from authorized facts. Select a registered reader goal compatible with the
+article intent; the program cannot change an accepted article's purpose.
+
+Choose the article form before filling variables. For L03, a system overview
+uses scope, packages, foundations, components, configuration, adoption and
+references; a foundation topic uses purpose, catalog, mapping, consumption,
+rules, platforms and references; runtime adoption uses environment, globals,
+inheritance, resources, ssr, platforms and verification. These are alternatives,
+not a request to fill all slots or produce a page for every token. Use only forms
+supported by the selected source and reader task.
+For F11, a directory emphasizes scope, catalog, contracts and details; a child
+application detail emphasizes ownership, integration, capabilities, navigation
+and delivery. Link common host contracts rather than repeat them in each detail.
+Read each selected article's guidance for chapter responsibilities and examples.
+If a supported chapter does not fit an available variable, submit it in that
+article's `sections` with source evidence; do not put it in an unknown variable,
+which is warned about and ignored. Preserve accepted section identities where
+applicable. Empty scaffolds are input skeletons, never finished reader content.
+
+Treat article outlines, writing slots and size recommendations as guidance.
+Keep useful evidence-backed content when a slot is unavailable; assess whether
+to merge, omit or add a chapter. A template or source version difference alone
+does not require approval or a restart: retain the versions, explain relevant
+uncertainty and continue work that the evidence supports. Agent review decides
+relevance, completeness and compatibility; the CLI checks reference identity,
+authorized scope, parseable inputs and concurrent revisions. A missing promised
+article remains unfinished until delivered or the accepted plan is adjusted.
+
+When supplied source text contains relevant usage examples, Author may declare
+`example_candidates` with a stable `scenario_key` and the authorized
+`source_item` path or reference. Select examples by reading their contents;
+file names alone are insufficient. The runtime binds the selection to the
+current subject, full path, source version and evidence, then exposes it to a
+selected examples Composer. Distinct files with the same basename remain
+distinct. Do not invent example source items, runtime outcomes or missing demos;
+omit the optional collection when no example is applicable.
+
+### Useful article content
+
+Choose one primary location for each explanation. An overview states actual
+capabilities and links to specialist articles; do not fill it with a promise
+that another page has the information. Keep summaries short plain text, not
+source tables. Merge a small overview and source-entry task when they would
+repeat the same file list and reading instructions. Source-entry articles
+should explain why each entry matters and name the next inspection action.
+
+For C02 feature details use prerequisites, operations, exceptions, acceptance
+and version when supported. For D04 engineering guides use scope, commands,
+delivery and conventions; operational diagnostics remain separate.
+For Q01 prefer systems/navigation/development/tools for a testing-domain map.
+Q02 lasting strategy uses layers/coverage/collaboration; a change plan uses
+risks/scenarios/environment/execution. Q04 regression selection uses
+smoke/selection/prerequisites/records; results/failures/conclusion describe
+actual recorded runs, never substitute for the selection baseline. Q07
+confirmed incident reviews use triggers/cause/repair/prevention; unresolved
+FAQ answers may omit these and retain investigation/followup.
+
+When planning an entry article, mark the source-supported entry and next-step
+sections as suggested required sections in the accepted article outline.
+Existing outline-gap diagnostics are advisory; explain missing material or
+add the supported content, without treating prose warnings as a new gate.
+Template section question_refs label writing responsibilities; actual reader
+coverage and its single primary carrier come from accepted question_targets.
+Do not count template section labels as additional answered user questions.
+
+For a deterministic API table, select the authorized contracts relevant to
+that article's task. A page task needs its page inputs and consumed contract
+entries, not every exported constant in the module. Keep caller/route context
+in source-backed prose; a declared API does not prove a live call.
+
+### Diagrams in reader articles
+
+Use the selected Provider diagram instructions and the article guidance to choose a diagram only when useful. Put fenced Mermaid in an evidence-backed semantic section; use text trees for hierarchy and tables for exact contracts. Explain the diagram in prose and retain source/next-step coordinates for consumers without rendering. Diagram syntax or missing optional graphics never establish a new completion gate. During review, check the meaning and provenance of arrows, not the diagram count.
+
+### Existing visual sources
+
+For Author/Review involving source images or tables, consume the selected Provider `references/visual-source-processing.md`. Read current workspace AGENTS.md and `context.convertVisuals`; explicit user instructions override defaults. Use authorized `visual_resources` and sections[].visuals; reuse accepted unchanged results. Capability absence or unsuitable content retains originals without a new gate. Never edit source snapshots or delete assets yourself.

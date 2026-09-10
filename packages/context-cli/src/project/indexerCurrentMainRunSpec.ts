@@ -1,3 +1,5 @@
+import type { IndexerArticlePlan } from "@c4a/context";
+import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import { supportsPrimaryArtifact } from "./indexerPrimaryArtifactPolicy.js";
 import type { IndexerPageTemplate } from "./indexerPageTemplate.js";
@@ -323,6 +325,7 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   dependency_view: unknown;
   canonical_inventory_members: readonly IndexerInventoryMember[];
   expected_subject_key: unknown;
+  knowledge_input?: ApprovedKnowledgeAuthorInput;
   artifact_policy_eligibility: unknown;
   allowed_question_targets: readonly {
     question_target_key: string;
@@ -331,7 +334,11 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   enrichment?: CurrentIndexerExtensionFacts;
   supplementary_sources?: readonly AuthorSupplementarySource[];
   page_template?: IndexerPageTemplate | undefined;
+  article_templates?: Record<string, IndexerPageTemplate> | undefined;
+  page_guidance?: { template_id: string; content: string } | undefined;
+  article_guidance?: Record<string, { template_id: string; content: string }> | undefined;
   page_plan?: {
+    articles?: IndexerArticlePlan[];
     scope_change?: { removed_member_ids: string[] };
     reader_task?: string;
     outline?: string[];
@@ -435,12 +442,16 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
     request,
     validation: {
       stage: "author",
+      ...(input.page_guidance === undefined ? {} : { page_guidance: input.page_guidance }),
+      ...(input.article_guidance === undefined ? {} : { article_guidance: input.article_guidance }),
+      ...(input.article_templates === undefined ? {} : { article_templates: input.article_templates }),
       ...(input.page_template === undefined ? {} : { page_template: input.page_template }),
       ...(input.page_plan === undefined ? {} : { page_plan: input.page_plan }),
       available_templates: (input.authority.manifest.provider.templates ?? []).filter((template) => template.profile === input.authority.profile.id),
       dependency_view: dependencyView,
       canonical_inventory_members: canonicalInventory,
       expected_subject_key: input.expected_subject_key,
+      ...(input.knowledge_input === undefined ? {} : { knowledge_input: input.knowledge_input }),
       artifact_policy_eligibility: eligibility,
       allowed_artifact_intents: artifactIntents,
       allowed_source_roles: [request.run_environment.source_role],

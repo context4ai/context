@@ -546,6 +546,23 @@ export function planIndexerConsumerInventoryShards(input: {
       filesByFamily.set(key, files);
     }
   }
+  // Directory grouping does not capture examples/docs kept outside the public
+  // entry's directory. Preserve explicit captured import relationships before
+  // creating the authorized shard; Author cannot recover excluded material.
+  // These files supply evidence only, never a second inventory ownership.
+  for (const [key, anchors] of anchorGroups) {
+    if (!anchors.some(({ fact }) => fact.kind === "code-symbol")) continue;
+    const available = input.factView.files.filter(file => file.disposition !== "excluded");
+    const selected = selectIndexerAuthorFiles({ files: available,
+      member_ids: new Set(anchors.map(({ member }) => member.member_id)) });
+    const files = filesByFamily.get(key) ?? [];
+    const present = new Set(files.map(file => file.file_ref));
+    for (const file of available) if (selected.has(file.normalized_path) && !present.has(file.file_ref)) {
+      files.push(file);
+      present.add(file.file_ref);
+    }
+    filesByFamily.set(key, files);
+  }
   const assignedFileRefs = new Set([...filesByFamily.values()].flatMap((files) =>
     files.map((file) => file.file_ref)
   ));
@@ -594,3 +611,4 @@ export function planIndexerConsumerInventoryShards(input: {
     });
   return unresolved === null ? anchored : [...anchored, unresolved];
 }
+import { selectIndexerAuthorFiles } from "./indexerAuthorFileSelection.js";

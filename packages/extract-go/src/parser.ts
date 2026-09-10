@@ -218,7 +218,7 @@ function unquoteGoString(value: string): string | undefined {
   }
 }
 
-function extractImports(root: SyntaxNode): GoImport[] {
+function extractImports(root: SyntaxNode, filePath: string): GoImport[] {
   const imports: GoImport[] = [];
   for (const spec of descendants(root, "import_spec")) {
     const pathNode = spec.childForFieldName("path") ?? spec.namedChildren.find((child) => child.type.endsWith("string_literal"));
@@ -228,7 +228,7 @@ function extractImports(root: SyntaxNode): GoImport[] {
     const alias = explicitAlias && explicitAlias !== "." && explicitAlias !== "_"
       ? explicitAlias
       : importPath.split("/").at(-1) ?? importPath;
-    imports.push({ alias, path: importPath });
+    imports.push({ alias, path: importPath, location: locationFor(filePath, spec) });
   }
   return imports.sort((left, right) => left.alias.localeCompare(right.alias) || left.path.localeCompare(right.path));
 }
@@ -356,7 +356,7 @@ export function indexGoSource(source: string, filePath: string, options: { expor
   if (!tree) throw new Error(`Go parser returned no syntax tree for ${filePath}`);
   const root = tree.rootNode;
   const packageName = descendants(root, "package_identifier")[0]?.text ?? "unknown";
-  const imports = extractImports(root);
+  const imports = extractImports(root, filePath);
   const relations = extractCallsAndRoutes(root, filePath, imports);
   return {
     path: filePath,

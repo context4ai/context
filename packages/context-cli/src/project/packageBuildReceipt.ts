@@ -1,3 +1,5 @@
+import type { PackageArticleLinkWarning } from "./packageArticleLinks.js";
+import type { PackageMarkdownLinkWarning } from "./packageMarkdownAnchors.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
@@ -23,7 +25,17 @@ export interface PackageBuildChanges {
   removed: PackageBuildFileChange[];
 }
 
+export type PackageBuildLinkWarning = PackageArticleLinkWarning | PackageMarkdownLinkWarning;
+
+export function parsePackageLinkWarnings(value: unknown): PackageBuildLinkWarning[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is PackageBuildLinkWarning => item !== null && typeof item === "object" &&
+    typeof item.path === "string" && typeof item.target === "string" &&
+    ["package-article-not-selected", "package-link-page-missing", "package-link-anchor-unresolved"].includes(item.code));
+}
+
 export interface PackageBuildSummary {
+  linkWarnings?: PackageBuildLinkWarning[];
   name: string;
   kind: "kb" | "llms";
   outDir: string;
@@ -166,6 +178,14 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     `  files: ${pkg.files}`,
     `  resources: ${pkg.resources.files} file(s), ${pkg.resources.bytes} byte(s)`,
   ];
+  for (const warning of pkg.linkWarnings ?? []) {
+    const explanation = warning.code === "package-article-not-selected"
+      ? "is not included; its source coordinate is retained for inspection"
+      : warning.code === "package-link-anchor-unresolved"
+        ? "has an unresolved section anchor; check the target heading or explicit anchor"
+        : "has no matching Markdown page in this package; check the selected navigation";
+    lines.push(`  warning: ${warning.path} references ${warning.target}, which ${explanation}.`);
+  }
   const optimization = pkg.resources.delivery.optimization;
   if (optimization?.state === "applied") {
     lines.push(

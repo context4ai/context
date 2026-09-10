@@ -29,3 +29,11 @@ Ask only about missing information that changes a decision: whether an apparent
 proposal was adopted, which version a correction applies to, or whether raw text
 is actually a quote. Do not demand every possible metadata field. Where the
 note itself states the boundary, use it and proceed within authorization.
+
+## Diagrams
+
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+
+## Existing source images and tables
+
+For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.

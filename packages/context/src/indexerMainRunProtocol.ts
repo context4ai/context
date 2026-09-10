@@ -1,3 +1,4 @@
+import type { IndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerArtifactResultSchema,
@@ -168,6 +169,7 @@ interface PartitionValidationContext {
 }
 
 interface AuthorValidationContext {
+  page_plan?: { articles?: IndexerArticlePlan[] };
   stage: "author";
   dependency_view: unknown;
   expected_subject_key: unknown;
@@ -259,6 +261,7 @@ export function validateIndexerMainRunResult(input: {
       expected_provider: request.final_authority,
       expected_input_digest: request.execution_request_digest,
       expected_subject_key: input.validation.expected_subject_key,
+      ...(input.validation.page_plan?.articles === undefined ? {} : { planned_articles: input.validation.page_plan.articles }),
       artifact_policy_eligibility: input.validation.artifact_policy_eligibility,
       allowed_source_roles: input.validation.allowed_source_roles,
       ...(input.validation.authorized_evidence_targets === undefined

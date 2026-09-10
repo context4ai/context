@@ -4,10 +4,34 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import { ContextError } from "../lib/errors.js";
 import { withProjectWriteLock } from "../project/writeLock.js";
+import { reuseCommandFileRead } from "../project/commandReadCache.js";
 
 const lockPath = (root: string) => join(root, ".tmp", "context-runtime", "locks", "project-write.lock");
 
 describe("project write lock owner diagnostics", () => {
+  test("API operations share reads within the lock, observe mutations and discard the cache afterwards", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-write-lock-reads-"));
+    const path = join(root, "state.json");
+    let reads = 0;
+    const read = () => reuseCommandFileRead({ key: "test-state", paths: [path], read: async () => {
+      reads++;
+      return readFile(path, "utf8");
+    } });
+    try {
+      await writeFile(path, "first");
+      await withProjectWriteLock(root, "outer", async () => {
+        expect(await read()).toBe("first");
+        await withProjectWriteLock(root, "inner", async () => { expect(await read()).toBe("first"); });
+        expect(reads).toBe(1);
+        await writeFile(path, "changed state");
+        expect(await read()).toBe("changed state");
+        expect(reads).toBe(2);
+      });
+      await withProjectWriteLock(root, "next", async () => { expect(await read()).toBe("changed state"); });
+      expect(reads).toBe(3);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("reuses the outer lock for nested project store operations", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-write-lock-nested-"));
     try {

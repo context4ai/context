@@ -30,7 +30,13 @@ test("104-page production keeps formal batches, partial delivery, repair and fai
       value: { stage: "structure-review", decision: "approved" } });
     const formalBatches: number[] = [];
     let repaired = false;
-    for (let cycle = 0; cycle < 10; cycle++) {
+    for (let cycle = 0; cycle < 20; cycle++) {
+      await completePartitionStage(root);
+      const nextStructure = await currentIndexerStructureReview(root);
+      if (nextStructure && !nextStructure.approved) {
+        await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision, managed: true,
+          value: { stage: "structure-review", decision: "approved" } });
+      }
       await completeAuthorStage(root);
       const candidates = await readCandidateRecords(root);
       if (!candidates.length) break;

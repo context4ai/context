@@ -18,16 +18,18 @@ import {
 } from "./indexerProtocolCommon.js";
 import type { IndexerJson } from "./indexerRegistry.js";
 
-const canonicalJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.boolean(),
-    z.number().finite(),
-    z.string(),
-    z.array(canonicalJsonSchema),
-    z.record(canonicalJsonSchema),
-  ])
-);
+// Reuse the schema graph for every payload value instead of allocating six
+// validators per recursive visit. String facts are common; union order changes
+// no accepted JSON types or digest/authorization checks.
+const canonicalJsonSchema: z.ZodType<IndexerJson> = z.lazy(() => canonicalJsonVariantsSchema);
+const canonicalJsonVariantsSchema = z.union([
+  z.string(),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+  z.array(canonicalJsonSchema),
+  z.record(canonicalJsonSchema),
+]);
 
 const parserFactSchema = z.object({
   fact_ref: indexerCanonicalRefSchema,

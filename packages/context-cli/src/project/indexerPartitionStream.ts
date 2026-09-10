@@ -16,6 +16,7 @@ const schema = z.object({
   phase: z.enum(["planning", "author", "resuming"]),
   partition_ledger: z.unknown(),
   completed_bindings: z.array(z.string()),
+  completed_receipts: z.record(z.array(z.string())).optional(),
   active_bindings: z.array(z.string()),
   final_wave: z.boolean().optional(),
   digest: z.string(),
@@ -25,6 +26,7 @@ export interface PartitionStream {
   phase: "planning" | "author" | "resuming";
   partition_ledger: IndexerMainRunLedger;
   completed_bindings: string[];
+  completed_receipts?: Record<string, string[]> | undefined;
   active_bindings: string[];
   final_wave?: boolean | undefined;
   digest: string;
@@ -49,7 +51,7 @@ export async function readPartitionStream(root: string): Promise<PartitionStream
 
 /** Ignore the mutable create/enrich target view, but include every material and
  * instruction binding that can change the actual page. */
-export function partitionAuthorBinding(spec: MainRunSpec): string {
+export function partitionAuthorBinding(spec: Pick<MainRunSpec, "request" | "validation">): string {
   const workset = spec.request.workset;
   if (workset.stage !== "author") throw new TypeError("Expected an Author plan");
   return indexerProtocolDigest({
@@ -69,7 +71,23 @@ export async function authorStreamRecord(root: string, bindings: string[], final
   const previous = await readPartitionStream(root);
   return partitionStreamRecord({ protocol: "context.indexer.partition-stream/v1", phase: "author",
     ...(finalWave === undefined ? {} : { final_wave: finalWave }),
-    partition_ledger: ledger, completed_bindings: previous?.completed_bindings ?? [], active_bindings: bindings });
+    partition_ledger: ledger, completed_bindings: previous?.completed_bindings ?? [],
+    ...(previous?.completed_receipts === undefined ? {} : { completed_receipts: previous.completed_receipts }), active_bindings: bindings });
+}
+
+/** Bind settled themes to the exact accepted executions. Repairs can keep the
+ * same source binding while replacing an older immutable Author receipt. */
+async function settledReceipts(root: string, state: PartitionStream, ledger: IndexerMainRunLedger) {
+  const { currentSpec } = await import("./indexerMainRunStoreRecords.js");
+  const receipts = { ...state.completed_receipts };
+  for (const binding of state.active_bindings) receipts[binding] = [];
+  for (const entry of ledger.entries) {
+    const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
+    const binding = partitionAuthorBinding(spec);
+    if (!state.active_bindings.includes(binding)) throw new TypeError("Settled Author receipt is outside the active wave");
+    receipts[binding]!.push(entry.execution_request_digest);
+  }
+  return receipts;
 }
 
 /** Explicit source/structure adjustments return to the saved planning ledger
@@ -100,11 +118,14 @@ async function resumePartitionStreamUnlocked(root: string): Promise<boolean> {
     const { digest: previousDigest, ...previous } = state; void previousDigest;
     state = partitionStreamRecord({ ...previous, phase: "resuming",
       completed_bindings: [...new Set([...state.completed_bindings, ...state.active_bindings])],
+      completed_receipts: await settledReceipts(root, state, ledger),
       active_bindings: [],
     });
     await atomicWriteFile(join(root, PARTITION_STREAM_PATH), JSON.stringify(state));
   }
-  for (const name of ["finalization", "candidate-compile", "structure-review/author-plan.json", "structure-review/current.json"]) {
+  // Keep the revision-bound decision: preparing the same plan can reuse it.
+  // A different wave's revision cannot inherit it; explicit feedback clears it.
+  for (const name of ["finalization", "candidate-compile", "structure-review/author-plan.json"]) {
     await rm(join(root, ".tmp/context-runtime/indexer", name), { recursive: true, force: true });
   }
   const { digest: _digest, ...payload } = state; void _digest;
@@ -137,6 +158,7 @@ export function finishPartitionStream(root: string): Promise<boolean> {
     await atomicWriteFile(join(root, PARTITION_STREAM_PATH), JSON.stringify(partitionStreamRecord({
       ...payload, phase: "planning", active_bindings: [],
       completed_bindings: [...new Set([...state.completed_bindings, ...state.active_bindings])],
+      completed_receipts: await settledReceipts(root, state, ledger),
     })));
     return true;
   });

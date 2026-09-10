@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.7",
+  "version": "0.7.8",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -37,6 +37,7 @@
   "scripts": {
     "build": "rm -rf dist && bun run ../build.ts src/cli.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && cp ../../LICENSE dist/LICENSE",
     "build:indexers": "bun run scripts/build-indexers.ts",
+    "generate:article-templates": "bun run scripts/generate-article-templates.ts",
     "build:workflow": "bun run scripts/build-workflow.ts",
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",

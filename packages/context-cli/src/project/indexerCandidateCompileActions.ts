@@ -1,3 +1,4 @@
+import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
@@ -23,7 +24,6 @@ import {
   readCandidateRecords,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStore.js";
 import { readCurrentIndexerPostAuthorEnvelopesForResults } from "./indexerPostAuthorRunStore.js";
 import { readIndexerCandidateCompileStaleDiagnostic } from "./indexerCandidateCompileFreshness.js";
 import {
@@ -618,7 +618,7 @@ export async function compileProjectIndexerCandidates(input: {
     async () => {
       await recoverDurableMultiFileTransactions(input.projectRoot);
       const delivery = await readIndexerDelivery(input.projectRoot);
-      const allRecords = await readAcceptedIndexerMainAuthorResultRecords(input.projectRoot);
+      const allRecords = await readDeliverableAuthorRecords(input.projectRoot);
       const currentRecords = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
         (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
       const authority = await currentContractAuthority({

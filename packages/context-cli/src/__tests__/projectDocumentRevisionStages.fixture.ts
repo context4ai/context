@@ -5,6 +5,8 @@ import {
   canonicalIndexerJson,
   indexerAuthorSemanticInputSchema,
   type IndexerInventoryMember,
+  type IndexerArticlePlan,
+  type IndexerSubjectKey,
 } from "@c4a/context";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
@@ -21,7 +23,7 @@ import type { readCandidateRecords } from "../project/candidateLedger.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 
-export async function completePartitionStage(root: string, withPagePlan = false, streaming = false, subject?: string): Promise<void> {
+export async function completePartitionStage(root: string, withPagePlan = false, streaming = false, subject?: string, articlePlan?: (intents: string[], targets: string[], subject: IndexerSubjectKey) => IndexerArticlePlan[], subjectKind?: string, templateId?: string, partitionUnitType = "semantic-subject"): Promise<void> {
   await advanceCurrentIndexerLifecycle(root);
   while (true) {
     const current = await resolveCurrentIndexerAgentContext(root);
@@ -51,10 +53,10 @@ export async function completePartitionStage(root: string, withPagePlan = false,
           ...(streaming ? { ready_for_author: true } : {}),
           reader_task: "Understand the public fixture capability.",
           ...(withPagePlan ? { artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
-            template_id: "component-library-usage-guide", priority: 0, delivery_boundary: true } : {}),
+            template_id: templateId ?? "component-library-usage-guide", priority: 0, delivery_boundary: true } : {}),
           subject: {
             namespace: workset.partition_subject_key.namespace,
-            kind: workset.partition_subject_key.kind,
+            kind: subjectKind ?? workset.partition_subject_key.kind,
             local_key: subject ?? `fixture-${suffix}`,
           },
           subject_intent: "primary" as const,
@@ -65,6 +67,9 @@ export async function completePartitionStage(root: string, withPagePlan = false,
             role: "primary-carrier" as const,
           })),
           outline: ["Overview"],
+          ...(articlePlan === undefined ? {} : { articles: articlePlan(task.spec.validation.available_artifact_intents as string[], validation.required_question_target_refs ?? [],
+            { protocol: "context.subject-key/v1", namespace: workset.partition_subject_key.namespace,
+              kind: subjectKind ?? workset.partition_subject_key.kind, local_key: subject ?? `fixture-${suffix}` }) }),
         }],
         excluded: [],
         unsupported: [],
@@ -77,7 +82,7 @@ export async function completePartitionStage(root: string, withPagePlan = false,
           request: task.spec.request,
           view: task.view,
           semantic,
-          validation: { ...validation, partition_unit_type: "semantic-subject" },
+          validation: { ...task.spec.validation as Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["validation"], ...validation, partition_unit_type: partitionUnitType },
         }),
       });
     }
@@ -101,7 +106,7 @@ export async function completePartitionStage(root: string, withPagePlan = false,
 
 export async function completeAuthorStage(
   root: string,
-  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string; relatedPage?: string } = {},
+  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string; relatedPage?: string; markdown?: string; includeFacts?: boolean } = {},
 ): Promise<{ catalogOnlyCount: number }> {
   let catalogOnlyCount = 0;
   while (true) {
@@ -180,12 +185,12 @@ export async function completeAuthorStage(
         key: "overview",
         heading: "Overview",
         markdown: [
-          "Use the exported answer constant as the public entry point.",
+          options.markdown ?? "Use the exported answer constant as the public entry point.",
           options.revisionSuffix,
           ...(options.relatedPage === undefined ? [] : [`[Related API](${options.relatedPage})`]),
         ].filter((value): value is string => value !== undefined).join("\n\n"),
         source_items: [source.evidence_ref],
-        facts: [],
+        facts: options.includeFacts ? task.view.items.filter(item => item.category === "fact").map(item => item.ref) : [],
         answers: validation.allowed_question_targets.map((target) =>
           target.question_target_key
         ),

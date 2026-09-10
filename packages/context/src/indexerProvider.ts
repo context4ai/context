@@ -270,6 +270,10 @@ const templateResourceSchema = z.object({
   id: indexerIdSchema,
   profile: indexerIdSchema,
   path: portableIndexerPathSchema,
+  reader_goal: indexerIdSchema.optional(),
+  guidance_path: portableIndexerPathSchema.optional(),
+  // Existing providers deliver profile templates by default; article catalogs opt in on selection.
+  delivery: z.enum(["profile", "selected"]).optional(),
 }).strict();
 
 const providerResourcesSchema = z.object({
@@ -525,7 +529,7 @@ function referencedProviderPaths(manifest: IndexerProviderManifest): string[] {
       ? []
       : [manifest.provider.program.execution.entry]),
     ...(manifest.provider.instructions ?? []).map((item) => item.path),
-    ...(manifest.provider.templates ?? []).map((item) => item.path),
+    ...(manifest.provider.templates ?? []).flatMap((item) => [item.path, ...(item.guidance_path === undefined ? [] : [item.guidance_path])]),
     ...(manifest.provides.composers ?? []).flatMap((item) =>
       item.contract === undefined ? [] : [item.contract.instruction]
     ),

@@ -1,3 +1,5 @@
+import { readPartitionStream } from "../project/indexerPartitionStream.js";
+import { configureDeliveryCadence } from "../project/indexerDeliveryCadence.js";
 import { indexerBatchStagePolicy } from "../project/indexerCurrentBatchPlanner.js";
 import {
   approveCandidates,
@@ -26,7 +28,7 @@ import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecyc
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { projectCurrentIndexerWorkflowRoute } from
   "../project/indexerCurrentWorkflowRoute.js";
-import { currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";
+import { acceptedCachePath, readAcceptedCache, readJsonMaybe, currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";
 import { readProjectIndexerCandidateCompileStatus } from "../project/indexerCandidateCompileActions.js";
 import { matchesAcceptedCompileResults } from "../project/indexerCandidateCompileFreshness.js";
 import { postAuthorCurrentStatePath } from "../project/indexerPostAuthorStorePersistence.js";
@@ -56,21 +58,22 @@ afterEach(async () => {
 });
 
 describe("current Indexer document revision", () => {
-  test("a delivery Composer starts with its matching route state while Author peers remain pending", async () => {
+  test("a delivery Composer starts with its matching route state while later topics remain in the planning checkpoint", async () => {
     const root = await workspace({ sourceCount: indexerBatchStagePolicy("author").max_tasks + 4 });
     const path = join(root, "src/indexers.yaml");
     const registry = YAML.parse(await readFile(path, "utf8"));
     registry.indexers[0].profile.composers = [{ id: "public-contract", provider: "community" }];
     await writeFile(path, YAML.stringify(registry));
+    await configureDeliveryCadence(root, "3");
     await completePartitionStage(root, true);
     const structure = await currentIndexerStructureReview(root);
     if (structure === undefined) throw new Error("missing structure review");
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
       value: { stage: "structure-review", decision: "approved" }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
-    expect((await currentLedger(root))?.entries.filter(entry => entry.state === "running")).toHaveLength(indexerBatchStagePolicy("author").max_tasks);
+    expect((await currentLedger(root))?.entries.filter(entry => entry.state === "running")).toHaveLength(3);
     await completeAuthorStage(root);
-    expect((await currentLedger(root))?.entries.some((entry) => entry.state === "pending")).toBe(true);
+    expect((await readPartitionStream(root))!.partition_ledger.entries.length).toBeGreaterThan((await currentLedger(root))!.entries.length);
     const composer = await readCurrentIndexerComposerBatch(root);
     expect(composer).toBeDefined();
     // Exercise the actual next route, including its exact batch/state guard.
@@ -90,27 +93,34 @@ describe("current Indexer document revision", () => {
     });
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
-  test("delivers a small readable batch while Author peers remain pending, then resumes after build", async () => {
-    const root = await workspace({ sourceCount: indexerBatchStagePolicy("author").max_tasks + 4, purpose: "Help a developer integrate the public constants." });
+  test("delivers a small readable wave while later topics remain planned, then resumes after build", async () => {
+    const root = await workspace({ sourceCount: 6, purpose: "Help a developer integrate the public constants." });
     await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
       join(root, "src/package-templates/kb"), { recursive: true });
     const entryPath = join(root, "src/index.ts");
     const entry = await readFile(entryPath, "utf8");
     await writeFile(entryPath, entry.replace("defineProject, source", "defineProject, kbPackage, source")
       .replace("packages: []", 'packages: [kbPackage({ name: "delivery-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
+    await configureDeliveryCadence(root, "3");
     await completePartitionStage(root, true);
     const structure = await currentIndexerStructureReview(root);
     if (structure === undefined) throw new Error("missing structure review");
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
       value: { stage: "structure-review", decision: "approved" }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
-    const future = (await currentLedger(root))!.entries.find((entry) => entry.state === "pending")!;
-    const futureSpec = await currentSpec({ projectRoot: root, request_digest: future.execution_request_digest });
-    const futureSubject = futureSpec.validation.expected_subject_key as { local_key: string };
-    const relatedPage = `./${futureSubject.local_key}.md`;
+    const currentSubjects = new Set(structure.preview.topics.map(topic => topic.subject_key!.local_key));
+    const saved = (await readPartitionStream(root))!;
+    const futureGroups = [];
+    for (const entry of saved.partition_ledger.entries) {
+      const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
+      const accepted = readAcceptedCache({ spec, cache: await readJsonMaybe(root, acceptedCachePath(entry.execution_request_digest)) });
+      const plan = accepted.operation_result as { groups: Array<{ subject_key: { local_key: string } }> };
+      futureGroups.push(...plan.groups.filter(group => !currentSubjects.has(group.subject_key.local_key)));
+    }
+    const relatedPage = `./${futureGroups[0]!.subject_key.local_key}.md`;
     await completeAuthorStage(root, { relatedPage });
     const before = await currentLedger(root);
-    expect(before?.entries.some((entry) => entry.state === "pending")).toBe(true);
+    expect(saved.partition_ledger.entries.length).toBeGreaterThan(before!.entries.length);
     const candidates = await readCandidateRecords(root);
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.length).toBeLessThanOrEqual(3);
@@ -136,10 +146,15 @@ describe("current Indexer document revision", () => {
     await acceptStarterPackageTemplates({ projectRoot: root });
     const built = await buildProjectPackages(root);
     expect(built.packages[0]?.files).toBeGreaterThan(0);
-    expect(await currentLedger(root)).toEqual(before);
+    expect((await readPartitionStream(root))?.completed_bindings).toHaveLength(before!.entries.length);
+    expect((await currentLedger(root))?.entries.map(entry => entry.execution_request_digest)).toEqual(saved.partition_ledger.entries.map(entry => entry.execution_request_digest));
     expect((await readIndexerDelivery(root))?.current).toEqual([]);
     for (const candidate of candidates) expect(await readFile(join(root, "knowledge", candidate.path), "utf8")).toContain("#");
     await advanceCurrentIndexerLifecycle(root);
+    const nextStructure = (await currentIndexerStructureReview(root))!;
+    if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
+      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }) });
     expect((await currentLedger(root))?.entries.some((entry) => entry.state === "running")).toBe(true);
     await completeAuthorStage(root, { relatedPage });
     const tail = await readCandidateRecords(root);

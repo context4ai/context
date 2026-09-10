@@ -129,7 +129,10 @@ async function describeRecord(input: {
   });
   const accepted = acceptedIdentity(input.record);
   const validatorContractDigest = authority.profile_contract.contract_digest;
-  const primaryView = materializeIndexerPrimaryResultViewFromArtifactResult({
+  // The SDK's empty-selection plan has no PrimaryResultView. Avoid building
+  // and validating that unused deep projection for every accepted article.
+  // The accepted ArtifactResult is still validated by the store above.
+  const primaryView = effective.entries.length === 0 ? undefined : materializeIndexerPrimaryResultViewFromArtifactResult({
     artifact_result: result,
     primary_result_digest: accepted.result_digest,
     validator_contract_digest: validatorContractDigest,
@@ -138,8 +141,8 @@ async function describeRecord(input: {
     effective_composer_set: effective,
     author_workset_digest: accepted.workset_digest,
     primary_result_digest: accepted.result_digest,
-    primary_facts: primaryView.facts,
-    primary_artifacts: primaryView.artifacts,
+    primary_facts: primaryView?.facts ?? [],
+    primary_artifacts: primaryView?.artifacts ?? [],
     validator_contract_digest: validatorContractDigest,
     current_profile_binding_digest: indexerProtocolDigest(indexer.profile),
     allowed_target_refs: [result.logical_unit.logical_unit_ref],

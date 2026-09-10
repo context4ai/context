@@ -92,10 +92,14 @@ test("a catalog-only ready wave resumes planning without waiting for nonexistent
     expect(await readCandidateRecords(root)).toHaveLength(0);
     expect((await readPartitionStream(root))!.phase).toBe("planning");
     expect((await currentLedger(root))!.entries.some(entry => entry.stage === "partition" && entry.state !== "accepted")).toBe(true);
-    await completePartitionStage(root, false, true, "catalog-subject");
-    const final = (await currentIndexerStructureReview(root))!;
-    await completeCurrentIndexerStructureReview({ projectRoot: root, revision: final.revision, decision: "approved" });
-    expect((await completeAuthorStage(root, { catalogOnlyFirst: true })).catalogOnlyCount).toBe(1);
+    for (let wave = 0; wave < 40 && await currentLedger(root); wave++) {
+      await completePartitionStage(root, false, true, "catalog-subject");
+      const next = await currentIndexerStructureReview(root);
+      if (!next) break;
+      if (!next.approved) await completeCurrentIndexerStructureReview({ projectRoot: root, revision: next.revision, decision: "approved" });
+      expect((await completeAuthorStage(root, { catalogOnlyFirst: true })).catalogOnlyCount).toBe(1);
+    }
+    expect(await readCandidateRecords(root)).toHaveLength(0);
     expect(await currentLedger(root)).toBeUndefined();
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);

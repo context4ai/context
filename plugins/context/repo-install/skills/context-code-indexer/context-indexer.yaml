@@ -1,10 +1,15 @@
 protocol: context.indexer.provider/v1
 id: context-code-indexer
 version: 1.2.1
-domains: [code]
-
+domains:
+  - code
 activation:
-  target_kinds: [repository, package, library, service, application]
+  target_kinds:
+    - repository
+    - package
+    - library
+    - service
+    - application
   required_signals:
     - id: supported-source
       description: The registered target scope contains source or contract files supported by Context.
@@ -18,7 +23,6 @@ activation:
       description: The scope contains only generated artifacts with no authoritative source boundary.
   agent_questions:
     - Which stable reader capability groups the complete eligible inventory?
-
 provides:
   profiles:
     - monorepo-container
@@ -39,7 +43,11 @@ provides:
     - derived-generated-source
   partition_strategies:
     - id: public-target-family
-      profiles: [component-library, sdk-library, plugin-extension, contract-source]
+      profiles:
+        - component-library
+        - sdk-library
+        - plugin-extension
+        - contract-source
       priority: 100
     - id: canonical-semantic-subject
       profiles:
@@ -64,108 +72,280 @@ provides:
     - id: main-index
       consumes: context.indexer.main-workset/v2
       produces: context.indexer.main-result/v1
-      accepts_layer_fragments: [fact-enrichment, template-variables]
+      accepts_layer_fragments:
+        - fact-enrichment
+        - template-variables
   layer_fragments:
     - kind: derived-artifact-proposal
       phase: post-author
       produces: context.indexer.layer-fragment/v1
   composers:
     - id: public-contract
-      supported_profiles: [component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, adapter-integration, contract-source, derived-generated-source]
+      supported_profiles:
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
       contract:
         instruction: references/composers/public-contract.md
-        primary_requirements: { fact_kinds: [code-symbol], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - code-symbol
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [contract]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - contract
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: protocol-boundary
-      supported_profiles: [web-application, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      supported_profiles:
+        - web-application
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
       contract:
         instruction: references/composers/protocol-boundary.md
-        primary_requirements: { fact_kinds: [protocol-operation], artifact_kinds: [contract] }
+        primary_requirements:
+          fact_kinds:
+            - protocol-operation
+          artifact_kinds:
+            - contract
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [contract]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - contract
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: cross-module-chain
-      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration]
+      supported_profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
       contract:
         instruction: references/composers/cross-module-chain.md
-        primary_requirements: { fact_kinds: [module-dependency], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - module-dependency
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [content]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - content
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: contracts-and-chains
-      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      supported_profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
       contract:
         instruction: references/composers/contracts-and-chains.md
-        primary_requirements: { fact_kinds: [contract-binding, module-dependency], artifact_kinds: [contract] }
+        primary_requirements:
+          fact_kinds:
+            - contract-binding
+            - module-dependency
+          artifact_kinds:
+            - contract
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [contract]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - contract
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: event-flow
-      supported_profiles: [web-application, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, adapter-integration, contract-source]
+      supported_profiles:
+        - web-application
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - adapter-integration
+        - contract-source
       contract:
         instruction: references/composers/event-flow.md
-        primary_requirements: { fact_kinds: [event-binding], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - event-binding
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [content]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - content
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: persistence-boundary
-      supported_profiles: [api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration]
+      supported_profiles:
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
       contract:
         instruction: references/composers/persistence-boundary.md
-        primary_requirements: { fact_kinds: [persistence-binding], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - persistence-binding
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [content]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - content
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: examples-and-documentation
-      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      supported_profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
       contract:
         instruction: references/composers/examples-and-documentation.md
-        primary_requirements: { fact_kinds: [example-candidate], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - example-candidate
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [examples]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
+          artifact_kinds:
+            - examples
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
     - id: development-and-delivery
-      supported_profiles: [monorepo-container, web-application, component-library, sdk-library, cli-tool, plugin-extension, api-service, gateway-facade, domain-service, background-runtime, event-consumer, data-sync-reconciliation, storage-repository, adapter-integration, contract-source, derived-generated-source]
+      supported_profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
       contract:
         instruction: references/composers/development-and-delivery.md
-        primary_requirements: { fact_kinds: [development-entry], artifact_kinds: [content] }
+        primary_requirements:
+          fact_kinds:
+            - development-entry
+          artifact_kinds:
+            - content
         derived_artifact_policy:
           fragment_protocol: context.indexer.layer-fragment/v1
           fragment_kind: derived-artifact-proposal
           artifact_policy_variant: standard
-          artifact_kinds: [content]
-        empty_result: { result_protocol: context.indexer.layer-fragment-result/v1, behavior: empty-fragment-set }
-  source_roles: [authoritative-source, public-contract-source, example-source, operational-source]
+          artifact_kinds:
+            - content
+        empty_result:
+          result_protocol: context.indexer.layer-fragment-result/v1
+          behavior: empty-fragment-set
+  source_roles:
+    - authoritative-source
+    - public-contract-source
+    - example-source
+    - operational-source
   logical_units:
     - id: semantic-subject
       identity: canonical-subject-key
       artifacts:
-        recommended: [content, contract, examples]
-        supported_policy_variants: [compact, standard, expanded]
-
+        recommended:
+          - content
+          - contract
+          - examples
+        supported_policy_variants:
+          - compact
+          - standard
+          - expanded
 provider:
   instructions:
     - path: references/indexer.md
@@ -186,69 +366,2887 @@ provider:
         - adapter-integration
         - contract-source
         - derived-generated-source
+    - path: references/article-catalog/monorepo-container-article-catalog.md
+      profiles:
+        - monorepo-container
+    - path: references/article-catalog/web-application-article-catalog.md
+      profiles:
+        - web-application
+    - path: references/article-catalog/component-library-article-catalog.md
+      profiles:
+        - component-library
+    - path: references/article-catalog/sdk-library-article-catalog.md
+      profiles:
+        - sdk-library
+    - path: references/article-catalog/cli-tool-article-catalog.md
+      profiles:
+        - cli-tool
+    - path: references/article-catalog/plugin-extension-article-catalog.md
+      profiles:
+        - plugin-extension
+    - path: references/article-catalog/api-service-article-catalog.md
+      profiles:
+        - api-service
+    - path: references/article-catalog/gateway-facade-article-catalog.md
+      profiles:
+        - gateway-facade
+    - path: references/article-catalog/domain-service-article-catalog.md
+      profiles:
+        - domain-service
+    - path: references/article-catalog/background-runtime-article-catalog.md
+      profiles:
+        - background-runtime
+    - path: references/article-catalog/event-consumer-article-catalog.md
+      profiles:
+        - event-consumer
+    - path: references/article-catalog/data-sync-reconciliation-article-catalog.md
+      profiles:
+        - data-sync-reconciliation
+    - path: references/article-catalog/storage-repository-article-catalog.md
+      profiles:
+        - storage-repository
+    - path: references/article-catalog/adapter-integration-article-catalog.md
+      profiles:
+        - adapter-integration
+    - path: references/article-catalog/contract-source-article-catalog.md
+      profiles:
+        - contract-source
+    - path: references/article-catalog/derived-generated-source-article-catalog.md
+      profiles:
+        - derived-generated-source
+    - path: references/diagrams.md
+      profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
+    - path: references/visual-source-processing.md
+      profiles:
+        - monorepo-container
+        - web-application
+        - component-library
+        - sdk-library
+        - cli-tool
+        - plugin-extension
+        - api-service
+        - gateway-facade
+        - domain-service
+        - background-runtime
+        - event-consumer
+        - data-sync-reconciliation
+        - storage-repository
+        - adapter-integration
+        - contract-source
+        - derived-generated-source
   templates:
-    - { id: monorepo-container, profile: monorepo-container, path: templates/monorepo-container.md }
-    - { id: web-application, profile: web-application, path: templates/web-application.md }
-    - { id: component-library, profile: component-library, path: templates/component-library.md }
-    - { id: sdk-library, profile: sdk-library, path: templates/sdk-library.md }
-    - { id: cli-tool, profile: cli-tool, path: templates/cli-tool.md }
-    - { id: plugin-extension, profile: plugin-extension, path: templates/plugin-extension.md }
-    - { id: api-service, profile: api-service, path: templates/api-service.md }
-    - { id: gateway-facade, profile: gateway-facade, path: templates/gateway-facade.md }
-    - { id: domain-service, profile: domain-service, path: templates/domain-service.md }
-    - { id: background-runtime, profile: background-runtime, path: templates/background-runtime.md }
-    - { id: event-consumer, profile: event-consumer, path: templates/event-consumer.md }
-    - { id: data-sync-reconciliation, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation.md }
-    - { id: storage-repository, profile: storage-repository, path: templates/storage-repository.md }
-    - { id: adapter-integration, profile: adapter-integration, path: templates/adapter-integration.md }
-    - { id: contract-source, profile: contract-source, path: templates/contract-source.md }
-    - { id: derived-generated-source, profile: derived-generated-source, path: templates/derived-generated-source.md }
-    - { id: monorepo-container-usage-guide, profile: monorepo-container, path: templates/monorepo-container-usage-guide.md, kind: page-program }
-    - { id: monorepo-container-maintenance-guide, profile: monorepo-container, path: templates/monorepo-container-maintenance-guide.md, kind: page-program }
-    - { id: component-library-usage-guide, profile: component-library, path: templates/component-library-usage-guide.md, kind: page-program }
-    - { id: component-library-public-api-reference, profile: component-library, path: templates/component-library-public-api-reference.md, kind: page-program }
-    - { id: component-library-maintenance-guide, profile: component-library, path: templates/component-library-maintenance-guide.md, kind: page-program }
-    - { id: sdk-library-usage-guide, profile: sdk-library, path: templates/sdk-library-usage-guide.md, kind: page-program }
-    - { id: sdk-library-public-api-reference, profile: sdk-library, path: templates/sdk-library-public-api-reference.md, kind: page-program }
-    - { id: sdk-library-maintenance-guide, profile: sdk-library, path: templates/sdk-library-maintenance-guide.md, kind: page-program }
-    - { id: web-application-page-task-guide, profile: web-application, path: templates/web-application-page-task-guide.md, kind: page-program }
-    - { id: web-application-federation-guide, profile: web-application, path: templates/web-application-federation-guide.md, kind: page-program }
-    - { id: web-application-maintenance-guide, profile: web-application, path: templates/web-application-maintenance-guide.md, kind: page-program }
-    - { id: cli-tool-usage-guide, profile: cli-tool, path: templates/cli-tool-usage-guide.md, kind: page-program }
-    - { id: cli-tool-public-api-reference, profile: cli-tool, path: templates/cli-tool-public-api-reference.md, kind: page-program }
-    - { id: cli-tool-maintenance-guide, profile: cli-tool, path: templates/cli-tool-maintenance-guide.md, kind: page-program }
-    - { id: plugin-extension-usage-guide, profile: plugin-extension, path: templates/plugin-extension-usage-guide.md, kind: page-program }
-    - { id: plugin-extension-public-api-reference, profile: plugin-extension, path: templates/plugin-extension-public-api-reference.md, kind: page-program }
-    - { id: plugin-extension-maintenance-guide, profile: plugin-extension, path: templates/plugin-extension-maintenance-guide.md, kind: page-program }
-    - { id: api-service-public-api-reference, profile: api-service, path: templates/api-service-public-api-reference.md, kind: page-program }
-    - { id: api-service-maintenance-guide, profile: api-service, path: templates/api-service-maintenance-guide.md, kind: page-program }
-    - { id: gateway-facade-public-api-reference, profile: gateway-facade, path: templates/gateway-facade-public-api-reference.md, kind: page-program }
-    - { id: gateway-facade-request-adaptation-guide, profile: gateway-facade, path: templates/gateway-facade-request-adaptation-guide.md, kind: page-program }
-    - { id: gateway-facade-maintenance-guide, profile: gateway-facade, path: templates/gateway-facade-maintenance-guide.md, kind: page-program }
-    - { id: domain-service-public-api-reference, profile: domain-service, path: templates/domain-service-public-api-reference.md, kind: page-program }
-    - { id: domain-service-maintenance-guide, profile: domain-service, path: templates/domain-service-maintenance-guide.md, kind: page-program }
-    - { id: background-runtime-task-runtime-guide, profile: background-runtime, path: templates/background-runtime-task-runtime-guide.md, kind: page-program }
-    - { id: background-runtime-maintenance-guide, profile: background-runtime, path: templates/background-runtime-maintenance-guide.md, kind: page-program }
-    - { id: event-consumer-task-runtime-guide, profile: event-consumer, path: templates/event-consumer-task-runtime-guide.md, kind: page-program }
-    - { id: event-consumer-maintenance-guide, profile: event-consumer, path: templates/event-consumer-maintenance-guide.md, kind: page-program }
-    - { id: data-sync-reconciliation-task-runtime-guide, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation-task-runtime-guide.md, kind: page-program }
-    - { id: data-sync-reconciliation-maintenance-guide, profile: data-sync-reconciliation, path: templates/data-sync-reconciliation-maintenance-guide.md, kind: page-program }
-    - { id: storage-repository-public-api-reference, profile: storage-repository, path: templates/storage-repository-public-api-reference.md, kind: page-program }
-    - { id: storage-repository-maintenance-guide, profile: storage-repository, path: templates/storage-repository-maintenance-guide.md, kind: page-program }
-    - { id: adapter-integration-usage-guide, profile: adapter-integration, path: templates/adapter-integration-usage-guide.md, kind: page-program }
-    - { id: adapter-integration-request-adaptation-guide, profile: adapter-integration, path: templates/adapter-integration-request-adaptation-guide.md, kind: page-program }
-    - { id: adapter-integration-maintenance-guide, profile: adapter-integration, path: templates/adapter-integration-maintenance-guide.md, kind: page-program }
-    - { id: contract-source-public-api-reference, profile: contract-source, path: templates/contract-source-public-api-reference.md, kind: page-program }
-    - { id: contract-source-usage-guide, profile: contract-source, path: templates/contract-source-usage-guide.md, kind: page-program }
-    - { id: derived-generated-source-public-api-reference, profile: derived-generated-source, path: templates/derived-generated-source-public-api-reference.md, kind: page-program }
-    - { id: derived-generated-source-usage-guide, profile: derived-generated-source, path: templates/derived-generated-source-usage-guide.md, kind: page-program }
-  forbidden_fallbacks: [one-page-per-symbol, ordinal-batch-pages, inferred-runtime-chain]
-  completion_checks: [inventory-disposition-closure, subject-owner-closure, source-coverage]
-
-
+    - id: monorepo-container
+      profile: monorepo-container
+      path: templates/monorepo-container.md
+    - id: web-application
+      profile: web-application
+      path: templates/web-application.md
+    - id: component-library
+      profile: component-library
+      path: templates/component-library.md
+    - id: sdk-library
+      profile: sdk-library
+      path: templates/sdk-library.md
+    - id: cli-tool
+      profile: cli-tool
+      path: templates/cli-tool.md
+    - id: plugin-extension
+      profile: plugin-extension
+      path: templates/plugin-extension.md
+    - id: api-service
+      profile: api-service
+      path: templates/api-service.md
+    - id: gateway-facade
+      profile: gateway-facade
+      path: templates/gateway-facade.md
+    - id: domain-service
+      profile: domain-service
+      path: templates/domain-service.md
+    - id: background-runtime
+      profile: background-runtime
+      path: templates/background-runtime.md
+    - id: event-consumer
+      profile: event-consumer
+      path: templates/event-consumer.md
+    - id: data-sync-reconciliation
+      profile: data-sync-reconciliation
+      path: templates/data-sync-reconciliation.md
+    - id: storage-repository
+      profile: storage-repository
+      path: templates/storage-repository.md
+    - id: adapter-integration
+      profile: adapter-integration
+      path: templates/adapter-integration.md
+    - id: contract-source
+      profile: contract-source
+      path: templates/contract-source.md
+    - id: derived-generated-source
+      profile: derived-generated-source
+      path: templates/derived-generated-source.md
+    - id: monorepo-container-usage-guide
+      profile: monorepo-container
+      path: templates/monorepo-container-usage-guide.md
+      kind: page-program
+    - id: monorepo-container-maintenance-guide
+      profile: monorepo-container
+      path: templates/monorepo-container-maintenance-guide.md
+      kind: page-program
+    - id: component-library-usage-guide
+      profile: component-library
+      path: templates/component-library-usage-guide.md
+      kind: page-program
+    - id: component-library-public-api-reference
+      profile: component-library
+      path: templates/component-library-public-api-reference.md
+      kind: page-program
+    - id: component-library-maintenance-guide
+      profile: component-library
+      path: templates/component-library-maintenance-guide.md
+      kind: page-program
+    - id: sdk-library-usage-guide
+      profile: sdk-library
+      path: templates/sdk-library-usage-guide.md
+      kind: page-program
+    - id: sdk-library-public-api-reference
+      profile: sdk-library
+      path: templates/sdk-library-public-api-reference.md
+      kind: page-program
+    - id: sdk-library-maintenance-guide
+      profile: sdk-library
+      path: templates/sdk-library-maintenance-guide.md
+      kind: page-program
+    - id: web-application-page-task-guide
+      profile: web-application
+      path: templates/web-application-page-task-guide.md
+      kind: page-program
+    - id: web-application-federation-guide
+      profile: web-application
+      path: templates/web-application-federation-guide.md
+      kind: page-program
+    - id: web-application-maintenance-guide
+      profile: web-application
+      path: templates/web-application-maintenance-guide.md
+      kind: page-program
+    - id: cli-tool-usage-guide
+      profile: cli-tool
+      path: templates/cli-tool-usage-guide.md
+      kind: page-program
+    - id: cli-tool-public-api-reference
+      profile: cli-tool
+      path: templates/cli-tool-public-api-reference.md
+      kind: page-program
+    - id: cli-tool-maintenance-guide
+      profile: cli-tool
+      path: templates/cli-tool-maintenance-guide.md
+      kind: page-program
+    - id: plugin-extension-usage-guide
+      profile: plugin-extension
+      path: templates/plugin-extension-usage-guide.md
+      kind: page-program
+    - id: plugin-extension-public-api-reference
+      profile: plugin-extension
+      path: templates/plugin-extension-public-api-reference.md
+      kind: page-program
+    - id: plugin-extension-maintenance-guide
+      profile: plugin-extension
+      path: templates/plugin-extension-maintenance-guide.md
+      kind: page-program
+    - id: api-service-public-api-reference
+      profile: api-service
+      path: templates/api-service-public-api-reference.md
+      kind: page-program
+    - id: api-service-maintenance-guide
+      profile: api-service
+      path: templates/api-service-maintenance-guide.md
+      kind: page-program
+    - id: gateway-facade-public-api-reference
+      profile: gateway-facade
+      path: templates/gateway-facade-public-api-reference.md
+      kind: page-program
+    - id: gateway-facade-request-adaptation-guide
+      profile: gateway-facade
+      path: templates/gateway-facade-request-adaptation-guide.md
+      kind: page-program
+    - id: gateway-facade-maintenance-guide
+      profile: gateway-facade
+      path: templates/gateway-facade-maintenance-guide.md
+      kind: page-program
+    - id: domain-service-public-api-reference
+      profile: domain-service
+      path: templates/domain-service-public-api-reference.md
+      kind: page-program
+    - id: domain-service-maintenance-guide
+      profile: domain-service
+      path: templates/domain-service-maintenance-guide.md
+      kind: page-program
+    - id: background-runtime-task-runtime-guide
+      profile: background-runtime
+      path: templates/background-runtime-task-runtime-guide.md
+      kind: page-program
+    - id: background-runtime-maintenance-guide
+      profile: background-runtime
+      path: templates/background-runtime-maintenance-guide.md
+      kind: page-program
+    - id: event-consumer-task-runtime-guide
+      profile: event-consumer
+      path: templates/event-consumer-task-runtime-guide.md
+      kind: page-program
+    - id: event-consumer-maintenance-guide
+      profile: event-consumer
+      path: templates/event-consumer-maintenance-guide.md
+      kind: page-program
+    - id: data-sync-reconciliation-task-runtime-guide
+      profile: data-sync-reconciliation
+      path: templates/data-sync-reconciliation-task-runtime-guide.md
+      kind: page-program
+    - id: data-sync-reconciliation-maintenance-guide
+      profile: data-sync-reconciliation
+      path: templates/data-sync-reconciliation-maintenance-guide.md
+      kind: page-program
+    - id: storage-repository-public-api-reference
+      profile: storage-repository
+      path: templates/storage-repository-public-api-reference.md
+      kind: page-program
+    - id: storage-repository-maintenance-guide
+      profile: storage-repository
+      path: templates/storage-repository-maintenance-guide.md
+      kind: page-program
+    - id: adapter-integration-usage-guide
+      profile: adapter-integration
+      path: templates/adapter-integration-usage-guide.md
+      kind: page-program
+    - id: adapter-integration-request-adaptation-guide
+      profile: adapter-integration
+      path: templates/adapter-integration-request-adaptation-guide.md
+      kind: page-program
+    - id: adapter-integration-maintenance-guide
+      profile: adapter-integration
+      path: templates/adapter-integration-maintenance-guide.md
+      kind: page-program
+    - id: contract-source-public-api-reference
+      profile: contract-source
+      path: templates/contract-source-public-api-reference.md
+      kind: page-program
+    - id: contract-source-usage-guide
+      profile: contract-source
+      path: templates/contract-source-usage-guide.md
+      kind: page-program
+    - id: derived-generated-source-public-api-reference
+      profile: derived-generated-source
+      path: templates/derived-generated-source-public-api-reference.md
+      kind: page-program
+    - id: derived-generated-source-usage-guide
+      profile: derived-generated-source
+      path: templates/derived-generated-source-usage-guide.md
+      kind: page-program
+    - id: monorepo-container-c01
+      profile: monorepo-container
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c01
+      profile: web-application
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-c01
+      profile: component-library
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-c01
+      profile: sdk-library
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-c01
+      profile: cli-tool
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-c01
+      profile: plugin-extension
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-c01
+      profile: api-service
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-c01
+      profile: gateway-facade
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c01
+      profile: domain-service
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-c01
+      profile: background-runtime
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-c01
+      profile: event-consumer
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-c01
+      profile: data-sync-reconciliation
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-c01
+      profile: storage-repository
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-c01
+      profile: adapter-integration
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-c01
+      profile: contract-source
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-c01
+      profile: derived-generated-source
+      path: templates/articles/c01.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c02
+      profile: web-application
+      path: templates/articles/c02.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c02
+      profile: domain-service
+      path: templates/articles/c02.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-c03
+      profile: monorepo-container
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c03
+      profile: web-application
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-c03
+      profile: component-library
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-c03
+      profile: sdk-library
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-c03
+      profile: cli-tool
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-c03
+      profile: plugin-extension
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-c03
+      profile: api-service
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-c03
+      profile: gateway-facade
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c03
+      profile: domain-service
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-c03
+      profile: background-runtime
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-c03
+      profile: event-consumer
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-c03
+      profile: data-sync-reconciliation
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-c03
+      profile: storage-repository
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-c03
+      profile: adapter-integration
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-c03
+      profile: contract-source
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-c03
+      profile: derived-generated-source
+      path: templates/articles/c03.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-c04
+      profile: monorepo-container
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c04
+      profile: web-application
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-c04
+      profile: component-library
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-c04
+      profile: sdk-library
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-c04
+      profile: cli-tool
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-c04
+      profile: plugin-extension
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-c04
+      profile: api-service
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-c04
+      profile: gateway-facade
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c04
+      profile: domain-service
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-c04
+      profile: background-runtime
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-c04
+      profile: event-consumer
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-c04
+      profile: data-sync-reconciliation
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-c04
+      profile: storage-repository
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-c04
+      profile: adapter-integration
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-c04
+      profile: contract-source
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-c04
+      profile: derived-generated-source
+      path: templates/articles/c04.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-c05
+      profile: monorepo-container
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c05
+      profile: web-application
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-c05
+      profile: component-library
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-c05
+      profile: sdk-library
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-c05
+      profile: cli-tool
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-c05
+      profile: plugin-extension
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-c05
+      profile: api-service
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-c05
+      profile: gateway-facade
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c05
+      profile: domain-service
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-c05
+      profile: background-runtime
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-c05
+      profile: event-consumer
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-c05
+      profile: data-sync-reconciliation
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-c05
+      profile: storage-repository
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-c05
+      profile: adapter-integration
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-c05
+      profile: contract-source
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-c05
+      profile: derived-generated-source
+      path: templates/articles/c05.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-c07
+      profile: monorepo-container
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-c07
+      profile: web-application
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-c07
+      profile: component-library
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-c07
+      profile: sdk-library
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-c07
+      profile: cli-tool
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-c07
+      profile: plugin-extension
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-c07
+      profile: api-service
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-c07
+      profile: gateway-facade
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-c07
+      profile: domain-service
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-c07
+      profile: background-runtime
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-c07
+      profile: event-consumer
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-c07
+      profile: data-sync-reconciliation
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-c07
+      profile: storage-repository
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-c07
+      profile: adapter-integration
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-c07
+      profile: contract-source
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-c07
+      profile: derived-generated-source
+      path: templates/articles/c07.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-d01
+      profile: monorepo-container
+      path: templates/articles/d01.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-d02
+      profile: web-application
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-d02
+      profile: api-service
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-d02
+      profile: gateway-facade
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-d02
+      profile: domain-service
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-d02
+      profile: background-runtime
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-d02
+      profile: event-consumer
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-d02
+      profile: data-sync-reconciliation
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-d02
+      profile: storage-repository
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-d02
+      profile: adapter-integration
+      path: templates/articles/d02.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-d03
+      profile: domain-service
+      path: templates/articles/d03.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-d03
+      profile: web-application
+      path: templates/articles/d03.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-d04
+      profile: monorepo-container
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-d04
+      profile: web-application
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-d04
+      profile: component-library
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-d04
+      profile: sdk-library
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-d04
+      profile: cli-tool
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-d04
+      profile: plugin-extension
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-d04
+      profile: api-service
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-d04
+      profile: gateway-facade
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-d04
+      profile: domain-service
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-d04
+      profile: background-runtime
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-d04
+      profile: event-consumer
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-d04
+      profile: data-sync-reconciliation
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-d04
+      profile: storage-repository
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-d04
+      profile: adapter-integration
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-d04
+      profile: contract-source
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-d04
+      profile: derived-generated-source
+      path: templates/articles/d04.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f01
+      profile: web-application
+      path: templates/articles/f01.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f02
+      profile: web-application
+      path: templates/articles/f02.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f03
+      profile: web-application
+      path: templates/articles/f03.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f04
+      profile: web-application
+      path: templates/articles/f04.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f05
+      profile: web-application
+      path: templates/articles/f05.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f06
+      profile: web-application
+      path: templates/articles/f06.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-f06
+      profile: contract-source
+      path: templates/articles/f06.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-f06
+      profile: derived-generated-source
+      path: templates/articles/f06.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f07
+      profile: web-application
+      path: templates/articles/f07.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f08
+      profile: web-application
+      path: templates/articles/f08.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-f09
+      profile: monorepo-container
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f09
+      profile: web-application
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-f09
+      profile: component-library
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-f09
+      profile: sdk-library
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-f09
+      profile: cli-tool
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-f09
+      profile: plugin-extension
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-f09
+      profile: api-service
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-f09
+      profile: gateway-facade
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-f09
+      profile: domain-service
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-f09
+      profile: background-runtime
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-f09
+      profile: event-consumer
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-f09
+      profile: data-sync-reconciliation
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-f09
+      profile: storage-repository
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-f09
+      profile: adapter-integration
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-f09
+      profile: contract-source
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-f09
+      profile: derived-generated-source
+      path: templates/articles/f09.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f10
+      profile: web-application
+      path: templates/articles/f10.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-f11
+      profile: monorepo-container
+      path: templates/articles/f11.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f11
+      profile: web-application
+      path: templates/articles/f11.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-f12
+      profile: web-application
+      path: templates/articles/f12.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-l01
+      profile: sdk-library
+      path: templates/articles/l01.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-l01
+      profile: cli-tool
+      path: templates/articles/l01.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-l01
+      profile: plugin-extension
+      path: templates/articles/l01.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-l01
+      profile: adapter-integration
+      path: templates/articles/l01.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-l02
+      profile: component-library
+      path: templates/articles/l02.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-l03
+      profile: component-library
+      path: templates/articles/l03.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-l03
+      profile: sdk-library
+      path: templates/articles/l03.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-l04
+      profile: plugin-extension
+      path: templates/articles/l04.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-l04
+      profile: adapter-integration
+      path: templates/articles/l04.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-l04
+      profile: sdk-library
+      path: templates/articles/l04.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-l04
+      profile: gateway-facade
+      path: templates/articles/l04.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-l05
+      profile: component-library
+      path: templates/articles/l05.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-q03
+      profile: monorepo-container
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-q03
+      profile: web-application
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-q03
+      profile: component-library
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-q03
+      profile: sdk-library
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-q03
+      profile: cli-tool
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-q03
+      profile: plugin-extension
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-q03
+      profile: api-service
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-q03
+      profile: gateway-facade
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-q03
+      profile: domain-service
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-q03
+      profile: background-runtime
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-q03
+      profile: event-consumer
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-q03
+      profile: data-sync-reconciliation
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-q03
+      profile: storage-repository
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-q03
+      profile: adapter-integration
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-q03
+      profile: contract-source
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-q03
+      profile: derived-generated-source
+      path: templates/articles/q03.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-q05
+      profile: monorepo-container
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-q05
+      profile: web-application
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: component-library-q05
+      profile: component-library
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: sdk-library-q05
+      profile: sdk-library
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-q05
+      profile: cli-tool
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: plugin-extension-q05
+      profile: plugin-extension
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-q05
+      profile: api-service
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-q05
+      profile: gateway-facade
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-q05
+      profile: domain-service
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-q05
+      profile: background-runtime
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-q05
+      profile: event-consumer
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-q05
+      profile: data-sync-reconciliation
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-q05
+      profile: storage-repository
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-q05
+      profile: adapter-integration
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-q05
+      profile: contract-source
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-q05
+      profile: derived-generated-source
+      path: templates/articles/q05.md
+      kind: procedure
+      delivery: selected
+    - id: cli-tool-q06
+      profile: cli-tool
+      path: templates/articles/q06.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-s01
+      profile: api-service
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-s01
+      profile: gateway-facade
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-s01
+      profile: domain-service
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-s01
+      profile: background-runtime
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-s01
+      profile: event-consumer
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-s01
+      profile: data-sync-reconciliation
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-s01
+      profile: storage-repository
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-s01
+      profile: adapter-integration
+      path: templates/articles/s01.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-s02
+      profile: api-service
+      path: templates/articles/s02.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-s02
+      profile: gateway-facade
+      path: templates/articles/s02.md
+      kind: procedure
+      delivery: selected
+    - id: contract-source-s02
+      profile: contract-source
+      path: templates/articles/s02.md
+      kind: procedure
+      delivery: selected
+    - id: derived-generated-source-s02
+      profile: derived-generated-source
+      path: templates/articles/s02.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-s03
+      profile: api-service
+      path: templates/articles/s03.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-s03
+      profile: gateway-facade
+      path: templates/articles/s03.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-s03
+      profile: domain-service
+      path: templates/articles/s03.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-s04
+      profile: domain-service
+      path: templates/articles/s04.md
+      kind: procedure
+      delivery: selected
+    - id: web-application-s04
+      profile: web-application
+      path: templates/articles/s04.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-s05
+      profile: storage-repository
+      path: templates/articles/s05.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-s05
+      profile: domain-service
+      path: templates/articles/s05.md
+      kind: procedure
+      delivery: selected
+    - id: api-service-s06
+      profile: api-service
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: gateway-facade-s06
+      profile: gateway-facade
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: domain-service-s06
+      profile: domain-service
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-s06
+      profile: background-runtime
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-s06
+      profile: event-consumer
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-s06
+      profile: data-sync-reconciliation
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: storage-repository-s06
+      profile: storage-repository
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: adapter-integration-s06
+      profile: adapter-integration
+      path: templates/articles/s06.md
+      kind: procedure
+      delivery: selected
+    - id: background-runtime-s07
+      profile: background-runtime
+      path: templates/articles/s07.md
+      kind: procedure
+      delivery: selected
+    - id: event-consumer-s07
+      profile: event-consumer
+      path: templates/articles/s07.md
+      kind: procedure
+      delivery: selected
+    - id: data-sync-reconciliation-s07
+      profile: data-sync-reconciliation
+      path: templates/articles/s07.md
+      kind: procedure
+      delivery: selected
+    - id: monorepo-container-c01-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: web-application-c01-page
+      profile: web-application
+      path: templates/article-programs/web-application-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/c01.md
+    - id: component-library-c01-page
+      profile: component-library
+      path: templates/article-programs/component-library-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: sdk-library-c01-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: cli-tool-c01-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: plugin-extension-c01-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: api-service-c01-page
+      profile: api-service
+      path: templates/article-programs/api-service-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: gateway-facade-c01-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: domain-service-c01-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: background-runtime-c01-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c01.md
+    - id: event-consumer-c01-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c01.md
+    - id: data-sync-reconciliation-c01-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c01.md
+    - id: storage-repository-c01-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: adapter-integration-c01-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c01.md
+    - id: contract-source-c01-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: derived-generated-source-c01-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-c01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c01.md
+    - id: web-application-c02-page
+      profile: web-application
+      path: templates/article-programs/web-application-c02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/c02.md
+    - id: domain-service-c02-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c02.md
+    - id: monorepo-container-c03-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: web-application-c03-page
+      profile: web-application
+      path: templates/article-programs/web-application-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/c03.md
+    - id: component-library-c03-page
+      profile: component-library
+      path: templates/article-programs/component-library-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: sdk-library-c03-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: cli-tool-c03-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: plugin-extension-c03-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: api-service-c03-page
+      profile: api-service
+      path: templates/article-programs/api-service-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: gateway-facade-c03-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: domain-service-c03-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: background-runtime-c03-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c03.md
+    - id: event-consumer-c03-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c03.md
+    - id: data-sync-reconciliation-c03-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c03.md
+    - id: storage-repository-c03-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: adapter-integration-c03-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c03.md
+    - id: contract-source-c03-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: derived-generated-source-c03-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-c03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c03.md
+    - id: monorepo-container-c04-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: web-application-c04-page
+      profile: web-application
+      path: templates/article-programs/web-application-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/c04.md
+    - id: component-library-c04-page
+      profile: component-library
+      path: templates/article-programs/component-library-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: sdk-library-c04-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: cli-tool-c04-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: plugin-extension-c04-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: api-service-c04-page
+      profile: api-service
+      path: templates/article-programs/api-service-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: gateway-facade-c04-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: domain-service-c04-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: background-runtime-c04-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c04.md
+    - id: event-consumer-c04-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c04.md
+    - id: data-sync-reconciliation-c04-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/c04.md
+    - id: storage-repository-c04-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: adapter-integration-c04-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/c04.md
+    - id: contract-source-c04-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: derived-generated-source-c04-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-c04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c04.md
+    - id: monorepo-container-c05-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: web-application-c05-page
+      profile: web-application
+      path: templates/article-programs/web-application-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: component-library-c05-page
+      profile: component-library
+      path: templates/article-programs/component-library-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: sdk-library-c05-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: cli-tool-c05-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: plugin-extension-c05-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: api-service-c05-page
+      profile: api-service
+      path: templates/article-programs/api-service-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: gateway-facade-c05-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: domain-service-c05-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: background-runtime-c05-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: event-consumer-c05-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: data-sync-reconciliation-c05-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: storage-repository-c05-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: adapter-integration-c05-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c05.md
+    - id: contract-source-c05-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c05.md
+    - id: derived-generated-source-c05-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-c05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c05.md
+    - id: monorepo-container-c07-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: web-application-c07-page
+      profile: web-application
+      path: templates/article-programs/web-application-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: component-library-c07-page
+      profile: component-library
+      path: templates/article-programs/component-library-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: sdk-library-c07-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: cli-tool-c07-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: plugin-extension-c07-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: api-service-c07-page
+      profile: api-service
+      path: templates/article-programs/api-service-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: gateway-facade-c07-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: domain-service-c07-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: background-runtime-c07-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: event-consumer-c07-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: data-sync-reconciliation-c07-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: storage-repository-c07-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: adapter-integration-c07-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/c07.md
+    - id: contract-source-c07-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c07.md
+    - id: derived-generated-source-c07-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-c07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/c07.md
+    - id: monorepo-container-d01-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-d01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/d01.md
+    - id: web-application-d02-page
+      profile: web-application
+      path: templates/article-programs/web-application-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/d02.md
+    - id: api-service-d02-page
+      profile: api-service
+      path: templates/article-programs/api-service-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d02.md
+    - id: gateway-facade-d02-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d02.md
+    - id: domain-service-d02-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d02.md
+    - id: background-runtime-d02-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/d02.md
+    - id: event-consumer-d02-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/d02.md
+    - id: data-sync-reconciliation-d02-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/d02.md
+    - id: storage-repository-d02-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d02.md
+    - id: adapter-integration-d02-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-d02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/d02.md
+    - id: domain-service-d03-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-d03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d03.md
+    - id: web-application-d03-page
+      profile: web-application
+      path: templates/article-programs/web-application-d03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d03.md
+    - id: monorepo-container-d04-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: web-application-d04-page
+      profile: web-application
+      path: templates/article-programs/web-application-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: component-library-d04-page
+      profile: component-library
+      path: templates/article-programs/component-library-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: sdk-library-d04-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: cli-tool-d04-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: plugin-extension-d04-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: api-service-d04-page
+      profile: api-service
+      path: templates/article-programs/api-service-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: gateway-facade-d04-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: domain-service-d04-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: background-runtime-d04-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: event-consumer-d04-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: data-sync-reconciliation-d04-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: storage-repository-d04-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: adapter-integration-d04-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/d04.md
+    - id: contract-source-d04-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d04.md
+    - id: derived-generated-source-d04-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-d04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/d04.md
+    - id: web-application-f01-page
+      profile: web-application
+      path: templates/article-programs/web-application-f01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f01.md
+    - id: web-application-f02-page
+      profile: web-application
+      path: templates/article-programs/web-application-f02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f02.md
+    - id: web-application-f03-page
+      profile: web-application
+      path: templates/article-programs/web-application-f03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f03.md
+    - id: web-application-f04-page
+      profile: web-application
+      path: templates/article-programs/web-application-f04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f04.md
+    - id: web-application-f05-page
+      profile: web-application
+      path: templates/article-programs/web-application-f05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f05.md
+    - id: web-application-f06-page
+      profile: web-application
+      path: templates/article-programs/web-application-f06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f06.md
+    - id: contract-source-f06-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-f06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/f06.md
+    - id: derived-generated-source-f06-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-f06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/f06.md
+    - id: web-application-f07-page
+      profile: web-application
+      path: templates/article-programs/web-application-f07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f07.md
+    - id: web-application-f08-page
+      profile: web-application
+      path: templates/article-programs/web-application-f08-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f08.md
+    - id: monorepo-container-f09-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: web-application-f09-page
+      profile: web-application
+      path: templates/article-programs/web-application-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: component-library-f09-page
+      profile: component-library
+      path: templates/article-programs/component-library-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: sdk-library-f09-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: cli-tool-f09-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: plugin-extension-f09-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: api-service-f09-page
+      profile: api-service
+      path: templates/article-programs/api-service-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: gateway-facade-f09-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: domain-service-f09-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: background-runtime-f09-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: event-consumer-f09-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: data-sync-reconciliation-f09-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: storage-repository-f09-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: adapter-integration-f09-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/f09.md
+    - id: contract-source-f09-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/f09.md
+    - id: derived-generated-source-f09-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-f09-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/f09.md
+    - id: web-application-f10-page
+      profile: web-application
+      path: templates/article-programs/web-application-f10-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-host-and-remote
+      guidance_path: templates/articles/f10.md
+    - id: monorepo-container-f11-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-f11-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/f11.md
+    - id: web-application-f11-page
+      profile: web-application
+      path: templates/article-programs/web-application-f11-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f11.md
+    - id: web-application-f12-page
+      profile: web-application
+      path: templates/article-programs/web-application-f12-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/f12.md
+    - id: sdk-library-l01-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-l01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l01.md
+    - id: cli-tool-l01-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-l01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l01.md
+    - id: plugin-extension-l01-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-l01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l01.md
+    - id: adapter-integration-l01-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-l01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l01.md
+    - id: component-library-l02-page
+      profile: component-library
+      path: templates/article-programs/component-library-l02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l02.md
+    - id: component-library-l03-page
+      profile: component-library
+      path: templates/article-programs/component-library-l03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l03.md
+    - id: sdk-library-l03-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-l03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l03.md
+    - id: plugin-extension-l04-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-l04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l04.md
+    - id: adapter-integration-l04-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-l04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l04.md
+    - id: sdk-library-l04-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-l04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l04.md
+    - id: gateway-facade-l04-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-l04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/l04.md
+    - id: component-library-l05-page
+      profile: component-library
+      path: templates/article-programs/component-library-l05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/l05.md
+    - id: monorepo-container-q03-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: web-application-q03-page
+      profile: web-application
+      path: templates/article-programs/web-application-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/q03.md
+    - id: component-library-q03-page
+      profile: component-library
+      path: templates/article-programs/component-library-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: sdk-library-q03-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: cli-tool-q03-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: plugin-extension-q03-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: api-service-q03-page
+      profile: api-service
+      path: templates/article-programs/api-service-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: gateway-facade-q03-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: domain-service-q03-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: background-runtime-q03-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q03.md
+    - id: event-consumer-q03-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q03.md
+    - id: data-sync-reconciliation-q03-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q03.md
+    - id: storage-repository-q03-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: adapter-integration-q03-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q03.md
+    - id: contract-source-q03-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: derived-generated-source-q03-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-q03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q03.md
+    - id: monorepo-container-q05-page
+      profile: monorepo-container
+      path: templates/article-programs/monorepo-container-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: web-application-q05-page
+      profile: web-application
+      path: templates/article-programs/web-application-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: develop-page-task
+      guidance_path: templates/articles/q05.md
+    - id: component-library-q05-page
+      profile: component-library
+      path: templates/article-programs/component-library-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: sdk-library-q05-page
+      profile: sdk-library
+      path: templates/article-programs/sdk-library-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: cli-tool-q05-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: plugin-extension-q05-page
+      profile: plugin-extension
+      path: templates/article-programs/plugin-extension-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: api-service-q05-page
+      profile: api-service
+      path: templates/article-programs/api-service-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: gateway-facade-q05-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: domain-service-q05-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: background-runtime-q05-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q05.md
+    - id: event-consumer-q05-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q05.md
+    - id: data-sync-reconciliation-q05-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/q05.md
+    - id: storage-repository-q05-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: adapter-integration-q05-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q05.md
+    - id: contract-source-q05-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: derived-generated-source-q05-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-q05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/q05.md
+    - id: cli-tool-q06-page
+      profile: cli-tool
+      path: templates/article-programs/cli-tool-q06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/q06.md
+    - id: api-service-s01-page
+      profile: api-service
+      path: templates/article-programs/api-service-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s01.md
+    - id: gateway-facade-s01-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s01.md
+    - id: domain-service-s01-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s01.md
+    - id: background-runtime-s01-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s01.md
+    - id: event-consumer-s01-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s01.md
+    - id: data-sync-reconciliation-s01-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s01.md
+    - id: storage-repository-s01-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s01.md
+    - id: adapter-integration-s01-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-s01-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: integrate-capability
+      guidance_path: templates/articles/s01.md
+    - id: api-service-s02-page
+      profile: api-service
+      path: templates/article-programs/api-service-s02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s02.md
+    - id: gateway-facade-s02-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-s02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s02.md
+    - id: contract-source-s02-page
+      profile: contract-source
+      path: templates/article-programs/contract-source-s02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s02.md
+    - id: derived-generated-source-s02-page
+      profile: derived-generated-source
+      path: templates/article-programs/derived-generated-source-s02-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s02.md
+    - id: api-service-s03-page
+      profile: api-service
+      path: templates/article-programs/api-service-s03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s03.md
+    - id: gateway-facade-s03-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-s03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s03.md
+    - id: domain-service-s03-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-s03-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: look-up-public-contract
+      guidance_path: templates/articles/s03.md
+    - id: domain-service-s04-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-s04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s04.md
+    - id: web-application-s04-page
+      profile: web-application
+      path: templates/article-programs/web-application-s04-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s04.md
+    - id: storage-repository-s05-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-s05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s05.md
+    - id: domain-service-s05-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-s05-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s05.md
+    - id: api-service-s06-page
+      profile: api-service
+      path: templates/article-programs/api-service-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: gateway-facade-s06-page
+      profile: gateway-facade
+      path: templates/article-programs/gateway-facade-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: domain-service-s06-page
+      profile: domain-service
+      path: templates/article-programs/domain-service-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: background-runtime-s06-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: event-consumer-s06-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: data-sync-reconciliation-s06-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: storage-repository-s06-page
+      profile: storage-repository
+      path: templates/article-programs/storage-repository-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: adapter-integration-s06-page
+      profile: adapter-integration
+      path: templates/article-programs/adapter-integration-s06-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: modify-or-diagnose-module
+      guidance_path: templates/articles/s06.md
+    - id: background-runtime-s07-page
+      profile: background-runtime
+      path: templates/article-programs/background-runtime-s07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s07.md
+    - id: event-consumer-s07-page
+      profile: event-consumer
+      path: templates/article-programs/event-consumer-s07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s07.md
+    - id: data-sync-reconciliation-s07-page
+      profile: data-sync-reconciliation
+      path: templates/article-programs/data-sync-reconciliation-s07-page.md
+      kind: page-program
+      delivery: selected
+      reader_goal: operate-or-extend-task
+      guidance_path: templates/articles/s07.md
+  forbidden_fallbacks:
+    - one-page-per-symbol
+    - ordinal-batch-pages
+    - inferred-runtime-chain
+  completion_checks:
+    - inventory-disposition-closure
+    - subject-owner-closure
+    - source-coverage
 customization:
-  supports: [instructions-append, template-override]
-
+  supports:
+    - instructions-append
+    - template-override
 quality_guidance:
   metric_ids:
     - inventory-disposition-coverage

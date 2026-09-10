@@ -12,6 +12,8 @@ function firstVisibleMarkdownLine(markdown: string): string | undefined {
       continue;
     }
     if (line.length === 0) continue;
+    // Section anchors are invisible navigation targets, not page content.
+    if (/^<a\s+(?:id|name)=(?:"[^"]*"|'[^']*')\s*><\/a>$/u.test(line)) continue;
     if (line.startsWith("<!--")) {
       if (!line.includes("-->")) insideComment = true;
       continue;

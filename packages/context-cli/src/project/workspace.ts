@@ -408,6 +408,7 @@ function renderPackageJson(
     context: {
       project: true,
       entry: DEFAULT_PROJECT_ENTRY,
+      convertVisuals: true,
       language,
       ...(debug === true ? { debug: true } : {}),
     },

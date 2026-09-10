@@ -71,6 +71,7 @@ export function renderApprovedIndexerMarkdown(input: {
   const frontmatter = YAML.stringify({
     title,
     type: okfTypeForCollection(input.record.collection),
+    artifact_ref: binding.artifact_ref,
     node_ref: input.record.node_ref,
     view_ref: input.record.view_ref,
     node_type: "entity",

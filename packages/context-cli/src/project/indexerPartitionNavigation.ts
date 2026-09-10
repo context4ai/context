@@ -1,6 +1,9 @@
 import { reuseCommandFileRead } from "./commandReadCache.js";
 import { join, resolve } from "node:path";
-import { buildIndexerAuthorizedWorksetViewSource, indexerProtocolDigest, loadSourcesRegistry } from "@c4a/context";
+import { buildIndexerAuthorizedWorksetViewSource, indexerProtocolDigest, loadSourcesRegistry, loadIndexerRegistry, type IndexerApprovedKnowledge } from "@c4a/context";
+import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { projectIndexerReadTargets, projectIndexerReadTargetAllows, type ProjectIndexerReadTarget } from "./indexerReadScopeAuthorization.js";
 import { currentLedger, currentSpec, runSpecPath, INDEXER_MAIN_RUN_CURRENT_PATH, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
 import type { ProjectIndexerParserFactsSourceBinding } from "./indexerMainSourceAdapter.js";
 
@@ -22,11 +25,24 @@ export async function buildPartitionNavigation(root: string, spec: MainRunSpec) 
   })),
   });
   const overview = tasks.filter(task => task !== undefined);
-  const digest = indexerProtocolDigest(overview);
+  const { registry } = await loadIndexerRegistry(root);
+  const targets = projectIndexerReadTargets({ registry, indexer_id: spec.request.workset.indexer_id });
+  const approvedArticles = partitionApprovedArticleCatalog(approvedKnowledgeSnapshotsFromStructure((await readKnowledgeStructure(root)).parsed), targets);
+  const digest = indexerProtocolDigest({ tasks: overview, approved_articles: approvedArticles });
   return buildIndexerAuthorizedWorksetViewSource({ request: spec.request, projection_kind: "partition-navigation",
     input_digests: [digest], items: [{ ref: "partition-navigation:current", category: "partition-navigation",
       provenance: { protocol: "context.indexer.partition-navigation/v1", digest },
-      value: { tasks: overview, guidance: "Inspect the whole scope before declaring a theme ready. Task counts are not page counts; other tasks may contribute to the same subject. Read detailed facts or bounded source files where the overview cannot resolve ownership." } }] });
+      value: { tasks: overview, approved_articles: approvedArticles,
+        guidance: "Inspect the whole scope before declaring a theme ready. Task counts are not page counts; other tasks may contribute to the same subject. approved_articles provides stable identities within this Indexer's read scope for knowledge_dependencies, not source facts or proof that those versions remain current. Author rechecks versions and authorization. Do not wait on another article in the same group; use direct evidence or a separately planned upstream group. Read detailed facts or bounded source files where the overview cannot resolve ownership." } }] });
+}
+
+export function partitionApprovedArticleCatalog(snapshots: readonly IndexerApprovedKnowledge[], targets: readonly ProjectIndexerReadTarget[]) {
+  return snapshots
+    .filter(snapshot => snapshot.source_versions.every(source => projectIndexerReadTargetAllows({ targets,
+      source_ref: source.source_ref, module_ref: source.module_ref })))
+    .map(snapshot => ({ artifact_ref: snapshot.artifact_ref, subject_key: snapshot.subject_key, path: snapshot.path,
+      sections: snapshot.sections.map(section => ({ section_ref: section.section_ref, ...(section.section_key === undefined ? {} : { section_key: section.section_key }) })),
+      approved_content_digest: snapshot.approved_content_digest }));
 }
 
 export async function buildPartitionSourceAccess(input: {

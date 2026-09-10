@@ -1,3 +1,4 @@
+import { hasFormalLegacyCodeIndexReference } from "./legacyCodeIndexReferences.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
@@ -87,7 +88,7 @@ export async function legacyCodeIndexMigrationRequired(projectRoot: string): Pro
   ])];
   for (const file of formalFiles) {
     const content = await readFile(file, "utf8");
-    if (migrateText(content) !== content) return true;
+    if (hasFormalLegacyCodeIndexReference(file, content)) return true;
   }
   return (await readCandidateLedgerMigrationState(projectRoot)).hasLegacyRows;
 }

@@ -1,0 +1,200 @@
+---
+{
+  "protocol": "context.indexer.template/v1",
+  "template_id": "monorepo-container-q03-page",
+  "profile": "monorepo-container",
+  "reader_goal": "integrate-capability",
+  "applicability": {
+    "artifact_policy_variants": [
+      "compact",
+      "standard",
+      "expanded"
+    ],
+    "condition_refs": []
+  },
+  "variables": [
+    {
+      "id": "scope",
+      "type": "string",
+      "content_layer": "semantic-prose",
+      "required": false,
+      "evidence_required": true
+    },
+    {
+      "id": "catalog",
+      "type": "string",
+      "content_layer": "semantic-prose",
+      "required": false,
+      "evidence_required": true
+    },
+    {
+      "id": "prerequisites",
+      "type": "string",
+      "content_layer": "semantic-prose",
+      "required": false,
+      "evidence_required": true
+    },
+    {
+      "id": "automation",
+      "type": "string",
+      "content_layer": "semantic-prose",
+      "required": false,
+      "evidence_required": true
+    },
+    {
+      "id": "references",
+      "type": "string",
+      "content_layer": "semantic-prose",
+      "required": false,
+      "evidence_required": true
+    }
+  ],
+  "deterministic_blocks": [],
+  "sections": [
+    {
+      "section_key": "scope",
+      "presence": "optional",
+      "question_ref": "question:q03-scope",
+      "reader_goal": "integrate-capability",
+      "variable_ids": [
+        "scope"
+      ],
+      "deterministic_block_ids": [],
+      "accepted_evidence_kinds": [
+        "code",
+        "contract",
+        "configuration",
+        "documentation"
+      ],
+      "minimum_evidence_items": 0,
+      "on_missing": "omit",
+      "deletion_condition": "Omit when not applicable or no supported value is supplied."
+    },
+    {
+      "section_key": "catalog",
+      "presence": "optional",
+      "question_ref": "question:q03-catalog",
+      "reader_goal": "integrate-capability",
+      "variable_ids": [
+        "catalog"
+      ],
+      "deterministic_block_ids": [],
+      "accepted_evidence_kinds": [
+        "code",
+        "contract",
+        "configuration",
+        "documentation"
+      ],
+      "minimum_evidence_items": 0,
+      "on_missing": "omit",
+      "deletion_condition": "Omit when not applicable or no supported value is supplied."
+    },
+    {
+      "section_key": "prerequisites",
+      "presence": "optional",
+      "question_ref": "question:q03-prerequisites",
+      "reader_goal": "integrate-capability",
+      "variable_ids": [
+        "prerequisites"
+      ],
+      "deterministic_block_ids": [],
+      "accepted_evidence_kinds": [
+        "code",
+        "contract",
+        "configuration",
+        "documentation"
+      ],
+      "minimum_evidence_items": 0,
+      "on_missing": "omit",
+      "deletion_condition": "Omit when not applicable or no supported value is supplied."
+    },
+    {
+      "section_key": "automation",
+      "presence": "optional",
+      "question_ref": "question:q03-automation",
+      "reader_goal": "integrate-capability",
+      "variable_ids": [
+        "automation"
+      ],
+      "deterministic_block_ids": [],
+      "accepted_evidence_kinds": [
+        "code",
+        "contract",
+        "configuration",
+        "documentation"
+      ],
+      "minimum_evidence_items": 0,
+      "on_missing": "omit",
+      "deletion_condition": "Omit when not applicable or no supported value is supplied."
+    },
+    {
+      "section_key": "references",
+      "presence": "optional",
+      "question_ref": "question:q03-references",
+      "reader_goal": "integrate-capability",
+      "variable_ids": [
+        "references"
+      ],
+      "deterministic_block_ids": [],
+      "accepted_evidence_kinds": [
+        "code",
+        "contract",
+        "configuration",
+        "documentation"
+      ],
+      "minimum_evidence_items": 0,
+      "on_missing": "omit",
+      "deletion_condition": "Omit when not applicable or no supported value is supplied."
+    }
+  ],
+  "page_policy": {
+    "split_suggestion": "Split by independently useful reader task when supported; preserve stable article identities.",
+    "semantic_boundaries": [
+      "reader-task",
+      "source-boundary"
+    ],
+    "keep_single_page_conditions": [
+      "one-reader-subject"
+    ]
+  },
+  "anonymous_section_examples": [
+    "A source-backed explanation that names an entry and the next investigation step."
+  ],
+  "anti_examples": [
+    "Invented relationships or current runtime values inferred from names alone."
+  ],
+  "forbidden_outputs": [
+    "Unresolved internal identifiers in reader-facing prose."
+  ],
+  "maximum_rendered_bytes": 1048576
+}
+---
+<!-- context:indexer-section scope -->
+## 范围与来源
+
+{{variable:scope}}
+<!-- /context:indexer-section -->
+
+<!-- context:indexer-section catalog -->
+## 能力与场景表
+
+{{variable:catalog}}
+<!-- /context:indexer-section -->
+
+<!-- context:indexer-section prerequisites -->
+## 前置条件和数据
+
+{{variable:prerequisites}}
+<!-- /context:indexer-section -->
+
+<!-- context:indexer-section automation -->
+## 自动化入口
+
+{{variable:automation}}
+<!-- /context:indexer-section -->
+
+<!-- context:indexer-section references -->
+## 需求与缺陷
+
+{{variable:references}}
+<!-- /context:indexer-section -->

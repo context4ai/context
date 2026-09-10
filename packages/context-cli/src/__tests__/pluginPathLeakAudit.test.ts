@@ -51,6 +51,9 @@ const SOURCE_PATH_FIELD_ALLOWED_FIELDS = new Set([
   // access, not arbitrary workspace state probing. Material integration tests
   // verify real readable paths and scoped source_items submission.
   "captured_root", "read_path",
+  // Example inventory identity: the full path within the already authorized
+  // captured source, never a workspace storage or absolute filesystem path.
+  "full_relative_path",
   // Internal boolean controlling selected-source read extent, not a path value
   // or an Agent-facing output field.
   "whole_file",

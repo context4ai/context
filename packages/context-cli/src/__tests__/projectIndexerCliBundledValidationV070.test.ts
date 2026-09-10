@@ -1,3 +1,4 @@
+import YAML from "yaml";
 import { describe, expect, test } from "bun:test";
 import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -383,13 +384,11 @@ describe("CLI bundled Indexer release validation", () => {
       { force: true },
     );
     const manifestPath = join(sourceRoot, "context-code-indexer", "context-indexer.yaml");
-    const manifest = await readFile(manifestPath, "utf8");
-    expect(manifest).toContain("fact_kinds: [code-symbol]");
-    await writeFile(
-      manifestPath,
-      manifest.replace("fact_kinds: [code-symbol]", "fact_kinds: [public-surface-drift]"),
-      "utf8",
-    );
+    const manifest = YAML.parse(await readFile(manifestPath, "utf8"));
+    const composer = manifest.provides.composers.find((item: { id: string }) => item.id === "public-contract");
+    expect(composer.contract.primary_requirements.fact_kinds).toContain("code-symbol");
+    composer.contract.primary_requirements.fact_kinds = ["public-surface-drift"];
+    await writeFile(manifestPath, YAML.stringify(manifest), "utf8");
     await expect(validateBundledIndexerComposers({
       source,
       bundleId: "context-code-indexer",

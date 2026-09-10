@@ -334,11 +334,11 @@ export async function collectProjectStatusSnapshot(
   projectRoot: string,
   options: CollectProjectStatusOptions = {},
 ): Promise<ProjectStatusSnapshot> {
-  return measureContextDebugOperation({
+  return withCommandReadCache(() => measureContextDebugOperation({
     projectRoot,
     operation: "status.snapshot-build",
     counters: { status_rebuild_count: 1 },
-  }, () => collectProjectStatusSnapshotInternal(projectRoot, options));
+  }, () => collectProjectStatusSnapshotInternal(projectRoot, options)));
 }
 
 export async function reevaluateProjectStatusWorkflow(input: {
@@ -399,3 +399,4 @@ export async function collectProjectStatus(
 ): Promise<ProjectStatus> {
   return (await collectProjectStatusSnapshot(projectRoot, options)).status;
 }
+import { withCommandReadCache } from "./commandReadCache.js";

@@ -1,8 +1,9 @@
+import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
 import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readIndexerDelivery } from "./indexerDelivery.js";
-import { partitionAuthorBinding, readPartitionStream } from "./indexerPartitionStream.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
 import { basename, join } from "node:path";
 import {
   buildIndexerLayoutChangeConfirmation,
@@ -33,7 +34,6 @@ import {
   INDEXER_CURRENT_READINESS_PATH,
 } from "./indexerCandidateCompileActions.js";
 import {
-  readAcceptedIndexerMainAuthorResultHistory,
   readAcceptedIndexerMainAuthorResultRecords,
 } from "./indexerMainRunStore.js";
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
@@ -393,7 +393,7 @@ export async function advanceCurrentIndexerFinalization(
     });
   }
   const loaded = await loadIndexerRegistry(projectRoot);
-  const allRecords = await readAcceptedIndexerMainAuthorResultRecords(projectRoot);
+  const allRecords = await readDeliverableAuthorRecords(projectRoot);
   const records = delivery?.current.length ? allRecords.filter((record) => delivery.current.some(
     (page) => page.result_digest === indexerArtifactResultSchema.parse(record.artifact_result).output_digest)) : allRecords;
   const results = records.map((item) => indexerArtifactResultSchema.parse(item.artifact_result));
@@ -434,8 +434,13 @@ export async function advanceCurrentIndexerFinalization(
   });
   const allowedFactPaths = new Set(["target.eligible", "evidence.current"]);
   const stream = await readPartitionStream(projectRoot);
-  const globalCoverageRequired = stream === undefined ||
-    stream.partition_ledger.entries.every((entry) => entry.state === "accepted");
+  // Finishing Partition only means all topics are known. A planned topic can
+  // still belong to a later Author wave; global reconciliation at this point
+  // would block the first deliverable pages on that future responsibility.
+  // Check the full registry on the final wave, preserving the legacy behavior
+  // for checkpoints written before the explicit final-wave marker existed.
+  const globalCoverageRequired = stream === undefined || (stream.final_wave !== false &&
+    stream.partition_ledger.entries.every((entry) => entry.state === "accepted"));
   const resolvedQuestions = globalCoverageRequired ? loaded.registry.requirements.flatMap((requirement) =>
     (requirement.questions ?? []).map((binding) => ({
       requirement_ref: `requirement:${requirement.id}`,
@@ -469,16 +474,9 @@ export async function advanceCurrentIndexerFinalization(
     item.target_ref,
     { target: { eligible: true }, evidence: { current: true } },
   ]));
-  const streamedAuthorBindings = stream === undefined ? undefined : new Set([
-    ...stream.completed_bindings,
-    ...stream.active_bindings,
-  ]);
-  const reconciliationRecords = stream !== undefined && globalCoverageRequired
-    ? await readAcceptedIndexerMainAuthorResultHistory({
-        projectRoot,
-        include: (spec) => streamedAuthorBindings!.has(partitionAuthorBinding(spec)),
-      })
-    : allRecords;
+  // Reconciliation and delivery must use the same exact settled receipts.
+  // Old accepted caches remain audit records, not current coverage authority.
+  const reconciliationRecords = allRecords;
   const reconciliationResults = reconciliationRecords.map((record) =>
     indexerArtifactResultSchema.parse(record.artifact_result));
   const reconciliation = globalCoverageRequired ? reconcileIndexerResults({

@@ -165,6 +165,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
           category === "inventory-member" ? displayed : { ref: item.ref, ...displayed }), "");
       }
       if (category === "partition-authority") {
+        output.push("For a required cross-topic article, declare articles[].knowledge_dependencies using supplied stable artifact_ref values, optional approved section_refs, and required. Keep one legal primary subject and member owner; supporting references do not own upstream members. Context schedules available upstream articles first. If no dependency can become ready, use structure review request-adjustment to correct the plan. A navigation-only grouping does not need a synthesis article or Composer.", "");
         output.push("Plan from the whole member overview, following full-fact links and captured source paths where boundaries are unclear. Set ready_for_author=true only for an independently useful theme with resolved ownership and relevant dependencies. Leave unresolved themes in planning. This permits early delivery, not skipping remaining inventory or Review.", "");
         output.push("Naming: group.key identifies the group; title labels the content. The main page path uses knowledge/<collection>/<subject.namespace>/<subject.local_key>.md as readable slugs. A string subject inherits the base namespace. For a new page with an opaque capture-ID namespace, choose a readable namespace and local_key using the explicit subject object and a permitted kind. Preserve existing subjects on updates; approved paths are reused and collisions go through layout confirmation.", "");
       }
@@ -172,6 +173,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
         output.push("The excerpts below are recommended reading, not the whole reading scope. If necessary, read the listed files directly under captured_root with your file tool. These are captured sources, not the live repository. Cite their repository-relative paths in sections[].source_items; Context resolves source associations automatically. For other missing files, request-material accepts exact paths or directories in this registered module. Do not scan unrelated repositories, recollect, or repartition.", "");
       }
       if (category === "author-authority") {
+        output.push("Approved supporting knowledge, when supplied, separates supporting-fact from approved-interpretation. Use the former with its original source/version evidence; attribute the latter as approved interpretation. Neither authorizes broader source access. Do not replace a required planned article with an optional Composer proposal.", "");
         if (record(record(item.value).page_plan).scope_change !== undefined) {
           output.push("Scope changed: some members were explicitly excluded. The old topic, reader task and outline are historical context, not evidence that the remaining members still form a useful page. Reassess the remaining sources before writing. Correct the title/summary and choose an allowed page form only if justified; otherwise use a supported non-publishing outcome with truthful member dispositions. Do not reinstate excluded members, invent an API, or repartition unaffected work.", "");
         }
@@ -179,7 +181,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
         if (Array.isArray(targets) && targets.length === 0) {
           output.push("No reader-question targets are required: leave sections[].answers empty. If essential source content is genuinely missing, use outcome=request-material with a plain-language material_gaps[].question and source_hints from this task. Context keeps the task pending; no question ID is needed. Do not request material already present in Source material below.", "");
         }
-        output.push("For publish, inherit page_plan.artifact_intent (or omit artifact_intent to use that plan). primary_artifact_options lists permitted primary forms and policies; other allowed intents may belong to derived pages. Do not duplicate the page to satisfy multiple forms.", "");
+        output.push("For publish with page_plan.articles, return articles with their accepted keys and article-specific sections; use article_guidance for each selected blueprint. Otherwise inherit page_plan.artifact_intent (or omit artifact_intent to use that plan) and use page_guidance when supplied. Suggested chapters and ordinary version differences are advisory; preserve evidence and a useful next step. primary_artifact_options lists permitted primary forms and policies; other allowed intents may belong to derived pages. Do not duplicate the page to satisfy multiple forms.", "");
       }
       if (workset.stage === "partition" || category === "index-requirement" || category === "source-access") {
         material.push({ section: "Goal and constraints",

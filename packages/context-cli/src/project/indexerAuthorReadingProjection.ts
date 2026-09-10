@@ -7,7 +7,7 @@ function object(value: unknown): Record<string, unknown> {
 /** The current choices and all executable limits stay visible. The full menu is
  * a discoverable detail, not a second source of submission authority. */
 export function projectAuthorAuthority(value: Record<string, unknown>) {
-  if (typeof object(value.page_plan).artifact_intent !== "string") return undefined;
+  if (typeof object(value.page_plan).artifact_intent !== "string" && !Array.isArray(object(value.page_plan).articles)) return undefined;
   const projected = { ...value };
   for (const key of ["allowed_artifact_intents", "available_templates", "primary_artifact_guidance"]) delete projected[key];
   if (value.artifact_policy_eligibility !== undefined) {

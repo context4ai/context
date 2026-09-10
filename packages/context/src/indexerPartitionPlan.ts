@@ -1,3 +1,4 @@
+import { indexerArticlePlanSchema, validateIndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerCanonicalRefSchema,
@@ -75,6 +76,7 @@ const partitionGroupSchema = z.object({
   outline: z.array(z.string().min(1)).optional(),
   artifact_intent: z.string().min(1).optional(),
   template_id: z.string().min(1).optional(),
+  articles: z.array(indexerArticlePlanSchema).min(1).optional(),
   priority: z.number().int().nonnegative().optional(),
   delivery_boundary: z.boolean().optional(),
   ready_for_author: z.boolean().optional(),
@@ -295,6 +297,7 @@ function validateGroups(
     if (targetRefs.some((ref) => !allowedTargets.has(ref))) {
       throw new TypeError(`partition group ${group.group_key} creates an unknown question target`);
     }
+    if (group.articles !== undefined) validateIndexerArticlePlan(group.articles, group.question_target_bindings.filter(binding => binding.role === "primary-carrier").map(binding => binding.target_ref));
     groups.set(group.group_key, group);
   }
   return groups;

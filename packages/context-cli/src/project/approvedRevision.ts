@@ -1,3 +1,4 @@
+import { withApprovedKnowledgeSupportSources } from "./approvedKnowledgeRebinding.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
@@ -18,6 +19,8 @@ import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import { runDurableMultiFileTransaction } from "./durableMultiFileTransaction.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { captureProcessedScopes, commitProcessedScopes } from "./processedScopeStorage.js";
+import { approvedKnowledgeRevisionInputSchema, approvedKnowledgeRebindingSchema, type ApprovedKnowledgeRebinding } from "./approvedKnowledgeRevisionInput.js";
+import { prepareApprovedKnowledgeRevision, assertApprovedKnowledgeRevisionCurrent } from "./approvedKnowledgeRevision.js";
 
 // The current compile container holds either a normal accepted-Indexer compile
 // or a direct revision of an approved page. Neither retains previous runs.
@@ -36,9 +39,11 @@ const requestSchema = z.object({
   pending_targets: z.array(z.object({ path: z.string().min(1), instruction: z.string().trim().min(1),
     target: revisionTargetSchema.optional(),
     regenerate: z.boolean().optional(),
+    knowledge_rebinding: approvedKnowledgeRebindingSchema.optional(),
     supporting_sources: z.array(z.string().min(1)).min(1).optional(),
     create: z.object({ path: z.string().min(1), title: z.string().min(1), source_refs: z.array(z.string().min(1)).min(1), instruction: z.string().min(1) }).strict().optional() }).strict()).optional(),
   regenerate: z.boolean().optional(),
+  knowledge_input: approvedKnowledgeRevisionInputSchema.optional(),
   requirements: z.array(indexRequirementSchema).optional(),
   processed_scopes: processedScopesSchema.optional(),
   candidate: z.unknown().optional(),
@@ -50,13 +55,14 @@ const requestSchema = z.object({
 }).strict();
 export type ApprovedRevision = Omit<z.infer<typeof requestSchema>, "candidate" | "batch_candidates"> & { candidate?: CandidateRecord; batch_candidates?: CandidateRecord[] };
 
-export function requestDigest(input: Pick<ApprovedRevision, "target" | "instruction" | "pending_targets" | "processed_scopes" | "requirements" | "program_blocks" | "regenerate" | "merge_context">): string {
+export function requestDigest(input: Pick<ApprovedRevision, "target" | "instruction" | "pending_targets" | "processed_scopes" | "requirements" | "program_blocks" | "regenerate" | "merge_context" | "knowledge_input">): string {
   // A page's review authority binds its own inputs. Adjusting a queued sibling
   // does not revoke an unchanged page's decision or accepted body.
   const scopes = input.processed_scopes?.filter((scope) => input.target.source_refs.some((ref) =>
     ref === scope.source_ref || ref.startsWith(`${scope.source_ref}#`) || ref.startsWith(`${scope.source_ref}/`)));
   const ids = new Set(scopes?.map((scope) => scope.requirement_ref));
   return indexerProtocolDigest({ target: input.target, instruction: input.instruction,
+    ...(input.knowledge_input === undefined ? {} : { knowledge_input: input.knowledge_input }),
     ...(input.merge_context ? { merge_context: input.merge_context } : {}),
     ...(input.regenerate ? { regenerate: true, program_blocks: input.program_blocks ?? [] } : {}),
     ...(input.requirements === undefined ? {} : { requirements: input.requirements.filter((item) => ids.has(item.id) || item.target_scope.targets.some((source) => input.target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`)))) }),
@@ -75,6 +81,7 @@ export function parseApprovedRevision(value: unknown): ApprovedRevision | undefi
   if (raw === undefined) return request;
   const candidate = parseCandidateRecord(raw, 1);
   if (candidate.approved_revision?.request_digest !== request.revision ||
+      indexerProtocolDigest(candidate.approved_revision?.knowledge_input ?? null) !== indexerProtocolDigest(request.knowledge_input ?? null) ||
       candidate.approved_revision.base_digest !== request.target.base_digest ||
       candidate.approved_revision.previous_path !== request.target.previous_path ||
       candidate.path !== request.target.path || candidate.node_ref !== request.target.node_ref ||
@@ -105,7 +112,8 @@ export function pendingAfterReopen(request: ApprovedRevision, selectedPath: stri
   // This is an interrupted Author, not an accepted Candidate. Keep its exact
   // input in the existing queue, including an unfinished new page or page move.
   return [{ path: request.target.path, instruction: request.instruction, target: request.target,
-    ...(request.regenerate ? { regenerate: true } : {}) },
+    ...(request.regenerate ? { regenerate: true } : {}),
+    ...(request.knowledge_input?.rebinding ? { knowledge_rebinding: request.knowledge_input.rebinding } : {}) },
     ...(request.pending_targets ?? []).filter((item) => item.path !== request.target.path)];
 }
 
@@ -119,8 +127,8 @@ export async function resolveApprovedRevisionAuthor(projectRoot: string, request
   const rejected = observed.candidates.find((item) => item.status === "rejected");
   const selected = revisionBatch(request).find((item) => item.candidate_id === rejected?.candidate_id);
   if (!selected) return undefined;
-  const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, ...previous } = request;
-  void _candidate; void _ready; void _blocks;
+  const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, knowledge_input: _knowledge, ...previous } = request;
+  void _candidate; void _ready; void _blocks; void _knowledge;
   const target: ApprovedRevision["target"] = {
     path: selected.path, node_ref: selected.node_ref, view_ref: selected.view_ref, collection: selected.collection,
     markdown: selected.body, source_refs: selected.source_refs, base_digest: selected.approved_revision!.base_digest,
@@ -130,6 +138,7 @@ export async function resolveApprovedRevisionAuthor(projectRoot: string, request
     batch_candidates: revisionBatch(request).filter((item) => item.candidate_id !== selected.candidate_id),
     instruction: `Review rejected this draft. Apply the user's review feedback before resubmitting; ask if the intended correction is unclear. Original task: ${selected.review.reason}`,
     ...(selected.path === request.target.path && request.program_blocks ? { program_blocks: request.program_blocks } : {}),
+    ...(selected.approved_revision?.knowledge_input ? { knowledge_input: selected.approved_revision.knowledge_input } : {}),
   };
   return { ...payload, revision: requestDigest(payload) };
 }
@@ -189,6 +198,7 @@ export async function prepareApprovedRevision(input: {
   pending_targets?: ApprovedRevision["pending_targets"];
   target?: ApprovedRevision["target"];
   supporting_sources?: string[];
+  knowledge_rebinding?: ApprovedKnowledgeRebinding;
   create?: NewKnowledgePage;
   replace_current?: boolean;
   persist?: boolean;
@@ -252,6 +262,8 @@ export async function prepareApprovedRevision(input: {
     const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
     const programScopes = input.processed_scopes?.filter((scope) => processedVersionForScope(readProcessedScopes(structure.parsed), scope) !== scope.processed_version);
     const { registry } = await loadIndexerRegistry(input.projectRoot);
+    const knowledgeInput = await prepareApprovedKnowledgeRevision(input.projectRoot, target.previous_path ?? target.path, registry, input.knowledge_rebinding);
+    if (knowledgeInput?.rebinding) target = withApprovedKnowledgeSupportSources(target, knowledgeInput);
     const requirements = input.requirements ?? registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
       target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
     const { currentScopeSourceVersion } = await import("./processedScopeStorage.js");
@@ -265,6 +277,7 @@ export async function prepareApprovedRevision(input: {
       ? await prepareRevisionProgramBlocks(input.projectRoot, target.source_refs, regenerationScopes ?? programScopes!) : undefined;
     if (input.regenerate && !programBlocks?.length) throw new TypeError("No applicable program blocks in the selected page sources. Inspect its Provider/materials; do not submit the old table as regenerated. Cancel or adjust this maintenance request before continuing.");
     const payload = { target, instruction: input.instruction.trim(), requirements,
+      ...(knowledgeInput === undefined ? {} : { knowledge_input: knowledgeInput }),
       ...(input.regenerate ? { regenerate: true } : {}),
       ...(programBlocks === undefined ? {} : { program_blocks: programBlocks }),
       ...(input.batch_candidates === undefined ? {} : { batch_candidates: input.batch_candidates }),
@@ -300,6 +313,8 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (!request || request.revision !== input.revision || request.candidate) throw new TypeError("Approved revision is stale. Refresh context status --format json.");
     if (request.refresh_sources) throw new TypeError("Import the explicitly adjusted source inputs, then run context task adjust with refresh: true before submitting page content.");
     await assertApprovedRevisionBase(input.projectRoot, request);
+    if (request.knowledge_input) await assertApprovedKnowledgeRevisionCurrent(input.projectRoot, request.target.previous_path ?? request.target.path,
+      (await loadIndexerRegistry(input.projectRoot)).registry, request.knowledge_input);
     const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
     await assertRevisionRequirements(input.projectRoot, request);
     const approved = request.target.base_digest === null ? undefined : hydrateApprovedKnowledgeMarkdown({
@@ -325,6 +340,13 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (new Set(sections.map((section) => section.id)).size !== sections.length) {
       throw new TypeError("Revision section identities must be unique");
     }
+    if (request.knowledge_input?.rebinding) {
+      const selected = new Set(request.knowledge_input.rebinding.sections?.map(section => section.section_key));
+      const previous = new Set(approvedContextSectionsInMarkdown(request.target.markdown).map(section => section.id));
+      if (sections.some(section => previous.has(section.id) && !selected.has(section.id!))) {
+        throw new TypeError("Retained sections need an explicit support selection after dependency replacement. Use context task adjust with knowledge_dependencies.sections; approved content is unchanged.");
+      }
+    }
     const title = z.string().trim().min(1).parse(metadata.title);
     const fingerprint = indexerProtocolDigest({ revision: request.revision, markdown });
     const projectedSections = sections.map((section) => ({
@@ -339,6 +361,7 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
       path: request.target.path, structure_digest: request.revision, source_refs: request.target.source_refs,
       body: markdown, fingerprint,
       approved_revision: { request_digest: request.revision, base_digest: request.target.base_digest,
+        ...(request.knowledge_input === undefined ? {} : { knowledge_input: request.knowledge_input }),
         ...(request.target.previous_path === undefined ? {} : { previous_path: request.target.previous_path }) },
       indexer_candidate: { compile_digest: request.revision, file_digest: fingerprint,
         artifact_ref: request.target.view_ref, section_refs: projectedSections.map((section) => section.section_ref),
@@ -349,7 +372,7 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (input.preview) return { protocol: "context.approved-revision-preview/v1", revision: request.revision,
       path: request.target.path, before: request.target.markdown, markdown, changed: markdown !== request.target.markdown };
     if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
-    if (markdown === approved && request.target.previous_path === undefined && !replacingCandidate) {
+    if (markdown === approved && request.target.previous_path === undefined && !replacingCandidate && !request.knowledge_input) {
       const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
       const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
       if (next || request.batch_candidates?.length) {
@@ -401,6 +424,7 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
   const [next, ...remaining] = request.pending_targets ?? [];
   if (next) {
     await prepareApprovedRevision({ projectRoot, replace_current: true, selector: next.path, instruction: next.instruction,
+      ...(next.knowledge_rebinding ? { knowledge_rebinding: next.knowledge_rebinding } : {}),
       ...(next.regenerate ? { regenerate: true } : {}),
       ...(next.target === undefined ? {} : { target: next.target }),
       pending_targets: remaining, ...(next.create === undefined ? {} : { create: next.create }),
@@ -450,6 +474,7 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
     if (selected && selected.path !== request.target.path) {
       const prepared = await prepareApprovedRevision({ projectRoot: input.projectRoot, replace_current: true, persist: false,
         selector: selected.path, instruction: input.instruction, batch_candidates: batch,
+        ...(selected.approved_revision?.knowledge_input?.rebinding ? { knowledge_rebinding: selected.approved_revision.knowledge_input.rebinding } : {}),
         ...(request.regenerate ? { regenerate: true } : {}),
         pending_targets: pendingAfterReopen(request, selected.path),
         ...(request.requirements ? { requirements: request.requirements } : {}),
@@ -457,7 +482,14 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
         ...(selected.approved_revision?.base_digest === null ? { create: { path: selected.path,
           title: selected.review.title, source_refs: selected.source_refs, instruction: input.instruction } } : {}) });
       base = prepared.request;
-    } else base = { ...base, target: await currentApprovedRevisionTarget(input.projectRoot, request) };
+    } else {
+      const { knowledge_input: _knowledge, ...rest } = base; void _knowledge;
+      const knowledge = await prepareApprovedKnowledgeRevision(input.projectRoot, base.target.previous_path ?? base.target.path,
+        (await loadIndexerRegistry(input.projectRoot)).registry, base.knowledge_input?.rebinding);
+      base = { ...rest, target: await currentApprovedRevisionTarget(input.projectRoot, request),
+        ...(knowledge === undefined ? {} : { knowledge_input: knowledge }) };
+      if (knowledge?.rebinding) base.target = withApprovedKnowledgeSupportSources(base.target, knowledge);
+    }
     const payload = { ...base, batch_candidates: kept, instruction: input.instruction.trim(), target: { ...base.target,
       markdown: selected?.body ?? base.target.markdown } };
     const current = await readFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), "utf8");

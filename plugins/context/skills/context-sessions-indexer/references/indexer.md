@@ -34,3 +34,11 @@ that the fallback exists. If code changed later, preserve still-applicable
 reasoning and mark superseded details only where that affects the reader.
 Where no code has been read, qualify implementation claims rather than hiding
 that limitation behind a change URL.
+
+## Diagrams
+
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+
+## Existing source images and tables
+
+For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.

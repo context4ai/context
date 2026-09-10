@@ -1,3 +1,4 @@
+import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
 import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
 import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
 import { existsSync } from "node:fs";
@@ -6,6 +7,7 @@ import { dirname, join } from "node:path";
 import YAML from "yaml";
 import { readProcessedScopes } from "@c4a/context";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { isCodeIndexCollection } from "./codeIndexCollection.js";
@@ -230,7 +232,9 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
   compactFiles: ApprovedKnowledgeFile[];
 }> {
   const rawFiles = await approvedKnowledgeFiles(projectRoot);
-  const processedScopes = readProcessedScopes((await readKnowledgeStructure(projectRoot)).parsed);
+  const previousStructure = (await readKnowledgeStructure(projectRoot)).parsed;
+  const processedScopes = readProcessedScopes(previousStructure);
+  const approvedKnowledge = approvedKnowledgeSnapshotsFromStructure(previousStructure);
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   const files = rawFiles.map((file) => ({
     ...file,
@@ -357,6 +361,7 @@ async function deriveApprovedStructure(projectRoot: string): Promise<{
       nodes,
       views: projectedViews,
       edges,
+      ...(approvedKnowledge.length === 0 ? {} : { approved_knowledge: approvedKnowledge.filter(snapshot => projectedViews.some(view => view.path === snapshot.path)) }),
       ...(processedScopes.length === 0 ? {} : { processed_scopes: processedScopes }),
     },
     edgeWarnings,
@@ -458,11 +463,13 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
 
 export async function closeProjectWorkspace(projectRoot: string): Promise<ProjectCloseResult> {
   return withProjectWriteLock(projectRoot, "close-knowledge", async () => {
-    const draftCandidates = (await readCandidateRecords(projectRoot)).filter((candidate) =>
+    const candidates = await readCandidateRecords(projectRoot);
+    const draftCandidates = candidates.filter((candidate) =>
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
     const delivery = await readIndexerDelivery(projectRoot);
     if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
+    else await assertRequiredArticlesReviewed(projectRoot, candidates);
     if (draftCandidates.length > 0 && !delivery?.partial) {
       throw new ContextError(ExitCode.WorkspaceStateError, "close is blocked while draft candidates still need Review", {
         category: ErrorCategory.WorkspaceStateInvalid,

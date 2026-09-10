@@ -366,6 +366,9 @@ export async function completeCurrentIndexerAction(input: {
   if (semantic.stage === "structure-review") {
     const { readKnowledgeUpdate, completeUpdateStructureReview } = await import("./knowledgeUpdate.js");
     if ((await readKnowledgeUpdate(found.projectRoot))?.structure_proposal) {
+      if (semantic.reading_structure !== undefined) {
+        throw new TypeError("This source-update review approves new source-bound pages. Apply its reading_structure edit with context task adjust --input - --format json, then submit this review without reading_structure; the existing source task is preserved.");
+      }
       await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision, managed: input.managed === true, authorities });
       const result = await completeUpdateStructureReview({ projectRoot: found.projectRoot, revision: input.revision,
         decision: semantic.decision, ...(semantic.feedback ? { feedback: semantic.feedback } : {}) });
@@ -393,6 +396,7 @@ export async function completeCurrentIndexerAction(input: {
       projectRoot: found.projectRoot,
       revision: input.revision,
       decision: semantic.decision,
+      ...(semantic.reading_structure === undefined ? {} : { reading_structure: semantic.reading_structure }),
       ...(semantic.feedback === undefined ? {} : { feedback: semantic.feedback }),
     });
     if (nextStage === "partition" || structure.preview.topics.length === 0) {

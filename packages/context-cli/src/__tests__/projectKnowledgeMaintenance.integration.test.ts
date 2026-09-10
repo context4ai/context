@@ -37,7 +37,7 @@ async function captureRuntimeEvents(work: () => Promise<unknown>) {
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
-async function deliveryWorkspace(sourceCount = 6) {
+async function deliveryWorkspace(sourceCount = 12) {
   const root = await createDocumentRevisionWorkspace({ sourceCount }); roots.push(root);
   await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"), join(root, "src/package-templates/kb"), { recursive: true });
   const path = join(root, "src/index.ts");
@@ -64,6 +64,10 @@ async function advance(root: string) {
 test("priority repairs a current Candidate and returns to its early delivery without consuming queued maintenance", async () => {
   const { root, views } = await deliveryWorkspace(12);
   await buildProjectPackages(root);
+  await completePartitionStage(root);
+  const nextStructure = (await currentIndexerStructureReview(root))!;
+  if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
+    managed: true, value: { stage: "structure-review", decision: "approved" } });
   await requestIndexerEarlyDelivery(root);
   await advanceCurrentIndexerLifecycle(root);
   await completeAuthorStage(root);
@@ -129,16 +133,23 @@ test("two approved revisions share delivery and resume the untouched production 
   const next = await collectProjectStatus(root, { managed: true });
   expect(next.workflow.current).toBeDefined();
   expect(next.workflow.current?.reason_code).not.toBe("route.indexer.approved-revision");
-  await advanceCurrentIndexerLifecycle(root);
-  await completeAuthorStage(root);
-  await advanceCurrentIndexerLifecycle(root);
-  const remaining = await readCandidateRecords(root);
-  expect(remaining.length).toBeGreaterThan(0);
-  await approveCandidates(root, remaining); await closeProjectWorkspace(root); await buildProjectPackages(root);
+  for (let wave = 0; wave < 20 && await currentLedger(root); wave++) {
+    await completePartitionStage(root);
+    const nextStructure = await currentIndexerStructureReview(root);
+    if (nextStructure && !nextStructure.approved) await completeCurrentIndexerAction({ cwd: root,
+      revision: nextStructure.revision, managed: true, value: { stage: "structure-review", decision: "approved" } });
+    await advanceCurrentIndexerLifecycle(root);
+    await completeAuthorStage(root);
+    await advanceCurrentIndexerLifecycle(root);
+    const remaining = await readCandidateRecords(root);
+    expect(remaining.length).toBeGreaterThan(0);
+    await approveCandidates(root, remaining); await closeProjectWorkspace(root); await buildProjectPackages(root);
+  }
   expect(await currentLedger(root)).toBeUndefined();
   for (const path of acceptedBodies) expect(await readFile(join(root, "knowledge", path), "utf8")).toContain("documented public entry point");
   expect((await collectProjectStatus(root, { managed: true })).workflow.status).toBe("complete");
-}, 60_000);
+// This case finishes two revisions and all twelve sources across subsequent waves.
+}, 180_000);
 
 test("same-version regeneration supplies current program blocks without advancing source baselines", async () => {
   const { root, views } = await deliveryWorkspace();
@@ -209,6 +220,10 @@ test("priority requests early delivery; explicit draft cancellation leaves produ
   expect(await currentLedger(root)).toEqual(ledger);
   expect(await readFile(join(root, "knowledge", views[0]!.path), "utf8")).toBe(original);
   expect(await readCandidateRecords(root)).toHaveLength(0);
+  await completePartitionStage(root);
+  const nextStructure = (await currentIndexerStructureReview(root))!;
+  if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
+    managed: true, value: { stage: "structure-review", decision: "approved" } });
   await registerKnowledgeMaintenance(root, { id: "urgent", operation: "revise", timing: "priority", targets: [{ path: views[0]!.path, instruction: "Clarify next." }] });
   expect((await maintenanceRevision(root)).action).toBe("early-delivery");
   await advance(root);

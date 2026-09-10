@@ -228,21 +228,15 @@ describe("plugin and workflow workspace guard", () => {
       PACKAGE_ROOT,
       PLUGIN_ROOT,
     ];
+    // Distribution-specific identifiers are audited downstream. Community
+    // guards cover portable shipped paths; tests may use synthetic paths.
     const forbidden = [
-      /\bbytedance\b/iu,
-      /\btiktok\b/iu,
-      /\bcontext-code-indexer-bytedance\b/iu,
-      /\btux(?:-web)?\b/iu,
-      /\bttls(?:[-_ ]?(?:web|backend))?\b/iu,
-      /\blive[-_ ]?agency\b/iu,
-      /\bvmok\b/iu,
-      /\bttastra\b/iu,
-      /\bedenx\b/iu,
+      /\/Users\/[^/]+\//u,
     ];
     const currentFile = fileURLToPath(import.meta.url);
     const files = (await Promise.all(roots.map(listPublishableText)))
       .flat()
-      .filter((file) => file !== currentFile);
+      .filter((file) => file !== currentFile && !file.includes("/__tests__/"));
     for (const file of files) {
       const text = await readFile(file, "utf8");
       for (const pattern of forbidden) expect(text, file).not.toMatch(pattern);

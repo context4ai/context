@@ -1,3 +1,4 @@
+import { validateIndexerPlannedArticles, type IndexerArticlePlan } from "./indexerArticlePlan.js";
 import { z } from "zod";
 import {
   indexerArtifactBundleSchema,
@@ -608,6 +609,7 @@ function validateQuestions(input: {
 }
 
 export function validateIndexerArtifactResult(input: {
+  planned_articles?: readonly IndexerArticlePlan[];
   result: unknown;
   workset: IndexerMainAuthorWorkset;
   expected_provider: {
@@ -639,6 +641,7 @@ export function validateIndexerArtifactResult(input: {
   if (indexerArtifactResultDigest(payload) !== result.output_digest) {
     throw new TypeError("ArtifactResult output digest is invalid");
   }
+  if (input.planned_articles !== undefined) validateIndexerPlannedArticles(result, input.planned_articles);
   const expectedProvider = input.expected_provider;
   if (
     result.author_workset_digest !== input.workset.workset_digest ||

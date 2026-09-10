@@ -13,7 +13,8 @@ export function readingItems(markdown: string, category: string, taskKey?: strin
       block.split(" — ")[0]!.split(", ").includes(taskKey));
     markdown = [...authorized, specific].join("\n");
   }
-  const chunks = markdown.split(`### ${category}\n\n`).slice(1);
+  const normalized = markdown.replaceAll(`### ${category} overview\n\n`, `### ${category}\n\n`);
+  const chunks = normalized.split(`### ${category}\n\n`).slice(1);
   return chunks.map((chunk) => {
     const item = readingObjects(chunk)[0]!;
     const { ref, ...fields } = item;

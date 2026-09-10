@@ -9,6 +9,44 @@ This page documents the protocol surface currently exposed by `@c4a/context`.
 Use the current CLI Route for executable inputs, schemas and selected resources.
 A protocol validator exported by the SDK is not a separate production workflow.
 
+## Articles supported by approved knowledge
+
+An article plan may declare `knowledge_dependencies`: stable `artifact_ref`,
+optional `section_refs` (empty means the approved article), and `required`.
+Use references supplied by Context; reader titles and output paths are not
+article identities. Each article keeps its existing primary subject and owned
+members. Referencing another article does not assign its members again.
+
+The current Partition/Author workflow delivers ready upstream articles before
+dependent required articles. An unavailable dependency remains visible in the
+structure preview; `request-adjustment` returns to planning. It cannot finish
+as an empty Author wave. Optional Composer output does not satisfy a required
+article plan.
+
+Review saves the approved fact payloads, evidence coordinates and versions with
+the approved Markdown transaction. These remain in `knowledge/structure.yaml`
+after close and temporary-cache cleanup. Author receives authorized supporting
+facts separately from approved interpretation. Current source captures, the
+Provider's accepted evidence kinds and the approved article version constrain
+that projection. A stored snapshot alone never expands source access.
+
+Previously approved dependencies can reuse their registered source reader even
+when that source has no owned Partition group in the current wave. Only the
+referenced authorized files enter the supporting projection. Missing or changed
+source files remain an upstream update task.
+
+An approved dependency change produces a verification warning for downstream
+articles. Use the existing `context revise` action on an affected article; its
+current route exposes `knowledge_input` with supporting facts and interpretations.
+Review accepts the refreshed supporting version even when the Agent confirms
+that the wording can stay the same. A plain edit with unavailable support does
+not clear the warning. `--regenerate` remains the existing program-block rebuild
+option, not a prerequisite for revising a prose synthesis.
+
+Writing style, chapter drift and ordinary Provider version differences remain
+guidance. Changed source/approval identities invalidate an in-flight supporting
+projection; they are not semantic content judgments.
+
 ## Resources and execution
 
 A Provider may contain a controlled program, profile-bound instructions,

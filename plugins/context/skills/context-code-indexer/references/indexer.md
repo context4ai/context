@@ -16,9 +16,12 @@ Classify each requested module from current manifests, stable entries, public co
 
 Read only the templates materialized for the selected profiles. Combine their questions into one deduplicated plan for the reader-visible capability; a template is guidance, not a source of facts, page counts, output paths, thresholds, or authority. Keep a repository container, public contract, runtime boundary, event flow, persistence boundary, adapter, generated-source provenance, and cross-module handoff separate when they answer different reader questions. Do not copy a template outline when source evidence does not support its sections.
 
-Partition selects `artifact_intent` and `template_id` from the current Provider
-catalog and saves `reader_task`, `outline`, `priority` and a natural
-`delivery_boundary`. Author reuses that accepted page plan. A selected page
+Partition selects permitted intents and templates from the current Provider
+catalog. A topic may contain several articles with distinct reader tasks and
+stable keys; members still have one primary owner. Use the applicable article
+catalog to select complementary articles, not every available type. Save the
+reader task, article outlines, priority and natural delivery boundary. Author
+reuses that accepted plan and receives only its selected writing blueprints. A selected page
 program renders declared API fields from current Facts in the same Artifact as
 the semantic prose. Do not transcribe its table or manufacture missing defaults.
 Optional `template_variables` supply only the program's declared semantic slots;
@@ -33,10 +36,10 @@ No dedicated behavior Fact is required when authorized captured source answers
 the question. Ask for additional material only when that source is insufficient
 for the core reader task; do not block other complete pages on local uncertainty.
 
-Reuse accepted plans and Results across deliveries. Context publishes a first
-readable sample, then batches of 30–50 pages through the current Review, close
-and build routes. Continue pending work after build; a readable first batch does
-not mean the whole source is finished.
+Reuse accepted plans and Results across deliveries. Follow the current theme
+wave and page batch selected by Context through Review, close and build. A theme
+can span several page batches; continue its remaining articles after build.
+A readable first batch does not mean the whole source is finished.
 
 ## Partition and identity
 
@@ -292,3 +295,30 @@ flow; do not edit it from the Indexer. If only the knowledge is misleading,
 revise the page from its approved text through Author/Review. Keep source
 associations in the source and page/section references in structure.yaml;
 do not add provenance fields to the knowledge header.
+
+## Source example candidates
+
+For source-grounded usage examples, submit the optional Author
+`example_candidates` collection using a stable `scenario_key` and one delivered
+`source_item` per file. Read the example before selecting it; story/demo names
+do not establish behavior or relevance. Keep full relative paths so examples
+from different directories do not collapse by basename. The host preserves
+source/version/evidence identity and can pass accepted candidates to the
+selected examples Composer. Explain setup, key calls, relevant arguments and
+expected behavior only where the supplied source supports them; a source
+example does not establish that it executed successfully.
+
+For multiple component articles in one library subject, select each article's
+own component, Props, handle and related nested-type facts. Do not bind the
+whole library inventory to every article: the deterministic API table uses the
+facts selected for that article, so broad bindings duplicate unrelated APIs.
+Keep library-wide inventory in the library entry and link to component details.
+The CLI validates the selected identities; the Agent decides their relevance.
+
+## Diagrams
+
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+
+## Existing source images and tables
+
+For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.

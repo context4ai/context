@@ -131,3 +131,29 @@ If the user explicitly requires a different presentation, explain the difference
 and resolve that choice before accepting it. Do not rerun unchanged Repair to
 force a format the program deliberately omits. Check the actual resulting page;
 accepted tasks or an empty Composer result alone do not demonstrate a correction.
+
+## Changed supporting articles
+
+`knowledge_input` separates approved interpretation from source-bound facts.
+Recheck the relevant interpretation when an upstream article changes; ordinary
+revision refreshes its version only after Review. Waiting input does not make
+old statements current, and a wording-only edit must retain the review warning.
+
+For a split, merge or removed upstream, use the existing `context task adjust
+--input - --format json` with `instruction` and `knowledge_dependencies`:
+
+```json
+{"instruction":"Rebind the affected explanation to the approved replacement","knowledge_dependencies":{"dependencies":[{"artifact_ref":"<approved article identity>","section_refs":[],"required":true}]}}
+```
+
+Select identities from the authorized approved article catalog; do not guess
+paths or promote prose into parser facts. Read the new current Route's
+`knowledge_input`, then repeat the adjustment with the same dependencies plus
+`sections`: each item has the retained `section_key`, selected `fact_refs` and
+`evidence_refs`. These are a full support replacement for those sections, not an
+append. Use only the supplied replacement facts or still-valid direct facts.
+An empty dependency list explicitly removes the old relationship; the remaining
+explanation still needs valid direct evidence. Revise the text to match the
+selection before submitting. The CLI checks identity, scope and version; the
+Agent and Review judge the explanation. Pending upstream approval remains a
+concrete task to finish or adjust, not a reason to clear the warning manually.

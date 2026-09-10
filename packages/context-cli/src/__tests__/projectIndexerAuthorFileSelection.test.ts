@@ -38,6 +38,23 @@ describe("focused Author material", () => {
       member_ids: new Set(["symbol:src/main.ts"]) });
     expect([...selected].sort()).toEqual(["src/dep.ts", "src/index.ts", "src/main.ts"]);
   });
+  test("follows captured MDX and raw demo imports with local text dependencies without opening uncaptured sources", () => {
+    const documentation = { file_ref: "file:docs/menu.mdx", normalized_path: "docs/menu.mdx", facts: [
+      { fact_ref: "import:component", kind: "mdx-esm-import", payload: { source_module: "../src/menu" } },
+      { fact_ref: "import:demo", kind: "mdx-esm-import", payload: { source_module: "../examples/menu.tsx?raw" } },
+      { fact_ref: "import:missing", kind: "mdx-esm-import", payload: { source_module: "../../uncaptured/demo.tsx?raw" } },
+    ] };
+    const selected = selectIndexerAuthorFiles({ files: [file("src/menu.tsx"), documentation,
+      file("examples/menu.tsx", ["../src/menu", "../locale/menu.json"]), file("locale/menu.json"),
+      file("docs/unrelated.tsx", ["../src/other"]), file("src/other.tsx")], member_ids: new Set(["symbol:src/menu.tsx"]) });
+    expect([...selected].sort()).toEqual(["docs/menu.mdx", "examples/menu.tsx", "locale/menu.json", "src/menu.tsx"]);
+  });
+  test("a TSX documentation entry can select a raw demo even without a test filename", () => {
+    const selected = selectIndexerAuthorFiles({ files: [file("docs/menu.tsx", ["../examples/basic?raw", "../locale/menu"]),
+      file("examples/basic.tsx", ["../src/menu"]), file("src/menu.tsx"), file("locale/menu.json"), file("examples/unrelated.tsx")],
+      member_ids: new Set(["symbol:docs/menu.tsx"]) });
+    expect([...selected].sort()).toEqual(["docs/menu.tsx", "examples/basic.tsx", "locale/menu.json", "src/menu.tsx"]);
+  });
   test("focuses a resumed View without changing task identity, accepted authority or explicit expansion", () => {
     const items = files.flatMap((source) => source.facts.map((fact) => ({
       ref: fact.fact_ref, category: "fact", provenance: { protocol: "fixture", container_ref: source.file_ref },

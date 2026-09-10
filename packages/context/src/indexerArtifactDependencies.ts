@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { compositionFactDependencies } from "./indexerCompositionFactDependencies.js";
+import { exampleFactDependencies } from "./indexerExampleFactDependencies.js";
 import {
   indexerEvidenceTargetAllows,
   type IndexerArtifactResult,
@@ -271,6 +272,7 @@ export function buildIndexerArtifactDependencySet(input: {
 
   const factNodes = [
     ...dependencyView.positive_nodes.filter((node) => node.kind === "selected-fact"),
+    ...exampleFactDependencies({ workset: input.workset, dependency_view: dependencyView, result: input.result }),
     ...(input.composition_input === undefined ? [] : compositionFactDependencies({
       composition_input: input.composition_input,
       workset: input.workset,
@@ -309,7 +311,7 @@ export function buildIndexerArtifactDependencySet(input: {
     dependencyView.positive_nodes.find((node) => node.kind === "logical-unit")!,
   );
   const resources = dependencyView.positive_nodes.filter((node) =>
-    node.kind === "template-policy-fragment" || node.kind === "contract-metric"
+    node.kind === "template-policy-fragment" || node.kind === "contract-metric" || node.kind === "approved-knowledge"
   ).map(versionedPositive);
   const negatives = dependencyView.negative_nodes.map(versionedNegative);
   const usedPositive = new Map<string, PositiveDependency>([[logical.node_ref, logical]]);

@@ -34,6 +34,12 @@ material questions and wait for answers before dependent planning; do not invent
 questions when the user's request already settles them. Do not record a transcript
 or repeat substantive questions already answered.
 
+Recommend a reading organization, proposed article types and useful chapters in
+the report, with reasons from actual material. Use the companion template's
+organization options as starting points. Carry explicit feedback into formal
+planning; navigation groups do not define source ownership or KB paths. Do not
+turn writing suggestions or ordinary version differences into completion gates.
+
 ## Placement in the current flow
 
 Save confirmed requirements through the existing registry configuration flow.

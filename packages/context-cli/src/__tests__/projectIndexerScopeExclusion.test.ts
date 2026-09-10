@@ -107,12 +107,14 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   expect(after!.entries.every((entry) => entry.stage === "author")).toBe(true);
   for (const [path, content] of cached) expect(await readFile(path, "utf8")).toBe(content);
   expect(await readFile(oldPath, "utf8")).toContain("@deprecated");
+  const approvedPreview = JSON.parse(await readFile(join(root, ".tmp/context-runtime/indexer/structure-review/author-plan.json"), "utf8")).preview;
   // Repreparation must not reintroduce the explicitly excluded targets.
   const restored = await preparePartitionStage(root);
   expect(restored!.entries.every((entry) => entry.state === "accepted")).toBe(true);
   const repeated = await prepareCurrentIndexerStructurePlan(root);
   expect(repeated.preview.topics).toHaveLength(after!.entries.length);
   expect(repeated.preview.obsolete_scope?.affected_page_count).toBe(0);
+  expect(repeated.preview).toEqual(approvedPreview);
   expect(repeated.approved).toBe(true);
   const acceptedDigests = restored!.entries.map((entry) => entry.execution_request_digest);
   expect(await completeCurrentIndexerStructureReview({ projectRoot: root,

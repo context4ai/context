@@ -15,7 +15,10 @@ export async function maintenanceProductionConflict(root: string,
     .map(view => String(view.node_ref)));
   const pages = await acceptedDeliveryPages(root);
   for (const entry of ledger.entries) {
-    if (entry.stage !== "author") return true;
+    // Planning has no draft writer. At a settled delivery boundary the local
+    // revision can finish before Author captures its approved target. Waiting
+    // for every later Partition wave would starve otherwise safe maintenance.
+    if (entry.stage !== "author") continue;
     const ownedPages = pages.filter(page => page.workset_digest === entry.workset_digest);
     if (entry.state === "accepted" && ownedPages.length && ownedPages.every(page => delivery?.delivered[page.ref] === page.content_digest)) continue;
     const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });

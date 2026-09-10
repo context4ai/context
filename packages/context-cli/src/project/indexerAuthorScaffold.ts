@@ -21,7 +21,10 @@ export function scaffoldAuthorTask(task: Pick<CurrentIndexerBatchTask, "spec" | 
     stage: "author", group_key: workset.group_key, outcome: "publish",
     ...(typeof plan.artifact_intent === "string" ? { artifact_intent: plan.artifact_intent } : {}),
     ...(policies.length === 1 ? { policy: policies[0]!.id } : {}),
-    title: "", summary: "", sections: [],
+    ...(Array.isArray(plan.articles) ? { articles: plan.articles.map(value => {
+      const article = object(value);
+      return { key: article.key, title: article.title, summary: "", sections: [] };
+    }) } : { title: "", summary: "", sections: [] }),
     member_dispositions: members.map(member => ({ item: member.member_id, state: "" })),
   } };
 }

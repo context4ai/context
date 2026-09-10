@@ -685,11 +685,7 @@ export function validateIndexerInspectorResult(input: {
     if (expectedVariants === undefined) {
       throw new TypeError("inspector projection targets an inactive profile");
     }
-    for (const [axisId, value] of Object.entries(expectedVariants)) {
-      if (item.payload.profile_variants[axisId] !== value) {
-        throw new TypeError("inspector projection variant drifted from the active Registry profile");
-      }
-    }
+    assertIndexerInspectorProfileVariants(item.payload, expectedVariants);
     for (const sourceFactRef of item.payload.source_fact_refs) {
       if (!inputFactRefs.has(sourceFactRef)) {
         throw new TypeError("inspector projection references a fact outside its input View");
@@ -710,4 +706,16 @@ export function validateIndexerInspectorResult(input: {
     throw new TypeError("inspector Result digest is invalid");
   }
   return { result, evidence, fact_payloads: result.fact_payloads };
+}
+
+/** Incomplete evidence may leave an axis unknown. Do not turn the configured
+ * expectation into an observed fact, or mistake absence for disagreement. */
+export function assertIndexerInspectorProfileVariants(
+  projection: z.infer<typeof indexerInspectorFactPayloadSchema>, expected: Readonly<Record<string, string>>,
+): void {
+  for (const [axis, expectedValue] of Object.entries(expected)) {
+    const observed = projection.profile_variants[axis];
+    if (observed === undefined && projection.status !== "available") continue;
+    if (observed !== expectedValue) throw new TypeError("inspector projection variant drifted from the active Registry profile");
+  }
 }

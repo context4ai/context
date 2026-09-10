@@ -65,13 +65,13 @@ const logicalUnitNodeInputSchema = z.object({
 }).strict();
 
 const resourceNodeInputSchema = z.object({
-  kind: z.enum(["template-policy-fragment", "contract-metric"]),
+  kind: z.enum(["template-policy-fragment", "contract-metric", "approved-knowledge"]),
   target_ref: indexerCanonicalRefSchema,
   content_digest: indexerDigestSchema,
   targets: dependencyTargetsSchema,
 }).strict();
 
-export const indexerPositiveDependencyNodeInputSchema = z.union([
+export const indexerPositiveDependencyNodeInputSchema = z.discriminatedUnion("kind", [
   sourceSpanNodeInputSchema,
   selectedFactNodeInputSchema,
   logicalUnitNodeInputSchema,
@@ -106,7 +106,7 @@ export const indexerResourceDependencyNodeSchema = resourceNodeInputSchema.exten
   node_ref: indexerCanonicalRefSchema,
 }).strict();
 
-export const indexerPositiveDependencyNodeSchema = z.union([
+export const indexerPositiveDependencyNodeSchema = z.discriminatedUnion("kind", [
   indexerSourceSpanDependencyNodeSchema,
   indexerSelectedFactDependencyNodeSchema,
   indexerLogicalUnitDependencyNodeSchema,

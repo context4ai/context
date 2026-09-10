@@ -99,3 +99,11 @@ flow; do not edit it from the Indexer. If only the knowledge is misleading,
 revise the page from its approved text through Author/Review. Keep source
 associations in the source and page/section references in structure.yaml;
 do not add provenance fields to the knowledge header.
+
+## Diagrams
+
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+
+## Existing source images and tables
+
+For authorized visual material, follow [source visual processing](visual-source-processing.md): preference, capability-aware conversion, accepted-result reuse and retention. Follow the workspace AGENTS.md for editable diagram style.

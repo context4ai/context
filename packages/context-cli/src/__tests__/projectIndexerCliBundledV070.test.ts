@@ -78,10 +78,11 @@ describe("CLI bundled Indexer release", () => {
       schema.profile === "component-library"
     )).toMatchObject({
       namespace: { operator: "canonical-source-module-namespace" },
-      kinds: [{
-        id: "component",
-        local_key: { operator: "canonical-export-family" },
-      }],
+      kinds: expect.arrayContaining([
+        { id: "component", local_key: { operator: "canonical-export-family" } },
+        { id: "library", local_key: { operator: "canonical-module-identity" } },
+        { id: "design-system", local_key: { operator: "canonical-module-identity" } },
+      ]),
     });
     expect(JSON.stringify(profiles.profiles)).not.toContain("subject_key_schema");
     expect(profiles.profiles.find((profile) => profile.id === "web-application")
@@ -151,7 +152,8 @@ describe("CLI bundled Indexer release", () => {
         expect(provider.provides.composers?.map((composer) => composer.contract))
           .toEqual(BUNDLED_CODE_COMPOSER_SPECS.map((composer) => composer.contract));
         const allTemplates = provider.provider.templates ?? [];
-        const templates = allTemplates.filter((template) => template.kind !== "page-program");
+        const templates = allTemplates.filter((template) =>
+          template.kind !== "page-program" && template.id === template.profile);
         expect(allTemplates.some((template) => template.kind === "page-program")).toBe(true);
         expect(templates.map((template) => template.profile)).toEqual(
           BUNDLED_CODE_PROFILE_IDS,

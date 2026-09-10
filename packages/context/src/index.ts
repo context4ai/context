@@ -734,3 +734,10 @@ export type { ManagedDocumentSourceType, ManagedDocumentSourceEntry } from "./ma
 
 export { sessionChangeSchema, sessionChangesSchema, readSessionChanges, writeSessionChanges } from "./sessionMetadata.js";
 export type { SessionChange } from "./sessionMetadata.js";
+
+export { indexerArticleKeySchema, indexerArticlePlanSchema, validateIndexerArticlePlan, indexerArticleSectionKey, validateIndexerPlannedArticles } from "./indexerArticlePlan.js";
+export type { IndexerArticlePlan } from "./indexerArticlePlan.js";
+
+export * from "./readingStructure.js";
+export * from "./indexerKnowledgeDependency.js";
+export * from "./indexerApprovedKnowledge.js";

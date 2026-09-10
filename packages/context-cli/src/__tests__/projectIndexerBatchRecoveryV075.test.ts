@@ -193,13 +193,22 @@ describe("current Indexer batch recovery", () => {
         outcome: "failed",
         message: expect.stringContaining("no task-foreign"),
       }),
-      expect.objectContaining({
-        task_key: current.descriptor.tasks[1]!.task_key,
-        outcome: "missing",
-        committed: false,
-      }),
     ]));
     expect(completion.outcomes.some((outcome) => outcome.committed === true)).toBe(false);
+    const missingRoute = await projectCurrentIndexerWorkflowRoute({
+      projectRoot: root, route: documentRevisionOuterIndexerRoute(), managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+    });
+    if (!missingRoute) throw new Error("missing recovery route");
+    const missing = await completeCurrentIndexerAction({
+      cwd: root, revision: missingRoute.revision, managed: true,
+      authorities: contextWorkflowAuthorities({ managed: true }),
+      value: { stage: "partition", results: [{ task_key: "task-foreign", result }] },
+    });
+    if (!("outcomes" in missing)) throw new Error("expected missing-task outcomes");
+    expect(missing.outcomes).toContainEqual(expect.objectContaining({
+      task_key: taskKey, outcome: "missing", committed: false,
+    }));
     await expect(completeCurrentIndexerAction({
       cwd: root,
       revision: `sha256:${"0".repeat(64)}`,

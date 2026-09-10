@@ -24,6 +24,16 @@ actual behavior, a confirmed decision, and a proposal that is not implemented.
 
 ## Edit one section or review part of a batch
 
+For a reading-directory-only change, use the existing `context task adjust
+--input <file|-> --format json` action with `reading_structure`. Supply its
+current `expected_revision`, explicit `upsert` entries and `remove` keys. Each
+entry retains its stable key, parent, title and order; optional targets use
+article identity and section key. The current structure preview supplies those
+identities. Use `expected_revision: null` only when no reading structure exists.
+After adjustment, follow status to rebuild affected packages. This changes the
+reading organization without capturing sources or rewriting approved prose.
+Do not directly edit generated package navigation or use titles as identities.
+
 The current approved-revision Route accepts either full `markdown` or explicit
 `sections` edits. Use an existing `writing_context.current_sections` ID and an
 ordered `content` list of `{ "markdown": "new text" }` and/or
@@ -303,3 +313,18 @@ and include it in the current requirement's evidence scope and the selected
 Indexer's read scope. Its `task adjust` scope also supplies the explicit
 `requirement_ref`. This extends the current page's available sources and keeps
 queued pages; it does not silently start another task or another Indexer.
+
+### Replacing supporting article identities
+
+When an upstream article is split, merged or removed, start `context revise` for
+its consumer and use `context task adjust --input - --format json` with
+`instruction` and `knowledge_dependencies: { dependencies }`. Each dependency
+uses an approved `artifact_ref`, optional `section_refs`, and `required` flag.
+The current Author input returns authorized replacement facts and their evidence.
+Repeat the adjustment with `knowledge_dependencies.sections`, selecting each
+retained `section_key` and its full `fact_refs` and `evidence_refs` support. Then
+revise the explanation and complete normal Review, close and build. An explicit
+empty dependency list removes the relationship only when remaining sections have
+valid direct support. Missing dependencies, changed approvals and invalid source
+references cannot silently become current evidence. Writing quality remains an
+Agent/Review decision; no chapter-count or wording gate is introduced.

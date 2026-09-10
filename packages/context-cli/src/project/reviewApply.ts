@@ -18,6 +18,7 @@ import {
 import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
+import { prepareApprovedKnowledgeSnapshotTarget } from "./approvedKnowledgeSnapshots.js";
 import {
   assertProjectIndexerCandidateInCompileIndex,
   loadProjectIndexerCandidateCompileIndex,
@@ -457,6 +458,7 @@ export async function applyReviewDecisions(input: {
       }
     }
     const targets = [
+      await prepareApprovedKnowledgeSnapshotTarget({ projectRoot: input.projectRoot, pages: pagesToWrite, candidates: rows }),
       ...navigationTargets,
       ...pagesToWrite.flatMap((page) => page.previous === undefined ? [] : [reviewFileTarget({
         path: page.previous.path, baseContent: page.previous.content,

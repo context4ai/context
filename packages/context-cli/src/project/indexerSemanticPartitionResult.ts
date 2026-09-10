@@ -1,5 +1,6 @@
 import {
   canonicalIndexerNodeRef,
+  validateIndexerArticlePlan,
   compareIndexerCanonicalText,
   indexerPartitionPlanCanonicalHash,
   validateIndexerSubjectKeyForContract,
@@ -120,7 +121,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     partition_unit_type: string;
     required_question_target_refs?: readonly string[];
     available_artifact_intents?: readonly string[];
-    available_templates?: readonly { id: string }[];
+    available_templates?: readonly { id: string; reader_goal?: string }[];
   };
 }): IndexerMainRunResult {
   if (input.request.workset.stage !== "partition") {
@@ -181,6 +182,23 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
     if (group.template_id !== undefined && !input.validation.available_templates?.some((template) => template.id === group.template_id)) {
       throw new TypeError(`unknown template ${group.template_id}; choose from the current partition authority`);
     }
+    const assertTemplateIntent = (templateId: string | undefined, intent: string | undefined) => {
+      const template = input.validation.available_templates?.find(item => item.id === templateId);
+      if (template?.reader_goal !== undefined && intent !== undefined && intent.split("/")[2] !== template.reader_goal) {
+        throw new TypeError(`template ${templateId} is registered for ${template.reader_goal}; choose a matching intent or another template from current authority`);
+      }
+    };
+    assertTemplateIntent(group.template_id, group.artifact_intent);
+    if (group.articles !== undefined) {
+      if (group.template_id !== undefined || group.artifact_intent !== undefined) throw new TypeError("choose either the article plan or the legacy page plan, not both");
+      for (const article of group.articles) {
+        assertTemplateIntent(article.template_id, article.artifact_intent);
+        if (!input.validation.available_artifact_intents?.includes(article.artifact_intent)) throw new TypeError(
+          "unknown article intent " + article.artifact_intent + "; choose from current partition authority");
+        if (article.template_id !== undefined && !input.validation.available_templates?.some(template => template.id === article.template_id)) throw new TypeError(
+          "unknown article template " + article.template_id + "; choose from current partition authority");
+      }
+    }
     const resolvedMembers = allowContainerMemberAliases
       ? deduplicatedSorted(group.members.map((member) =>
         resolveMember(member, "partition member")
@@ -198,6 +216,10 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       left.target_ref,
       right.target_ref,
     ));
+    const articles = group.articles?.map(article => ({ ...article,
+      question_targets: article.question_targets.map(target => resolveAlias(targets, target, "article question target")).sort(),
+    }));
+    if (articles !== undefined) validateIndexerArticlePlan(articles, resolvedTargets.filter(target => target.role === "primary-carrier").map(target => target.target_ref));
     const subject = qualifyIndexerPartitionEntrySubject({
       subject: subjectKey(group.subject, workset.partition_subject_key),
       explicit_subject: typeof group.subject !== "string",
@@ -217,6 +239,7 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       label: group.title,
       reader_task: group.reader_task,
       outline: group.outline,
+      ...(articles === undefined ? {} : { articles }),
       ...(group.artifact_intent === undefined ? {} : { artifact_intent: group.artifact_intent }),
       ...(group.template_id === undefined ? {} : { template_id: group.template_id }),
       ...(group.priority === undefined ? {} : { priority: group.priority }),

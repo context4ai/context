@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { access, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { EdgeSource, EdgeType, Grounding, PackageKind, SymbolKind, Visibility } from "@c4a/core";
+import { EdgeSource, EdgeType, Grounding, PackageKind, SymbolKind, Visibility, materializeIndexerEvidenceAdapterResult } from "@c4a/core";
 import type { FileSystem, ManifestInfo, SourceInfo } from "@c4a/extract";
 import { goExtractionToEvidenceAdapterResult } from "../evidenceAdapter.js";
 import { GoPlugin } from "../plugin.js";
@@ -70,6 +70,10 @@ func privateHelper() {}
       confidence: 1,
     }));
     expect(result.stats).toMatchObject({ files: 1, exportedSymbols: 3, internalSymbols: 1 });
+    expect(result.relations).toContainEqual(expect.objectContaining({
+      type: EdgeType.Imports, from: "api/routes.go", to: "github.com/gin-gonic/gin",
+      line: 2, grounding: Grounding.Code, source: EdgeSource.Ast,
+    }));
     expect(result.coverage).toEqual({
       tier: "ast-catalog",
       capabilities: ["go-ast", "go-call-relations", "go-http-routes", "parser.go"],
@@ -102,6 +106,11 @@ func privateHelper() {}
       disposition: "analyzed",
     });
     expect(evidence.files[0]?.facts.some((fact) => fact.denominator === "symbol")).toBe(true);
+    expect(materializeIndexerEvidenceAdapterResult(evidence).fact_payloads).toContainEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        type: "imports", from: "api/routes.go", to: "github.com/gin-gonic/gin", line: 2,
+      }),
+    }));
   });
 
   test("requires entry detection before extraction", async () => {
