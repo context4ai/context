@@ -36,7 +36,7 @@
     "@c4a/core": "workspace:*",
     "jsonc-parser": "^3.3.1",
     "toml-eslint-parser": "^1.0.3",
-    "web-tree-sitter": "^0.20.8",
+    "web-tree-sitter": "^0.27.0",
     "yaml": "^2.8.2",
     "zod": "^3.23.8"
   }
