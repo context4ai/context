@@ -67,7 +67,8 @@ again. Resolve essential missing goals or source boundaries before production.
 
 `grill-me` is targeted clarification, not a fixed questionnaire. Research what the
 available material can answer, then ask about consequential unknowns. A required
-schema field is not automatically a question for the user. For substantial new
-work, the opening report summarizes the agreed purpose, scope and first delivery;
-invite the user to read it unless they waived that pause. A report should not
-silently substitute guessed decisions for unanswered questions.
+schema field is not automatically a question for the user. For the first production
+task in a new workspace, the work-start report must resolve and display the agreed
+purpose, source families, language, settings, outputs and first delivery before
+source registration. Present it and wait for feedback even in managed mode. A
+report must not silently substitute guessed decisions for unanswered questions.

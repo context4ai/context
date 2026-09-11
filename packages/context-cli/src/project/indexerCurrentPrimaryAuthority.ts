@@ -21,7 +21,7 @@ import {
   loadCliIndexerReleaseManifest,
 } from "./indexerCliBundledProvider.js";
 import type { IndexerCustomizationView } from "./indexerCustomization.js";
-import { loadCurrentIndexerProviderSelection } from
+import { loadCurrentIndexerProviderSelection, requiresCurrentIndexerProviderSelection } from
   "./indexerCurrentProviderSelection.js";
 import { collectIndexerBundleFiles } from "./indexerDistributionBuild.js";
 import type { StagedIndexerProviderBundle } from "./indexerProviderStage.js";
@@ -174,9 +174,7 @@ export async function resolveCurrentProjectIndexerPrimaryAuthority(input: {
   );
   if (provider === undefined) throw new TypeError(`Indexer ${indexer.id} has no primary Provider`);
 
-  const requiresSelection = indexer.providers.length > 1 ||
-    indexer.customization !== undefined ||
-    provider.distribution.kind !== "cli-bundled";
+  const requiresSelection = requiresCurrentIndexerProviderSelection(indexer);
   if (requiresSelection && input.projectRoot === undefined) {
     throw new TypeError(`Indexer ${indexer.id} requires its applied Provider selection`);
   }

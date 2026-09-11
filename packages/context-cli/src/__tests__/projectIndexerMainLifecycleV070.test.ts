@@ -225,10 +225,14 @@ describe("project main Indexer lifecycle Actions", () => {
       module_ref: MODULE_REF,
       profile_contract_digest: profileContractDigest,
     });
-    expect(built.worksets[0]?.source_binding_digest).toBe(binding.source_binding_digest);
-    expect(built.worksets[0]?.partition_input_digests).toEqual(
-      expect.arrayContaining(binding.partition_input_digests),
-    );
+    if (binding.adapter !== "parser-facts") throw new Error("Expected parser facts binding");
+    const { partitionDependencyDigest } = await import("../project/indexerPartitionDependencies.js");
+    const projection = built.run_specs[0]!.validation.partition_projection as Parameters<typeof partitionDependencyDigest>[1];
+    expect(projection).toBeDefined();
+    const dependency = partitionDependencyDigest(binding, projection);
+    expect(dependency).toBeDefined();
+    expect(built.worksets[0]?.source_binding_digest).toBe(dependency);
+    expect(built.worksets[0]?.partition_input_digests).toEqual([dependency!]);
   });
 
   test("assigns module reader questions to the strongest public consumer family", async () => {

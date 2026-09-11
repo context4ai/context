@@ -10,6 +10,35 @@ Context is registry-only by default. The durable selection lives in
 resolved transport paths and runtime staging directories are not selection
 authority. A Provider-only project does not create `src/indexer/`.
 
+
+## Large sources and planning depth
+
+Use directory/manifests, route or service registration and representative code to
+select Providers and plan reader subjects. Do not run a complete symbol index
+just to decide the initial article menu. Application/service file-inventory
+batches describe reading scope; they are not business module boundaries or a
+requirement to publish one article per directory. Inspect the supplied source
+access and converge related batches into reader subjects. A file with no supplied
+symbol facts has not been deeply parsed; this is not evidence that it has no APIs.
+Accepted application batches acquire parser facts before Author. Existing
+request-material remains the next action for implementation outside the initial
+reading scope. Public-contract-led profiles, including component libraries,
+retain their contract preparation because those facts define their reader targets.
+
+A read scope is an authorization ceiling. Each Indexer should own its actual
+module, with other sources as supporting evidence only when needed. Mixed
+frameworks require per-module Provider choices; do not disable a relevant
+extension to avoid fixing an oversized source boundary. Framework facts are
+still prepared at Author after the selected code has been parsed. For large
+IDL sources, first follow the selected applications' concrete protocol references
+and required includes; an entire protocol monorepo is not a default target.
+
+Parser progress is on stderr; stdout remains the command's JSON result. Report
+actual phase, source and available counts without estimating a percentage from
+elapsed time. A preparation-cache hit only reuses parser work, not proof of
+completed articles. After interruption use the current Route; do not clear state
+or increase memory automatically to retry the same oversized scope.
+
 ## Selection flow
 
 Follow `workflow.current` from `context status --format json` or `context run`.
@@ -31,8 +60,9 @@ configuration or semantic input boundary; it does not make those decisions.
    installed-Skill inventory, discovery report, or discovery-only confirmation
    is required. Use the supplied exact identity and cli-bundled distribution
    for shipped Providers, even when their Skills are also visible to the Host.
-   For a relevant external Skill, read only its exact Host-exposed frontmatter
-   and sibling `context-indexer.yaml` needed for selection. Do not guess versions
+   For a relevant external Skill, read its exact Host-exposed `SKILL.md`
+   and sibling `context-indexer.yaml`, then only the linked framework references
+   needed to evaluate observed module signals. Do not guess versions
    or scan `.claude`, `.codex`, `.agents` or arbitrary user directories. Different
    versions remain distinct; discovery order is not selection precedence.
 3. Submit the semantic `indexers` and any relevant non-CLI `host_visible_skills`
@@ -56,6 +86,31 @@ fingerprints.
 For CLI-bundled instruction Providers, these fields record the original
 selection; they are not a requirement to reinstall old bytes when resuming.
 The current CLI supplies its installed Provider's guidance automatically.
+
+### Select technology profiles per module
+
+A registered repository is a source boundary, not a single technology profile.
+Different modules may need different primary profiles and extension layers. Use
+the current selection contract's supported module and target/read scopes; never
+assign one module's stack to the entire repository merely because it was
+registered as one source.
+
+An observed framework dependency, configuration, entry or adapter signal is a
+reason to load the relevant Provider Skill and its applicable reference during
+selection. Reading this guidance is not activation or permission to execute the
+Provider. Follow its evidence rules to verify the signal within authorized source
+material, then bind the applicable profile only to the supported modules. A name
+alone may justify investigation without proving a framework is active.
+
+If boundaries are still unclear, identify the relevant modules and inspect their
+configuration and entries in the existing selection flow. Do not reject a
+relevant Provider solely because the repository contains mixed stacks, or defer
+investigation until generic authoring happens to report a capability gap. Record
+unresolved evidence and the concrete next inspection when it cannot yet be
+obtained. Keep unrelated modules on their appropriate primary profiles; multiple
+compatible, proven extensions may support one module without becoming duplicate
+primary owners. These are Agent selection responsibilities, not CLI semantic
+checks or new review gates.
 
 ## Resuming after a tool update
 
@@ -110,18 +165,19 @@ indexers:
     providers:
       - id: community
         role: primary
-        skill: "<catalog.skill>"
-        version: "<catalog.version>"
-        integrity: "<catalog.integrity>"
-        distribution:
-          kind: cli-bundled
-          locator: "<catalog.distribution.locator>"
+        catalog_skill: "<catalog.skill>"
 ```
 
 - Choose `component-library` only if it matches the reader task and appears in
   the selected catalog entry's `capabilities.profiles`. For captured documents,
   notes or conversation summaries, select a profile from the corresponding
-  compatible Provider. Copy the actual catalog identity.
+  compatible Provider. `catalog_skill` selects exactly one bundled entry from the
+  current Action catalog. The CLI fills its version, integrity and distribution
+  after checking the Route revision; a changed catalog invalidates that revision.
+  Do not combine this reference with identity overrides. Full identities remain
+  available for explicitly pinned entries and external Providers, which retain
+  their resolution and authorization requirements. The persisted registry always
+  contains complete identities, never `catalog_skill` references.
 - Bind each selected requirement and all required coverage domains it owns;
   the single-domain template is not permission to drop other required domains.
   `owned_scope` names the target being described. `read_scope` may also include
@@ -347,17 +403,16 @@ Existing `reader_goals` remain valid when it is absent. Context passes this
 requirement through Partition, Author, and Review; it does not classify free
 text against a fixed vocabulary.
 
-After representative reading and necessary scope discussion, substantial new work
-can preserve the decisions in `.tmp/work-start-report.md` before Partition.
-The current workflow supplies `procedure.work-start-report` and
-`template.work-start-report`: a readable report with its existing requirement
-reference, use scenarios, scope choices, proposed classifications, first delivery
-and actual execution settings. Lightweight edits keep a short summary. The report
-is scratch context, not a published Artifact, a new approval or a condition for
-advancing the workflow. On its first presentation, invite the user to read and
-correct it and pause for that response, including in managed mode, unless they
-explicitly waived this reading opportunity. Reuse the response and report when
-continuing the same task; do not add a per-batch pause or report-status field.
+For the first production task in a new workspace, the source-boundary Route
+requires `.tmp/work-start-report.md` before source registration. The current
+workflow supplies `procedure.work-start-report` and `template.work-start-report`:
+a readable report covering readers, purpose, source families, language, settings,
+delivery outputs, first delivery and proposed organization. The Agent reads the
+brief and representative authorized material with Host tools, presents the report
+and resolves its missing choices before registration or capture. The CLI only
+checks the Route payload references a real non-empty report and records its digest;
+it does not judge prose or infer semantic decisions. Reuse and update the report
+with actual Provider choices before Partition rather than adding a per-batch report.
 
 Partition may select `artifact_intent` and `template_id` from the current
 Provider catalog, along with `reader_task`, `outline`, `priority`, and

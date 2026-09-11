@@ -112,10 +112,14 @@ export function createContextWorkflowFacts(
     observation.capturedDocumentSources === observation.documentSources.length &&
     observation.pendingCaptureCommands.length === 0;
   const partialDelivery = observation.indexerCandidateCompile.partial_delivery === true && observation.indexerCandidateCompile.state === "current" && !observation.indexerCandidateCompile.revision_pending;
+  // A compiled delivery wave can reach Review while later Authors remain queued.
+  // Retained delivery history alone does not make an unfinished lifecycle current.
+  const deliveryReady = observation.indexerCandidateCompile.delivery_ready === true && observation.indexerCandidateCompile.state === "current" && !observation.indexerCandidateCompile.revision_pending;
+  const outputOnlyMaintenance = observation.indexerCandidateCompile.maintenance_output_only === true;
   const reviewGateClear = observation.draftCandidates === 0 || partialDelivery;
   const hasApprovedKnowledge = observation.approvedPages > 0;
   const rollback = observation.indexerCandidateCompile.rollback_pending === true;
-  const indexerLifecycleCurrent = !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
+  const indexerLifecycleCurrent = (!observation.unfinishedIndexerTasks || partialDelivery || deliveryReady || outputOnlyMaintenance) && observation.taskPreparation !== "resume-requested" && !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
     (
@@ -141,6 +145,7 @@ export function createContextWorkflowFacts(
 
   return {
     workspace: {
+      task_start_authorized: observation.taskPreparation !== "cleared",
       project_entry_valid: observation.projectEntryValid,
       state_valid: workspaceStateValid(observation),
     },
@@ -195,6 +200,8 @@ export function createContextWorkflowFacts(
       templates_reviewed: packageTemplatesReviewed(observation),
       current: packagesCurrent && !partialDelivery,
     },
+    version: { current: observation.versionCurrent !== false,
+      recording_satisfied: partialDelivery || ((deliveryReady || outputOnlyMaintenance) && observation.unfinishedIndexerTasks === true) || observation.versionCurrent !== false },
     logs: {
       configured: runtimeEvents.configured,
       ...(buildLogPending && hasApprovedKnowledge && packagesCurrent

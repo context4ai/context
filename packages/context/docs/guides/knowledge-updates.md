@@ -16,17 +16,115 @@ and continues through Review and delivery. Expression-only changes need no
 source capture or Parser. Preserve prior confirmed contributions; distinguish
 actual behavior, a confirmed decision, and a proposal that is not implemented.
 
-## Edit one section or review part of a batch
+## First-task intake budget
 
-For a reading-directory-only change, use the existing `context task adjust
---input <file|-> --format json` action with `reading_structure`. Supply its
+Before registration and capture, the Agent uses the user's task instructions and
+reads batch metadata titles across the explicitly supplied document list. Lark
+metadata requests accept at most 200 entries each, not 200 words or 200 documents
+overall. H1/H2 may be reused only when metadata returns them without
+body retrieval; Lark batch metadata returns titles, not headings. Batch failure
+falls back to at most 10 unresolved document title lookups total, unless a shared
+authentication failure makes those calls redundant. The Agent does not fetch
+source bodies, outlines, images or attachments. Missing title metadata is
+optional: preserve the original URL without falling back to body retrieval or
+changing credentials. Resolve intent from the conversation; refine provisional
+chapters and module boundaries from evidence after formal capture.
+
+## Workspace versions and changelog
+
+`package.json.version` is the workspace SemVer. At completed-scope delivery the
+workflow asks the Agent to inspect formal changes and record an increasing version
+with a concise changelog. Added modules or expanded material coverage increment
+minor; corrections, existing-module updates, navigation and persistent status
+changes increment patch. Major requires an explicit user instruction. Temporary
+progress under `.tmp/` never causes a version increase.
+
+Version recording runs at completed-scope delivery after Review, Close and package
+configuration/template approval, before the final build. The record response
+returns the next workspace Route, so no extra status call is needed. Build retries
+reuse the recorded version when formal content is unchanged. Intermediate batches
+do not each receive a version.
+
+The workspace AGENTS.md and version-writing instructions require each entry's
+details to stay within 1500 visible characters, including punctuation across the
+title, changes, trigger descriptions and actor display name, excluding protocol
+keys, version and date. The Agent compresses longer drafts before submission,
+preserving main changes, impact and triggers instead of truncating text or splitting
+the iteration into extra versions. This is an Agent writing rule, not a prose-quality
+CLI gate.
+
+`context version inspect --format json` returns changed paths and a digest. The
+coordinator submits `context version record --input <file> --format json` with:
+
+```yaml
+expected_digest: "<digest returned by inspect>"
+version: 0.2.0
+title: Add module recovery guidance
+changes:
+  - Document recovery conditions and the supported retry flow.
+triggers:
+  - kind: module
+    description: Additional module material requested in this iteration.
+actor:
+  kind: lark
+  name: Example User
+```
+
+`actor` is optional; omit it to use local Git `user.name` when configured. Use a
+Lark display name only when explicitly known from the conversation. Trigger kinds
+are `initial`, `note`, `sessions`, `mr`, `module`, `document`, `navigation`,
+`repair`, `dist`, and `other`. Agent-written fields describe the actual diff and
+conversation; they must not expose credentials, raw transcripts or private IDs.
+
+The CLI writes `changelog.yaml`, generated `CHANGELOG.md`, `package.json` and the
+`.context-version.json` content baseline together. Keep these formal files with
+the workspace; do not hand-edit generated baselines. Git-managed and unignored
+new files are compared (without Git, non-runtime workspace files are compared).
+Version metadata itself, `dist`, `.tmp` and dependencies do not cause changes.
+
+Successful builds record version and per-package hashes in `.context-builds.json`.
+They do not increase versions. Before publishing, `context version publish-check
+--format json` compares against `.context-published.json`. A same-version changed
+output requires a patch using `version inspect --publish` and a `dist` trigger,
+then a rebuild. Record `version published --hash <checked-hash> --receipt
+<successful-publication-reference> --format json` only after external success.
+No command commits, tags or uploads automatically.
+
+Website history is available at `changelog.html`: cards are newest first, the
+latest three expanded and older cards collapsed. The History button beside the
+theme switch and footer update timestamps link there. KB and LLMS outputs carry
+the same workspace version and changelog.
+
+## Customize the knowledge map at any time
+
+For a knowledge-map-only change, use the existing `context task adjust
+--input <file|-> --format json` action with `knowledge_map`. Supply its
 current `expected_revision`, explicit `upsert` entries and `remove` keys. Each
 entry retains its stable key, parent, title and order; optional targets use
 article identity and section key. The current structure preview supplies those
-identities. Use `expected_revision: null` only when no reading structure exists.
+identities. Read the persistent `src/knowledge-map.yaml`; use
+`expected_revision: null` only when no knowledge map exists.
 After adjustment, follow status to rebuild affected packages. This changes the
 reading organization without capturing sources or rewriting approved prose.
 Do not directly edit generated package navigation or use titles as identities.
+
+Users can ask in conversation to move a topic, rename a directory, change order,
+or organize the same articles for another reader task. Handle this during ongoing
+production or after completion through the same adjustment; no active Indexer
+task, source recapture or new mode choice is required. Finish or revoke active
+worker assignments before changing the map. Preserve unrelated entries and page
+identities. The map controls website navigation and LLMS organization together.
+
+For each new or changed article, the Agent decides whether to retain its current
+placement, add another placement, move it, or create a warranted category. Check
+these choices against the user's settled organization before structure approval
+and delivery. New articles must be bound even if the map revision has not changed;
+modifying a title alone is not a reason to change article identity. Never satisfy
+coverage by mechanically placing every new page under an unrelated catch-all.
+Build reports missing bindings for the Agent to resolve; it does not classify
+content. Moving a menu entry does not change the article URL.
+
+## Edit one section or review part of a batch
 
 The current approved-revision Route accepts either full `markdown` or explicit
 `sections` edits. Use an existing `writing_context.current_sections` ID and an

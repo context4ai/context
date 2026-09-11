@@ -6,7 +6,7 @@ import { createContext, runInContext } from "node:vm";
 import { completeAuthorStage, completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 import { readCandidateRecords, writeCandidateRecords } from "../project/candidateLedger.js";
 import { writeReviewHtml } from "../project/reviewHtml.js";

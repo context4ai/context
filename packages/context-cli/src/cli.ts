@@ -8,6 +8,7 @@ import { registerProjectRunCommand } from "./commands/runProject.js";
 import { continueAfterProjectReview } from "./project/workflow/workflowContinuation.js";
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
+import { registerVersionCommands } from "./commands/versionCommands.js";
 import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { registerProjectActionCommands } from "./commands/actionCommands.js";
@@ -447,6 +448,7 @@ export function createCliProgram(): Command {
     });
 
   registerProjectCloseAndBuildCommands(program);
+  registerVersionCommands(program);
   registerRuntimeEventLogCommands(program);
 
   registerProjectSourceCommands(program);

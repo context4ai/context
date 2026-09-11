@@ -1,7 +1,9 @@
+import { prepareParserEntry, prepareParserEntryInProcess } from "../project/indexerParserEntryWorker.js";
+import { materializeProjectIndexerParserFiles } from "../project/indexerParserSourceMaterialization.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -201,4 +203,37 @@ describe("0.7.4 parser lifecycle CLI actions", () => {
     expect(plan.entries.flatMap((entry) => entry.files.map((file) => file.normalized_path)))
       .toEqual(["src/index.ts"]);
   });
+});
+
+test("a first source slice does not materialize an unrelated authorized source", async () => {
+  const root = await projectRoot();
+  const registryPath = join(root, "src/indexers.yaml");
+  const registry = YAML.parse(await readFile(registryPath, "utf8"));
+  registry.requirements[0].target_scope.targets.push({ source_ref: "repo:20260901/unavailable", module_refs: [] });
+  await writeFile(registryPath, YAML.stringify(registry));
+  const materialized = await materializeProjectIndexerParserFiles({
+    projectRoot: root, indexer_id: "web-indexer", profile_contract: bundledIndexerProfileContract(),
+    source_scope: { source_ref: "repo:20260901/sample", module_ref: "module:sample" },
+  });
+  expect(materialized.files.map(file => file.normalized_path)).toEqual(["src/index.ts"]);
+  expect(materialized.files.every(file => file.source_ref === "repo:20260901/sample")).toBe(true);
+  await expect(materializeProjectIndexerParserFiles({
+    projectRoot: root, indexer_id: "web-indexer", profile_contract: bundledIndexerProfileContract(),
+    source_scope: { source_ref: "repo:20260901/not-authorized", module_ref: null },
+  })).rejects.toThrow("outside the authorized read scope");
+});
+
+test("isolated parser preparation preserves output and reports a failed unit", async () => {
+  const root = await projectRoot();
+  const requirement = bundledIndexerProfileContract().profiles.find(profile => profile.id === "web-application")!
+    .parser_requirements.find(candidate => candidate.capability === "parser.typescript")!;
+  const mapping = buildIndexerParserCoordinateMapping({ requirement, resolution: "direct", registry: "npm",
+    actual_coordinate: requirement.community_coordinate, abi_digest: requirement.abi_digest });
+  const input = { projectRoot: root, source_ref: "repo:20260901/sample", entry_digest: digest("entry"),
+    capability: "parser.typescript", normalized_paths: ["src/index.ts"], requirement, mapping, lock: parserLock() };
+  const stable = (value: unknown) => JSON.parse(JSON.stringify(value,
+    (key, item: unknown) => key === "extractedAt" ? "<execution-time>" : item));
+  expect(stable(await prepareParserEntry(input))).toEqual(stable(await prepareParserEntryInProcess(input)));
+  await expect(prepareParserEntry({ ...input, normalized_paths: ["missing.ts"] }))
+    .rejects.toThrow("parser plan references an untracked source file");
 });

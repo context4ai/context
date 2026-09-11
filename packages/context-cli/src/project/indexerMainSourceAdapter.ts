@@ -1,3 +1,5 @@
+import { ContextError } from "../lib/errors.js";
+import { ExitCode } from "../types/exitCode.js";
 import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import { buildPartitionSourceAccess } from "./indexerPartitionNavigation.js";
 import {
@@ -38,6 +40,8 @@ import {
 } from "./indexerConsumerWorksetPlanner.js";
 import type { IndexerParserSourceSelection } from "./indexerParserRuntimeIndex.js";
 import { buildProjectIndexerAuthorSourceText } from "./indexerAuthorSourceText.js";
+import { resolveIndexerPlanningInventory } from "./indexerPlanningInventory.js";
+import { unionParserSourceSlices } from "./indexerParserSliceUnion.js";
 
 interface ProjectIndexerMainSourceBindingBase {
   source_ref: string;
@@ -53,7 +57,9 @@ interface ProjectIndexerMainSourceBindingBase {
 export interface ProjectIndexerParserFactsSourceBinding
   extends ProjectIndexerMainSourceBindingBase {
   adapter: "parser-facts";
-  parser_binding: IndexerParserRuntimeSourceBinding;
+  parser_binding?: IndexerParserRuntimeSourceBinding;
+  inventory_only?: boolean;
+  analysis_scopes?: readonly (readonly string[])[];
   parser_fact_view: IndexerParserFactView;
   parser_fact_index: ReadonlyMap<string, {
     file_ref: string;
@@ -258,10 +264,13 @@ export async function resolveProjectIndexerMainSourceIdentity(input: {
   source_ref: string;
   module_ref: string | null;
   profile_contract_digest: string;
+  inventory_only?: boolean;
 }): Promise<IndexerSourceIdentityInventory> {
   return capturedDocumentCoordinates(input.source_ref) !== null
     ? (await capturedDocumentsBinding(input)).source_identity_inventory
-    : ensureCurrentProjectIndexerParserSourceIdentity(input);
+    : input.inventory_only
+      ? (await resolveIndexerPlanningInventory(input)).source_identity_inventory
+      : ensureCurrentProjectIndexerParserSourceIdentity(input);
 }
 
 export async function resolveProjectIndexerMainSourceBinding(input: {
@@ -272,6 +281,7 @@ export async function resolveProjectIndexerMainSourceBinding(input: {
   profile_contract_digest: unknown;
   parser_execution?: IndexerParserRuntimeExecutionReceipt;
   parser_selection?: IndexerParserSourceSelection;
+  inventory_only?: boolean;
 }): Promise<ProjectIndexerMainSourceBinding> {
   const currentIndexerId = requiredText(input.indexer_id, "main Indexer indexer_id");
   const sourceRef = requiredText(input.source_ref, "main Indexer source_ref");
@@ -288,8 +298,27 @@ export async function resolveProjectIndexerMainSourceBinding(input: {
       profile_contract_digest: profileContractDigest,
     });
   }
+  if (input.inventory_only || input.parser_selection?.inventory_only) {
+    return resolveIndexerPlanningInventory({ projectRoot: input.projectRoot,
+      indexer_id: currentIndexerId, source_ref: sourceRef, module_ref: sourceModuleRef,
+      profile_contract_digest: profileContractDigest,
+      ...(input.parser_selection === undefined ? {} : { selection: input.parser_selection }) });
+  }
   const slice = input.parser_execution === undefined
-    ? await ensureCurrentProjectIndexerParserSourceSlice({
+    ? input.parser_selection?.analysis_scopes !== undefined
+      ? await (async () => {
+          const slices = [];
+          const covered = new Set(input.parser_selection!.analysis_scopes!.flat());
+          const extra = (input.parser_selection!.paths ?? []).filter(path => !covered.has(path));
+          const scopes = [...input.parser_selection!.analysis_scopes!, ...(extra.length ? [extra] : [])];
+          for (const paths of scopes) slices.push(await ensureCurrentProjectIndexerParserSourceSlice({
+            projectRoot: input.projectRoot, indexer_id: currentIndexerId, source_ref: sourceRef,
+            module_ref: sourceModuleRef, profile_contract_digest: profileContractDigest,
+            selection: { paths },
+          }));
+          return unionParserSourceSlices(slices);
+        })()
+      : await ensureCurrentProjectIndexerParserSourceSlice({
       projectRoot: input.projectRoot,
       indexer_id: currentIndexerId,
       source_ref: sourceRef,
@@ -318,6 +347,9 @@ export async function resolveProjectIndexerMainSourceBinding(input: {
   const factView = slice.fact_view;
   return {
     adapter: "parser-facts",
+    ...(input.parser_selection?.paths === undefined ? {} : {
+      analysis_scopes: input.parser_selection.analysis_scopes ?? [input.parser_selection.paths],
+    }),
     source_ref: sourceRef,
     module_ref: sourceModuleRef,
     profile_contract_digest: profileContractDigest,
@@ -337,22 +369,34 @@ export function assertProjectIndexerMainSourceBinding(input: {
   binding: ProjectIndexerMainSourceBinding;
   dependency_view?: unknown;
   partition_projection?: unknown;
+  accepted_partition_material_digest?: string;
 }): void {
   const authorDependencyView = input.workset.stage === "author"
     ? validateIndexerAuthorDependencyView(input.dependency_view)
     : null;
   const partitionDigest = input.workset.stage === "partition"
     ? partitionDependencyDigest(input.binding, input.partition_projection as IndexerConsumerWorksetProjection | undefined) : undefined;
-  const scopedPartition = partitionDigest !== undefined && input.workset.source_binding_digest === partitionDigest;
+  const scopedPartition = partitionDigest !== undefined && (input.workset.source_binding_digest === partitionDigest ||
+    input.accepted_partition_material_digest === partitionDigest);
   if (
     input.workset.source_ref !== input.binding.source_ref ||
     input.workset.module_ref !== input.binding.module_ref ||
     input.workset.profile_contract_digest !== input.binding.profile_contract_digest ||
     input.workset.source_binding_digest !== (
-      authorDependencyView?.view_digest ?? (scopedPartition ? partitionDigest : input.binding.source_binding_digest)
+      authorDependencyView?.view_digest ?? (scopedPartition ? input.workset.source_binding_digest : input.binding.source_binding_digest)
     )
   ) {
-    throw new TypeError("main Indexer workset targets a stale source adapter binding");
+    throw new ContextError(ExitCode.WorkspaceStateError,
+      "main Indexer workset targets a stale source adapter binding. Preserve accepted results; inspect the reported source and refresh the current Route before adjusting only the affected source scope.", {
+        category: "workspace-state-invalid", reason_code: "indexer-source-binding-stale",
+        workset_digest: input.workset.workset_digest, stage: input.workset.stage,
+        source_ref: input.workset.source_ref, module_ref: input.workset.module_ref,
+        expected: { profile: input.workset.profile_contract_digest, binding: input.workset.source_binding_digest },
+        actual: { source_ref: input.binding.source_ref, module_ref: input.binding.module_ref,
+          profile: input.binding.profile_contract_digest, binding: input.binding.source_binding_digest,
+          partition_material_digest: partitionDigest ?? null },
+        next_action: { command: "context status --format json" },
+      });
   }
   if (input.workset.stage === "partition") {
     const supplied = new Set(
@@ -360,7 +404,7 @@ export function assertProjectIndexerMainSourceBinding(input: {
         ? input.workset.partition_input_digests
         : [],
     );
-    if ((scopedPartition ? [partitionDigest!] : input.binding.partition_input_digests).some((digest) => !supplied.has(digest))) {
+    if ((scopedPartition ? (input.workset.source_binding_digest === partitionDigest ? [partitionDigest!] : []) : input.binding.partition_input_digests).some((digest) => !supplied.has(digest))) {
       throw new TypeError("partition workset omits source adapter input digests");
     }
   }

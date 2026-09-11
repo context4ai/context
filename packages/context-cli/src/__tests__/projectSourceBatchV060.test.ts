@@ -7,6 +7,7 @@ import { join } from "node:path";
 import YAML from "yaml";
 import { ContextError } from "../lib/errors.js";
 import { addRepoSource, type AddRepoSourceInput } from "../project/repoSources.js";
+import { collectProjectStatus } from "../project/status.js";
 import { initContextProject } from "../project/workspace.js";
 import { invokeCliInDir } from "./documentSourcesV062Helpers.js";
 
@@ -41,6 +42,50 @@ async function createMonorepo(root: string): Promise<{ root: string; head: strin
 }
 
 describe("0.6.0 source registration concurrency and batch input", () => {
+  test("requires a presented work-start report for Route-bound first source registration", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-source-batch-work-start-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "context", dev: true });
+      const inputPath = join(initialized.projectRoot, "source-batch.yaml");
+      await writeFile(inputPath, YAML.stringify({
+        sources: [{ type: "lark", wikiToken: "wiki-secret-token", title: "User Manual" }],
+      }), "utf8");
+      const status = await collectProjectStatus(initialized.projectRoot);
+      const revision = status.workflow.current?.revision;
+      expect(revision).toBeDefined();
+
+      const missing = await invokeCliInDir(initialized.projectRoot, [
+        "--workflow-revision", revision!, "source", "add", "batch", "20260712",
+        "--input", inputPath, "--format", "json",
+      ]);
+      expect(missing.status).not.toBe(0);
+      expect(missing.stderr).toContain("requires work_start_report");
+
+      await mkdir(join(initialized.projectRoot, ".tmp"), { recursive: true });
+      await writeFile(join(initialized.projectRoot, ".tmp", "work-start-report.md"),
+        "# Work-start report\n\nAll required start conditions were resolved and presented.\n", "utf8");
+      await writeFile(inputPath, YAML.stringify({
+        work_start_report: { path: ".tmp/work-start-report.md" },
+        sources: [{ type: "lark", wikiToken: "wiki-secret-token", title: "User Manual" }],
+      }), "utf8");
+
+      const registered = await invokeCliInDir(initialized.projectRoot, [
+        "--workflow-revision", revision!, "source", "add", "batch", "20260712",
+        "--input", inputPath, "--format", "json",
+      ]);
+      expect(registered.status).toBe(0);
+      expect(JSON.parse(registered.stdout)).toMatchObject({
+        kind: "source.registration.batch",
+        work_start_report: {
+          path: ".tmp/work-start-report.md",
+          digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        },
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("registers repo and Lark modules from one mixed batch command", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-source-batch-"));
     try {

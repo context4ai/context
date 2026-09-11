@@ -1,3 +1,6 @@
+import { currentLedger } from "./indexerMainRunStoreRecords.js";
+import { readPartitionStream } from "./indexerPartitionStream.js";
+import { readTaskPreparation } from "./taskResumption.js";
 import { readIndexerDelivery } from "./indexerDelivery.js";
 import { assertPreparationComplete } from "./workspacePreparation.js";
 import { join } from "node:path";
@@ -35,6 +38,7 @@ import {
   recordContextDebugPerformance,
 } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
+import { inspectWorkspaceVersion } from "./workspaceChangelog.js";
 import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateCompileActions.js";
 import {
@@ -177,7 +181,18 @@ async function collectProjectStatusSnapshotInternal(
   // ledger must not hide package configuration/Review recovery gates.
   const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
     (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
+  const taskPreparation = await readTaskPreparation(projectRoot);
+  const taskLedger = await currentLedger(projectRoot);
+  const partitionStream = await readPartitionStream(projectRoot);
+  // A settled planning ledger can still contain themes not selected for this
+  // Author wave. Only the stream's final-wave receipt closes that remainder.
+  const unfinishedIndexerTasks = (partitionStream !== undefined && partitionStream.final_wave !== true) ||
+    [taskLedger, partitionStream?.partition_ledger].some(ledger =>
+      ledger?.entries.some(entry => entry.state !== "accepted"));
   const observation: ContextWorkflowObservation = {
+    versionCurrent: phaseStatus.projectEntryValid ? (await inspectWorkspaceVersion(projectRoot)).current : false,
+    taskPreparation,
+    unfinishedIndexerTasks,
     projectRoot,
     projectEntryValid: phaseStatus.projectEntryValid,
     stateDiagnostics: [
@@ -215,6 +230,8 @@ async function collectProjectStatusSnapshotInternal(
     close: closeStatus,
     indexerRegistry,
     indexerCandidateCompile: { partial_delivery: indexerDelivery?.partial !== undefined, state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
+      delivery_ready: !maintenanceOutputOnly && (indexerDelivery?.current.length ?? 0) > 0,
+      maintenance_output_only: maintenanceOutputOnly,
       managed_source_pending: !maintenanceOutputOnly && managedSourceUpdatePending,
       ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
       ...(!maintenanceOutputOnly && indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),

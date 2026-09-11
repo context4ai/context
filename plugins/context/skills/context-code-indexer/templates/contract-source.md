@@ -71,3 +71,52 @@ must contain exact contract identities and source locators, not just filenames.
 
 Revise or stop when authority cannot be distinguished from a generated copy,
 imports or versions are unresolved, or compatibility claims are not declared.
+
+## Overview maps for a selected contract family
+
+When the user chooses a bounded overview, organize the page as scope/version,
+contract-family map, representative operations, active consumers, lookup procedure,
+change/generation entrypoints and unread boundaries. Separate API entry schemas,
+domain contracts, runtime RPC/message boundaries and common models when the source
+actually distinguishes them. Do not force these layers onto an unrelated schema.
+
+A useful family row contains purpose, authoritative directory/file, known consumer
+and the next lookup. A representative operation row can connect reader action,
+external operation identity, schema Service/Method and implementation locator;
+mark an unknown hop as a question, never a proven call. Count only with a recorded
+file-set boundary or reproducible inventory; a few examples cannot establish
+complete coverage or a total operation count. Cross-file imports needed to explain
+a selected type are supporting evidence, not automatic new article subjects.
+
+For large groups, directory routes with scoped searches are preferable to thousands
+of file rows. Give an actual lookup example and what to do when no match is found.
+A short article does not imply cheap extraction: the confirmed overview treatment
+must first be expressible in the actual source/production configuration. This
+writing template does not change parser depth. If the current contract profile
+would still prepare the entire source, resolve that scope before proceeding;
+do not silently select another profile or claim deferred parsing already happened.
+
+## Prefer linked definitions over schema transcription
+
+For entry-first knowledge, avoid exhaustive IDL reading and rewriting. Start with
+consumer/generator configuration and known operation identities; inspect only the
+definitions needed for the actual claim. A file locator does not prove its fields
+or runtime use. Keep complete schema bodies out of Markdown unless a short excerpt
+is necessary to explain the reader's question. Do not modify authoritative IDL.
+
+A source-backed attachment is useful only when an article explicitly needs and
+links that exact definition. Repository presence alone never selects an asset.
+If a supported source-resource projection exists, use its registered source,
+revision, relative path and byte digest; never copy the entire IDL tree or hand-write
+knowledge/assets. Otherwise retain a versioned source locator and state that the
+offline attachment is unavailable. The existing document-attachment mechanism is
+not proof that repository files have been registered as source assets.
+
+An attached IDL remains source evidence, not a second authoritative contract or
+an instruction to create another article. Include dependencies are added only
+when needed for the documented use; distinguish a readable excerpt from a complete,
+compilable schema bundle. Do not claim the attachment compiles unless verified.
+Source byte changes must invalidate the affected resource and dependent evidence;
+unchanged bytes can reuse the resource. A repository revision change alone does
+not prove a changed definition, and source bytes changing do not prove a breaking
+API change. Preserve source identity even when identical bytes share storage.

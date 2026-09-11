@@ -10,10 +10,17 @@ Explain output shapes before SDK factory names. Offer:
 
 - an Agent knowledge-base package with `AGENTS.md`, a knowledge-query Skill,
   approved OKF roots, and adaptive indexes;
+- a searchable documentation website with the approved knowledge map, source cards and local-time update timestamps;
 - one LLM text bundle for model context or RAG import.
 
+These are multi-select channels, not exclusive options. For a new workspace with
+no explicit preference, propose KB + website as the default in the work-start
+report. Reuse that decision or session delegation at packaging; do not ask again
+for each channel. Preserve an existing workspace's configured output choices.
+A user can add a website later by asking to generate a documentation website.
+
 The user may postpone packaging and keep the approved Markdown in `knowledge/`.
-Pause at this choice and resume when an output is selected; postponing is not a
+When a user decision is required by the current Route and no session authority exists, collect the choices together; postponing is not a
 package declaration or a completed delivery. Do not write a `none` factory or
 claim that `packages: []` records a finished output choice.
 
@@ -35,6 +42,8 @@ explicit omission only when the author asks for another delivery policy. Git
 raw uses an immutable derived URL or an author-provided HTTPS `urlPrefix`;
 publishing and access remain the author's responsibility.
 
-Do not offer a hidden `both` shortcut. If the user wants multiple outputs,
-declare and inspect one first, then obtain confirmation for the next. Mention
-`kbPackage` and `llmsPackage` only after the semantic output choice.
+Map KB + website to one `kbPackage` with `site` configured, and LLM text to an
+additional `llmsPackage`. There is no `both` factory. If only a website is wanted,
+explain that it is built alongside the KB and only the sibling `dist/<base>-site/` directory needs
+to be distributed. The Agent makes the small SDK configuration edit; users do
+not need to write webpage code. Do not add a separate confirmation per output.

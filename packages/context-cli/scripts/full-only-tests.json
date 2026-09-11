@@ -1,0 +1,18 @@
+[
+  "approvedKnowledgeAuthor.integration.test.ts",
+  "articleCodeProfileScenarios.integration.test.ts",
+  "articleCodeScenarios.integration.test.ts",
+  "articleOrganizationScenarios.integration.test.ts",
+  "indexerArticleDelivery.integration.test.ts",
+  "indexerAuthorDraft.integration.test.ts",
+  "indexerComposerDelivery.integration.test.ts",
+  "indexerEarlyDelivery.integration.test.ts",
+  "indexerEmptyStructure.integration.test.ts",
+  "indexerFinalWaveReconciliation.integration.test.ts",
+  "indexerPartitionStream.integration.test.ts",
+  "indexerProductionEfficiency.integration.test.ts",
+  "managedSourceKnowledgeUpdate.integration.test.ts",
+  "packageSiteBuild.integration.test.ts",
+  "productionReadiness.integration.test.ts",
+  "projectKnowledgeMaintenance.integration.test.ts"
+]

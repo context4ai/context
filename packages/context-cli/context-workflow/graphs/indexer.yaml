@@ -70,6 +70,10 @@ nodes:
     satisfiedBy:
       - path: indexer_current.advance_complete
         equals: true
+    resources:
+      required:
+        - resources/procedures/homogeneous-source-review.md
+
   - id: run-current-indexer-agent
     kind: action
     reasonCode: route.indexer.agent-step
@@ -79,9 +83,12 @@ nodes:
         equals: true
     resources:
       required:
+        - resources/procedures/parallel-agent-batch.md
+        - resources/procedures/homogeneous-source-review.md
         - resources/views/resolved-indexer-instructions.yaml
         - resources/views/authorized-indexer-workset-view.yaml
       recommended:
+        - resources/templates/indexer-agent-worker.md
         - resources/procedures/work-start-report.md
         - resources/templates/work-start-report.md
   - id: confirm-current-indexer-obsolete-scope
@@ -148,6 +155,7 @@ nodes:
     action: actions/configure-indexer-providers.yaml
     resources:
       required:
+        - resources/procedures/homogeneous-source-review.md
         - resources/contracts/indexer-provider-guide.yaml
       recommended:
         - resources/procedures/work-start-report.md
@@ -313,9 +321,12 @@ nodes:
     action: actions/run-indexer-agent-step.yaml
     resources:
       required:
+        - resources/procedures/parallel-agent-batch.md
+        - resources/procedures/homogeneous-source-review.md
         - resources/views/resolved-indexer-instructions.yaml
         - resources/views/authorized-indexer-workset-view.yaml
       recommended:
+        - resources/templates/indexer-agent-worker.md
         - resources/procedures/work-start-report.md
         - resources/templates/work-start-report.md
   - id: propose-overlay-question-amendment

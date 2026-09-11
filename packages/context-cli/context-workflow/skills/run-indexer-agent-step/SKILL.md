@@ -9,10 +9,26 @@ metadata:
 
 # Run one bounded Indexer Agent batch
 
-Read the current Route action input and every required Resource marked `read-required`.
+Before dependent bulk work, follow
+[the shared homogeneous-source review](../../resources/procedures/homogeneous-source-review.md).
+Reuse explicit group decisions; when a newly observed group needs user choice,
+present its concrete scope and pause before parsing or submitting dependent work.
+
+
+Read the current Route action input and required shared instructions. Every
+Resource marked `read-required` must be read by the Agent responsible for that
+work; delegation does not waive reading or permit fabricated receipts.
 For `stage: approved-revision`, follow `procedure.approved-revision`: read the
 supplied approved page and return the revised Markdown using that action's schema.
 The batch instructions below apply to Partition, Author, and Composer worksets.
+
+For Partition and Author, follow the current Route's
+`procedure.parallel-agent-batch` before reading task material. When the Host and
+current permissions allow delegation, use 2–4 read-only workers for independent
+tasks; otherwise complete them in this Agent. The coordinator owns all Context
+commands and file writes. This is execution within the selected batch, not a new
+lifecycle or permission to overlap stages. Use `template.indexer-agent-worker`
+for each assignment and the procedure's bounded fallback on worker failure.
 
 Use the readable `resolved-indexer-instructions` and each task's
 `authorized-indexer-workset-view/task-NNN`, including its goals, constraints and source material.
@@ -32,15 +48,21 @@ evidence.
 Return exactly one `results[]` entry for every task in the current batch, in task-key order. Each
 entry carries its `task_key` and the existing stage-specific semantic Result. A single-task batch
 still uses the same array shape. Prepare distinct results together and submit the batch once;
-do not turn it into a separate CLI round trip for each page. Copy dynamic authority values only from the Route input or that
+do not turn it into a separate CLI round trip for each page. Author group_key may be omitted to inherit the group selected by this current task_key; an explicit different group is rejected. The CLI preview and completion apply the same inheritance. Inventory facts in the reading map exact members to parser names/kinds and usable references; they do not decide coverage. Copy dynamic authority values only from the Route input or that
 task's authorized View.
 
-At the start of Partition, preserve the settled purpose/scope decisions in the
-work-start report when this substantial task warrants one and the earlier setup
-did not already cover it. The current Route exposes `procedure.work-start-report`
+At the start of Partition, preserve new settled purpose/scope findings in the
+existing work-start report when the earlier setup did not already cover them.
+The current Route exposes `procedure.work-start-report`
 and `template.work-start-report` for that handoff, including the scratch write
 boundary. Reuse an applicable report on continuation; do not recreate it for each
-workset. Report text is context, not evidence or authority. Author follows the
+workset. When planning tasks first become countable, ensure the report's task and
+module breakdown has been shown before bulk planning; for more than 50 planning
+tasks, wait for the required first report feedback before continuing. This
+threshold wait occurs once per continuing production task; later recounts or
+revisions reshow the report without repeating that wait unless a new unresolved
+user choice requires it. Follow the procedure's feedback rules. Unchanged
+continuations reuse the prior handoff. Report text is context, not evidence or authority. Author follows the
 accepted page plan and does not reread these resources or rewrite the report
 unless a material task decision changes.
 
@@ -182,6 +204,13 @@ If `next` is null and `next_preparation` reports failure, the committed outcomes
 are still saved: run its recovery command, not the previous submission. A stage's
 `progress.stop=complete` does not mean Review, close or package build is finished.
 
+For Indexer files that need no read receipt, reuse a fully read resource in this
+conversation only when its source/Provider identity and content digest are unchanged
+and its contents remain available. A new revision alone does not require rereading
+those files. Always read the new Route and task-specific changes; after context loss
+or truncated output, read the missing content. Never invent a receipt or mark an
+unread file as read.
+
 ## Reader purpose and saved page plans
 
 Use the bound requirement's `purpose` and open `reader_goals` throughout planning,
@@ -268,9 +297,10 @@ number of currently prepared tasks. Revisions can overlap delivered pages;
 do not add wave tasks to delivered pages to invent a page total.
 
 Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second uses `slice`. For example, with matching CLI values:
-**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前分片：补充内容检查 0/8 项]**
+`wave` supplement; the second describes the current action, using `slice` counts
+when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
+**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前进展：补充内容检查 0/8 项]**
 
 A completion receipt's `submitted_slice` describes the slice just submitted;
 `progress.scopes.slice` can already describe the next Route. Use the former when
@@ -278,8 +308,12 @@ reporting submission success and the latter when announcing the next slice.
 Never combine their numerators and denominators. A null slice means no active
 Agent task slice, not that the workflow is complete. During Review/build, state
 the returned Route action briefly rather than inventing a slice ratio.
-If progress is unavailable after task cleanup, say the counters are unavailable;
-do not turn the last wave into the overall scope or report delivery as zero.
+Before counters exist or after task cleanup, describe the known stage and current
+action instead of repeatedly saying counters are unavailable. For example:
+**[总体进展：正在准备知识工作区]**
+**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
+During review or packaging, name that action rather than a nonexistent slice.
+Do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.
@@ -383,3 +417,20 @@ Use the selected Provider diagram instructions and the article guidance to choos
 ### Existing visual sources
 
 For Author/Review involving source images or tables, consume the selected Provider `references/visual-source-processing.md`. Read current workspace AGENTS.md and `context.convertVisuals`; explicit user instructions override defaults. Use authorized `visual_resources` and sections[].visuals; reuse accepted unchanged results. Capability absence or unsuitable content retains originals without a new gate. Never edit source snapshots or delete assets yourself.
+
+### Knowledge-map placement during structure review
+
+Structure approval includes `knowledge_map`. Read the preview's `knowledge_map_coverage`
+and `article_targets`. Add article entries beneath the agreed category nodes,
+with `target.artifact_ref` and an optional `section_key`; categories alone do not
+place articles. Preserve prior-wave entries. An unchanged knowledge-map revision does
+not imply the new articles are covered. Resolve the CLI's missing/invalid target
+list before resubmitting approval; classification remains your responsibility.
+Report article delivery and navigation coverage separately.
+
+For new and revised pages, decide placements against the user's current knowledge
+map: retain, add, move or create a category when the reader purpose warrants it.
+Preserve unrelated entries and stable article identities. The coordinator owns
+map edits; workers may suggest placements but never write the map. Recheck new
+article bindings each wave, even when the map itself has not changed. Website
+navigation and LLMS consume this same accepted map.

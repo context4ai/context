@@ -1,3 +1,5 @@
+import { inheritAuthorTaskGroup } from "./indexerAuthorTaskDefaults.js";
+import { listCliBundledIndexers } from "./indexerCliBundledProvider.js";
 import { submittedProgressSlice } from "./indexerProgressScopes.js";
 import { assertCurrentIndexerBatchRevision } from "./indexerBatchRevision.js";
 import { previewAuthorBatch } from "./indexerAuthorDraft.js";
@@ -195,7 +197,9 @@ export async function completeCurrentIndexerAction(input: {
         { category: ErrorCategory.WorkflowRevisionStale },
       );
     }
+    const catalog = await listCliBundledIndexers();
     const currentRoute = await buildCurrentIndexerProviderSelectionRoute({
+      catalog,
       projectRoot: found.projectRoot,
       registry: loaded.registry,
       authorities,
@@ -209,6 +213,7 @@ export async function completeCurrentIndexerAction(input: {
       );
     }
     const outcome = await completeCurrentIndexerProviderSelection({
+      catalog,
       projectRoot: found.projectRoot,
       currentRegistry: loaded.registry,
       semantic,
@@ -366,8 +371,8 @@ export async function completeCurrentIndexerAction(input: {
   if (semantic.stage === "structure-review") {
     const { readKnowledgeUpdate, completeUpdateStructureReview } = await import("./knowledgeUpdate.js");
     if ((await readKnowledgeUpdate(found.projectRoot))?.structure_proposal) {
-      if (semantic.reading_structure !== undefined) {
-        throw new TypeError("This source-update review approves new source-bound pages. Apply its reading_structure edit with context task adjust --input - --format json, then submit this review without reading_structure; the existing source task is preserved.");
+      if (semantic.knowledge_map !== undefined) {
+        throw new TypeError("This source-update review approves new source-bound pages. Apply its knowledge_map edit with context task adjust --input - --format json, then submit this review without knowledge_map; the existing source task is preserved.");
       }
       await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision, managed: input.managed === true, authorities });
       const result = await completeUpdateStructureReview({ projectRoot: found.projectRoot, revision: input.revision,
@@ -396,7 +401,7 @@ export async function completeCurrentIndexerAction(input: {
       projectRoot: found.projectRoot,
       revision: input.revision,
       decision: semantic.decision,
-      ...(semantic.reading_structure === undefined ? {} : { reading_structure: semantic.reading_structure }),
+      ...(semantic.knowledge_map === undefined ? {} : { knowledge_map: semantic.knowledge_map }),
       ...(semantic.feedback === undefined ? {} : { feedback: semantic.feedback }),
     });
     if (nextStage === "partition" || structure.preview.topics.length === 0) {
@@ -465,22 +470,18 @@ export async function completeCurrentIndexerAction(input: {
     }
     for (const submitted of semantic.results) {
       if (duplicateKeys.has(submitted.task_key)) continue;
-      const parsed = indexerAuthorSemanticInputSchema.safeParse(submitted.result);
-      if (!parsed.success) {
-        outcomes.push(schemaFailure({
-          stage: "author",
-          task_key: submitted.task_key,
-          result: submitted.result,
-          issues: parsed.error.issues,
-        }));
-        continue;
-      }
       try {
         const task = await measureContextDebugOperation({ projectRoot: found.projectRoot, operation: `indexer.completion.${semantic.stage}.read-task` }, () => loadCurrentIndexerBatchTask({
           projectRoot: found.projectRoot,
           descriptor: current.descriptor,
           taskKey: submitted.task_key,
         }));
+        const parsed = indexerAuthorSemanticInputSchema.safeParse(inheritAuthorTaskGroup(submitted.result, task));
+        if (!parsed.success) {
+          outcomes.push(schemaFailure({ stage: "author", task_key: submitted.task_key,
+            result: submitted.result, issues: parsed.error.issues }));
+          continue;
+        }
         if (parsed.data.outcome === "request-material") {
           const material = await prepareIndexerAuthorMaterial({
             projectRoot: found.projectRoot, spec: task.spec, group_key: parsed.data.group_key,

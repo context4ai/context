@@ -14,6 +14,13 @@ tools:
 
 # Capture
 
+When repository exploration reveals a large group with a shared structural or
+generation pattern, follow [the homogeneous-source review](homogeneous-source-review.md)
+before dependent bulk parsing. Capturing a repository is not a decision to deeply
+index every file. Preserve explicit treatment choices for Provider selection and
+resume instead of asking again after capture.
+
+
 Current capture discipline for document sources. The executable path is source
 registration plus the declared capture phase flow:
 
@@ -39,6 +46,26 @@ Register several file/Lark/repo sources with `context source add batch [date]
 parallel. Repo batch items require `module`; file/Lark items may omit it and use
 the module returned by the CLI. A write-lock error means another Context mutation is active: wait for
 it to finish and retry rather than editing registry files.
+
+
+## Repository boundaries before bulk work
+
+Register the scope the user actually requested, not the containing monorepo merely
+because it is convenient to clone. Reuse one local checkout and register its
+confirmed module directories through the existing source registration command.
+Read that command's current schema for local path/subpath fields. Keep a source
+for each independently selected application/service boundary; names alone do not
+restrict filesystem reads. `modules: []` means no registered child boundary, not
+that the repository has no directories or cannot be narrowed.
+
+For protocol repositories, inspect the selected applications' maintained IDL
+configuration and import/include statements first. Register the referenced
+protocol directories and retain their required include dependencies as supporting
+material. Do not register every protocol in the repository solely to discover
+which ones the application uses. Unresolved dynamic references remain explicit
+material gaps with a next investigation; do not claim their absence or silently
+omit requested coverage. These inspections use existing read authorization and
+settled scope, not a new confirmation step.
 
 ---
 
@@ -123,9 +150,16 @@ Before choosing a local Markdown capture route, honor the surrounding task conte
   do not ask for `YYYYMMDD-2`. Declare
   `captureLark({ source: source("<date>", "<module>", { type: "lark" }) })`,
   then run `context run capture:lark:<date>/<module> --format json`.
+- For a registered document batch with shared capture settings, use
+  [Batch capture from the source registry](../manuals/reference/project-api.md#batch-capture-from-the-source-registry)
+  to load the registry and generate typed references and phases. Do not transcribe
+  the full YAML module list into `src/index.ts`. Select only the intended entries;
+  use the entire registry only when all its documents are in scope. Preserve
+  existing phases/packages and keep processor or resource exceptions per document.
 - Mixed local document and Lark document batches are separate sources unless
-  the current CLI explicitly offers a combined source contract. Do not write an
-  Agent-side URL/file loop.
+  the current CLI explicitly offers a combined source contract. Mapping registered
+  entries into declarative SDK phases is supported; writing an Agent-side loop
+  that fetches URLs/files and creates snapshots outside the CLI is not.
 - Refresh or recapture request for an already registered file/Lark source →
   rerun the same declared capture phase. The CLI appends a new snapshot only
   when content changes and never overwrites prior snapshots.

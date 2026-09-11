@@ -27,11 +27,13 @@ const valid = [
   { stage: "provider-resolution", result: { handler: "host-handler" } },
   { stage: "provider-program-authorization", decision: "approved" },
   { stage: "structure-review", decision: "approved" },
+  { stage: "structure-review", decision: "approved", knowledge_map: { expected_revision: null, upsert: [], remove: [] } },
   { stage: "structure-review", decision: "request-adjustment", feedback: "Split the two reader topics" },
   { stage: "layout-confirmation", decision: "approved", paths: [{ artifact_ref: "artifact:start", output_path: "codeindex/start.md" }] },
   { stage: "layout-confirmation", decision: "rejected", feedback: "Use readable paths" },
 ];
 const invalid = [
+  { stage: "structure-review", decision: "approved", knowledge_map: {} },
   publish({ member_dispositions: [{ items: [], state: "covered" }] }),
   publish({ member_dispositions: [{ item: "entry:start", items: ["entry:start"], state: "covered" }] }),
   publish({ title: undefined }), publish({ summary: undefined }), publish({ sections: [] }),

@@ -1,3 +1,4 @@
+import { assertPartitionAdmission } from "./indexerPartitionAdmission.js";
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -83,6 +84,10 @@ async function acceptValidatedMainRun(input: {
   immutable_records?: readonly { path: string; value: unknown }[];
   inject_failure?: DurableMultiFileFailureInjector;
 }) {
+  if (input.validated.request.workset.stage === "partition") {
+    await assertPartitionAdmission({ projectRoot: input.projectRoot, ledger: input.current,
+      validated: input.validated });
+  }
   const cache = acceptedCacheRecord(input);
   const ledger = acceptIndexerMainRun({
     ledger: input.current,

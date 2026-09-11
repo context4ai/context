@@ -29,3 +29,8 @@ replacement is not an approved-identity conflict.
 Do not delete candidates, approved pages, snapshots, or structure slots to make
 verification pass. Derived diagnostics should not be handled as independent
 root failures.
+
+If normal status/Route evaluation fails or supported repair makes no progress, use
+`context task recover --format json` and read its independent recovery Skill.
+Preserve the current workspace; follow its sanitized issue-report path if safe
+recovery is unavailable.

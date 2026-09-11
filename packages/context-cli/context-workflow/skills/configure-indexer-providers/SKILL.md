@@ -9,6 +9,12 @@ metadata:
 
 # Configure Indexer Providers
 
+Before dependent bulk work, follow
+[the shared homogeneous-source review](../../resources/procedures/homogeneous-source-review.md).
+Reuse explicit group decisions; when a newly observed group needs user choice,
+present its concrete scope and pause before parsing or submitting dependent work.
+
+
 Read
 the `context.indexer.provider-guide` resource at the exact path in the current Route
 for the registry-only default, Provider-layer rules, conflict handling and
@@ -29,8 +35,12 @@ the shipped release. Read those files only for a Provider you intend to select
 when its guidance is not already available; resolve its relative references
 against that supplied bundle, not an arbitrary installed copy. Do not run a separate catalog command,
 enumerate every installed Skill, or require a discovery report/confirmation.
-For a selected shipped Provider, copy its exact version, integrity and
-cli-bundled distribution from the supplied catalog. The same Skill/version
+For a selected shipped Provider, submit `{id, role, catalog_skill}` using the
+catalog's exact skill name, plus `config` only when needed. The CLI expands the
+version, integrity and distribution from the revision-bound catalog and validates
+the complete registry. Do not supply identity overrides alongside `catalog_skill`.
+Use full identity fields for an external Provider or a deliberately pinned existing
+entry; those still follow normal resolution and authorization. The same Skill/version
 visible in the Host is a projection, not another Provider or a reason for Host
 resolution. If selecting a relevant external Skill, read only its exact
 Host-exposed frontmatter and sibling `context-indexer.yaml` needed to identify
@@ -79,8 +89,10 @@ current Route when the work warrants a report. This is the last planning handoff
 before Partition: write or update `.tmp/work-start-report.md` with the Host file
 tool. Explain discovered Indexer choices and non-selections using the supplied
 catalog, visible relevant Skills and this task's materials; label unapplied choices
-as proposals. Follow the report procedure's reading invitation and pause before
-submitting the normal Provider selection below, unless explicitly waived.
+as proposals. Reuse the first report's confirmed purpose, scope and authority;
+updating it with compatible Provider choices does not require another pause.
+Ask again only for a material unresolved user decision or a current authorization
+Gate; do not bypass the initial report handoff if it has not happened.
 A useful report already formed during requirement setup should be reused; do not
 restart discussion or add report fields to the selection Result.
 
@@ -98,7 +110,8 @@ visible to the Host; leave it empty for a CLI-bundled selection without external
 observations. It is not an inventory of installed Skills. `indexers` contains
 the semantic registry entries selected for the
 unchanged requirements in the Action input. Select portable distribution
-locators and exact versions and integrities. Each required
+locators and exact versions and integrities for full identity entries; use
+`catalog_skill` for an explicit bundled catalog choice. Each required
 requirement/domain/source/module owner cell needs one primary Indexer;
 overlapping read scope is allowed for enrichers. One Indexer may combine a
 primary layer, supporting profiles, extension layers, and composers, but

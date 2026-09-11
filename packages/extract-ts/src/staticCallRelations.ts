@@ -40,8 +40,8 @@ export const collectStaticCallRelations = (
   source: string,
   filePath: string,
   importBindings: ReadonlyMap<string, ImportBinding>,
+  sourceFile: ts.SourceFile = createEcmaScriptSourceFile(source, filePath),
 ): RelationInfo[] => {
-  const sourceFile = createEcmaScriptSourceFile(source, filePath);
   const relations: RelationInfo[] = [];
 
   const visit = (node: ts.Node, owner: string) => {

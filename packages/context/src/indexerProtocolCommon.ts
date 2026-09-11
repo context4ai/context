@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { hashCanonicalIndexerJson } from "./indexerProtocolHash.js";
 import { z } from "zod";
 
 export const INDEXER_PROVIDER_MANIFEST_NAME = "context-indexer.yaml";
@@ -150,7 +150,7 @@ export function canonicalIndexerJson(value: unknown): string {
 }
 
 export function indexerProtocolDigest(value: unknown): string {
-  return `sha256:${createHash("sha256").update(canonicalIndexerJson(value)).digest("hex")}`;
+  return hashCanonicalIndexerJson(value, canonicalIndexerJson);
 }
 
 export function formatIndexerSchemaIssues(issues: readonly z.ZodIssue[]): string {

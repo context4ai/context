@@ -55,7 +55,7 @@ export async function buildPartitionSourceAccess(input: {
   if (!repo) throw new TypeError("Partition source repository is not registered");
   const value = { source_ref: input.binding.source_ref, module_ref: input.binding.module_ref,
     captured_root: resolve(input.projectRoot, repo.materializedAt), paths: input.paths,
-    guidance: "Read these captured files as needed. Additional exploration stays within the registered module and requirement read scope. Exploration does not expand this task's inventory ownership." };
+    guidance: `${input.binding.inventory_only ? "File inventory only: symbols, contracts and call relations have not been extracted. Inspect manifests, route/service registrations and representative source bodies to plan reader subjects. Physical batches are not business modules or page boundaries. Accepted batches are parsed before Author; missing implementation uses the existing material request. " : ""}Read these captured files as needed. Additional exploration stays within the registered module and requirement read scope. Exploration does not expand this task's inventory ownership.` };
   const digest = indexerProtocolDigest(value);
   return buildIndexerAuthorizedWorksetViewSource({ request: input.spec_request, projection_kind: "partition-source-access",
     input_digests: [digest], items: [{ ref: `source-access:${input.binding.source_ref}`, category: "source-access",

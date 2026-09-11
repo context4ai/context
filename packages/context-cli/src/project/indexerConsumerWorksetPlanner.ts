@@ -470,6 +470,9 @@ export function validateIndexerConsumerWorksetProjection(input: {
   const anchorIds = new Set(projection.fact_items
     .filter((item) => item.role === "consumer-anchor")
     .map((item) => item.fact_ref));
+  if (projection.family_key.startsWith("source-inventory:") && projection.fact_items.length === 0) {
+    for (const ref of projection.file_refs) anchorIds.add(ref);
+  }
   if (!projection.unresolved && [...inventoryIds].some((id) => !anchorIds.has(id))) {
     throw new TypeError("consumer workset inventory must be backed by projected anchors");
   }

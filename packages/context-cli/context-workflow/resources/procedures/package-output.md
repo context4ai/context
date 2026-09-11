@@ -6,11 +6,14 @@ mediaType: text/markdown
 
 # Package output
 
+Before editing, read `context.sdk.package-outputs`, especially its Agent configuration
+and delivery recipe. It contains the concrete SDK declarations and preview steps.
+
 Package selection decides how approved knowledge is presented to downstream
 agents or text consumers. Explain the available Context package kinds and their
 directory shape before asking the user to choose.
 
-After confirmation, declare the package in `src/index.ts` using the SDK schema
+Using the settled multi-select choice or current session authority, declare the packages in `src/index.ts` using the SDK schema
 resource. The current Route's `configuration.contract` lists the supported
 output choices, required fields, mechanical defaults, and follow-up status
 command; do not infer another factory or hidden default. Templates may customize presentation, but they must not overwrite
@@ -46,3 +49,19 @@ external links and accepts responsibility for publishing and access. Use a
 confirmed immutable HTTPS prefix where possible; do not infer or probe an
 unknown host convention. Explicit omission keeps unresolved links and must be
 described as such.
+
+For a new workspace without explicit output preferences, use KB + website. Enable
+`site: { title: <workspace title>, lang: <workspace language> }` on the same
+`kbPackage` in `src/index.ts`; selecting LLMS also adds `llmsPackage`. Omit `site`
+when the user deselects the website. Existing declarations are not automatically
+changed. A request to generate a documentation website follows this same route,
+including after initial delivery. Inspect existing declarations before editing;
+do not register the request itself as source material or re-index unchanged knowledge.
+
+Validate reading targets before build. Website navigation uses the approved reading
+structure; repair missing bindings through the current structure adjustment action.
+Build cost is rendering and local search generation, not another Indexer run.
+Report measured cost only; do not promise a fixed duration for all workspaces.
+Website failure preserves the previous package and requires repair or an explicit
+change of output choice. Publishing is a separate action handled by the user's
+chosen deployment tool; producing a website never authorizes deployment.

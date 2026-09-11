@@ -1,5 +1,5 @@
-import { readingStructureUpdateSchema } from "@c4a/context";
-import { applyReadingStructureUpdate } from "./readingStructure.js";
+import { knowledgeMapUpdateSchema } from "@c4a/context";
+import { applyKnowledgeMapUpdate } from "./knowledgeMap.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
@@ -29,8 +29,8 @@ async function maybe(root: string, path: string) {
 /** Adjust the current native source task. Invalidate selected input ownership,
  * never the workspace, and keep accepted peers in the existing temporary cache. */
 export async function adjustCurrentTaskSources(projectRoot: string, value: unknown) {
-  const reading = z.object({ reading_structure: readingStructureUpdateSchema }).strict().safeParse(value);
-  if (reading.success) return applyReadingStructureUpdate(projectRoot, reading.data.reading_structure);
+  const reading = z.object({ knowledge_map: knowledgeMapUpdateSchema }).strict().safeParse(value);
+  if (reading.success) return applyKnowledgeMapUpdate(projectRoot, reading.data.knowledge_map);
   if (value && typeof value === "object" && "knowledge_dependencies" in value) {
     const knowledge = z.object({ knowledge_dependencies: approvedKnowledgeRebindingSchema, instruction: z.string().trim().min(1) }).strict().parse(value);
     const { adjustCurrentTaskKnowledge } = await import("./taskKnowledgeAdjustment.js");

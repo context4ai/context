@@ -354,18 +354,22 @@ function countParseErrors(root: SyntaxNode): number {
 export function indexGoSource(source: string, filePath: string, options: { exportedOnly?: boolean } = {}): GoFileIndex {
   const tree = parser.parse(source);
   if (!tree) throw new Error(`Go parser returned no syntax tree for ${filePath}`);
-  const root = tree.rootNode;
-  const packageName = descendants(root, "package_identifier")[0]?.text ?? "unknown";
-  const imports = extractImports(root, filePath);
-  const relations = extractCallsAndRoutes(root, filePath, imports);
-  return {
-    path: filePath,
-    package: packageName,
-    imports,
-    symbols: extractSymbols(root, filePath, packageName, options.exportedOnly ?? false),
-    calls: relations.calls,
-    routes: relations.routes,
-    parseErrors: countParseErrors(root),
-    lines: source.length === 0 ? 0 : source.split(/\r\n|\r|\n/u).length,
-  };
+  try {
+    const root = tree.rootNode;
+    const packageName = descendants(root, "package_identifier")[0]?.text ?? "unknown";
+    const imports = extractImports(root, filePath);
+    const relations = extractCallsAndRoutes(root, filePath, imports);
+    return {
+      path: filePath,
+      package: packageName,
+      imports,
+      symbols: extractSymbols(root, filePath, packageName, options.exportedOnly ?? false),
+      calls: relations.calls,
+      routes: relations.routes,
+      parseErrors: countParseErrors(root),
+      lines: source.length === 0 ? 0 : source.split(/\r\n|\r|\n/u).length,
+    };
+  } finally {
+    tree.delete();
+  }
 }

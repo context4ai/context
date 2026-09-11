@@ -363,7 +363,7 @@ export const analyzeFile = async (
 ): Promise<FileAnalysis> => {
   const source = await fs.readFile(filePath);
   const sourceFile = createEcmaScriptSourceFile(source, filePath);
-  const commonJs = analyzeCommonJsModule(source, filePath);
+  const commonJs = analyzeCommonJsModule(source, filePath, sourceFile);
   const jsxLike = isJsxLikePath(filePath);
   const parserSource = jsxLike
     ? treeSitterCompatibleJsxSource(sourceFile, source)
@@ -390,53 +390,57 @@ export const analyzeFile = async (
     };
   }
 
-  if (commonJs.diagnostics.length > 0) {
+  try {
+    if (commonJs.diagnostics.length > 0) {
+      return {
+        declarations: new Map(),
+        importBindings: new Map(),
+        relations: [],
+        lines: countLines(source),
+        disposition: "unsupported",
+        diagnostics: commonJs.diagnostics,
+      };
+    }
+
+    const root = tree.rootNode;
+    const relations: RelationInfo[] = [];
+    const importBindings = await collectImportBindings(root, filePath, fs, resolver, relations, commonJs);
+    const declarations = new Map<string, DeclarationRecord>();
+
+    for (const relation of relations) {
+      if (relation.from === "") {
+        relation.from = filePath;
+      }
+    }
+
+    for (const child of root.namedChildren) {
+      if (DECLARATION_TYPES.has(child.type)) {
+        analyzeDeclaration(child, filePath, declarations, importBindings, relations);
+        continue;
+      }
+
+      if (child.type !== "export_statement") continue;
+      const declaration = child.namedChildren.find((node) => DECLARATION_TYPES.has(node.type));
+      if (declaration) {
+        analyzeDeclaration(declaration, filePath, declarations, importBindings, relations);
+      }
+    }
+
+    appendCommonJsSyntheticDeclarations(commonJs, filePath, declarations);
+    relations.push(...collectStaticCallRelations(source, filePath, importBindings, sourceFile));
+
     return {
-      declarations: new Map(),
-      importBindings: new Map(),
-      relations: [],
+      declarations,
+      importBindings,
+      // Preserve the physical source file for every relation. `from` may be a
+      // local identifier shared by many files, so downstream adapters must not
+      // infer provenance from the identifier alone.
+      relations: relations.map((relation) => ({ ...relation, file: filePath })),
       lines: countLines(source),
-      disposition: "unsupported",
-      diagnostics: commonJs.diagnostics,
+      disposition: "analyzed",
+      diagnostics: [],
     };
+  } finally {
+    tree.delete();
   }
-
-  const root = tree.rootNode;
-  const relations: RelationInfo[] = [];
-  const importBindings = await collectImportBindings(root, filePath, fs, resolver, relations, commonJs);
-  const declarations = new Map<string, DeclarationRecord>();
-
-  for (const relation of relations) {
-    if (relation.from === "") {
-      relation.from = filePath;
-    }
-  }
-
-  for (const child of root.namedChildren) {
-    if (DECLARATION_TYPES.has(child.type)) {
-      analyzeDeclaration(child, filePath, declarations, importBindings, relations);
-      continue;
-    }
-
-    if (child.type !== "export_statement") continue;
-    const declaration = child.namedChildren.find((node) => DECLARATION_TYPES.has(node.type));
-    if (declaration) {
-      analyzeDeclaration(declaration, filePath, declarations, importBindings, relations);
-    }
-  }
-
-  appendCommonJsSyntheticDeclarations(commonJs, filePath, declarations);
-  relations.push(...collectStaticCallRelations(source, filePath, importBindings));
-
-  return {
-    declarations,
-    importBindings,
-    // Preserve the physical source file for every relation. `from` may be a
-    // local identifier shared by many files, so downstream adapters must not
-    // infer provenance from the identifier alone.
-    relations: relations.map((relation) => ({ ...relation, file: filePath })),
-    lines: countLines(source),
-    disposition: "analyzed",
-    diagnostics: [],
-  };
 };

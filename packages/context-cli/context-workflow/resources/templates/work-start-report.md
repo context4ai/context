@@ -6,6 +6,14 @@ mediaType: text/markdown
 
 # <Task name> | Work-start report
 
+Before capture, use the request and batch metadata titles across the supplied list;
+follow the work-start procedure's 200-entry request limit and fallback to at most
+10 unresolved title lookups. Reuse H1/H2 only if
+already returned by metadata;
+do not fetch source bodies, outlines, images or attachments to fill this template.
+Retain URLs whose titles are unavailable. Body-level findings, counts and detailed
+chapter plans belong to the post-capture update, not initial start conditions.
+
 Open with who will use the knowledge, what it will help them do, and the first
 pages they can read. Use connected prose. State a concrete reading milestone;
 estimate time only when supported by actual conditions.
@@ -33,9 +41,10 @@ number of currently prepared tasks. Revisions can overlap delivered pages;
 do not add wave tasks to delivered pages to invent a page total.
 
 Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second uses `slice`. For example, with matching CLI values:
-**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前分片：补充内容检查 0/8 项]**
+`wave` supplement; the second describes the current action, using `slice` counts
+when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
+**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前进展：补充内容检查 0/8 项]**
 
 A completion receipt's `submitted_slice` describes the slice just submitted;
 `progress.scopes.slice` can already describe the next Route. Use the former when
@@ -43,15 +52,48 @@ reporting submission success and the latter when announcing the next slice.
 Never combine their numerators and denominators. A null slice means no active
 Agent task slice, not that the workflow is complete. During Review/build, state
 the returned Route action briefly rather than inventing a slice ratio.
-If progress is unavailable after task cleanup, say the counters are unavailable;
-do not turn the last wave into the overall scope or report delivery as zero.
+Before counters exist or after task cleanup, describe the known stage and current
+action instead of repeatedly saying counters are unavailable. For example:
+**[总体进展：正在准备知识工作区]**
+**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
+During review or packaging, name that action rather than a nonexistent slice.
+Do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.
 
+## Start conditions
+
+Place this compact table near the beginning of the report. Fill it from the user's
+request, task instructions, conversation, current settings and the title sample
+(captured evidence only in later updates).
+Use `none` only for an intentionally absent source family. Do not write the source
+registration payload while any required row is unresolved.
+
+| Start condition | Resolved value and basis |
+| --- | --- |
+| Readers and purpose | |
+| Questions or tasks to cover | |
+| Code scope | |
+| Document scope | |
+| Other source scope | |
+| Output language | |
+| Execution mode | |
+| Document optimization, visual conversion and debug | |
+| Delivery outputs | |
+| First useful delivery | |
+| Current version and inclusion boundary | |
+
+After the table, state that all required conditions are resolved. If any condition
+is still missing, ask the remaining focused questions in the
+conversation; do not present that draft as the completed report. Remove empty cells
+and template instructions from the actual report.
+
 ## What we read and learned
 
 Explain useful findings across the materials already read. Say which sources
+were only title-sampled before capture; do not imply that their bodies were read.
+After capture, explain which sources
 explain what, and which links were only retained without reading their targets.
 Name actual documents, images or attachments instead of internal processing terms.
 Link supporting material beside a conclusion when useful. Do not turn this into
@@ -59,6 +101,13 @@ a reading log or claim implementation, completeness or verification beyond what
 was actually inspected.
 
 ## Scope and choices
+
+When a large homogeneous group needs a decision, use
+[the shared scope review](../procedures/homogeneous-source-review.md). Present
+repository/revision, directory boundary, relevance, and, only after capture,
+file count and sample content,
+estimated cost with its basis, proposed treatment and the user’s choice together.
+Omit this table when no such group is observed; reuse settled choices on resume.
 
 Describe what will be covered, what serves as background, what is excluded and
 why. Preserve choices about priorities and missing information. Distinguish user
@@ -84,6 +133,40 @@ reliable estimate is possible, state what is already known, the concrete remaini
 work needed to estimate it and when you can revisit it. An internal stage name is
 not an explanation. Do not invent counts, imply that a check happened, or scan more
 material just to fill a number. Explain the delivery order after the first pages.
+
+## Enumerated planning scope
+
+Once CLI tasks are enumerated, replace any unknown planning total with the actual
+count and show this updated report to the user. If the total exceeds 50 planning
+tasks, pause for confirmation of this breakdown before continuing, including in
+managed mode unless the user explicitly waived this feedback wait. Reuse an
+applicable prior confirmation for the same continuing production task even when
+the above-threshold total is recalculated or revised; show the updated report but
+do not pause again solely for the threshold. Do not pause once
+per slice, delivery wave or recovery. Keep final page counts separate.
+Group by actual repositories, applications/services and document collections;
+frontend/backend are useful only when the material supports those categories.
+
+| Source or Indexer group | Planning tasks | Material scope |
+| --- | ---: | --- |
+
+For each substantial code group, provide:
+
+| Module or directory group | Planning tasks | Covered material |
+| --- | ---: | --- |
+
+Counts must reconcile to the current inventory. Show representative submodules
+where useful; a short conversation may group the remainder, while this report
+keeps the full module list. For documents, list their registered titles or group
+those titles by evidenced topic. Label directory-based descriptions as material
+orientation, not completed semantic analysis. Distinguish unbound modules from
+unknown content; do not invent a module classification or extrapolate page counts.
+If the current CLI lacks enough task metadata, identify the unavailable detail.
+
+On a material revision, include a short change note: previous scope → current
+scope, reason and delivery impact. Re-share the report link and the changes in
+conversation; do not silently update this file. Follow the procedure's existing
+feedback rules instead of adding a new CLI gate.
 
 ## Suggested reading organization
 
@@ -137,6 +220,47 @@ required question, move source files or require parsing again. Record material
 scope changes using the existing requirements flow. Suggested headings, writing
 style and ordinary version differences are advisory; let the Agent judge content
 and preserve source coordinates and a useful next investigation step.
+
+## Proposed website layout
+
+When website delivery is selected or proposed, draw one compact text wireframe
+using the proposed organization above. Show the site title and top navigation,
+a representative left menu with its hierarchy, article title and main chapters,
+and the right on-page outline. Use reader-facing names, not storage directories.
+For a narrow screen, briefly describe how menus collapse and body padding stays
+readable. Label the sketch as a proposal; it is not a screenshot or a built site.
+Keep it in this report without generating a temporary website or empty articles.
+
+Use this arrangement as a sketch guide; replace labels with the actual proposal
+and omit unsupported elements rather than copying placeholders into the report:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ Site title       Top-level entry A       Top-level entry B   │
+├────────────────┬───────────────────────────┬────────────────┤
+│ Selected group │ Representative article    │ On this page   │
+│   Overview     │                           │ Introduction   │
+│   Article A    │ Introduction              │ Main task      │
+│   Article B    │ Main task                 │ Reference      │
+│ Another group  │ Reference                 │                │
+└────────────────┴───────────────────────────┴────────────────┘
+```
+
+On material changes, revise this sketch alongside the directory and chapter plan,
+and send the report link plus a short change explanation to the user. Do not
+silently revise it or repeat the initial feedback pause for routine adjustments.
+
+## Delivery outputs (multiple selection)
+
+Show KB package, documentation website, and LLMS text as selectable channels.
+For a new workspace with no explicit preference, mark KB + website as the default;
+honor the user's selected subset and existing workspace configuration. User
+feedback here carries forward to packaging without a second per-channel question.
+Explain briefly that website rendering reuses the proposed knowledge map and approved
+articles. Agent edits the package declaration; no webpage coding is required from
+the user. Do not promise deployment or a fixed build time. If only website delivery
+is selected, explain that the site is generated beside the KB directory as
+`dist/<base>-site/`, where `<base>` removes one trailing `-kb` from the package name.
 
 ## What could be misrepresented
 

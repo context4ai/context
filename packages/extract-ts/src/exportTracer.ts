@@ -197,115 +197,119 @@ const traceFile = async (
     const tree = await parseFile(parserSource, jsxLike);
     if (!tree) return [];
 
-    const root = tree.rootNode;
-    const localDeclarations = collectLocalDeclarations(root);
-    const importBindings = collectImportBindings(root);
-    for (const declaration of commonJs.syntheticDeclarations) {
-      localDeclarations.set(declaration.name, declaration.name);
-    }
-    for (const binding of commonJs.bindings) {
-      importBindings.set(binding.localName, {
-        source: binding.source,
-        importedName: binding.importedName,
-      });
-    }
-    const exportsList: TracedExport[] = [];
-
-    for (const node of root.namedChildren) {
-      if (node.type !== "export_statement") continue;
-
-      const stringNode = node.namedChildren.find((child) => child.type === "string");
-      const exportClause = node.namedChildren.find((child) => child.type === "export_clause");
-      const declaration = node.namedChildren.find((child) => DECLARATION_TYPES.has(child.type));
-
-      if (declaration) {
-        for (const name of getDeclarationName(declaration)) {
-          exportsList.push({ exportedName: name, localName: name, declarationFile: filePath });
-        }
-        continue;
+    try {
+      const root = tree.rootNode;
+      const localDeclarations = collectLocalDeclarations(root);
+      const importBindings = collectImportBindings(root);
+      for (const declaration of commonJs.syntheticDeclarations) {
+        localDeclarations.set(declaration.name, declaration.name);
       }
-
-      if (node.text.startsWith("export default ")) {
-        const identifier = node.namedChildren.find(
-          (child) => child.type === "identifier" || child.type === "type_identifier",
-        );
-        if (identifier && localDeclarations.has(identifier.text)) {
-          exportsList.push({
-            exportedName: identifier.text,
-            localName: identifier.text,
-            declarationFile: filePath,
-          });
-        }
-        continue;
+      for (const binding of commonJs.bindings) {
+        importBindings.set(binding.localName, {
+          source: binding.source,
+          importedName: binding.importedName,
+        });
       }
+      const exportsList: TracedExport[] = [];
 
-      if (!exportClause) {
-        if (stringNode && node.text.startsWith("export *")) {
-          const targetPath = await resolveImportSourcePath(filePath, stripQuotes(stringNode.text), fs, state.resolver);
-          if (targetPath) {
-            exportsList.push(...(await traceFile(targetPath, fs, state)));
+      for (const node of root.namedChildren) {
+        if (node.type !== "export_statement") continue;
+
+        const stringNode = node.namedChildren.find((child) => child.type === "string");
+        const exportClause = node.namedChildren.find((child) => child.type === "export_clause");
+        const declaration = node.namedChildren.find((child) => DECLARATION_TYPES.has(child.type));
+
+        if (declaration) {
+          for (const name of getDeclarationName(declaration)) {
+            exportsList.push({ exportedName: name, localName: name, declarationFile: filePath });
           }
+          continue;
         }
-        continue;
-      }
 
-      if (!stringNode) {
+        if (node.text.startsWith("export default ")) {
+          const identifier = node.namedChildren.find(
+            (child) => child.type === "identifier" || child.type === "type_identifier",
+          );
+          if (identifier && localDeclarations.has(identifier.text)) {
+            exportsList.push({
+              exportedName: identifier.text,
+              localName: identifier.text,
+              declarationFile: filePath,
+            });
+          }
+          continue;
+        }
+
+        if (!exportClause) {
+          if (stringNode && node.text.startsWith("export *")) {
+            const targetPath = await resolveImportSourcePath(filePath, stripQuotes(stringNode.text), fs, state.resolver);
+            if (targetPath) {
+              exportsList.push(...(await traceFile(targetPath, fs, state)));
+            }
+          }
+          continue;
+        }
+
+        if (!stringNode) {
+          for (const specifier of exportClause.namedChildren.filter((child) => child.type === "export_specifier")) {
+            const parsed = parseExportSpecifier(specifier);
+            if (!parsed) continue;
+            if (localDeclarations.has(parsed.localName)) {
+              exportsList.push({
+                exportedName: parsed.exportedName,
+                localName: parsed.localName,
+                declarationFile: filePath,
+              });
+              continue;
+            }
+
+            const importBinding = importBindings.get(parsed.localName);
+            if (importBinding) {
+              exportsList.push(...(await traceImportedBinding(filePath, importBinding, parsed.exportedName, fs, state)));
+            }
+          }
+          continue;
+        }
+
+        const targetPath = await resolveImportSourcePath(filePath, stripQuotes(stringNode.text), fs, state.resolver);
+        if (!targetPath) continue;
+
+        const traced = await traceFile(targetPath, fs, state);
         for (const specifier of exportClause.namedChildren.filter((child) => child.type === "export_specifier")) {
           const parsed = parseExportSpecifier(specifier);
           if (!parsed) continue;
-          if (localDeclarations.has(parsed.localName)) {
-            exportsList.push({
-              exportedName: parsed.exportedName,
-              localName: parsed.localName,
-              declarationFile: filePath,
-            });
-            continue;
-          }
-
-          const importBinding = importBindings.get(parsed.localName);
-          if (importBinding) {
-            exportsList.push(...(await traceImportedBinding(filePath, importBinding, parsed.exportedName, fs, state)));
-          }
+          const match = traced.find((item) => item.exportedName === parsed.localName);
+          if (!match) continue;
+          exportsList.push({
+            exportedName: parsed.exportedName,
+            localName: match.localName,
+            declarationFile: match.declarationFile,
+          });
         }
-        continue;
       }
 
-      const targetPath = await resolveImportSourcePath(filePath, stripQuotes(stringNode.text), fs, state.resolver);
-      if (!targetPath) continue;
-
-      const traced = await traceFile(targetPath, fs, state);
-      for (const specifier of exportClause.namedChildren.filter((child) => child.type === "export_specifier")) {
-        const parsed = parseExportSpecifier(specifier);
-        if (!parsed) continue;
-        const match = traced.find((item) => item.exportedName === parsed.localName);
-        if (!match) continue;
-        exportsList.push({
-          exportedName: parsed.exportedName,
-          localName: match.localName,
-          declarationFile: match.declarationFile,
-        });
-      }
-    }
-
-    exportsList.push(...(await traceCommonJsExports({
-      analysis: commonJs,
-      filePath,
-      localDeclarations,
-      traceImported: (source, importedName, exportedName) => traceImportedBinding(
+      exportsList.push(...(await traceCommonJsExports({
+        analysis: commonJs,
         filePath,
-        { source, importedName },
-        exportedName,
-        fs,
-        state,
-      ),
-      traceWildcard: async (source) => {
-        const targetPath = await resolveImportSourcePath(filePath, source, fs, state.resolver);
-        return targetPath ? traceFile(targetPath, fs, state) : [];
-      },
-    })));
+        localDeclarations,
+        traceImported: (source, importedName, exportedName) => traceImportedBinding(
+          filePath,
+          { source, importedName },
+          exportedName,
+          fs,
+          state,
+        ),
+        traceWildcard: async (source) => {
+          const targetPath = await resolveImportSourcePath(filePath, source, fs, state.resolver);
+          return targetPath ? traceFile(targetPath, fs, state) : [];
+        },
+      })));
 
-    state.inFlight.delete(filePath);
-    return uniqueExports(exportsList);
+      return uniqueExports(exportsList);
+    } finally {
+      tree.delete();
+      state.inFlight.delete(filePath);
+    }
   })();
 
   state.cache.set(filePath, promise);

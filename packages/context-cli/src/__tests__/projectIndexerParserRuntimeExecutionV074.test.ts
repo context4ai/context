@@ -106,6 +106,25 @@ describe("0.7.4 parser runtime execution", () => {
       }],
     });
 
+    let loads = 0;
+    const lazyInput = {
+      projectRoot: process.cwd(), profile_contract: profiles, profile_id: "api-service",
+      execution_plan: plan, dependencies: lockedDependencies({ requirement, mapping, lock }),
+      mappings: [mapping], locks: [lock], entry_inputs: [],
+      load_entry_input: async () => {
+        loads++;
+        return { entry_digest: indexerParserExecutionEntryDigest(entry), files: { "api/example.thrift": content } };
+      },
+    };
+    const lazy = await executeProjectIndexerParserPlan(lazyInput);
+    expect(lazy).toEqual(receipt);
+    expect(loads).toBe(1);
+    expect(await executeProjectIndexerParserPlan({ ...lazyInput, previous_execution: lazy })).toEqual(receipt);
+    expect(loads).toBe(1);
+    await expect(executeProjectIndexerParserPlan({ ...lazyInput,
+      load_entry_input: async () => ({ entry_digest: digest("wrong-entry"), files: {} }),
+    })).rejects.toThrow("another execution entry");
+
     expect(receipt.merge.primary_owners).toEqual([expect.objectContaining({
       normalized_path: "api/example.thrift",
       disposition: "unsupported",
@@ -312,7 +331,7 @@ describe("0.7.4 parser runtime execution", () => {
     const before = await run(JSON.stringify({ module: "a", revision: 1 }));
     const cacheRoot = await mkdtemp(join(tmpdir(), "context-parser-source-cache-"));
     try {
-      await writeIndexerParserRuntimeIndex({
+      const cacheInput = {
         projectRoot: cacheRoot,
         indexer_id: "source-local-fixture",
         indexer_digest: digest("indexer"),
@@ -325,7 +344,13 @@ describe("0.7.4 parser runtime execution", () => {
         }],
         parser_package_set_digest: digest("parser-packages"),
         execution: before,
-      });
+      };
+      await writeIndexerParserRuntimeIndex(cacheInput);
+      const isolated = { ...cacheInput, cache_key: "source-local-fixture:module-a" };
+      await writeIndexerParserRuntimeIndex(isolated);
+      const isolatedManifest = await readIndexerParserRuntimeIndexManifest(isolated);
+      expect(await readIndexerParserRuntimeExecution({ ...isolated, manifest: isolatedManifest })).toEqual(before);
+
       const manifest = await readIndexerParserRuntimeIndexManifest({
         projectRoot: cacheRoot,
         indexer_id: "source-local-fixture",

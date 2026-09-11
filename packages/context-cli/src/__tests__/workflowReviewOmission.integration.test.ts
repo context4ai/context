@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { completeAuthorStage, completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
@@ -47,6 +47,8 @@ for (const allOmitted of [false, true]) test(`Review omission reaches the next r
   const status = () => collectProjectStatus(root, { managed: true, authorities });
   expect((await status()).workflow.current?.node).toBe("close-approved-knowledge");
   await closeProjectWorkspace(root);
+  await (await import("./knowledgeMapReview.fixture.js")).placeApprovedReadingFixture(root);
+  await (await import("./workspaceVersionDelivery.fixture.js")).recordFixtureVersionIfRequired(root);
   if (!allOmitted) {
     expect((await status()).workflow.current?.node).toBe("build-next");
     await buildProjectPackages(root);

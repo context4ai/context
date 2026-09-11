@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -35,7 +35,7 @@
     "README.zh-CN.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun run ../build.ts src/cli.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && cp ../../LICENSE dist/LICENSE",
+    "build": "rm -rf dist && bun run ../build.ts src/cli.ts src/parserEntryWorker.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && cp ../../LICENSE dist/LICENSE",
     "build:indexers": "bun run scripts/build-indexers.ts",
     "generate:article-templates": "bun run scripts/generate-article-templates.ts",
     "build:workflow": "bun run scripts/build-workflow.ts",
@@ -43,6 +43,8 @@
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
     "test": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --max-concurrency=1 --timeout=120000",
+    "test:full": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full --max-concurrency=1 --timeout=1200000",
+    "test:full-only": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full-only --max-concurrency=1 --timeout=1200000",
     "lint": "eslint src --cache --cache-location .tmp/eslint-cache",
     "clean-cache": "bun run src/cli.ts clean-cache"
   },
@@ -65,6 +67,7 @@
     "ink": "^5.0.0",
     "jiti": "^2.7.0",
     "mdast-util-to-string": "^4.0.0",
+    "mermaid": "11.12.0",
     "react": "^18.3.1",
     "remark-gfm": "^4.0.1",
     "remark-mdx": "^3.1.1",
@@ -73,6 +76,7 @@
     "sharp": "^0.35.3",
     "typescript": "^5.5.4",
     "unified": "^11.0.5",
+    "vitepress": "1.6.4",
     "web-tree-sitter": "^0.20.8",
     "yaml": "^2.5.1",
     "zod": "^3.23.8"

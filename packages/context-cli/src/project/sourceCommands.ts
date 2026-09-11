@@ -278,6 +278,8 @@ export function registerProjectSourceCommands(program: Command): void {
     .option("--format <format>", "output format: json | yaml | table", "table")
     .addHelpText("after", `
 Payload example:
+  work_start_report:
+    path: .tmp/work-start-report.md
   sources:
     - type: repo
       module: module-a
@@ -293,6 +295,8 @@ repo.local is resolved from the Context project root. A valid local Git checkout
 lets the CLI infer origin and the current commit; remote/ref are needed only when
 that local identity cannot be resolved. If local is omitted, the CLI also accepts
 one uniquely named Git directory at <project-root>/<module> or ../<module>.
+The current source-boundary Route requires the completed, presented work-start
+report shown above. A direct maintenance call outside that Route may omit it.
 `)
     .action(async (namespace: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
@@ -310,6 +314,7 @@ one uniquely named Git directory at <project-root>/<module> or ../<module>.
         projectRoot,
         namespace: sourceNamespace.name,
         payload,
+        requireWorkStartReport: typeof program.opts().workflowRevision === "string",
       });
       writeFormatted(result, format);
     });

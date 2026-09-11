@@ -435,6 +435,8 @@ export async function executeProjectIndexerParserPlan(input: {
   mappings: readonly IndexerParserCoordinateMapping[];
   locks: readonly IndexerParserResolutionLock[];
   entry_inputs: readonly IndexerParserRuntimeEntryInput[];
+  /** Resolve only the next non-reusable entry, so prepared parser state can be released. */
+  load_entry_input?: (entry: IndexerParserExecutionPlanEntry) => Promise<IndexerParserRuntimeEntryInput>;
   previous_execution?: IndexerParserRuntimeExecutionReceipt;
 }): Promise<IndexerParserRuntimeExecutionReceipt> {
   const plan = validateIndexerParserExecutionPlan(input.execution_plan);
@@ -501,7 +503,11 @@ export async function executeProjectIndexerParserPlan(input: {
       });
       continue;
     }
-    const entryInput = entryInputs.get(entryDigest);
+    process.stderr.write(`[context parser] ${entry.source_ref}: ${entry.capability}, ${entry.files.length} files; prepare and adapt\n`);
+    const entryInput = entryInputs.get(entryDigest) ?? await input.load_entry_input?.(entry);
+    if (entryInput !== undefined && entryInput.entry_digest !== entryDigest) {
+      throw new TypeError("parser runtime input targets another execution entry");
+    }
     if (entryInput === undefined) {
       throw new TypeError(`parser runtime lacks input for ${entry.capability} entry`);
     }
@@ -631,6 +637,7 @@ export async function executeProjectIndexerParserPlan(input: {
       result,
     });
   }
+  process.stderr.write(`[context parser] merging ${executions.length} parser results\n`);
   const merge = mergeIndexerEvidenceAdapterExecutions({
     execution_plan: plan,
     executions,

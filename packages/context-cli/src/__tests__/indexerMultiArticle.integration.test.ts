@@ -1,4 +1,4 @@
-import { readReadingStructure } from "../project/readingStructure.js";
+import { readKnowledgeMap } from "../project/knowledgeMap.js";
 import { adjustCurrentTaskSources } from "../project/taskSourceAdjustment.js";
 import { join } from "node:path";
 import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
@@ -12,7 +12,7 @@ import { cp, readFile, writeFile, rm } from "node:fs/promises";
 import { indexerAuthorSemanticInputSchema, type IndexerArticlePlan } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
@@ -37,12 +37,12 @@ test("accepted multi-article plan keeps identities and shared member ownership t
     const navigationTargets = review.preview.topics.flatMap(topic => topic.article_targets ?? []);
     expect(navigationTargets.length).toBeGreaterThan(0);
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision, decision: "approved",
-      reading_structure: { expected_revision: null, remove: [], upsert: [
+      knowledge_map: { expected_revision: null, remove: [], upsert: [
         { key: "library", parent: null, title: "Components and adoption", order: 0 },
         ...navigationTargets.map((target, index) => ({ key: `entry-${index}`, parent: "library", title: target.article_key, order: index,
           target: { artifact_ref: target.artifact_ref, section_key: target.section_keys[0]! } })),
       ] } });
-    expect(await readFile(join(root, "src/reading-structure.yaml"), "utf8")).toContain("Components and adoption");
+    expect(await readFile(join(root, "src/knowledge-map.yaml"), "utf8")).toContain("Components and adoption");
     const current = (await resolveCurrentIndexerAgentContext(root))!;
     for (const descriptor of current.descriptor.tasks) {
     const task = await loadCurrentIndexerBatchTask({ projectRoot: root, descriptor: current.descriptor, taskKey: descriptor.task_key });
@@ -91,7 +91,7 @@ test("accepted multi-article plan keeps identities and shared member ownership t
     await acceptStarterPackageTemplates({ projectRoot: root });
     const built = await buildProjectPackages(root);
     expect(built.packages[0]!.files).toBeGreaterThan(candidates.length);
-    const navigation = JSON.parse(await readFile(join(root, "dist/article-kb/context-reading-structure.json"), "utf8"));
+    const navigation = JSON.parse(await readFile(join(root, "dist/article-kb/context-knowledge-map.json"), "utf8"));
     expect(navigation.warnings).toEqual([]);
     expect(navigation.entries[0].children.length).toBe(navigationTargets.length);
     expect(await readFile(join(root, "dist/article-kb/index.md"), "utf8")).toContain("Components and adoption");
@@ -104,9 +104,9 @@ test("accepted multi-article plan keeps identities and shared member ownership t
       expect(await readFile(join(root, "dist/article-kb", decodeURIComponent(path)), "utf8")).toContain(`<a id="${anchor}"></a>`);
     }
     const originalBodies = await Promise.all(candidates.map(candidate => readFile(join(root, "knowledge", candidate.path), "utf8")));
-    const reading = (await readReadingStructure(root))!;
+    const reading = (await readKnowledgeMap(root))!;
     const library = reading.entries.find(entry => entry.key === "library")!;
-    await adjustCurrentTaskSources(root, { reading_structure: { expected_revision: reading.revision,
+    await adjustCurrentTaskSources(root, { knowledge_map: { expected_revision: reading.revision,
       upsert: [{ ...library, title: "Adoption by reader task" }], remove: [] } });
     const renamed = await buildProjectPackages(root);
     expect(renamed.packages[0]!.state).toBe("updated");

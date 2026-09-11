@@ -206,9 +206,11 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
     configuration: {
       file: "src/index.ts",
       action:
-        "Declare the package output confirmed for the current approved knowledge.",
+        "Declare all selected outputs together. For a new workspace without an explicit output preference, default to a knowledge-base package with site enabled. Preserve existing choices. A website shares its kbPackage; do not create a duplicate KB.",
       contract: {
         target: "package-output",
+        selection: "multiple",
+        recommended_choices: ["agent-knowledge-base", "documentation-website"],
         choices: [
           {
             id: "agent-knowledge-base",
@@ -217,6 +219,12 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
             defaults: {
               template: "src/package-templates/kb",
             },
+          },
+          {
+            id: "documentation-website",
+            factory: "kbPackage",
+            required: ["name", "template", "site"],
+            defaults: { template: "src/package-templates/kb", site: {} },
           },
           {
             id: "llm-text",

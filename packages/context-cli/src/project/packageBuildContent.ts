@@ -1,4 +1,6 @@
 import { projectPackageArticleLinks, type PackageArticleLinkWarning } from "./packageArticleLinks.js";
+import { buildLlmsDocuments, llmsArticles } from "./packageLlms.js";
+import { readKnowledgeMap } from "./knowledgeMap.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -148,16 +150,12 @@ export async function packageKnowledgeBundle(
   pkg: PackageDefinition,
   files: readonly ApprovedKnowledgeFile[],
 ): Promise<string> {
+  if (pkg.kind === "package.llms") {
+    const map = await readKnowledgeMap(projectRoot);
+    return buildLlmsDocuments({ title: pkg.name, articles: llmsArticles(pkg, files), ...(map ? { map } : {}) }).files.get("llms.txt")!;
+  }
   const projected = await Promise.all(files.map(async (file) => {
-    const content = packageKind(pkg) === "llms"
-      ? (await projectPackageKnowledgeAssets({
-          projectRoot,
-          pkg,
-          file,
-          content: file.content,
-          linkFromPath: "llms.txt",
-        })).content
-      : file.content;
+    const content = file.content;
     const distPath = packageKnowledgeOutputPath(pkg, file.relPath);
     const lines = [`# ${distPath}`, ""];
     if (file.relPath !== distPath) lines.push(`<!-- approved_path: ${file.relPath} -->`, "");

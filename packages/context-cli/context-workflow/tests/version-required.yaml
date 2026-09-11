@@ -1,0 +1,25 @@
+schema: agent-graph.test.v1
+name: completed formal changes require a workspace version before completion
+graph: workspace
+entry: context
+state:
+  facts:
+    version: { current: false, recording_satisfied: false }
+    workspace: { task_start_authorized: true, project_entry_valid: true, state_valid: true }
+    verification: { blocking_clear: true }
+    evidence: { maintenance_clear: true }
+    indexer: { lifecycle_current: true, registry_state: current }
+    gates:
+      evidence_maintenance_resolved: true
+      source_read_resolved: true
+      knowledge_review_resolved: true
+      package_output_resolved: true
+    sources: { registered: true, repositories_ready: true }
+    capture: { declarations_complete: true, batch_digest: null, complete: true }
+    review: { gate_clear: true, batch_resolved: true }
+    close: { current: true }
+    packages: { declared: true, templates_reviewed: true, current: false }
+expect:
+  statusCode: actionable
+  primaryNode: record-workspace-version
+  primaryReasonCode: route.version.content-changed

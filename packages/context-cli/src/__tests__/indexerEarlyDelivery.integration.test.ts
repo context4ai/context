@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
-import { buildProjectPackages } from "../project/packageBuilder.js";
+import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
 import { collectProjectStatus } from "../project/status.js";
@@ -32,6 +32,8 @@ test("an explicit build request delivers an unfinished Author batch, keeps Revie
     await closeProjectWorkspace(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     await buildProjectPackages(root);
+    const { workspaceVersion } = await import("../project/workspaceChangelog.js");
+    expect(await workspaceVersion(root)).toBe("0.0.0");
     const first = await readIndexerDelivery(root);
     expect(Object.keys(first!.delivered)).toHaveLength(3);
     await configureDeliveryCadence(root, "20");
@@ -58,13 +60,14 @@ test("an explicit build request delivers an unfinished Author batch, keeps Revie
     const delivery = (await readIndexerDelivery(root))!;
     expect(delivery.current.length).toBeGreaterThan(0);
     expect(delivery.current.length).toBeLessThan(30);
-    expect((await collectProjectStatus(root)).workflow.current?.availability).toBe("requires-user");
+    expect((await collectProjectStatus(root)).workflow.current).toMatchObject({ node: "review-current-batch", availability: "requires-user" });
     // A repeated request at Review is already satisfied, not a request for another checkpoint.
     await runCurrentIndexerLifecycle({ projectRoot: root, managed: false, authorities: [], deliver: true });
     expect((await readIndexerDelivery(root))?.early_requested).not.toBe(true);
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
     await buildProjectPackages(root);
+    expect(await workspaceVersion(root)).toBe("0.0.0");
     expect(Object.keys((await readIndexerDelivery(root))!.delivered).length).toBeGreaterThan(3);
     expect(await currentLedger(root)).toEqual(checkpoint);
     await advanceCurrentIndexerLifecycle(root);

@@ -1,6 +1,11 @@
 import type { CommandMatrixEntry } from "./pathFreeContractTypes.js";
 
 export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
+  { command: "version", view: "production-semantic", handles: ["version"], notes: "Knowledge workspace version namespace." },
+  { command: "version inspect", view: "production-semantic", handles: ["version", "expected_digest"], notes: "Inspects formal changes before recording a version." },
+  { command: "version record", view: "production-semantic", handles: ["version", "expected_digest"], notes: "Atomically records an increasing version and agent-written changelog." },
+  { command: "version publish-check", view: "production-semantic", handles: ["version", "hash"], notes: "Checks built artifacts against the successful publication baseline without uploading." },
+  { command: "version published", view: "production-semantic", handles: ["version", "hash", "receipt"], notes: "Records an explicitly supplied successful external publication receipt." },
   { command: "entry", view: "production-semantic", handles: ["project_status", "workspace_root", "next_command"], notes: "Resolves the single agent entry into initialization, workspace relocation, or current Agent Graph workflow evaluation." },
   { command: "init", view: "production-semantic", handles: ["project_dir", "project_name"], notes: "Creates a project-local Context workspace." },
   { command: "plugin", view: "production-semantic", handles: ["plugin_status", "agent_adapter"], notes: "Global Context agent plugin namespace." },
@@ -21,6 +26,8 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "update", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Prepare a scoped update from fixed source inputs and approved knowledge." },
   { command: "task", view: "production-semantic", handles: ["revision", "source_ref", "next_command"], notes: "Current task adjustment and explicit rollback namespace." },
   { command: "task prepare", view: "production-semantic", handles: ["state", "next_command"], notes: "Prepare an explicitly requested workspace maintenance reset while retaining approved knowledge and registered sources." },
+  { command: "task recover", view: "production-semantic", handles: ["resources", "actions", "revision", "affected_worksets", "next"], notes: "Independent diagnostics and digest-bound draft recovery; sanitized issue template when safe recovery is unavailable." },
+  { command: "task resume", view: "production-semantic", handles: ["action", "next"], notes: "Explicitly reopen a cleared task from current requirements while preserving retained knowledge and any active ledger." },
   { command: "task maintain", view: "production-semantic", handles: ["id", "targets", "timing", "next_command"], notes: "Registers approved-page maintenance without replacing active production." },
   { command: "task maintenance-status", view: "production-semantic", handles: ["revision", "state", "reason"], notes: "Reads active and queued maintenance and its current transition revision." },
   { command: "task advance-maintenance", view: "production-semantic", handles: ["revision", "outcome", "next_command"], notes: "Executes the Graph-selected transition at a safe delivery boundary." },

@@ -4,7 +4,7 @@ import { rm } from "node:fs/promises";
 import { indexerAuthorSemanticInputSchema } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";

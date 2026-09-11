@@ -10,6 +10,17 @@ A source boundary is a user decision about which repositories, modules, or
 documents may become approved knowledge. It affects extraction scope,
 provenance, output paths, and freshness checks.
 
+For the first production task in a newly initialized workspace, source
+registration is the boundary after work-start intake. Read the required work-start
+procedure and template, treat a supplied checklist as task guidance, read batch
+metadata titles under that procedure's limits and fallback without fetching bodies
+or outlines, resolve the required information,
+present the completed report and wait for user feedback before preparing this
+action's payload. Do not start registration, capture or extraction while any start
+condition remains unresolved. The payload must carry the report path required by
+the current schema; the CLI verifies the report exists and records its digest but
+does not judge its prose or infer decisions from it.
+
 Do not infer this boundary by using the current directory, monorepo layout,
 package names, or Git remotes to select additional sources. Once the user has named a concrete local module
 or path, resolving its unique local directory and reading that checkout's Git

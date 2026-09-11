@@ -1,3 +1,5 @@
+import { normalizePackageSite, type PackageSiteDefinition } from "./packageSite.js";
+export { packageSiteSchema, type PackageSiteDefinition } from "./packageSite.js";
 import type {
   PackageKind,
   PackageNavigationDefinition,
@@ -422,6 +424,7 @@ export type KbPackageDefinition = BasePackageDefinition & {
   navigation: PackageNavigationDefinition;
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
+  site?: PackageSiteDefinition;
 };
 
 export type LlmsPackageDefinition = BasePackageDefinition & {
@@ -703,16 +706,19 @@ export const kbPackage = (definition: {
   navigation?: Partial<PackageNavigationDefinition>;
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
+  site?: PackageSiteDefinition;
 }): KbPackageDefinition => {
   const base = createPackageDefinitionBase("kb", definition);
   const distribution = normalizePackageDistribution(definition.distribution);
   const assets = normalizePackageAssets(definition.assets);
+  const site = normalizePackageSite(definition.site);
   return {
     kind: "package.kb",
     ...base,
     navigation: normalizePackageNavigation(definition.navigation),
     ...(distribution === undefined ? {} : { distribution }),
     assets,
+    ...(site === undefined ? {} : { site }),
   };
 };
 
@@ -738,6 +744,6 @@ export type { SessionChange } from "./sessionMetadata.js";
 export { indexerArticleKeySchema, indexerArticlePlanSchema, validateIndexerArticlePlan, indexerArticleSectionKey, validateIndexerPlannedArticles } from "./indexerArticlePlan.js";
 export type { IndexerArticlePlan } from "./indexerArticlePlan.js";
 
-export * from "./readingStructure.js";
+export * from "./knowledgeMap.js";
 export * from "./indexerKnowledgeDependency.js";
 export * from "./indexerApprovedKnowledge.js";

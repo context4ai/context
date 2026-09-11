@@ -1,3 +1,4 @@
+import { indexerPlanningSummary } from "./indexerPlanningSummary.js";
 import { indexerProgressScopes } from "./indexerProgressScopes.js";
 import { readPartitionStream } from "./indexerPartitionStream.js";
 import { readCandidateRecords } from "./candidateLedger.js";
@@ -14,6 +15,7 @@ import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 export interface IndexerCurrentProgress {
   scopes: ReturnType<typeof indexerProgressScopes>;
   stage: "partition" | "author";
+  planning_summary?: Awaited<ReturnType<typeof indexerPlanningSummary>>;
   planning?: { total: number; accepted: number; remaining: number; delivered_waves_pending_planning: boolean };
   workflow_progress: {
     scope: "current-indexer-run"; partitioned: number | null; planned_topics: number | null;
@@ -113,6 +115,7 @@ export async function currentIndexerProgress(input: {
   const activeComposer = composerEntries.filter(entry => entry.state === "running");
   const mainSlice = descriptor?.tasks.map(task => ledger.entries.find(entry => entry.workset_digest === task.workset_digest));
   return {
+    ...(planningLedger === undefined ? {} : { planning_summary: await indexerPlanningSummary(input.projectRoot, planningLedger) }),
     scopes: indexerProgressScopes({
       delivered,
       planning: planningLedger ? { completed: planningLedger.entries.filter(entry => entry.state === "accepted").length, total: planningLedger.entries.length, stale: planningLedger.entries.filter(entry => entry.state === "stale").length } : null,

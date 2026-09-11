@@ -8,7 +8,7 @@ export function partitionDependencyDigest(
   binding: ProjectIndexerMainSourceBinding,
   projection: IndexerConsumerWorksetProjection | undefined,
 ): string | undefined {
-  if (binding.adapter !== "parser-facts" || projection === undefined || projection.unresolved) return undefined;
+  if (binding.adapter !== "parser-facts" || projection === undefined) return undefined;
   const selectedFiles = new Set(projection.file_refs);
   const selectedFacts = new Set(projection.fact_items.map(item => item.fact_ref));
   const files = binding.parser_fact_view.files.filter(file => selectedFiles.has(file.file_ref));

@@ -4,7 +4,17 @@ description: Fact-grounded lifecycle for a Context knowledge workspace.
 entrypoints:
   context: repair-project-entry
   rollback: close-rollback
+  recovery: inspect-task-recovery
 nodes:
+  - id: inspect-task-recovery
+    kind: action
+    reasonCode: route.workspace.recovery
+    action: actions/inspect-task-recovery.yaml
+    resources:
+      required:
+        - resources/procedures/task-recovery.md
+        - resources/templates/recovery-issue.md
+
   - id: repair-project-entry
     kind: action
     reasonCode: route.workspace.project-entry-invalid
@@ -32,6 +42,7 @@ nodes:
       recommended:
         - resources/procedures/workspace-prepare.md
         - resources/procedures/workspace-restore.md
+        - resources/procedures/task-recovery.md
 
   - id: repair-verification
     kind: action
@@ -96,7 +107,7 @@ nodes:
     reasonCode: route.source.boundary-required
     gate:
       id: source-boundary
-      prompt: Choose the repositories, modules, or documents that may become knowledge sources.
+      prompt: Complete and present the first-task work-start report, resolve every required start condition, then confirm the repositories, modules, or documents that may become knowledge sources. A task brief is not itself a source unless explicitly selected for ingestion.
       authority: context.source-boundary
       delegatable: false
     resolutionAction: actions/register-source-batch.yaml
@@ -110,6 +121,8 @@ nodes:
         - resources/dialogue/source-boundary.md
         - resources/dialogue/workflow-mode-after-creation.md
         - resources/views/source-current.yaml
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
       recommended:
         - resources/procedures/source-capture-detailed.md
 
@@ -185,12 +198,28 @@ nodes:
         - resources/procedures/source-capture-detailed.md
         - resources/manuals/guides/lark-resources.md
 
+  - id: reopen-cleared-task
+    kind: gate
+    reasonCode: route.workspace.task-cleared
+    resolutionAction: actions/resume-workspace-task.yaml
+    gate:
+      id: resume-workspace-task
+      prompt: Task state was cleared; retained knowledge does not prove all registered scope was delivered. Stay ready unless the user asks to resume production. With that explicit request, run task resume and follow the fresh Route.
+      delegatable: false
+    satisfiedBy:
+      - path: workspace.task_start_authorized
+        equals: true
+    resources:
+      required:
+        - resources/procedures/workspace-prepare.md
+
   - id: run-indexer-lifecycle
     kind: action
     reasonCode: route.indexer.lifecycle-required
     action: actions/run-indexer-lifecycle.yaml
     resources:
       required:
+        - resources/procedures/homogeneous-source-review.md
         - resources/contracts/indexer-registry-bootstrap.yaml
         - resources/contracts/indexer-provider-guide.yaml
         - resources/views/source-boundary.yaml
@@ -345,6 +374,14 @@ nodes:
     kind: terminal
     terminalOutcome: completed
 
+  - id: record-workspace-version
+    kind: action
+    reasonCode: route.version.content-changed
+    action: actions/record-workspace-version.yaml
+    satisfiedBy:
+      - path: version.recording_satisfied
+        equals: true
+
 edges:
   - { from: repair-project-entry, to: repair-workspace-state }
   - { from: repair-workspace-state, to: repair-verification }
@@ -355,13 +392,15 @@ edges:
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
-  - { from: capture-next, to: run-indexer-lifecycle }
+  - { from: capture-next, to: reopen-cleared-task }
+  - { from: reopen-cleared-task, to: run-indexer-lifecycle, kind: gatedBy }
   - { from: run-indexer-lifecycle, to: review-current-batch }
   - { from: review-current-batch, to: close-approved-knowledge, kind: gatedBy }
   - { from: close-approved-knowledge, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: build-next, kind: gatedBy }
+  - { from: review-package-template, to: record-workspace-version, kind: gatedBy }
+  - { from: record-workspace-version, to: build-next }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }
   - { from: close-rollback, to: build-rollback }

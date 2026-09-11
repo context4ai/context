@@ -111,6 +111,7 @@ export async function prepareIndexerAuthorMaterial(input: {
     projectRoot: input.projectRoot, indexer_id: workset.indexer_id,
     source_ref: workset.source_ref, module_ref: workset.module_ref,
     profile_contract_digest: workset.profile_contract_digest,
+    inventory_only: true,
   });
   const files = inventory.files.filter((file) => hints.some((hint) =>
     file.normalized_path === hint || file.normalized_path.startsWith(`${hint}/`)));

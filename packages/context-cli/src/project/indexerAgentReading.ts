@@ -1,3 +1,4 @@
+import { authorInventoryReading } from "./indexerAuthorInventoryReading.js";
 import { projectAuthorWritingBrief } from "./indexerAuthorWritingBrief.js";
 import { compactReadingMembers, MEMBER_ROWS_GUIDANCE } from "./indexerReadingMemberRows.js";
 import { compactAuthorFact, readingDetail } from "./indexerAuthorCompactReading.js";
@@ -129,7 +130,8 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
     if (category === "inventory-member" && workset.stage === "author") {
       const members = view.items.filter(item => item.category === category);
       if (members.length > 0) output.push("### inventory-member", "",
-        readingBlock(JSON.stringify(authorRecordRows(members.map(item => item.value)))), "");
+        readingBlock(JSON.stringify(authorRecordRows(authorInventoryReading(view)))), "",
+        "Member facts list exact authorized references with parser names/kinds and explicit propsType when present. Use these references for section facts or contract selection; the mapping does not imply public visibility or coverage. Do not guess another fact from a name suffix.", "");
       continue;
     }
     for (const item of view.items.filter((candidate) => candidate.category === category)) {

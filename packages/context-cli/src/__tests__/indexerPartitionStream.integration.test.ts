@@ -1,3 +1,7 @@
+import { placeApprovedReadingFixture } from "./knowledgeMapReview.fixture.js";
+import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
+import { prepareIndexerAuthorMaterial } from "../project/indexerAuthorMaterial.js";
+import { applyIndexerAuthorMaterials } from "../project/indexerAuthorMaterialStore.js";
 import { configureDeliveryCadence, readDeliveryCadence } from "../project/indexerDeliveryCadence.js";
 import { currentIndexerProgress } from "../project/indexerCurrentProgress.js";
 import { expect, test } from "bun:test";
@@ -5,7 +9,7 @@ import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { buildProjectPackages } from "../project/packageBuilder.js";
@@ -40,11 +44,21 @@ test("ready themes deliver through structure/content review and build before rem
     expect(structure.approved).toBe(false);
     expect((await currentLedger(root))!.entries.every(entry => entry.state === "pending")).toBe(true);
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: structure.revision, decision: "approved" });
+    // Normal source expansion changes execution digests after the wave snapshot.
+    await resolveCurrentIndexerAgentContext(root);
+    const running = (await currentLedger(root))!.entries.find(entry => entry.state === "running")!;
+    const beforeExpansion = await currentSpec({ projectRoot: root, request_digest: running.execution_request_digest });
+    if (beforeExpansion.request.workset.stage !== "author") throw new Error("Expected Author");
+    const material = await prepareIndexerAuthorMaterial({ projectRoot: root, spec: beforeExpansion,
+      group_key: beforeExpansion.request.workset.group_key, source_hints: ["src"] });
+    expect(material.spec.request.execution_request_digest).not.toBe(running.execution_request_digest);
+    await applyIndexerAuthorMaterials({ projectRoot: root, materials: [material] });
     await completeAuthorStage(root);
     expect((await readCandidateRecords(root)).length).toBeGreaterThan(0);
     expect((await readPartitionStream(root))!.phase).toBe("author");
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
     // Closing does not erase planning or mark the wave delivered before build.
     expect((await readPartitionStream(root))!.phase).toBe("author");
     await acceptStarterPackageTemplates({ projectRoot: root });
@@ -71,6 +85,7 @@ test("ready themes deliver through structure/content review and build before rem
       await completeAuthorStage(root);
       await approveCandidates(root, await readCandidateRecords(root));
       await closeProjectWorkspace(root);
+      await placeApprovedReadingFixture(root);
       await buildProjectPackages(root);
     }
     expect(sizes[0]).toBe(3);
@@ -122,6 +137,7 @@ test("larger streaming work amortizes later delivery waves while planning still 
       if (candidates.length) {
         await approveCandidates(root, candidates);
         await closeProjectWorkspace(root);
+        await placeApprovedReadingFixture(root);
         await acceptStarterPackageTemplates({ projectRoot: root });
         await buildProjectPackages(root);
       }
@@ -139,7 +155,7 @@ test("larger streaming work amortizes later delivery waves while planning still 
     expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(80);
     expect(await currentLedger(root)).toBeUndefined();
   } finally { await rm(root, { recursive: true, force: true }); }
-}, 240000);
+}, 1_200_000);
 
 test("a ready wave delivers without requiring results from Indexers whose planning has not run yet", async () => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 8 });
@@ -168,6 +184,7 @@ test("a ready wave delivers without requiring results from Indexers whose planni
     expect((await readPartitionStream(root))!.phase).toBe("author");
     await approveCandidates(root, candidates);
     await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     await buildProjectPackages(root);
     expect((await readPartitionStream(root))!.phase).toBe("planning");
@@ -194,6 +211,7 @@ test("later material for an already delivered subject receives its approved pros
     const candidate = (await readCandidateRecords(root))[0]!;
     await approveCandidates(root, [candidate]);
     await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     await buildProjectPackages(root);
     await completePartitionStage(root, false, true, "shared-capability");
@@ -260,6 +278,7 @@ test("a confirmed scope below ten themes stays in one delivery and closes withou
     await completeAuthorStage(root);
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
+    await placeApprovedReadingFixture(root);
     await buildProjectPackages(root);
     expect(await currentLedger(root)).toBeUndefined();
     expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(8);

@@ -1,3 +1,4 @@
+import { assertPartitionAdmission } from "./indexerPartitionAdmission.js";
 import {
   acceptIndexerMainRun,
   buildIndexerMainRunRequest,
@@ -184,6 +185,10 @@ export async function acceptIndexerMainPartitionRunsStore(input: {
             partitionConvergencePath(attemptDigest),
           ),
         });
+        if (convergence.decision === "accepted") {
+          await assertPartitionAdmission({ projectRoot: input.projectRoot, ledger,
+            validated, staged: immutableRecords });
+        }
       } catch (error) {
         outcomes.push({
           workset_digest: run.workset_digest,

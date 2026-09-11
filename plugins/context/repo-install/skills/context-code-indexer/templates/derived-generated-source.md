@@ -115,3 +115,18 @@ material-question proposal until the missing authority is provided.
 - the plan duplicates upstream reference material without consumer value;
 - legacy replacement or deprecation claims are inferred rather than evidenced;
 - generated symbols dominate projected pages.
+
+## Compact collection map
+
+For a confirmed homogeneous collection, group by observed purpose and consumers,
+not one page per generated file. Explain the source of truth, local output boundary,
+representative shapes, scoped lookup, regeneration and what remains unread. Count
+physical copies separately from unique contracts: the same model copied into several
+applications is not several independent interfaces. An import path containing an
+upstream repository name does not prove an additional checkout or runtime call.
+
+A generator marker is evidence of provenance, not proof that the whole tree is
+irrelevant. Preserve the supported consumer surface and maintained overlays.
+Handwritten homogeneous handlers/configurations use their own semantic profile;
+do not call them generated just to compress their article output. The same map
+style can be used without changing provenance or pretending all files were read.

@@ -43,6 +43,7 @@ export type ContextWorkflowAuthority =
 
 export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   workspace: {
+    task_start_authorized: boolean;
     project_entry_valid: boolean;
     state_valid: boolean;
   };
@@ -90,6 +91,9 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
 }
 
 export interface ContextWorkflowObservation {
+  versionCurrent?: boolean;
+  unfinishedIndexerTasks?: boolean;
+  taskPreparation?: "cleared" | "resume-requested" | undefined;
   projectRoot: string;
   projectEntryValid: boolean;
   stateDiagnostics: string[];
@@ -130,6 +134,8 @@ export interface ContextWorkflowObservation {
     rollback_pending?: boolean;
   revision_pending?: boolean;
     delivery_pending?: boolean;
+    delivery_ready?: boolean;
+    maintenance_output_only?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };
 }
@@ -232,11 +238,13 @@ export interface ContextResolvedWorkflowRoute {
     action: string;
     contract?: {
       target: "package-output";
+      selection?: "multiple";
+      recommended_choices?: string[];
       choices: Array<{
-        id: "agent-knowledge-base" | "llm-text" | "none";
+        id: "agent-knowledge-base" | "documentation-website" | "llm-text" | "none";
         factory: "kbPackage" | "llmsPackage" | null;
         required: string[];
-        defaults?: Record<string, string>;
+        defaults?: Record<string, JsonValue>;
       }>;
       reference_resources: string[];
       after_edit: string;

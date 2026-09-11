@@ -18,7 +18,7 @@ const stableRefSchema = z.string().regex(
   /^[a-z][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._~:/#-]*$/u,
 );
 
-const indexerJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
+export const indexerJsonSchema: z.ZodType<IndexerJson> = z.lazy(() =>
   z.union([
     z.null(),
     z.boolean(),
@@ -280,7 +280,7 @@ const providerLayerSchema = z.object({
   }
 });
 
-export const indexerRegistryEntrySchema = z.object({
+export const indexerRegistryEntryInputSchema = z.object({
   id: indexerIdSchema,
   operations: z.array(z.enum(INDEXER_SEMANTIC_OPERATIONS)).min(1)
     .default(["main-index"]),
@@ -295,7 +295,9 @@ export const indexerRegistryEntrySchema = z.object({
   customization: z.object({
     mode: z.enum(["extend", "replace"]),
   }).strict().optional(),
-}).strict().transform((value) => ({
+}).strict();
+
+export const indexerRegistryEntrySchema = indexerRegistryEntryInputSchema.transform((value) => ({
   ...value,
   read_scope: value.read_scope ?? {
     refs: [...new Set(value.requirement_bindings.flatMap((binding) =>

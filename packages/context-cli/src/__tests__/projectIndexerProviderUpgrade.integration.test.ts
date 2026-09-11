@@ -13,7 +13,7 @@ import * as bundled from "../project/indexerCliBundledProvider.js";
 import * as reading from "../project/indexerAgentReading.js";
 import { materializeBundledIndexerDistribution } from "../project/indexerDistributionBuild.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { projectCurrentIndexerWorkflowRoute, resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { currentLedger, currentSpec } from "../project/indexerMainRunStoreRecords.js";

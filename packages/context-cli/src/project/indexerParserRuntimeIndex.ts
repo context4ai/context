@@ -55,6 +55,8 @@ export interface IndexerParserRuntimeSourceSlice {
 }
 
 export interface IndexerParserSourceSelection {
+  inventory_only?: boolean;
+  analysis_scopes?: readonly (readonly string[])[];
   member_refs?: readonly string[];
   paths?: readonly string[];
 }
@@ -198,12 +200,13 @@ export function validateIndexerParserRuntimeIndexManifest(
 async function readChunk<T>(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
   chunk: ContentChunk;
   kind?: "metadata" | "facts";
   counters?: IndexerRuntimeReadCounters;
 }): Promise<T> {
   return readIndexerRuntimeChunk<T>({
-    path: chunkPath(input.projectRoot, input.indexer_id, input.chunk.file),
+    path: chunkPath(input.projectRoot, input.cache_key ?? input.indexer_id, input.chunk.file),
     chunk: input.chunk,
     kind: input.kind ?? "metadata",
     ...(input.counters === undefined ? {} : { counters: input.counters }),
@@ -213,8 +216,9 @@ async function readChunk<T>(input: {
 export async function readIndexerParserRuntimeIndexManifest(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
 }): Promise<IndexerParserRuntimeIndexManifest> {
-  const path = indexerParserRuntimeManifestPath(input.projectRoot, input.indexer_id);
+  const path = indexerParserRuntimeManifestPath(input.projectRoot, input.cache_key ?? input.indexer_id);
   return reuseCommandFileRead({ key: "parser-runtime-manifest", paths: [path],
     read: async () => validateIndexerParserRuntimeIndexManifest(JSON.parse(await readFile(path, "utf8"))),
   });
@@ -223,6 +227,7 @@ export async function readIndexerParserRuntimeIndexManifest(input: {
 export async function readIndexerParserRuntimeSourceMetadata(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
   manifest: IndexerParserRuntimeIndexManifest;
   source_ref: string;
   module_ref: string | null;
@@ -256,6 +261,7 @@ export async function readIndexerParserRuntimeSourceMetadata(input: {
 export async function readIndexerParserRuntimeSourceSlice(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
   manifest: IndexerParserRuntimeIndexManifest;
   source_ref: string;
   module_ref: string | null;
@@ -307,6 +313,7 @@ export async function readIndexerParserRuntimeSourceSlice(input: {
 export async function readIndexerParserRuntimeExecution(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
   manifest: IndexerParserRuntimeIndexManifest;
   counters?: IndexerRuntimeReadCounters;
 }): Promise<IndexerParserRuntimeExecutionReceipt> {
@@ -332,6 +339,7 @@ export async function readIndexerParserRuntimeExecution(input: {
 export async function writeIndexerParserRuntimeIndex(input: {
   projectRoot: string;
   indexer_id: string;
+  cache_key?: string;
   indexer_digest: string;
   source_registry_digest: string;
   parser_packages: InstalledIndexerParserPackage[];
@@ -345,31 +353,38 @@ export async function writeIndexerParserRuntimeIndex(input: {
     }),
     view,
   ]));
-  const sourceChunks = input.execution.source_bindings.map((binding) => {
+  const retained = new Set<string>();
+  const writeChunk = async (chunk: ReturnType<typeof chunkFor>) => {
+    await writeIndexerRuntimeChunk({
+      path: chunkPath(input.projectRoot, input.cache_key ?? input.indexer_id, chunk.descriptor.file),
+      chunk: chunk.descriptor, text: chunk.text,
+    });
+    retained.add(chunk.descriptor.file);
+  };
+  const sourceChunks: IndexerParserRuntimeSourceIndexEntry[] = [];
+  for (const binding of input.execution.source_bindings) {
     const view = factViews.get(sourceKey(binding));
     if (view === undefined) throw new TypeError("parser runtime source binding has no Fact View");
-    const fileChunks = view.files.map((file) => ({ file, ...chunkFor(file) }));
+    const files: SourceMetadata["files"] = [];
+    // Serialize/write a bounded batch, retaining descriptors rather than every JSON string.
+    for (let offset = 0; offset < view.files.length; offset += 8) {
+      files.push(...await Promise.all(view.files.slice(offset, offset + 8).map(async file => {
+        const chunk = chunkFor(file);
+        await writeChunk(chunk);
+        return { file_ref: file.file_ref, normalized_path: file.normalized_path, chunk: chunk.descriptor };
+      })));
+    }
     const { files: _files, ...header } = view;
     void _files;
-    const chunk = chunkFor({
-      source_binding: binding,
-      fact_view: header,
-      files: fileChunks.map(({ file, descriptor }) => ({
-        file_ref: file.file_ref, normalized_path: file.normalized_path, chunk: descriptor,
-      })),
-    } satisfies SourceMetadata);
-    return {
-      entry: {
-        source_ref: binding.source_ref,
-        module_ref: binding.module_ref,
-        binding_digest: binding.binding_digest,
-        fact_view_digest: view.view_digest,
-        chunk: chunk.descriptor,
-      },
-      text: chunk.text,
-      fileChunks,
-    };
-  }).sort((left, right) => sourceKey(left.entry).localeCompare(sourceKey(right.entry)));
+    const chunk = chunkFor({ source_binding: binding, fact_view: header, files } satisfies SourceMetadata);
+    await writeChunk(chunk);
+    sourceChunks.push({
+      source_ref: binding.source_ref, module_ref: binding.module_ref,
+      binding_digest: binding.binding_digest, fact_view_digest: view.view_digest,
+      chunk: chunk.descriptor,
+    });
+  }
+  sourceChunks.sort((left, right) => sourceKey(left).localeCompare(sourceKey(right)));
   const global = chunkFor({
     protocol: input.execution.protocol,
     execution_plan_digest: input.execution.execution_plan_digest,
@@ -380,15 +395,7 @@ export async function writeIndexerParserRuntimeIndex(input: {
     merge: input.execution.merge,
     execution_digest: input.execution.execution_digest,
   } satisfies IndexerParserRuntimeGlobalSlice);
-  const chunks = [global, ...sourceChunks.flatMap((chunk) => [
-    { descriptor: chunk.entry.chunk, text: chunk.text }, ...chunk.fileChunks,
-  ])];
-  for (let offset = 0; offset < chunks.length; offset += 16) {
-    await Promise.all(chunks.slice(offset, offset + 16).map((chunk) => writeIndexerRuntimeChunk({
-      path: chunkPath(input.projectRoot, input.indexer_id, chunk.descriptor.file),
-      chunk: chunk.descriptor, text: chunk.text,
-    })));
-  }
+  await writeChunk(global);
   const payload: IndexerParserRuntimeIndexPayload = {
     cache_format: INDEX_FORMAT,
     indexer_id: input.indexer_id,
@@ -400,18 +407,17 @@ export async function writeIndexerParserRuntimeIndex(input: {
     parser_packages: [...input.parser_packages],
     parser_package_set_digest: input.parser_package_set_digest,
     global_chunk: global.descriptor,
-    sources: sourceChunks.map((chunk) => chunk.entry),
+    sources: sourceChunks,
   };
   const manifest = validateIndexerParserRuntimeIndexManifest({
     ...payload,
     manifest_digest: indexerProtocolDigest(payload),
   });
   await atomicWriteFile(
-    indexerParserRuntimeManifestPath(input.projectRoot, input.indexer_id),
+    indexerParserRuntimeManifestPath(input.projectRoot, input.cache_key ?? input.indexer_id),
     canonicalText(manifest),
   );
-  const retained = new Set(chunks.map((chunk) => chunk.descriptor.file));
-  const chunkRoot = join(runtimeRoot(input.projectRoot, input.indexer_id), "chunks");
+  const chunkRoot = join(runtimeRoot(input.projectRoot, input.cache_key ?? input.indexer_id), "chunks");
   const files = await readdir(chunkRoot).catch(() => [] as string[]);
   await Promise.all(files.filter((file) => !retained.has(file)).map((file) =>
     rm(join(chunkRoot, file), { force: true })

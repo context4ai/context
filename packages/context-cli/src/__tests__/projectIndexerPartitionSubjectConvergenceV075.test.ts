@@ -11,7 +11,7 @@ import {
   type IndexerPartitionStrategy,
   type IndexerPartitionValidationInput,
 } from "@c4a/context";
-import { convergeIndexerPartitionSubjects } from
+import { assertIndexerPartitionPrimaryOwners, convergeIndexerPartitionSubjects } from
   "../project/indexerPartitionSubjectConvergence.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -232,4 +232,15 @@ describe("0.7.5 partition Subject convergence", () => {
       ),
     ])).toThrow("requires exactly one primary author");
   });
+});
+
+
+test("admission permits same-owner shards and supplementary plans awaiting a primary", () => {
+  const make = (suffix: string, intent: "primary" | "enrich-or-independent") => {
+    const value = partition({ member_id: `member:${suffix}`, member_kind: "component" }, suffix,
+      { subject_intent: intent });
+    return { workset: value.workset, plan: value.plan as IndexerPartitionPlan };
+  };
+  expect(() => assertIndexerPartitionPrimaryOwners([make("a", "primary"), make("b", "primary")])).not.toThrow();
+  expect(() => assertIndexerPartitionPrimaryOwners([make("a", "enrich-or-independent"), make("b", "enrich-or-independent")])).not.toThrow();
 });

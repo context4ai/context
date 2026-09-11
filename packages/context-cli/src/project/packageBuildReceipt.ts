@@ -8,6 +8,7 @@ import type { PackageDefinition } from "@c4a/context";
 import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { toPosixPath } from "./packageTemplateUtils.js";
+import { packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 
 export interface PackageBuildFileChange {
   path: string;
@@ -39,6 +40,7 @@ export interface PackageBuildSummary {
   name: string;
   kind: "kb" | "llms";
   outDir: string;
+  siteOutDir?: string;
   inputs: number;
   files: number;
   resources: {
@@ -98,7 +100,10 @@ export async function packageOutputSnapshot(
   previousOutputs: readonly PackageOutputFile[] = [],
 ): Promise<PackageOutputFile[]> {
   const previousByPath = new Map(previousOutputs.map((file) => [file.path, file]));
-  return Promise.all((await walkPackageFiles(join(projectRoot, pkg.outDir))).map(async (file) => {
+  const files = (await Promise.all(packageOutputDirs(pkg).map(async output =>
+    (await walkPackageFiles(join(projectRoot, output))).map(file => ({ ...file,
+      relPath: toPosixPath(relative(join(projectRoot, pkg.outDir), file.absPath)) }))))).flat();
+  return Promise.all(files.map(async (file) => {
     const current = classifyOutputFile(file.relPath, knowledgeGroups);
     const previous = previousByPath.get(file.relPath);
     const classification = current.kind === "file" && previous !== undefined
@@ -119,6 +124,8 @@ export async function packageOutputFingerprint(projectRoot: string, pkg: Package
   return {
     fingerprint: createHash("sha256").update(JSON.stringify({
       outDirExists: existsSync(join(projectRoot, pkg.outDir)),
+      siteDirExists: pkg.kind === "package.kb" && pkg.site
+        ? existsSync(join(projectRoot, packageSiteOutputDir(pkg))) : undefined,
       files: snapshot.map(({ path, sha256 }) => ({ path, sha256 })),
     })).digest("hex"),
     files: snapshot.length,
@@ -174,6 +181,7 @@ function formatPackageChangeLines(label: string, changes: readonly PackageBuildF
 export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
   const lines = [
     `- ${pkg.name} (${pkg.kind}, ${pkg.state}) -> \`${pkg.outDir}\``,
+    ...(pkg.siteOutDir ? [`  website: \`${pkg.siteOutDir}\``] : []),
     `  inputs: ${pkg.inputs}`,
     `  files: ${pkg.files}`,
     `  resources: ${pkg.resources.files} file(s), ${pkg.resources.bytes} byte(s)`,

@@ -111,15 +111,35 @@ function groupMembers(entry: SubjectGroupEntry): IndexerInventoryMember[] {
   return members;
 }
 
+function primaryOwnerIdentity(workset: IndexerMainPartitionWorkset): string {
+  return [workset.indexer_id, workset.source_ref, workset.module_ref ?? "",
+    workset.primary_execution_fingerprint].join("\u0000");
+}
+
+/** Partial planning can still await a primary, but cannot accept two owners. */
+export function assertIndexerPartitionPrimaryOwners(
+  partitions: readonly { workset: IndexerMainPartitionWorkset; plan: IndexerPartitionPlan }[],
+): void {
+  const owners = new Map<string, { identity: string; source: string }>();
+  for (const { workset, plan } of partitions) {
+    if (plan.status !== "complete") continue;
+    for (const group of plan.groups) {
+      if (group.subject_intent !== "primary") continue;
+      const identity = primaryOwnerIdentity(workset);
+      const previous = owners.get(group.logical_unit_ref);
+      if (previous !== undefined && previous.identity !== identity) {
+        throw new TypeError(`Subject ${group.logical_unit_ref} has conflicting primary owners: ` +
+          `${previous.source} and ${workset.source_ref} (${workset.indexer_id})`);
+      }
+      owners.set(group.logical_unit_ref, { identity, source: `${workset.source_ref} (${workset.indexer_id})` });
+    }
+  }
+}
+
 function ownerEntry(entries: readonly SubjectGroupEntry[]): SubjectGroupEntry {
   if (entries.length === 1) return entries[0]!;
   const primaries = entries.filter((entry) => entry.group.subject_intent === "primary");
-  const primaryOwners = new Set(primaries.map((entry) => [
-    entry.workset.indexer_id,
-    entry.workset.source_ref,
-    entry.workset.module_ref ?? "",
-    entry.workset.primary_execution_fingerprint,
-  ].join("\u0000")));
+  const primaryOwners = new Set(primaries.map(entry => primaryOwnerIdentity(entry.workset)));
   if (primaries.length === 0 || primaryOwners.size !== 1) {
     throw new TypeError(
       `Subject ${entries[0]!.group.logical_unit_ref} requires exactly one primary author; ` +

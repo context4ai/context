@@ -1,3 +1,5 @@
+import { approvedKnowledgeMapTargets } from "../project/knowledgeMapCoverage.js";
+import { placeApprovedReadingFixture } from "./knowledgeMapReview.fixture.js";
 import { readPartitionStream } from "../project/indexerPartitionStream.js";
 import { configureDeliveryCadence } from "../project/indexerDeliveryCadence.js";
 import { indexerBatchStagePolicy } from "../project/indexerCurrentBatchPlanner.js";
@@ -42,6 +44,16 @@ import {
   documentRevisionOuterIndexerRoute as outerIndexerRoute,
 } from "./projectDocumentRevisionV074.fixture.js";
 
+async function readingInput(root: string) {
+  const current = (await currentIndexerStructureReview(root))!;
+  const targets = [...await approvedKnowledgeMapTargets(root), ...current.preview.topics.flatMap(topic => topic.article_targets ?? [])];
+  return { expected_revision: current.knowledge_map?.revision ?? null, remove: [],
+    upsert: [...new Map(targets.map(target => [target.artifact_ref, target])).values()].map(target => ({
+      key: `reader:${target.artifact_ref}`, parent: null, title: target.artifact_ref, order: 0,
+      target: { artifact_ref: target.artifact_ref },
+    })) };
+}
+
 const DOCUMENT_REVISION_TEST_TIMEOUT_MS = 60_000;
 const temporaryRoots: string[] = [];
 
@@ -69,7 +81,7 @@ describe("current Indexer document revision", () => {
     const structure = await currentIndexerStructureReview(root);
     if (structure === undefined) throw new Error("missing structure review");
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
-      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
     expect((await currentLedger(root))?.entries.filter(entry => entry.state === "running")).toHaveLength(3);
     await completeAuthorStage(root);
@@ -106,7 +118,7 @@ describe("current Indexer document revision", () => {
     const structure = await currentIndexerStructureReview(root);
     if (structure === undefined) throw new Error("missing structure review");
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
-      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
     const currentSubjects = new Set(structure.preview.topics.map(topic => topic.subject_key!.local_key));
     const saved = (await readPartitionStream(root))!;
@@ -134,6 +146,7 @@ describe("current Indexer document revision", () => {
     }) });
     expect(await readFile(review.path, "utf8")).toContain("Help a developer integrate the public constants.");
     await approveCandidates(root, candidates);
+    await placeApprovedReadingFixture(root);
     await closeProjectWorkspace(root);
     expect(await currentLedger(root)).toEqual(before);
     expect((await readIndexerDelivery(root))?.closed).toBe(true);
@@ -153,7 +166,7 @@ describe("current Indexer document revision", () => {
     await advanceCurrentIndexerLifecycle(root);
     const nextStructure = (await currentIndexerStructureReview(root))!;
     if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
-      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
     expect((await currentLedger(root))?.entries.some((entry) => entry.state === "running")).toBe(true);
     await completeAuthorStage(root, { relatedPage });
@@ -161,6 +174,7 @@ describe("current Indexer document revision", () => {
     expect(tail.length).toBeGreaterThan(0);
     expect(tail.some((page) => candidates.some((first) => first.path === page.path))).toBe(false);
     await approveCandidates(root, tail);
+    await placeApprovedReadingFixture(root);
     await closeProjectWorkspace(root);
     expect(await currentLedger(root)).not.toBeUndefined();
     await buildProjectPackages(root);
@@ -170,6 +184,7 @@ describe("current Indexer document revision", () => {
     expect(relinked.map((page) => page.path)).toEqual(candidates.map((page) => page.path));
     expect(relinked[0]?.body).toContain(`[Related API](${relatedPage})`);
     await approveCandidates(root, relinked);
+    await placeApprovedReadingFixture(root);
     await closeProjectWorkspace(root);
     await buildProjectPackages(root);
     expect(await currentLedger(root)).toBeUndefined();
@@ -353,7 +368,7 @@ describe("current Indexer document revision", () => {
     await completeCurrentIndexerAction({
       cwd: root,
       revision: structure.revision,
-      value: { stage: "structure-review", decision: "approved" },
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) },
       managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }),
     });
@@ -421,12 +436,13 @@ describe("current Indexer document revision", () => {
     const structure = await currentIndexerStructureReview(root);
     if (!structure) throw new Error("missing initial structure review");
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
-      value: { stage: "structure-review", decision: "approved" }, managed: true,
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
     await completeAuthorStage(root);
     const initial = await readCandidateRecords(root);
     const path = initial[0]!.path;
     await approveCandidates(root, initial);
+    await placeApprovedReadingFixture(root);
     await closeProjectWorkspace(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     await buildProjectPackages(root);
@@ -452,7 +468,8 @@ describe("current Indexer document revision", () => {
         authorities: contextWorkflowAuthorities({ managed: true }) });
       expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
       await approveCandidates(root, await readCandidateRecords(root));
-      await closeProjectWorkspace(root);
+      await placeApprovedReadingFixture(root);
+    await closeProjectWorkspace(root);
       expect(await readApprovedRevision(root)).toBeDefined();
       if (wording === "First revision.") {
         const configured = await readFile(entryPath, "utf8");
@@ -540,7 +557,7 @@ describe("current Indexer document revision", () => {
     await completeCurrentIndexerAction({
       cwd: root,
       revision: managedStructureRoute!.revision,
-      value: { stage: "structure-review", decision: "approved" },
+      value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) },
       managed: true,
       authorities: managedAuthorities,
     });

@@ -1,5 +1,7 @@
 schema: agent-graph.code-catalog.v1
 codes:
+  - { code: route.version.content-changed, kind: route-reason, summary: Record an increasing workspace version and changelog for formal content changes. }
+  - { code: route.workspace.recovery, kind: route-reason, summary: Inspect a stuck task independently of normal workflow evaluation., document: resources/procedures/task-recovery.md }
   - { code: route.indexer.maintenance, kind: route-reason, summary: Advance registered knowledge maintenance at a safe boundary., document: resources/procedures/knowledge-maintenance.md }
   - { code: diagnostic.project-entry-invalid, kind: diagnostic, severity: error, summary: The Context project entry cannot be loaded., document: resources/diagnostics/workspace-state.md }
   - { code: diagnostic.workspace-state-invalid, kind: diagnostic, severity: error, summary: Context cannot establish valid lifecycle facts for the workspace., document: resources/diagnostics/workspace-state.md }
@@ -91,3 +93,4 @@ codes:
   - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after current mechanical validation passes. }
   - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure after required material gaps are resolved. }
   - { code: route.indexer.source-update, kind: route-reason, summary: Inspect fixed source changes against current approved pages. }
+  - { code: route.workspace.task-cleared, kind: route-reason, summary: Task state is cleared and production awaits an explicit resume request., document: resources/procedures/workspace-prepare.md }

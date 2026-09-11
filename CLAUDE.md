@@ -56,9 +56,27 @@ bun run --filter @c4a/dev-cli start
 - Local edits: run the affected package's typecheck/lint and relevant test files.
   Shared test fixtures require all their consumers; SDK/schema changes include
   affected downstream checks. Do not rerun the whole workspace for every edit.
-- `bun run verify` runs workspace static checks and tests, including CLI
-  integration tests. It is not a fast unit-only gate.
-- `bun run verify:full` adds Node dist smoke checks; build required artifacts first.
+- `bun run verify` runs workspace static checks and the default test collection.
+  CLI integration files with an observed individual test above 20 seconds belong
+  in `packages/context-cli/scripts/full-only-tests.json`, not the default gate.
+  This is a maintained classification, not a runtime timeout or automatic skip.
+- `bun run verify:full` runs the default collection, then full-only CLI tests once,
+  followed by Node dist smoke checks; build required artifacts first.
+  The CLI package's `test:full` runs both collections; `test:full-only` runs only
+  the heavy collection. Append `--list` to inspect selection without execution.
+  Release CI uses `verify`; registry installation smoke remains a separate gate.
+  Successful publication triggers independent post-release `verify:full` on the
+  published commit. Full CLI runs default to a 20-minute per-test timeout (explicit
+  test budgets still apply); the streaming stress case also allows 20 minutes.
+  The full CI job has a separate 180-minute budget and preserves its test log.
+  Default and post-release full CI each use four independent runner shards;
+  `CONTEXT_TEST_SHARD=1/4` selects one CLI shard, with serial batches within it.
+  Sorted discovery distributes new files automatically. All shards must pass;
+  failures do not cancel sibling shards. Each runner builds its own artifacts,
+  avoiding shared filesystem, environment and port state. Other package checks
+  remain unchanged on each runner. Local commands stay serial unless explicitly
+  launched in separate worktrees with distinct shard values; do not run shards
+  concurrently against one shared workspace or dist directory.
   These commands are alternative scopes, not a ladder to execute in sequence.
 - Reuse applicable passing results until inputs change. Collect failures once,
   fix them together and rerun the selected scope. Keep the current result summary

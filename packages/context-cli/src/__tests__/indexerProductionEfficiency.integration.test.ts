@@ -8,7 +8,7 @@ import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWork
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { withCommandReadCache } from "../project/commandReadCache.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
-import { completeCurrentIndexerAction } from "../project/indexerCurrentAction.js";
+import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completeAuthorStage, completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
 

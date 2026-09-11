@@ -71,6 +71,13 @@ completion from outstanding user requests; Composer task names are not a revisio
 queue. If the Graph is complete, return to the Context entry to handle any
 remaining authorized requests rather than declaring a missing Review/build.
 
+For Indexer files that need no read receipt, reuse a fully read resource in this
+conversation only when its source/Provider identity and content digest are unchanged
+and its contents remain available. A new revision alone does not require rereading
+those files. Always read the new Route and task-specific changes; after context loss
+or truncated output, read the missing content. Never invent a receipt or mark an
+unread file as read.
+
 ## User-facing progress
 
 Use CLI `progress.scopes` (or `indexerProgress.scopes` in status) as the
@@ -93,9 +100,10 @@ number of currently prepared tasks. Revisions can overlap delivered pages;
 do not add wave tasks to delivered pages to invent a page total.
 
 Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second uses `slice`. For example, with matching CLI values:
-**[总体进度：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前分片：补充内容检查 0/8 项]**
+`wave` supplement; the second describes the current action, using `slice` counts
+when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
+**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
+**[当前进展：补充内容检查 0/8 项]**
 
 A completion receipt's `submitted_slice` describes the slice just submitted;
 `progress.scopes.slice` can already describe the next Route. Use the former when
@@ -103,8 +111,12 @@ reporting submission success and the latter when announcing the next slice.
 Never combine their numerators and denominators. A null slice means no active
 Agent task slice, not that the workflow is complete. During Review/build, state
 the returned Route action briefly rather than inventing a slice ratio.
-If progress is unavailable after task cleanup, say the counters are unavailable;
-do not turn the last wave into the overall scope or report delivery as zero.
+Before counters exist or after task cleanup, describe the known stage and current
+action instead of repeatedly saying counters are unavailable. For example:
+**[总体进展：正在准备知识工作区]**
+**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
+During review or packaging, name that action rather than a nonexistent slice.
+Do not turn the last wave into the overall scope or report delivery as zero.
 Continue authorized work after an update; only the agreed delivery stop or an
 actual unresolved blocker permits stopping. This format governs progress, not
 answers, review findings or necessary questions.

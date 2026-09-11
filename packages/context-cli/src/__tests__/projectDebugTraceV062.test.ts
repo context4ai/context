@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -31,6 +31,34 @@ function events(projectRoot: string): Array<Record<string, unknown>> {
 }
 
 describe("Context observational debug trace", () => {
+  test("status excludes itself but preserves prior incomplete status invocations", async () => {
+    const root = mkdtempSync(join(tmpdir(), "context-debug-self-"));
+    try {
+      await Bun.write(join(root, "package.json"), JSON.stringify({
+        name: "debug-self-fixture", private: true,
+        context: { project: true, entry: "src/index.ts", debug: true },
+      }));
+      const first = await runCli(root, ["debug", "status", "--format", "json"]);
+      expect(first.code).toBe(0);
+      expect(JSON.parse(first.stdout).unmatched_invocations).toEqual([]);
+      const invoked = events(root).find(event => event.kind === "cli.invoked")!;
+      expect(events(root).some(event => event.kind === "cli.completed" &&
+        event.invocation_id === invoked.invocation_id)).toBe(true);
+      appendFileSync(join(root, ".tmp/context-runtime/debug/events.jsonl"),
+        `${JSON.stringify({ ...invoked, invocation_id: "prior-incomplete-status" })}\n`);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const status = await runCli(root, ["debug", "status", "--format", "json"]);
+        expect(status.code).toBe(0);
+        expect(JSON.parse(status.stdout).unmatched_invocations).toMatchObject([
+          { invocation_id: "prior-incomplete-status" },
+        ]);
+        expect(JSON.parse(status.stdout).unmatched_invocations).toHaveLength(1);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("records local performance measurements without changing action results", async () => {
     const root = mkdtempSync(join(tmpdir(), "context-debug-performance-"));
     try {

@@ -7,7 +7,7 @@ import { captureFile, source, indexerAuthorSemanticInputSchema } from "@c4a/cont
 import { createArticleDocumentWorkspace } from "./articleDocumentWorkspace.fixture.js";
 import { completePartitionStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { runCaptureFilePhase } from "../project/documentCapture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
