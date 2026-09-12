@@ -31,6 +31,13 @@ tasks from the same batch as workers finish; never prepare the next batch while
 this one is active. Known dependencies between tasks require sequential handling
 by the coordinator. A worker result never becomes evidence for a peer.
 
+For Author tasks available in this batch, the coordinator may dynamically choose
+the drafting order by topic relationships and reader needs, not source type.
+Prefer shared concepts before dependent explanations when useful; let independent
+topics proceed. This preference adds no dependency fields, extra material reads
+or waiting gate. Reassess as work progresses, preserve task boundaries and the
+required submission order, and do not bring forward tasks from another batch.
+
 Tell the user briefly, in their language, how many planning or writing workers
 will run when first enabling delegation or changing its concurrency/mode. Reuse
 that announcement across unchanged batches. Report a fallback once when it happens. Worker completion is draft

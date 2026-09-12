@@ -30,6 +30,20 @@ optional: preserve the original URL without falling back to body retrieval or
 changing credentials. Resolve intent from the conversation; refine provisional
 chapters and module boundaries from evidence after formal capture.
 
+## Agent-planned writing order
+
+Within the tasks available in the current Route, the Agent may choose a writing
+order from the reader's needs and relationships between topics. There is no
+fixed code-first or document-first rule. Prefer foundational concepts and shared
+terminology before walkthroughs or summaries that benefit from them, when this
+reduces rework. Independent topics can proceed without waiting; adjust the order
+as writing progresses instead of maintaining a separate scheduling artifact.
+
+This is an Agent working preference, not a new dependency or completion gate.
+Do not add dependency fields, fetch extra material, or delay useful work merely
+to establish an order. Keep current task boundaries, source permissions and
+submission rules; do not pull future batches forward or change the CLI Route.
+
 ## Workspace versions and changelog
 
 `package.json.version` is the workspace SemVer. At completed-scope delivery the
