@@ -3,6 +3,7 @@ import type { CandidateRecord } from "./candidateLedger.js";
 import { ensureMarkdownPageTitle } from "./markdownPageTitle.js";
 import { okfTypeForCollection } from "./okfTypes.js";
 import { readerKnowledgeDescription } from "./packageKnowledgeProjection.js";
+import { compactApprovedKnowledgeMarkdown, ensureApprovedKnowledgePresentation } from "./approvedKnowledgeMetadata.js";
 
 function escapeHtmlAttribute(value: string): string {
   return value
@@ -12,27 +13,10 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/gu, "&gt;");
 }
 
-function sectionMarkdown(input: {
-  section: NonNullable<CandidateRecord["indexer_candidate"]>["sections"][number];
-  artifactKind: string;
-  sourceRefs: readonly string[];
-}): string {
-  const refs = input.sourceRefs;
-  const primaryRef = refs[0] ?? input.section.section_ref;
+function sectionMarkdown(section: CandidateRecord["indexer_candidate"]["sections"][number]): string {
   return [
-    `<!-- context:section id="${escapeHtmlAttribute(input.section.section_key)}" kind="${escapeHtmlAttribute(input.artifactKind)}" source_ref="${escapeHtmlAttribute(primaryRef)}" -->`,
-    "",
-    ...(refs.length <= 1
-      ? []
-      : [
-          "<!-- context:source_refs",
-          JSON.stringify(refs),
-          "/context:source_refs -->",
-          "",
-        ]),
-    input.section.markdown.trimEnd(),
-    "",
-    "<!-- /context:section -->",
+    `<!-- context:section id="${escapeHtmlAttribute(section.section_key)}" -->`,
+    "", section.markdown.trimEnd(), "", "<!-- /context:section -->",
   ].join("\n");
 }
 
@@ -40,28 +24,21 @@ export function renderApprovedIndexerMarkdown(input: {
   record: CandidateRecord;
   timestamp: string;
 }): string {
-  if (input.record.approved_revision !== undefined) return input.record.body;
+  if (input.record.approved_revision !== undefined) {
+    const content = compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(input.record.body));
+    return content.replace(/^---\r?\n([\s\S]*?)\r?\n---/u, (_match, header: string) => {
+      const metadata = YAML.parse(header) as Record<string, unknown>;
+      return ["---", YAML.stringify({ ...metadata, timestamp: input.timestamp }).trimEnd(), "---"].join("\n");
+    });
+  }
   const binding = input.record.indexer_candidate;
   if (input.record.candidate_type !== "indexer-artifact" || binding === undefined) {
     throw new TypeError("Indexer approved renderer requires an indexer-artifact Candidate");
   }
-  const sources = [...new Set(binding.evidence_bindings.map((item) => item.source_ref))];
-  if (sources.length === 0) sources.push(binding.source_ref);
-  const sourceByEvidenceRef = new Map(binding.evidence_bindings.map((item) => [
-    item.evidence_ref,
-    item.source_ref,
-  ]));
   const title = input.record.review.title;
   const body = binding.sections.flatMap((section, index) => [
     ...(index === 0 ? [] : [""]),
-    sectionMarkdown({
-      section,
-      artifactKind: input.record.kind,
-      sourceRefs: [...new Set(section.evidence_refs.flatMap((ref) => {
-        const sourceRef = sourceByEvidenceRef.get(ref);
-        return sourceRef === undefined ? [] : [sourceRef];
-      }))].sort(),
-    }),
+    sectionMarkdown(section),
   ]).join("\n");
   const description = readerKnowledgeDescription({
     description: input.record.review.summary,
@@ -71,16 +48,8 @@ export function renderApprovedIndexerMarkdown(input: {
   const frontmatter = YAML.stringify({
     title,
     type: okfTypeForCollection(input.record.collection),
-    artifact_ref: binding.artifact_ref,
-    node_ref: input.record.node_ref,
-    view_ref: input.record.view_ref,
-    node_type: "entity",
     description,
-    tags: ["indexer", input.record.kind, input.record.module],
     timestamp: input.timestamp,
-    resource: `knowledge:${input.record.path.replace(/\.md$/u, "")}`,
-    sources,
-    visibility: input.record.visibility,
   }).trimEnd();
   return [
     "---",

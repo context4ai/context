@@ -5,7 +5,6 @@ import { join } from "node:path";
 import {
   canonicalIndexerJson,
   buildIndexerRunEnvelope,
-  buildIndexerArtifactDependencySet,
   indexerProtocolDigest,
   validateAndRecordIndexerMainRun,
   validateIndexerMainAcceptedRecord,
@@ -158,7 +157,6 @@ export function validateAcceptedCacheEnvelope(input: {
     result_digest: acceptedRecord.result_digest,
     receipt_digest: acceptedRecord.receipt_digest,
     run_envelope_digest: acceptedRecord.run_envelope_digest,
-    artifact_dependency_set_digest: acceptedRecord.artifact_dependency_set_digest,
   });
   if (
     acceptedRecord.workset_digest !== input.spec.request.workset.workset_digest ||
@@ -181,25 +179,9 @@ export function readAcceptedCache(input: {
   const request = input.spec.request;
   const result = cached.result as IndexerMainRunResult;
   const runEnvelope = buildIndexerRunEnvelope(request);
-  let dependencies: ReturnType<typeof buildIndexerArtifactDependencySet> | null | undefined;
   return {
     request, result, operation_result: result.result.result,
     accepted_record: cached.accepted_record, run_envelope: runEnvelope,
-    // Only incremental-impact consumers need this derived graph.
-    get artifact_dependency_set() {
-      if (dependencies !== undefined) return dependencies;
-      dependencies = request.workset.stage === "author" && result.result.stage === "author"
-        ? buildIndexerArtifactDependencySet({ result: result.result.result, workset: request.workset,
-            run_envelope: runEnvelope, dependency_view: input.spec.validation.dependency_view,
-            composition_input: request.composition_input,
-            ...(input.spec.validation.authorized_evidence_targets === undefined ? {} : {
-              authorized_evidence_targets: input.spec.validation.authorized_evidence_targets as
-                NonNullable<Parameters<typeof buildIndexerArtifactDependencySet>[0]["authorized_evidence_targets"]>,
-            }),
-          })
-        : null;
-      return dependencies;
-    },
   };
 }
 

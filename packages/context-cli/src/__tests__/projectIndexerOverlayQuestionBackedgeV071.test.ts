@@ -161,8 +161,6 @@ function overlay(): IndexerContractOverlay {
       question_target_domains: [{
         id: "example/component-operation",
         selector: { operator: "all-inventory" },
-        grouping_operator: "by-subject-key",
-        subject_key_kind: "component",
         granularity: "identity",
       }],
       reader_question_contracts: [{
@@ -431,9 +429,6 @@ describe("validated overlay question amendment back-edge", () => {
     expect(prepared.rebind.target_final_report.providers).toEqual(
       sample.baseFinal.providers,
     );
-    expect(prepared.rebind.target_final_report.subject_key_schema_set_digest).toBe(
-      sample.baseFinal.subject_key_schema_set_digest,
-    );
     await expect(validateIndexerSelectionFinal({
       registry: prepared.amendment.target_registry,
       static_report: sample.baseStatic,
@@ -526,8 +521,6 @@ describe("validated overlay question amendment back-edge", () => {
       confirmation: prepared.confirmation,
       rebind_receipt_digest: prepared.rebind.receipt_digest,
       rebound_selection_digest: prepared.rebind.target_final_report.report_digest,
-      subject_key_schema_set_digest:
-        prepared.rebind.target_final_report.subject_key_schema_set_digest,
       finalized_validation_report_digests: [
         prepared.amendment.conformance_report_digest,
         prepared.rebind.target_final_report.report_digest,

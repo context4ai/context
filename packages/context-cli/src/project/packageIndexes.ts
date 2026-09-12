@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, posix as pathPosix, relative } from "node:path";
 import {
   DEFAULT_PACKAGE_NAVIGATION,
+  type ArticleStructureEntry,
   type PackageDefinition,
   type PackageNavigationDefinition,
 } from "@c4a/context";
@@ -29,6 +30,7 @@ import {
 } from "./packageKnowledgeProjection.js";
 
 export interface ApprovedKnowledgeFile {
+  article?: ArticleStructureEntry | undefined;
   relPath: string;
   absPath: string;
   content: string;
@@ -44,8 +46,7 @@ interface KnowledgeItemTemplateRecord extends Record<string, unknown> {
   okf_root_path: string;
   approved_path: string;
   dist_path: string;
-  node_ref: string;
-  view_ref: string;
+  article_id: string;
   pathWithinCollection: string;
   href: string;
   hrefFromTemplate: string;
@@ -294,12 +295,11 @@ export function knowledgeInventory(
       ? okfRoot
       : packageOkfRootPath(pkg, okfRoot as OkfOutputRoot);
     const group = groupNameForSegments(segments);
-    const sources = Array.isArray(productionFrontmatter.sources) ? productionFrontmatter.sources : [];
+    const sources = file.article?.sections.flatMap(section => section.references.map(reference => reference.source_ref)) ?? [];
     const firstSource = sources.find((source): source is string => typeof source === "string");
     const source = (firstSource ?? "").replace(/^repo:/u, "") || group;
     const hrefFromTemplate = relativeMarkdownHref(templateRelPath, outputRelPath);
-    const nodeRef = stringField(productionFrontmatter, "node_ref");
-    const viewRef = stringField(productionFrontmatter, "view_ref");
+
     return {
       path: outputRelPath,
       sourcePath,
@@ -310,8 +310,7 @@ export function knowledgeInventory(
       okf_root_path: okfRootPath,
       approved_path: sourcePath,
       dist_path: outputRelPath,
-      node_ref: nodeRef,
-      view_ref: viewRef,
+      article_id: file.article?.article_id ?? "",
       pathWithinCollection,
       href: hrefFromTemplate,
       hrefFromTemplate,

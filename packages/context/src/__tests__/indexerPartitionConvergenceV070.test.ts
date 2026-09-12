@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  indexerProtocolDigest,
   buildIndexerMainWorkset,
-  canonicalIndexerNodeRef,
   convergeIndexerPartitionPlan,
   indexerPartitionPlanCanonicalHash,
   indexerInventoryMembersDigest,
@@ -59,17 +59,10 @@ function workset(): IndexerMainPartitionWorkset {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "module",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:overview"],
     partition_input_digests: [digest("e")],
@@ -87,17 +80,10 @@ function group(input: {
   members: string[];
   role: "primary-carrier" | "enricher";
 }) {
-  const subjectKey = {
-    protocol: "context.subject-key/v1" as const,
-    namespace: "sample",
-    kind: "capability",
-    local_key: input.local_key,
-  };
   return {
     group_key: input.key,
-    subject_key: subjectKey,
-    subject_intent: "primary" as const,
-    logical_unit_ref: canonicalIndexerNodeRef(subjectKey),
+    logical_unit_ref: indexerProtocolDigest({ indexer_id: "sample",
+      source_ref: "repo:sample@revision", module_ref: "module:sample", group_key: input.key }),
     label: input.label,
     reader_question_refs: ["question:overview"],
     question_target_bindings: [{ target_ref: TARGET_REF, role: input.role }],
@@ -120,11 +106,9 @@ function completePlan(input: {
       indexer_id: input.current.indexer_id,
       indexer_fingerprint: input.current.primary_execution_fingerprint,
       requirement_digest: input.current.requirement_set_digest,
-      subject_key_schema_digest: input.current.subject_key_schema_digest,
       source_scope_digest: input.current.source_scope_digest,
       source_refs: [input.current.source_ref],
       module_ref: input.current.module_ref,
-      partition_subject_key: input.current.partition_subject_key,
       parent_scope_ref: input.current.module_ref!,
       inventory_digest: input.current.partition_inventory_digest,
       question_target_inventory_digest: input.current.question_target_inventory_digest,
@@ -326,11 +310,9 @@ describe("partition strategy convergence", () => {
         indexer_id: current.indexer_id,
         indexer_fingerprint: current.primary_execution_fingerprint,
         requirement_digest: current.requirement_set_digest,
-        subject_key_schema_digest: current.subject_key_schema_digest,
         source_scope_digest: current.source_scope_digest,
         source_refs: [current.source_ref],
         module_ref: current.module_ref,
-        partition_subject_key: current.partition_subject_key,
         parent_scope_ref: current.module_ref!,
         inventory_digest: current.partition_inventory_digest,
         question_target_inventory_digest: current.question_target_inventory_digest,

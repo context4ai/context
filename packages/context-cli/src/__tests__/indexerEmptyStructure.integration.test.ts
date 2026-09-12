@@ -54,8 +54,8 @@ async function finishPlanning(root: string, preserveFirstIndexer = false) {
       const include = preserveFirstIndexer && workset.indexer_id === "revision-fixture";
       results.push({ task_key: item.task_key, result: { stage: "partition", outcome: "complete",
         groups: include ? [{ key: workset.workset_digest, title: "Public API", reader_task: "Use this capability",
-          subject: { namespace: workset.partition_subject_key.namespace, kind: workset.partition_subject_key.kind, local_key: workset.workset_digest },
-          subject_intent: "primary", members: validation.canonical_inventory_members.map((member) => member.member_id),
+
+           members: validation.canonical_inventory_members.map((member) => member.member_id),
           questions: workset.reader_question_refs, question_targets: (validation.required_question_target_refs ?? []).map((target) => ({ target, role: "primary-carrier" })), outline: ["API"] }] : [],
         excluded: include ? [] : validation.canonical_inventory_members.map((member) => ({ item: member.member_id, reason_code: "outside-reader-scope" })), unsupported: [] } });
     }

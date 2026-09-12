@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildIndexerMainWorkset,
-  canonicalIndexerNodeRef,
+  indexerProtocolDigest,
   indexerPartitionGroupProjectionDigest,
   indexerInventoryMembersDigest,
   indexerPartitionPlanBindingDigest,
@@ -11,7 +11,6 @@ import {
   type IndexerMainPartitionWorkset,
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -26,12 +25,6 @@ const AUTHORIZED_STRATEGIES = [{
   strategy_ref: STRATEGY,
   strategy_digest: STRATEGY_DIGEST,
 }];
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component",
-  local_key: "button",
-};
 const MEMBER_IDS = [
   "member:example/basic",
   "member:export/button",
@@ -67,17 +60,10 @@ function workset(): IndexerMainPartitionWorkset {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample-package",
-      kind: "component-library",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest(AUTHORIZED_STRATEGIES),
     reader_question_refs: QUESTION_REFS,
     partition_input_digests: [digest("c")],
@@ -104,11 +90,9 @@ function completePlan(currentWorkset = workset()): CompletePartitionPlan {
       indexer_id: currentWorkset.indexer_id,
       indexer_fingerprint: currentWorkset.primary_execution_fingerprint,
       requirement_digest: currentWorkset.requirement_set_digest,
-      subject_key_schema_digest: currentWorkset.subject_key_schema_digest,
       source_scope_digest: currentWorkset.source_scope_digest,
       source_refs: [currentWorkset.source_ref],
       module_ref: currentWorkset.module_ref,
-      partition_subject_key: currentWorkset.partition_subject_key,
       parent_scope_ref: currentWorkset.module_ref!,
       inventory_digest: currentWorkset.partition_inventory_digest,
       question_target_inventory_digest: currentWorkset.question_target_inventory_digest,
@@ -120,9 +104,8 @@ function completePlan(currentWorkset = workset()): CompletePartitionPlan {
     reader_question_refs: QUESTION_REFS,
     groups: [{
       group_key: "component:button",
-      subject_key: SUBJECT,
-      subject_intent: "primary",
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: currentWorkset.indexer_id,
+        source_ref: currentWorkset.source_ref, module_ref: currentWorkset.module_ref, group_key: "component:button" }),
       label: "Button",
       reader_question_refs: QUESTION_REFS,
       question_target_bindings: [{
@@ -160,7 +143,7 @@ function validate(plan: unknown, currentWorkset = workset()) {
 }
 
 describe("PartitionPlan authority and closure", () => {
-  test("validates exact workset binding, SubjectKey identity, members, and targets", () => {
+  test("validates exact workset binding, writing group identity, members, and targets", () => {
     const currentWorkset = workset();
     const plan = completePlan(currentWorkset);
     expect(validate(plan, currentWorkset)).toEqual(plan);
@@ -218,7 +201,7 @@ describe("PartitionPlan authority and closure", () => {
     const wrongIdentity = completePlan();
     wrongIdentity.groups[0]!.logical_unit_ref = "node:other";
     rehash(wrongIdentity);
-    expect(() => validate(wrongIdentity)).toThrow(/non-canonical logical unit/);
+    expect(() => validate(wrongIdentity)).toThrow(/invalid identity/);
 
     const ordinal = completePlan();
     ordinal.groups[0]!.label = "batch-1";
@@ -257,17 +240,10 @@ describe("PartitionPlan authority and closure", () => {
       requirement_set_digest: digest("2"),
       primary_execution_fingerprint: digest("3"),
       profile_contract_digest: digest("4"),
-      subject_key_schema_digest: digest("5"),
       source_scope_digest: digest("6"),
       source_binding_digest: digest("7"),
       primary_resource_binding_digest: digest("8"),
       question_target_inventory_digest: digest("9"),
-      partition_subject_key: {
-        protocol: "context.subject-key/v1",
-        namespace: "sample-package",
-        kind: "component-library",
-        local_key: "root",
-      },
       strategy_set_digest: indexerPartitionStrategySetDigest(AUTHORIZED_STRATEGIES),
       reader_question_refs: [],
       partition_input_digests: [digest("c")],

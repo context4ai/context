@@ -61,16 +61,15 @@ test("an approved page linking an omitted peer can reenter its existing Author a
   expect(next.entries.filter((entry) => entry.state === "accepted")).toHaveLength(ledger.entries.length - 1);
   const running = next.entries.find((entry) => entry.state === "running")!;
   const spec = await currentSpec({ projectRoot: root, request_digest: running.execution_request_digest });
-  const sections = (markdown: string) => approvedContextSectionsInMarkdown(markdown).map(({ id, kind, refs, readerVisibleBody }) =>
-    ({ id, kind, refs, readerVisibleBody }));
+  const sections = (markdown: string) => approvedContextSectionsInMarkdown(markdown).map(({ id, readerVisibleBody }) =>
+    ({ id, readerVisibleBody }));
   expect(sections(spec.request.workset.repair_intent!.current_markdown!)).toEqual(sections(before));
   expect(await readFile(join(root, "knowledge", approved.path), "utf8")).toBe(before);
   await completeAuthorStage(root);
   const candidates = await readCandidateRecords(root);
   expect(candidates.find((item) => item.path === omitted.path)?.status).toBe("rejected");
   const repaired = candidates.find((item) => item.path === approved.path)!;
-  expect(repaired.node_ref).toBe(approved.node_ref);
-  expect(repaired.view_ref).toBe(approved.view_ref);
+  expect(repaired.article_id).toBe(approved.article_id);
   await approveCandidates(root, [repaired]);
   await closeProjectWorkspace(root); await buildProjectPackages(root);
   expect((await collectProjectStatus(root, { managed: true })).workflow.status).toBe("complete");

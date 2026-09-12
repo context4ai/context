@@ -86,36 +86,24 @@ cannot justify excluding uninspected members or asserting behavior. Unknown
 material formats remain full required reading. Author can access complete selected
 facts and source text; reduced planning input is not evidence for a final claim.
 
-Set a group's `ready_for_author: true` only after its identity, primary ownership,
+Set a group's `ready_for_author: true` only after its scope, material ownership,
 reader task and relevant shared dependencies are resolved well enough to write
 an independently useful page. A sample, file boundary or large fact count is
 not sufficient. Leave it absent/false when neighboring material could change the
 boundary. This declaration permits an early wave; it does not mark the remaining
 inventory complete or bypass normal structure/content review. After a wave's
 build, follow the fresh Route back to remaining Partition tasks. Later material
-for the same subject must retain its identity and improve its approved pages,
+for an existing article must retain its identity and improve its approved content,
 not create duplicates. All inventory members still need final dispositions.
 
-Read `partition-authority` before choosing each group subject. A string
-changes only the local key and preserves `base_subject_key` namespace and kind. Use an explicit
-subject object only when its kind is listed in `subject_key_contract.kinds`; never invent a kind
-from a page title, operation name, framework term, or business vocabulary.
-For a new reader subject, choose a durable, readable namespace and local key:
-the main page defaults to `knowledge/<collection>/<namespace>/<local-key>.md`
-(normalized as readable slugs). `group.key` identifies a group and `title` labels
-its content; neither renames that path. A capture token such as `wiki-a1b2c3d4`
-is not a reader namespace. Use the existing explicit subject object to choose,
-for example, `namespace: sample-web`, `local_key: faq`, with the permitted kind.
-Avoid repeating the same name as both directory and basename. Preserve an
-existing subject when enriching it; changing a title is not a reason to change
-identity. Context preserves approved paths and routes collisions to the existing
-layout confirmation, where readable renames are chosen instead of hash suffixes.
-
-`subject_intent` describes the reader-subject outcome, not the source file's role. Use `primary`
-when the group owns a reader subject. Use `enrich-or-independent` for a publishable supplemental
-view such as test or example behavior: Context reuses a matching subject when available and creates
-an independent subject otherwise. Do not emit `supporting`; material that must never become a reader
-subject must not be emitted as a group.
+Read `partition-authority` for available article intents and templates.
+Choose a stable, readable `group.key` for each writing topic and keep existing
+article keys on updates. Source scope and group key determine the writing group;
+title changes do not create a new identity. Context preserves approved paths.
+Do not submit SubjectKey, subject_intent, node types, graph relations or mounting
+matrices. Material that has no publishable reader purpose belongs in the member
+dispositions, not an artificial topic. Path collisions use the existing layout
+decision, not guessed identity merges.
 
 For an Author Result, write reader-facing `title`, `summary`, and `sections` only when publishing.
 Read the main task and its shared material, then expand details for the claims and
@@ -156,21 +144,22 @@ then submit normally. Preview input errors include `issues` with paths relative 
 each task entry (starting at `result`) and section/member identifiers when available.
 Use those paths to locate edits; errors from conversion or rendering keep their
 original message and do not imply a payload field location. Preview does not replace Review or guarantee a later unchanged revision.
-Each section references supplied source material through `source_items`, `facts`, or both.
-Both are arrays of references, not objects. Authorized Facts already carry their source
-bindings, so do not repeat those bindings in `source_items` merely to satisfy a field.
-A section with neither resolvable sources nor Facts is still invalid.
-Catalog-only and unsupported results publish no Artifact and need no policy selection. Copy `source_items` from the
-task's Source material, or use repository-relative file paths for captured code you read directly,
-not inventory or repository identifiers. Context constructs the internal
-Facts and EvidenceBindings. For `catalog-only`, return the member dispositions without dummy prose
-or sections: Context retains the corresponding authorized facts. Do not use it when the View lacks
-facts for that member; report unsupported or missing material instead.
-For behavior, read source text. Source material is a focused default, not an exclusive reading boundary.
-The task's `source-access` lists captured file paths under `captured_root`; use your file tool to read
-these files directly when excerpts are insufficient. Do not switch to a live checkout or unrelated
-sources. Submit the read files' repository-relative paths in `sections[].source_items`; Context
-resolves the source association without manual fingerprints or a separate CLI call.
+Each output fragment records only the source regions actually used in its prose:
+`references: [{source_ref, locator: {path, start_line, end_line}}]`.
+Use the source identity and captured path supplied for this task. Locations are
+inclusive line ranges in that captured text. The CLI computes the region digest;
+do not submit fact IDs, evidence IDs, binding digests or duplicate source lists.
+Each fragment has at most three distinct source positions, not three per article.
+Choose necessary regions or split the prose by meaning; do not truncate necessary
+references or merge unrelated line ranges to evade the limit.
+
+Catalog-only and unsupported results publish no article. Record truthful member
+dispositions without dummy prose or a fact ledger. Empty references are not proof:
+only omit them when the fragment genuinely has no source-derived claim.
+
+For behavior, read source text. The task's `source-access` lists captured files
+under `captured_root`; read relevant ranges directly when excerpts are insufficient.
+Do not switch to a live checkout or unrelated sources. Cite the exact ranges used.
 A signature or call name alone does
 not establish behavior absent from those lines. Do not copy process-only carriers into reader Markdown.
 Read shared instructions once while they remain available in the current conversation;
@@ -236,7 +225,7 @@ results. Reading a View with a script is not a substitute for understanding its
 sources. Reuse mechanics, not unsupported content claims.
 
 When the selected template supplies a program-generated API table, bind the
-applicable facts and let the renderer produce field rows, types and defaults.
+applicable source-derived values and use the available formatter for rows, types and defaults.
 Do not write a second equivalent table or restate every row in prose. Explain
 usage decisions, composition, pitfalls and migration boundaries; mention a
 parameter or default when it helps explain that behavior. This does not waive
@@ -271,7 +260,7 @@ Excluded members remain excluded. Publish only when the remaining sources suppor
 a useful page, with an accurate title, summary and an allowed artifact intent.
 The old template/intent restriction has been released for this changed group.
 If it should not be a page, use a supported non-publishing outcome and truthful
-member dispositions; catalog-only requires authorized facts. Zero extracted facts
+member dispositions; catalog-only does not publish prose. Zero extracted facts
 alone does not prohibit a source-grounded document, and does not establish an API.
 Do not restart unrelated accepted tasks to repair this group's interpretation.
 
@@ -320,7 +309,7 @@ answers, review findings or necessary questions.
 
 ### Planned articles
 
-When the current Partition authority supports an article plan, keep one subject
+When the current Partition authority supports an article plan, keep one writing group
 and one inventory owner for the topic. Plan stable article keys, the reader task,
 allowed intent and template, required or optional articles and sections, and one
 required article responsible for each primary question target. A shared source
@@ -334,14 +323,10 @@ missing. Change the accepted plan through the existing structure adjustment
 route before adding articles or changing their purpose. Legacy single-page
 plans continue to use the single-page submission.
 
-For a selected page program, use the current variable catalog and its linked
-article guidance. A semantic `template_variables` value may bind its own
-`value`, `source_items` and `facts`; use current reading-view aliases. This lets
-you supply a supported chapter without writing another copy merely to attach
-evidence. Plain strings retain the existing section-evidence binding behavior.
-Do not populate deterministic variables with prose: the runtime projects them
-from authorized facts. Select a registered reader goal compatible with the
-article intent; the program cannot change an accepted article's purpose.
+For a selected page program, use its variable catalog and article guidance.
+Variables carry `value` and direct `references`; do not attach parser facts or
+repeat equivalent prose to satisfy a binding requirement. Use supported formatters
+or source-grounded Markdown. The selected intent still describes the reader task.
 
 Choose the article form before filling variables. For L03, a system overview
 uses scope, packages, foundations, components, configuration, adoption and
@@ -368,14 +353,9 @@ relevance, completeness and compatibility; the CLI checks reference identity,
 authorized scope, parseable inputs and concurrent revisions. A missing promised
 article remains unfinished until delivered or the accepted plan is adjusted.
 
-When supplied source text contains relevant usage examples, Author may declare
-`example_candidates` with a stable `scenario_key` and the authorized
-`source_item` path or reference. Select examples by reading their contents;
-file names alone are insufficient. The runtime binds the selection to the
-current subject, full path, source version and evidence, then exposes it to a
-selected examples Composer. Distinct files with the same basename remain
-distinct. Do not invent example source items, runtime outcomes or missing demos;
-omit the optional collection when no example is applicable.
+Integrate relevant examples into ordinary article fragments with their actual
+source regions. Read their contents; filenames do not establish runtime behavior.
+Do not maintain a separate example/fact binding ledger.
 
 ### Useful article content
 

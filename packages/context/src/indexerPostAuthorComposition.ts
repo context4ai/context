@@ -29,7 +29,6 @@ import {
   materializeIndexerPrimaryResultViewFromArtifactResult,
   validateIndexerPrimaryResultView,
   type IndexerPrimaryArtifactView,
-  type IndexerPrimaryFactView,
   type IndexerPrimaryResultView,
 } from "./indexerPrimaryResultView.js";
 
@@ -48,7 +47,6 @@ export type {
   IndexerComposerInvocationReceipt,
   IndexerEffectiveArtifactSet,
   IndexerPrimaryArtifactView,
-  IndexerPrimaryFactView,
   IndexerPrimaryResultView,
 };
 
@@ -245,7 +243,6 @@ export function planIndexerPostAuthorComposition(input: {
   effective_composer_set: IndexerEffectiveComposerSet;
   author_workset_digest: string;
   primary_result_digest: string;
-  primary_facts: readonly IndexerPrimaryFactView[];
   primary_artifacts: readonly IndexerPrimaryArtifactView[];
   validator_contract_digest: string;
   current_profile_binding_digest: string;
@@ -273,7 +270,6 @@ export function planIndexerPostAuthorComposition(input: {
   const primaryResultView = materializeIndexerPrimaryResultView({
     workset_digest: input.author_workset_digest,
     primary_result_digest: input.primary_result_digest,
-    facts: input.primary_facts,
     artifacts: input.primary_artifacts,
     validator_contract_digest: input.validator_contract_digest,
   });

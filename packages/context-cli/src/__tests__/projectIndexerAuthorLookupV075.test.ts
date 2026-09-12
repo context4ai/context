@@ -63,8 +63,7 @@ describe("Author source lookup", () => {
           groups: projection.unresolved ? [] : [{
             key: "public-api", title: ownsReaderPlan ? "Public API" : "Supporting details",
             reader_task: ownsReaderPlan ? "Locate the public exports and constraints." : "Explain the supporting declarations.",
-            subject: { namespace: workset.partition_subject_key.namespace, kind: workset.partition_subject_key.kind, local_key: "public-api" },
-            subject_intent: ownsReaderPlan ? "primary" : "enrich-or-independent",
+
             members: validation.canonical_inventory_members.map((member) => member.member_id),
             questions: [...workset.reader_question_refs],
             question_targets: (validation.required_question_target_refs ?? []).map((target) => ({ target, role: "primary-carrier" })),

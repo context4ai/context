@@ -20,7 +20,7 @@ for (const legacy of [false, true]) test(`cleared production reopens through Rou
     await completePartitionStage(root);
     const review = (await currentIndexerStructureReview(root))!;
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision, decision: "approved" });
-    await completeAuthorStage(root, { includeFacts: true });
+    await completeAuthorStage(root);
     const candidates = await readCandidateRecords(root);
     await approveCandidates(root, candidates);
     await closeProjectWorkspace(root);

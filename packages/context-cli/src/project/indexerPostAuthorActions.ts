@@ -89,7 +89,6 @@ export async function buildProjectIndexerPostAuthorWorksets(input: {
     >[0]["effective_composer_set"],
     author_workset_digest: authorWorksetDigest,
     primary_result_digest: primaryView.primary_result_digest,
-    primary_facts: primaryView.facts,
     primary_artifacts: primaryView.artifacts,
     validator_contract_digest: String(value.validator_contract_digest ?? ""),
     current_profile_binding_digest: String(value.current_profile_binding_digest ?? ""),

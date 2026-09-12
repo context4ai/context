@@ -1,13 +1,14 @@
+import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
+import { validateArticleStructureEntries, indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
   processedVersionForScope, indexRequirementSchema, } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { prepareApprovedRevision, readApprovedRevision } from "./approvedRevision.js";
+import { prepareApprovedRevision, readApprovedRevision, targetBytes } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScopes } from "./processedScopeStorage.js";
 import { currentLedger } from "./indexerMainRunStoreRecords.js";
@@ -56,14 +57,15 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
     })));
     const structure = await readKnowledgeStructure(projectRoot);
     if (!structure.parsed) throw new TypeError("Close the existing knowledge before checking source updates");
-    const views: unknown[] = Array.isArray(structure.parsed.views) ? structure.parsed.views : [];
-    const candidates = views.flatMap((value) => {
-      if (!value || typeof value !== "object") return [];
-      const view = value as Record<string, unknown>;
-      const refs = Array.isArray(view.sources) ? view.sources.filter((ref): ref is string => typeof ref === "string") : [];
-      if (!refs.some((ref) => scopes.some((scope) => ref === scope.source_ref || ref.startsWith(`${scope.source_ref}/`) || ref.startsWith(`${scope.source_ref}#`)))) return [];
-      return [{ path: String(view.path), title: String(view.title), view_ref: String(view.view_ref), source_refs: refs }];
-    });
+    const candidates = await Promise.all(validateArticleStructureEntries(structure.parsed.articles ?? [])
+      .filter(article => article.sections.some(section => section.references.some(reference =>
+        scopes.some(scope => scope.source_ref === reference.source_ref))))
+      .map(async article => {
+        const title = parseFrontmatterLoose(await targetBytes(projectRoot, article.path)).title;
+        return { path: article.path, title: typeof title === "string" ? title : article.path,
+          view_ref: article.article_id,
+          source_refs: [...new Set(article.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
+      }));
     const { registry } = await loadIndexerRegistry(projectRoot);
     const requirementIds = new Set(scopes.map((scope) => scope.requirement_ref));
     const requirements = registry.requirements.filter((requirement) => requirementIds.has(requirement.id));

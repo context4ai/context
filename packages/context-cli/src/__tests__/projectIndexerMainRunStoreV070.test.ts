@@ -10,7 +10,7 @@ import {
   buildIndexerMainWorksetSet,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
-  canonicalIndexerNodeRef,
+  indexerProtocolDigest,
   composeIndexerLayerInput,
   indexerRegistryDigests,
   indexerPartitionPlanCanonicalHash,
@@ -99,18 +99,11 @@ function workset(requirementSetDigest = digest("2"), sourceRef = "repo:sample@re
     primary_execution_fingerprint:
       PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("9"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "module",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:knowledge"],
     partition_input_digests: [digest("c")],
@@ -137,11 +130,9 @@ function plan(
       indexer_id: current.indexer_id,
       indexer_fingerprint: current.primary_execution_fingerprint,
       requirement_digest: current.requirement_set_digest,
-      subject_key_schema_digest: current.subject_key_schema_digest,
       source_scope_digest: current.source_scope_digest,
       source_refs: [current.source_ref],
       module_ref: current.module_ref,
-      partition_subject_key: current.partition_subject_key,
       parent_scope_ref: current.module_ref!,
       inventory_digest: current.partition_inventory_digest,
       question_target_inventory_digest: current.question_target_inventory_digest,
@@ -153,9 +144,7 @@ function plan(
     reader_question_refs: current.reader_question_refs,
     groups: [{
       group_key: "module:sample",
-      subject_key: current.partition_subject_key,
-      subject_intent: "primary" as const,
-      logical_unit_ref: canonicalIndexerNodeRef(current.partition_subject_key),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: current.indexer_id, source_ref: current.source_ref, module_ref: current.module_ref, group_key: "module:sample" }),
       label: "Sample module",
       reader_question_refs: current.reader_question_refs,
       question_target_bindings: [{ target_ref: TARGET_REF, role: "primary-carrier" as const }],
@@ -243,7 +232,7 @@ describe("project main Indexer runtime store", () => {
     expect(read.operation_result).toEqual(validated.operation_result);
     expect(read.accepted_record).toEqual(validated.accepted_record);
     expect(read.run_envelope).toEqual(validated.run_envelope);
-    expect(read.artifact_dependency_set).toBeNull();
+    expect(read).not.toHaveProperty("artifact_dependency_set");
     expect(() => readAcceptedCache({ cache: { ...cache, result: {} }, spec })).toThrow();
   });
   test("atomically recovers accepted Result/receipt and never reruns a legal cached result", async () => {
@@ -665,33 +654,25 @@ describe("project main Indexer runtime store", () => {
 });
 
 
-describe("Partition admission across sources", () => {
-  for (const batch of [false, true]) test(`rejects conflicting ownership before commit (${batch ? "batch" : "single"})`, async () => {
+describe("Partition identity across sources", () => {
+  for (const batch of [false, true]) test(`keeps same-named source groups independent (${batch ? "batch" : "single"})`, async () => {
     const root = await mkdtemp(join(tmpdir(), "context-partition-admission-"));
     try {
       const a = fixture();
       const b = fixture(undefined, "repo:supplement@revision");
+      expect(a.result.result.result.groups[0]!.logical_unit_ref).not.toBe(b.result.result.result.groups[0]!.logical_unit_ref);
       await prepareIndexerMainRunStore({ projectRoot: root,
         workset_set: buildIndexerMainWorksetSet([a.current, b.current]), run_specs: [a.spec, b.spec] });
       for (const f of [a, b]) await startIndexerMainRunStore({ projectRoot: root, workset_digest: f.current.workset_digest });
       if (batch) {
         const result = await acceptIndexerMainPartitionRunsStore({ projectRoot: root, runs: [a, b].map(f => ({ workset_digest: f.current.workset_digest, result: f.result })) });
-        expect(result.outcomes.map(o => [o.outcome, o.committed])).toEqual([["accepted", true], ["failed", false]]);
-        expect(result.outcomes[1]!.message).toContain("partition-subject-conflict");
+        expect(result.outcomes.map(o => [o.outcome, o.committed])).toEqual([["accepted", true], ["accepted", true]]);
       } else {
         await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: a.current.workset_digest, result: a.result });
-        await expect(acceptIndexerMainRunStore({ projectRoot: root, workset_digest: b.current.workset_digest, result: b.result })).rejects.toThrow("partition-subject-conflict");
+        await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: b.current.workset_digest, result: b.result });
       }
       const records = await readAcceptedIndexerMainPartitionResultRecords(root, true);
-      expect(records.map(r => r.request.execution_request_digest)).toEqual([a.request.execution_request_digest]);
-      const payload = b.result.result.result;
-      if (payload.status !== "complete") throw new Error("expected complete plan");
-      const { canonical_hash: _hash, ...fields } = payload;
-      void _hash;
-      const repaired = { ...fields, groups: fields.groups.map(g => ({ ...g, subject_intent: "enrich-or-independent" as const })) };
-      b.result.result.result = { ...repaired, canonical_hash: indexerPartitionPlanCanonicalHash(repaired) };
-      await acceptIndexerMainRunStore({ projectRoot: root, workset_digest: b.current.workset_digest, result: b.result });
-      expect(await readAcceptedIndexerMainPartitionResultRecords(root)).toHaveLength(2);
+      expect(records.map(r => r.request.execution_request_digest).sort()).toEqual([a.request.execution_request_digest, b.request.execution_request_digest].sort());
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 });

@@ -96,7 +96,13 @@ test("explicit managed rename synchronizes exact references and preserves source
   const saved = await importManagedDocument(root, { type: "note", name, markdown: "# Original decision" });
   await mkdir(join(root, "knowledge/guides"), { recursive: true });
   await writeFile(join(root, "knowledge/guides/guide.md"), `# Guide\n\nSource: ${saved.source_ref}#scope\n[Original](../../sources/note/${name}#scope)\nNeighbor: ${saved.source_ref}-other\n`);
-  await writeFile(join(root, "knowledge/structure.yaml"), `views:\n  - path: guides/guide.md\n    sources: ["${saved.source_ref}"]\n`);
+  const { createArticleSourceReference } = await import("@c4a/context");
+  const citation = createArticleSourceReference(saved.source_ref,
+    { path: "decision.md", start_line: 1, end_line: 1 }, "# Original decision\n");
+  await writeFile(join(root, "knowledge/structure.yaml"), JSON.stringify({ articles: [{
+    article_id: "guide", path: "guides/guide.md", collection: "sop", visibility: "public",
+    sections: [{ id: "scope", references: [citation] }],
+  }] }));
   await writeFile(join(root, "src/indexers.yaml"), `evidence: ["${saved.source_ref}"]\n`);
   await writeFile(join(root, "src/index.ts"), `import { source as inputSource } from "@c4a/context";\nconst value = inputSource("note", "${name}");\n`);
   const input = { projectRoot: root, source_ref: saved.source_ref, name: "20260907/confirmed-decision.md" };
@@ -111,6 +117,12 @@ test("explicit managed rename synchronizes exact references and preserves source
   expect(page).toContain(`../../sources/note/${input.name}#scope`);
   expect(await readFile(join(root, "src/index.ts"), "utf8")).toContain(`inputSource("note", "${input.name}")`);
   expect(page).toContain(`${saved.source_ref}-other`);
+  const { readKnowledgeStructure } = await import("../project/packageBuildInventory.js");
+  const renamed = (await readKnowledgeStructure(root)).parsed!.articles as Array<{ sections: Array<{ references: unknown[] }> }>;
+  expect(renamed[0]!.sections[0]!.references).toEqual([{ ...citation, source_ref: `note:${input.name}`,
+    locator: { ...citation.locator, path: "confirmed-decision.md" } }]);
+  const { registeredArticleSourceReader } = await import("../project/articleSourceReader.js");
+  expect(await (await registeredArticleSourceReader(root))(`note:${input.name}`, "confirmed-decision.md")).toBe("# Original decision\n");
   expect(await readFile(join(root, "src/indexers.yaml"), "utf8")).toContain(`note:${input.name}`);
 });
 

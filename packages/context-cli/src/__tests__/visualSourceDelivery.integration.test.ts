@@ -17,6 +17,7 @@ import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { buildProjectPackages } from "../project/packageBuilder.js";
 import { visualResourcesFromView, readVisualReceipts, approvedVisualResults } from "../project/visualSourceProcessing.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 test("captured image reaches Author, survives selected template and Review, and ships Mermaid without image", async () => {
   const root = await createArticleDocumentWorkspace({ id: "visual-delivery", sourceType: "file", profile: "domain-reference",
@@ -33,7 +34,7 @@ test("captured image reaches Author, survives selected template and Review, and 
     await completePartitionStage(root, false, false, undefined, (intents, targets) => [{ key: "flow", title: "Request flow",
       reader_task: "Understand request flow", artifact_intent: intents.find(intent => intent.includes("/understand-domain/") && intent.endsWith("/content"))!,
       template_id: "domain-reference-c01-page", required: true, question_targets: targets,
-      sections: [{ key: "scope", heading: "Scope", required: false }] }], undefined, undefined, "reader-subject");
+      sections: [{ key: "scope", heading: "Scope", required: false }] }], undefined, "reader-subject");
     const review = (await currentIndexerStructureReview(root))!;
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: review.revision, decision: "approved" });
     const current = (await resolveCurrentIndexerAgentContext(root))!;
@@ -43,15 +44,15 @@ test("captured image reaches Author, survives selected template and Review, and 
     const validation = task.spec.validation as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"];
     const visuals = visualResourcesFromView(task.view);
     expect(visuals).toHaveLength(1);
-    const document = task.view.items.find(item => item.category === "document")!;
+    const references = await fixtureArticleReferences(root, task.view);
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key, outcome: "publish", policy: "standard",
       articles: [{ key: "flow", title: "Request flow", summary: "A documented request and reply.", sections: [{ key: "scope", heading: "Scope",
-        markdown: "The source defines request then reply.", source_items: [document.ref], answers: validation.page_plan!.articles![0]!.question_targets,
+        markdown: "The source defines request then reply.", references, answers: validation.page_plan!.articles![0]!.question_targets,
         visuals: [{ resource: visuals[0]!.ref, context: ["Request then reply."], requirements: "English; flow", disposition: "converted", format: "mermaid",
           markdown: "```mermaid\nflowchart LR\n Client --> Service\n Service --> Client\n```" }] }],
-        template_variables: { scope: { value: `Read the documented flow.\n\n${visuals[0]!.original_markdown}`, source_items: [document.ref] } } }],
+        template_variables: { scope: { value: `Read the documented flow.\n\n${visuals[0]!.original_markdown}`, references } } }],
       member_dispositions: validation.canonical_inventory_members.map(member => ({ item: member.member_id, state: "covered", article: "flow", section: "scope" })) });
-    const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+    const result = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, validation, semantic });
     const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] });
     expect(accepted.outcomes[0]?.outcome).toBe("accepted");
     await advanceCurrentIndexerLifecycle(root);

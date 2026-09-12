@@ -143,13 +143,11 @@ function memberEvidenceRef(memberId: string): string {
 
 function authorFact(input: {
   fact: IndexerParserFact;
-  subject_key: PartitionGroup["subject_key"];
   evidence_ref: string;
 }) {
   return {
     fact_ref: input.fact.fact_ref,
     fact_kind: input.fact.kind,
-    subject_key: input.subject_key,
     value: input.fact.payload,
     evidence_refs: [input.evidence_ref],
   };
@@ -259,7 +257,6 @@ function parserDependencyView(input: {
       fact_ref: fact.fact_ref,
       fact_digest: indexerProtocolDigest(authorFact({
         fact,
-        subject_key: input.group.subject_key,
         evidence_ref: evidenceRef,
       })),
       source_span_node_refs: [spanRefByEvidence.get(evidenceRef)!],

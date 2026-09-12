@@ -12,11 +12,11 @@ function slice(proposal: IndexerLayoutProposal, index: number): IndexerLayoutPro
   return { ...payload, proposal_digest: indexerProtocolDigest(payload) };
 }
 
-test("delivering page B of the same subject does not adopt already approved page A", () => {
+test("delivering page B of the same writing group does not adopt already approved page A", () => {
   const full = readerLayoutProposal("shared-subject", { multiple: true });
   const first = slice(full, 0);
   const next = slice(full, 1);
-  expect(first.node.node_ref).toBe(next.node.node_ref);
+  expect(first.artifacts[0]!.artifact_ref).not.toBe(next.artifacts[0]!.artifact_ref);
   const base = approvedBaseProjection({ proposal: next, structure: approvedReaderStructure([first]) });
   expect(base).toBeUndefined();
   const preparation = prepareIndexerReaderPaths({ proposals: [next], base_projections: base ? [base] : [],
@@ -30,7 +30,7 @@ test("delivering page B of the same subject does not adopt already approved page
 test("the same delivered page retains an approved renamed path through its stable identity", () => {
   const page = slice(readerLayoutProposal("shared-subject", { multiple: true }), 0);
   const structure = approvedReaderStructure([page]);
-  structure.views[0]!.path = "codeindex/custom/accepted-page.md";
+  structure.articles[0]!.path = "codeindex/custom/accepted-page.md";
   const base = approvedBaseProjection({ proposal: page, structure });
   expect(base?.artifacts[0]?.output_path).toBe("knowledge/codeindex/custom/accepted-page.md");
   expect(base?.artifacts[0]?.artifact_ref).toBe(page.artifacts[0]!.artifact_ref);

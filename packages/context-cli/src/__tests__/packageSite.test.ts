@@ -9,7 +9,10 @@ import { withStagedPackageOutput } from "../project/packageBuildStage.js";
 
 const pkg = kbPackage({ name: "sample", template: "src/templates", site: { title: "Knowledge", base: "/docs/" } });
 const selected = [{ relPath: "codeindex/app/start.md", absPath: "/unused", content: '---\ntitle: Start\nartifact_ref: article:start\n---\n# Start\n<!-- context:section id="entry" -->\n## Entry\n' },
-  { relPath: "codeindex/app/next.md", absPath: "/unused", content: '---\ntitle: Next\nartifact_ref: article:next\n---\n# Next\n' }];
+  { relPath: "codeindex/app/next.md", absPath: "/unused", content: '---\ntitle: Next\nartifact_ref: article:next\n---\n# Next\n' }].map(file => ({ ...file,
+    article: { article_id: file.relPath.includes("start") ? "article:start" : "article:next", path: file.relPath,
+      collection: "codeindex" as const, visibility: "public", sections: file.relPath.includes("start") ? [{ id: "entry", references: [] }] : [] },
+  }));
 const structure = updateKnowledgeMap(undefined, { expected_revision: null, upsert: [
   { key: "business", parent: null, title: "Business" },
   { key: "start", parent: "business", title: "Getting started", target: { artifact_ref: "article:start" } },
@@ -62,7 +65,10 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     await writeFile(join(root, pkg.outDir, "skills/search/references/tips.md"), '# Search tips\n');
     await mkdir(join(root, "sources/repo"), { recursive: true });
     await writeFile(join(root, "sources/repo/index.yaml"), 'sources:\n  - name: "20260910"\n    modules:\n      - name: sample\n        subpath: packages/ui\n        git:\n          remote: git@github.com:example/components.git\n          ref: abc123\n');
-    const sourced = selected.map(file => ({ ...file, content: file.content + '\n<!-- context:section id="source" source_ref="repo:20260910/sample" -->\n' }));
+    const sourced = selected.map(file => ({ ...file, article: { ...file.article, sections: [
+      ...file.article.sections, { id: "source", references: [{ source_ref: "repo:20260910/sample",
+        locator: { path: "src/entry.ts", start_line: 1, end_line: 1 }, content_digest: "sha256:" + "a".repeat(64) }] },
+    ] } }));
     await writeFile(join(root, "changelog.yaml"), JSON.stringify({ entries: [5, 4, 3, 2, 1].map(value => ({
       version: `0.${value}.0`, date: "2026-09-10T10:00:00.000Z", title: `Version ${value}`,
       changes: ["Added coverage <script>unsafe()</script>"], triggers: [{ kind: "module", description: "New module material" }],
@@ -102,7 +108,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(article).not.toContain("unsafe-script");
     expect(article).toContain("language-mermaid");
     expect(article).toContain('class="context-sources"');
-    expect(article).toContain("https://github.com/example/components/tree/abc123/packages/ui");
+    expect(article).toContain("https://github.com/example/components/blob/abc123/packages/ui/src/entry.ts#L1-L1");
     expect(await readFile(join(root, packageSiteOutputDir(pkg), "resources/others/assets/example.svg"), "utf8")).toContain("<svg");
     const map = JSON.parse(await readFile(join(root, packageSiteOutputDir(pkg), "context-site-map.json"), "utf8"));
     expect(map.pages).toHaveLength(4);

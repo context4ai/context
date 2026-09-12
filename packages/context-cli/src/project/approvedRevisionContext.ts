@@ -1,7 +1,7 @@
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest } from "@c4a/context";
+import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest, type ArticleStructureEntry } from "@c4a/context";
 import { loadIndexerCustomization } from "./indexerCustomization.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
 import { currentCliInstructionDescriptors } from "./indexerCurrentInstructionMaterialization.js";
@@ -9,7 +9,7 @@ import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 
 /** Resolve current selected writing resources even for an explicit page revise
  * with no source-update request. No Parser or remote acquisition runs here. */
-export async function approvedRevisionContext(root: string, target: { source_refs: string[]; markdown: string }) {
+export async function approvedRevisionContext(root: string, target: { source_refs: string[]; markdown: string; sections: ArticleStructureEntry["sections"] }) {
   const { registry } = await loadIndexerRegistry(root);
   const requirements = registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
     target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
@@ -45,6 +45,6 @@ export async function approvedRevisionContext(root: string, target: { source_ref
     }));
   return { requirements, providers, sources,
     current_sections: approvedContextSectionsInMarkdown(target.markdown).map((section) => ({
-      id: section.id, kind: section.kind, source_refs: section.refs, markdown: section.readerVisibleBody,
+      id: section.id, references: target.sections.find(item => item.id === section.id)?.references ?? [], markdown: section.readerVisibleBody,
     })) };
 }

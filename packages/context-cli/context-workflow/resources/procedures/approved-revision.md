@@ -18,7 +18,7 @@ Record new factual contributions as managed sources before expanding source
 ownership; an editing instruction alone is not a permanent factual source.
 
 Return the full revised Markdown in the supplied output schema, preserving the
-page's identity, source list, and source-bound section markup. Do not silently
+page's stable fragment markers and metadata. Do not silently
 turn paraphrased text into a verbatim quotation. Do not directly write knowledge
 files. Context prepares a Candidate and routes it through the existing Review,
 apply, close, and build steps. Managed mode delegates Review, not source truth.
@@ -27,18 +27,18 @@ If Context reports that the approved page changed, read that version and restart
 the revision. Never overwrite a concurrent edit with the old page snapshot.
 
 When `target.base_digest` is null, this is a new page in the confirmed update scope.
-The supplied Markdown contains only its stable identity and initial metadata.
+The supplied Markdown contains its initial metadata. Article identity stays in the structure.
 Read the specified source material and write the complete page with source-bound
 sections, using the existing purpose and page forms. Do not treat the initial
 heading as an already written page.
 
-Use `target.source_refs` as the final page source list. It can include explicitly
+Use `target.source_refs` as the allowed source scope, not as a list to copy onto the page. It can include explicitly
 selected supporting material absent from the old Markdown. Read that material
 before using it, add only its relevant explanation, and cite it in the affected
 sections. A session rationale is not proof of runtime behavior.
 
 When `target.previous_path` is present, the user explicitly selected a page move.
-Keep its stable Node/View identity. The supplied Markdown already rebases its
+Keep its stable article identity and fragment IDs. The supplied Markdown already rebases its
 relative links for `target.path`; do not put them back at the old location.
 Explain the move in the review summary. Approval moves the page and updates
 incoming Markdown navigation together; do not create a second copy or manually
@@ -101,10 +101,20 @@ For a small change, submit `sections` instead of `markdown`. Select exact IDs fr
 `writing_context.current_sections`; each edit contains `section_id` and `content`,
 an ordered array of `{ "markdown": "replacement text" }` or
 `{ "program": "exact token from program_blocks" }`. The CLI retains untouched
-sections, page identity and the edited section's source references. Do not include
+sections and page identity. Omitted references preserve the previous citations. Do not include
 section wrappers in replacement text. Use full Markdown for new pages, changed
 structure or pages without unambiguous section IDs. Both forms use the current
 Action schema and the same source and baseline validation.
+
+When a fragment's support changes, include `references` with its actual
+`source_ref` and `locator` (`path`, `start_line`, `end_line`). Each fragment allows
+up to three positions; Context reads the captured region and computes its digest.
+For full Markdown, optional `sections` contains only `{ section_id, references }`
+entries; for local edits it can accompany `content` or update references alone.
+An explicit empty list removes that fragment's citations. Deleted fragments lose
+their references; new fragments need their own selected sources, not copied IDs.
+Uniquely moved unchanged text can retain its fingerprint at its new position;
+changed or ambiguous regions remain visible for review, not silently refreshed.
 
 For example, after substituting IDs/tokens from this Route:
 
@@ -131,29 +141,3 @@ If the user explicitly requires a different presentation, explain the difference
 and resolve that choice before accepting it. Do not rerun unchanged Repair to
 force a format the program deliberately omits. Check the actual resulting page;
 accepted tasks or an empty Composer result alone do not demonstrate a correction.
-
-## Changed supporting articles
-
-`knowledge_input` separates approved interpretation from source-bound facts.
-Recheck the relevant interpretation when an upstream article changes; ordinary
-revision refreshes its version only after Review. Waiting input does not make
-old statements current, and a wording-only edit must retain the review warning.
-
-For a split, merge or removed upstream, use the existing `context task adjust
---input - --format json` with `instruction` and `knowledge_dependencies`:
-
-```json
-{"instruction":"Rebind the affected explanation to the approved replacement","knowledge_dependencies":{"dependencies":[{"artifact_ref":"<approved article identity>","section_refs":[],"required":true}]}}
-```
-
-Select identities from the authorized approved article catalog; do not guess
-paths or promote prose into parser facts. Read the new current Route's
-`knowledge_input`, then repeat the adjustment with the same dependencies plus
-`sections`: each item has the retained `section_key`, selected `fact_refs` and
-`evidence_refs`. These are a full support replacement for those sections, not an
-append. Use only the supplied replacement facts or still-valid direct facts.
-An empty dependency list explicitly removes the old relationship; the remaining
-explanation still needs valid direct evidence. Revise the text to match the
-selection before submitting. The CLI checks identity, scope and version; the
-Agent and Review judge the explanation. Pending upstream approval remains a
-concrete task to finish or adjust, not a reason to clear the warning manually.

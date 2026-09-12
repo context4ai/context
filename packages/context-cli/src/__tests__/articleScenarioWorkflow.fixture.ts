@@ -1,9 +1,11 @@
 import { expect } from "bun:test";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
+import { readArticleContracts } from "./articleContractReading.fixture.js";
 import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import YAML from "yaml";
-import { indexerAuthorSemanticInputSchema, indexerTemplateContractSchema, validateIndexerAuthorDependencyView } from "@c4a/context";
+import { indexerAuthorSemanticInputSchema, indexerTemplateContractSchema } from "@c4a/context";
 import type { ArticleScenario } from "./articleCodeScenarios.fixture.js";
 import { createArticleDocumentWorkspace } from "./articleDocumentWorkspace.fixture.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
@@ -55,7 +57,7 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
       artifact_intent: intents.find(intent => intent.split("/")[2] === contract.reader_goal && intent.endsWith("/content"))!,
       template_id: contract.template_id, question_targets: index === 0 ? targets : [],
       sections: Object.keys(article.slots).map(key => ({ key, heading: key, required: false })),
-    })), undefined, undefined, scenario.sourceType ? "reader-subject" : "semantic-subject");
+    })), undefined, scenario.sourceType ? "reader-subject" : "semantic-subject");
     const delivered: Array<{ type: string; key: string; path: string }> = [];
     for (let wave = 0; wave < 30; wave++) {
       const structure = await currentIndexerStructureReview(root);
@@ -79,29 +81,25 @@ export async function runArticleScenario(scenario: ArticleScenario, options: { o
           const workset = task.spec.request.workset;
           if (workset.stage !== "author") throw new Error("Expected Author");
           const validation = task.spec.validation as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"];
-          const facts = task.view.items.filter(item => item.category === "fact").map(item => item.ref);
-          const sourceItems = scenario.sourceType ? validateIndexerAuthorDependencyView(validation.dependency_view).positive_nodes.flatMap(node => node.kind === "source-span" ? [node.evidence_ref] : []) : [];
-          expect(facts.length + sourceItems.length).toBeGreaterThan(0);
+          const references = await fixtureArticleReferences(root, task.view);
+          const renderContracts = scenario.articles.some(article => article.symbols)
+            ? await readArticleContracts(root, task.spec.request, path) : undefined;
           const articles = validation.page_plan!.articles!.map(planned => {
             const article = scenario.articles.find(article => (article.key ?? article.type) === planned.key)!;
             expect(validation.article_templates?.[planned.key]?.contract.template_id).toBe(planned.template_id);
-            const articleFacts = article.symbols ? task.view.items.filter(item => {
-              if (item.category !== "fact") return false;
-              const value = item.value as { payload?: { name?: string } };
-              return value.payload?.name !== undefined && article.symbols!.includes(value.payload.name);
-            }).map(item => item.ref) : facts;
-            expect(articleFacts.length + sourceItems.length).toBeGreaterThan(0);
             const key = Object.keys(article.slots)[0]!;
+            const apiSlot = validation.article_templates?.[planned.key]?.contract.deterministic_blocks
+              .find(block => block.renderer === "public-contract-table")?.source_variable_id;
+            const variables = { ...article.slots, ...(article.symbols && apiSlot
+              ? { [apiSlot]: renderContracts!(article.symbols) } : {}) };
             return { key: planned.key, title: article.title, summary: article.task,
-              sections: [{ key, heading: key, markdown: article.slots[key]!, facts: articleFacts, source_items: sourceItems, answers: planned.question_targets }],
-              template_variables: Object.fromEntries(Object.entries(article.slots).map(([key, value]) => [key, { value, facts: articleFacts, source_items: sourceItems }])) };
+              sections: [{ key, heading: key, markdown: article.slots[key]!, references, answers: planned.question_targets }],
+              template_variables: Object.fromEntries(Object.entries(variables).map(([key, value]) => [key, { value, references }])) };
           });
           const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key, outcome: "publish", policy: "standard", articles,
-            target_resolutions: (workset.target_resolution_view?.entries ?? []).map(entry => ({ target: entry.query_ref,
-              disposition: entry.state === "resolved" ? "reuse-existing" : "create-independent" })),
             member_dispositions: validation.canonical_inventory_members.map(member => ({ item: member.member_id, state: "covered",
               article: articles[0]!.key, section: articles[0]!.sections[0]!.key })) });
-          const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+          const result = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, validation, semantic });
           const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] });
           expect(accepted.outcomes).toMatchObject([{ outcome: "accepted" }]);
         }

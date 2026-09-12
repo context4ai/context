@@ -13,8 +13,11 @@ export function indexerParserTaskSelection(input: {
     const scopes = input.validation.parser_analysis_scopes as {
       source_ref: string; module_ref: string | null; scopes: string[][];
     } | undefined;
-    return { ...(scopes?.source_ref === input.source_ref && scopes.module_ref === input.module_ref
-      ? { analysis_scopes: scopes.scopes } : {}), paths: [...new Set(view.positive_nodes.flatMap((node) =>
+    const analysisScopes = scopes?.source_ref === input.source_ref && scopes.module_ref === input.module_ref
+      ? scopes.scopes : undefined;
+    const usesParsedFacts = view.positive_nodes.some(node => node.kind === "selected-fact");
+    return { ...(!usesParsedFacts && !analysisScopes?.length ? { inventory_only: true } : {}),
+      ...(analysisScopes === undefined ? {} : { analysis_scopes: analysisScopes }), paths: [...new Set(view.positive_nodes.flatMap((node) =>
       node.kind === "source-span" && node.source_ref === input.source_ref && node.module_ref === input.module_ref
         ? [node.locator.path]
         : []

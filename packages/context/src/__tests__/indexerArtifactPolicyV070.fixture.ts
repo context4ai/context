@@ -72,15 +72,7 @@ export function artifactPolicyContractsFixture() {
       }],
       variant_schema: { axes: [] },
     }],
-    subject_key_schemas: [{
-      profile: "component-library",
-      version: 1,
-      namespace: { operator: "canonical-source-module-namespace" },
-      kinds: [{
-        id: "component",
-        local_key: { operator: "canonical-export-family" },
-      }],
-    }],
+
   };
   const profiles: IndexerProfileContract = {
     ...profilePayload,

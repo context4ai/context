@@ -43,9 +43,6 @@ const approvedLayoutPayloadSchema = z.object({
   indexer_id: indexerIdSchema,
   profile: indexerIdSchema,
   profile_contract_digest: indexerDigestSchema,
-  subject_key_schema_set_digest: indexerDigestSchema,
-  subject_key_schema_digest: indexerDigestSchema,
-  node_ref: indexerCanonicalRefSchema,
   shared_artifact_fingerprint: indexerSharedArtifactFingerprintSchema,
   artifacts: z.array(approvedArtifactSchema),
 }).strict();
@@ -149,9 +146,6 @@ export function buildIndexerApprovedLayoutProjection(
     indexer_id: proposal.indexer_id,
     profile: proposal.profile,
     profile_contract_digest: proposal.profile_contract_digest,
-    subject_key_schema_set_digest: proposal.subject_key_schema_set_digest,
-    subject_key_schema_digest: proposal.subject_key_schema_digest,
-    node_ref: proposal.node.node_ref,
     shared_artifact_fingerprint: proposal.shared_artifact_fingerprint,
     artifacts: proposal.artifacts.map((artifact) => ({
       artifact_ref: artifact.artifact_ref,
@@ -517,16 +511,6 @@ export function compareIndexerLayout(input: {
   const base = input.base === null
     ? null
     : validateIndexerApprovedLayoutProjection(input.base);
-  if (base !== null && (
-    base.indexer_id !== target.indexer_id ||
-    base.profile !== target.profile ||
-    base.node_ref !== target.node.node_ref ||
-    base.subject_key_schema_digest !== target.subject_key_schema_digest
-  )) {
-    throw new TypeError(
-      "layout comparison cannot bypass profile or SubjectKey re-identification authority",
-    );
-  }
   const baseByRef = new Map((base?.artifacts ?? []).map((artifact) => [
     artifact.artifact_ref,
     artifact,

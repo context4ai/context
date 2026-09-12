@@ -7,10 +7,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-monorepo-container",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-monorepo-container-source"] }],
-    "evidence_refs": ["evidence:anonymous-monorepo-container-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -20,10 +32,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-web-application",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-web-application-source"] }],
-    "evidence_refs": ["evidence:anonymous-web-application-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -33,10 +57,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-component-library",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-component-library-source"] }],
-    "evidence_refs": ["evidence:anonymous-component-library-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -46,10 +82,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-sdk-library",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-sdk-library-source"] }],
-    "evidence_refs": ["evidence:anonymous-sdk-library-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -59,10 +107,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-cli-tool",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-cli-tool-source"] }],
-    "evidence_refs": ["evidence:anonymous-cli-tool-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -72,10 +132,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-plugin-extension",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-plugin-extension-source"] }],
-    "evidence_refs": ["evidence:anonymous-plugin-extension-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -85,10 +157,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-api-service",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-api-service-source"] }],
-    "evidence_refs": ["evidence:anonymous-api-service-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -98,10 +182,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-gateway-facade",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-gateway-facade-source"] }],
-    "evidence_refs": ["evidence:anonymous-gateway-facade-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -111,10 +207,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-domain-service",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-domain-service-source"] }],
-    "evidence_refs": ["evidence:anonymous-domain-service-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -124,10 +232,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-background-runtime",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-background-runtime-source"] }],
-    "evidence_refs": ["evidence:anonymous-background-runtime-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -137,10 +257,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-event-consumer",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-event-consumer-source"] }],
-    "evidence_refs": ["evidence:anonymous-event-consumer-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -150,10 +282,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-data-sync-reconciliation",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-data-sync-reconciliation-source"] }],
-    "evidence_refs": ["evidence:anonymous-data-sync-reconciliation-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -163,10 +307,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-storage-repository",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-storage-repository-source"] }],
-    "evidence_refs": ["evidence:anonymous-storage-repository-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -176,10 +332,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-adapter-integration",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-adapter-integration-source"] }],
-    "evidence_refs": ["evidence:anonymous-adapter-integration-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -189,10 +357,22 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-contract-source",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-contract-source-source"] }],
-    "evidence_refs": ["evidence:anonymous-contract-source-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   },
   {
     "protocol": "context.indexer.authoring-fixture/v1",
@@ -202,9 +382,21 @@
     "source_role": "authoritative-source",
     "logical_unit_id": "semantic-subject",
     "logical_unit_ref": "node:anonymous-derived-generated-source",
-    "canonical_facts": { "target": { "eligible": true } },
+    "canonical_facts": {
+      "target": {
+        "eligible": true
+      }
+    },
     "artifact_policy_variant": "standard",
-    "artifacts": [{ "artifact_id": "content", "artifact_kind": "content", "purpose": "required", "reader_question_refs": ["question:failure-recovery"], "evidence_refs": ["evidence:anonymous-derived-generated-source-source"] }],
-    "evidence_refs": ["evidence:anonymous-derived-generated-source-source"]
+    "artifacts": [
+      {
+        "artifact_id": "content",
+        "artifact_kind": "content",
+        "purpose": "required",
+        "reader_question_refs": [
+          "question:failure-recovery"
+        ]
+      }
+    ]
   }
 ]

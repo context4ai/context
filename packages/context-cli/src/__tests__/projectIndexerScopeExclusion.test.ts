@@ -45,8 +45,6 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
     const semantic: Parameters<typeof buildIndexerPartitionRunResultFromSemantic>[0]["semantic"] = {
       stage: "partition", outcome: "complete", groups: projection.unresolved ? [] : [{
         key: workset.workset_digest, title: "Public entry", reader_task: "Locate the public API.",
-        subject: { namespace: workset.partition_subject_key.namespace, kind: workset.partition_subject_key.kind,
-          local_key: workset.workset_digest }, subject_intent: "primary",
         members: validation.canonical_inventory_members.map((member) => member.member_id),
         questions: [...workset.reader_question_refs],
         question_targets: (validation.required_question_target_refs ?? []).map((target) => ({ target, role: "primary-carrier" })),
@@ -86,7 +84,6 @@ test("explicit obsolete exclusion keeps accepted partitions and starts only curr
   const scopedAuthor = await buildProjectIndexerMainAuthorWorksets({ projectRoot: root, source_projections: projections, value: {
     protocol: "context.indexer.main-author-workset-build-input/v1",
     partitions: excludeIndexerPartitionMembers(partitions, new Set([members[0]!])),
-    target_resolution_views: [],
   } });
   if (!("run_specs" in scopedAuthor)) throw new Error("expected scoped Author runs");
   const changedSpec = scopedAuthor.run_specs.find((spec) => (spec.validation.page_plan as {

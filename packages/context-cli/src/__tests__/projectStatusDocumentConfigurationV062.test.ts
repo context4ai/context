@@ -107,7 +107,7 @@ describe("0.6.2 document source and capture status routing", () => {
       expect(status.verifyErrors).toBe(0);
       expect(status.evidenceStatus).toBe("pass");
       expect(status.state).toBe("route.indexer.lifecycle-required");
-      expect(status.close.state).toBe("missing");
+      expect(status.close.state).toBe("stale");
       expect(status.next).toContain("registry-and-Provider indexing lifecycle");
     } finally {
       await rm(root, { recursive: true, force: true });

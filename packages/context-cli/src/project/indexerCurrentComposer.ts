@@ -141,7 +141,6 @@ async function describeRecord(input: {
     effective_composer_set: effective,
     author_workset_digest: accepted.workset_digest,
     primary_result_digest: accepted.result_digest,
-    primary_facts: primaryView?.facts ?? [],
     primary_artifacts: primaryView?.artifacts ?? [],
     validator_contract_digest: validatorContractDigest,
     current_profile_binding_digest: indexerProtocolDigest(indexer.profile),
@@ -343,7 +342,7 @@ function composerTaskCost(context: CurrentIndexerComposerContext) {
   return {
     input_bytes: Buffer.byteLength(renderIndexerPostAuthorReading(view), "utf8"),
     output_reserve_bytes: 32 * 1024 + view.artifacts.length * 16 * 1024,
-    view_item_count: view.facts.length + view.artifacts.length,
+    view_item_count: view.artifacts.length,
   };
 }
 

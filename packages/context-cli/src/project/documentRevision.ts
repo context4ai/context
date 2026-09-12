@@ -300,7 +300,7 @@ export async function beginDocumentRevision(input: DocumentRevisionInput) {
     normalizedSelector(alias).toLocaleLowerCase() === selector));
   const applied = status.compile.files.filter((file) =>
     !candidates.some((candidate) => candidate.candidate_id === indexerCandidateId(file.file_digest)) &&
-    [indexerCandidateId(file.file_digest), file.output_path, file.node_ref, file.internal_view_ref,
+    [indexerCandidateId(file.file_digest), file.output_path, file.artifact_ref,
       indexerCandidateTitle(file.markdown, file.output_path, file.artifact_kind)].some((alias) =>
       normalizedSelector(alias).toLocaleLowerCase() === selector));
   if (pending.length + applied.length > 1) throw new ContextError(ExitCode.UserError, `revision target is ambiguous: ${input.selector}`, {

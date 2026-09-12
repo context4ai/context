@@ -16,7 +16,7 @@ export const maintenanceInputSchema = z.object({
 });
 export type MaintenanceInput = z.infer<typeof maintenanceInputSchema>;
 const requestSchema = z.object({ input: maintenanceInputSchema, delivered_before: z.string(),
-  targets: z.array(z.object({ path: z.string(), view_ref: z.string() }).strict()) }).strict();
+  targets: z.array(z.object({ path: z.string(), article_id: z.string() }).strict()) }).strict();
 const stateSchema = z.object({
   protocol: z.literal("context.maintenance/v1"),
   pending: z.array(requestSchema),

@@ -1,3 +1,4 @@
+import { articleFragmentReferences, articleSourceReferenceSchema } from "./articleStructure.js";
 import { z } from "zod";
 import {
   indexerDeterministicBlockRendererSchema,
@@ -6,7 +7,6 @@ import {
 } from "./indexerContentLayers.js";
 import { indexerCanonicalRefSchema } from "./indexerLayerComposition.js";
 import {
-  INDEXER_EVIDENCE_KINDS,
   addDuplicateIssues,
   indexerDigestSchema,
   indexerIdSchema,
@@ -27,7 +27,6 @@ const templateVariableContractSchema = z.object({
   type: templateVariableTypeSchema,
   content_layer: z.enum(["deterministic-fact", "semantic-prose"]),
   required: z.boolean(),
-  evidence_required: z.boolean(),
   maximum_length: z.number().int().positive().max(262_144).optional(),
   maximum_items: z.number().int().positive().max(512).optional(),
 }).strict().superRefine((value, context) => {
@@ -64,14 +63,11 @@ const templateSectionSchema = z.object({
   reader_goal: indexerIdSchema,
   variable_ids: z.array(indexerIdSchema),
   deterministic_block_ids: z.array(indexerIdSchema),
-  accepted_evidence_kinds: z.array(z.enum(INDEXER_EVIDENCE_KINDS)),
-  minimum_evidence_items: z.number().int().nonnegative().max(128),
   on_missing: z.enum(["request-input", "omit"]),
   deletion_condition: z.string().min(1),
 }).strict().superRefine((value, context) => {
   addDuplicateIssues(value.variable_ids, context, "variable_ids");
   addDuplicateIssues(value.deterministic_block_ids, context, "deterministic_block_ids");
-  addDuplicateIssues(value.accepted_evidence_kinds, context, "accepted_evidence_kinds");
   const expected = value.presence === "required" ? "request-input" : "omit";
   if (value.on_missing !== expected) {
     context.addIssue({
@@ -80,23 +76,7 @@ const templateSectionSchema = z.object({
       path: ["on_missing"],
     });
   }
-  if (
-    value.presence === "required" &&
-    (value.minimum_evidence_items === 0 || value.accepted_evidence_kinds.length === 0)
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "required Section must require at least one accepted evidence item",
-      path: ["minimum_evidence_items"],
-    });
-  }
-  if (value.minimum_evidence_items > 0 && value.accepted_evidence_kinds.length === 0) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "evidence cardinality requires at least one accepted evidence kind",
-      path: ["accepted_evidence_kinds"],
-    });
-  }
+
 });
 
 export const indexerTemplateContractSchema = z.object({
@@ -197,7 +177,7 @@ const renderedSectionSchema = z.object({
   artifact_kind: indexerIdSchema,
   markdown: z.string().min(1),
   content_blocks: z.array(indexerRenderedContentBlockSchema).min(1),
-  evidence_refs: z.array(indexerCanonicalRefSchema),
+  references: z.array(articleSourceReferenceSchema).max(3),
   content_digest: indexerDigestSchema,
 }).strict();
 
@@ -256,21 +236,14 @@ export function validateIndexerRenderedArtifact(value: unknown): IndexerRendered
       validateIndexerRenderedContentBlock(block)
     );
     const markdown = contentBlocks.map((block) => block.markdown).join("");
-    const blockEvidenceRefs = [...new Set(
-      contentBlocks.flatMap((block) => block.evidence_refs),
-    )].sort();
+    const references = articleFragmentReferences(contentBlocks.flatMap(block => block.references));
     if (
       markdown !== section.markdown ||
-      blockEvidenceRefs.length !== section.evidence_refs.length ||
-      blockEvidenceRefs.some((ref, index) => ref !== section.evidence_refs[index]) ||
-      new Set(section.evidence_refs).size !== section.evidence_refs.length ||
-      section.evidence_refs.some(
-        (ref, index) => [...section.evidence_refs].sort()[index] !== ref,
-      ) ||
+      JSON.stringify(references) !== JSON.stringify(section.references) ||
       section.content_digest !== indexerProtocolDigest({
         markdown: section.markdown,
         content_blocks: section.content_blocks,
-        evidence_refs: section.evidence_refs,
+        references: section.references,
       })
     ) {
       throw new TypeError(`rendered Section ${section.section_key} integrity is invalid`);

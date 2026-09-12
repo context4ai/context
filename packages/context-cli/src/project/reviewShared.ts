@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   KNOWLEDGE_COLLECTIONS,
+  validateArticleStructureEntries,
   type KnowledgeCollection,
 } from "@c4a/context";
 import { parseDocumentSourceLocator, parseSpanSourceRef } from "@c4a/extract";
@@ -17,7 +18,6 @@ import {
 } from "./approvedKnowledgeMetadata.js";
 import { knowledgeAssetReferences } from "./knowledgeAssets.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
-import { assertSafeEntityId } from "./entityId.js";
 import type { CandidateRecord } from "./candidateLedger.js";
 
 export { assertSafeEntityId } from "./entityId.js";
@@ -133,7 +133,7 @@ export async function readReviewCandidateSnapshot(
   return {
     candidate_id: record.candidate_id,
     collection: record.collection,
-    source: record.indexer_candidate.source_ref,
+    source: record.source_refs.join(", "),
     source_refs: record.source_refs,
     markdown: record.body,
   };
@@ -141,24 +141,24 @@ export async function readReviewCandidateSnapshot(
 
 export interface ApprovedPageReference {
   collection: KnowledgeCollection;
-  viewRef: string;
-  nodeRef: string;
+  articleId: string;
   path: string;
   relPath: string;
   frontmatter: Record<string, unknown>;
 }
 
-export interface ApprovedPageViewRefIndex {
-  byViewRef: ReadonlyMap<string, ApprovedPageReference>;
+export interface ApprovedArticleIndex {
+  byArticleId: ReadonlyMap<string, ApprovedPageReference>;
   byRelPath: ReadonlyMap<string, ApprovedPageReference>;
   assetReferencesByRelPath: ReadonlyMap<string, readonly string[]>;
 }
 
-export async function buildApprovedPageViewRefIndex(
+export async function buildApprovedArticleIndex(
   projectRoot: string,
-): Promise<ApprovedPageViewRefIndex> {
+): Promise<ApprovedArticleIndex> {
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
-  const byViewRef = new Map<string, ApprovedPageReference>();
+  const byArticleId = new Map<string, ApprovedPageReference>();
+  const articlesByPath = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   const byRelPath = new Map<string, ApprovedPageReference>();
   const assetReferencesByRelPath = new Map<string, readonly string[]>();
   for (const collection of KNOWLEDGE_COLLECTIONS) {
@@ -188,77 +188,35 @@ export async function buildApprovedPageViewRefIndex(
           relPath: join(collection, rel),
           metadata,
         });
-        if (typeof frontmatter.view_ref !== "string") continue;
-        const viewSeparator = frontmatter.view_ref.indexOf(":");
-        const viewPrefix = viewSeparator < 0 ? "" : frontmatter.view_ref.slice(0, viewSeparator);
-        if (!frontmatter.view_ref.startsWith("view:artifact:") && viewPrefix !== collection) {
-          continue;
-        }
-        const fallbackNodeRef = viewSeparator < 0 ? "" : frontmatter.view_ref.slice(viewSeparator + 1);
-        const nodeRef = typeof frontmatter.node_ref === "string" && frontmatter.node_ref.trim().length > 0
-          ? frontmatter.node_ref.trim()
-          : fallbackNodeRef;
-        const page = {
-          collection,
-          viewRef: frontmatter.view_ref,
-          nodeRef,
-          path: absPath,
-          relPath,
-          frontmatter,
-        };
+        const article = articlesByPath.get(`${collection}/${rel}`);
+        if (article === undefined) continue;
+        const page = { collection, articleId: article.article_id, path: absPath, relPath, frontmatter };
         byRelPath.set(relPath, page);
-        if (!byViewRef.has(frontmatter.view_ref)) {
-          byViewRef.set(frontmatter.view_ref, page);
-        }
+        byArticleId.set(article.article_id, page);
       }
     };
     visit(collectionRoot, "");
   }
-  return { byViewRef, byRelPath, assetReferencesByRelPath };
+  return { byArticleId, byRelPath, assetReferencesByRelPath };
 }
 
-export function findApprovedPageForViewRef(
+export function findApprovedPageForArticleId(
   viewRef: string,
-  index: ApprovedPageViewRefIndex,
+  index: ApprovedArticleIndex,
 ): ApprovedPageReference | undefined {
-  const separator = viewRef.indexOf(":");
-  if (separator <= 0) {
-    throw new ContextError(ExitCode.UserError, `approved maintenance target must be a view_ref: ${viewRef}`, {
-      category: ErrorCategory.UserInputInvalid,
-      view_ref: viewRef,
-      next: "Use <collection>:<node_ref>, for example architecture:entity/install.",
-    });
-  }
-  const prefix = viewRef.slice(0, separator);
-  const indexerView = viewRef.startsWith("view:artifact:");
-  if (!indexerView && !(KNOWLEDGE_COLLECTIONS as readonly string[]).includes(prefix)) {
-    throw new ContextError(ExitCode.UserError, `approved maintenance view_ref has unsupported collection: ${viewRef}`, {
-      category: ErrorCategory.UserInputInvalid,
-      view_ref: viewRef,
-      next: `Use one of ${KNOWLEDGE_COLLECTIONS.join(", ")} as the view_ref prefix.`,
-    });
-  }
-  const nodeRef = indexerView ? "" : viewRef.slice(separator + 1);
-  if (!indexerView) assertSafeEntityId(nodeRef);
-  const found = index.byViewRef.get(viewRef);
-  if (found === undefined) return undefined;
-  if (!indexerView && found.collection !== prefix) return undefined;
-  return {
-    ...found,
-    nodeRef: found.nodeRef.length > 0 ? found.nodeRef : nodeRef,
-  };
+  return index.byArticleId.get(viewRef);
 }
 
-export async function approvedPageForViewRef(projectRoot: string, viewRef: string): Promise<{ collection: KnowledgeCollection; nodeRef: string; path: string; relPath: string }> {
-  const found = findApprovedPageForViewRef(
+export async function approvedPageForArticleId(projectRoot: string, viewRef: string): Promise<ApprovedPageReference> {
+  const found = findApprovedPageForArticleId(
     viewRef,
-    await buildApprovedPageViewRefIndex(projectRoot),
+    await buildApprovedArticleIndex(projectRoot),
   );
   if (found !== undefined) return found;
   throw new ContextError(ExitCode.WorkspaceStateError, `approved page is not available: ${viewRef}`, {
     category: ErrorCategory.WorkspaceStateInvalid,
     view_ref: viewRef,
-    next: "Run context verify to inspect current approved knowledge view_refs.",
+    next: "Run context verify to inspect current approved articles.",
   });
 }
 

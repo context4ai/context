@@ -73,12 +73,12 @@ neither a new content-quality gate nor a Provider-specific retry ledger is neede
    `context revise`; it does not create a metric retry ledger or risk Gate.
 9. **Reader questions.** Declare reusable question templates with stable refs,
    target domains and allowed evidence contracts. Do not make a question id
-   globally unique to one SubjectKey group.
+   globally unique to one article group.
 10. **Inspector safety.** Accept only the versioned stdin request and bounded
     authorized evidence view; emit strict JSON within limits. Never read the
     repository, environment or network implicitly, and never expose raw
     config values, secrets or unbounded stderr/stdout.
-11. **Base gates.** Do not reduce source scope integrity, identity, evidence,
+11. **Base gates.** Do not reduce source scope integrity, article identity,
     requirement, disposition, reference-only or provenance gates. Provider
     integrity identifies content; it does not grant pass authority.
 12. **Anonymous fixtures.** Cover at least a component library, Web app, API
@@ -134,15 +134,14 @@ neither a new content-quality gate nor a Provider-specific retry ledger is neede
     consumed in the bounded Author View rather than copied into every
     Partition decision.
 
-The current Route delivers readable task material with goals and constraints
-first, followed by the authorized sources and facts. For behavioral explanations,
-read the complete source excerpts. Copy the displayed `source_items` into the
-section's `source_items`; use Fact references in `facts`, not as source items.
-Context resolves a text item's authorized source spans internally. Inventory
-identities and a repository reference do not identify section source material.
-These process-local excerpts are not new Facts or reader-page metadata. Do not
-reopen the repository or infer behavior from a locator alone when the supplied
-lines do not establish it. Batch size does not define a knowledge page boundary.
+The current Route delivers goals, constraints and authorized source access.
+Read the actual source regions needed to explain behavior. Each output fragment
+uses `references` with its source ref and exact file/line region, at most three
+locations per fragment, not per article. Context computes the regional content
+digest. Do not submit source_items, facts or evidence-binding ledgers. Optional
+parser output can help read or format declarations; it is not an article ledger.
+Do not infer behavior from a locator alone or read outside the authorized scope.
+Batch size does not define a knowledge page boundary.
 
 Author task resources may point to one shared batch reading file. Read that path
 once, use shared material only for its listed task keys, and consider each task's
@@ -155,16 +154,16 @@ full; no earlier batch file or additional reading command is required.
 
 Exactly one primary layer returns a complete partition/author Result for an
 operation. Pre-author extensions return only declared fragments and cannot
-change ownership, denominator or Subject identity. Post-author composers bind
+change ownership, denominator or article identity. Post-author composers bind
 one current `PrimaryResultView` and return only a derived proposal fragment;
 an empty composer run still has a receipt. Composer selection is the
 intersection of registry selection, manifest declaration and current profile
 applicability, not array order.
 
-Use canonical SubjectKey schemas and the Context NodeRef formula. All selected
-Providers must reuse the same Node when the SubjectKey is equal. An
-enricher uses the supplied TargetResolutionView (`resolved`, `absent` or
-`ambiguous`) and never guesses identity from a title or path resemblance.
+Use the existing article identity and page plan supplied by Context. Production
+does not extract a subject graph, classify node types, or resolve graph targets.
+Revise a known article through its existing identity; a similar title alone
+does not authorize merging or replacing another page.
 
 Every Section uses the exact `document_kind`, `reader_goal` and
 `artifact_kind` tuple from the current profile's unique layout mapping. The

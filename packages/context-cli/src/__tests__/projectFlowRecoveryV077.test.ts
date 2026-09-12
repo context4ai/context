@@ -29,8 +29,8 @@ async function setup() {
  await completeAuthorStage(root);
  await approveCandidates(root,await readCandidateRecords(root));
  await closeProjectWorkspace(root); await acceptStarterPackageTemplates({projectRoot:root}); await buildProjectPackages(root);
- const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).views;
- return {root,path:views[0].path};
+ const articles=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).articles;
+ return {root,path:articles[0].path};
 }
 test('concurrent approved edit provides a merge Route and rejects an outdated merge',async()=>{
  const {root,path}=await setup();
@@ -73,7 +73,7 @@ test('repeated CLI regeneration starts a new cycle after completion, preserving 
  const revision=(await readApprovedRevision(root))!;
  expect(revision.program_blocks!.length).toBeGreaterThan(0);
  const block=revision.program_blocks![0]!;
- await completeApprovedRevision({projectRoot:root,revision:revision.revision,markdown:revision.target.markdown+`\n<!-- context:section id="api-audit" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n`});
+ await completeApprovedRevision({projectRoot:root,revision:revision.revision,markdown:revision.target.markdown+`\n<!-- context:section id="api-audit" -->\n${block.token}\n<!-- /context:section -->\n`});
  await approveCandidates(root,await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
  const source=join(root,'fixture-source');
  await writeFile(join(source,'src/index.ts'),'export const answer = 43;\n');
@@ -108,7 +108,7 @@ test('module adjustment retains independent same-source worksets and accepted ca
 test('revisiting an earlier page preserves interrupted sibling regeneration and program blocks',async()=>{
  const {root}=await setup();
  const {registerKnowledgeMaintenance}=await import('../project/knowledgeMaintenance.js');
- const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).views;
+ const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).articles;
  await registerKnowledgeMaintenance(root,{id:'two-api-pages',operation:'regenerate',targets:views.map((view: { path: string })=>({path:view.path,instruction:'Regenerate this page API table.'}))});
  await advanceKnowledgeMaintenance(root,(await maintenanceRevision(root)).revision);
  const first=(await readApprovedRevision(root))!;
@@ -120,7 +120,7 @@ test('revisiting an earlier page preserves interrupted sibling regeneration and 
  const resumed=(await readApprovedRevision(root))!;
  expect(resumed.target.path).toBe(second.target.path);expect(resumed.regenerate).toBe(true);expect(resumed.program_blocks).toEqual(second.program_blocks);
  const block=resumed.program_blocks![0]!;
- await completeApprovedRevision({projectRoot:root,revision:resumed.revision,markdown:resumed.target.markdown+`\n<!-- context:section id="regenerated" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n`});
+ await completeApprovedRevision({projectRoot:root,revision:resumed.revision,markdown:resumed.target.markdown+`\n<!-- context:section id="regenerated" -->\n${block.token}\n<!-- /context:section -->\n`});
  expect((await readCandidateRecords(root)).find(item=>item.path===second.target.path)!.body).toContain(block.markdown);
  await approveCandidates(root,await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
  expect((await readMaintenance(root)).active).toBeUndefined();

@@ -136,7 +136,7 @@ test("a newly discovered topic uses the existing review writer and does not over
   const request = (await readApprovedRevision(root))!;
   expect(request.target.base_digest).toBeNull();
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown +
-    `\n<!-- context:section id="usage" kind="content" source_ref="${scope.source_ref}" -->\n\nUse the two public constants together.\n\n<!-- /context:section -->\n` });
+    `\n<!-- context:section id="usage" -->\n\nUse the two public constants together.\n\n<!-- /context:section -->\n` });
   expect(await baseline(root)).toEqual([]);
   await approveCandidates(root, await readCandidateRecords(root));
   try { await closeProjectWorkspace(root); } catch (error) { throw new Error(JSON.stringify(error)); }
@@ -166,15 +166,14 @@ test("late development context updates one code page without moving its code ver
     decisions: [{ path: target.path, instruction: "Add the confirmed development rationale as intent, not behavior.", supporting_sources: [note.source_ref] }, { path: peer.path }], new_topics: [] });
   const request = (await readApprovedRevision(root))!;
   expect(request.target.source_refs).toContain(note.source_ref);
-  const header = /^---\n([\s\S]*?)\n---\n/u.exec(request.target.markdown)!;
-  const metadata = YAML.parse(header[1]!); metadata.sources = [...request.target.source_refs].reverse();
-  expect(metadata.sources.length).toBeGreaterThan(1);
-  const wrongSources = { ...metadata, sources: [...metadata.sources, "note:unregistered/extra"] };
+  expect(request.target.source_refs.length).toBeGreaterThan(1);
+  const markdown = request.target.markdown +
+    `\n<!-- context:section id="rationale" -->\n\nThe development discussion chose separate constants for separate callers. This is intent, not a runtime guarantee.\n\n<!-- /context:section -->\n`;
+  const locator = { path: note.path.split("/").at(-1)!, start_line: 1, end_line: 1 };
   await expect(completeApprovedRevision({ projectRoot: root, revision: request.revision, preview: true,
-    markdown: request.target.markdown.replace(header[0], `---\n${YAML.stringify(wrongSources)}---\n`) })).rejects.toThrow("identity and sources");
-  const markdown = request.target.markdown.replace(header[0], `---\n${YAML.stringify(metadata)}---\n`) +
-    `\n<!-- context:section id="rationale" kind="content" source_ref="${note.source_ref}" -->\n\nThe development discussion chose separate constants for separate callers. This is intent, not a runtime guarantee.\n\n<!-- /context:section -->\n`;
-  await complete(root, { stage: "approved-revision", markdown });
+    markdown, sections: [{ section_id: "rationale", references: [{ source_ref: "note:unregistered/extra", locator }] }] })).rejects.toThrow("outside this revision");
+  await complete(root, { stage: "approved-revision", markdown,
+    sections: [{ section_id: "rationale", references: [{ source_ref: note.source_ref, locator: { ...locator, start_line: 3, end_line: 3 } }] }] });
   expect(await currentLedger(root)).toBeUndefined();
   await approveCandidates(root, await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
   const processed = await baseline(root);
@@ -191,9 +190,9 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
   const { durableContentDigest } = await import("../project/durableSingleFileTransaction.js");
   const root = await initialKnowledge();
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  const path = structure.views[0].path;
+  const path = structure.articles[0].path;
   const original = await readFile(join(root, "knowledge", path), "utf8");
-  const peer = await readFile(join(root, "knowledge", structure.views[1].path), "utf8");
+  const peer = await readFile(join(root, "knowledge", structure.articles[1].path), "utf8");
   await beginDocumentRevision({ projectRoot: root, selector: path, instruction: "Clarify the overview." });
   const revision = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: revision.target.markdown.replace(/(\n# [^\n]+)/u, "$1 clarified") });
@@ -209,7 +208,7 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
   await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision });
   expect((await rollbackProjectTask({ projectRoot: root, value, apply: true, plan_digest: plan.revision })).action).toBe("already-applied");
   expect(await readFile(join(root, "knowledge", path), "utf8")).toBe(original);
-  expect(await readFile(join(root, "knowledge", structure.views[1].path), "utf8")).toBe(peer);
+  expect(await readFile(join(root, "knowledge", structure.articles[1].path), "utf8")).toBe(peer);
   await expect(beginKnowledgeUpdate(root, { scopes: [scope] })).rejects.toThrow("active task");
   await expect(finishTaskRollback(root)).rejects.toThrow("unfinished");
   expect((await collectProjectStatus(root, { managed: true })).workflow.current?.reason_code).toBe("route.rollback.close-required");
@@ -228,8 +227,8 @@ test("explicit page move preserves its identity and updates incoming navigation 
   const { access } = await import("node:fs/promises");
   const root = await initialKnowledge();
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  const view = structure.views[0];
-  const peerPath = structure.views[1].path;
+  const view = structure.articles[0];
+  const peerPath = structure.articles[1].path;
   const originalPeer = await readFile(join(root, "knowledge", peerPath), "utf8");
   const { posix } = await import("node:path");
   const link = posix.relative(posix.dirname(peerPath), view.path);
@@ -242,14 +241,14 @@ test("explicit page move preserves its identity and updates incoming navigation 
   expect(request.target.path).toBe(nextPath);
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown });
   const candidates = await readCandidateRecords(root);
-  expect(candidates[0]!.view_ref).toBe(view.view_ref);
+  expect(candidates[0]!.article_id).toBe(view.article_id);
   await approveCandidates(root, candidates);
   await expect(access(join(root, "knowledge", view.path))).rejects.toThrow();
   expect(await readFile(join(root, "knowledge", peerPath), "utf8")).toContain(`](${posix.relative(posix.dirname(peerPath), nextPath)}#details)`);
   await closeProjectWorkspace(root); await buildProjectPackages(root);
   expect(await readApprovedRevision(root)).toBeUndefined();
   const after = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  expect(after.views.find((entry: { view_ref: string }) => entry.view_ref === view.view_ref).path).toBe(nextPath);
+  expect(after.articles.find((entry: { article_id: string }) => entry.article_id === view.article_id).path).toBe(nextPath);
 }, 60_000);
 
 test("same-task input adjustment keeps the approved body and queued pages and rejects old completion", async () => {
@@ -319,7 +318,7 @@ test("Review rejection returns Author in both modes without a reset or repeated 
   const root = await initialKnowledge();
   const { prepareApprovedRevision, APPROVED_REVISION_PATH } = await import("../project/approvedRevision.js");
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  await prepareApprovedRevision({ projectRoot: root, selector: structure.views[0].path, instruction: "Clarify the explanation." });
+  await prepareApprovedRevision({ projectRoot: root, selector: structure.articles[0].path, instruction: "Clarify the explanation." });
   const request = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "updated public entry point") });
   const candidates = await readCandidateRecords(root);
@@ -393,11 +392,15 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
       source_refs: [scope.source_ref], instruction: "Explain the new task." }] : [] });
   if (newPage) await complete(root, { stage: "structure-review", decision: "approved" });
   const first = (await readApprovedRevision(root))!;
-  await complete(root, { stage: "approved-revision", markdown: first.target.markdown.replace("public entry point", "updated public entry point") });
+  expect(first.target.sections.some(section => section.references.length > 0)).toBe(true);
+  const revisedSections = first.target.sections.map(section => ({ id: section.id, references: [] }));
+  await complete(root, { stage: "approved-revision", markdown: first.target.markdown.replace("public entry point", "updated public entry point"),
+    sections: revisedSections.map(section => ({ section_id: section.id, references: section.references })) });
   const interrupted = (await readApprovedRevision(root))!;
   const { reopenApprovedRevision } = await import("../project/approvedRevision.js");
   await reopenApprovedRevision({ projectRoot: root, selector: first.target.path, instruction: "Add the missing detail to the first page." });
   const reopened = (await readApprovedRevision(root))!;
+  expect(reopened.target.sections).toEqual(revisedSections);
   expect(reopened.pending_targets?.[0]).toMatchObject({ target: interrupted.target, instruction: interrupted.instruction });
   await complete(root, { stage: "approved-revision", markdown: reopened.target.markdown + "\nMissing detail.\n" });
   const resumed = (await readApprovedRevision(root))!;
@@ -405,7 +408,7 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
   expect(resumed.instruction).toBe(interrupted.instruction);
   expect(await baseline(root)).toEqual([]);
   const markdown = newPage ? resumed.target.markdown +
-    `\n<!-- context:section id="usage" kind="content" source_ref="${scope.source_ref}" -->\n\nUse the changed constant for this task.\n\n<!-- /context:section -->\n`
+    `\n<!-- context:section id="usage" -->\n\nUse the changed constant for this task.\n\n<!-- /context:section -->\n`
     : resumed.target.markdown.replace("public entry point", "updated public entry point");
   await complete(root, { stage: "approved-revision", markdown });
   expect((await readCandidateRecords(root)).map((item) => item.path).sort()).toEqual([first.target.path, interrupted.target.path].sort());
@@ -442,13 +445,13 @@ test("an approved revision remains current after close relocates source images",
   registry.indexers[0].read_scope.refs.push("requirement:workspace-knowledge#evidence_source_scope");
   await writeFile(registryPath, YAML.stringify(registry));
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  const { request } = await prepareApprovedRevision({ projectRoot: root, selector: structure.views[0].path,
+  const { request } = await prepareApprovedRevision({ projectRoot: root, selector: structure.articles[0].path,
     instruction: "Add the supplied illustration.", supporting_sources: [sourceRef] });
-  const header = /^---\n([\s\S]*?)\n---\n/u.exec(request.target.markdown)!;
-  const metadata = YAML.parse(header[1]!); metadata.sources = request.target.source_refs;
-  const markdown = request.target.markdown.replace(header[0], `---\n${YAML.stringify(metadata)}---\n`) +
-    `\n<!-- context:section id="illustration" kind="content" source_ref="${sourceRef}" -->\n\n![Example](${asset})\n\n<!-- /context:section -->\n`;
-  await completeApprovedRevision({ projectRoot: root, revision: request.revision, markdown });
+  const markdown = request.target.markdown +
+    `\n<!-- context:section id="illustration" -->\n\n![Example](${asset})\n\n<!-- /context:section -->\n`;
+  await completeApprovedRevision({ projectRoot: root, revision: request.revision, markdown,
+    sections: [{ section_id: "illustration", references: [{ source_ref: sourceRef,
+      locator: { path: "illustrated.md", start_line: 1, end_line: 1 } }] }] });
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root);
   const pagePath = join(root, "knowledge", request.target.path);
@@ -478,7 +481,7 @@ test("revision Route includes selected Provider resources and expands current AP
   const { expandRevisionProgramBlocks } = await import("../project/approvedRevisionPrograms.js");
   expect(() => expandRevisionProgramBlocks("{{context:program:foreign}}", request.program_blocks ?? [])).toThrow();
   await complete(root, { stage: "approved-revision", markdown: request.target.markdown +
-    `\n<!-- context:section id="options" kind="content" source_ref="${scope.source_ref}" -->\n${block!.token}\n<!-- /context:section -->\n` });
+    `\n<!-- context:section id="options" -->\n${block!.token}\n<!-- /context:section -->\n` });
   const candidates = await readCandidateRecords(root);
   expect(candidates[0]!.body).toContain(block!.markdown);
   expect(candidates[0]!.body).not.toContain(block!.token);

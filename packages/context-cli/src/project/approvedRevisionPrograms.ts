@@ -1,5 +1,5 @@
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
-import { indexerProtocolDigest, projectIndexerPublicContractTable, materializeIndexerStructuredContent,
+import { indexerProtocolDigest, projectIndexerPublicContractTable, renderIndexerDeterministicFacts,
   type IndexerArtifactFact, type ProcessedScope } from "@c4a/context";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
 import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
@@ -37,10 +37,10 @@ export async function prepareRevisionProgramBlocks(root: string, sourceRefs: str
             const table = projectIndexerPublicContractTable(fact);
             if (!table) continue;
             const token = `{{context:program:${indexerProtocolDigest({ source: scope.source_ref, fact: fact.fact_ref }).slice(7)}}}`;
-            const [rendered] = materializeIndexerStructuredContent({ facts, blocks: [{
-              block_id: "api", layer: "deterministic-block", renderer: "public-contract-table", fact_refs: [fact.fact_ref],
-            }] });
-            blocks.set(token, { token, source_ref: scope.source_ref, fact_ref: fact.fact_ref, markdown: rendered!.markdown, declaration_status: table.declaration_status });
+            const markdown = renderIndexerDeterministicFacts({
+              renderer: "public-contract-table", facts: [fact], supporting_facts: facts,
+            });
+            blocks.set(token, { token, source_ref: scope.source_ref, fact_ref: fact.fact_ref, markdown, declaration_status: table.declaration_status });
           }
         }
       }

@@ -30,11 +30,9 @@ after each build; preserve already delivered pages and source-grounded prose.
 
 Use `classification.md` as the semantic source for `document_kind`, `reader_goal`, and current `artifact_kind` selection. Use `structure-and-artifacts.md` for mixed-document routing, Section-versus-Artifact promotion, density, duplicate/conflict handling, and target candidate resolution. The CLI-supplied profile contract remains the only authority for collection and path projection.
 
-Use `semantic-planning.md` for evidence authority, SubjectKey/target-resolution
-judgment, relation and structured-claim gates, content-purpose precision, and
-stale/collision recovery behavior. It adapts the useful semantic gates from the
-former align path to the current Result ABI; it does not authorize legacy align
-commands or `context.structure.v1`.
+Use `semantic-planning.md` for source authority, reader-topic grouping,
+regional references, content-purpose precision and stale/collision recovery.
+Production does not require subject modeling or structured relation claims.
 
 Use `editorial-policy.md` for editorial review hints and anonymous decision examples. Content assessment belongs to the Agent and user; hints do not trigger a CLI prose rescan, rejection, or additional gate. Context owns source references, protected values, revision CAS/storage, and structural validation.
 
@@ -45,7 +43,7 @@ When a captured document already contains coherent reader-facing guidance, prese
 For each reader Artifact, start the first actual Section with exactly one
 level-one heading that names the reader subject. Keep the heading concise and
 source-backed. It is a display title for outline and final Candidate Review,
-not a SubjectKey, ownership signal, or identity fallback. Later Sections in the
+not an ownership signal or identity fallback. Later Sections in the
 same Artifact must not add another level-one heading.
 
 When current source material cannot answer a required canonical question, return the exact material-question disposition for the supplied target. A later run may consume newly captured Markdown as ordinary source and update the same knowledge candidate. Context owns layout, collection mapping, runtime material-gap state, each delivery's content Review, and close.
@@ -110,4 +108,4 @@ For authorized visual material, follow [source visual processing](visual-source-
 
 ## Reading selected article material
 
-Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI applies executable contracts and evidence bindings; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.
+Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI checks source authorization, regional references and safe writes; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.

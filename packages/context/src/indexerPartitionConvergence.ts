@@ -140,7 +140,7 @@ function relationship(plan: IndexerPartitionPlan) {
     index === 0 || compareIndexerCanonicalText(lexicalRanges[index - 1]!.last, range.first) < 0
   );
   const ordinals = groups.map(({ group }) => {
-    const candidates = [group.group_key, group.subject_key.local_key];
+    const candidates = [group.group_key];
     for (const candidate of candidates) {
       const match = ORDINAL_IDENTITY.exec(candidate);
       if (match?.[1] !== undefined) return Number.parseInt(match[1], 10);

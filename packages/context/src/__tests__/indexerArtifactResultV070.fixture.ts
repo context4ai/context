@@ -6,11 +6,9 @@ import {
   buildIndexerMainWorkset,
   buildIndexerPrimaryExecutionProjection,
   buildIndexerRunEnvironment,
-  buildIndexerTargetResolutionView,
   canonicalIndexerNodeRef,
   indexerArtifactResultDigest,
   indexerCapabilityGroupMemberIdsDigest,
-  indexerEvidenceBindingDigest,
   indexerDependencyNodeRef,
   indexerInventoryMembersDigest,
   indexerProtocolDigest,
@@ -163,26 +161,9 @@ export function runEnvironment(
 }
 
 export function authorWorkset(
-  target: boolean | "resolved" | "absent" = false,
   memberIds: readonly string[] = [MEMBER_REF],
 ): IndexerMainAuthorWorkset {
   const dependencyView = authorDependencyView(memberIds);
-  const targetView = target ? buildIndexerTargetResolutionView({
-    requirement_ref: "requirement:public-knowledge",
-    subject_key_schema_digest: digest("5"),
-    query_digest: digest("e"),
-    entries: [target === "absent"
-      ? {
-          query_ref: digest("f"),
-          state: "absent",
-        }
-      : {
-          query_ref: digest("f"),
-          state: "resolved",
-          subject_key: TARGET_SUBJECT,
-          node_ref: canonicalIndexerNodeRef(TARGET_SUBJECT),
-        }],
-  }) : undefined;
   const value = buildIndexerMainWorkset({
     stage: "author",
     indexer_id: "component-library",
@@ -195,7 +176,6 @@ export function authorWorkset(
     primary_execution_fingerprint:
       PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest:
@@ -211,7 +191,6 @@ export function authorWorkset(
     }))),
     group_projection_digest: digest("2"),
     group_dependency_view_digest: dependencyView.view_digest,
-    ...(targetView === undefined ? {} : { target_resolution_view: targetView }),
     allowed_artifact_policy_variants: ELIGIBILITY.eligible_variants.map((variant) => variant.id),
     artifact_policy_eligibility_digest: ELIGIBILITY.eligibility_digest,
   });
@@ -221,22 +200,8 @@ export function authorWorkset(
 
 export function artifactResult(
   workset = authorWorkset(),
-  targetResolutionDispositions: IndexerArtifactResult["logical_unit"]["target_resolution_dispositions"] = [],
   memberIds: readonly string[] = [MEMBER_REF],
 ): IndexerArtifactResult {
-  const evidencePayload = {
-    evidence_ref: EVIDENCE_NODE.evidence_ref,
-    kind: "code" as const,
-    source_ref: workset.source_ref,
-    module_ref: workset.module_ref,
-    locator: EVIDENCE_NODE.locator,
-    content_digest: EVIDENCE_NODE.content_digest,
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidenceBinding = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
   const payload: Omit<IndexerArtifactResult, "output_digest"> = {
     protocol: "context.indexer.artifact-result/v1",
     author_workset_digest: workset.workset_digest,
@@ -254,9 +219,7 @@ export function artifactResult(
     source_role: "authoritative-source",
     logical_unit: {
       group_key: workset.group_key,
-      subject_key: SUBJECT,
       logical_unit_ref: workset.logical_unit_ref,
-      target_resolution_dispositions: targetResolutionDispositions,
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: workset.workset_digest,
@@ -277,12 +240,9 @@ export function artifactResult(
         section_evidence: [{
           artifact_id: "button-overview",
           section_key: "summary",
-          evidence_refs: [evidenceBinding.evidence_ref],
         }],
       })),
     }),
-    facts: [FACT],
-    evidence_bindings: [evidenceBinding],
     artifacts: [{
       artifact_id: "button-overview",
       artifact_kind: "overview",
@@ -298,8 +258,8 @@ export function artifactResult(
           block_id: "summary-block",
           layer: "semantic-prose",
           markdown: "A public control.",
-          evidence_refs: [evidenceBinding.evidence_ref],
-        }],
+          references: [{ source_ref: workset.source_ref, locator: EVIDENCE_NODE.locator, content_digest: EVIDENCE_NODE.content_digest }],
+          }],
       }],
     }],
     artifact_bundle: buildIndexerArtifactBundle({
@@ -310,7 +270,6 @@ export function artifactResult(
         artifact_kind: "overview",
         purpose: "required",
         reader_question_refs: [QUESTION_REF],
-        evidence_refs: [evidenceBinding.evidence_ref],
       }],
     }),
     material_question_proposals: [{
@@ -354,7 +313,6 @@ export function validateArtifactResultFixture(
     workset,
     expected_provider: PROVIDER,
     expected_input_digest: INPUT_DIGEST,
-    expected_subject_key: SUBJECT,
     artifact_policy_eligibility: ELIGIBILITY,
     allowed_source_roles: ["authoritative-source"],
     allowed_question_targets: [{

@@ -5,17 +5,17 @@ import { partitionAuthorBinding, readPartitionStream } from "./indexerPartitionS
 
 type AuthorRecord = Awaited<ReturnType<typeof readAcceptedIndexerMainAuthorResultRecords>>[number];
 
-function subjectAuthority(record: AuthorRecord): string {
+function writingGroupAuthority(record: AuthorRecord): string {
   return indexerProtocolDigest({
     indexer: record.request.workset.indexer_id,
     requirement: record.request.workset.requirement_set_digest,
-    subject: record.validation.expected_subject_key,
+    logical_unit_ref: record.request.workset.stage === "author" ? record.request.workset.logical_unit_ref : null,
   });
 }
 
 /** Only receipts explicitly settled by the active stream can participate in
- * link repair. A later revision replaces its subject's old article collection;
- * other subjects retain their settled cross-wave link targets. */
+ * link repair. A later revision replaces its writing group's old article collection;
+ * other groups retain their settled cross-wave link targets. */
 export async function readDeliverableAuthorRecords(projectRoot: string) {
   const ledger = await currentLedger(projectRoot);
   const current = ledger?.entries.every(entry => entry.stage === "author")
@@ -38,7 +38,7 @@ export async function readDeliverableAuthorRecords(projectRoot: string) {
   const selected = new Map<string, AuthorRecord[]>();
   const latest = new Map<string, number>();
   for (const record of history) {
-    const key = subjectAuthority(record);
+    const key = writingGroupAuthority(record);
     const rank = receiptOrder.get(record.request.execution_request_digest) ?? order.get(partitionAuthorBinding(record))!;
     const previous = latest.get(key);
     if (previous === undefined || rank > previous) {
@@ -49,6 +49,6 @@ export async function readDeliverableAuthorRecords(projectRoot: string) {
       selected.get(key)!.push(record);
     }
   }
-  const activeSubjects = new Set(current.map(subjectAuthority));
-  return [...current, ...[...selected].filter(([key]) => !activeSubjects.has(key)).flatMap(([, records]) => records)];
+  const activeGroups = new Set(current.map(writingGroupAuthority));
+  return [...current, ...[...selected].filter(([key]) => !activeGroups.has(key)).flatMap(([, records]) => records)];
 }

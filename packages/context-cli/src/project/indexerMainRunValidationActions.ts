@@ -1,18 +1,12 @@
-import { assertApprovedKnowledgeInputCurrent, assertApprovedKnowledgeSourcesCurrent } from "./approvedKnowledgeInput.js";
 import type { AuthorSupplementarySource } from "./indexerCurrentMainRunSpec.js";
-import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import {
   buildIndexerSourceIdentityInventory,
   canonicalIndexerInventoryMembers,
-  indexerMainRunResultSchema,
   indexerInventoryMembersDigest,
   validateAndRecordIndexerMainRun,
   validateIndexerAuthorDependencyView,
-  validateIndexerSubjectKeyForContract,
   validateIndexerMainRunRequest,
 } from "@c4a/context";
-import { resolveCurrentProjectIndexerPrimaryAuthority } from
-  "./indexerCurrentPrimaryAuthority.js";
 import {
   assertProjectIndexerMainSourceBinding,
   resolveProjectIndexerMainSourceBinding,
@@ -65,32 +59,6 @@ export async function validateProjectIndexerMainRun(input: {
   );
   assertRequirementRefs(registry, [workset.requirement_ref]);
   if (workset.stage === "partition") {
-    const authority = await resolveCurrentProjectIndexerPrimaryAuthority({
-      projectRoot: input.projectRoot,
-      registry,
-      indexer_id: String(workset.indexer_id),
-    });
-    const profileSubjectSchema = authority.profile_contract.subject_key_schemas.find((schema) =>
-      schema.profile === authority.profile.id
-    );
-    if (profileSubjectSchema === undefined) {
-      throw new TypeError(`missing partition SubjectKey contract for ${authority.profile.id}`);
-    }
-    const { profile: _profile, ...subjectKeyContract } = profileSubjectSchema;
-    void _profile;
-    // Validate the actual subject against today's contract. A changed schema
-    // fingerprint alone does not make a previously valid subject unusable.
-    const mainResult = indexerMainRunResultSchema.parse(value.result);
-    if (mainResult.result.stage !== "partition") {
-      throw new TypeError("partition validation requires a partition Result");
-    }
-    for (const group of mainResult.result.result.groups) {
-      validateIndexerSubjectKeyForContract(
-        group.subject_key,
-        subjectKeyContract,
-        authority.profile.id,
-      );
-    }
     const canonicalInventory = canonicalIndexerInventoryMembers(
       array(
         validation.canonical_inventory_members,
@@ -114,13 +82,9 @@ export async function validateProjectIndexerMainRun(input: {
     }
     validation.canonical_inventory_members = canonicalInventory;
   } else {
-    if (validation.knowledge_input !== undefined) {
-      const knowledge = validation.knowledge_input as ApprovedKnowledgeAuthorInput;
-      await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
-      const supporting = [binding];
+    {
       const readTargets = projectIndexerReadTargets({ registry, indexer_id: workset.indexer_id });
       for (const descriptor of (validation.supplementary_sources ?? []) as AuthorSupplementarySource[]) {
-        if (!knowledge.evidence_bindings.some(evidence => evidence.source_ref === descriptor.source_ref && evidence.module_ref === descriptor.module_ref)) continue;
         if (!projectIndexerReadTargetAllows({ targets: readTargets, source_ref: descriptor.source_ref, module_ref: descriptor.module_ref })) {
           throw new TypeError("Supporting source is outside the current Indexer read scope");
         }
@@ -131,9 +95,7 @@ export async function validateProjectIndexerMainRun(input: {
         if (resolved.source_binding_digest !== descriptor.source_binding_digest) {
           throw new TypeError("author supplementary source binding is stale; refresh the current Author task before submitting");
         }
-        supporting.push(resolved);
       }
-      assertApprovedKnowledgeSourcesCurrent(knowledge, supporting);
     }
     const dependencyView = validateIndexerAuthorDependencyView(
       validation.dependency_view,
@@ -185,33 +147,11 @@ export async function validateProjectIndexerMainRun(input: {
       indexer_id: String(workset.indexer_id),
     });
   }
-  try {
-    return {
-      protocol: "context.indexer.main-run-validation/v1" as const,
-      ...validateAndRecordIndexerMainRun(
-        {
-          ...value,
-          validation,
-        } as unknown as Parameters<typeof validateAndRecordIndexerMainRun>[0],
-      ),
-      graph_outcome: "completed" as const,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const outcome = message.includes("index-target-resolution-ambiguous")
-      ? "index-target-resolution-ambiguous" as const
-      : message.includes("index-target-resolution-invalid")
-      ? "index-target-resolution-invalid" as const
-      : undefined;
-    if (outcome === undefined) throw error;
-    return {
-      protocol: "context.indexer.target-resolution-outcome/v1" as const,
-      outcome,
-      conflicts: [],
-      message,
-      graph_outcome: outcome === "index-target-resolution-ambiguous"
-        ? "blocked" as const
-        : "failed" as const,
-    };
-  }
+  return {
+    protocol: "context.indexer.main-run-validation/v1" as const,
+    ...validateAndRecordIndexerMainRun(
+      { ...value, validation } as unknown as Parameters<typeof validateAndRecordIndexerMainRun>[0],
+    ),
+    graph_outcome: "completed" as const,
+  };
 }

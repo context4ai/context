@@ -9,6 +9,7 @@ import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSeman
 import { acceptIndexerMainAuthorRunsStore } from "../project/indexerMainRunStore.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 export async function createArticleReviewWorkspace() {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 1 });
@@ -32,20 +33,17 @@ export async function authorReviewArticles(root: string, suffix = "") {
     const workset = task.spec.request.workset;
     if (workset.stage !== "author") throw new Error("expected Author");
     const validation = task.spec.validation as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"];
-    const fact = task.view.items.find(item => item.category === "fact")!;
+    const references = await fixtureArticleReferences(root, task.view, "src/index.ts");
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key,
       outcome: "publish", policy: "standard",
-      target_resolutions: (workset.target_resolution_view?.entries ?? []).map(entry => ({
-        target: entry.query_ref, disposition: entry.state === "resolved" ? "reuse-existing" : "create-independent",
-      })),
       articles: validation.page_plan!.articles!.map(article => ({ key: article.key, title: article.title,
         summary: "Source entry for a public capability.", sections: [{ key: "entry", heading: "Entry",
-          markdown: `Read src/index.ts for the exported constant. ${suffix}`, facts: [fact.ref], answers: article.question_targets }],
+          markdown: `Read src/index.ts for the exported constant. ${suffix}`, references, answers: article.question_targets }],
       })), member_dispositions: validation.canonical_inventory_members.map(member => ({
         item: member.member_id, state: "covered", article: "overview", section: "entry",
       })),
     });
-    const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+    const result = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, validation, semantic });
     expect((await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] })).outcomes[0]?.outcome).toBe("accepted");
   }
   await advanceCurrentIndexerLifecycle(root);

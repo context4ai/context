@@ -20,14 +20,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-purpose"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-domain-reference-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-domain-reference-source"
     ]
   },
   {
@@ -51,14 +45,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-purpose"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-product-requirements-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-product-requirements-source"
     ]
   },
   {
@@ -82,14 +70,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-structure"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-technical-guide-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-technical-guide-source"
     ]
   },
   {
@@ -113,14 +95,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-operation"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-user-and-developer-guide-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-user-and-developer-guide-source"
     ]
   },
   {
@@ -144,14 +120,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-operation"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-runbook-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-runbook-source"
     ]
   },
   {
@@ -175,14 +145,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-purpose"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-faq-support-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-faq-support-source"
     ]
   },
   {
@@ -206,14 +170,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-purpose"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-decision-record-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-decision-record-source"
     ]
   },
   {
@@ -237,14 +195,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-operation"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-incident-review-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-incident-review-source"
     ]
   },
   {
@@ -268,14 +220,8 @@
         "purpose": "required",
         "reader_question_refs": [
           "question:reader-operation"
-        ],
-        "evidence_refs": [
-          "evidence:anonymous-test-validation-source"
         ]
       }
-    ],
-    "evidence_refs": [
-      "evidence:anonymous-test-validation-source"
     ]
   }
 ]

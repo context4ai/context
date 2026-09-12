@@ -9,9 +9,7 @@ import {
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
   buildIndexerProjectedArtifactPlan,
-  buildIndexerSubjectCatalog,
   canonicalOwnerCellRef,
-  canonicalIndexerNodeRef,
   indexerPartitionPlanCanonicalHash,
   indexerProtocolDigest,
   type IndexerArtifactPolicyEligibility,
@@ -336,17 +334,10 @@ describe("project main Indexer lifecycle Actions", () => {
       requirement_set_digest: requirementDigest,
       primary_execution_fingerprint: digest("2"),
       profile_contract_digest: digest("3"),
-      subject_key_schema_digest: digest("4"),
       source_scope_digest: digest("5"),
       source_binding_digest: digest("6"),
       primary_resource_binding_digest: digest("7"),
       question_target_inventory_digest: digest("8"),
-      partition_subject_key: {
-        protocol: "context.subject-key/v1",
-        namespace: "sample",
-        kind: "module",
-        local_key: "app",
-      },
       strategy_set_digest: digest("9"),
       reader_question_refs: ["question:architecture"],
       partition_input_digests: [digest("a")],
@@ -400,60 +391,8 @@ describe("project main Indexer lifecycle Actions", () => {
     )).toBe(true);
   });
 
-  test("returns a typed blocking Outcome for an ambiguous exact SubjectKey", async () => {
-    const { root, requirementDigest } = await project();
-    const subjectKey = {
-      protocol: "context.subject-key/v1" as const,
-      namespace: "sample",
-      kind: "component",
-      local_key: "legacy-card",
-    };
-    const catalog = buildIndexerSubjectCatalog({
-      requirement_ref: "requirement:workspace-knowledge",
-      subject_key_schema_digest: digest("a"),
-      approved_subjects: [{
-        node_ref: "node:legacy/card-a",
-        subject_key: subjectKey,
-      }, {
-        node_ref: "node:legacy/card-b",
-        subject_key: subjectKey,
-      }],
-      partition_subjects: [],
-    });
-    const inputPath = await writeInput(root, "target-resolution-ambiguous", {
-      protocol: "context.indexer.target-resolution-build-input/v1",
-      requirement_set_digest: requirementDigest,
-      catalog,
-      queries: [{
-        group_ref: "partition-group:ambiguous",
-        subject_intent: "enrich-or-independent",
-        subject_key: subjectKey,
-      }],
-    });
-    const result = JSON.parse(await runCliInDir(root, [
-      "indexer", "build-target-resolution-views",
-      "--input", inputPath,
-      "--format", "json",
-    ]));
-    expect(result).toMatchObject({
-      protocol: "context.indexer.target-resolution-build/v1",
-      outcome: "index-target-resolution-ambiguous",
-      graph_outcome: "blocked",
-      conflicts: [{
-        group_ref: "partition-group:ambiguous",
-        conflicting_node_refs: ["node:legacy/card-a", "node:legacy/card-b"],
-      }],
-    });
-  });
-
   test("pauses Candidate materialization through a non-Gate partial outcome", async () => {
     const { root, requirementDigest } = await project();
-    const subjectKey = {
-      protocol: "context.subject-key/v1" as const,
-      namespace: "sample",
-      kind: "catalog",
-      local_key: "root",
-    };
     type CompletePartitionPlan = Extract<IndexerPartitionPlan, { status: "complete" }>;
     const planPayload: Omit<CompletePartitionPlan, "canonical_hash"> = {
       protocol: "context.indexer.partition-plan/v1",
@@ -463,11 +402,9 @@ describe("project main Indexer lifecycle Actions", () => {
         indexer_id: "sample-indexer",
         indexer_fingerprint: digest("2"),
         requirement_digest: requirementDigest,
-        subject_key_schema_digest: digest("3"),
         source_scope_digest: digest("4"),
         source_refs: ["repo:sample@revision"],
         module_ref: "module:app",
-        partition_subject_key: subjectKey,
         parent_scope_ref: "module:app",
         inventory_digest: digest("5"),
         question_target_inventory_digest: digest("6"),
@@ -484,9 +421,7 @@ describe("project main Indexer lifecycle Actions", () => {
       reader_question_refs: ["question:overview"],
       groups: [{
         group_key: "catalog:root",
-        subject_key: subjectKey,
-        subject_intent: "primary",
-        logical_unit_ref: canonicalIndexerNodeRef(subjectKey),
+        logical_unit_ref: indexerProtocolDigest({ indexer_id: "sample-indexer", source_ref: "module:app", group_key: "catalog:root" }),
         label: "Catalog",
         reader_question_refs: ["question:overview"],
         question_target_bindings: [],
@@ -512,7 +447,6 @@ describe("project main Indexer lifecycle Actions", () => {
         artifact_kind: "content",
         purpose: "required",
         reader_question_refs: ["question:overview"],
-        evidence_refs: ["evidence:source"],
       }],
     });
     const eligibilityPayload: Omit<IndexerArtifactPolicyEligibility, "eligibility_digest"> = {
@@ -556,7 +490,6 @@ describe("project main Indexer lifecycle Actions", () => {
           artifact_policy_eligibility_digest: eligibility.eligibility_digest,
           artifact_policy_variant: bundle.artifact_policy_variant,
         },
-        evidence_justification_refs: ["evidence:source"],
       }, ...Array.from({ length: 301 }, (_, index) => ({
         projection_key: `unassigned/${index}`,
         artifact_id: `unassigned-${index}`,

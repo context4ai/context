@@ -1,35 +1,76 @@
 import { expect, test } from "bun:test";
-import { buildIndexerApprovedKnowledge, indexerEvidenceBindingDigest, indexerProtocolDigest, type IndexerApprovedKnowledge } from "@c4a/context";
-import { staleApprovedKnowledgeRefs } from "../project/approvedKnowledgeDependencyWarnings.js";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createArticleSourceReference } from "@c4a/context";
+import { createDocumentSnapshotManifest } from "@c4a/extract";
+import { approvedKnowledgeDependencyWarnings } from "../project/approvedKnowledgeDependencyWarnings.js";
+import { rememberArticleRegion } from "../project/articleRegionBaselines.js";
 
-function article(id: string, parent?: IndexerApprovedKnowledge) {
-  const digest = indexerProtocolDigest(id);
-  const evidence = { evidence_ref: `evidence:${id}`, kind: "code" as const, source_ref: "repo:example", module_ref: "module:service",
-    locator: { path: `src/${id}.ts`, start_line: 1, end_line: 1 }, content_digest: digest, coverage_tier: "ast-catalog" as const };
-  return buildIndexerApprovedKnowledge({ protocol: "context.indexer.approved-knowledge/v1", artifact_ref: `artifact:${id}`,
-    subject_key: { protocol: "context.subject-key/v1", namespace: "example", kind: "service", local_key: id },
-    path: `codeindex/${id}.md`, approved_content_digest: digest,
-    source_versions: [{ source_ref: evidence.source_ref, module_ref: evidence.module_ref, version: digest }],
-    evidence_bindings: [{ ...evidence, binding_digest: indexerEvidenceBindingDigest(evidence) }], facts: [],
-    sections: [{ section_ref: `section:${id}`, markdown: "A source-bound entry.", evidence_refs: [evidence.evidence_ref], fact_refs: [] }],
-    dependencies: parent ? [{ artifact_ref: parent.artifact_ref, required: true, section_refs: [] }] : [],
-    dependency_versions: parent ? [{ artifact_ref: parent.artifact_ref, approved_content_digest: parent.approved_content_digest,
-      projection_digest: indexerProtocolDigest({ snapshot: parent.snapshot_digest, sections: parent.sections.map(section => section.section_ref).sort() }) }] : [],
-  });
-}
-
-test("support projection changes invalidate downstream articles even if approved Markdown is unchanged", () => {
-  const upstream = article("entry"), overview = article("overview", upstream), journey = article("journey", overview);
-  const current = new Map([upstream, overview, journey].map(snapshot => [snapshot.artifact_ref, snapshot.approved_content_digest]));
-  expect([...staleApprovedKnowledgeRefs([upstream, overview, journey], current)]).toEqual([]);
-  const { snapshot_digest: _, ...payload } = upstream; void _;
-  const changed = buildIndexerApprovedKnowledge({ ...payload, sections: payload.sections.map(section => ({ ...section, markdown: "An updated source-bound interpretation." })) });
-  expect(staleApprovedKnowledgeRefs([changed, overview, journey], current)).toEqual(new Set([overview.artifact_ref, journey.artifact_ref]));
-  expect(staleApprovedKnowledgeRefs([overview, journey], current)).toEqual(new Set([overview.artifact_ref, journey.artifact_ref]));
+test("checks actual cited regions without a parser or article dependency graph", async () => {
+  const root = await mkdtemp(join(tmpdir(), "article-region-check-"));
+  const source = "header\nimportant behavior\nother material\n";
+  const reference = createArticleSourceReference("file:guide",
+    { path: "guide.md", start_line: 2, end_line: 2 }, source);
+  const structure = { articles: [{ article_id: "guide", path: "faq/guide.md",
+    collection: "faq", visibility: "public", sections: [{ id: "behavior", references: [reference] }] }] };
+  const path = join(root, "sources/file/guide/guide.md");
+  try {
+    await mkdir(join(root, "sources/file/guide"), { recursive: true });
+    await writeFile(join(root, "sources/file/index.yaml"), "sources:\n  - name: guide\n");
+    await writeFile(path, source);
+    await writeFile(join(root, "sources/file/guide/manifest.json"), JSON.stringify(createDocumentSnapshotManifest({
+      sourceType: "file", sourceName: "guide", capturedAt: "2026-09-12T00:00:00.000Z",
+      files: [{ path: "guide.md", bytes: source, title: "Guide" }],
+    })));
+    rememberArticleRegion(root, reference, source);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toEqual([]);
+    await writeFile(path, `inserted line\n${source}`);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
+      { code: "approved-source-region-moved" },
+    ]);
+    await writeFile(path, `inserted line\n${source}important behavior\n`);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
+      { code: "approved-source-region-changed" },
+    ]);
+    await writeFile(path, source.replace("other material", "unrelated change"));
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toEqual([]);
+    await writeFile(path, source.replace("important behavior", "changed behavior"));
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
+      { severity: "warning", code: "approved-source-region-changed", path: "faq/guide.md" },
+    ]);
+    expect(structure.articles[0]!.sections[0]!.references[0]).toEqual(reference);
+    await rm(path);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toHaveLength(1);
+    await symlink(join(root, "sources/file/index.yaml"), path);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toHaveLength(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
-test("omitted optional support is not a stale required promise", () => {
-  const base = article("entry"), { snapshot_digest: _, ...payload } = base; void _;
-  const optional = buildIndexerApprovedKnowledge({ ...payload, dependencies: [{ artifact_ref: "artifact:absent", required: false, section_refs: [] }] });
-  expect([...staleApprovedKnowledgeRefs([optional], new Map([[optional.artifact_ref, optional.approved_content_digest]]))]).toEqual([]);
+test("articles without source regions do not load source registries", async () => {
+  expect(await approvedKnowledgeDependencyWarnings("/not-a-workspace", { articles: [] })).toEqual([]);
+});
+
+test.each(["note", "sessions"] as const)("%s references cannot borrow a sibling document's content", async kind => {
+  const root = await mkdtemp(join(tmpdir(), "article-managed-region-"));
+  const text = "# Saved material\nShared text\n";
+  const directory = join(root, "sources", kind, "20260912");
+  const reference = createArticleSourceReference(`${kind}:20260912/first.md`,
+    { path: "first.md", start_line: 2, end_line: 2 }, text);
+  const structure = { articles: [{ article_id: "saved", path: "faq/saved.md",
+    collection: "faq", visibility: "public", sections: [{ id: "answer", references: [reference] }] }] };
+  try {
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "first.md"), text);
+    await writeFile(join(directory, "second.md"), text);
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toEqual([]);
+    reference.locator.path = "second.md";
+    expect(await approvedKnowledgeDependencyWarnings(root, structure)).toMatchObject([
+      { code: "approved-source-region-changed" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

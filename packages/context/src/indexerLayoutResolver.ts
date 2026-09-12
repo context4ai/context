@@ -1,3 +1,4 @@
+import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
 import { z } from "zod";
 import type { KnowledgeCollection } from "./contracts.js";
 import { validateIndexerArtifactBundle } from "./indexerArtifactPolicy.js";
@@ -25,18 +26,9 @@ import {
   portableIndexerPathSchema,
 } from "./indexerProtocolCommon.js";
 import {
-  validateIndexerResolvedSubjectKeySchemaSet,
-  validateIndexerSubjectKeyForSchema,
-} from "./indexerSubjectKeyAuthority.js";
-import {
   validateIndexerRenderedArtifact,
   type IndexerRenderedArtifact,
 } from "./indexerTemplateRendering.js";
-import {
-  canonicalIndexerNodeRef,
-  indexerSubjectKeySchema,
-  type IndexerSubjectKey,
-} from "./indexerSubjectIdentity.js";
 import {
   indexerSharedArtifactFingerprintSchema,
   validateIndexerSharedArtifactFingerprint,
@@ -52,17 +44,15 @@ const layoutSectionSchema = z.object({
   artifact_kind: indexerIdSchema,
   state: z.enum(["structured", "rendered", "material-gap"]),
   content_digest: indexerDigestSchema.nullable(),
-  evidence_refs: z.array(indexerCanonicalRefSchema),
+  references: z.array(articleSourceReferenceSchema).max(3),
   material_question_proposal_ref: indexerCanonicalRefSchema.nullable(),
   collection_resolution_digest: indexerDigestSchema,
 }).strict();
 
 const layoutArtifactSchema = z.object({
   artifact_ref: indexerCanonicalRefSchema,
-  node_ref: indexerCanonicalRefSchema,
   artifact_id: indexerIdSchema,
   artifact_kind: indexerIdSchema,
-  internal_view_ref: indexerCanonicalRefSchema,
   collection: indexerKnowledgeCollectionSchema,
   output_path: portableIndexerPathSchema,
   shared_artifact_fingerprint_digest: indexerDigestSchema,
@@ -82,15 +72,9 @@ const layoutProposalPayloadSchema = z.object({
   source_ref: indexerCanonicalRefSchema,
   profile: indexerIdSchema,
   profile_contract_digest: indexerDigestSchema,
-  subject_key_schema_set_digest: indexerDigestSchema,
-  subject_key_schema_digest: indexerDigestSchema,
   artifact_result_digest: indexerDigestSchema,
   post_author_composition_fingerprint: indexerDigestSchema.nullable(),
   shared_artifact_fingerprint: indexerSharedArtifactFingerprintSchema,
-  node: z.object({
-    node_ref: indexerCanonicalRefSchema,
-    subject_key: indexerSubjectKeySchema,
-  }).strict(),
   artifacts: z.array(layoutArtifactSchema),
   delivery_artifact_ids: z.array(z.string().min(1)).min(1).optional(),
 }).strict();
@@ -114,9 +98,6 @@ function validateArtifactResultIdentity(value: unknown): IndexerArtifactResult {
   if (indexerArtifactResultDigest(withoutOutputDigest(result)) !== result.output_digest) {
     throw new TypeError("layout resolver requires a current Artifact Result digest");
   }
-  if (canonicalIndexerNodeRef(result.logical_unit.subject_key) !== result.logical_unit.logical_unit_ref) {
-    throw new TypeError("layout resolver requires canonical logical-unit Node identity");
-  }
   return result;
 }
 
@@ -128,29 +109,20 @@ export function indexerLayoutArtifactRef(
 }
 
 export function indexerLayoutSectionIdentityRef(input: {
-  node_ref: string;
-  owner_indexer_id: string;
-  artifact_kind: string;
+  artifact_ref: string;
   section_key: string;
 }): string {
-  return `section-identity:subject:${indexerProtocolDigest({
-    protocol: "context.indexer.section-identity/v1",
-    node_ref: input.node_ref,
-    owner_indexer_id: input.owner_indexer_id,
-    artifact_kind: input.artifact_kind,
-    section_key: input.section_key,
-  })}`;
+  return `${input.artifact_ref}#${input.section_key}`;
 }
 
 export function indexerLayoutSectionRef(
   currentArtifactRef: string,
   sectionIdentityRef: string,
 ): string {
-  return `section:subject:${indexerProtocolDigest({
-    protocol: "context.indexer.section-placement/v1",
-    artifact_ref: currentArtifactRef,
-    section_identity_ref: sectionIdentityRef,
-  })}`;
+  if (!sectionIdentityRef.startsWith(`${currentArtifactRef}#`)) {
+    throw new TypeError("Fragment identity belongs to another article");
+  }
+  return sectionIdentityRef;
 }
 
 export function indexerLayoutViewRef(currentArtifactRef: string, collection: KnowledgeCollection): string {
@@ -187,13 +159,14 @@ function readerPathSlug(value: string): string {
 
 function outputPath(input: {
   collection: KnowledgeCollection;
-  subject_key: IndexerSubjectKey;
+  source_ref: string;
+  group_key: string;
   artifact: { artifact_id: string; artifact_kind: string };
   primary: boolean;
   duplicate_kind: boolean;
 }): string {
-  const namespace = readerPathSlug(input.subject_key.namespace);
-  const subject = readerPathSlug(input.subject_key.local_key);
+  const namespace = readerPathSlug(input.source_ref.replace(/^[^:]+:/u, ""));
+  const subject = readerPathSlug(input.group_key);
   const suffix = input.primary
     ? ""
     : input.duplicate_kind
@@ -208,36 +181,32 @@ interface MaterializedSection {
   projection: IndexerArtifactSectionProjection;
   state: "structured" | "rendered" | "material-gap";
   content_digest: string | null;
-  evidence_refs: string[];
+  references: ArticleSourceReference[];
   material_question_proposal_ref: string | null;
 }
 
 function structuredSections(
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>,
-  facts: IndexerArtifactResult["facts"],
   render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>>,
 ): MaterializedSection[] {
-  return artifact.sections.map((section) => {
+  return artifact.sections.flatMap((section) => {
     const contentBlocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
-      facts,
       render_cache,
     });
-    const evidenceRefs = [...new Set(contentBlocks.flatMap((block) => block.evidence_refs))]
-      .sort(compareIndexerCanonicalText);
-    return {
+    return contentBlocks.map((block, index) => ({
       projection: {
-        section_key: section.section_key,
+        section_key: index === 0 ? section.section_key : `${section.section_key}--${section.blocks[index]!.block_id}`,
         owner_indexer_id: section.owner_indexer_id,
         document_kind: section.document_kind,
         reader_goal: section.reader_goal,
         artifact_kind: section.artifact_kind,
       },
-      state: "structured",
-      content_digest: indexerProtocolDigest({ content_blocks: contentBlocks }),
-      evidence_refs: evidenceRefs,
+      state: "structured" as const,
+      content_digest: indexerProtocolDigest({ content_blocks: [block] }),
+      references: articleFragmentReferences(block.references),
       material_question_proposal_ref: null,
-    };
+    }));
   });
 }
 
@@ -263,7 +232,9 @@ function templateSections(input: {
     projection,
   ]));
   const sections: MaterializedSection[] = rendered.sections.map((section) => {
-    const projection = projections.get(section.section_key);
+    const projection = projections.get(section.section_key) ?? [...projections.values()]
+      .filter(item => section.section_key.startsWith(`${item.section_key}--`))
+      .sort((left, right) => right.section_key.length - left.section_key.length)[0];
     if (projection === undefined) {
       throw new TypeError(`rendered Section ${section.section_key} lacks projection intent`);
     }
@@ -276,10 +247,10 @@ function templateSections(input: {
       throw new TypeError(`rendered Section ${section.section_key} changes projection intent`);
     }
     return {
-      projection,
+      projection: { ...projection, section_key: section.section_key },
       state: "rendered",
       content_digest: section.content_digest,
-      evidence_refs: [...section.evidence_refs],
+      references: section.references,
       material_question_proposal_ref: null,
     };
   });
@@ -292,7 +263,7 @@ function templateSections(input: {
       projection,
       state: "material-gap",
       content_digest: null,
-      evidence_refs: [],
+      references: [],
       material_question_proposal_ref: gap.material_question_proposal_ref,
     });
   }
@@ -309,7 +280,6 @@ export function resolveIndexerLayout(input: {
   profile: string;
   profile_contract: unknown;
   operator_contract: unknown;
-  subject_key_schema_set: unknown;
   shared_artifact_fingerprint: unknown;
   rendered_artifacts?: readonly IndexerRenderedArtifact[];
   delivery_artifact_ids?: readonly string[] | undefined;
@@ -326,16 +296,6 @@ export function resolveIndexerLayout(input: {
     throw new TypeError("layout resolver shared Artifact fingerprint has the wrong Indexer");
   }
   const contract = validateIndexerProfileContract(input.profile_contract, input.operator_contract);
-  const subjectKeySchemaSet = validateIndexerResolvedSubjectKeySchemaSet(
-    input.subject_key_schema_set,
-  );
-  const subjectKeySchema = subjectKeySchemaSet.schemas.find((schema) =>
-    schema.indexer_id === result.indexer_id && schema.profile === input.profile
-  );
-  if (subjectKeySchema === undefined) {
-    throw new TypeError("layout resolver requires an exact Indexer/profile SubjectKey schema");
-  }
-  validateIndexerSubjectKeyForSchema(result.logical_unit.subject_key, subjectKeySchema);
   const renderedById = new Map((input.rendered_artifacts ?? []).map((item) => [
     item.artifact_id,
     item,
@@ -383,7 +343,7 @@ export function resolveIndexerLayout(input: {
       throw new TypeError(`Artifact ${artifact.artifact_id} is absent from its closed Bundle`);
     }
     const sections = artifact.representation === "sections"
-      ? structuredSections(artifact, result.facts, input.render_cache)
+      ? structuredSections(artifact, input.render_cache)
       : (() => {
         const rendered = renderedById.get(artifact.artifact_id);
         if (rendered === undefined) {
@@ -419,14 +379,13 @@ export function resolveIndexerLayout(input: {
       : null;
     return {
       artifact_ref: currentArtifactRef,
-      node_ref: nodeRef,
       artifact_id: artifact.artifact_id,
       artifact_kind: artifact.artifact_kind,
-      internal_view_ref: indexerLayoutViewRef(currentArtifactRef, collection),
       collection,
       output_path: outputPath({
         collection,
-        subject_key: result.logical_unit.subject_key,
+        source_ref: result.source_ref,
+        group_key: result.logical_unit.group_key,
         artifact,
         primary: effective.artifacts.length === 1 ||
           (requiredArtifactIds.size === 1 && requiredArtifactIds.has(artifact.artifact_id)),
@@ -440,9 +399,7 @@ export function resolveIndexerLayout(input: {
         : null,
       sections: sections.map((section, index) => {
         const sectionIdentityRef = indexerLayoutSectionIdentityRef({
-          node_ref: nodeRef,
-          owner_indexer_id: section.projection.owner_indexer_id,
-          artifact_kind: section.projection.artifact_kind,
+          artifact_ref: currentArtifactRef,
           section_key: section.projection.section_key,
         });
         return {
@@ -451,7 +408,7 @@ export function resolveIndexerLayout(input: {
           ...section.projection,
           state: section.state,
           content_digest: section.content_digest,
-          evidence_refs: section.evidence_refs,
+          references: section.references,
           material_question_proposal_ref: section.material_question_proposal_ref,
           collection_resolution_digest: resolved[index]!.resolution_digest,
         };
@@ -484,15 +441,9 @@ export function resolveIndexerLayout(input: {
     source_ref: result.source_ref,
     profile: input.profile,
     profile_contract_digest: contract.contract_digest,
-    subject_key_schema_set_digest: subjectKeySchemaSet.set_digest,
-    subject_key_schema_digest: subjectKeySchema.schema_digest,
     artifact_result_digest: result.output_digest,
     post_author_composition_fingerprint: effective.composition_fingerprint,
     shared_artifact_fingerprint: sharedFingerprint,
-    node: {
-      node_ref: nodeRef,
-      subject_key: result.logical_unit.subject_key,
-    },
     artifacts: input.delivery_artifact_ids === undefined ? artifacts
       : artifacts.filter((artifact) => input.delivery_artifact_ids!.includes(artifact.artifact_id)),
     ...(input.delivery_artifact_ids === undefined ? {} : {
@@ -512,7 +463,6 @@ export function validateIndexerLayoutProposal(input: {
   post_author_envelope?: unknown | null;
   profile_contract: unknown;
   operator_contract: unknown;
-  subject_key_schema_set: unknown;
   rendered_artifacts?: readonly IndexerRenderedArtifact[];
 }): IndexerLayoutProposal {
   const proposal = indexerLayoutProposalSchema.parse(input.proposal);
@@ -523,7 +473,6 @@ export function validateIndexerLayoutProposal(input: {
     profile: proposal.profile,
     profile_contract: input.profile_contract,
     operator_contract: input.operator_contract,
-    subject_key_schema_set: input.subject_key_schema_set,
     shared_artifact_fingerprint: proposal.shared_artifact_fingerprint,
     delivery_artifact_ids: proposal.delivery_artifact_ids,
     ...(input.rendered_artifacts === undefined

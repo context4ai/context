@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   buildIndexerPostAuthorFragmentRequest,
-  canonicalIndexerNodeRef,
   indexerProtocolDigest,
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
@@ -15,13 +14,7 @@ import type { IndexerInstructionMaterializationRequest } from "../project/indexe
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
-const SUBJECT_KEY = {
-  protocol: "context.subject-key/v1" as const,
-  namespace: "sample-package",
-  kind: "component",
-  local_key: "public-button",
-};
-const NODE_REF = canonicalIndexerNodeRef(SUBJECT_KEY);
+const ARTICLE_REF = "artifact:component-overview";
 
 function postAuthorRequest(seed = "4") {
   const composers = resolveEffectiveIndexerComposers({
@@ -46,32 +39,15 @@ function postAuthorRequest(seed = "4") {
     effective_composer_set: composers,
     author_workset_digest: digest(seed),
     primary_result_digest: digest(seed === "4" ? "5" : "e"),
-    primary_facts: [{
-      fact_ref: "fact:component-summary",
-      subject_key: SUBJECT_KEY,
-      fact_kind: "component-summary",
-      value: { summary: "public control" },
-      evidence_refs: [{
-        ref: "evidence:component-source",
-        kind: "code",
-        source_digest: digest("6"),
-      }],
-    }],
     primary_artifacts: [{
-      artifact_ref: "artifact:component-overview",
-      subject_key: SUBJECT_KEY,
+      artifact_ref: ARTICLE_REF,
       artifact_kind: "overview",
       artifact_policy_variant: "standard",
       variables: { title: "Public button" },
-      evidence_refs: [{
-        ref: "evidence:component-source",
-        kind: "code",
-        source_digest: digest("6"),
-      }],
     }],
     validator_contract_digest: digest("7"),
     current_profile_binding_digest: digest("8"),
-    allowed_target_refs: [NODE_REF],
+    allowed_target_refs: [ARTICLE_REF],
   });
   if (plan.state !== "pending") throw new Error("expected pending post-author plan");
   return {

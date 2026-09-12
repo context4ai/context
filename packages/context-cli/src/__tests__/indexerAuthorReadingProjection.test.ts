@@ -116,7 +116,7 @@ test("CSS and package bodies are reachable in emitted detail files without mutat
     const original = structuredClone(input.view);
     const files = planIndexerReadingFiles([buildIndexerTaskReading(input)]);
     const main = files.readings[0]!.markdown;
-    expect(main).toContain(source.ref);
+    expect(main).toContain(path);
     expect(main).toContain("keep-me");
     expect(main).not.toContain(text);
     expect(main).not.toContain("optional-intent");

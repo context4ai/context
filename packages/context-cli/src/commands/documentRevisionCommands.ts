@@ -99,7 +99,7 @@ export function registerDocumentRevisionCommand(program: Command): void {
       process.stdout.write(`${JSON.stringify(await cancelKnowledgeMaintenance(requireProjectRoot(), id, options.discardRevision))}\n`);
     });
   task.command("adjust").description("Adjust current source/module inputs or reader organization while preserving unrelated work")
-    .requiredOption("--input <file>", "YAML/JSON scopes or knowledge_dependencies with instruction, or knowledge_map; - for stdin")
+    .requiredOption("--input <file>", "YAML/JSON source scopes with instruction, or knowledge_map; - for stdin")
     .option("--format <format>", "output format: json", "json")
     .action(async (options: { input: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");

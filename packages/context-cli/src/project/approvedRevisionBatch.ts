@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { canonicalIndexerJson } from "@c4a/context";
+import YAML from "yaml";
+import { canonicalIndexerJson, validateArticleStructureEntries } from "@c4a/context";
 import { prepareApprovedRevision, type ApprovedRevision } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { selectDeliveryPages } from "./indexerDelivery.js";
@@ -14,18 +15,17 @@ import { canonicalizeApprovedKnowledgeAssetPair } from "./knowledgeAssetRepair.j
 export async function prepareRevisionBatchContinuation(root: string, request: ApprovedRevision, batch: CandidateRecord[]) {
   const [next, ...remaining] = request.pending_targets ?? [];
   if (!next) return undefined;
-  const pages = batch.map((candidate, index) => ({ ref: candidate.view_ref, artifact_id: candidate.view_ref,
+  const pages = batch.map((candidate, index) => ({ ref: candidate.article_id, artifact_id: candidate.article_id,
     result_digest: candidate.fingerprint, workset_digest: candidate.structure_digest,
     content_digest: candidate.fingerprint, priority: index,
     boundary: index === batch.length - 1 && next.path.split("/")[0] !== candidate.collection }));
   const delivered = Object.fromEntries(batch.filter((candidate) => candidate.approved_revision?.base_digest)
-    .map((candidate) => [candidate.view_ref, candidate.approved_revision!.base_digest!]));
+    .map((candidate) => [candidate.article_id, candidate.approved_revision!.base_digest!]));
   const structure = await readKnowledgeStructure(root);
-  const hasPriorDelivery = Array.isArray(structure.parsed?.views) && structure.parsed.views.length > 0;
+  const hasPriorDelivery = Array.isArray(structure.parsed?.articles) && structure.parsed.articles.length > 0;
   if (selectDeliveryPages({ pages, delivered, hasPriorDelivery, allAuthorsAccepted: false }).length > 0) return undefined;
   const prepared = await prepareApprovedRevision({ projectRoot: root, replace_current: true, persist: false,
     selector: next.path, instruction: next.instruction, pending_targets: remaining, batch_candidates: batch,
-    ...(next.knowledge_rebinding ? { knowledge_rebinding: next.knowledge_rebinding } : {}),
     ...(next.regenerate ? { regenerate: true } : {}),
     ...(next.target ? { target: next.target } : {}),
     ...(next.create ? { create: next.create } : {}), ...(next.supporting_sources ? { supporting_sources: next.supporting_sources } : {}),
@@ -38,13 +38,33 @@ export async function prepareRevisionBatchContinuation(root: string, request: Ap
  * source-image relocation. Real content changes are still not equivalent. */
 export async function approvedRevisionCandidateApplied(root: string, candidate: CandidateRecord, applied: string | undefined, closed = false): Promise<boolean> {
   if (applied === undefined) return false;
+  const article = validateArticleStructureEntries((await readKnowledgeStructure(root)).parsed?.articles ?? [])
+    .find(item => item.article_id === candidate.article_id);
+  const sections = candidate.indexer_candidate.sections.map(section => ({
+    id: section.section_key, references: section.references,
+  }));
+  if (!article || article.path !== candidate.path || article.collection !== candidate.collection ||
+      article.visibility !== candidate.visibility || canonicalIndexerJson(article.sections) !== canonicalIndexerJson(sections)) return false;
   if (!closed && applied === candidate.body) return true;
-  const expected = compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(candidate.body));
-  if (expected === applied) return true;
+  const expected = revisionComparableMarkdown(candidate.body);
+  const approved = revisionComparableMarkdown(applied);
+  if (expected === approved) return true;
   const pair = await canonicalizeApprovedKnowledgeAssetPair({ projectRoot: root,
-    pageRelPath: `knowledge/${candidate.path}`, expectedContent: expected, approvedContent: applied,
+    pageRelPath: `knowledge/${candidate.path}`, expectedContent: expected, approvedContent: approved,
     sourceLocators: candidate.source_refs });
   return pair.expectedContent === pair.approvedContent;
+}
+
+function revisionComparableMarkdown(markdown: string): string {
+  const compact = compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(markdown));
+  // Review assigns the publication timestamp. It must not make the same
+  // accepted content appear unapplied; all other metadata and body still match.
+  return compact.replace(/^---\r?\n([\s\S]*?)\r?\n---/u, (_match, header: string) => {
+    const metadata = YAML.parse(header) as Record<string, unknown>;
+    const { timestamp: _timestamp, ...content } = metadata;
+    void _timestamp;
+    return ["---", YAML.stringify(content).trimEnd(), "---"].join("\n");
+  });
 }
 
 export async function observeApprovedRevisionBatch(root: string, request: ApprovedRevision) {

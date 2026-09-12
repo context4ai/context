@@ -80,7 +80,7 @@ describe("0.7.4 project parser execution planning", () => {
       "parser.yaml",
       "parser.toml",
     ]);
-    expect(requirements("component-library").map((item) => item.capability)).toEqual([
+    expect(requirements("web-application").map((item) => item.capability)).toEqual([
       "parser.typescript",
       "parser.javascript",
       "parser.mdx",

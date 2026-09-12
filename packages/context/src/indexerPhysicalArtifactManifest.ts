@@ -13,7 +13,6 @@ import {
 const logicalUnitOwnerSchema = z.object({
   kind: z.literal("logical-unit"),
   logical_unit_ref: indexerCanonicalRefSchema,
-  node_ref: indexerCanonicalRefSchema,
   artifact_ref: indexerCanonicalRefSchema,
   artifact_id: indexerIdSchema,
   artifact_kind: indexerIdSchema,

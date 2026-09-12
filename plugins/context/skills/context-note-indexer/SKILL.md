@@ -4,7 +4,7 @@ description: Context-managed Provider for saved notes, excerpts and observations
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.0.0"
+  context-provider-version: "1.0.1-alpha.1"
 ---
 
 # Context Note Indexer

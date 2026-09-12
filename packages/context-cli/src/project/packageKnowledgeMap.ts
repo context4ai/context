@@ -3,7 +3,6 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { projectKnowledgeMap, knowledgeMapTargetKey, type PackageDefinition, type KnowledgeMap } from "@c4a/context";
 import { packageKnowledgeOutputPath } from "./packageDistribution.js";
-import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 
 export function knowledgeMapSectionAnchor(key: string): string {
@@ -12,7 +11,7 @@ export function knowledgeMapSectionAnchor(key: string): string {
 export function packageKnowledgeMapTargets(pkg: PackageDefinition, files: readonly ApprovedKnowledgeFile[]): Map<string, string> {
   const targets = new Map<string, string>();
   for (const file of files) {
-    const artifact = parseKnowledgeFrontmatter(file.content).artifact_ref;
+    const artifact = file.article?.article_id;
     if (typeof artifact !== "string") continue;
     const href = `./${packageKnowledgeOutputPath(pkg, file.relPath).split("/").map(encodeURIComponent).join("/")}`;
     targets.set(artifact, href);

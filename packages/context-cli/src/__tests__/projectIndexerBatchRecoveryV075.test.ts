@@ -39,12 +39,7 @@ async function currentPartitionTask(root: string) {
       key: "batch-recovery",
       title: "Batch recovery",
       reader_task: "Understand the public fixture capability.",
-      subject: {
-        namespace: workset.partition_subject_key.namespace,
-        kind: workset.partition_subject_key.kind,
-        local_key: "batch-recovery",
-      },
-      subject_intent: "primary" as const,
+
       members: validation.canonical_inventory_members.map((member) => member.member_id),
       questions: [...workset.reader_question_refs],
       question_targets: (validation.required_question_target_refs ?? []).map((target) => ({

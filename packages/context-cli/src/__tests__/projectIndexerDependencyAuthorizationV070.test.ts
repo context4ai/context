@@ -157,7 +157,7 @@ describe("Indexer dependency authorization Gate", () => {
       proposal_digest: sample.proposal.proposal_digest,
       resolution: sample.resolution,
       resolutionInputRef: sample.resolutionPath,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance],
+      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.packageOutput],
     });
     const managed = await buildIndexerDependencyAuthorizationRoute({
       projectRoot: sample.root,

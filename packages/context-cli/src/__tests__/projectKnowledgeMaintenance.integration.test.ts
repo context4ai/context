@@ -50,7 +50,7 @@ async function deliveryWorkspace(sourceCount = 12) {
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root);
   await acceptStarterPackageTemplates({ projectRoot: root });
-  const views = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")).views as Array<{ path: string }>;
+  const views = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")).articles as Array<{ path: string }>;
   return { root, views };
 }
 
@@ -165,7 +165,7 @@ test("same-version regeneration supplies current program blocks without advancin
   const block = request.program_blocks![0]!;
   const route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
   await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
-    value: { stage: "approved-revision", markdown: request.target.markdown + `\n<!-- context:section id="api" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n` } });
+    value: { stage: "approved-revision", markdown: request.target.markdown + `\n<!-- context:section id="api" -->\n${block.token}\n<!-- /context:section -->\n` } });
   expect((await readCandidateRecords(root))[0]!.body).toContain(block.markdown);
   await approveCandidates(root, await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
   expect(YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")).processed_scopes).toEqual(before);
@@ -194,7 +194,7 @@ test("failed preparation retains a cancellable request and rejects stale transit
   await expect(advanceKnowledgeMaintenance(root, `sha256:${"0".repeat(64)}`)).rejects.toThrow("route changed");
   const path = join(root, "knowledge/structure.yaml");
   const structure = YAML.parse(await readFile(path, "utf8"));
-  structure.views[0].path = "guides/moved.md";
+  structure.articles[0].path = "guides/moved.md";
   await writeFile(path, YAML.stringify(structure));
   await expect(advanceKnowledgeMaintenance(root, next.revision)).rejects.toThrow("changed identity");
   expect((await maintenanceRevision(root)).action).toBe("advance");

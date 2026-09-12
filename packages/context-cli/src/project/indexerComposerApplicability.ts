@@ -6,10 +6,8 @@ import { buildIndexerPostAuthorResultFromSemantic } from "./indexerSemanticPostA
 export function missingComposerInputs(composer: IndexerComposerDeclaration, view: IndexerPrimaryResultView): string[] {
   const required = composer.contract?.primary_requirements;
   if (!required) return [];
-  const facts = new Set(view.facts.filter((fact) => fact.evidence_refs.length > 0).map((fact) => fact.fact_kind));
-  const artifacts = new Set(view.artifacts.filter((artifact) => artifact.evidence_refs.length > 0).map((artifact) => artifact.artifact_kind));
+  const artifacts = new Set(view.artifacts.map((artifact) => artifact.artifact_kind));
   return [
-    ...required.fact_kinds.filter((kind) => !facts.has(kind)).map((kind) => `fact:${kind}`),
     ...required.artifact_kinds.filter((kind) => !artifacts.has(kind)).map((kind) => `artifact:${kind}`),
   ];
 }

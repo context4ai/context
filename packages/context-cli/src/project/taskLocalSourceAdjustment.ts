@@ -1,9 +1,8 @@
-import { withApprovedKnowledgeSupportSources } from "./approvedKnowledgeRebinding.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
+import { validateArticleStructureEntries, indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
 import { readApprovedRevision, requestDigest, currentApprovedRevisionTarget } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
@@ -65,8 +64,8 @@ export async function adjustLocalRevisionSources(root: string, input: {
     if (revision) {
       const affected = additions.length > 0 || revision.target.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)));
       const currentTarget = affected ? await currentApprovedRevisionTarget(root, revision) : revision.target;
-      const { refresh_sources: _refresh, candidate, knowledge_input: _knowledge, ...rest } = revision;
-      void _refresh; void _knowledge;
+      const { refresh_sources: _refresh, candidate, ...rest } = revision;
+      void _refresh;
       // A scope baseline covers already delivered pages too. Revisit every
       // approved source-bound page after changing its fixed input, without
       // replacing approved prose or introducing per-page version records.
@@ -76,12 +75,11 @@ export async function adjustLocalRevisionSources(root: string, input: {
       const pending = [...(revision.pending_targets ?? [])];
       const known = new Set([revision.target.path, ...pending.map((item) => item.path)]);
       const structure = await readKnowledgeStructure(root);
-      for (const view of Array.isArray(structure.parsed?.views) ? structure.parsed.views : []) {
-        if (!view || typeof view !== "object" || typeof view.path !== "string" || known.has(view.path)) continue;
-        if (!Array.isArray(view.sources) || !view.sources.some((ref: unknown) => typeof ref === "string" &&
-          changedSources.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)))) continue;
-        pending.push({ path: view.path, instruction: `Reassess the current approved page against the adjusted source. Preserve its text if unaffected.\n${input.instruction}` });
-        known.add(view.path);
+      for (const article of validateArticleStructureEntries(structure.parsed?.articles ?? [])) {
+        if (known.has(article.path) || !article.sections.some(section =>
+          section.references.some(reference => changedSources.includes(reference.source_ref)))) continue;
+        pending.push({ path: article.path, instruction: `Reassess this page against the changed source. Preserve unaffected text and inspect changes outside cited regions for new topics.\n${input.instruction}` });
+        known.add(article.path);
       }
       const keptBatch = (revision.batch_candidates ?? []).filter((item) => {
         if (!item.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)))) return true;
@@ -96,12 +94,9 @@ export async function adjustLocalRevisionSources(root: string, input: {
       });
       const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
       const programBlocks = affected ? await prepareRevisionProgramBlocks(root, revision.target.source_refs, scopes.filter((scope) => selected.includes(scope.source_ref))) : revision.program_blocks;
-      const { prepareApprovedKnowledgeRevision } = await import("./approvedKnowledgeRevision.js");
-      const knowledge = affected ? await prepareApprovedKnowledgeRevision(root, currentTarget.previous_path ?? currentTarget.path, registry, revision.knowledge_input?.rebinding) : revision.knowledge_input;
-      const payload = { ...rest, ...(knowledge === undefined ? {} : { knowledge_input: knowledge }), ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
+      const payload = { ...rest, ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
         target: affected ? { ...currentTarget, markdown: candidate?.body ?? currentTarget.markdown, source_refs: [...new Set([...currentTarget.source_refs, ...additions.map((scope) => scope.source_ref)])] } : revision.target,
         instruction: affected ? `${revision.instruction}\n\n${input.instruction}` : revision.instruction };
-      if (knowledge?.rebinding) payload.target = withApprovedKnowledgeSupportSources(payload.target, knowledge);
       next = { ...payload, revision: requestDigest(payload), ...(!affected && candidate ? { candidate } : {}) };
       if (affected && candidate) discardIds.add(candidate.candidate_id);
     } else {

@@ -26,12 +26,12 @@ for (const provider of ["context-code-indexer", "context-markdown-indexer", "con
         artifact_id: "reader-entry", artifact_kind: "content", artifact_policy_variant: contract.applicability.artifact_policy_variants[0]!,
         representation: "sections", sections: [{ section_key: "reader-entry--introduction", owner_indexer_id: "fixture",
           document_kind: "reference", reader_goal: contract.reader_goal, artifact_kind: "content",
-          blocks: [{ block_id: "intro", layer: "semantic-prose", markdown: "# Reader entry", evidence_refs: ["evidence:source"] }] }],
+          blocks: [{ block_id: "intro", layer: "semantic-prose", markdown: "# Reader entry", references: [] }] }],
       });
       const variables = Object.fromEntries(contract.variables.filter(variable => variable.content_layer === "semantic-prose")
-        .map(variable => [variable.id, { value: "Inspect the documented source entry for " + variable.id + ".", evidence_refs: ["evidence:source"] }]));
+        .map(variable => [variable.id, { value: "Inspect the documented source entry for " + variable.id + ".", references: [] }]));
       const artifact = makeArtifact();
-      applySelectedPageTemplate({ artifact, template, articleKey: "reader-entry", facts: [], semanticVariables: variables });
+      applySelectedPageTemplate({ artifact, template, articleKey: "reader-entry", semanticVariables: variables });
       const markdown = artifact.sections.flatMap(section => section.blocks.flatMap(block => block.layer === "semantic-prose" ? [block.markdown] : [])).join("\n");
       for (const variable of Object.values(variables)) expect(markdown).toContain(variable.value);
       expect(markdown).not.toContain("{{variable:");
@@ -45,7 +45,7 @@ for (const provider of ["context-code-indexer", "context-markdown-indexer", "con
           ["environment", "globals", "inheritance", "resources", "ssr", "platforms", "verification"],
         ]) {
           const variant = makeArtifact();
-          applySelectedPageTemplate({ artifact: variant, template, articleKey: "reader-entry", facts: [],
+          applySelectedPageTemplate({ artifact: variant, template, articleKey: "reader-entry",
             semanticVariables: Object.fromEntries(keys.map(key => [key, variables[key]!])) });
           expect(variant.sections.slice(1).map(section => section.section_key))
             .toEqual(keys.map(key => `reader-entry--${key}`));
@@ -53,7 +53,7 @@ for (const provider of ["context-code-indexer", "context-markdown-indexer", "con
       }
       const omitted = makeArtifact();
       const original = structuredClone(omitted.sections);
-      applySelectedPageTemplate({ artifact: omitted, template, articleKey: "reader-entry", facts: [] });
+      applySelectedPageTemplate({ artifact: omitted, template, articleKey: "reader-entry" });
       expect(omitted.sections).toEqual(original);
     }
   });

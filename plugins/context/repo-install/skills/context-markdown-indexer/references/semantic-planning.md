@@ -1,176 +1,84 @@
-# Source, subject, and claim planning
+# Source and article planning
 
-Use these rules while producing the current `main-index` `ArtifactResult`.
-Captured Markdown is ordinary source material: it may create or enrich the same
-knowledge candidates as code-derived input. If required material is still
-missing, return a material-gap disposition and let a later main-index run consume
-the newly captured source. Do not create an answer-only result, landing, or
-second review workflow. Context remains the authority for schemas, SubjectKey
-normalization, identities, paths, collisions, stale state, layout changes,
-Review, and publication.
+Use the current task, authorized sources and selected page plan. Context owns
+source access, article identities, paths, revision checks, review and writes.
+Do not construct nodes, SubjectKeys, relationships or target-resolution results.
 
-## Reader-subject grouping
+## Grouping reader topics
 
-The rules below are the grouping guidance for the current document View.
-Context handles strategy selection, ordering, retry, and catalog fallback;
-do not retrieve a separate strategy definition or submit strategy metadata.
+Group document material by durable reader purpose, not by file, heading or
+transport batch. Read enough of the authorized text to establish that purpose;
+titles and filenames are navigation signals, not proof of behavior or authority.
+Choose clear group keys and titles. Keep existing article identity on updates;
+a title change does not create another article.
 
-For a partition workset, group captured document members by durable reader
-subject rather than by file, heading, route, or temporary capture batch. Use
-the complete authorized document text together with maintained title,
-`source_path`, route, audience, and reader-task evidence. These fields are
-evidence for the decision; none is sufficient by itself.
+Combine material that jointly answers one reader task. Split platform/runtime
+variants when their contracts, behavior or reader actions materially differ.
+Do not make a page for every heading or inventory member. Navigation-only lists,
+duplicates and empty placeholders receive an appropriate inventory disposition,
+not filler prose. Account for every supplied inventory member.
 
-Choose readable, durable subject names during Partition. Context's main-page
-path uses the subject namespace as the directory and local key as the basename;
-the group's key and authored title do not rename it. When the default namespace
-is a capture ID or opaque source token, use the existing explicit subject object
-with a source-supported product/platform namespace and topic key, such as
-`sample-web` / `faq`, under a permitted kind. Do not repeat the source token in
-both path segments or use random/hash suffixes to resolve collisions. Keep an
-existing subject and its approved path on updates; a title edit alone does not
-create a new identity. Review the proposed subject and final reader path, not
-only the page title. Context handles path normalization and layout confirmation.
+## Reading and authority
 
-One group may contain multiple documents when they jointly explain the same
-reader subject. Split platform or runtime variants only when their supported
-contract, behavior, lifecycle, or reader task is materially different. Keep
-navigation-only indexes, generated duplicates, empty placeholders, and
-superseded pages out of authored groups with an explicit inventory
-disposition. Every current inventory member must still receive exactly one
-partition disposition. If durable subject boundaries cannot be established,
-return a failed Partition Result explaining the missing boundary evidence so
-Context can choose the next attempt. Do not silently substitute one group per file.
+Use only the authorized sources and roles supplied with the task. Read the
+actual code or text needed for each explanation; use optional parser output
+only when it helps inspect or format that material. Preserve exact commands,
+identifiers, conditions, numbers, links and source-authored uncertainty.
+A source's polished wording or filename does not increase its authority.
 
-## Evidence and authority
+Missing required material becomes the current material-gap disposition. Newly
+captured material uses the same production and review workflow; do not create
+an answer-only result or a second review ledger.
 
-Read every authorized evidence item required by the current workset before
-making a source-wide decision. A file name, URL, title, heading, navigation
-label, polished wording, profile id, or example is a navigation signal, not
-proof of subject identity, authority, or reader intent.
+## Writing and source references
 
-Use only current source roles, authorized source views, target-resolution views,
-and question targets supplied with the workset. Supporting or context-only material
-may guide investigation but cannot become a cited Section or structured claim
-unless the current authority makes it eligible. Preserve exact identifiers,
-commands, links, numbers, conditions, code, and source-authored uncertainty.
+Start from the selected article and current approved content when revising.
+Preserve useful explanations, examples, images and confirmed contributions.
+Plan independent pages only when they have a distinct reader task and useful
+standalone content. Keep a short warning, example or local clarification in the
+relevant article instead of inventing a graph subject for it.
 
-Positive example: a Section is classified from its complete requirement text
-and stated audience. Negative example: a document is classified as a runbook
-only because its path contains `ops/`.
+Apply classification.md and structure-and-artifacts.md to select the current
+content intent. Context resolves its collection; do not supply a new taxonomy.
+A page's title and description belong to Markdown, not a second subject catalog.
 
-## Subject boundary
+For each output fragment, cite the actual source regions used, at most three
+locations. Use references with source_ref and a locator identifying the file
+and inclusive line range. Context computes the content digest. Do not copy
+parser facts, evidence IDs, binding digests or whole-workset ledgers into the
+result. Split genuinely distinct prose when it needs distinct references;
+never invent a continuous region for unrelated locations to evade the limit.
 
-For Author, the primary logical-unit SubjectKey is fixed by the workset. Do not replace it
-with a title-derived key. When Context supplies target-resolution entries,
-close every entry with exactly one current disposition:
+## Meaning, conflicts and updates
 
-- `reuse-existing` only for an exact evidence-supported subject match;
-- `create-independent` only when evidence establishes a distinct durable
-  subject and separate reader value under a permitted SubjectKey schema;
-- `unresolved` with a `reason_code` when the supplied material cannot establish
-  identity or the required capability is unavailable. `request-material` and
-  `unsupported` are whole-Result outcomes, not target-resolution dispositions.
+Relationships can be explained in prose, links and diagrams when the source
+supports them; no structured graph claim is required. Two names in a See also
+list do not establish a runtime dependency. Preserve unresolved contradictions
+or uncertainty rather than selecting whichever source appears first.
 
-Treat local material as a Section before proposing an independent subject or
-Artifact. A heading, table row, FAQ label, warning, short example, relationship
-phrase, or one-off conclusion does not establish independent identity. A
-concrete product or technical object, an atomic term, a repeatable process with
-source-backed steps and outcome, or a real grouping scope with supported child
-subjects may justify a separate subject when the current schema permits it.
+Choose the narrowest supported content purpose:
+- decisions explain choices, alternatives and rationale;
+- incidents preserve impact, sequence, cause, response and follow-up as available;
+- tests describe a checkable target, scenario or observed result;
+- standards distinguish normative requirements from suggestions;
+- guides give actions, verification and applicable recovery;
+- examples retain literal sample material;
+- comparisons distinguish objects along meaningful dimensions.
 
-Positive examples include an independently named service with its own contract,
-or a repeatable recovery procedure with actors, steps, outcome, and standalone
-retrieval value. Negative examples include “component usage” as one sentence,
-“three modes” as a parallel list, a navigation-only placeholder, or “X impact
-on Y” without an independent referent. Keep those as Sections, registered
-questions, or unresolved target decisions as appropriate.
+Collapse duplicate statements only when meaning, authority and reader task
+match. Source-region changes identify material to reconsider, not an instruction
+to rewrite every page. Region deletion or ambiguous relocation is not proof
+that the old guidance is still valid. New uncited material may justify a new
+topic or a revision after semantic review.
 
-Titles and headings are evidence, not identity. Keep reader-facing labels in
-the authored content; do not invent aliases, slugs, collections, containment,
-or paths to force a match. A subject shaped like a grouping scope needs current
-supported child identities. A process-shaped subject needs actual process
-evidence, not merely a word such as “flow”, “migration”, or “strategy”.
+## Completion and recovery
 
-## Section and Artifact planning
+Return one result for each supplied task. Preserve stable fragment keys when
+editing the same content and remove references for deleted fragments. Context
+handles final Markdown markers, metadata and durable structure writes.
 
-Apply `classification.md` and `structure-and-artifacts.md` at Section scope.
-Keep source-backed Sections continuous when possible. Split unrelated reader
-tasks even under one heading; merge adjacent headings only when they form one
-coherent answer with compatible projection intent. A dedicated Artifact must
-clear the same independent reader-task and evidence-boundary test regardless of
-content type.
-
-Use density only to choose an inspection granularity. `macro`, `meso`, `micro`,
-and `single-pass` never choose a SubjectKey, authority, projection intent, or
-quality outcome.
-
-## Relation and structured-claim gate
-
-Emit a structured claim only when its subject is authorized, its owner Section
-exists, and the cited evidence in that same Section supports the claim kind.
-Do not convert a vague “related” mention, shared table membership, name
-similarity, containment, or endpoint-only evidence into a stronger relation.
-When evidence conflicts and source precedence does not resolve it, preserve the
-conflict in the supported diagnostic or material-question disposition instead
-of selecting by file order, heading order, or polished wording.
-
-Source-authored uncertainty belongs in the reader prose when it is material.
-Do not use a confidence label to conceal Agent uncertainty, and do not invent a
-structured field that the current schema does not expose. Missing endpoint,
-ownership, or relation evidence must remain unresolved rather than becoming a
-dangling claim.
-
-Positive example: a cited Section explicitly states that one component consumes
-another component's output, and both subjects are authorized. Negative example:
-two components appear in one “See also” list, so the Indexer invents a runtime
-dependency.
-
-## Content-purpose precision
-
-Choose the narrowest registered Section projection intent. Preserve these
-semantic boundaries when they apply:
-
-- a decision needs alternatives or options, the selected path, and rationale;
-- an incident review needs incident identity plus impact/timeline and cause,
-  response, mitigation, or follow-up evidence;
-- a test/validation Section needs a checkable target, scenario, observation, or
-  acceptance result;
-- a standard/policy Section needs a stable normative rule or constraint;
-- a task or migration guide needs a reader action, verification, and relevant
-  recovery boundary;
-- an example is literal sample material, not ordinary scenario prose;
-- a comparison distinguishes at least two subjects across meaningful
-  dimensions.
-
-If the registered vocabulary cannot express the evidence, return a material or
-capability disposition. Do not use a broad narrative label merely to avoid the
-missing-intent path.
-
-## Duplicate, deletion, and recovery rules
-
-Collapse duplicate statements only when their subject, authority, reader task,
-and evidence boundary are the same. Preserve separate Sections when authority,
-lifecycle, reader task, or evidence boundary differs. Omit material only under
-the eligible reasons in `editorial-policy.md`; an answered question, actionable
-limitation, replacement-bearing deprecation, source-backed decision, or
-recovery instruction remains knowledge.
-
-On an ambiguous target, return the current unresolved/material disposition. On
-a stale workset, digest mismatch, schema mismatch, collision, or forged layout,
-stop and use the fresh Context route; do not repair the failure by changing a
-semantic label, inventing an alias, or hand-authoring a path. A destructive or
-ambiguous layout change is handled by Context's conditional human Gate. A
-non-destructive addition does not create a review pause merely because it is
-new.
-
-If the same current semantic quality problem survives three accepted revision
-attempts, keep already-passing Sections intact and request one aggregated piece
-of content-organization, source-fidelity, or missing-material guidance. Retry
-history and assessments are runtime audit data, never reader knowledge.
-
-Before returning the Result, verify that every required evidence item and
-target-resolution entry has a disposition, every Section has one current
-projection intent and evidence boundary, every claim is owned and cited, every
-duplicate/conflict decision is explicit, and no collection, path, temporary
-identity, placeholder, or unsupported claim appears in the Result.
+On stale revision, use the returned recovery route. On a path or identity
+collision, do not invent aliases or bypass review. Keep unresolved material
+explicit. Before submitting, check inventory dispositions, the selected
+article plan, useful prose and the real regional references; do not perform
+a separate subject or relation modeling pass.

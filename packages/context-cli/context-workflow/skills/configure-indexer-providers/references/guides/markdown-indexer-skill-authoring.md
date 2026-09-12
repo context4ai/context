@@ -38,11 +38,11 @@ instruction.
 Author Results propose logical Sections and their intent; they do not write
 `knowledge/` paths. Each Section binds:
 
-- the canonical SubjectKey/Node target or an explicit independent target;
-- its reader-question refs and exact evidence spans;
+- the selected article and reader purpose;
+- its reader-question refs and actual source regions;
 - an Artifact kind and Section key stable across content-only changes;
 - a projection intent describing purpose, not a physical filename;
-- structured content layers and their digests.
+- authored content, without an article-side facts or evidence ledger.
 
 Context owns the closed mapping from profile/Section intent to collection and
 path. The layout resolver reuses an existing Artifact by stable identity,
@@ -52,14 +52,13 @@ Protected changes to an approved layout have their own human-only Gate; this
 is distinct from ordinary structure review and its managed delegation. A Provider cannot
 avoid that Gate by emitting a path or relabeling the change.
 
-## Reusing Code Nodes
+## Reusing existing articles
 
-Use the supplied subject catalog and TargetResolutionView. Equal SubjectKeys use
-the same NodeRef across Code and Markdown. `resolved` enriches the existing
-Node; `absent` may create an explicitly independent subject or a material gap;
-`ambiguous` fails before authoring. Titles, heading similarity and filenames
-are never identity fallback. Unrelated catalog changes must not make a workset
-stale.
+Read the supplied approved article when a task updates existing knowledge.
+Preserve its identity, applicable content and confirmed contributions. Code and
+documents can inform the same page without a shared Node or SubjectKey.
+Production does not build or resolve graph targets; title similarity alone
+does not justify merging articles.
 
 ## Artifact and Section planning
 
@@ -71,14 +70,13 @@ fan-out audit, layout actualization and the final Candidate compile.
 
 The first actual Section of each reader Artifact begins with one concise,
 source-backed level-one heading. Context uses that heading as the outline and
-Candidate Review display title. It never participates in SubjectKey derivation
+Candidate Review display title. It never changes stable article identity
 or ownership, and later Sections in the same Artifact do not repeat it.
 
-Each Section carries exact positive and negative dependency refs. Incremental
-impact is Section/Artifact-local: a source membership, question denominator,
-candidate pool, evidence span or run-envelope change invalidates only the
-dependent scope. A Provider must not replace this with source-wide or
-collection-wide recomputation.
+Each output fragment records at most three actual source locations. Context
+hashes those regions and uses changes, missing regions or ambiguous relocation
+to identify articles needing review. Changes outside cited regions can still
+introduce new topics; unchanged references do not prove the whole article current.
 
 ## Editorial policy
 
@@ -95,7 +93,7 @@ does not create another gate or require a signal-clearing receipt.
 
 When current material cannot answer a required canonical question, return the
 exact material-question disposition for the supplied owner cell, question
-contract and Subject target. Do not invent a new question contract or landing.
+contract and selected scope. Do not invent a new question contract or landing.
 Context reports the unresolved set in current reconciliation state; it does not
 create a second checkpoint ledger or published gap artifact.
 
@@ -109,9 +107,9 @@ requirement change.
 
 Each captured document remains an independently recoverable Partition input,
 but Context may transport several documents in one bounded Agent step. Return
-one result for every supplied task key and let global convergence merge
-documents that establish the same Subject. Batch order, filename order and
-heading order never create Subject identity. Author and Review use the same
+one result for every supplied task key. Group material by useful reader topics;
+do not assume that shared wording automatically merges articles. Batch order,
+filename order and heading order never create article identity. Author and Review use the same
 bounded transport rule without adding intermediate user approvals.
 
 ## Markdown author fixture checklist
@@ -122,14 +120,14 @@ Release fixtures should cover:
 - authoritative reference, guide, runbook, FAQ, decision, incident, policy,
   test and release/migration document shapes using anonymous content;
 - per-Section projection into every supported collection intent;
-- existing Code Node reuse, independent subject, ambiguity and material gap;
+- existing article revision, new reader topics and material gaps;
 - content-only reuse plus add/remove/rename/split/merge/collection/path/Section
   move in both directions;
 - protected values, links, images/assets and source-span fidelity;
 - editorial positives and placeholder/speculation/unsupported negatives;
 - material-gap runtime recovery, main-index retry and no-output-leak;
-- Section-local incremental invalidation, new membership/denominator/candidate
-  pool changes and unaffected Section reuse.
+- region changes, line drift, missing or ambiguous regions and unaffected
+  fragment reuse.
 
 Source authorization, capture revision safety, canonical question/collection
 contracts, layout confirmation, review and build remain Context authority and

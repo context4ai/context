@@ -15,7 +15,6 @@ import { withProjectWriteLock } from "./writeLock.js";
 import { INDEXER_CURRENT_FINALIZATION_PATH } from "./indexerCurrentFinalization.js";
 import { INDEXER_CURRENT_READINESS_PATH, readProjectIndexerCandidateCompileStatus } from "./indexerCandidateCompileActions.js";
 import { resetIndexerDeliveryProjection } from "./indexerDelivery.js";
-import { approvedKnowledgeRebindingSchema } from "./approvedKnowledgeRevisionInput.js";
 
 const schema = z.object({ scopes: z.array(z.object({ source_ref: z.string().min(1), requirement_ref: z.string().min(1).optional(),
   module_refs: z.array(z.string().min(1)).optional() }).strict()).min(1),
@@ -31,11 +30,6 @@ async function maybe(root: string, path: string) {
 export async function adjustCurrentTaskSources(projectRoot: string, value: unknown) {
   const reading = z.object({ knowledge_map: knowledgeMapUpdateSchema }).strict().safeParse(value);
   if (reading.success) return applyKnowledgeMapUpdate(projectRoot, reading.data.knowledge_map);
-  if (value && typeof value === "object" && "knowledge_dependencies" in value) {
-    const knowledge = z.object({ knowledge_dependencies: approvedKnowledgeRebindingSchema, instruction: z.string().trim().min(1) }).strict().parse(value);
-    const { adjustCurrentTaskKnowledge } = await import("./taskKnowledgeAdjustment.js");
-    return adjustCurrentTaskKnowledge(projectRoot, knowledge);
-  }
   const input = schema.parse(value);
   return withProjectWriteLock(projectRoot, "adjust-current-task-sources", async () => {
     if (await readTaskRollback(projectRoot)) throw new TypeError("Finish the current rollback before adjusting inputs.");

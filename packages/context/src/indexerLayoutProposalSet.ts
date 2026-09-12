@@ -14,7 +14,6 @@ import { validateIndexerSharedArtifactFingerprint } from
 
 const layoutProposalSetPayloadSchema = z.object({
   protocol: z.literal("context.indexer.layout-proposal-set/v1"),
-  subject_key_schema_set_digest: indexerDigestSchema,
   proposals: z.array(indexerLayoutProposalSchema).min(1),
 }).strict();
 
@@ -93,21 +92,14 @@ export function buildIndexerLayoutProposalSet(
 ): IndexerLayoutProposalSet {
   const proposals = values.map(validateProposalDigest).sort((left, right) =>
     compareIndexerCanonicalText(
-      `${left.node.node_ref}\u0000${left.indexer_id}\u0000${left.proposal_digest}`,
-      `${right.node.node_ref}\u0000${right.indexer_id}\u0000${right.proposal_digest}`,
+      `${left.indexer_id}\u0000${left.proposal_digest}`,
+      `${right.indexer_id}\u0000${right.proposal_digest}`,
     )
   );
   if (proposals.length === 0) {
     throw new TypeError("layout proposal set must contain at least one proposal");
   }
-  const schemaDigests = new Set(
-    proposals.map((proposal) => proposal.subject_key_schema_set_digest),
-  );
-  if (schemaDigests.size !== 1) {
-    throw new TypeError("layout proposal set mixes SubjectKey schema authorities");
-  }
   assertUnique(proposals.map((proposal) => proposal.proposal_digest), "proposal digests");
-  assertUnique(proposals.map((proposal) => proposal.node.node_ref), "Node ownership");
   const fingerprintByIndexer = new Map<string, string>();
   for (const proposal of proposals) {
     const fingerprint = proposal.shared_artifact_fingerprint.fingerprint_digest;
@@ -139,7 +131,6 @@ export function buildIndexerLayoutProposalSet(
   );
   const payload = layoutProposalSetPayloadSchema.parse({
     protocol: "context.indexer.layout-proposal-set/v1",
-    subject_key_schema_set_digest: proposals[0]!.subject_key_schema_set_digest,
     proposals,
   });
   return indexerLayoutProposalSetSchema.parse({

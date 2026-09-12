@@ -182,7 +182,7 @@ content.
 ### Meaning
 
 A reader target requires a CLI-authorized declaration, registration, public
-contract, approved Subject, or Partition Subject identity.
+contract, approved article, or Partition article identity.
 
 ### Revise
 

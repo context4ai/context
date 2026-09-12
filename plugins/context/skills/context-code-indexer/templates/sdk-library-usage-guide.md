@@ -17,8 +17,7 @@
       "id": "api",
       "type": "json",
       "content_layer": "deterministic-fact",
-      "required": false,
-      "evidence_required": true
+      "required": false
     }
   ],
   "deterministic_blocks": [
@@ -40,13 +39,6 @@
       "deterministic_block_ids": [
         "api-table"
       ],
-      "accepted_evidence_kinds": [
-        "code",
-        "contract",
-        "configuration",
-        "documentation"
-      ],
-      "minimum_evidence_items": 0,
       "on_missing": "omit",
       "deletion_condition": "Omit when no authorized structured contract is available."
     }

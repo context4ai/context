@@ -89,7 +89,7 @@ test("a selected but unbound saved source stops at configuration without startin
 test("a new session topic uses scoped update and delivers without rebuilding old worksets", async () => {
   const root = await initialKnowledge();
   const before = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-  const oldPages = new Map<string, string>(await Promise.all(before.views.map(async (view: { path: string }) =>
+  const oldPages = new Map<string, string>(await Promise.all(before.articles.map(async (view: { path: string }) =>
     [view.path, await readFile(join(root, "knowledge", view.path), "utf8")] as const)));
   await importManagedDocument(root, { type: "sessions", name: "20260909/archive-only.md", markdown: "# Archive\n\nSaved for later reference only." });
   expect(await prepareManagedSourceKnowledgeUpdate(root)).toBe(false);
@@ -110,7 +110,7 @@ test("a new session topic uses scoped update and delivers without rebuilding old
   await complete(root, { stage: "structure-review", decision: "approved" });
   const revision = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: revision.target.markdown +
-    `\n<!-- context:section id="scope" kind="content" source_ref="${sourceRef}" -->\n\nThe supplied discussion states that only registered services appear in the picker.\n\n<!-- /context:section -->\n` });
+    `\n<!-- context:section id="scope" -->\n\nThe supplied discussion states that only registered services appear in the picker.\n\n<!-- /context:section -->\n` });
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root);
   await buildProjectPackages(root);

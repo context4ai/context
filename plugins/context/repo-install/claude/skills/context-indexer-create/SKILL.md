@@ -57,8 +57,9 @@ Use one context.indexer.provider/v1 manifest for all four source families.
 Note and Sessions currently use the markdown domain with their own target kinds
 and profiles; do not invent new protocol domains. A resource must be declared
 so the lifecycle can send it to the Agent: an unreferenced reference file is
-not enough. Preserve stable source/subject identity, evidence bindings and
-revision boundaries; keep nonessential metadata out of knowledge frontmatter.
+not enough. Preserve stable article and fragment identities, authorized source-region references
+and revision boundaries. Do not require subject modeling or article Fact/evidence
+ledgers; keep nonessential metadata out of knowledge frontmatter.
 
 The new Provider does not own source authorization, scheduling, approval,
 close/build or publication. Return the current operation's declared results.

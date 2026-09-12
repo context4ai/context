@@ -176,17 +176,12 @@ export async function rebindIndexerSelectionToOverlayRequirement(input: {
   if (
     targetFinal.requirement_set_digest !== amendment.target_requirement_set_digest ||
     canonicalIndexerJson(targetFinal.providers) !==
-      canonicalIndexerJson(expectedBaseFinal.providers) ||
-    targetFinal.subject_key_schema_set_digest !==
-      expectedBaseFinal.subject_key_schema_set_digest ||
-    canonicalIndexerJson(targetFinal.subject_key_schemas) !==
-      canonicalIndexerJson(expectedBaseFinal.subject_key_schemas)
+      canonicalIndexerJson(expectedBaseFinal.providers)
   ) {
-    throw new TypeError("rebound final selection changed Provider or SubjectKey authority");
+    throw new TypeError("rebound final selection changed Provider authority");
   }
   const reusedProviderSetDigest = indexerProtocolDigest({
     providers: expectedBaseFinal.providers,
-    subject_key_schema_set_digest: expectedBaseFinal.subject_key_schema_set_digest,
   });
   const payload: Omit<IndexerOverlayQuestionRebindReceipt, "receipt_digest"> = {
     protocol: "context.indexer.overlay-question-rebind-receipt/v1",

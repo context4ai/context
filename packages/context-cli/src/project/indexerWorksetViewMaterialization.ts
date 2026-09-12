@@ -6,8 +6,6 @@ import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFre
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { approvedKnowledgeWorksetSource, type ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
-import { assertApprovedKnowledgeInputCurrent } from "./approvedKnowledgeInput.js";
 import {
   hostActionInputDigest,
   validateHostActionResult,
@@ -53,7 +51,6 @@ const OUTPUT_SCHEMA = "context.indexer.authorized-workset-view/v1" as const;
 
 function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): IndexerJson {
   const fields = [
-    "expected_subject_key",
     "allowed_source_roles",
     "artifact_policy_eligibility",
     "allowed_artifact_intents",
@@ -64,9 +61,7 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
       throw new TypeError(`author run spec is missing ${field}`);
     }
   }
-  const workset = spec.request.workset;
   return JSON.parse(canonicalIndexerJson(projectAuthorWritingBrief({
-    expected_subject_key: spec.validation.expected_subject_key,
     allowed_source_roles: spec.validation.allowed_source_roles,
     artifact_policy_eligibility: spec.validation.artifact_policy_eligibility,
     allowed_artifact_intents: spec.validation.allowed_artifact_intents,
@@ -89,14 +84,6 @@ function authorAuthorityValue(spec: ReturnType<typeof normalizeRunSpec>): Indexe
       alias: `question-target:${index + 1}`,
       question: target.question_ref,
     })),
-    target_resolutions: workset.stage === "author" &&
-        workset.target_resolution_view !== undefined
-      ? workset.target_resolution_view.entries.map((entry, index) => ({
-          alias: `target-resolution:${index + 1}`,
-          state: entry.state,
-          ...(entry.state === "resolved" ? { subject_key: entry.subject_key } : {}),
-        }))
-      : [],
   }))) as IndexerJson;
 }
 
@@ -353,16 +340,8 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
             digest: spec.spec_digest,
           },
           value: {
-            base_subject_key: request.workset.partition_subject_key,
             ...(spec.validation.available_artifact_intents === undefined ? {} : { available_artifact_intents: spec.validation.available_artifact_intents as IndexerJson }),
             ...(spec.validation.available_templates === undefined ? {} : { available_templates: spec.validation.available_templates as IndexerJson }),
-            subject_entry_guidance: "Use distinct subjects for different public entrypoints or incompatible current/deprecated contracts. Short subjects owned entirely by a deprecated directory receive a deprecated- prefix. Use an explicit SubjectKey for an intentional cross-entry migration or comparison page. Public API coverage does not require one page per symbol.",
-            ...(spec.validation.subject_key_contract === undefined
-              ? {}
-              : {
-                  subject_key_contract:
-                    spec.validation.subject_key_contract as IndexerJson,
-                }),
           },
         }],
       })
@@ -513,11 +492,6 @@ export async function prepareProjectIndexerWorksetViewMaterialization(input: {
       ...sourceProjectionSources,
       ...supplementaryProjectionSources,
       ...inspectorProjectionSources,
-      ...(spec.validation.knowledge_input === undefined ? [] : [await (async () => {
-        const knowledge = spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput;
-        await assertApprovedKnowledgeInputCurrent(input.projectRoot, knowledge);
-        return approvedKnowledgeWorksetSource({ request, dependency_view: spec.validation.dependency_view, knowledge });
-      })()]),
       ...(input.additional_projection_sources ?? []),
     ],
     canonical_inventory_members: inventoryMembers,

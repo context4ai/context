@@ -10,13 +10,13 @@ export function candidatePreview(candidate: ReviewCandidateView): string {
 }
 
 export function candidateGroupKey(candidate: ReviewCandidateView): string {
-  const path = candidate.record.indexer_candidate.evidence_bindings[0]?.locator.path;
+  const path = candidate.record.indexer_candidate.sections.flatMap(section => section.references)[0]?.locator.path;
   const group = path === undefined ? candidate.record.kind : dirname(path).split("\\").join("/");
   return `${candidate.record.module} / ${group === "." ? candidate.record.kind : group}`;
 }
 
 export function candidateGroupLabel(candidate: ReviewCandidateView): string {
-  const path = candidate.record.indexer_candidate.evidence_bindings[0]?.locator.path;
+  const path = candidate.record.indexer_candidate.sections.flatMap(section => section.references)[0]?.locator.path;
   const group = path === undefined ? candidate.record.kind : dirname(path).split("\\").join("/");
   return group === "."
     ? candidate.record.module

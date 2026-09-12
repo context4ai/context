@@ -41,8 +41,7 @@ async function currentTask(root: string) {
   };
   const result = { stage: "partition", outcome: "complete", groups: [{
     key: "public-guide", title: "Public guide", reader_task: "Use the public capability",
-    subject: { namespace: workset.partition_subject_key.namespace, kind: workset.partition_subject_key.kind,
-      local_key: "public-guide" }, subject_intent: "primary",
+
     members: validation.canonical_inventory_members.map((member) => member.member_id),
     questions: workset.reader_question_refs, question_targets: (validation.required_question_target_refs ?? [])
       .map((target) => ({ target, role: "primary-carrier" })), outline: ["Overview"],

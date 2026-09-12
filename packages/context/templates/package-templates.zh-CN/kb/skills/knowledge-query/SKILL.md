@@ -12,15 +12,15 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 1. 判断请求属于实体查找、解释、流程、规则、关系、细节还是覆盖检查。
 2. 从最相关的根索引开始，例如 `{{wikisRoot}}/index.md`，再沿链接进入具体页面。
 3. 只读取回答所需的章节；frontmatter 用来选择范围，不作为事实依据。
-4. 查询关系或影响范围时，先检查 `context-build-inventory.json` 中的 `structure.edge_records`，再读取两端页面。
-5. 结论只能来自可见章节正文和来源支持的边记录，并引用对应页面或章节。
+4. 查询关系或影响范围时，读取相关页面中的明确说明；同名、目录位置或链接本身不能证明关系。
+5. 结论来自可见章节正文，并引用对应页面或章节。
 6. 如果包内没有证据，明确报告缺口和已经检查的范围，不要根据邻近内容推断。
 
 ## 知识根目录
 
 | 根目录 | 用途 |
 |---|---|
-| `{{wikisRoot}}/` | 来自 codeindex、business、product 的结构化实体和关系。 |
+| `{{wikisRoot}}/` | 来自 codeindex、business、product 的代码、业务和产品说明。 |
 | `{{guidesRoot}}/` | 架构、流程、FAQ、决策、故障和排障说明。 |
 | `{{rulesRoot}}/` | 标准、约束、验收条件和测试场景。 |
 | `{{featsRoot}}/` | 被选择进入包内的功能知识。 |
@@ -35,7 +35,7 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 | 指定实体、API、领域或动作 | 打开匹配页面或最近的分组索引；有歧义时列出候选。 |
 | 架构、流程、FAQ、决策或故障 | 从 `{{guidesRoot}}/index.md` 开始。 |
 | 标准、约束、验收或测试 | 从 `{{rulesRoot}}/index.md` 开始。 |
-| 关系或影响范围 | 检查类型化边，再读取两端页面。 |
+| 关系或影响范围 | 阅读相关正文中的明确说明，并指出覆盖边界。 |
 | 已知页面中的细节 | 读取相关 Markdown 标题及其正文。 |
 | 覆盖范围或缺口 | 检查根索引和 `context-build-inventory.json`。 |
 
@@ -47,10 +47,10 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 | frontmatter 的标题、描述和标签 | 导航和范围选择。 |
 | Markdown 标题 | 定位和引用页面中的章节。 |
 | 读者可见的章节正文 | 事实结论的主要依据。 |
-| `context-build-inventory.json` 的边记录 | 类型化关系证据。 |
+| 导出的来源说明 | 原始材料可用时定位并阅读；不能只凭链接扩展结论。 |
 | 根索引和构建清单 | 包的范围和覆盖情况。 |
 
-不要根据页面同时出现来推断关系。发布页不需要生产标识或来源记账字段才能使用，直接引用可读路径和标题；不要寻找已经移除的技术元数据，也不要要求用户补齐。关系、覆盖问题，或维护者需要通过 `dist_path` → `approved_path` 定位原批准页时，才读取构建清单。原始来源归因留在生产工作区的 `knowledge/`，不要求写入发布页。原始材料未随包分发时，只根据已批准的可见正文回答并说明边界。
+不要根据页面同时出现来推断关系。直接引用可读路径和标题，不寻找已经移除的图谱字段，也不要求用户补齐。覆盖问题，或维护者需要通过 `dist_path` → `approved_path` 定位原批准页时，才读取构建清单。来源说明由工作区片段引用自动导出。原始材料未随包分发时，只根据已批准的可见正文回答并说明边界。
 
 ## 搜索兜底
 
@@ -62,7 +62,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 
 脚本位于知识包目录内时会自动定位 `{{packageName}}`。如果包管理工具将本 Skill 复制到了其他位置，增加 `--root <包含 context-build-inventory.json 的包目录>`；也可以使用 `--base <多包集合根目录>`，按构建清单中的包名定位。它按 Markdown 标题和固定行块机械切分，返回路径、行号、标题和短预览，不判断内容语义。
 
-搜索命中只是线索。回答前必须打开命中的页面和章节；关系或影响范围仍以 `context-build-inventory.json` 的类型化边为准，不能用 BM25 分数或文本共现替代关系证据。
+搜索命中只是线索。回答前打开命中的页面和章节；关系或影响范围须引用实际说明该关系的正文，不能用 BM25 分数或文本共现代替。
 
 ## 引用与缺口
 
@@ -71,7 +71,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 ```text
 页面：     <结论> [<root>/path/page.md]
 章节：     <结论> [<root>/path/page.md, 标题：<可见标题>]
-关系：     <结论> [context-build-inventory.json#structure.edge_records edge:<type>]
+关系：     <结论> [<root>/path/page.md, 标题：<明确说明该关系的章节>]
 覆盖：     <结论> [context-build-inventory.json]
 ```
 
@@ -89,7 +89,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 
 - 包内兼容 OKF 的根目录是本 Skill 的事实来源。
 - 本包只包含 Context 工作区选择并批准的知识，不声明完整覆盖底层产品或代码库。
-- 已有更窄索引范围可以回答时，不要扫描所有页面或关系边。
+- 已有更窄索引范围可以回答时，不要扫描所有页面。
 
 已批准知识文件：`{{knowledgeCount}}`
 

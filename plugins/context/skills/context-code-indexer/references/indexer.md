@@ -216,7 +216,7 @@ Explain stable responsibility, inputs, outputs, state and failure boundaries, th
 
 ## Post-author composer result
 
-For a post-author workset, use only the effective composer named by Context and the matching composer instruction materialized beside this contract. Consume the complete workset-scoped `PrimaryResultView`; do not reopen discovery, expand scope, change Subject identity or ownership, or return another complete main Result. A composer may emit only the declared `derived-artifact-proposal` kind and Artifact policy.
+For a post-author workset, use only the effective composer named by Context and the matching composer instruction materialized beside this contract. Consume the complete workset-scoped `PrimaryResultView`; do not reopen discovery, expand scope, change article identity or ownership, or return another complete main Result. A composer may emit only the declared `derived-artifact-proposal` kind and Artifact policy.
 
 If a declared primary fact or Artifact requirement is absent, or the view does not support an independent reader question, return the current task's semantic result with `stage: post-author`, `outcome: complete`, `proposals: []`, and `diagnostics: []` in the usual `results[]` envelope. Context constructs internal fragments and digests. Do not inspect temporary files or infer missing content.
 
@@ -325,4 +325,4 @@ For authorized visual material, follow [source visual processing](visual-source-
 
 ## Reading selected article material
 
-Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI applies executable contracts and evidence bindings; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.
+Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI checks source authorization, regional references and safe writes; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.

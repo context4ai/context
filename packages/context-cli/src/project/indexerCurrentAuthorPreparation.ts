@@ -1,9 +1,5 @@
+import { indexerArtifactRef } from "@c4a/context";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
-import { readApprovedKnowledgeInput } from "./approvedKnowledgeInput.js";
-import { resolveApprovedKnowledgeSources } from "./approvedKnowledgeSources.js";
-import { withApprovedKnowledgeDependencies, type ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
-import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
-import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import { streamingAuthorBase } from "./indexerStreamingAuthorBase.js";
 import { readPartitionStream } from "./indexerPartitionStream.js";
 import { hasCurrentIndexerRegistryProjection } from "./indexerCurrentRegistryFreshness.js";
@@ -12,8 +8,6 @@ import {
   buildIndexerMainAuthorWorksets,
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
-  canonicalIndexerNodeRef, indexerArtifactRef, validateIndexerKnowledgeDependencyGraph, IndexerKnowledgeDependencyCycleError,
-  type IndexerKnowledgeDependency,
   canonicalIndexerInventoryMembers,
   indexerPartitionGroupBindingDigest,
   indexerPartitionGroupRef,
@@ -40,8 +34,6 @@ import { buildProjectIndexerAuthorDependencyView } from "./indexerAuthorDependen
 import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
 import {
   resolveProjectIndexerAuthorQuestionTargets,
-  takeProjectIndexerGroupTargetView,
-  type ProjectIndexerTargetResolutionViewBinding,
 } from "./indexerAuthorQuestionTargets.js";
 
 type CompletePartitionPlan = Extract<IndexerPartitionPlan, { status: "complete" }>;
@@ -107,7 +99,6 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     group_key: string;
   }[]>;
   question_target_inventory: unknown;
-  target_resolution_views: readonly ProjectIndexerTargetResolutionViewBinding[];
 }) {
   const inventory = validateIndexerQuestionTargetInventory(input.question_target_inventory);
   const validatedPartitions = validateIndexerPartitionInputs(input.partitions);
@@ -116,13 +107,6 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     workset: validatedPartitions[index]!.workset,
     plan: validatedPartitions[index]!.plan,
   }));
-  const views = new Map(input.target_resolution_views.map((binding) => [
-    binding.group_ref,
-    binding.view,
-  ]));
-  if (views.size !== input.target_resolution_views.length) {
-    throw new TypeError("target resolution view bindings must have unique group refs");
-  }
   const authorityByIndexer = new Map<string, CurrentPrimaryAuthority>();
   const bindingByPartition = new Map<string, ProjectIndexerMainSourceBinding>();
   const resolveBinding = createIndexerAuthorSourceResolver({
@@ -267,11 +251,6 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
         synthetic_members: members,
         origins,
       });
-      const targetResolutionView = takeProjectIndexerGroupTargetView({
-        views,
-        partition_workset_digest: partition.workset.workset_digest,
-        group,
-      });
       return {
         partition,
         authority,
@@ -311,99 +290,10 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
             variant.id
           ),
           artifact_policy_eligibility_digest: eligibility.eligibility_digest,
-          ...(targetResolutionView === undefined
-            ? {}
-            : { target_resolution_view: targetResolutionView }),
         },
       };
     });
   });
-  if (views.size > 0) {
-    throw new TypeError("target resolution views contain unknown partition groups");
-  }
-  const knowledgeByPreparation = new Map<(typeof preparations)[number], ApprovedKnowledgeAuthorInput>();
-  const withKnowledge = preparations.filter(item => item.articles?.some(article => article.knowledge_dependencies?.length));
-  if (withKnowledge.length) {
-    const snapshots = approvedKnowledgeSnapshotsFromStructure((await readKnowledgeStructure(input.projectRoot)).parsed);
-    const graph = new Map(snapshots
-      .map(snapshot => [snapshot.artifact_ref, { artifact_ref: snapshot.artifact_ref, dependencies: snapshot.dependencies }]));
-    for (const prepared of preparations) for (const article of prepared.articles ?? []) {
-      const ref = indexerArtifactRef(canonicalIndexerNodeRef(prepared.group.subject_key), {
-        artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
-      });
-      graph.set(ref, { artifact_ref: ref, dependencies: article.knowledge_dependencies ?? [] });
-    }
-    const cyclic = new Set<string>();
-    // Preserve the review/adjustment route for an invalid dependency plan.
-    // Identity/schema errors still fail normally; a cycle cannot be repaired
-    // by merely waiting for an upstream article to finish.
-    try { validateIndexerKnowledgeDependencyGraph([...graph.values()]); }
-    catch (error) {
-      if (!(error instanceof IndexerKnowledgeDependencyCycleError)) throw error;
-      for (const ref of error.artifact_refs) cyclic.add(ref);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        for (const node of graph.values()) if (!cyclic.has(node.artifact_ref) && node.dependencies.some(dependency => cyclic.has(dependency.artifact_ref))) {
-          cyclic.add(node.artifact_ref); changed = true;
-        }
-      }
-    }
-    for (const prepared of withKnowledge) {
-      const dependencies = new Map<string, IndexerKnowledgeDependency>();
-      for (const article of prepared.articles ?? []) for (const dependency of article.knowledge_dependencies ?? []) {
-        const previous = dependencies.get(dependency.artifact_ref);
-        dependencies.set(dependency.artifact_ref, previous ? { ...dependency, required: previous.required || dependency.required,
-          section_refs: previous.section_refs.length && dependency.section_refs.length
-            ? [...new Set([...previous.section_refs, ...dependency.section_refs])].sort() : [] } : dependency);
-      }
-      const authorizedTargets = projectIndexerReadTargets({ registry: input.registry, indexer_id: prepared.partition.workset.indexer_id });
-      const sources = await resolveApprovedKnowledgeSources({ projectRoot: input.projectRoot, registry: input.registry,
-        authorized_targets: authorizedTargets, snapshots: snapshots.filter(snapshot => dependencies.has(snapshot.artifact_ref)),
-        current: sourcePartitions.flatMap(partition => {
-          const binding = bindingByPartition.get(partition.workset.workset_digest);
-          return binding ? [{ indexer_id: partition.workset.indexer_id, binding }] : [];
-        }),
-      });
-      const ownRefs = new Set((prepared.articles ?? []).map(article => indexerArtifactRef(canonicalIndexerNodeRef(prepared.group.subject_key), {
-        artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
-      })));
-      const planningIssues = [...dependencies.values()].flatMap(dependency => {
-        const reason = cyclic.has(dependency.artifact_ref) ? "dependency-cycle" as const
-          : ownRefs.has(dependency.artifact_ref) ? "same-group-dependency" as const : undefined;
-        // Cycles violate the accepted graph contract. A non-cyclic optional
-        // sibling can be omitted: waiting for the same atomic group would
-        // otherwise prevent useful direct-source articles from being written.
-        return reason ? [{ artifact_ref: dependency.artifact_ref, required: reason === "dependency-cycle" || dependency.required, reason }] : [];
-      });
-      const affected = new Set(planningIssues.map(issue => issue.artifact_ref));
-      const knowledge = await readApprovedKnowledgeInput({ projectRoot: input.projectRoot,
-        dependencies: [...dependencies.values()].filter(dependency => !affected.has(dependency.artifact_ref)),
-        subject_key: prepared.group.subject_key, authorized_targets: authorizedTargets,
-        bindings: sources.map(source => source.binding),
-        evidence_kinds: new Set(prepared.authority.profile.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds)),
-      });
-      knowledge.pending.push(...planningIssues);
-      knowledge.status = knowledge.pending.some(item => item.required) ? "waiting" : "ready";
-      knowledgeByPreparation.set(prepared, knowledge);
-      const view = withApprovedKnowledgeDependencies(prepared.dependency_view, knowledge);
-      prepared.dependency_view = view;
-      prepared.group_context.group_dependency_view_digest = view.view_digest;
-      // Include supporting files in the primary material projection, without
-      // changing the group's owned member denominator.
-      prepared.binding = mergeIndexerAuthorSourceBindings(sources.map(source => source.binding).filter(binding =>
-        binding.source_ref === prepared.binding.source_ref && binding.module_ref === prepared.binding.module_ref &&
-        binding.profile_contract_digest === prepared.binding.profile_contract_digest));
-      for (const { indexer_id, binding } of sources) {
-        if (binding.source_ref === prepared.binding.source_ref && binding.module_ref === prepared.binding.module_ref) continue;
-        if (!knowledge.evidence_bindings.some(evidence => evidence.source_ref === binding.source_ref && evidence.module_ref === binding.module_ref)) continue;
-        if (!prepared.supplementary_sources.some(source => source.source_ref === binding.source_ref && source.module_ref === binding.module_ref)) {
-          prepared.supplementary_sources.push({ indexer_id, source_ref: binding.source_ref, module_ref: binding.module_ref,
-            profile_contract_digest: binding.profile_contract_digest, source_binding_digest: binding.source_binding_digest });
-        }
-      }
-    }
-  }
   const built = buildIndexerMainAuthorWorksets({
     partitions: input.partitions,
     group_contexts: preparations.map((item) => item.group_context),
@@ -449,7 +339,7 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
     }
     // The accepted grouping stays intact. A newly prepared Author request uses
     // current instructions without pretending its parent used the same bundle.
-    const base = stream ? await streamingAuthorBase(input.projectRoot, partitionWorkset.logical_unit_ref, approvedStructure) : undefined;
+    const base = stream ? await streamingAuthorBase(input.projectRoot, (prepared.articles ?? [{ key: "main" }]).map(article => indexerArtifactRef(partitionWorkset.logical_unit_ref, { artifact_id: article.key })), approvedStructure) : undefined;
     const workset = buildIndexerMainWorkset({ ...currentExecutionWorksetFields({
       workset: partitionWorkset, execution: prepared.authority.primary_execution,
     }), ...(base === undefined ? {} : { repair_intent: base }) });
@@ -486,8 +376,6 @@ export async function prepareCurrentProjectIndexerAuthorRuns(input: {
       registry: input.registry,
       dependency_view: prepared.dependency_view,
       canonical_inventory_members: prepared.members,
-      expected_subject_key: prepared.group.subject_key,
-      ...(knowledgeByPreparation.has(prepared) ? { knowledge_input: knowledgeByPreparation.get(prepared)! } : {}),
       page_guidance: await loadSelectedArticleGuidance({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.scopeChange.length ? undefined : prepared.group.template_id }),
       page_template: await loadSelectedPageTemplate({ projectRoot: input.projectRoot, authority: prepared.authority, templateId: prepared.scopeChange.length ? undefined : prepared.group.template_id }),
       article_guidance: Object.fromEntries((await Promise.all((prepared.scopeChange.length ? [] : prepared.group.articles ?? []).map(async article => {

@@ -91,7 +91,7 @@ test("ready themes deliver through structure/content review and build before rem
     expect(sizes[0]).toBe(3);
     expect(seen.size).toBe(12);
     expect(await currentLedger(root)).toBeUndefined();
-    expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(12);
+    expect((await readKnowledgeStructure(root)).parsed?.articles).toHaveLength(12);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);
 
@@ -99,16 +99,20 @@ test("a catalog-only ready wave resumes planning without waiting for nonexistent
   const root = await createDocumentRevisionWorkspace({ sourceCount: 40 });
   try {
     await configureDeliveryCadence(root, "1");
-    await completePartitionStage(root, false, true, "catalog-subject");
+    await completePartitionStage(root, false, true);
     const first = (await currentIndexerStructureReview(root))!;
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: first.revision, decision: "approved" });
     const result = await completeAuthorStage(root, { catalogOnlyFirst: true });
     expect(result.catalogOnlyCount).toBe(1);
     expect(await readCandidateRecords(root)).toHaveLength(0);
-    expect((await readPartitionStream(root))!.phase).toBe("planning");
-    expect((await currentLedger(root))!.entries.some(entry => entry.stage === "partition" && entry.state !== "accepted")).toBe(true);
+    const resumed = (await readPartitionStream(root))!;
+    expect(resumed.completed_bindings).toHaveLength(1);
+    expect(resumed.partition_ledger.entries.some(entry => entry.state !== "accepted")).toBe(true);
+    // The same advance may already prepare the next ready theme. It must not
+    // wait for a build of the catalog-only wave or repeat its accepted Author.
+    expect((await currentLedger(root))!.entries.some(entry => entry.state !== "accepted")).toBe(true);
     for (let wave = 0; wave < 40 && await currentLedger(root); wave++) {
-      await completePartitionStage(root, false, true, "catalog-subject");
+      await completePartitionStage(root, false, true);
       const next = await currentIndexerStructureReview(root);
       if (!next) break;
       if (!next.approved) await completeCurrentIndexerStructureReview({ projectRoot: root, revision: next.revision, decision: "approved" });
@@ -152,7 +156,7 @@ test("larger streaming work amortizes later delivery waves while planning still 
     expect(waves[0]).toBeLessThanOrEqual(3);
     expect(waves.slice(1).some(count => count >= 30 && count <= 50)).toBe(true);
     expect(intermediateDelivery).toBe(true);
-    expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(80);
+    expect((await readKnowledgeStructure(root)).parsed?.articles).toHaveLength(80);
     expect(await currentLedger(root)).toBeUndefined();
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 1_200_000);
@@ -198,12 +202,12 @@ test("a ready wave delivers without requiring results from Indexers whose planni
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);
 
-test("later material for an already delivered subject receives its approved prose and stable identity", async () => {
+test("a later source receives an independent writing identity without implicit subject convergence", async () => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 40 });
   try {
     await configureDeliveryCadence(root, "1");
     await declarePackage(root);
-    await completePartitionStage(root, false, true, "shared-capability");
+    await completePartitionStage(root, false, true);
     const first = (await currentIndexerStructureReview(root))!;
     expect(first.preview.topics).toHaveLength(1);
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: first.revision, decision: "approved" });
@@ -214,18 +218,16 @@ test("later material for an already delivered subject receives its approved pros
     await placeApprovedReadingFixture(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
     await buildProjectPackages(root);
-    await completePartitionStage(root, false, true, "shared-capability");
+    await completePartitionStage(root, false, true);
     const next = (await currentIndexerStructureReview(root))!;
     expect(next.preview.topics).toHaveLength(1);
-    expect(next.preview.topics[0]!.target.mode).toBe("enrich");
-    expect(next.preview.topics[0]!.subject_key).toEqual(first.preview.topics[0]!.subject_key);
+    expect(next.preview.topics[0]!.key).not.toBe(first.preview.topics[0]!.key);
     const ledger = (await currentLedger(root))!;
     const spec = await currentSpec({ projectRoot: root, request_digest: ledger.entries[0]!.execution_request_digest });
-    expect(spec.request.workset.repair_intent?.current_markdown).toContain("Preserve this approved explanation.");
-    expect(spec.request.workset.repair_intent?.current_markdown).toContain(candidate.path);
+    expect(spec.request.workset.repair_intent).toBeUndefined();
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: next.revision, decision: "approved" });
     await completeAuthorStage(root);
-    expect((await readCandidateRecords(root))[0]!.path).toBe(candidate.path);
+    expect((await readCandidateRecords(root))[0]!.path).not.toBe(candidate.path);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);
 
@@ -281,6 +283,6 @@ test("a confirmed scope below ten themes stays in one delivery and closes withou
     await placeApprovedReadingFixture(root);
     await buildProjectPackages(root);
     expect(await currentLedger(root)).toBeUndefined();
-    expect((await readKnowledgeStructure(root)).parsed?.views).toHaveLength(8);
+    expect((await readKnowledgeStructure(root)).parsed?.articles).toHaveLength(8);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);

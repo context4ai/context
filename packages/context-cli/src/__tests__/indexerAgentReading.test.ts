@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildIndexerAuthorDependencyView, type IndexerAuthorizedWorksetView, type IndexerMainWorkset } from "@c4a/context";
-import { buildIndexerAuthorSourceItems, resolveIndexerAuthorSourceItems } from "../project/indexerAuthorSourceItems.js";
+import { buildIndexerAuthorSourceItems } from "../project/indexerAuthorSourceItems.js";
 import { renderIndexerInstructionsReading, renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { readingObjects } from "./indexerReading.fixture.js";
 
@@ -49,47 +49,23 @@ function fixture() {
 }
 
 describe("Agent task reading and Author source references", () => {
-  test("accepts a displayed text item as the union of its authorized spans", () => {
-    const { view, dependency } = fixture();
-    const index = buildIndexerAuthorSourceItems({ view, nodes: dependency.positive_nodes });
-    expect(resolveIndexerAuthorSourceItems(index, ["source-text:main"], "usage.source_items"))
-      .toEqual(["evidence:range-1", "evidence:range-3"]);
-    expect(index.choices).toHaveLength(1);
-    expect(index.choices[0]!.ref).toBe("source-text:main");
-    expect(() => resolveIndexerAuthorSourceItems(index, ["repo:sample"], "usage.source_items"))
-      .toThrow("Use source_items from the current task");
-    expect(() => resolveIndexerAuthorSourceItems(index, ["fact:config"], "usage.source_items"))
-      .toThrow("not authorized");
-    expect(resolveIndexerAuthorSourceItems(index, ["src/main.ts"], "usage.source_items"))
-      .toEqual(["evidence:range-1", "evidence:range-3"]);
-  });
-
-  test("same path from different sources still requires an explicit source item", () => {
-    const { view, dependency } = fixture();
-    const original = dependency.positive_nodes.find((node) => node.kind === "source-span")!;
-    const foreign = { ...original, node_ref: "foreign-span", evidence_ref: "evidence:foreign", source_ref: "repo:other" };
-    const index = buildIndexerAuthorSourceItems({ view, nodes: [...dependency.positive_nodes, foreign] });
-    expect(() => resolveIndexerAuthorSourceItems(index, ["src/main.ts"], "usage.source_items")).toThrow("not authorized");
-    expect(resolveIndexerAuthorSourceItems(index, ["source-text:main"], "usage.source_items"))
-      .toEqual(["evidence:range-1", "evidence:range-3"]);
-  });
-
-  test("rejects a source-text carrier that points outside its authorized file or range", () => {
-    for (const change of ["path", "range", "ref"]) {
-      const { view, dependency } = fixture();
-      const text = view.items.find((item) => item.category === "source-text")!.value as {
-        path: string; spans: { start_line: number; source_span_refs: string[] }[];
-      };
-      if (change === "path") text.path = "src/other.ts";
-      if (change === "range") text.spans[0]!.start_line = 2;
-      if (change === "ref") text.spans[0]!.source_span_refs = ["dependency:foreign"];
-      expect(() => buildIndexerAuthorSourceItems({ view, nodes: dependency.positive_nodes }))
-        .toThrow("does not match its authorized spans");
-    }
+  test("source navigation describes captured ranges without expanding them into fact or evidence IDs", () => {
+    const { view } = fixture();
+    const index = buildIndexerAuthorSourceItems({ view });
+    expect(index.choices).toEqual([{ ref: "source-text:main", source_ref: "repo:sample",
+      path: "src/main.ts", ranges: [{ start_line: 1, end_line: 3 }] }]);
+    view.items.push({ ...view.items[0]!, ref: "document:other", category: "document",
+      value: { source_ref: "repo:other", path: "src/main.ts", spans: [
+        { start_line: 1, end_line: 1 }, { start_line: 3, end_line: 3 },
+      ] } });
+    expect(buildIndexerAuthorSourceItems({ view }).choices).toContainEqual({
+      ref: "document:other", source_ref: "repo:other", path: "src/main.ts",
+      ranges: [{ start_line: 1, end_line: 1 }, { start_line: 3, end_line: 3 }],
+    });
   });
 
   test("renders goals first and preserves complete source and Provider payloads", () => {
-    const { view, workset, text, dependency } = fixture();
+    const { view, workset, text } = fixture();
     const markdown = renderIndexerWorksetReading({ view, workset, task_key: "task-001" });
     expect(markdown.indexOf("Use the public API")).toBeLessThan(markdown.indexOf("## Source material"));
     expect(markdown).toContain(text);
@@ -102,22 +78,12 @@ describe("Agent task reading and Author source references", () => {
     expect(markdown).toContain("Retain non-object material too");
     expect(readingObjects(markdown).find(item => item.ref === "authority:sample")?.allowed_artifact_intents)
       .toContainEqual({ source_role: "authoritative-source", document_kind: "code-reference", reader_goal: "understand-capability", artifact_kind: "content" });
-    const choices = readingObjects(markdown).filter((value) => Array.isArray(value.source_items));
-    expect(choices.length).toBeGreaterThan(0);
-    const index = buildIndexerAuthorSourceItems({ view, nodes: dependency.positive_nodes });
-    for (const choice of choices) expect(resolveIndexerAuthorSourceItems(index, choice.source_items as string[], "section"))
-      .toEqual(["evidence:range-1", "evidence:range-3"]);
+    const choices = readingObjects(markdown).filter(value => Array.isArray(value.available_ranges));
+    expect(choices).toContainEqual({ source_ref: "repo:sample", path: "src/main.ts",
+      available_ranges: [{ start_line: 1, end_line: 3 }] });
+    expect(markdown).not.toContain('"source_items"');
+    expect(markdown).not.toContain('"evidence_ref"');
     expect(renderIndexerWorksetReading({ view, workset, task_key: "task-001" })).toBe(markdown);
-  });
-
-  test("document source_items retain all spans rather than an arbitrary first match", () => {
-    const { view, dependency } = fixture();
-    view.items = view.items.filter((item) => item.category !== "source-text");
-    view.items.push({ ...view.items[0]!, ref: "document:guide", category: "document",
-      value: { path: "src/main.ts", source_path: "captured/guide.md" } });
-    const index = buildIndexerAuthorSourceItems({ view, nodes: dependency.positive_nodes });
-    expect(resolveIndexerAuthorSourceItems(index, ["document:guide"], "section"))
-      .toEqual(["evidence:range-1", "evidence:range-3"]);
   });
 
   test("instruction delivery retains every body without exposing receipt hashes", () => {

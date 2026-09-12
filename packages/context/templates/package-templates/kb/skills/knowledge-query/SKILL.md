@@ -17,11 +17,9 @@ as evidence rather than relying on memory or frontmatter summaries.
    follow its links to a likely page.
 3. Read only the sections needed for the question. Use frontmatter to select
    scope, not to support factual claims.
-4. For relationship or impact questions, inspect
-   `context-build-inventory.json` `structure.edge_records` before reading the
-   endpoint pages.
-5. Answer only from reader-visible section content and source-backed edge
-   records. Cite the supporting page or section.
+4. For relationship or impact questions, read the relevant pages' explicit
+   explanations. Shared names, directory placement and links alone do not prove a relationship.
+5. Answer from reader-visible section content and cite the supporting page or section.
 6. If the package lacks evidence, report the gap and what was checked instead
    of inferring from nearby content.
 
@@ -29,7 +27,7 @@ as evidence rather than relying on memory or frontmatter summaries.
 
 | Root | Use |
 |---|---|
-| `{{wikisRoot}}/` | Structured entities and relationships from codeindex, business, and product knowledge. |
+| `{{wikisRoot}}/` | Code, business and product reference articles. |
 | `{{guidesRoot}}/` | Architecture, procedures, FAQs, decisions, incidents, and troubleshooting. |
 | `{{rulesRoot}}/` | Standards, constraints, acceptance criteria, and test scenarios. |
 | `{{featsRoot}}/` | Feature knowledge when selected into the package. |
@@ -45,7 +43,7 @@ was not selected into this package.
 | Named entity, API, domain, or action | Open the matching page or nearest group index. Show candidates if names are ambiguous. |
 | Architecture, procedure, FAQ, decision, or incident | Start from `{{guidesRoot}}/index.md`. |
 | Standard, constraint, acceptance, or test question | Start from `{{rulesRoot}}/index.md`. |
-| Relationship or impact | Inspect typed edges, then read both endpoint pages. |
+| Relationship or impact | Read the relevant explanations and state any coverage limits. |
 | Detail inside a known page | Read the relevant Markdown heading and its body. |
 | Coverage, gap, or inventory | Inspect the root indexes and `context-build-inventory.json`. |
 
@@ -59,16 +57,16 @@ Use each opened page or package artifact as an evidence card:
 | Frontmatter title, description, and tags | Navigation and scope selection only. |
 | Markdown headings | Locate and cite a section within its page. |
 | Reader-visible section body | Primary support for factual claims. |
-| `context-build-inventory.json` edge records | Typed relationship evidence. |
+| Exported source attribution | Locate the original material when available; read it before extending a claim. |
 | Root indexes and build inventory | Package scope and coverage evidence. |
 
 Do not infer a relationship from page co-occurrence. Published pages do not need
 production identifiers or source bookkeeping to be usable. Cite their readable
 paths and headings; do not search for missing technical metadata or ask users
-to supply it. Open the build inventory only for relationship or coverage questions,
+to supply it. Open the build inventory only for coverage questions,
 or when a maintainer needs to locate the original approved page via
-`dist_path` → `approved_path`. Original source attribution belongs to that
-workspace's `knowledge/`, not to the published page. If the original material is
+`dist_path` → `approved_path`. Source attribution is exported automatically from
+the workspace's fragment references. If the original material is
 not bundled, answer only from the visible approved content and state its limits.
 
 ## Search Fallback
@@ -91,9 +89,8 @@ by headings and bounded line ranges, then returns paths, line ranges, headings,
 and previews; it does not interpret meaning.
 
 Treat every hit as a lead and open its page and section before answering. For
-relationship or impact claims, use typed edges from
-`context-build-inventory.json`; BM25 scores and text co-occurrence are not
-relationship evidence.
+relationship or impact claims, cite the explanation that actually establishes
+the relationship; BM25 scores and text co-occurrence do not establish it.
 
 ## Citations And Gaps
 
@@ -102,7 +99,7 @@ Use compact citations tied to claims:
 ```text
 Page:         <claim> [<root>/path/page.md]
 Section:      <claim> [<root>/path/page.md, heading: <visible heading>]
-Relationship: <claim> [context-build-inventory.json#structure.edge_records edge:<type>]
+Relationship: <claim> [<root>/path/page.md, heading: <supporting explanation>]
 Coverage:     <claim> [context-build-inventory.json]
 ```
 
@@ -122,7 +119,7 @@ from memory, previous conversations, or source files outside the package.
 - The bundled OKF-compatible roots are the source of truth for this Skill.
 - The package contains approved knowledge selected by its Context workspace; it
   does not claim complete coverage of the underlying product or codebase.
-- Do not scan every page or edge when a narrower indexed scope answers the
+- Do not scan every page when a narrower indexed scope answers the
   request.
 
 Approved knowledge files: `{{knowledgeCount}}`

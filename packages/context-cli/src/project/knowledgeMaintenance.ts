@@ -1,6 +1,6 @@
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerProtocolDigest } from "@c4a/context";
+import { indexerProtocolDigest, validateArticleStructureEntries } from "@c4a/context";
 import { maintenanceInputSchema, readMaintenance, saveMaintenance, MAINTENANCE_ROOT } from "./maintenanceStorage.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
@@ -38,8 +38,8 @@ export async function registerKnowledgeMaintenance(root: string, value: unknown,
     const structure = await readKnowledgeStructure(root);
     const targets = input.targets.map(target => {
       const path = target.path.replace(/^knowledge\//u, "");
-      const matches = (Array.isArray(structure.parsed?.views) ? structure.parsed.views : []).filter(view => view && typeof view === "object" && view.path === path);
-      if (matches.length !== 1 || typeof matches[0]!.view_ref !== "string") throw new ContextError(ExitCode.UserError,
+      const matches = validateArticleStructureEntries(structure.parsed?.articles ?? []).filter(article => article.path === path);
+      if (matches.length !== 1 || typeof matches[0]!.article_id !== "string") throw new ContextError(ExitCode.UserError,
         `Maintenance requires an approved page: ${target.path}`, {
           category: ErrorCategory.UserInputInvalid,
           reason_code: "maintenance-target-not-approved",
@@ -47,7 +47,7 @@ export async function registerKnowledgeMaintenance(root: string, value: unknown,
           next_action: { command: "context review list --all --format json" },
         });
       target.path = path;
-      return { path, view_ref: matches[0]!.view_ref as string };
+      return { path, article_id: matches[0]!.article_id as string };
     });
     if (new Set(targets.map(item => item.path)).size !== targets.length) throw new TypeError("Maintenance targets repeat the same approved page");
     const delivery = await readIndexerDelivery(root);
@@ -122,8 +122,8 @@ export async function advanceKnowledgeMaintenance(root: string, revision: string
       await finishMaintenanceRevision(root);
     } else {
       const structure = await readKnowledgeStructure(root);
-      for (const target of active.targets) if (!(Array.isArray(structure.parsed?.views) && structure.parsed.views.some(view =>
-        view && typeof view === "object" && view.path === target.path && view.view_ref === target.view_ref))) throw new TypeError(`Approved page moved or changed identity: ${target.path}. Cancel this request and register its current path; no original task was discarded.`);
+      for (const target of active.targets) if (!(validateArticleStructureEntries(structure.parsed?.articles ?? []).some(article =>
+        article.path === target.path && article.article_id === target.article_id))) throw new TypeError(`Approved page moved or changed identity: ${target.path}. Cancel this request and register its current path; no original task was discarded.`);
       if (!await readApprovedRevision(root)) {
         const [first, ...rest] = active.input.targets;
         await prepareApprovedRevision({ projectRoot: root, selector: first!.path, instruction: first!.instruction,

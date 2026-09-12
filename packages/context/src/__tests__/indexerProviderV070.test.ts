@@ -238,7 +238,7 @@ describe("context.indexer.provider/v1", () => {
         "      supported_profiles: [component-library]",
         "      contract:",
         "        instruction: references/composers/examples.md",
-        "        primary_requirements: { fact_kinds: [example-candidate], artifact_kinds: [content] }",
+        "        primary_requirements: { artifact_kinds: [content] }",
         "        derived_artifact_policy:",
         "          fragment_protocol: context.indexer.layer-fragment/v1",
         "          fragment_kind: derived-artifact-proposal",
@@ -250,7 +250,7 @@ describe("context.indexer.provider/v1", () => {
     const parsed = parseIndexerProviderManifest(withContract);
     expect(parsed.provides.composers?.[0]?.contract).toMatchObject({
       instruction: "references/composers/examples.md",
-      primary_requirements: { fact_kinds: ["example-candidate"] },
+      primary_requirements: { artifact_kinds: ["content"] },
       derived_artifact_policy: { artifact_kinds: ["examples"] },
       empty_result: { behavior: "empty-fragment-set" },
     });
@@ -357,7 +357,7 @@ describe("context.indexer.provider/v1", () => {
       ),
     )).toThrow(/requires one composition extension/);
 
-    const missingSubjectAuthority = providerManifest().replace(
+    const minimalExtension = providerManifest().replace(
       "quality_guidance:\n",
       [
         "composition:",
@@ -370,9 +370,8 @@ describe("context.indexer.provider/v1", () => {
       "profiles: [component-library]",
       "profiles: [component-library, example/framework-application]",
     );
-    expect(() => parseIndexerProviderManifest(missingSubjectAuthority)).toThrow(
-      /subject_key_schema/,
-    );
+    expect(parseIndexerProviderManifest(minimalExtension).composition?.extensions[0]?.profile)
+      .toBe("example/framework-application");
 
     const extended = providerManifest().replace(
       "quality_guidance:\n",
@@ -384,13 +383,6 @@ describe("context.indexer.provider/v1", () => {
         "      variant_schema:",
         "        axes:",
         "          - { id: runtime_mode, type: enum, values: [spa, ssr], required: false }",
-        "      subject_key_schema:",
-        "        version: 1",
-        "        namespace: { operator: canonical-source-module-namespace }",
-        "        kinds:",
-        "          - id: application",
-        "            local_key: { operator: canonical-module-identity }",
-        "        normalization: [trim, unicode-nfc, preserve-case]",
         "quality_guidance:",
       ].join("\n") + "\n",
     ).replace(

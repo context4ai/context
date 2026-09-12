@@ -25,6 +25,7 @@ import { createDocumentRevisionWorkspace, documentRevisionOuterIndexerRoute } fr
 import { readingObjects } from "./indexerReading.fixture.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
 import { LIFECYCLE_ROOT } from "../project/lifecyclePaths.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 const packageRoot = resolve(import.meta.dir, "../..");
 const roots: string[] = [];
@@ -138,7 +139,7 @@ describe("installed Provider upgrades preserve useful work", () => {
         if (!workset || workset.stage !== "partition") throw new Error("missing workset");
         results.push({ task_key: task.task_key, result: {
           stage: "partition", outcome: "complete", groups: [{
-            key: task.task_key, title: "Public constants", subject: task.task_key, subject_intent: "primary",
+            key: task.task_key, title: "Public constants",
             reader_task: "Find exported constants and their values.",
             members: (spec.validation.canonical_inventory_members as IndexerInventoryMember[]).map((item) => item.member_id),
             questions: [...workset.reader_question_refs],
@@ -243,20 +244,20 @@ describe("installed Provider upgrades preserve useful work", () => {
           canonical_inventory_members: IndexerInventoryMember[];
           allowed_question_targets: Array<{ question_target_key: string }>;
         };
-        // Use the source_items actually handed to a fresh Agent, not internal
-        // dependency/evidence IDs hidden in the run spec.
+        // Read the source path handed to a fresh Agent, not hidden dependency IDs.
         const material = await resource(author, `authorized-indexer-workset-view/${descriptor.task_key}`);
-        const source = readingObjects(material).find((item) => Array.isArray(item.source_items));
-        expect(source?.source_items).toBeDefined();
+        const source = readingObjects(material).find(item => Array.isArray(item.available_ranges) && typeof item.path === "string");
+        expect(source?.path).toBeDefined();
         const intent = validation.allowed_artifact_intents[0]!;
         const missingMaterial = indexerAuthorSemanticInputSchema.parse({
           stage: "author", group_key: workset.group_key, outcome: "request-material",
-          material_gaps: [{ question: "Need the complete declaration body", source_hints: source!.source_items }],
+          material_gaps: [{ question: "Need the complete declaration body", source_hints: [source!.path] }],
           member_dispositions: validation.canonical_inventory_members.map((member) => ({
             item: member.member_id, state: "catalog-only", reason_code: "missing-source-body",
           })),
         });
         expect(() => buildIndexerAuthorRunResultFromSemantic({
+          projectRoot: root,
           request: task.spec.request, view: task.view, semantic: missingMaterial,
           validation: { ...task.spec.validation, allowed_question_targets: [] } as unknown as
             Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"],
@@ -266,23 +267,18 @@ describe("installed Provider upgrades preserve useful work", () => {
           stage: "author", group_key: workset.group_key, outcome: "publish",
           artifact_intent: [intent.source_role, intent.document_kind, intent.reader_goal, intent.artifact_kind].join("/"),
           policy: validation.artifact_policy_eligibility.eligible_variants[0]!.id,
-          target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
-            target: entry.query_ref, disposition: entry.state === "resolved" ? "reuse-existing" : "create-independent",
-          })),
           title: `Constants ${workset.group_key}`, summary: "Find the public constant exports.",
           sections: [{ key: "exports", heading: "Exports", markdown: "Use the exported constants at the public entry point.",
-            source_items: source!.source_items,
-            facts: task.view.items.filter((item) => item.category === "fact").map((item) => item.ref),
+            references: await fixtureArticleReferences(root, task.view),
             answers: validation.allowed_question_targets.map((target) => target.question_target_key) }],
           member_dispositions: validation.canonical_inventory_members.map((member) => ({ item: member.member_id, state: "covered", section: "exports" })),
           material_gaps: [], diagnostics: [],
         } });
         const repeated = indexerAuthorSemanticInputSchema.parse(authorResults.at(-1)!.result);
         const section = repeated.sections[0]!;
-        section.facts = [...section.facts, ...section.facts];
         section.answers = [...section.answers, ...section.answers];
         repeated.sections.push({ ...section, key: "details", heading: "Details" });
-        const normalized = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request,
+        const normalized = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request,
           view: task.view, semantic: repeated, validation: task.spec.validation as unknown as
             Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"] });
         expect(() => validateIndexerMainRunResult({ request: task.spec.request, result: normalized,

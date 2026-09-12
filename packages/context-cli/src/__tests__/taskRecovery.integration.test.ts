@@ -1,4 +1,3 @@
-import { canonicalIndexerNodeRef, indexerArtifactRef } from "@c4a/context";
 import type { MainRunSpec } from "../project/indexerMainRunStoreRecords.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { expect, test } from "bun:test";
@@ -118,19 +117,13 @@ test("candidate recovery preserves approved bytes and refuses to retract a publi
 }, 120000);
 
 
-test("recovery expands explicit transitive article consumers and leaves independent work outside its scope", () => {
-  const subject = (name: string) => ({ protocol: "context.subject-key/v1", namespace: "sample", kind: "module", local_key: name });
-  const ref = (name: string) => indexerArtifactRef(canonicalIndexerNodeRef(subject(name)), { artifact_id: "overview", artifact_kind: "content" });
-  const spec = (name: string, dependencies: string[]): MainRunSpec => ({
+test("recovery preserves the explicit task scope and rejects unknown worksets", () => {
+  const spec = (name: string): MainRunSpec => ({
     request: { workset: { workset_digest: name } },
-    validation: { expected_subject_key: subject(name), page_plan: { articles: [{ key: "overview", title: name,
-      reader_task: "Understand this module", artifact_intent: "source/guide/understand/content", required: true,
-      sections: [{ key: "entry", heading: "Entry", required: true }],
-      knowledge_dependencies: dependencies.map(name => ({ artifact_ref: ref(name), required: true, section_refs: [] })),
-    }] } },
   } as unknown as MainRunSpec);
   const selected = new Set(["a"]);
-  const closure = recoveryWorksetClosure([spec("c", ["b"]), spec("b", ["a"]), spec("a", []), spec("independent", [])], selected);
-  expect([...closure].sort()).toEqual(["a", "b", "c"]);
+  const closure = recoveryWorksetClosure([spec("c"), spec("b"), spec("a"), spec("independent")], selected);
+  expect([...closure]).toEqual(["a"]);
+  expect(() => recoveryWorksetClosure([spec("a")], new Set(["missing"])) ).toThrow("unknown workset");
   expect([...selected]).toEqual(["a"]);
 });

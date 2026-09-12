@@ -390,13 +390,7 @@ describe("two-stage Indexer selection validation", () => {
     });
     expect(finalReport.static_report_digest).toBe(staticReport.report_digest);
     expect(finalReport.providers[0]?.bundle_integrity).toBe(sample.bundle.resolved.integrity);
-    expect(finalReport.subject_key_schemas).toHaveLength(1);
-    expect(finalReport.subject_key_schemas[0]).toMatchObject({
-      indexer_id: "sample-indexer",
-      profile: "component-library",
-      authority: { kind: "community-base" },
-    });
-    expect(finalReport.subject_key_schema_set_digest).toMatch(/^sha256:/);
+    expect(finalReport).not.toHaveProperty("subject_key_schemas");
     expect(finalReport.composition_plans).toHaveLength(1);
     expect(finalReport.composition_plans[0]).toMatchObject({
       indexer_id: "sample-indexer",
@@ -673,7 +667,7 @@ describe("two-stage Indexer selection validation", () => {
     });
     expect(() => buildIndexerProgramExecutionAuthorizationInput({
       report,
-      authority_ref: "context.evidence-maintenance",
+      authority_ref: "context.package-output",
       authority_scope_digest: `sha256:${"7".repeat(64)}`,
     })).toThrow(/incomplete/);
     const inputPath = join(sample.workspace, "program-authorization.json");
@@ -683,7 +677,7 @@ describe("two-stage Indexer selection validation", () => {
       projectRoot: sample.workspace,
       authorization_input: authorizationInput,
       authorizationInputRef: inputPath,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance],
+      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.packageOutput],
     });
     const managed = await buildIndexerProgramExecutionAuthorizationRoute({
       projectRoot: sample.workspace,

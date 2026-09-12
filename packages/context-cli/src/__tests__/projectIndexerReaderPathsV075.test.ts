@@ -125,7 +125,7 @@ describe("reader path confirmation", () => {
     })).rejects.toThrow("approved page");
   });
 
-  test("does not treat selecting new names as approval of destructive changes to existing pages", async () => {
+  test("selecting new names does not implicitly remove articles omitted from this batch", async () => {
     const root = await workspace();
     const old = readerLayoutProposal("guide/a", { multiple: true });
     await saveStructure(root, [old]);
@@ -134,16 +134,10 @@ describe("reader path confirmation", () => {
     await confirmCurrentIndexerLayout({
       projectRoot: root, revision: pending.state.revision, actor_ref: "human:local-user", paths,
     });
-    const destructive = await prepareCurrentIndexerLayout({ projectRoot: root, proposals });
-    expect(destructive.pending).toBe(true);
-    if (!destructive.pending) throw new Error("removing the old examples still needs approval");
-    expect(destructive.state.layout_transition?.requires_confirmation).toBe(true);
-    expect(destructive.state.confirmations).toEqual([]);
-    await confirmCurrentIndexerLayout({
-      projectRoot: root, revision: destructive.state.revision, actor_ref: "human:local-user",
-    });
     const resolved = await prepareCurrentIndexerLayout({ projectRoot: root, proposals });
     expect(resolved.pending).toBe(false);
+    expect(YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")))
+      .toEqual(approvedReaderStructure([old]));
     // Simulate the later readiness revision: approval belongs to the same transition,
     // not to a transient finalization state name or readiness digest.
     const state = await readCurrentIndexerFinalization(root);

@@ -15,7 +15,6 @@ entrypoints:
   markdown-provider: inspect-markdown-provider-capture
   requirement-confirmation: route-index-requirement-confirmation
   contract-overlay-validation: validate-indexer-contract-overlays
-  subject-key-validation: validate-subject-key-schemas
   dependency-authorization: authorize-indexer-dependencies
   program-execution-authorization: authorize-indexer-program-execution
   overlay-question-proposal: propose-overlay-question-amendment
@@ -26,7 +25,6 @@ entrypoints:
   main-run-validation: validate-main-index-author-result
   post-author-composer-step: run-indexer-post-author-composer
   candidate-compile: compile-indexer-candidates
-  incremental-impact: report-indexer-incremental-impact
 nodes:
   - id: merge-approved-revision
     kind: action
@@ -348,32 +346,6 @@ nodes:
   - id: contract-overlay-valid
     kind: terminal
     terminalOutcome: completed
-  - id: validate-subject-key-schemas
-    kind: action
-    reasonCode: route.indexer.subject-key-validation
-    action: actions/validate-subject-key-schemas.yaml
-  - id: subject-key-schema-current
-    kind: terminal
-    terminalOutcome: completed
-  - id: subject-reidentification-invalid
-    kind: terminal
-    terminalOutcome: failed
-  - id: confirm-subject-reidentification
-    kind: gate
-    reasonCode: route.indexer.subject-reidentification
-    inspectionAction: actions/validate-subject-key-schemas.yaml
-    resolutionAction: actions/confirm-subject-reidentification.yaml
-    gate:
-      id: confirm-subject-reidentification
-      prompt: Confirm the exact collision-free old-to-new Node identity mapping for this breaking SubjectKey schema change.
-      authority: context.indexer-subject-reidentification
-      delegatable: false
-    satisfiedBy:
-      - path: indexer_subject_reidentification.authorized
-        equals: true
-  - id: subject-reidentification-confirmed
-    kind: terminal
-    terminalOutcome: completed
   - id: authorize-indexer-dependencies
     kind: gate
     reasonCode: route.indexer.dependency-authorization
@@ -430,14 +402,6 @@ nodes:
     kind: action
     reasonCode: route.indexer.main-run-validation
     action: actions/validate-main-index-run.yaml
-  - id: index-target-resolution-ambiguous
-    kind: terminal
-    join: any
-    terminalOutcome: blocked
-  - id: index-target-resolution-invalid
-    kind: terminal
-    join: any
-    terminalOutcome: failed
   - id: run-indexer-post-author-composer
     kind: action
     reasonCode: route.indexer.post-author-agent-step
@@ -454,13 +418,6 @@ nodes:
     reasonCode: route.indexer.candidate-compile
     action: actions/compile-indexer-candidates.yaml
   - id: indexer-candidates-compiled
-    kind: terminal
-    terminalOutcome: completed
-  - id: report-indexer-incremental-impact
-    kind: action
-    reasonCode: route.indexer.incremental-impact
-    action: actions/report-indexer-incremental-impact.yaml
-  - id: indexer-incremental-impact-reported
     kind: terminal
     terminalOutcome: completed
 edges:
@@ -591,18 +548,6 @@ edges:
   - from: validate-indexer-selection-proposal
     to: indexer-selection-invalid
     outcomes: [failed]
-  - from: validate-subject-key-schemas
-    to: subject-key-schema-current
-    outcomes: [completed]
-  - from: validate-subject-key-schemas
-    to: confirm-subject-reidentification
-    outcomes: [blocked]
-  - from: validate-subject-key-schemas
-    to: subject-reidentification-invalid
-    outcomes: [failed]
-  - from: confirm-subject-reidentification
-    to: subject-reidentification-confirmed
-    outcomes: [completed]
   - from: run-indexer-agent-step
     to: done
     outcomes: [completed]
@@ -645,10 +590,7 @@ edges:
     to: done
     outcomes: [completed]
   - from: validate-main-index-author-result
-    to: index-target-resolution-ambiguous
-    outcomes: [blocked]
-  - from: validate-main-index-author-result
-    to: index-target-resolution-invalid
+    to: indexer-selection-invalid
     outcomes: [failed]
   - from: run-indexer-post-author-composer
     to: done
@@ -658,7 +600,4 @@ edges:
     outcomes: [failed]
   - from: compile-indexer-candidates
     to: indexer-candidates-compiled
-    outcomes: [completed]
-  - from: report-indexer-incremental-impact
-    to: indexer-incremental-impact-reported
     outcomes: [completed]

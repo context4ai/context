@@ -44,7 +44,7 @@ runtime chain.
 ## Contract and transformation at each handoff
 ## State changes and terminal outcome
 ## Authentication, failure, retry, and fallback
-## Source-backed edge inventory
+## Source-backed handoff explanation
 ## Known gaps and excluded implementation detail
 ```
 
@@ -55,17 +55,16 @@ plugin-host-to-provider.
 ## Partition and ownership rule
 
 A flow normally cites sources already owned by module units. Give the flow one
-stable SubjectKey and keep module inventory ownership unchanged; its author
+stable article identity and keep module inventory ownership unchanged; its author
 workset may reference the exact cross-source evidence views but must not claim
 the same inventory members as a second primary owner.
 
 The aggregate candidate may cite evidence from every participating source. It
 must cover all Route-reported structural probes selected by the flow profile;
 one page may cover several probes when it carries each exact evidence locator.
-Use `operation` and `handoff` candidate sections and emit source-backed
-`depends_on` edges from the owning module candidate to the next registered
-module candidate. Narrative arrows or a textual sequence do not satisfy the
-structured relationship requirement.
+Explain operations and handoffs in reader prose, links or diagrams, citing the
+actual source regions for each fragment (at most three locations per fragment).
+Do not emit graph edges, classify nodes or create a relationship ledger.
 
 ## Granularity and stop conditions
 

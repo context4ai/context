@@ -93,17 +93,6 @@ function buildPlan(
     effective_composer_set: effectiveComposerSet as IndexerEffectiveComposerSet,
     author_workset_digest: authorWorksetDigest,
     primary_result_digest: primaryResultDigest,
-    primary_facts: [{
-      fact_ref: "fact:component-summary",
-      subject_key: SUBJECT,
-      fact_kind: "component-summary",
-      value: { summary: "Public control" },
-      evidence_refs: [{
-        ref: "evidence:component-source",
-        kind: "code",
-        source_digest: digest("a"),
-      }],
-    }],
     primary_artifacts: [],
     validator_contract_digest: digest("3"),
     current_profile_binding_digest: digest("4"),

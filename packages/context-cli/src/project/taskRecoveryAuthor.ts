@@ -1,8 +1,8 @@
 import {
   buildIndexerMainRunRequest, buildIndexerMainWorkset, buildIndexerMainWorksetSet,
   buildIndexerRepairIntent, composeIndexerLayerInput, recoverIndexerMainRunLedger,
-  validateIndexerMainRunLedger, startIndexerMainRun, indexerProtocolDigest, indexerArticlePlanSchema,
-  canonicalIndexerNodeRef, indexerArtifactRef, type IndexerProjectFileTarget,
+  validateIndexerMainRunLedger, startIndexerMainRun, indexerProtocolDigest,
+  type IndexerProjectFileTarget,
 } from "@c4a/context";
 import { currentLedger, currentSpec, normalizeRunSpec, runSpecPath, INDEXER_MAIN_RUN_CURRENT_PATH, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
 import { readRecoveryCheckpoint, recoveryText, recoveryBaselineGuard, RECOVERY_ROOT } from "./taskRecoveryCheckpoint.js";
@@ -19,26 +19,11 @@ import { readMaintenance } from "./maintenanceStorage.js";
 import { encodeTemplateSnapshots } from "./indexerTemplateSnapshots.js";
 import { recoveryJournals, RECOVERY_COMMAND } from "./taskRecovery.js";
 
-function articles(spec: MainRunSpec) {
-  const plan = spec.validation.page_plan as { articles?: unknown[] } | undefined;
-  return (plan?.articles ?? []).map(value => indexerArticlePlanSchema.parse(value));
-}
-function articleRefs(spec: MainRunSpec) {
-  return articles(spec).map(article => indexerArtifactRef(canonicalIndexerNodeRef(spec.validation.expected_subject_key),
-    { artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)! }));
-}
+/** Recovery affects the explicitly selected tasks, not a retired article graph. */
 export function recoveryWorksetClosure(specs: readonly MainRunSpec[], requested: ReadonlySet<string>): Set<string> {
-  const selected = new Set(requested);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const refs = new Set(specs.filter(spec => selected.has(spec.request.workset.workset_digest)).flatMap(articleRefs));
-    for (const spec of specs) if (!selected.has(spec.request.workset.workset_digest) &&
-      articles(spec).some(article => article.knowledge_dependencies?.some(dep => refs.has(dep.artifact_ref)))) {
-      selected.add(spec.request.workset.workset_digest); changed = true;
-    }
-  }
-  return selected;
+  const known = new Set(specs.map(spec => spec.request.workset.workset_digest));
+  for (const id of requested) if (!known.has(id)) throw new TypeError("Recovery selected an unknown workset");
+  return new Set(requested);
 }
 
 function repairedSpec(spec: MainRunSpec, instruction: string, revision: string): MainRunSpec {

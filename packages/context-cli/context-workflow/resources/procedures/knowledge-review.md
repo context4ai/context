@@ -11,7 +11,7 @@ Open one report for the complete current candidate set and apply only a payload
 that matches its collection scope and candidate-set digest.
 
 Before Review, Context checks both sides of approved page identity: whether a
-candidate path is already owned by another `view_ref` / `node_ref`, and whether
+candidate path is already owned by another `article_id`, and whether
 the candidate `view_ref` is already approved at another path. Either conflict
 blocks Review. Follow the returned identity-coordination route: the default
 mechanical repair preserves the approved identity and approved path, then

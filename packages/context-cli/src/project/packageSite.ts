@@ -13,7 +13,7 @@ import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import { knowledgeMapSectionAnchor } from "./packageKnowledgeMap.js";
 import { markdownReaderLinks } from "./markdownLinks.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
-import { siteArticleSources } from "./packageSiteSources.js";
+import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSources.js";
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 
 export const PACKAGE_SITE_VERSION = "vitepress-site-v20-llms-utf8";
@@ -36,7 +36,7 @@ export function createSiteNavigation(pkg: PackageDefinition, selected: readonly 
   const identities = new Set<string>();
   const pages: SitePage[] = selected.map(file => {
     const meta = parseKnowledgeFrontmatter(file.content);
-    const artifact = typeof meta.artifact_ref === "string" ? meta.artifact_ref : undefined;
+    const artifact = file.article?.article_id;
     if (artifact && identities.has(artifact)) throw new TypeError(`Duplicate website article identity: ${artifact}. Resolve the duplicate approved article before building.`);
     if (artifact) identities.add(artifact);
     const path = sitePagePath(artifact ?? `path:${file.relPath}`);
@@ -147,7 +147,7 @@ export async function writePackageSite(input: {
   const temporary = await mkdtemp(join(temporaryRoot, "website-"));
   try {
     const registry = await loadSourcesRegistry({ rootDir: projectRoot });
-    const sourceContent = new Map(selected.map(file => [packageKnowledgeOutputPath(pkg, file.relPath), file.content]));
+    const sourceContent = new Map(selected.map(file => [packageKnowledgeOutputPath(pkg, file.relPath), file]));
     const mapping = createSiteNavigation(pkg, selected, structure);
     const delivered = await walkPackageFiles(root);
     const byPath = new Map(mapping.pages.map(page => [page.package_path, page]));
@@ -189,10 +189,12 @@ export async function writePackageSite(input: {
       const content = await readFile(join(root, page.package_path), "utf8");
       // Only the presentation title is passed as frontmatter; source frontmatter
       // cannot supply scripts, layouts, imports or head tags to the compiler.
-      const body = siteMarkdown(content, page.package_path, byPath, resources);
-      const original = sourceContent.get(page.package_path) ?? content;
-      const sources = siteArticleSources(original, registry);
-      const timestamp = parseKnowledgeFrontmatter(original).timestamp;
+      const original = sourceContent.get(page.package_path);
+      const provenance = articleProvenanceMarkdown(original?.article, registry);
+      const pageContent = provenance && content.endsWith(provenance) ? content.slice(0, -provenance.length) : content;
+      const body = siteMarkdown(pageContent, page.package_path, byPath, resources);
+      const sources = siteArticleSources(original?.article, registry);
+      const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
       const updated = typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))
         ? new Date(timestamp).toISOString() : null;
       await writeFile(join(temporary, page.site_path.replace(/\.html$/u, ".md")),

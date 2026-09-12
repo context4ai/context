@@ -1,26 +1,25 @@
+import { validateArticleStructureEntries } from "@c4a/context";
+import { indexerArtifactReferences, type ArticleSourceReference } from "@c4a/context";
 import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
 import { measureContextDebugOperation } from "./debugTrace.js";
 import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readIndexerDelivery } from "./indexerDelivery.js";
 import { readPartitionStream } from "./indexerPartitionStream.js";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import {
   buildIndexerLayoutChangeConfirmation,
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutTransition,
   canonicalIndexerJson,
   indexerArtifactResultSchema,
-  indexerLayoutArtifactRef,
   indexerLayoutSectionIdentityRef,
-  indexerLayoutSectionRef,
   indexerProtocolDigest,
   indexerRegistryDigests,
   reconcileIndexerResults,
   resolveIndexerBaseQuestionBindingAuthority,
   resolveIndexerOverlayQuestionBindingAuthority,
   resolveIndexerLayout,
-  resolveIndexerSubjectKeySchemas,
   validateIndexerApprovedLayoutProjection,
   type IndexerApprovedLayoutProjection,
   type IndexerArtifactResult,
@@ -85,64 +84,12 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function readableId(value: string): string {
-  const normalized = value.normalize("NFC")
-    .replace(/\.md$/iu, "")
-    .replace(/([^\p{Letter}\p{Number}])+/gu, "-")
-    .replace(/^-+|-+$/gu, "")
-    .toLocaleLowerCase("en-US");
-  return normalized.length === 0 ? "content" : normalized;
-}
-
-function viewsForNode(
-  structure: Record<string, unknown> | undefined,
-  nodeRef: string,
-): Record<string, unknown>[] {
-  return Array.isArray(structure?.views)
-    ? structure.views.filter((value): value is Record<string, unknown> =>
-        object(value)?.node_ref === nodeRef
-      )
-    : [];
-}
-
-function oldSections(input: {
-  view: Record<string, unknown>;
-  node_ref: string;
-  indexer_id: string;
-  artifact_ref: string;
-  artifact_kind: string;
-  fallback: IndexerLayoutProposal["artifacts"][number]["sections"];
-}) {
-  const values = Array.isArray(input.view.sections) ? input.view.sections : [];
-  const sections = values.flatMap((value) => {
-    const section = object(value);
-    const key = text(section?.id);
-    if (key === undefined) return [];
-    const identity = indexerLayoutSectionIdentityRef({
-      node_ref: input.node_ref,
-      owner_indexer_id: input.indexer_id,
-      artifact_kind: input.artifact_kind,
-      section_key: readableId(key),
-    });
-    return [{
-      section_ref: indexerLayoutSectionRef(input.artifact_ref, identity),
-      section_identity_ref: identity,
-    }];
-  });
-  return (sections.length > 0
-    ? sections
-    : input.fallback.map((section) => ({
-        section_ref: section.section_ref,
-        section_identity_ref: section.section_identity_ref,
-      })))
-    .sort((left, right) => left.section_identity_ref.localeCompare(right.section_identity_ref));
-}
-
 export function approvedBaseProjection(input: {
   proposal: IndexerLayoutProposal;
   structure: Record<string, unknown> | undefined;
 }): IndexerApprovedLayoutProjection | undefined {
-  const views = viewsForNode(input.structure, input.proposal.node.node_ref);
+  const views = validateArticleStructureEntries(input.structure?.articles ?? []).filter(article =>
+    input.proposal.artifacts.some(artifact => artifact.artifact_ref === article.article_id));
   if (views.length === 0) return undefined;
   const artifacts = views.flatMap((view) => {
     const path = text(view.path);
@@ -150,23 +97,13 @@ export function approvedBaseProjection(input: {
     if (path === undefined || collection === undefined) return [];
     const outputPath = path.startsWith("knowledge/") ? path : `knowledge/${path}`;
     const identity = input.proposal.artifacts.find((artifact) =>
-      artifact.internal_view_ref === view.view_ref
+      artifact.artifact_ref === view.article_id
     );
-    const exact = input.proposal.artifacts.find((artifact) => artifact.output_path === outputPath);
-    const byName = input.proposal.artifacts.filter((artifact) =>
-      readableId(artifact.artifact_id) === readableId(basename(path))
-    );
-    const proposed = identity ?? exact ?? (byName.length === 1 ? byName[0] : undefined);
-    if (input.proposal.delivery_artifact_ids !== undefined && proposed === undefined) return [];
-    const firstSection = Array.isArray(view.sections)
-      ? object(view.sections[0])
-      : undefined;
-    const artifactId = proposed?.artifact_id ?? readableId(basename(path));
-    const artifactKind = proposed?.artifact_kind ?? text(firstSection?.kind) ?? "content";
-    const artifactRef = proposed?.artifact_ref ?? indexerLayoutArtifactRef(
-      input.proposal.node.node_ref,
-      { artifact_id: artifactId, artifact_kind: artifactKind },
-    );
+    if (!identity) return [];
+    const proposed = identity;
+    const artifactId = proposed.artifact_id;
+    const artifactKind = proposed.artifact_kind;
+    const artifactRef = view.article_id;
     return [{
       artifact_ref: artifactRef,
       artifact_id: artifactId,
@@ -178,14 +115,10 @@ export function approvedBaseProjection(input: {
       purpose: proposed?.purpose ?? "required" as const,
       split_of_artifact_ref: proposed?.split_of_artifact_ref ?? null,
       split_boundary: proposed?.split_boundary ?? null,
-      sections: oldSections({
-        view,
-        node_ref: input.proposal.node.node_ref,
-        indexer_id: input.proposal.indexer_id,
-        artifact_ref: artifactRef,
-        artifact_kind: artifactKind,
-        fallback: proposed?.sections ?? [],
-      }),
+      sections: view.sections.map(section => {
+        const ref = indexerLayoutSectionIdentityRef({ artifact_ref: artifactRef, section_key: section.id });
+        return { section_ref: ref, section_identity_ref: ref };
+      }).sort((a, b) => a.section_identity_ref.localeCompare(b.section_identity_ref)),
     }];
   }).sort((left, right) => left.artifact_ref.localeCompare(right.artifact_ref));
   if (artifacts.length === 0) return undefined;
@@ -194,9 +127,6 @@ export function approvedBaseProjection(input: {
     indexer_id: input.proposal.indexer_id,
     profile: input.proposal.profile,
     profile_contract_digest: input.proposal.profile_contract_digest,
-    subject_key_schema_set_digest: input.proposal.subject_key_schema_set_digest,
-    subject_key_schema_digest: input.proposal.subject_key_schema_digest,
-    node_ref: input.proposal.node.node_ref,
     shared_artifact_fingerprint: input.proposal.shared_artifact_fingerprint,
     artifacts,
   };
@@ -220,21 +150,18 @@ function acceptedRefs(records: readonly AcceptedAuthorRecord[]) {
 }
 
 function registeredSources(results: readonly IndexerArtifactResult[]) {
-  const bySource = new Map<string, IndexerArtifactResult["evidence_bindings"]>();
-  for (const result of results) {
-    for (const binding of result.evidence_bindings) {
-      const entries = bySource.get(binding.source_ref) ?? [];
-      entries.push(binding);
-      bySource.set(binding.source_ref, entries);
+  const bySource = new Map<string, ArticleSourceReference[]>();
+  for (const result of results) for (const artifact of result.artifacts) {
+    for (const reference of indexerArtifactReferences(artifact)) {
+      const entries = bySource.get(reference.source_ref) ?? [];
+      entries.push(reference);
+      bySource.set(reference.source_ref, entries);
     }
   }
-  return [...bySource].map(([sourceRef, bindings]) => ({
-    source_ref: sourceRef,
-    source_input_digest: indexerProtocolDigest(bindings.map((binding) => ({
-      binding_digest: binding.binding_digest,
-      content_digest: binding.content_digest,
-    }))),
-    evidence_kinds: [...new Set(bindings.map((binding) => binding.kind))].sort(),
+  return [...bySource].map(([source_ref, references]) => ({
+    source_ref,
+    source_input_digest: indexerProtocolDigest([...new Map(references.map(reference =>
+      [JSON.stringify(reference), reference])).values()]),
   }));
 }
 
@@ -498,29 +425,6 @@ export async function advanceCurrentIndexerFinalization(
   }
 
   const digests = indexerRegistryDigests(loaded.registry);
-  const selections = loaded.registry.indexers.flatMap((indexer) => [{
-    indexer_id: indexer.id,
-    profile: indexer.profile.primary.id,
-    role: "primary" as const,
-    provider_layer_id: indexer.profile.primary.provider,
-  }, ...(indexer.profile.additional ?? []).map((profile) => ({
-    indexer_id: indexer.id,
-    profile: profile.id,
-    role: profile.kind,
-    provider_layer_id: profile.provider,
-  }))]);
-  const subjectSchemas = selectionState === undefined
-    ? resolveIndexerSubjectKeySchemas({
-        profile_contract: contracts.profile_contract,
-        operator_contract: contracts.operator_contract,
-        selections,
-        providers: [],
-      })
-    : {
-        protocol: "context.indexer.resolved-subject-key-schema-set/v1" as const,
-        schemas: selectionState.final_report.subject_key_schemas,
-        set_digest: selectionState.final_report.subject_key_schema_set_digest,
-      };
   const indexerById = new Map(loaded.registry.indexers.map((indexer) => [indexer.id, indexer]));
   const postAuthorEnvelopes = await readCurrentIndexerPostAuthorEnvelopesForResults({
     projectRoot,
@@ -547,7 +451,6 @@ export async function advanceCurrentIndexerFinalization(
       profile: indexer.profile.primary.id,
       profile_contract: contracts.profile_contract,
       operator_contract: contracts.operator_contract,
-      subject_key_schema_set: subjectSchemas,
       shared_artifact_fingerprint: record.run_envelope.shared_artifact_fingerprint,
     }));
   }
@@ -564,7 +467,6 @@ export async function advanceCurrentIndexerFinalization(
     value: {
       protocol: "context.indexer.candidate-compile-input/v1",
       accepted_result_refs: acceptedRefs(records),
-      subject_key_schema_set: subjectSchemas,
       layout_proposal_set: layoutSet,
       layout_transition: transition,
       layout_change_confirmations: confirmations,

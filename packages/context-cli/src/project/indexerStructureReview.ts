@@ -1,12 +1,9 @@
 import { approvedKnowledgeMapTargets, knowledgeMapCoverage } from "./knowledgeMapCoverage.js";
 import { acceptStructureDecision, readKnowledgeMap } from "./knowledgeMap.js";
 import { withProjectWriteLock } from "./writeLock.js";
-import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import type { KnowledgeMap, KnowledgeMapUpdate } from "@c4a/context";
 import { deliveryWaveSize, readDeliveryCadence } from "./indexerDeliveryCadence.js";
-import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { authorStreamRecord, PARTITION_STREAM_PATH, partitionAuthorBinding, partitionStreamRecord, readPartitionStream, reopenPartitionStream } from "./indexerPartitionStream.js";
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,25 +12,22 @@ import {
   buildIndexerMainWorksetSet,
   invalidateIndexerMainRunWorksets,
   canonicalIndexerJson,
-  canonicalIndexerNodeRef,
   indexerArtifactRef,
   indexerArticleSectionKey,
   indexerPartitionGroupRef,
   indexerProtocolDigest,
   validateIndexerPartitionSemanticInput,
+  validateIndexerPartitionInputs,
   type IndexerAuthorizedWorksetViewSource,
   type IndexerPartitionSemanticInput,
   type IndexerPartitionPlan,
   type IndexerPartitionValidationInput,
   type IndexerMainPartitionWorkset,
-  type IndexerSubjectKey,
   type IndexerArticlePlan,
 } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import {
   buildProjectIndexerMainAuthorWorksets,
-  buildProjectIndexerSubjectCatalog,
-  buildProjectIndexerTargetResolutionViews,
 } from "./indexerMainLifecycleActions.js";
 import {
   INDEXER_MAIN_RUN_STORE_ROOT,
@@ -46,10 +40,6 @@ import {
   normalizeRunSpec,
   acceptedCachePath, currentSpec, persistLedger,
 } from "./indexerMainRunStoreRecords.js";
-import type { ProjectIndexerTargetResolutionViewBinding } from
-  "./indexerAuthorQuestionTargets.js";
-import { convergeIndexerPartitionSubjects } from
-  "./indexerPartitionSubjectConvergence.js";
 import type { IndexerConsumerWorksetProjection } from "./indexerConsumerWorksetPlanner.js";
 import { prepareAndStartNextIndexerBatch } from "./indexerCurrentBatch.js";
 import { summarizeIndexerObsoleteScope } from "./indexerObsoleteScope.js";
@@ -90,18 +80,12 @@ export interface IndexerSemanticStructurePreview {
     outline: string[];
     articles?: IndexerArticlePlan[];
     article_targets?: Array<{ article_key: string; artifact_ref: string; section_keys: string[] }>;
-    subject_key?: IndexerSubjectKey;
     members: string[];
     questions: string[];
-    target: {
-      mode: "create" | "enrich";
-      node_ref: string | null;
-    };
   }>;
   excluded: Array<{ item: string; reason_code: string }>;
   unsupported: Array<{ item: string; missing_capabilities: string[] }>;
   obsolete_scope?: ReadableObsoleteScope;
-  pending_knowledge?: Array<{ group_key: string; dependencies: ApprovedKnowledgeAuthorInput["pending"] }>;
   preview_digest: string;
 }
 
@@ -247,12 +231,20 @@ export async function prepareCurrentIndexerStructurePlan(
           }),
     };
   }), excluded);
-  const converged = convergeIndexerPartitionSubjects(partitions);
+  const validated = validateIndexerPartitionInputs(partitions);
+  const currentPartitions = partitions.map((partition, index) => ({ ...partition, plan: validated[index]!.plan }));
+  const origins = new Map(currentPartitions.flatMap(partition => {
+    const plan = partition.plan as IndexerPartitionPlan;
+    return plan.groups.map(group => {
+      const origin = { partition_workset_digest: partition.workset.workset_digest, group_key: group.group_key };
+      return [indexerPartitionGroupRef(origin), [origin]] as const;
+    });
+  }));
   const prepared = await prepareAuthorPlan(
     projectRoot,
-    converged.partitions,
+    currentPartitions,
     partitions,
-    converged.origins_by_group_ref,
+    origins,
     new Map(records.flatMap((record) => record.validation.partition_projection === undefined
       ? []
       : [[record.request.workset.workset_digest,
@@ -261,10 +253,7 @@ export async function prepareCurrentIndexerStructurePlan(
   const stream = await readPartitionStream(projectRoot);
   const completed = new Set(stream?.completed_bindings ?? []);
   const allPlanned = ledger.entries.every(entry => entry.state === "accepted");
-  const remaining = prepared.author.run_specs.filter(spec => !completed.has(partitionAuthorBinding(spec)));
-  const waiting = remaining.filter(spec => (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput | undefined)?.status === "waiting");
   const available = prepared.author.run_specs.filter(spec =>
-    (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput | undefined)?.status !== "waiting" &&
     !completed.has(partitionAuthorBinding(spec)) && (allPlanned ||
       (spec.validation.page_plan as { ready_for_author?: boolean } | undefined)?.ready_for_author === true))
     .sort((left, right) => {
@@ -275,19 +264,16 @@ export async function prepareCurrentIndexerStructurePlan(
     allPlanned ? prepared.author.run_specs.length : undefined);
   const selected = !allPlanned && available.length < target
     ? [] : available.slice(0, target);
-  const selectedKeys = new Set(selected.map(spec => spec.request.workset.stage === "author" ? spec.request.workset.group_key : ""));
-  // An unresolved required dependency is a planning task, never an empty wave
-  // that can be approved and silently counted as finished.
-  if (!selected.length) for (const spec of waiting) if (spec.request.workset.stage === "author") selectedKeys.add(spec.request.workset.group_key);
+  const selectedKeys = new Set(selected.flatMap(spec => spec.request.workset.stage === "author"
+    ? [spec.request.workset.logical_unit_ref] : []));
   prepared.author.obsolete_scope = summarizeIndexerObsoleteScope(selected, {
     pending_planning: !allPlanned,
     deprecated_member_ids: new Set(prepared.author.obsolete_scope.affected.flatMap(item => item.member_ids)),
-    titles: new Map(converged.partitions.flatMap(partition => partition.plan.status === "complete"
+    titles: new Map(currentPartitions.flatMap(partition => partition.plan.status === "complete"
       ? partition.plan.groups.map(group => [group.group_key, group.label] as const) : [])),
   });
   prepared.author.run_specs = selected;
   prepared.author.workset_set = buildIndexerMainWorksetSet(selected.map(spec => spec.request.workset));
-  const targetByGroup = new Map(prepared.targets.map((target) => [target.group_ref, target]));
   const authoredByOrigin = new Map(records.flatMap((partition, entryIndex) => {
     const result = semantic[entryIndex];
     return result?.outcome === "complete"
@@ -299,34 +285,23 @@ export async function prepareCurrentIndexerStructurePlan(
   }));
   const payload = {
     protocol: "context.indexer.semantic-structure-preview/v1" as const,
-    ...(waiting.length ? { pending_knowledge: waiting.map(spec => ({
-      group_key: spec.request.workset.stage === "author" ? spec.request.workset.group_key : "",
-      dependencies: (spec.validation.knowledge_input as ApprovedKnowledgeAuthorInput).pending,
-    })) } : {}),
     obsolete_scope: {
       ...prepared.author.obsolete_scope,
       affected: prepared.author.obsolete_scope.affected.map((item) => ({
         title: item.title, paths: item.paths, mixed_current_content: item.mixed_current_content,
       })),
     },
-    topics: converged.partitions.flatMap((partition) => {
+    topics: partitions.flatMap((partition) => {
       const plan = partition.plan as IndexerPartitionPlan;
-      return plan.status === "complete" ? plan.groups.filter(group => selectedKeys.has(group.group_key)).map((group) => {
+      return plan.status === "complete" ? plan.groups.filter(group => selectedKeys.has(group.logical_unit_ref)).map((group) => {
         const groupRef = indexerPartitionGroupRef({
           partition_workset_digest: partition.workset.workset_digest,
           group_key: group.group_key,
         });
-        // Convergence chooses the primary owner. Supplementary material must not
-        // replace its reader plan merely because its digest sorts first. If the
-        // owner has no semantic payload, fall back to the owner's plan label.
-        const owner = converged.origins_by_group_ref.get(groupRef)?.[0];
+        const owner = origins.get(groupRef)?.[0];
         const authored = owner === undefined ? undefined : authoredByOrigin.get(
           `${owner.partition_workset_digest}\u0000${owner.group_key}`,
         );
-        const target = targetByGroup.get(groupRef);
-        if (target === undefined) {
-          throw new TypeError(`semantic structure target is missing for ${groupRef}`);
-        }
         return {
           key: group.group_key,
           ...(group.scope_change === undefined ? {} : { scope_change: group.scope_change }),
@@ -335,13 +310,11 @@ export async function prepareCurrentIndexerStructurePlan(
           outline: authored?.outline ?? [group.label],
           ...(group.articles === undefined ? {} : { articles: group.articles,
             article_targets: group.articles.map(article => ({ article_key: article.key,
-              artifact_ref: indexerArtifactRef(canonicalIndexerNodeRef(group.subject_key), {
+              artifact_ref: indexerArtifactRef(group.logical_unit_ref, {
                 artifact_id: article.key, artifact_kind: article.artifact_intent.split("/").at(-1)!,
               }), section_keys: article.sections.map(section => indexerArticleSectionKey(article.key, section.key)) })) }),
-          subject_key: group.subject_key,
           members: group.member_ids,
           questions: group.reader_question_refs,
-          target: { mode: target.mode, node_ref: target.node_ref },
         };
       }) : [];
     }).sort((left, right) => left.key.localeCompare(right.key)),
@@ -378,7 +351,7 @@ export async function prepareCurrentIndexerStructurePlan(
     partition_results: records.map((record) => record.accepted_record.result_digest).sort(),
   });
   const planPayload = {
-    final_wave: allPlanned && selected.length === remaining.length,
+    final_wave: allPlanned && selected.length === available.length,
     revision,
     preview,
     workset_set: prepared.author.workset_set,
@@ -460,98 +433,6 @@ async function prepareAuthorPlan(
   }[]>,
   sourceProjections: ReadonlyMap<string, IndexerConsumerWorksetProjection>,
 ) {
-  const structure = await readKnowledgeStructure(projectRoot);
-  const approved = new Set((Array.isArray(structure.parsed?.views) ? structure.parsed.views : [])
-    .map(view => (view as Record<string, unknown>).node_ref));
-  const primaryTarget = (groupRef: string, nodeRef: string) => ({ group_ref: groupRef,
-    mode: approved.has(nodeRef) ? "enrich" as const : "create" as const,
-    node_ref: approved.has(nodeRef) ? nodeRef : null });
-  const targetResolutionViews: ProjectIndexerTargetResolutionViewBinding[] = [];
-  const targets: Array<{
-    group_ref: string;
-    mode: "create" | "enrich";
-    node_ref: string | null;
-  }> = [];
-  const catalogGroups = new Map<string, typeof partitions>();
-  for (const partition of partitions) {
-    const key = `${partition.workset.requirement_ref}\u0000${partition.workset.subject_key_schema_digest}`;
-    const group = catalogGroups.get(key) ?? [];
-    group.push(partition);
-    catalogGroups.set(key, group);
-  }
-  for (const grouped of catalogGroups.values()) {
-    const planGroups = grouped.flatMap((partition) =>
-      partition.plan.status === "complete"
-        ? partition.plan.groups.map((group) => ({ partition, group }))
-        : []
-    );
-    const queries = planGroups.filter(({ group }) =>
-      group.subject_intent === "enrich-or-independent"
-    ).map(({ partition, group }) => ({
-      group_ref: indexerPartitionGroupRef({
-        partition_workset_digest: partition.workset.workset_digest,
-        group_key: group.group_key,
-      }),
-      subject_intent: "enrich-or-independent" as const,
-      subject_key: group.subject_key,
-    }));
-    if (queries.length === 0) continue;
-    const first = grouped[0]!;
-    const catalog = await buildProjectIndexerSubjectCatalog({
-      projectRoot,
-      value: {
-        protocol: "context.indexer.subject-catalog-build-input/v1",
-        requirement_ref: first.workset.requirement_ref,
-        subject_key_schema_digest: first.workset.subject_key_schema_digest,
-        approved_subjects: [],
-        partitions: grouped,
-      },
-    });
-    const resolved = await buildProjectIndexerTargetResolutionViews({
-      projectRoot,
-      value: {
-        protocol: "context.indexer.target-resolution-build-input/v1",
-        requirement_set_digest: (await loadIndexerRegistry(projectRoot)).requirementSetDigest,
-        catalog,
-        queries,
-      },
-    });
-    if (!("views" in resolved)) {
-      throw new TypeError("semantic structure contains an ambiguous target resolution");
-    }
-    targetResolutionViews.push(...resolved.views);
-    for (const { partition, group } of planGroups) {
-      const groupRef = indexerPartitionGroupRef({
-        partition_workset_digest: partition.workset.workset_digest,
-        group_key: group.group_key,
-      });
-      if (group.subject_intent === "primary") {
-        targets.push(primaryTarget(groupRef, group.logical_unit_ref));
-        continue;
-      }
-      const view = resolved.views.find((binding) => binding.group_ref === groupRef)?.view;
-      const entry = view?.entries[0];
-      targets.push({
-        group_ref: groupRef,
-        mode: entry?.state === "resolved" ? "enrich" : "create",
-        node_ref: entry?.state === "resolved" ? entry.node_ref : null,
-      });
-    }
-  }
-  for (const { partition, group } of partitions.flatMap((partition) =>
-    partition.plan.status === "complete"
-      ? partition.plan.groups.map((group) => ({ partition, group }))
-      : []
-  )) {
-    if (group.subject_intent !== "primary") continue;
-    const groupRef = indexerPartitionGroupRef({
-      partition_workset_digest: partition.workset.workset_digest,
-      group_key: group.group_key,
-    });
-    if (!targets.some((target) => target.group_ref === groupRef)) {
-      targets.push(primaryTarget(groupRef, group.logical_unit_ref));
-    }
-  }
   const author = await buildProjectIndexerMainAuthorWorksets({
     projectRoot,
     source_partitions: sourcePartitions,
@@ -560,13 +441,12 @@ async function prepareAuthorPlan(
     value: {
       protocol: "context.indexer.main-author-workset-build-input/v1",
       partitions,
-      target_resolution_views: targetResolutionViews,
     },
   });
   if (!("worksets" in author)) {
     throw new TypeError("semantic structure cannot produce author worksets");
   }
-  return { author, targets };
+  return { author };
 }
 
 export async function prepareCurrentIndexerAuthorStage(projectRoot: string): Promise<void> {
@@ -602,10 +482,6 @@ async function completeStructureReviewUnlocked(input: StructureReviewCompletion)
   let current = await currentIndexerStructureReview(input.projectRoot);
   if (current === undefined || current.revision !== input.revision) {
     throw new TypeError("semantic structure review revision is stale");
-  }
-  if (input.decision === "approved" && current.preview.pending_knowledge?.length &&
-      current.preview.topics.every(topic => current!.preview.pending_knowledge!.some(pending => pending.group_key === topic.key))) {
-    throw new TypeError("Supporting article plan is not ready. Use this structure review's request-adjustment decision with feedback: dependency-cycle needs an acyclic plan; same-group-dependency needs a separate upstream group or direct source evidence; other pending dependencies need their upstream articles planned or refreshed. No Author work has been marked complete.");
   }
   if (input.decision === "exclude-obsolete") {
     const scope = current.preview.obsolete_scope;

@@ -5,9 +5,8 @@ import { applyIndexerAuthorMaterials } from "./indexerAuthorMaterialStore.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from "./indexerWorksetViewMaterialization.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "./indexerSemanticAuthorResult.js";
 
-/** Direct file reads use the existing source_items string array. Resolve paths
- * in the registered module on submission, so the Agent need not manufacture
- * source-span IDs or make a preparatory CLI round trip. */
+/** Resolve submitted source regions within the registered module. The Agent
+ * supplies paths and lines, not parser facts or evidence identities. */
 export async function prepareIndexerAuthorSubmission(input: {
   projectRoot: string;
   task: Awaited<ReturnType<typeof loadCurrentIndexerBatchTask>>;
@@ -18,8 +17,8 @@ export async function prepareIndexerAuthorSubmission(input: {
   const articles = input.semantic.articles ?? [];
   const sections = [...input.semantic.sections, ...articles.flatMap(article => article.sections)];
   const variables = [input.semantic.template_variables, ...articles.map(article => article.template_variables)];
-  const paths = [...new Set([...sections.flatMap(section => section.source_items),
-    ...variables.flatMap(values => Object.values(values ?? {}).flatMap(value => typeof value === "string" ? [] : value.source_items))])]
+  const paths = [...new Set([...sections.flatMap(section => section.references.filter(ref => ref.source_ref === task.spec.request.workset.source_ref).map(ref => ref.locator.path)),
+    ...variables.flatMap(values => Object.values(values ?? {}).flatMap(value => typeof value === "string" ? [] : value.references.filter(ref => ref.source_ref === task.spec.request.workset.source_ref).map(ref => ref.locator.path)))])]
     .filter((ref) => !ref.includes(":"));
   const material = paths.length === 0 || !task.spec.request.workset.source_ref.startsWith("repo:")
     ? undefined : await prepareIndexerAuthorMaterial({
@@ -36,7 +35,7 @@ export async function prepareIndexerAuthorSubmission(input: {
     task = { ...task, spec: material.spec, view: prepared.projection.view };
   }
   const result = buildIndexerAuthorRunResultFromSemantic({
-    request: task.spec.request, view: task.view, semantic: input.semantic,
+    projectRoot: input.projectRoot, request: task.spec.request, view: task.view, semantic: input.semantic,
     validation: task.spec.validation as unknown as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"],
   });
   // Validate the semantic submission before replacing its pending request.

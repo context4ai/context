@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   buildIndexerQuestionTargetInventory,
   canonicalOwnerCellRef,
-  canonicalIndexerNodeRef,
   evaluateIndexerRestrictedSelector,
   indexerMaterialQuestionKey,
   indexerQuestionRevisionDigest,
@@ -15,16 +14,9 @@ import {
   validateIndexerResolvedMaterialQuestion,
   type IndexerRequirementQuestionBinding,
   type IndexerResolvedMaterialQuestion,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component",
-  local_key: "button",
-};
 const ALLOWED_FACTS = new Set([
   "evidence.current",
   "target.kind",
@@ -92,7 +84,6 @@ function inventory() {
       owner_cell_ref: "owner-cell:public-knowledge#operations",
       source_ref: "repo:sample@revision",
       module_ref: "module:packages/sample",
-      subject_key: SUBJECT,
       canonical_fact_slice_digest: digest("0"),
     }],
   });
@@ -187,11 +178,12 @@ describe("material question authority", () => {
 });
 
 describe("QuestionTargetInventory identity", () => {
-  test("derives target and Node identity without Artifact/Page counts", () => {
+  test("derives target identity without a subject or Artifact/Page counts", () => {
     const value = inventory();
     const item = value.items[0]!;
     expect(item.target_ref).toBe(indexerQuestionSubjectTargetRef(item));
-    expect(item.node_ref).toBe(canonicalIndexerNodeRef(SUBJECT));
+    expect(item).not.toHaveProperty("node_ref");
+    expect(item).not.toHaveProperty("subject_key");
     expect(indexerQuestionTargetItemDigest(item)).toMatch(/^sha256:/);
     expect(validateIndexerQuestionTargetInventory(value)).toEqual(value);
   });

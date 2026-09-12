@@ -1,4 +1,5 @@
 import { expect } from "bun:test";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -6,7 +7,6 @@ import {
   indexerAuthorSemanticInputSchema,
   type IndexerInventoryMember,
   type IndexerArticlePlan,
-  type IndexerSubjectKey,
 } from "@c4a/context";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWorkflowRoute.js";
@@ -23,7 +23,7 @@ import type { readCandidateRecords } from "../project/candidateLedger.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 
-export async function completePartitionStage(root: string, withPagePlan = false, streaming = false, subject?: string, articlePlan?: (intents: string[], targets: string[], subject: IndexerSubjectKey) => IndexerArticlePlan[], subjectKind?: string, templateId?: string, partitionUnitType = "semantic-subject"): Promise<void> {
+export async function completePartitionStage(root: string, withPagePlan = false, streaming = false, groupKey?: string, articlePlan?: (intents: string[], targets: string[]) => IndexerArticlePlan[], templateId?: string, partitionUnitType = "semantic-subject"): Promise<void> {
   await advanceCurrentIndexerLifecycle(root);
   while (true) {
     const current = await resolveCurrentIndexerAgentContext(root);
@@ -40,7 +40,6 @@ export async function completePartitionStage(root: string, withPagePlan = false,
       const validation = task.spec.validation as {
         canonical_inventory_members: IndexerInventoryMember[];
         authorized_source_refs: string[];
-        subject_key_contract: unknown;
         required_question_target_refs?: string[];
       };
       const suffix = workset.workset_digest.slice(-8);
@@ -48,18 +47,12 @@ export async function completePartitionStage(root: string, withPagePlan = false,
         stage: "partition" as const,
         outcome: "complete" as const,
         groups: [{
-          key: `fixture-${suffix}`,
+          key: groupKey ?? `fixture-${suffix}`,
           title: `Fixture ${suffix}`,
           ...(streaming ? { ready_for_author: true } : {}),
           reader_task: "Understand the public fixture capability.",
           ...(withPagePlan ? { artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
             template_id: templateId ?? "component-library-usage-guide", priority: 0, delivery_boundary: true } : {}),
-          subject: {
-            namespace: workset.partition_subject_key.namespace,
-            kind: subjectKind ?? workset.partition_subject_key.kind,
-            local_key: subject ?? `fixture-${suffix}`,
-          },
-          subject_intent: "primary" as const,
           members: validation.canonical_inventory_members.map((member) => member.member_id),
           questions: [...workset.reader_question_refs],
           question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
@@ -67,9 +60,7 @@ export async function completePartitionStage(root: string, withPagePlan = false,
             role: "primary-carrier" as const,
           })),
           outline: ["Overview"],
-          ...(articlePlan === undefined ? {} : { articles: articlePlan(task.spec.validation.available_artifact_intents as string[], validation.required_question_target_refs ?? [],
-            { protocol: "context.subject-key/v1", namespace: workset.partition_subject_key.namespace,
-              kind: subjectKind ?? workset.partition_subject_key.kind, local_key: subject ?? `fixture-${suffix}` }) }),
+          ...(articlePlan === undefined ? {} : { articles: articlePlan(task.spec.validation.available_artifact_intents as string[], validation.required_question_target_refs ?? []) }),
         }],
         excluded: [],
         unsupported: [],
@@ -106,7 +97,7 @@ export async function completePartitionStage(root: string, withPagePlan = false,
 
 export async function completeAuthorStage(
   root: string,
-  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string; relatedPage?: string; markdown?: string; includeFacts?: boolean } = {},
+  options: { catalogOnlyFirst?: boolean; revisionSuffix?: string; relatedPage?: string; markdown?: string } = {},
 ): Promise<{ catalogOnlyCount: number }> {
   let catalogOnlyCount = 0;
   while (true) {
@@ -124,10 +115,7 @@ export async function completeAuthorStage(
       const workset = task.spec.request.workset;
       if (workset.stage !== "author") throw new Error("expected Author task");
       const validation = task.spec.validation as {
-      dependency_view: {
-        positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
-      };
-      expected_subject_key: unknown;
+      dependency_view: unknown;
       artifact_policy_eligibility: {
         eligible_variants: Array<{ id: string }>;
       };
@@ -145,20 +133,14 @@ export async function completeAuthorStage(
         question_ref: string;
       }>;
       };
-      const source = validation.dependency_view.positive_nodes.find((node) =>
-        node.kind === "source-span" && node.evidence_ref !== undefined
-      );
-      if (source?.evidence_ref === undefined) throw new Error("fixture Author has no source span");
+      const references = await fixtureArticleReferences(root, task.view);
       const intent = validation.page_plan?.artifact_intent === undefined ? validation.allowed_artifact_intents[0]
         : validation.allowed_artifact_intents.find((intent) => [intent.source_role, intent.document_kind,
           intent.reader_goal, intent.artifact_kind].join("/") === validation.page_plan!.artifact_intent);
       const policy = validation.artifact_policy_eligibility.eligible_variants[0];
       if (intent === undefined || policy === undefined) throw new Error("fixture Author has no output policy");
-      const catalogFact = task.view.items.find((item) =>
-        item.category === "fact"
-      );
       const catalogOnly = options.catalogOnlyFirst === true &&
-        catalogOnlyCount === 0 && catalogFact !== undefined;
+        catalogOnlyCount === 0;
       if (catalogOnly) catalogOnlyCount++;
       const semantic = {
       stage: "author" as const,
@@ -171,12 +153,6 @@ export async function completeAuthorStage(
         intent.artifact_kind,
       ].join("/"),
       policy: policy.id,
-      target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
-        target: entry.query_ref,
-        disposition: entry.state === "resolved"
-          ? "reuse-existing" as const
-          : "create-independent" as const,
-      })),
       ...(catalogOnly ? {} : {
         title: `Fixture ${workset.group_key}`,
         summary: "A focused guide to the fixture's public entry point.",
@@ -189,8 +165,7 @@ export async function completeAuthorStage(
           options.revisionSuffix,
           ...(options.relatedPage === undefined ? [] : [`[Related API](${options.relatedPage})`]),
         ].filter((value): value is string => value !== undefined).join("\n\n"),
-        source_items: [source.evidence_ref],
-        facts: options.includeFacts ? task.view.items.filter(item => item.category === "fact").map(item => item.ref) : [],
+        references,
         answers: validation.allowed_question_targets.map((target) =>
           target.question_target_key
         ),
@@ -204,6 +179,7 @@ export async function completeAuthorStage(
       diagnostics: [],
       };
       const result = buildIndexerAuthorRunResultFromSemantic({
+          projectRoot: root,
           request: task.spec.request,
           view: task.view,
           semantic: indexerAuthorSemanticInputSchema.parse(semantic),
@@ -217,11 +193,7 @@ export async function completeAuthorStage(
           if (disposition.inventory_disposition !== "owned" || disposition.projection_disposition !== "catalog-only") {
             throw new Error("expected catalog-only disposition");
           }
-          expect(disposition.fact_refs.length).toBeGreaterThan(0);
-          for (const ref of disposition.fact_refs) {
-            expect(task.view.items.some((item) => item.ref === ref &&
-              (ref === disposition.member_id || item.provenance.container_ref === disposition.member_id))).toBe(true);
-          }
+          expect(validation.canonical_inventory_members.some(member => member.member_id === disposition.member_id)).toBe(true);
         }
       }
       runs.push({

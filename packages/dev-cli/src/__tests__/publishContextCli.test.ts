@@ -206,7 +206,12 @@ describe("publish package list", () => {
     expect(releaseChannel("0.7.0-preview.1")).toBe("preview");
     expect(releaseChannel("0.7.0-rc.1")).toBe("rc");
     expect(releaseChannel("0.7.0")).toBe("latest");
-    expect(() => releaseChannel("0.7.0-beta.1")).toThrow(/only final, preview\.N, and rc\.N/u);
+    expect(() => releaseChannel("0.7.0-beta.1")).toThrow(/only final, alpha\.N, preview\.N, and rc\.N/u);
+    expect(releaseChannel("0.7.10-alpha.1")).toBe("alpha");
+    expect(releasePublishPlan("0.7.10-alpha.1").publish_tag).toBe("alpha");
+    expect(parserReleaseMetadata("0.7.10-alpha.1").coordinates.every(
+      coordinate => coordinate.version === "0.7.10-alpha.1",
+    )).toBe(true);
 
     expect(releasePublishPlan("0.7.0-preview.2")).toMatchObject({
       channel: "preview",
@@ -228,18 +233,15 @@ describe("publish package list", () => {
     expect(finalPlan.packages.every((pkg) => pkg.exact_spec.endsWith("@0.7.0"))).toBe(true);
   });
 
-  test("publishes with the planned tag before exact install smoke", async () => {
+  test("publishes with the planned tag without a registry smoke prerequisite", async () => {
     const workflow = await readFile(
       resolve(import.meta.dir, "../../../..", ".github/workflows/publish.yml"),
       "utf8",
     );
     const publish = workflow.indexOf("- name: Publish packages");
-    const smoke = workflow.indexOf("- name: Smoke exact registry release");
 
     expect(publish).toBeGreaterThan(0);
-    expect(smoke).toBeGreaterThan(publish);
     expect(workflow).toContain('--tag "${{ steps.release-metadata.outputs.publish_tag }}"');
-    expect(workflow).toContain("--receipt .tmp/release-install-smoke.json");
     expect(workflow).not.toContain("Promote final release dist-tags");
     expect(workflow).not.toContain("npm publish \"${package_dir}\" --access public --provenance\n");
   });

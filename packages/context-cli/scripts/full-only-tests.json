@@ -1,5 +1,4 @@
 [
-  "approvedKnowledgeAuthor.integration.test.ts",
   "articleCodeProfileScenarios.integration.test.ts",
   "articleCodeScenarios.integration.test.ts",
   "articleOrganizationScenarios.integration.test.ts",

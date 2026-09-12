@@ -1,12 +1,12 @@
-import { withApprovedKnowledgeSupportSources } from "./approvedKnowledgeRebinding.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
+import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile, realpath } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
 import { z } from "zod";
 import YAML from "yaml";
-import { indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema,
+import { articleSectionSchema, validateArticleStructureEntries, indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema,
   indexRequirementSchema, readProcessedScopes, processedVersionForScope, type IndexRequirement, type ProcessedScope } from "@c4a/context";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -19,17 +19,16 @@ import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import { runDurableMultiFileTransaction } from "./durableMultiFileTransaction.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { captureProcessedScopes, commitProcessedScopes } from "./processedScopeStorage.js";
-import { approvedKnowledgeRevisionInputSchema, approvedKnowledgeRebindingSchema, type ApprovedKnowledgeRebinding } from "./approvedKnowledgeRevisionInput.js";
-import { prepareApprovedKnowledgeRevision, assertApprovedKnowledgeRevisionCurrent } from "./approvedKnowledgeRevision.js";
 
 // The current compile container holds either a normal accepted-Indexer compile
 // or a direct revision of an approved page. Neither retains previous runs.
 export const APPROVED_REVISION_PATH = join(".tmp", "context-runtime", "indexer", "candidate-compile", "current.json");
 const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/u);
 const revisionTargetSchema = z.object({
-  path: z.string().min(1), node_ref: z.string().min(1), view_ref: z.string().min(1),
+  path: z.string().min(1), article_id: z.string().min(1),
   collection: indexerKnowledgeCollectionSchema, markdown: z.string().min(1),
-  base_digest: digest.nullable(), previous_path: z.string().min(1).optional(), source_refs: z.array(z.string().min(1)).min(1),
+  sections: z.array(articleSectionSchema), visibility: z.string().min(1),
+  base_digest: digest.nullable(), previous_path: z.string().min(1).optional(), source_refs: z.array(z.string().min(1)),
 }).strict();
 const requestSchema = z.object({
   protocol: z.literal("context.approved-revision/v1"),
@@ -39,11 +38,9 @@ const requestSchema = z.object({
   pending_targets: z.array(z.object({ path: z.string().min(1), instruction: z.string().trim().min(1),
     target: revisionTargetSchema.optional(),
     regenerate: z.boolean().optional(),
-    knowledge_rebinding: approvedKnowledgeRebindingSchema.optional(),
     supporting_sources: z.array(z.string().min(1)).min(1).optional(),
     create: z.object({ path: z.string().min(1), title: z.string().min(1), source_refs: z.array(z.string().min(1)).min(1), instruction: z.string().min(1) }).strict().optional() }).strict()).optional(),
   regenerate: z.boolean().optional(),
-  knowledge_input: approvedKnowledgeRevisionInputSchema.optional(),
   requirements: z.array(indexRequirementSchema).optional(),
   processed_scopes: processedScopesSchema.optional(),
   candidate: z.unknown().optional(),
@@ -55,14 +52,13 @@ const requestSchema = z.object({
 }).strict();
 export type ApprovedRevision = Omit<z.infer<typeof requestSchema>, "candidate" | "batch_candidates"> & { candidate?: CandidateRecord; batch_candidates?: CandidateRecord[] };
 
-export function requestDigest(input: Pick<ApprovedRevision, "target" | "instruction" | "pending_targets" | "processed_scopes" | "requirements" | "program_blocks" | "regenerate" | "merge_context" | "knowledge_input">): string {
+export function requestDigest(input: Pick<ApprovedRevision, "target" | "instruction" | "pending_targets" | "processed_scopes" | "requirements" | "program_blocks" | "regenerate" | "merge_context">): string {
   // A page's review authority binds its own inputs. Adjusting a queued sibling
   // does not revoke an unchanged page's decision or accepted body.
   const scopes = input.processed_scopes?.filter((scope) => input.target.source_refs.some((ref) =>
     ref === scope.source_ref || ref.startsWith(`${scope.source_ref}#`) || ref.startsWith(`${scope.source_ref}/`)));
   const ids = new Set(scopes?.map((scope) => scope.requirement_ref));
   return indexerProtocolDigest({ target: input.target, instruction: input.instruction,
-    ...(input.knowledge_input === undefined ? {} : { knowledge_input: input.knowledge_input }),
     ...(input.merge_context ? { merge_context: input.merge_context } : {}),
     ...(input.regenerate ? { regenerate: true, program_blocks: input.program_blocks ?? [] } : {}),
     ...(input.requirements === undefined ? {} : { requirements: input.requirements.filter((item) => ids.has(item.id) || item.target_scope.targets.some((source) => input.target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`)))) }),
@@ -81,15 +77,21 @@ export function parseApprovedRevision(value: unknown): ApprovedRevision | undefi
   if (raw === undefined) return request;
   const candidate = parseCandidateRecord(raw, 1);
   if (candidate.approved_revision?.request_digest !== request.revision ||
-      indexerProtocolDigest(candidate.approved_revision?.knowledge_input ?? null) !== indexerProtocolDigest(request.knowledge_input ?? null) ||
       candidate.approved_revision.base_digest !== request.target.base_digest ||
       candidate.approved_revision.previous_path !== request.target.previous_path ||
-      candidate.path !== request.target.path || candidate.node_ref !== request.target.node_ref ||
-      candidate.view_ref !== request.target.view_ref ||
-      candidate.fingerprint !== indexerProtocolDigest({ revision: request.revision, markdown: candidate.body })) {
+      candidate.path !== request.target.path ||
+      candidate.article_id !== request.target.article_id ||
+      candidate.fingerprint !== revisionCandidateFingerprint(request.revision, candidate.body,
+        candidate.indexer_candidate.sections)) {
     throw new TypeError("Approved revision Candidate does not match its request");
   }
   return { ...request, candidate };
+}
+
+function revisionCandidateFingerprint(revision: string, markdown: string,
+  sections: CandidateRecord["indexer_candidate"]["sections"]): string {
+  return indexerProtocolDigest({ revision, markdown,
+    sections: sections.map(section => ({ id: section.section_key, references: section.references })) });
 }
 
 export async function readApprovedRevision(projectRoot: string): Promise<ApprovedRevision | undefined> {
@@ -112,8 +114,7 @@ export function pendingAfterReopen(request: ApprovedRevision, selectedPath: stri
   // This is an interrupted Author, not an accepted Candidate. Keep its exact
   // input in the existing queue, including an unfinished new page or page move.
   return [{ path: request.target.path, instruction: request.instruction, target: request.target,
-    ...(request.regenerate ? { regenerate: true } : {}),
-    ...(request.knowledge_input?.rebinding ? { knowledge_rebinding: request.knowledge_input.rebinding } : {}) },
+    ...(request.regenerate ? { regenerate: true } : {}) },
     ...(request.pending_targets ?? []).filter((item) => item.path !== request.target.path)];
 }
 
@@ -127,18 +128,18 @@ export async function resolveApprovedRevisionAuthor(projectRoot: string, request
   const rejected = observed.candidates.find((item) => item.status === "rejected");
   const selected = revisionBatch(request).find((item) => item.candidate_id === rejected?.candidate_id);
   if (!selected) return undefined;
-  const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, knowledge_input: _knowledge, ...previous } = request;
-  void _candidate; void _ready; void _blocks; void _knowledge;
+  const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, ...previous } = request;
+  void _candidate; void _ready; void _blocks;
   const target: ApprovedRevision["target"] = {
-    path: selected.path, node_ref: selected.node_ref, view_ref: selected.view_ref, collection: selected.collection,
-    markdown: selected.body, source_refs: selected.source_refs, base_digest: selected.approved_revision!.base_digest,
+    path: selected.path, article_id: selected.article_id, collection: selected.collection,
+    markdown: selected.body, source_refs: selected.source_refs,
+    visibility: selected.visibility, sections: selected.indexer_candidate.sections.map(section => ({ id: section.section_key, references: section.references })), base_digest: selected.approved_revision!.base_digest,
     ...(selected.approved_revision!.previous_path ? { previous_path: selected.approved_revision!.previous_path } : {}),
   };
   const payload = { ...previous, target, pending_targets: pendingAfterReopen(request, selected.path),
     batch_candidates: revisionBatch(request).filter((item) => item.candidate_id !== selected.candidate_id),
     instruction: `Review rejected this draft. Apply the user's review feedback before resubmitting; ask if the intended correction is unclear. Original task: ${selected.review.reason}`,
     ...(selected.path === request.target.path && request.program_blocks ? { program_blocks: request.program_blocks } : {}),
-    ...(selected.approved_revision?.knowledge_input ? { knowledge_input: selected.approved_revision.knowledge_input } : {}),
   };
   return { ...payload, revision: requestDigest(payload) };
 }
@@ -184,7 +185,9 @@ export async function currentApprovedRevisionTarget(projectRoot: string, request
       void _previous;
       return { ...target, base_digest: durableContentDigest(bytes), markdown: hydrateApprovedKnowledgeMarkdown({
         content: bytes, relPath: candidate.path, metadata: await readApprovedKnowledgeMetadataIndex(projectRoot),
-      }) };
+      }), sections: candidate.indexer_candidate.sections.map(section => ({
+        id: section.section_key, references: section.references,
+      })), source_refs: candidate.source_refs };
     }
   }
   await assertApprovedRevisionBase(projectRoot, request);
@@ -198,7 +201,6 @@ export async function prepareApprovedRevision(input: {
   pending_targets?: ApprovedRevision["pending_targets"];
   target?: ApprovedRevision["target"];
   supporting_sources?: string[];
-  knowledge_rebinding?: ApprovedKnowledgeRebinding;
   create?: NewKnowledgePage;
   replace_current?: boolean;
   persist?: boolean;
@@ -215,9 +217,13 @@ export async function prepareApprovedRevision(input: {
     }
     const structure = await readKnowledgeStructure(input.projectRoot);
     const selector = input.selector.replace(/^knowledge\//u, "").normalize("NFC").toLocaleLowerCase();
-    const views = Array.isArray(structure.parsed?.views) ? structure.parsed.views : [];
-    const matches = views.filter((view): view is Record<string, unknown> => !!view && typeof view === "object" &&
-      [view.path, view.title, view.view_ref, view.node_ref].some((value) => typeof value === "string" && value.normalize("NFC").toLocaleLowerCase() === selector));
+    const articles = validateArticleStructureEntries(structure.parsed?.articles ?? []);
+    const exact = articles.filter(article => [article.path, article.article_id].some(value =>
+      value.normalize("NFC").toLocaleLowerCase() === selector));
+    const matches = exact.length ? exact : (await Promise.all(articles.map(async article => {
+      const title = frontmatter(await targetBytes(input.projectRoot, article.path)).title;
+      return typeof title === "string" && title.normalize("NFC").toLocaleLowerCase() === selector ? article : undefined;
+    }))).filter(article => article !== undefined);
     if (!input.target && !input.create && matches.length !== 1) throw new TypeError("Use one unambiguous approved page path or title from knowledge/structure.yaml.");
     if (input.create && matches.length > 0) throw new TypeError("New topic already has an approved page; revise that page instead");
     const view = matches[0]!;
@@ -241,9 +247,10 @@ export async function prepareApprovedRevision(input: {
     const bytes = await targetBytes(input.projectRoot, path);
     const metadata = await readApprovedKnowledgeMetadataIndex(input.projectRoot);
     const markdown = hydrateApprovedKnowledgeMarkdown({ content: bytes, relPath: path, metadata });
-    target = { path, node_ref: String(view.node_ref), view_ref: String(view.view_ref), collection,
+    target = { path, article_id: view.article_id, collection,
+      sections: view.sections, visibility: view.visibility,
       markdown, base_digest: durableContentDigest(bytes),
-      source_refs: z.array(z.string().min(1)).min(1).parse(view.sources) };
+      source_refs: [...new Set(view.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
     }
     if (input.move_to !== undefined) {
       if (input.create || !isSafeKnowledgeTargetPath(target.collection, input.move_to) || input.move_to === target.path) {
@@ -262,8 +269,6 @@ export async function prepareApprovedRevision(input: {
     const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
     const programScopes = input.processed_scopes?.filter((scope) => processedVersionForScope(readProcessedScopes(structure.parsed), scope) !== scope.processed_version);
     const { registry } = await loadIndexerRegistry(input.projectRoot);
-    const knowledgeInput = await prepareApprovedKnowledgeRevision(input.projectRoot, target.previous_path ?? target.path, registry, input.knowledge_rebinding);
-    if (knowledgeInput?.rebinding) target = withApprovedKnowledgeSupportSources(target, knowledgeInput);
     const requirements = input.requirements ?? registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
       target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
     const { currentScopeSourceVersion } = await import("./processedScopeStorage.js");
@@ -277,7 +282,6 @@ export async function prepareApprovedRevision(input: {
       ? await prepareRevisionProgramBlocks(input.projectRoot, target.source_refs, regenerationScopes ?? programScopes!) : undefined;
     if (input.regenerate && !programBlocks?.length) throw new TypeError("No applicable program blocks in the selected page sources. Inspect its Provider/materials; do not submit the old table as regenerated. Cancel or adjust this maintenance request before continuing.");
     const payload = { target, instruction: input.instruction.trim(), requirements,
-      ...(knowledgeInput === undefined ? {} : { knowledge_input: knowledgeInput }),
       ...(input.regenerate ? { regenerate: true } : {}),
       ...(programBlocks === undefined ? {} : { program_blocks: programBlocks }),
       ...(input.batch_candidates === undefined ? {} : { batch_candidates: input.batch_candidates }),
@@ -313,8 +317,6 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
     if (!request || request.revision !== input.revision || request.candidate) throw new TypeError("Approved revision is stale. Refresh context status --format json.");
     if (request.refresh_sources) throw new TypeError("Import the explicitly adjusted source inputs, then run context task adjust with refresh: true before submitting page content.");
     await assertApprovedRevisionBase(input.projectRoot, request);
-    if (request.knowledge_input) await assertApprovedKnowledgeRevisionCurrent(input.projectRoot, request.target.previous_path ?? request.target.path,
-      (await loadIndexerRegistry(input.projectRoot)).registry, request.knowledge_input);
     const markdown = prepareRevisionMarkdown(request.target.markdown, input, request.program_blocks ?? []);
     await assertRevisionRequirements(input.projectRoot, request);
     const approved = request.target.base_digest === null ? undefined : hydrateApprovedKnowledgeMarkdown({
@@ -322,57 +324,48 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
       metadata: await readApprovedKnowledgeMetadataIndex(input.projectRoot),
     });
     const metadata = frontmatter(markdown);
-    if (metadata.node_ref !== request.target.node_ref || metadata.view_ref !== request.target.view_ref ||
-        (!Array.isArray(metadata.sources) || metadata.sources.some(source => typeof source !== "string") ||
-          indexerProtocolDigest([...metadata.sources].sort()) !== indexerProtocolDigest([...request.target.source_refs].sort()))) {
-      throw new TypeError("Direct revision must retain the approved identity and sources. Register additional factual material before changing its source scope.");
-    }
     const replacingCandidate = (await readCandidateRecords(input.projectRoot)).some((item) => item.path === request.target.path);
     const sections = approvedContextSectionsInMarkdown(markdown);
-    if (sections.length === 0 || sections.some((section) => !section.id || section.refs.length === 0)) {
-      throw new TypeError("Revision must retain source-bound context sections");
-    }
-    const previousRefs = new Set(approvedContextSectionsInMarkdown(request.target.markdown).flatMap((section) => section.refs));
-    if (sections.some((section) => section.refs.some((ref) => !previousRefs.has(ref) &&
-      !request.target.source_refs.some((source) => ref === source || ref.startsWith(`${source}#`))))) {
-      throw new TypeError("Revision section references a source outside the approved page scope");
+    if (sections.length === 0 || sections.some(section => !section.id)) {
+      throw new TypeError("Revision requires stable fragment markers");
     }
     if (new Set(sections.map((section) => section.id)).size !== sections.length) {
       throw new TypeError("Revision section identities must be unique");
     }
-    if (request.knowledge_input?.rebinding) {
-      const selected = new Set(request.knowledge_input.rebinding.sections?.map(section => section.section_key));
-      const previous = new Set(approvedContextSectionsInMarkdown(request.target.markdown).map(section => section.id));
-      if (sections.some(section => previous.has(section.id) && !selected.has(section.id!))) {
-        throw new TypeError("Retained sections need an explicit support selection after dependency replacement. Use context task adjust with knowledge_dependencies.sections; approved content is unchanged.");
-      }
-    }
     const title = z.string().trim().min(1).parse(metadata.title);
-    const fingerprint = indexerProtocolDigest({ revision: request.revision, markdown });
+    const references = await prepareRevisionReferences({ projectRoot: input.projectRoot,
+      sourceRefs: request.target.source_refs, previous: request.target.sections,
+      sectionIds: sections.map(section => section.id!), edits: input.sections });
     const projectedSections = sections.map((section) => ({
-      section_ref: `${request.target.view_ref}#${section.id!}`, section_key: section.id!,
-      evidence_refs: [], markdown: section.readerVisibleBody,
+      section_ref: `${request.target.article_id}#${section.id!}`, section_key: section.id!,
+      references: references.find(item => item.id === section.id)!.references,
+      markdown: section.readerVisibleBody,
       markdown_digest: indexerProtocolDigest(section.readerVisibleBody),
     }));
+    const fingerprint = revisionCandidateFingerprint(request.revision, markdown, projectedSections);
     const candidate = parseCandidateRecord({
-      candidate_id: indexerCandidateId(fingerprint), node_ref: request.target.node_ref, view_ref: request.target.view_ref,
+      candidate_id: indexerCandidateId(fingerprint), article_id: request.target.article_id,
       collection: request.target.collection, status: "draft", candidate_type: "indexer-artifact",
-      kind: sections[0]?.kind ?? "content", visibility: "public", module: "approved-revision",
-      path: request.target.path, structure_digest: request.revision, source_refs: request.target.source_refs,
+      kind: "content", visibility: request.target.visibility, module: "approved-revision",
+      path: request.target.path, structure_digest: request.revision,
+      source_refs: [...new Set(references.flatMap(section => section.references.map(reference => reference.source_ref)))],
       body: markdown, fingerprint,
       approved_revision: { request_digest: request.revision, base_digest: request.target.base_digest,
-        ...(request.knowledge_input === undefined ? {} : { knowledge_input: request.knowledge_input }),
         ...(request.target.previous_path === undefined ? {} : { previous_path: request.target.previous_path }) },
       indexer_candidate: { compile_digest: request.revision, file_digest: fingerprint,
-        artifact_ref: request.target.view_ref, section_refs: projectedSections.map((section) => section.section_ref),
-        source_ref: request.target.source_refs[0], evidence_bindings: [], sections: projectedSections },
+        artifact_ref: request.target.article_id, section_refs: projectedSections.map((section) => section.section_ref),
+        sections: projectedSections },
       review: { title, summary: z.string().trim().min(1).parse(metadata.description ?? title),
         signals: ["approved-page-revision"], reason: request.instruction }, updated: new Date().toISOString(),
     }, 1);
     if (input.preview) return { protocol: "context.approved-revision-preview/v1", revision: request.revision,
-      path: request.target.path, before: request.target.markdown, markdown, changed: markdown !== request.target.markdown };
+      path: request.target.path, before: request.target.markdown, markdown,
+      changed: markdown !== request.target.markdown || indexerProtocolDigest(references) !== indexerProtocolDigest(request.target.sections) };
     if (request.processed_scopes) await captureProcessedScopes(input.projectRoot, request.processed_scopes);
-    if (markdown === approved && request.target.previous_path === undefined && !replacingCandidate && !request.knowledge_input) {
+    const approvedSections = validateArticleStructureEntries((await readKnowledgeStructure(input.projectRoot)).parsed?.articles ?? [])
+      .find(article => article.article_id === request.target.article_id)?.sections;
+    if (markdown === approved && indexerProtocolDigest(references) === indexerProtocolDigest(approvedSections ?? []) &&
+        request.target.previous_path === undefined && !replacingCandidate) {
       const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
       const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
       if (next || request.batch_candidates?.length) {
@@ -424,7 +417,6 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
   const [next, ...remaining] = request.pending_targets ?? [];
   if (next) {
     await prepareApprovedRevision({ projectRoot, replace_current: true, selector: next.path, instruction: next.instruction,
-      ...(next.knowledge_rebinding ? { knowledge_rebinding: next.knowledge_rebinding } : {}),
       ...(next.regenerate ? { regenerate: true } : {}),
       ...(next.target === undefined ? {} : { target: next.target }),
       pending_targets: remaining, ...(next.create === undefined ? {} : { create: next.create }),
@@ -461,9 +453,9 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
     };
     const selector = input.selector.replace(/^\.\//u, "").replace(/^knowledge\//u, "").normalize("NFC").toLowerCase();
     const batch = [...(request.batch_candidates ?? []), ...(request.candidate ? [request.candidate] : [])];
-    const selected = batch.find((item) => [item.path, item.node_ref, item.view_ref, item.candidate_id, item.review.title]
+    const selected = batch.find((item) => [item.path, item.article_id, item.candidate_id, item.review.title]
       .some((alias) => alias.normalize("NFC").toLowerCase() === selector));
-    const aliases = [request.target.path, request.target.node_ref, request.target.view_ref, frontmatter(request.target.markdown).title];
+    const aliases = [request.target.path, request.target.article_id, frontmatter(request.target.markdown).title];
     if (!selected && !aliases.some((alias) => typeof alias === "string" && alias.normalize("NFC").toLowerCase() === selector)) {
       throw new TypeError("Another page update is active. Finish or explicitly roll back that task before starting this revision.");
     }
@@ -474,7 +466,6 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
     if (selected && selected.path !== request.target.path) {
       const prepared = await prepareApprovedRevision({ projectRoot: input.projectRoot, replace_current: true, persist: false,
         selector: selected.path, instruction: input.instruction, batch_candidates: batch,
-        ...(selected.approved_revision?.knowledge_input?.rebinding ? { knowledge_rebinding: selected.approved_revision.knowledge_input.rebinding } : {}),
         ...(request.regenerate ? { regenerate: true } : {}),
         pending_targets: pendingAfterReopen(request, selected.path),
         ...(request.requirements ? { requirements: request.requirements } : {}),
@@ -483,15 +474,17 @@ export async function reopenApprovedRevision(input: { projectRoot: string; selec
           title: selected.review.title, source_refs: selected.source_refs, instruction: input.instruction } } : {}) });
       base = prepared.request;
     } else {
-      const { knowledge_input: _knowledge, ...rest } = base; void _knowledge;
-      const knowledge = await prepareApprovedKnowledgeRevision(input.projectRoot, base.target.previous_path ?? base.target.path,
-        (await loadIndexerRegistry(input.projectRoot)).registry, base.knowledge_input?.rebinding);
-      base = { ...rest, target: await currentApprovedRevisionTarget(input.projectRoot, request),
-        ...(knowledge === undefined ? {} : { knowledge_input: knowledge }) };
-      if (knowledge?.rebinding) base.target = withApprovedKnowledgeSupportSources(base.target, knowledge);
+      base = { ...base, target: await currentApprovedRevisionTarget(input.projectRoot, request) };
     }
     const payload = { ...base, batch_candidates: kept, instruction: input.instruction.trim(), target: { ...base.target,
-      markdown: selected?.body ?? base.target.markdown } };
+      markdown: selected?.body ?? base.target.markdown,
+      ...(selected ? {
+        source_refs: [...new Set([...base.target.source_refs, ...selected.source_refs])],
+        sections: selected.indexer_candidate.sections.map(section => ({
+          id: section.section_key, references: section.references,
+        })),
+      } : {}),
+    } };
     const current = await readFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), "utf8");
     const content = `${JSON.stringify({ ...payload, revision: requestDigest(payload) })}\n`;
     let ledger: string | undefined;

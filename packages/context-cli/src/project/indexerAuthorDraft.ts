@@ -92,7 +92,7 @@ export async function previewAuthorBatch(input: { projectRoot: string; revision:
         for (const artifact of result.artifacts) {
           if (artifact.representation !== "sections") continue;
           const markdown = artifact.sections.flatMap(section => materializeIndexerStructuredContent({
-            blocks: section.blocks, facts: result.facts,
+            blocks: section.blocks,
           }).map(block => block.markdown)).join("\n\n") + "\n";
           const digest = createHash("sha256").update(markdown).digest("hex");
           const path = join(input.projectRoot, ".tmp/context-runtime/author-previews", `${digest}.md`);

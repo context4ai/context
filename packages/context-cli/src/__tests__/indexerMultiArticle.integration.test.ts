@@ -17,6 +17,7 @@ import { resolveCurrentIndexerAgentContext } from "../project/indexerCurrentWork
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
 import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSemanticAuthorResult.js";
 import { acceptIndexerMainAuthorRunsStore } from "../project/indexerMainRunStore.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 function plan(intents: string[], targets: string[]): IndexerArticlePlan[] {
   const intent = intents.find(value => value.endsWith("/content"))!;
@@ -56,17 +57,19 @@ test("accepted multi-article plan keeps identities and shared member ownership t
     expect(guidance.integration?.template_id).toBe("component-library-l02");
     expect(guidance.integration?.content).toContain("writing blueprint");
     expect(Object.keys(guidance).sort()).toEqual(["integration", "overview"]);
-    const fact = task.view.items.find(item => item.category === "fact")!;
+    const references = await fixtureArticleReferences(root, task.view);
     const input = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key, outcome: "publish", policy: "standard",
       articles: accepted.map(article => ({ key: article.key, title: article.title, summary: "Reference for the public entry.",
-        sections: [{ key: "entry", heading: "Entry", markdown: "Use the exported entry.", facts: [fact.ref], answers: article.question_targets }] })),
+        sections: [{ key: "entry", heading: "Entry", markdown: "Use the exported entry.", references, answers: article.question_targets }] })),
       member_dispositions: validation.canonical_inventory_members.map(member => ({ item: member.member_id, state: "covered", article: "overview", section: "entry" })),
     });
-    const build = (semantic = input) => buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+    const build = (semantic = input) => buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, validation, semantic });
     for (const articles of [input.articles!.slice(0, 1), [...input.articles!, input.articles![0]!], [{ ...input.articles![0]!, key: "invented" }, input.articles![1]!]]) {
       expect(() => build({ ...input, articles })).toThrow();
     }
-    expect(() => build({ ...input, articles: input.articles!.map(article => ({ ...article, sections: [{ ...article.sections[0]!, facts: ["fact:unavailable"] }] })) })).toThrow();
+    expect(() => build({ ...input, articles: input.articles!.map(article => ({ ...article, sections: [{ ...article.sections[0]!,
+      references: [{ ...references[0]!, source_ref: "repo:outside-author-scope" }],
+    }] })) })).toThrow();
     const drift = build({ ...input, articles: input.articles!.map(article => article.key === "integration" ?
       { ...article, sections: article.sections.map(section => ({ ...section, key: "investigation" })) } : article) });
     if (drift.result.result.protocol !== "context.indexer.artifact-result/v1") throw new Error("expected ArtifactResult");

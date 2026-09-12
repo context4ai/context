@@ -4,57 +4,47 @@ import { renderIndexerPostAuthorReading } from "../project/indexerPostAuthorRead
 import { missingComposerInputs } from "../project/indexerComposerApplicability.js";
 
 const digest = `sha256:${"a".repeat(64)}`;
-const subject = { protocol: "context.subject-key/v1" as const, namespace: "sample", kind: "component", local_key: "panel" };
-const evidence = [{ kind: "code" as const, ref: "evidence:sample", source_digest: digest }];
+const reference = { source_ref: "repo:sample", locator: { path: "src/panel.ts", start_line: 1, end_line: 3 }, content_digest: digest };
 function view() {
   return materializeIndexerPrimaryResultView({ workset_digest: digest, primary_result_digest: digest, validator_contract_digest: digest,
-    facts: [{ fact_ref: "fact:canonical", subject_key: subject, fact_kind: "code-symbol", evidence_refs: evidence,
-      value: { name: "Panel", typeAnnotation: "/** @default false */ enabled?: boolean", contractResolution: "declaration-only",
-        evidence_refs: ["business-value-must-survive"], members: [{ name: "enabled", optional: true, type: "boolean" }] } }],
-    artifacts: [{ artifact_ref: "artifact:canonical", subject_key: subject, artifact_kind: "content", artifact_policy_variant: "standard", evidence_refs: evidence,
+    artifacts: [{ artifact_ref: "article:canonical", artifact_kind: "content", artifact_policy_variant: "standard",
       variables: { representation: "sections", sections: [{ section_key: "usage", document_kind: "guide", blocks: [
-        { layer: "semantic-prose", block_id: "body", markdown: "# Panel\n\nRead the panel.", evidence_refs: ["evidence:sample"] },
-        { layer: "deterministic-block", block_id: "api", renderer: "public-contract-table", fact_refs: ["fact:canonical"] },
+        { layer: "semantic-prose", block_id: "body", markdown: "# Panel\n\nRead the panel.", references: [reference] },
       ] }] } }],
   });
 }
 
-test("Composer reading preserves semantic values and Markdown while using submission aliases", () => {
+test("Composer reading preserves Markdown and direct source regions without restoring a fact ledger", () => {
   const input = view(); const before = JSON.stringify(input);
   const reading = renderIndexerPostAuthorReading(input);
   expect(reading).toContain("# Panel\n\nRead the panel.");
-  expect(reading).toContain('"fact:1"');
   expect(reading).toContain("artifact:1");
-  expect(reading.indexOf("# Panel\n")).toBeLessThan(reading.indexOf("### fact:1"));
-  expect(reading).toContain("@default false");
-  expect(reading).toContain("declaration-only");
-  expect(reading).toContain("business-value-must-survive");
-  expect(reading).not.toContain("evidence:sample");
+  expect(reading).toContain('"source_ref": "repo:sample"');
+  expect(reading).toContain('"path": "src/panel.ts"');
+  expect(reading).toContain('"start_line": 1');
+  expect(reading).toContain(digest);
   expect(reading).not.toContain("materialization_receipt");
-  expect(reading).not.toContain(digest);
+  expect(reading).not.toContain("primary_result_digest");
+  expect(reading).not.toContain('"facts"');
+  expect(reading).not.toContain('"subject_key"');
   expect(JSON.stringify(input)).toBe(before);
-  expect(() => renderIndexerPostAuthorReading({ ...input, facts: [] })).toThrow();
+  expect(() => renderIndexerPostAuthorReading({ ...input, artifacts: [] })).toThrow();
 });
 
-test("Composer applicability follows declared kinds and actual evidenced inputs", () => {
-  const composer = { contract: { primary_requirements: { fact_kinds: ["code-symbol"], artifact_kinds: ["content"] } } } as IndexerComposerDeclaration;
+test("Composer applicability uses the declared article kinds, not retired fact kinds", () => {
+  const composer = { contract: { primary_requirements: { artifact_kinds: ["content"] } } } as IndexerComposerDeclaration;
   expect(missingComposerInputs(composer, view())).toEqual([]);
-  expect(missingComposerInputs(composer, { ...view(), facts: [] })).toEqual(["fact:code-symbol"]);
   expect(missingComposerInputs(composer, { ...view(), artifacts: [] })).toEqual(["artifact:content"]);
-  const unbound = view(); unbound.facts[0]!.evidence_refs = [];
-  expect(missingComposerInputs(composer, unbound)).toEqual(["fact:code-symbol"]);
 });
 
-test("Composer shares section metadata and preserves member values without changing canonical facts", () => {
+test("Composer shares repeated section metadata but keeps provider values and every section", () => {
   const original = view();
+  const members = Array.from({ length: 10 }, (_, i) => ({ name: `value${i}`, optional: true, default: i % 2 === 0 }));
   const sections = ["usage", "limits"].map(section_key => ({ section_key, owner: "sample-provider", custom: { keep: true },
-    blocks: [{ layer: "semantic-prose", markdown: `## ${section_key}\nRead this section.` }],
+    blocks: [{ layer: "semantic-prose", markdown: `## ${section_key}\nRead this section.`, references: [reference] }],
   }));
-  const members = Array.from({ length: 10 }, (_, i) => ({ name: `value${i}`, kind: "property", optional: true,
-    visibility: "exported", file: "src/options.ts", type: "boolean", default: i % 2 === 0 }));
   const input = materializeIndexerPrimaryResultView({ workset_digest: digest, primary_result_digest: digest, validator_contract_digest: digest,
-    facts: original.facts.map(fact => ({ ...fact, value: { ...fact.value as object, members } })),
-    artifacts: original.artifacts.map(artifact => ({ ...artifact, variables: { representation: "sections", sections } })),
+    artifacts: original.artifacts.map(artifact => ({ ...artifact, variables: { representation: "sections", sections, members } })),
   });
   const before = JSON.stringify(input);
   const reading = renderIndexerPostAuthorReading(input);
@@ -62,10 +52,7 @@ test("Composer shares section metadata and preserves member values without chang
   expect(blocks.filter(block => block.owner === "sample-provider")).toHaveLength(1);
   expect(blocks.some(block => block.section_key === "usage")).toBe(true);
   expect(blocks.some(block => block.section_key === "limits")).toBe(true);
-  const groups = blocks.find(block => block.kind === "code-symbol").value.members.groups;
-  expect(groups.flatMap((group: { common: object; columns: string[]; rows: unknown[][] }) => group.rows.map(row => ({ ...group.common,
-    ...Object.fromEntries(group.columns.map((key, i) => [key, row[i]])),
-  })))).toEqual(members);
+  expect(blocks.find(block => Array.isArray(block.members))?.members).toEqual(members);
   expect(reading).toContain("## limits\nRead this section.");
   expect(JSON.stringify(input)).toBe(before);
 });

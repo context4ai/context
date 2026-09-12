@@ -141,13 +141,12 @@ Each item contains:
 | `sourcePath` | Approved knowledge path before OKF output mapping, for example `architecture/entity/button.md`. |
 | `approved_path` | Alias for `sourcePath`. |
 | `dist_path` | Alias for `path`. |
+| `article_id` | Stable article identity from the approved article index. |
 | `internalCollection` | Internal approved collection, for example `architecture`. |
 | `internal_collection` | Alias for `internalCollection`. |
 | `collection` | Internal approved collection; alias for `internalCollection`. |
 | `okf_root` | OKF output root, for example `wikis`, `guides`, `rules`, or `feats`. |
 | `okf_root_path` | Final flat package-relative OKF root. |
-| `node_ref` | Stable NodeRef from approved frontmatter, for example `entity/button`. |
-| `view_ref` | Stable ViewRef from approved frontmatter, for example `architecture:entity/button`. |
 | `pathWithinCollection` | Path below the OKF root, for example `architecture/entity/button.md`. |
 | `href` | Link relative to the template file currently being rendered. Use this in custom templates. |
 | `hrefFromTemplate` | Alias for `href`. |
@@ -157,7 +156,7 @@ Each item contains:
 | `type` | OKF `type` from frontmatter. |
 | `description` | OKF `description` from frontmatter, when present. |
 | `timestamp` | OKF `timestamp` from frontmatter, when present. |
-| `source` | First top-level `sources` entry without the `repo:` prefix, or the group name. |
+| `source` | First actual source reference from the article index, or the group name. |
 | `group` | First path segment under the OKF root. |
 | `parentPath` | Parent path below the OKF root. |
 | `depth` | Segment count below the OKF root. |

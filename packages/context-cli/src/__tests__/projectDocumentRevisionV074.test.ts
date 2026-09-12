@@ -120,24 +120,24 @@ describe("current Indexer document revision", () => {
     await completeCurrentIndexerAction({ cwd: root, revision: structure.revision,
       value: { stage: "structure-review", decision: "approved", knowledge_map: await readingInput(root) }, managed: true,
       authorities: contextWorkflowAuthorities({ managed: true }) });
-    const currentSubjects = new Set(structure.preview.topics.map(topic => topic.subject_key!.local_key));
+    const currentGroups = new Set(structure.preview.topics.map(topic => topic.key));
     const saved = (await readPartitionStream(root))!;
     const futureGroups = [];
     for (const entry of saved.partition_ledger.entries) {
       const spec = await currentSpec({ projectRoot: root, request_digest: entry.execution_request_digest });
       const accepted = readAcceptedCache({ spec, cache: await readJsonMaybe(root, acceptedCachePath(entry.execution_request_digest)) });
-      const plan = accepted.operation_result as { groups: Array<{ subject_key: { local_key: string } }> };
-      futureGroups.push(...plan.groups.filter(group => !currentSubjects.has(group.subject_key.local_key)));
+      const plan = accepted.operation_result as { groups: Array<{ group_key: string }> };
+      futureGroups.push(...plan.groups.filter(group => !currentGroups.has(group.group_key)));
     }
-    const relatedPage = `./${futureGroups[0]!.subject_key.local_key}.md`;
+    const relatedPage = `./${futureGroups[0]!.group_key}.md`;
     await completeAuthorStage(root, { relatedPage });
     const before = await currentLedger(root);
     expect(saved.partition_ledger.entries.length).toBeGreaterThan(before!.entries.length);
     const candidates = await readCandidateRecords(root);
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.length).toBeLessThanOrEqual(3);
-    expect(candidates[0]?.body).toContain("## API");
-    expect(candidates[0]?.body).toContain("export entry");
+    expect(candidates[0]?.body).toContain("public entry point");
+    expect(candidates[0]?.body).toContain("Use the exported answer constant");
     expect(candidates[0]?.body).toContain("Related API");
     expect(candidates[0]?.body).not.toContain(`[Related API](${relatedPage})`);
     const review = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates: candidates.map((record) => {
@@ -190,7 +190,7 @@ describe("current Indexer document revision", () => {
     expect(await currentLedger(root)).toBeUndefined();
     expect(await readIndexerDelivery(root)).toBeUndefined();
     for (const candidate of [...candidates, ...tail]) {
-      expect(await readFile(join(root, "knowledge", candidate.path), "utf8")).toContain("## API");
+      expect(await readFile(join(root, "knowledge", candidate.path), "utf8")).toContain("Use the exported answer constant");
     }
   }, DOCUMENT_REVISION_TEST_TIMEOUT_MS);
 
@@ -274,12 +274,7 @@ describe("current Indexer document revision", () => {
               key: "accepted-peer",
               title: "Accepted peer",
               reader_task: "Understand the accepted public fixture capability.",
-              subject: {
-                namespace: workset.partition_subject_key.namespace,
-                kind: workset.partition_subject_key.kind,
-                local_key: "accepted-peer",
-              },
-              subject_intent: "primary",
+
               members: validation.canonical_inventory_members.map((member) => member.member_id),
               questions: [...workset.reader_question_refs],
               question_targets: (validation.required_question_target_refs ?? []).map((target) => ({

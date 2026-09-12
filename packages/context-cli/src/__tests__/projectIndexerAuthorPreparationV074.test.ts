@@ -1,21 +1,15 @@
+import { authorResultFixture } from "./authorResult.fixture.js";
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import YAML from "yaml";
 import {
-  buildIndexerArtifactBundle,
-  buildIndexerCapabilityGroupEvidence,
   buildIndexerAuthorDependencyView,
-  buildIndexerInventoryDispositionSet,
-  canonicalIndexerNodeRef,
-  indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerInventoryMembersDigest,
   indexerPartitionPlanCanonicalHash,
   indexerRegistryDigests,
-  type IndexerArtifactResult,
-  type IndexerMainAuthorWorkset,
+  indexerProtocolDigest,
   type IndexerPartitionPlan,
   type IndexerRegistry,
 } from "@c4a/context";
@@ -34,9 +28,6 @@ import { projectIndexerPrimaryCarrierQuestionTargetRefs } from
   "../project/indexerAuthorQuestionTargets.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from
   "../project/indexerWorksetViewMaterialization.js";
-import {
-  type MainRunSpec,
-} from "../project/indexerMainRunStoreRecords.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
@@ -156,174 +147,6 @@ async function markdownProject(
   };
 }
 
-function authorResultFixture(spec: MainRunSpec) {
-  const workset = spec.request.workset as IndexerMainAuthorWorkset;
-  const validation = spec.validation as {
-    dependency_view: {
-      positive_nodes: Array<{
-        kind: string;
-        evidence_ref?: string;
-        source_ref?: string;
-        module_ref?: string | null;
-        locator?: { path: string; start_line: number; end_line: number };
-        content_digest?: string;
-      }>;
-    };
-    canonical_inventory_members: Array<{ member_id: string; member_kind: "document" }>;
-    expected_subject_key: IndexerMainAuthorWorkset["stage"] extends "author"
-      ? { protocol: "context.subject-key/v1"; namespace: string; kind: string; local_key: string }
-      : never;
-    artifact_policy_eligibility: {
-      eligible_variants: Array<{
-        id: string;
-        required_artifact_kinds: string[];
-      }>;
-    };
-    allowed_artifact_intents: Array<{
-      source_role: string;
-      document_kind: string;
-      reader_goal: string;
-      artifact_kind: string;
-    }>;
-  };
-  const sourceSpan = validation.dependency_view.positive_nodes.find((node) =>
-    node.kind === "source-span"
-  );
-  if (
-    sourceSpan?.evidence_ref === undefined ||
-    sourceSpan.source_ref === undefined ||
-    sourceSpan.module_ref === undefined ||
-    sourceSpan.locator === undefined ||
-    sourceSpan.content_digest === undefined
-  ) {
-    throw new Error("author fixture requires one source span");
-  }
-  const variant = validation.artifact_policy_eligibility.eligible_variants.find((candidate) =>
-    workset.allowed_artifact_policy_variants.includes(candidate.id)
-  );
-  const artifactKind = variant?.required_artifact_kinds[0];
-  const intent = validation.allowed_artifact_intents.find((candidate) =>
-    candidate.artifact_kind === artifactKind
-  );
-  if (variant === undefined || artifactKind === undefined || intent === undefined) {
-    throw new Error("author fixture requires one eligible required Artifact intent");
-  }
-  const artifactId = "content";
-  const sectionKey = "overview";
-  const evidencePayload = {
-    evidence_ref: sourceSpan.evidence_ref,
-    kind: "documentation" as const,
-    source_ref: sourceSpan.source_ref,
-    module_ref: sourceSpan.module_ref,
-    locator: sourceSpan.locator,
-    content_digest: sourceSpan.content_digest,
-    coverage_tier: "lightweight-evidence" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
-  const artifactPayload: Omit<IndexerArtifactResult, "output_digest"> = {
-    protocol: "context.indexer.artifact-result/v1",
-    author_workset_digest: workset.workset_digest,
-    partition_plan_binding_digest: workset.partition_plan_binding_digest,
-    group_projection_digest: workset.group_projection_digest,
-    indexer_id: workset.indexer_id,
-    provider_layer_ref: spec.request.final_authority.layer_ref,
-    provider_integrity: spec.request.final_authority.integrity,
-    provider_bundle_digest: spec.request.final_authority.bundle_digest,
-    config_fingerprint: spec.request.final_authority.config_fingerprint,
-    customization_fingerprint: spec.request.final_authority.customization_fingerprint,
-    requirement_ref: workset.requirement_ref,
-    source_ref: workset.source_ref,
-    module_ref: workset.module_ref,
-    source_role: spec.request.run_environment.source_role,
-    logical_unit: {
-      group_key: workset.group_key,
-      subject_key: validation.expected_subject_key,
-      logical_unit_ref: workset.logical_unit_ref,
-      target_resolution_dispositions: [],
-    },
-    capability_group_evidence: buildIndexerCapabilityGroupEvidence({
-      author_workset_digest: workset.workset_digest,
-      group_projection_digest: workset.group_projection_digest,
-      logical_unit_ref: workset.logical_unit_ref,
-      member_ids: validation.canonical_inventory_members.map((member) => member.member_id),
-      capability_groups: [],
-    }),
-    inventory_dispositions: buildIndexerInventoryDispositionSet({
-      author_workset_digest: workset.workset_digest,
-      group_projection_digest: workset.group_projection_digest,
-      logical_unit_ref: workset.logical_unit_ref,
-      dispositions: validation.canonical_inventory_members.map((member) => ({
-        ...member,
-        inventory_disposition: "owned" as const,
-        projection_disposition: "detailed" as const,
-        section_evidence: [{
-          artifact_id: artifactId,
-          section_key: sectionKey,
-          evidence_refs: [evidence.evidence_ref],
-        }],
-      })),
-    }),
-    facts: [],
-    evidence_bindings: [evidence],
-    artifacts: [{
-      artifact_id: artifactId,
-      artifact_kind: artifactKind,
-      artifact_policy_variant: variant.id,
-      representation: "sections",
-      sections: [{
-        section_key: sectionKey,
-        owner_indexer_id: workset.indexer_id,
-        document_kind: intent.document_kind,
-        reader_goal: intent.reader_goal,
-        artifact_kind: artifactKind,
-        blocks: [{
-          block_id: "summary",
-          layer: "semantic-prose",
-          markdown: `# ${workset.group_key}\n\nStable group knowledge.`,
-          evidence_refs: [evidence.evidence_ref],
-        }],
-      }],
-    }],
-    artifact_bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: workset.logical_unit_ref,
-      artifact_policy_variant: variant.id,
-      artifacts: [{
-        artifact_id: artifactId,
-        artifact_kind: artifactKind,
-        purpose: "required",
-        reader_question_refs: [],
-        evidence_refs: [evidence.evidence_ref],
-      }],
-    }),
-    material_question_proposals: [],
-    question_target_dispositions: [],
-    diagnostics: [],
-    input_digest: spec.request.execution_request_digest,
-  };
-  const artifact = {
-    ...artifactPayload,
-    output_digest: indexerArtifactResultDigest(artifactPayload),
-  };
-  return {
-    artifact,
-    result: {
-      protocol: "context.indexer.run-result/v1" as const,
-      operation: "main-index" as const,
-      consumed_input_view_digest: spec.request.composition_input.view_digest,
-      result: {
-        protocol: "context.indexer.main-result/v1" as const,
-        stage: "author" as const,
-        workset_digest: workset.workset_digest,
-        execution_request_digest: spec.request.execution_request_digest,
-        result: artifact,
-      },
-    },
-  };
-}
-
 describe("project current Author preparation", () => {
   test("reserves question dispositions for the partition primary carrier", () => {
     expect(projectIndexerPrimaryCarrierQuestionTargetRefs([{
@@ -393,11 +216,9 @@ describe("project current Author preparation", () => {
         indexer_id: workset.indexer_id,
         indexer_fingerprint: workset.primary_execution_fingerprint,
         requirement_digest: workset.requirement_set_digest,
-        subject_key_schema_digest: workset.subject_key_schema_digest,
         source_scope_digest: workset.source_scope_digest,
         source_refs: [workset.source_ref],
         module_ref: workset.module_ref,
-        partition_subject_key: workset.partition_subject_key,
         parent_scope_ref: workset.module_ref ?? workset.source_ref,
         inventory_digest: workset.partition_inventory_digest,
         question_target_inventory_digest: workset.question_target_inventory_digest,
@@ -409,9 +230,7 @@ describe("project current Author preparation", () => {
       reader_question_refs: workset.reader_question_refs,
       groups: [{
         group_key: groupKey,
-        subject_key: workset.partition_subject_key,
-        subject_intent: "primary",
-        logical_unit_ref: canonicalIndexerNodeRef(workset.partition_subject_key),
+        logical_unit_ref: indexerProtocolDigest({ indexer_id: workset.indexer_id, source_ref: workset.source_ref, module_ref: workset.module_ref, group_key: groupKey }),
         label: "Guide",
         reader_question_refs: workset.reader_question_refs,
         question_target_bindings: workset.allowed_question_target_refs.map((targetRef) => ({
@@ -444,7 +263,6 @@ describe("project current Author preparation", () => {
           authorized_strategies: partitionValidation.authorized_strategies,
           required_question_target_refs: partitionValidation.required_question_target_refs,
         }],
-        target_resolution_views: [],
       },
     });
     if (!("worksets" in author)) throw new Error("expected author worksets");
@@ -471,7 +289,7 @@ describe("project current Author preparation", () => {
       }>;
     };
     expect(currentAuthorValidation.dependency_view.logical_unit_ref).toBe(
-      canonicalIndexerNodeRef(workset.partition_subject_key),
+      indexerProtocolDigest({ indexer_id: workset.indexer_id, source_ref: workset.source_ref, module_ref: workset.module_ref, group_key: groupKey }),
     );
     expect(indexerInventoryMembersDigest(
       currentAuthorValidation.canonical_inventory_members,
@@ -504,14 +322,13 @@ describe("project current Author preparation", () => {
     )).toEqual([
       expect.objectContaining({
         value: expect.objectContaining({
-          expected_subject_key: workset.partition_subject_key,
           allowed_artifact_intents: currentAuthorValidation.allowed_artifact_intents,
           allowed_question_targets: currentAuthorValidation.allowed_question_targets,
         }),
       }),
     ]);
 
-    const fixture = authorResultFixture(author.run_specs[0]!);
+    const fixture = await authorResultFixture(root, author.run_specs[0]!);
     const validationInput = {
       protocol: "context.indexer.main-run-validation-input/v1" as const,
       request: author.run_specs[0]!.request,

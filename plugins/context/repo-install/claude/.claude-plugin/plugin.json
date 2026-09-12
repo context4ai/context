@@ -1,7 +1,7 @@
 {
   "name": "c4a",
   "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
-  "version": "0.7.9",
+  "version": "0.7.10-alpha.1",
   "author": {
     "name": "c4a"
   },

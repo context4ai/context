@@ -161,7 +161,8 @@ export async function completeCurrentIndexerAction(input: {
     await assertProjectWorkflowRevision({ cwd: found.projectRoot, expectedRevision: input.revision,
       managed: input.managed === true, authorities });
     const { completeApprovedRevision } = await import("./approvedRevision.js");
-    const content = "markdown" in semantic ? { markdown: semantic.markdown } : { sections: semantic.sections };
+    const content = "markdown" in semantic ? { markdown: semantic.markdown,
+      ...(semantic.sections === undefined ? {} : { sections: semantic.sections }) } : { sections: semantic.sections };
     if (input.preview) return completeApprovedRevision({ projectRoot: found.projectRoot,
       revision: input.revision, ...content, preview: true });
     const candidate = await completeApprovedRevision({ projectRoot: found.projectRoot,

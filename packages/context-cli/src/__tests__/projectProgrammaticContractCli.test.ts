@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 import { execFile, execFileSync } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import YAML from "yaml";
-import { indexerArtifactResultSchema, indexerAuthorSemanticInputSchema, resolveIndexerSubjectKeySchemas } from "@c4a/context";
+import { indexerArtifactResultSchema, indexerAuthorSemanticInputSchema, projectIndexerPublicContractTable,
+  renderIndexerDeterministicFacts, type IndexerArtifactFact } from "@c4a/context";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
 import { completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
@@ -17,7 +19,6 @@ import { buildIndexerAuthorRunResultFromSemantic } from "../project/indexerSeman
 import { acceptIndexerMainAuthorRunsStore, readAcceptedIndexerMainAuthorResultRecords } from "../project/indexerMainRunStore.js";
 import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { readCurrentIndexerFinalization } from "../project/indexerCurrentFinalization.js";
-import { loadCliIndexerBaseContracts } from "../project/indexerCliBundledProvider.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { readIndexerDelivery } from "../project/indexerDelivery.js";
 
@@ -86,12 +87,16 @@ async function acceptContractAuthors(root: string, catalogComponent: boolean): P
     const workset = task.spec.request.workset;
     if (workset.stage !== "author") throw new Error("expected Author workset");
     const validation = task.spec.validation as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"];
-    const dependencyView = validation.dependency_view as {
-      positive_nodes: Array<{ kind: string; evidence_ref?: string }>;
-    };
-    const sourceItems = dependencyView.positive_nodes.flatMap(node =>
-      node.kind === "source-span" && node.evidence_ref ? [node.evidence_ref] : []);
+    const references = await fixtureArticleReferences(root, task.view);
     const viewFacts = task.view.items.filter(item => item.category === "fact");
+    // The author selects and formats the supplied contracts. Candidate compile
+    // preserves that prose; it no longer manufactures an article fact ledger.
+    const facts = viewFacts.map(item => {
+      const value = item.value as { kind: string; payload: IndexerArtifactFact["value"] };
+      return { fact_ref: item.ref, fact_kind: value.kind, value: value.payload, evidence_refs: [],
+        subject_key: { protocol: "context.subject-key/v1" as const, namespace: "fixture", kind: "file", local_key: "panel.tsx" } };
+    }).filter(fact => projectIndexerPublicContractTable(fact) !== undefined);
+    const api = renderIndexerDeterministicFacts({ renderer: "public-contract-table", facts });
     const catalogMembers = new Set(validation.canonical_inventory_members.filter(member =>
       catalogComponent && viewFacts.some(item => {
         const value = item.value as { payload?: { kind?: string } };
@@ -103,12 +108,8 @@ async function acceptContractAuthors(root: string, catalogComponent: boolean): P
       stage: "author", outcome: "publish", group_key: workset.group_key,
       artifact_intent: "authoritative-source/usage-guide/integrate-capability/content",
       title: "Public component", summary: "Use the public component and its parameters.",
-      target_resolutions: (workset.target_resolution_view?.entries ?? []).map(entry => ({
-        target: entry.query_ref, disposition: entry.state === "resolved" ? "reuse-existing" : "create-independent",
-      })),
-      sections: [{ key: "overview", heading: "Overview", markdown: "Use the exported component.",
-        source_items: sourceItems,
-        facts: viewFacts.filter(item => !catalogMembers.has(item.provenance.container_ref ?? item.ref)).map(item => item.ref),
+      sections: [{ key: "overview", heading: "Overview", markdown: "Use the exported component.\n\n" + api,
+        references,
         answers: validation.allowed_question_targets.map(target => target.question_target_key),
       }],
       member_dispositions: validation.canonical_inventory_members.map(member => catalogMembers.has(member.member_id)
@@ -117,7 +118,7 @@ async function acceptContractAuthors(root: string, catalogComponent: boolean): P
       material_gaps: [], diagnostics: [],
     });
     runs.push({ workset_digest: workset.workset_digest,
-      result: buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, semantic, validation }) });
+      result: buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, semantic, validation }) });
   }
   if (catalogComponent) expect(supportingCount).toBeGreaterThan(0);
   const accepted = await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs });
@@ -126,7 +127,7 @@ async function acceptContractAuthors(root: string, catalogComponent: boolean): P
 }
 
 for (const catalogComponent of [false, true]) {
-  test(`CLI Candidate compile merges defaults with component ${catalogComponent ? "catalog-only" : "covered"}`, async () => {
+  test(`CLI Candidate compile preserves source-rendered defaults with component ${catalogComponent ? "catalog-only" : "covered"}`, async () => {
     const root = await prepareContractWorkspace();
     try {
       await acceptContractAuthors(root, catalogComponent);
@@ -137,11 +138,6 @@ for (const catalogComponent of [false, true]) {
         ...record, artifact_result: indexerArtifactResultSchema.parse(record.artifact_result),
       })).filter(record => !delivery?.current.length || delivery.current.some(page =>
         page.result_digest === record.artifact_result.output_digest));
-      const contracts = await loadCliIndexerBaseContracts();
-      const schemas = resolveIndexerSubjectKeySchemas({ profile_contract: contracts.profiles,
-        operator_contract: contracts.operators, providers: [], selections: [{
-          indexer_id: "revision-fixture", profile: "component-library", role: "primary", provider_layer_id: "community",
-        }] });
       const input = {
         protocol: "context.indexer.candidate-compile-input/v1",
         accepted_result_refs: records.map(record => ({
@@ -150,7 +146,6 @@ for (const catalogComponent of [false, true]) {
           acceptance_digest: record.accepted_record.acceptance_digest,
           artifact_result_digest: record.artifact_result.output_digest,
         })),
-        subject_key_schema_set: schemas,
         layout_proposal_set: finalization!.layout_proposal_set,
         layout_transition: finalization!.layout_transition,
         layout_change_confirmations: finalization!.confirmations ?? [],

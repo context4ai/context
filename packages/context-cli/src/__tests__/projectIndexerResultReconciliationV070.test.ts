@@ -13,12 +13,10 @@ import {
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
   buildIndexerQuestionTargetInventory,
-  canonicalIndexerNodeRef,
   canonicalOwnerCellRef,
   composeIndexerLayerInput,
   indexerArtifactResultDigest,
   indexerCapabilityGroupMemberIdsDigest,
-  indexerEvidenceBindingDigest,
   indexerInventoryMembersDigest,
   indexerProtocolDigest,
   indexerRegistryDigests,
@@ -28,7 +26,6 @@ import {
   type IndexerArtifactResult,
   type IndexerMainAuthorWorkset,
   type IndexerRegistry,
-  type IndexerSubjectKey,
 } from "@c4a/context";
 import {
   acceptIndexerMainRunStore,
@@ -45,12 +42,8 @@ const SOURCE_REF = "repo:sample";
 const MODULE_REF = "module:service";
 const MEMBER_REF = "member:worker";
 const INVENTORY = [{ member_id: MEMBER_REF, member_kind: "service" as const }];
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample",
-  kind: "service",
-  local_key: "worker",
-};
+const LOGICAL_UNIT_REF = indexerProtocolDigest({ indexer_id: "service-indexer", source_ref: SOURCE_REF,
+  module_ref: MODULE_REF, group_key: "service:worker" });
 
 const PRIMARY_EXECUTION_PROJECTION = buildIndexerPrimaryExecutionProjection({
   indexer_id: "service-indexer",
@@ -129,7 +122,7 @@ function eligibility(): IndexerArtifactPolicyEligibility {
 }
 
 function dependencyView() {
-  const logicalUnitRef = canonicalIndexerNodeRef(SUBJECT);
+  const logicalUnitRef = LOGICAL_UNIT_REF;
   return buildIndexerAuthorDependencyView({
     source_ref: SOURCE_REF,
     module_ref: MODULE_REF,
@@ -176,7 +169,6 @@ function authorWorkset(requirementSetDigest: string): IndexerMainAuthorWorkset {
     primary_execution_fingerprint:
       PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
     profile_contract_digest: digest("b"),
-    subject_key_schema_digest: digest("f"),
     source_scope_digest: digest("0"),
     source_binding_digest: digest("1"),
     primary_resource_binding_digest:
@@ -184,7 +176,7 @@ function authorWorkset(requirementSetDigest: string): IndexerMainAuthorWorkset {
     question_target_inventory_digest: digest("3"),
     partition_plan_binding_digest: digest("4"),
     group_key: "service:worker",
-    logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+    logical_unit_ref: LOGICAL_UNIT_REF,
     member_ids_digest: indexerCapabilityGroupMemberIdsDigest([MEMBER_REF]),
     member_inventory_digest: indexerInventoryMembersDigest(INVENTORY),
     group_projection_digest: digest("6"),
@@ -223,19 +215,6 @@ function runFixture(requirementSetDigest: string) {
       primary_execution_projection: PRIMARY_EXECUTION_PROJECTION,
     }),
   });
-  const evidencePayload = {
-    evidence_ref: "evidence:worker-boundary",
-    kind: "code" as const,
-    source_ref: workset.source_ref,
-    module_ref: workset.module_ref,
-    locator: { path: "src/worker.ts", start_line: 1, end_line: 1 },
-    content_digest: digest("b"),
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
   const artifactPayload: Omit<IndexerArtifactResult, "output_digest"> = {
     protocol: "context.indexer.artifact-result/v1",
     author_workset_digest: workset.workset_digest,
@@ -253,9 +232,7 @@ function runFixture(requirementSetDigest: string) {
     source_role: "authoritative-source",
     logical_unit: {
       group_key: workset.group_key,
-      subject_key: SUBJECT,
       logical_unit_ref: workset.logical_unit_ref,
-      target_resolution_dispositions: [],
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: workset.workset_digest,
@@ -273,11 +250,8 @@ function runFixture(requirementSetDigest: string) {
         member_kind: "service",
         inventory_disposition: "owned",
         projection_disposition: "boundary-only",
-        evidence_refs: [evidence.evidence_ref],
       }],
     }),
-    facts: [],
-    evidence_bindings: [evidence],
     artifacts: [],
     artifact_bundle: null,
     material_question_proposals: [],
@@ -297,7 +271,6 @@ function runFixture(requirementSetDigest: string) {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: eligibility(),
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],
@@ -368,7 +341,6 @@ describe("project Indexer result reconciliation", () => {
       effective_composer_set: effectiveComposers,
       author_workset_digest: run.workset.workset_digest,
       primary_result_digest: acceptedAuthor.accepted_record.result_digest,
-      primary_facts: [],
       primary_artifacts: [],
       validator_contract_digest: digest("b"),
       current_profile_binding_digest: digest("c"),

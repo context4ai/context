@@ -9,7 +9,7 @@ test("one accepted Result and its Composer pages compile in separate batches wit
     const proposal = resolveIndexerLayout({ artifact_result: fixture.result,
       post_author_envelope: fixture.envelope, profile: "component-library",
       profile_contract: fixture.profiles, operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
       shared_artifact_fingerprint: fixture.accepted.run_envelope.shared_artifact_fingerprint,
       ...(ids === undefined ? {} : { delivery_artifact_ids: ids }),
     });
@@ -17,7 +17,7 @@ test("one accepted Result and its Composer pages compile in separate batches wit
     const input = { layout_proposal_set: layout,
       layout_transition: buildIndexerLayoutTransition({ layout_proposal_set: layout, base_projections: [] }),
       accepted_results: [fixture.accepted], profile_contract: fixture.profiles,
-      operator_contract: fixture.operators, subject_key_schema_set: fixture.subjectKeySchemaSet };
+      operator_contract: fixture.operators };
     const result = buildIndexerCandidateCompile(input);
     expect(validateIndexerCandidateCompile({ ...input, compile: result })).toEqual(result);
     return result.files;

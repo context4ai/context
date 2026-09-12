@@ -9,95 +9,6 @@ import {
   indexerIdSchema,
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
-import { indexerSubjectKeySchema } from "./indexerSubjectIdentity.js";
-
-const targetResolutionEntrySchema = z.union([
-  z.object({
-    query_ref: indexerDigestSchema,
-    state: z.literal("resolved"),
-    subject_key: indexerSubjectKeySchema,
-    node_ref: indexerCanonicalRefSchema,
-  }).strict(),
-  z.object({
-    query_ref: indexerDigestSchema,
-    state: z.literal("absent"),
-  }).strict(),
-  z.object({
-    query_ref: indexerDigestSchema,
-    state: z.literal("ambiguous"),
-    conflicting_node_refs: z.array(indexerCanonicalRefSchema).min(2),
-  }).strict().superRefine((value, context) => {
-    addDuplicateIssues(value.conflicting_node_refs, context, "conflicting_node_refs");
-  }),
-]);
-
-export const indexerTargetResolutionViewSchema = z.object({
-  protocol: z.literal("context.indexer.target-resolution-view/v1"),
-  view_digest: indexerDigestSchema,
-  requirement_ref: indexerCanonicalRefSchema,
-  subject_key_schema_digest: indexerDigestSchema,
-  query_digest: indexerDigestSchema,
-  entries: z.array(targetResolutionEntrySchema).min(1),
-}).strict().superRefine((value, context) => {
-  addDuplicateIssues(value.entries.map((item) => item.query_ref), context, "entries.query_ref");
-});
-
-export type IndexerTargetResolutionView = z.infer<
-  typeof indexerTargetResolutionViewSchema
->;
-
-export function indexerTargetResolutionViewDigest(
-  value: Omit<IndexerTargetResolutionView, "view_digest">,
-): string {
-  return indexerProtocolDigest(value);
-}
-
-export function buildIndexerTargetResolutionView(
-  input: Omit<IndexerTargetResolutionView, "protocol" | "view_digest">,
-): IndexerTargetResolutionView {
-  const entries = [...input.entries].sort((left, right) =>
-    compareIndexerCanonicalText(left.query_ref, right.query_ref)
-  ).map((entry) =>
-    entry.state === "ambiguous"
-      ? { ...entry, conflicting_node_refs: [...entry.conflicting_node_refs].sort() }
-      : entry
-  );
-  const payload: Omit<IndexerTargetResolutionView, "view_digest"> = {
-    protocol: "context.indexer.target-resolution-view/v1",
-    ...input,
-    entries,
-  };
-  return indexerTargetResolutionViewSchema.parse({
-    ...payload,
-    view_digest: indexerTargetResolutionViewDigest(payload),
-  });
-}
-
-export function validateIndexerTargetResolutionView(
-  value: unknown,
-): IndexerTargetResolutionView {
-  const view = indexerTargetResolutionViewSchema.parse(value);
-  const payload: Omit<IndexerTargetResolutionView, "view_digest"> = {
-    protocol: view.protocol,
-    requirement_ref: view.requirement_ref,
-    subject_key_schema_digest: view.subject_key_schema_digest,
-    query_digest: view.query_digest,
-    entries: view.entries,
-  };
-  if (indexerTargetResolutionViewDigest(payload) !== view.view_digest) {
-    throw new TypeError("TargetResolutionView digest is invalid");
-  }
-  const rebuilt = buildIndexerTargetResolutionView({
-    requirement_ref: view.requirement_ref,
-    subject_key_schema_digest: view.subject_key_schema_digest,
-    query_digest: view.query_digest,
-    entries: view.entries,
-  });
-  if (rebuilt.view_digest !== view.view_digest) {
-    throw new TypeError("TargetResolutionView entries must use canonical ordering");
-  }
-  return view;
-}
 
 const indexerRepairIntentPayloadSchema = z.object({
   target_ref: z.string().min(1),
@@ -146,7 +57,6 @@ const mainWorksetBaseFields = {
   requirement_set_digest: indexerDigestSchema,
   primary_execution_fingerprint: indexerDigestSchema,
   profile_contract_digest: indexerDigestSchema,
-  subject_key_schema_digest: indexerDigestSchema,
   source_scope_digest: indexerDigestSchema,
   source_binding_digest: indexerDigestSchema,
   primary_resource_binding_digest: indexerDigestSchema,
@@ -157,7 +67,6 @@ const mainWorksetBaseFields = {
 const partitionWorksetSchema = z.object({
   ...mainWorksetBaseFields,
   stage: z.literal("partition"),
-  partition_subject_key: indexerSubjectKeySchema,
   strategy_set_digest: indexerDigestSchema,
   reader_question_refs: z.array(indexerCanonicalRefSchema),
   partition_input_digests: z.array(indexerDigestSchema).min(1),
@@ -184,7 +93,6 @@ const authorWorksetSchema = z.object({
   member_inventory_digest: indexerDigestSchema,
   group_projection_digest: indexerDigestSchema,
   group_dependency_view_digest: indexerDigestSchema,
-  target_resolution_view: indexerTargetResolutionViewSchema.optional(),
   allowed_artifact_policy_variants: z.array(indexerIdSchema).min(1),
   artifact_policy_eligibility_digest: indexerDigestSchema,
 }).strict().superRefine((value, context) => {
@@ -261,15 +169,6 @@ export function buildIndexerMainWorkset(input: MainWorksetInput): IndexerMainWor
           "allowed_artifact_policy_variants",
         ),
       };
-  if (
-    normalized.stage === "author" &&
-    normalized.target_resolution_view?.entries.some((entry) => entry.state === "ambiguous")
-  ) {
-    throw new TypeError("index-target-resolution-ambiguous");
-  }
-  if (normalized.stage === "author" && normalized.target_resolution_view !== undefined) {
-    validateIndexerTargetResolutionView(normalized.target_resolution_view);
-  }
   if (normalized.repair_intent !== undefined) {
     validateIndexerRepairIntent(normalized.repair_intent);
   }
@@ -344,7 +243,6 @@ export function buildIndexerMainWorksetSet(
     owner_cohort_ref: indexerOwnerCohortRef(workset),
     ...(workset.stage === "partition"
       ? { partition_key: indexerProtocolDigest({
-          partition_subject_key: workset.partition_subject_key,
           partition_inventory_digest: workset.partition_inventory_digest,
         }) }
       : {

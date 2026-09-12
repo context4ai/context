@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { articleSourceReferenceSchema } from "./articleStructure.js";
 import {
   indexerArtifactContentBlockSchema,
   indexerCanonicalJsonSchema,
 } from "./indexerContentLayers.js";
 import {
-  indexerCanonicalRefSchema,
   indexerIdSchema,
   indexerProtocolDigest,
 } from "./indexerProtocolCommon.js";
@@ -23,8 +23,7 @@ const indexerArtifactSectionSchema = indexerArtifactSectionProjectionSchema.exte
 
 const indexerArtifactTemplateVariableSchema = z.object({
   value: indexerCanonicalJsonSchema,
-  fact_refs: z.array(indexerCanonicalRefSchema),
-  evidence_refs: z.array(indexerCanonicalRefSchema),
+  references: z.array(articleSourceReferenceSchema).max(3),
 }).strict();
 
 const artifactCommonFields = {
@@ -59,13 +58,20 @@ export type IndexerArtifactSectionProjection = z.infer<
 >;
 
 export function indexerArtifactRef(
-  nodeRef: string,
-  artifact: { artifact_id: string; artifact_kind: string },
+  logicalUnitRef: string,
+  artifact: { artifact_id: string; artifact_kind?: string },
 ): string {
-  return `artifact:subject:${indexerProtocolDigest({
+  return `article:${indexerProtocolDigest({
     protocol: "context.indexer.artifact-identity/v1",
-    node_ref: nodeRef,
+    logical_unit_ref: logicalUnitRef,
     artifact_id: artifact.artifact_id,
-    artifact_kind: artifact.artifact_kind,
   })}`;
+}
+
+/** Article-wide traversal has no three-source cap; that cap applies to each
+ * individual fragment. This helper never expands references into parser facts. */
+export function indexerArtifactReferences(artifact: IndexerArtifact) {
+  return artifact.representation === "sections"
+    ? artifact.sections.flatMap(section => section.blocks.flatMap(block => block.references))
+    : Object.values(artifact.variables).flatMap(variable => variable.references);
 }

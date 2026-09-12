@@ -140,13 +140,6 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
   "context.validate-indexer-contract-overlay/v1": () => ({
     commands: [],
   }),
-  "context.confirm-subject-reidentification/v1": () => ({
-    commands: [command(
-      "context indexer confirm-subject-reidentification --input .tmp/agent-payloads/indexer-subject-reidentification-confirmation.json --format json",
-      "external",
-      "agent-required",
-    )],
-  }),
   "context.propose-overlay-question-amendment/v1": () => ({
     commands: [],
   }),

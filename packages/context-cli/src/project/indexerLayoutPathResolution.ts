@@ -76,7 +76,7 @@ function findConflicts(input: Pick<IndexerReaderPathPreparation,
         previousOwner.get(key) !== artifact.artifact_ref;
       conflict.artifacts.push({
         artifact_ref: artifact.artifact_ref,
-        title: `${proposal.node.subject_key.namespace} / ${proposal.node.subject_key.local_key} (${artifact.artifact_kind})`,
+        title: `${artifact.output_path} (${artifact.artifact_kind})`,
         output_path: artifact.output_path,
       });
       byPath.set(key, conflict);

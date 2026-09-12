@@ -106,8 +106,8 @@ The Provider is considered valid only when all of the following are true:
     another CLI gate. Do not create a separate content-audit report or require
     an Agent to rewrite valid content solely to clear a heuristic signal.
 17. The Indexer graph advances from partition to author work only through
-    CLI-validated workset-set Facts. Exact SubjectKey resolution happens before
-    authoring; post-author composers receive only a bounded PrimaryResultView,
+    CLI-validated workset-set Facts. Article planning does not require subject
+    modeling; post-author composers receive only a bounded PrimaryResultView,
     and reconciliation is unreachable until the independent composer set is
     either explicitly not required or fully accepted with a current envelope.
 18. Main Indexer dispatch first recovers a local content-addressed run ledger.
@@ -144,11 +144,10 @@ The Provider is considered valid only when all of the following are true:
 24. Requirement confirmation always uses the CLI-recomputed canonical comparator.
     Ordinary changes may use only their explicit session authority; contraction
     and incomparable obligation replacement enter a non-delegable human Gate.
-25. SubjectKey schema authority is resolved from the CLI base contract or the one
-    owning extension Provider. Identity-breaking changes over approved Nodes need
-    a Provider major and one exact human re-identification authorization; invalid
-    mappings fail before the Gate. Ambiguous and invalid target resolution are
-    typed blocking/failure Outcomes and cannot enter author work.
+25. Stable article and fragment identities locate content across revisions.
+    Source references contain actual paths and line ranges; the Host computes
+    regional digests. Subject catalogs, relationship matrices and article fact
+    ledgers are not prerequisites for production.
 26. Initial Provider selection is part of the same current Route as the main
     Indexer lifecycle. Its Agent Action receives exact requirements and the
     CLI-bundled catalog and returns only non-CLI visible Skill identities plus

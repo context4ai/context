@@ -22,7 +22,7 @@ export async function selectPartialDelivery(root: string, currentRefs?: Readonly
   }
   const index = await loadProjectIndexerCandidateCompileIndex(root);
   const revision = index.approvedRevisionCandidates;
-  const pages = revision ? revision.map(item => ({ path: `knowledge/${item.path}`, ref: item.view_ref }))
+  const pages = revision ? revision.map(item => ({ path: `knowledge/${item.path}`, ref: item.article_id }))
     : [...index.filesByDigest.values()].filter(item => currentRefs === undefined || currentRefs.has(item.artifact_ref))
       .map(item => ({ path: item.output_path, ref: item.artifact_ref }));
   const unresolved = new Set(candidates.map(item => `knowledge/${item.path}`));

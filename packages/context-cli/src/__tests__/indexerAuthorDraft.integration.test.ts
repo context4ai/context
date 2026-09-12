@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 import { readFile, realpath, rm } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -34,10 +35,10 @@ test("Author grouped draft validates without changing acceptance, then commits t
       const selected = await loadCurrentIndexerBatchTask({ projectRoot: root, descriptor: current.descriptor, taskKey: descriptor.task_key });
       const skeleton = scaffoldAuthorTask(selected);
       const validation = selected.spec.validation as { allowed_question_targets: { question_target_key: string }[] };
-      const fact = selected.view.items.find(item => item.category === "fact")!;
+      const references = await fixtureArticleReferences(root, selected.view);
       results.push({ task_key: skeleton.task_key, result: { ...skeleton.result,
         title: "Public entry", summary: "Use the public entry.",
-        sections: [{ key: "overview", heading: "Overview", markdown: "Use the exported entry.", facts: [fact.ref], answers: validation.allowed_question_targets.map(target => target.question_target_key) }],
+        sections: [{ key: "overview", heading: "Overview", markdown: "Use the exported entry.", references, answers: validation.allowed_question_targets.map(target => target.question_target_key) }],
         member_dispositions: [{ items: skeleton.result.member_dispositions.map(item => item.item), state: "covered", section: "overview" }],
       } });
     }
@@ -121,14 +122,17 @@ test("Author grouped draft validates without changing acceptance, then commits t
     const files = (task.spec.validation.source_identity_inventory as { files: { normalized_path: string }[] }).files;
     const additionalPath = files.some(file => file.normalized_path === "src/index.ts") ? "src/secondary.ts" : "src/index.ts";
     const expanded = { ...value, results: value.results.map((row, index) => index !== 0 ? row : {
-      ...row, result: { ...row.result, sections: row.result.sections.map(section => ({ ...section, source_items: [additionalPath] })) },
+      ...row, result: { ...row.result, sections: row.result.sections.map(section => ({ ...section,
+        references: [...section.references, { source_ref: section.references[0]!.source_ref,
+          locator: { path: additionalPath, start_line: 1, end_line: 1 } }],
+      })) },
     }) };
     const materialPreview = await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true, authorities, value: expanded, preview: true });
     expect(materialPreview).toMatchObject({ valid: true, committed_count: 0 });
     expect(JSON.stringify(await currentLedger(root))).toBe(before);
     expect((await resolveCurrentIndexerWorkflowRoute({ projectRoot: root, authorities, managed: true }))!.revision).toBe(route.revision);
     const malformed = JSON.parse(JSON.stringify(value));
-    malformed.results[0].result.sections[0].facts = [42];
+    malformed.results[0].result.sections[0].references = [42];
     malformed.results[0].result.member_dispositions = [
       { item: draft.result.member_dispositions[0]!.item, state: "invalid-state" },
       { items: [draft.result.member_dispositions[0]!.item], state: "invalid-state" },
@@ -139,7 +143,7 @@ test("Author grouped draft validates without changing acceptance, then commits t
     expect(located).toMatchObject({ valid: false, committed_count: 0, revision_advanced: false });
     const failure = located.validation_results.find(item => item.task_key === draft.task_key)!;
     expect(failure.issues).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: ["result", "sections", 0, "facts", 0], section_key: "overview" }),
+      expect.objectContaining({ path: ["result", "sections", 0, "references", 0], section_key: "overview" }),
       expect.objectContaining({ path: ["result", "member_dispositions", 0, "state"], member_id: draft.result.member_dispositions[0]!.item }),
       expect.objectContaining({ path: ["result", "member_dispositions", 1, "state"] }),
       expect.objectContaining({ path: ["result", "member_dispositions", 2], code: "invalid_union" }),

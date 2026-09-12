@@ -13,7 +13,8 @@ describe("cached read consumers stay current after writes", () => {
     try {
       await mkdir(join(root, "knowledge"));
       const path = join(root, "knowledge/structure.yaml");
-      const structure = (suffix: string) => ({ views: [{ path: `codeindex/${suffix}.md`, view_ref: `view:${suffix}` }] });
+      const structure = (suffix: string) => ({ articles: [{ path: `codeindex/${suffix}.md`, article_id: `article:${suffix}`,
+        collection: "codeindex", visibility: "public", sections: [] }] });
       await writeFile(path, JSON.stringify(structure("first")));
       await withCommandReadCache(async () => {
         const first = await readApprovedKnowledgeMetadataIndex(root);
@@ -22,8 +23,8 @@ describe("cached read consumers stay current after writes", () => {
         await writeFile(path, JSON.stringify(structure("next")));
         const next = await readApprovedKnowledgeMetadataIndex(root);
         expect([...next.byPath.keys()]).toEqual(["codeindex/next.md"]);
-        await writeFile(path, "views: [");
-        expect((await readApprovedKnowledgeMetadataIndex(root)).byPath.size).toBe(0);
+        await writeFile(path, "articles: [");
+        await expect(readApprovedKnowledgeMetadataIndex(root)).rejects.toThrow();
         await writeFile(path, JSON.stringify(structure("recovered")));
         expect([...(await readApprovedKnowledgeMetadataIndex(root)).byPath.keys()]).toEqual(["codeindex/recovered.md"]);
       });

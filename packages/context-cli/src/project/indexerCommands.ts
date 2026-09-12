@@ -24,8 +24,6 @@ import {
   buildProjectIndexerMainAuthorWorksets,
   buildProjectIndexerMainPartitionWorksets,
   buildProjectIndexerQuestionTargetInventory,
-  buildProjectIndexerSubjectCatalog,
-  buildProjectIndexerTargetResolutionViews,
   auditProjectIndexerProjectedArtifactFanOut,
   observeProjectIndexerMainWorksets,
   validateProjectIndexerMainRun,
@@ -51,11 +49,8 @@ import {
 } from "./indexerPostAuthorActions.js";
 import { reconcileProjectIndexerResults } from "./indexerResultReconciliationActions.js";
 import { registerIndexerRequirementGateCommands } from "./indexerRequirementGateCommands.js";
-import { registerIndexerSubjectIdentityCommands } from "./indexerSubjectIdentityCommands.js";
 import { registerIndexerMarkdownProviderCommands } from "./indexerMarkdownProviderCommands.js";
 import { compileProjectIndexerCandidates } from "./indexerCandidateCompileActions.js";
-import { reportProjectIndexerIncrementalImpact } from
-  "./indexerIncrementalImpactActions.js";
 import { reportProjectIndexerBenchmark } from "./indexerBenchmarkActions.js";
 import {
   dispatchProjectIndexerProviderResolution,
@@ -151,7 +146,6 @@ export function registerProjectIndexerCommands(program: Command): void {
     .description("Inspect, confirm, and apply Indexer requirements and Providers");
 
   registerIndexerRequirementGateCommands(indexer);
-  registerIndexerSubjectIdentityCommands(indexer);
   registerIndexerMarkdownProviderCommands(indexer);
 
   requirementCommand(
@@ -325,16 +319,6 @@ export function registerProjectIndexerCommands(program: Command): void {
       run: validateProjectIndexerMainRun,
     },
     {
-      name: "build-subject-catalog",
-      description: "Merge approved Nodes with fully validated partition subjects",
-      run: buildProjectIndexerSubjectCatalog,
-    },
-    {
-      name: "build-target-resolution-views",
-      description: "Resolve exact enrich-or-independent SubjectKey queries",
-      run: buildProjectIndexerTargetResolutionViews,
-    },
-    {
       name: "build-main-index-author-worksets",
       description: "Build one immutable author workset per validated partition group",
       run: buildProjectIndexerMainAuthorWorksets,
@@ -348,11 +332,6 @@ export function registerProjectIndexerCommands(program: Command): void {
       name: "compile-indexer-candidates",
       description: "Compile Candidate Artifacts from the exact accepted author IndexerResult set",
       run: compileProjectIndexerCandidates,
-    },
-    {
-      name: "report-indexer-incremental-impact",
-      description: "Report exact Artifact and Section impact from current Merkle dependencies",
-      run: reportProjectIndexerIncrementalImpact,
     },
   ] as const;
   for (const action of lifecycleActions) {

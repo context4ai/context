@@ -9,7 +9,9 @@ const schemaPath = join(import.meta.dir, "../../context-workflow/schemas/indexer
 const author = {
   stage: "author", group_key: "public-api", outcome: "publish",
   title: "Public API", summary: "How to use the public entry point.",
-  sections: [{ key: "usage", heading: "Usage", markdown: "Call start().", source_items: ["src/index.ts"] }],
+  sections: [{ key: "usage", heading: "Usage", markdown: "Call start().", references: [{
+    source_ref: "repo:sample", locator: { path: "src/index.ts", start_line: 1, end_line: 2 },
+  }] }],
   member_dispositions: [{ item: "entry:start", state: "covered", section: "usage" }],
 };
 const batch = (stage: string, result: unknown) => ({

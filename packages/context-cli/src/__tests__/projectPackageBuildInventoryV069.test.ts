@@ -1,226 +1,52 @@
-import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PackageDefinition } from "@c4a/context";
-import {
-  packageBuildInventory,
-  packageScopedKnowledgeStructure,
-  readKnowledgeStructure,
-  type SelectedApprovedKnowledgeFile,
-} from "../project/packageBuildInventory.js";
+import type { ArticleStructureEntry, PackageDefinition } from "@c4a/context";
+import { packageBuildInventory, packageScopedKnowledgeStructure, readKnowledgeStructure,
+  type SelectedApprovedKnowledgeFile } from "../project/packageBuildInventory.js";
 
-function approvedPage(input: {
-  title: string;
-  nodeRef: string;
-  viewRef: string;
-}): string {
-  return [
-    "---",
-    `title: ${input.title}`,
-    "type: Skill",
-    `node_ref: ${input.nodeRef}`,
-    `view_ref: ${input.viewRef}`,
-    "node_type: action",
-    `description: ${input.title}`,
-    "tags:",
-    "  - runbook",
-    "timestamp: 2026-06-28T00:00:00.000Z",
-    "sources:",
-    "  - file:docs/index.md",
-    "---",
-    "",
-    `# ${input.title}`,
-    "",
-  ].join("\n");
-}
-
-describe("0.6.9 package build inventory collection summaries", () => {
-  test("summarizes selected knowledge by internal collection instead of navigation group", async () => {
-    const projectRoot = mkdtempSync(join(tmpdir(), "context-cli-inventory-v069-"));
-    mkdirSync(join(projectRoot, "knowledge"), { recursive: true });
-    writeFileSync(join(projectRoot, "knowledge", "structure.yaml"), `${JSON.stringify({
-      schema_version: "context.approved-structure.v1",
-      processed_scopes: [{ requirement_ref: "sample-manual", source_ref: "file:docs",
-        processed_version: "sha256:" + "a".repeat(64) }],
-      material_gap_ledger: {
-        protocol: "context.indexer.material-gap-ledger/v1",
-        entries: [{ answer_body: "must-not-enter-dist" }],
-      },
-      material_answers: [{ planned_answer_digest: "must-not-enter-dist" }],
-      nodes: [{
-        node_ref: "action/alpha",
-        title: "Alpha Feature",
-        node_type: "action",
-      }, {
-        node_ref: "action/beta",
-        title: "Beta Experiment",
-        node_type: "action",
-      }, {
-        node_ref: "action/gamma",
-        title: "Gamma Unselected",
-        node_type: "action",
-      }],
-      views: [{
-        view_ref: "feats:action/alpha",
-        node_ref: "action/alpha",
-        collection: "feats",
-        path: "feats/feature/alpha.md",
-        sections: [{ section_ref: "feats:action/alpha#overview" }],
-      }, {
-        view_ref: "architecture:action/alpha",
-        node_ref: "action/alpha",
-        collection: "architecture",
-        path: "architecture/feature/alpha.md",
-        sections: [{ section_ref: "architecture:action/alpha#overview" }],
-      }, {
-        view_ref: "feats:action/beta",
-        node_ref: "action/beta",
-        collection: "feats",
-        path: "feats/experiment/beta.md",
-        sections: [{ section_ref: "feats:action/beta#overview" }],
-      }, {
-        view_ref: "feats:action/gamma",
-        node_ref: "action/gamma",
-        collection: "feats",
-        path: "feats/experiment/gamma.md",
-        sections: [{ section_ref: "feats:action/gamma#overview" }],
-      }],
-      edges: [{
-        type: "depends_on",
-        from: "action/alpha",
-        to: "feats:action/beta",
-        source_refs: ["file:docs/index.md#span:alpha L1-1@abcdef123456"],
-      }, {
-        type: "depends_on",
-        from: "feats:action/gamma",
-        to: "feats:action/beta",
-        source_refs: ["file:docs/index.md#span:gamma L2-2@abcdef123456"],
-      }],
-    })}\n`, "utf8");
-    const selected: SelectedApprovedKnowledgeFile[] = [{
-      relPath: "feats/feature/alpha.md",
-      absPath: join(projectRoot, "knowledge", "feats", "feature", "alpha.md"),
-      content: approvedPage({
-        title: "Alpha Feature",
-        nodeRef: "action/alpha",
-        viewRef: "feats:action/alpha",
-      }),
+test("package inventory contains only selected articles and excludes production bookkeeping", async () => {
+  const root = await mkdtemp(join(tmpdir(), "context-package-articles-"));
+  try {
+    await mkdir(join(root, "knowledge"));
+    const articles: ArticleStructureEntry[] = [
+      { article_id: "alpha", path: "feats/feature/alpha.md", collection: "feats", visibility: "public", sections: [] },
+      { article_id: "beta", path: "feats/experiment/beta.md", collection: "feats", visibility: "public", sections: [] },
+      { article_id: "gamma", path: "architecture/gamma.md", collection: "architecture", visibility: "public", sections: [] },
+    ];
+    await writeFile(join(root, "knowledge/structure.yaml"), JSON.stringify({
+      schema_version: "context.approved-structure.v1", articles,
+      processed_scopes: [{ requirement_ref: "manual", source_ref: "file:docs", processed_version: "sha256:" + "a".repeat(64) }],
+      material_gap_ledger: { entries: [{ answer_body: "private runtime" }] },
+    }));
+    const selected: SelectedApprovedKnowledgeFile[] = articles.slice(0, 2).map(article => ({
+      relPath: article.path, absPath: join(root, "knowledge", article.path), article,
+      content: "---\ntitle: " + article.article_id + "\ntype: Feature\ndescription: Reader instructions.\ntimestamp: 2026-09-12T00:00:00.000Z\n---\n",
       selectedBy: [{ kind: "collection", value: "feats" }],
-    }, {
-      relPath: "feats/experiment/beta.md",
-      absPath: join(projectRoot, "knowledge", "feats", "experiment", "beta.md"),
-      content: approvedPage({
-        title: "Beta Experiment",
-        nodeRef: "action/beta",
-        viewRef: "feats:action/beta",
-      }),
-      selectedBy: [{ kind: "collection", value: "feats" }],
-    }];
-
-    const scopedStructure = packageScopedKnowledgeStructure({
-      selected,
-      structure: await readKnowledgeStructure(projectRoot),
-    });
-    expect(JSON.stringify(scopedStructure.parsed)).not.toContain("action/gamma");
-    expect(JSON.stringify(scopedStructure.parsed)).not.toContain("architecture:action/alpha");
-    expect(scopedStructure.parsed).not.toHaveProperty("material_gap_ledger");
-    expect(scopedStructure.parsed).not.toHaveProperty("material_answers");
-    expect(scopedStructure.parsed).not.toHaveProperty("processed_scopes");
-    const originalStructure = await readKnowledgeStructure(projectRoot);
-    const advancedStructure = { ...originalStructure, parsed: { ...originalStructure.parsed,
-      processed_scopes: [{ requirement_ref: "sample-manual", source_ref: "file:docs",
-        processed_version: "sha256:" + "b".repeat(64) }] } };
-    expect(packageScopedKnowledgeStructure({ selected, structure: advancedStructure }).sha256)
-      .toBe(scopedStructure.sha256);
-    expect(JSON.stringify(scopedStructure.parsed)).not.toContain("must-not-enter-dist");
-
+    }));
+    const original = await readKnowledgeStructure(root);
+    const scoped = packageScopedKnowledgeStructure({ selected, structure: original });
+    expect(scoped.parsed).toEqual({ schema_version: "context.approved-structure.v1", articles: articles.slice(0, 2) });
+    const advanced = { ...original, parsed: { ...original.parsed,
+      processed_scopes: [{ requirement_ref: "manual", source_ref: "file:docs", processed_version: "sha256:" + "b".repeat(64) }] } };
+    expect(packageScopedKnowledgeStructure({ selected, structure: advanced }).sha256).toBe(scoped.sha256);
     const inventory = packageBuildInventory({
-      pkg: {
-        kind: "package.kb",
-        name: "sample-kb",
-        outDir: "dist/sample-kb",
-        reads: [],
-        writes: [],
+      pkg: { kind: "package.kb", name: "sample-kb", outDir: "dist/sample-kb", reads: [], writes: [],
         template: { path: "src/package-templates/kb", vars: {} },
-        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 },
-      } as PackageDefinition,
-      selected,
-      structure: scopedStructure,
-      verifyEvidenceStatus: "pass",
-    }) as {
-      approved_knowledge: {
-        groups: Array<{ name: string; internal_collection: string; count: number }>;
-        collections: Array<{
-          collection: string;
-          internal_collection: string;
-          okf_root: string;
-          count: number;
-          edge_count: number;
-          edge_contract: { validation_scope: string; valid: boolean; checked: number };
-        }>;
-      };
-      structure: {
-        scope: string;
-        nodes: number;
-        edges: number;
-        edge_contract: { validation_scope: string; valid: boolean; checked: number };
-        edge_records_scope: string;
-        edge_records: Array<{
-          type: string;
-          from: string;
-          to: string;
-          source_refs: string[];
-          collections: string[];
-          okf_roots: string[];
-        }>;
-        relationship_coverage: {
-          state: string;
-          codegraph_views: number;
-          emitted_edges: number;
-        };
-      };
-    };
-
-    expect(inventory.approved_knowledge.groups).toEqual(expect.arrayContaining([
+        navigation: { foldDirectoryIndexes: true, maxInlineEntries: 50 } } as PackageDefinition,
+      selected, structure: scoped, verifyEvidenceStatus: "pass",
+    });
+    const approved = inventory.approved_knowledge as { groups: unknown[]; collections: unknown[] };
+    expect(approved.groups).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "feature", internal_collection: "feats", count: 1 }),
       expect.objectContaining({ name: "experiment", internal_collection: "feats", count: 1 }),
     ]));
-    expect(inventory.approved_knowledge.collections).toEqual([expect.objectContaining({
-      collection: "feats",
-      internal_collection: "feats",
-      okf_root: "feats",
-      count: 2,
-      edge_count: 1,
-      edge_contract: expect.objectContaining({
-        validation_scope: "collection",
-        valid: true,
-        checked: 1,
-      }),
+    expect(approved.collections).toEqual([expect.objectContaining({
+      collection: "feats", internal_collection: "feats", okf_root: "feats", count: 2,
     })]);
-    expect(inventory.structure).toMatchObject({
-      scope: "selected-package",
-      nodes: 2,
-      edges: 1,
-      edge_contract: {
-        validation_scope: "structure",
-        valid: true,
-        checked: 1,
-      },
-    });
-    expect(inventory.structure.edge_records_scope).toBe("selected-package");
-    expect(inventory.structure.edge_records).toEqual([expect.objectContaining({
-      type: "depends_on",
-      from: "action/alpha",
-      to: "feats:action/beta",
-      source_refs: ["file:docs/index.md#span:alpha L1-1@abcdef123456"],
-      collections: ["feats"],
-      okf_roots: ["feats"],
-    })]);
-    expect(inventory.structure.relationship_coverage).toEqual(expect.objectContaining({
-      state: "not-applicable",
-      codegraph_views: 0,
-      emitted_edges: 0,
-    }));
-  });
+    expect(inventory.structure).toMatchObject({ scope: "selected-package", articles: 2 });
+    expect(inventory.structure).not.toHaveProperty("nodes");
+    expect(inventory.structure).not.toHaveProperty("edge_records");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

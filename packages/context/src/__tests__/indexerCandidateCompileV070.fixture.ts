@@ -6,10 +6,8 @@ import {
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutTransition,
   buildIndexerSharedArtifactFingerprint,
-  canonicalIndexerNodeRef,
   composeIndexerPostAuthorEnvelope,
   indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerLayerFragmentDigest,
   indexerProtocolDigest,
   indexerRenderedArtifactDigest,
@@ -17,23 +15,21 @@ import {
   planIndexerPostAuthorComposition,
   resolveEffectiveIndexerComposers,
   resolveIndexerLayout,
-  resolveIndexerSubjectKeySchemas,
   validateIndexerPostAuthorFragmentResult,
   type IndexerArtifactResult,
   type IndexerLayerFragment,
   type IndexerRenderedArtifact,
-  type IndexerSubjectKey,
 } from "../index.js";
 import { artifactPolicyContractsFixture } from "./indexerArtifactPolicyV070.fixture.js";
 
 export const candidateCompileDigest = (character: string) =>
   `sha256:${character.repeat(64)}`;
 
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "anonymous-package",
-  kind: "component",
-  local_key: "toggle",
+const LOGICAL_UNIT_REF = indexerProtocolDigest({ indexer_id: "component-indexer", source_ref: "module:components", group_key: "component:toggle" });
+const REFERENCE = {
+  source_ref: "repo:anonymous@revision",
+  locator: { path: "src/toggle.ts", start_line: 1, end_line: 12 },
+  content_digest: candidateCompileDigest("a"),
 };
 const SHARED_ARTIFACT_FINGERPRINT = buildIndexerSharedArtifactFingerprint({
   indexer_id: "component-indexer",
@@ -43,19 +39,6 @@ const SHARED_ARTIFACT_FINGERPRINT = buildIndexerSharedArtifactFingerprint({
 });
 
 function resultFixture(): IndexerArtifactResult {
-  const evidencePayload = {
-    evidence_ref: "evidence:anonymous-toggle-source",
-    kind: "code" as const,
-    source_ref: "repo:anonymous@revision",
-    module_ref: "module:components",
-    locator: { path: "src/toggle.ts", start_line: 1, end_line: 12 },
-    content_digest: candidateCompileDigest("a"),
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
   const payload: Omit<IndexerArtifactResult, "output_digest"> = {
     protocol: "context.indexer.artifact-result/v1",
     author_workset_digest: candidateCompileDigest("1"),
@@ -68,26 +51,26 @@ function resultFixture(): IndexerArtifactResult {
     config_fingerprint: candidateCompileDigest("6"),
     customization_fingerprint: null,
     requirement_ref: "requirement:anonymous-knowledge",
-    source_ref: evidence.source_ref,
-    module_ref: evidence.module_ref,
+    source_ref: REFERENCE.source_ref,
+    module_ref: "module:components",
     source_role: "authoritative-source",
     logical_unit: {
       group_key: "component:toggle",
-      subject_key: SUBJECT,
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
-      target_resolution_dispositions: [],
+
+      logical_unit_ref: LOGICAL_UNIT_REF,
+
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: candidateCompileDigest("1"),
       group_projection_digest: candidateCompileDigest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT_REF,
       member_ids: ["member:toggle"],
       capability_groups: [],
     }),
     inventory_dispositions: buildIndexerInventoryDispositionSet({
       author_workset_digest: candidateCompileDigest("1"),
       group_projection_digest: candidateCompileDigest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT_REF,
       dispositions: [{
         member_id: "member:toggle",
         member_kind: "component",
@@ -96,12 +79,11 @@ function resultFixture(): IndexerArtifactResult {
         section_evidence: [{
           artifact_id: "toggle-overview",
           section_key: "summary",
-          evidence_refs: [evidence.evidence_ref],
         }],
       }],
     }),
-    facts: [],
-    evidence_bindings: [evidence],
+
+
     artifacts: [{
       artifact_id: "toggle-overview",
       artifact_kind: "overview",
@@ -117,19 +99,18 @@ function resultFixture(): IndexerArtifactResult {
           block_id: "summary-block",
           layer: "semantic-prose",
           markdown: "# Toggle\n\nAnonymous capability evidence.",
-          evidence_refs: [evidence.evidence_ref],
+          references: [REFERENCE],
         }],
       }],
     }],
     artifact_bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT_REF,
       artifact_policy_variant: "standard",
       artifacts: [{
         artifact_id: "toggle-overview",
         artifact_kind: "overview",
         purpose: "required",
         reader_question_refs: ["question:overview"],
-        evidence_refs: [evidence.evidence_ref],
       }],
     }),
     material_question_proposals: [],
@@ -193,7 +174,7 @@ function acceptedResult(result: IndexerArtifactResult) {
     result_digest: indexerProtocolDigest(result),
     receipt_digest: candidateCompileDigest("c"),
     run_envelope_digest: runEnvelope.envelope_digest,
-    artifact_dependency_set_digest: candidateCompileDigest("e"),
+
   };
   return {
     run_result: runResult,
@@ -214,23 +195,12 @@ export function candidateCompileFixture(adjust?: (result: IndexerArtifactResult)
     void output_digest;
     result.output_digest = indexerArtifactResultDigest(payload);
   }
-  const subjectKeySchemaSet = resolveIndexerSubjectKeySchemas({
-    profile_contract: contracts.profiles,
-    operator_contract: contracts.operators,
-    selections: [{
-      indexer_id: result.indexer_id,
-      profile: "component-library",
-      role: "primary",
-      provider_layer_id: "primary",
-    }],
-    providers: [],
-  });
   const proposal = resolveIndexerLayout({
     artifact_result: result,
     profile: "component-library",
     profile_contract: contracts.profiles,
     operator_contract: contracts.operators,
-    subject_key_schema_set: subjectKeySchemaSet,
+
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
   });
   const layoutSet = buildIndexerLayoutProposalSet([proposal]);
@@ -242,7 +212,7 @@ export function candidateCompileFixture(adjust?: (result: IndexerArtifactResult)
     ...contracts,
     result,
     accepted: acceptedResult(result),
-    subjectKeySchemaSet,
+
     proposal,
     layoutSet,
     transition,
@@ -277,7 +247,7 @@ export function candidateCompilePostAuthorFixture() {
     effective_composer_set: effectiveComposerSet,
     author_workset_digest: fixture.result.author_workset_digest,
     primary_result_digest: primaryResultDigest,
-    primary_facts: primaryView.facts,
+
     primary_artifacts: primaryView.artifacts,
     validator_contract_digest: validatorContractDigest,
     current_profile_binding_digest: candidateCompileDigest("a"),
@@ -288,7 +258,6 @@ export function candidateCompilePostAuthorFixture() {
     workset: plan.worksets[0]!,
     primary_result_view: plan.primary_result_view,
   });
-  const evidence = fixture.result.evidence_bindings[0]!;
   const fragmentPayload: Omit<IndexerLayerFragment, "fragment_digest"> = {
     protocol: "context.indexer.layer-fragment/v1",
     workset_digest: request.workset.workset_digest,
@@ -318,15 +287,10 @@ export function candidateCompilePostAuthorFixture() {
               block_id: "examples",
               layer: "semantic-prose",
               markdown: "# Toggle examples\n\nUse the public Toggle capability.",
-              evidence_refs: [evidence.evidence_ref],
+              references: [REFERENCE],
             }],
           }],
         },
-        evidence_refs: [{
-          ref: evidence.evidence_ref,
-          kind: evidence.kind,
-          source_digest: evidence.content_digest,
-        }],
       }],
     },
   };
@@ -362,7 +326,7 @@ export function candidateCompilePostAuthorFixture() {
     profile: "component-library",
     profile_contract: fixture.profiles,
     operator_contract: fixture.operators,
-    subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     shared_artifact_fingerprint: fixture.accepted.run_envelope.shared_artifact_fingerprint,
   });
   const layoutSet = buildIndexerLayoutProposalSet([proposal]);
@@ -401,17 +365,17 @@ export function candidateCompileTemplateFixture() {
   void _digest;
   result.output_digest = indexerArtifactResultDigest(payload);
   const markdown = "# Toggle template\n\nRendered evidence.";
-  const evidenceRefs = ["evidence:anonymous-toggle-source"];
+  const references = [REFERENCE];
   const contentBlocks = [{
     layer: "semantic-prose" as const,
     markdown,
-    fact_refs: [],
-    evidence_refs: evidenceRefs,
+
+    references,
     content_digest: indexerProtocolDigest({
       layer: "semantic-prose",
       markdown,
-      fact_refs: [],
-      evidence_refs: evidenceRefs,
+
+      references,
     }),
   }];
   const renderedPayload: Omit<IndexerRenderedArtifact, "rendered_digest"> = {
@@ -432,11 +396,11 @@ export function candidateCompileTemplateFixture() {
       artifact_kind: "overview",
       markdown,
       content_blocks: contentBlocks,
-      evidence_refs: evidenceRefs,
+      references,
       content_digest: indexerProtocolDigest({
         markdown,
         content_blocks: contentBlocks,
-        evidence_refs: evidenceRefs,
+        references,
       }),
     }],
     material_question_gaps: [],
@@ -451,7 +415,7 @@ export function candidateCompileTemplateFixture() {
     profile: "component-library",
     profile_contract: fixture.profiles,
     operator_contract: fixture.operators,
-    subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
     rendered_artifacts: [rendered],
   });
@@ -487,7 +451,7 @@ export function candidateCompileMultiSectionFixture() {
       block_id: "dependency-handoff-block",
       layer: "semantic-prose",
       markdown: "## Dependency handoff\n\nAnonymous dependency evidence.",
-      evidence_refs: ["evidence:anonymous-toggle-source"],
+      references: [REFERENCE],
     }],
   });
   const disposition = result.inventory_dispositions.dispositions[0];
@@ -497,7 +461,6 @@ export function candidateCompileMultiSectionFixture() {
   disposition.section_evidence.push({
     artifact_id: "toggle-overview",
     section_key: "dependency-handoff",
-    evidence_refs: ["evidence:anonymous-toggle-source"],
   });
   const { output_digest: _digest, ...payload } = result;
   void _digest;
@@ -508,7 +471,7 @@ export function candidateCompileMultiSectionFixture() {
     profile: "component-library",
     profile_contract: fixture.profiles,
     operator_contract: fixture.operators,
-    subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
   });
   const layoutSet = buildIndexerLayoutProposalSet([proposal]);

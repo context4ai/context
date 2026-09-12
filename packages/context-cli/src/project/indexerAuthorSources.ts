@@ -4,7 +4,6 @@ import {
   buildIndexerSourceIdentityInventory,
   indexerProtocolDigest,
   type IndexerPartitionValidationInput,
-  type IndexerPartitionPlan,
 } from "@c4a/context";
 import {
   assertProjectIndexerMainSourceBinding,
@@ -73,35 +72,20 @@ export function createIndexerAuthorSourceResolver(input: {
         value: projection, factView: binding.parser_fact_view,
         inventory: partition.canonical_inventory_members,
       });
-      if (binding.inventory_only) {
-        // Partition owns file identities; deep facts are prepared only for its
-        // accepted reading batch and enter Author through the normal dependency view.
-        // The caller validated source partitions before resolving their material.
-        const plan = partition.plan as IndexerPartitionPlan;
-        const owned = new Set(plan.status === "complete"
-          ? plan.groups.flatMap(group => group.member_ids) : []);
-        const paths = binding.parser_fact_view.files.filter(file => owned.has(file.file_ref))
-          .map(file => file.normalized_path);
-        if (paths.length === 0) return binding;
-        const deep = await resolveProjectIndexerMainSourceBinding({
-          projectRoot: input.projectRoot, indexer_id: workset.indexer_id,
-          source_ref: workset.source_ref, module_ref: workset.module_ref,
-          profile_contract_digest: workset.profile_contract_digest,
-          parser_selection: { paths },
-        });
-        return { ...deep, source_binding_digest: binding.source_binding_digest };
-      }
+      // An inventory-only Partition remains inventory-only. Author reads the
+      // captured files and submits actual regions; it must not trigger another
+      // full parser pass merely to reconstruct a mandatory fact ledger.
     }
     return binding;
   };
 }
 
-/** Converged Subjects can span several Partition tasks from the same source. */
+/** A writing group can reuse material from several tasks of the same source. */
 export function mergeIndexerAuthorSourceBindings(
   bindings: readonly ProjectIndexerMainSourceBinding[],
 ): ProjectIndexerMainSourceBinding {
   const first = bindings[0];
-  if (first === undefined) throw new TypeError("Author Subject has no primary source");
+  if (first === undefined) throw new TypeError("Author group has no primary source");
   for (const binding of bindings) {
     if (binding.adapter !== first.adapter || binding.source_ref !== first.source_ref ||
         binding.module_ref !== first.module_ref ||

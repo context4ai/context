@@ -6,6 +6,7 @@ import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { projectIndexerReadTargets, projectIndexerReadTargetAllows, type ProjectIndexerReadTarget } from "./indexerReadScopeAuthorization.js";
 import { currentLedger, currentSpec, runSpecPath, INDEXER_MAIN_RUN_CURRENT_PATH, type MainRunSpec } from "./indexerMainRunStoreRecords.js";
 import type { ProjectIndexerParserFactsSourceBinding } from "./indexerMainSourceAdapter.js";
+import { resolveProjectIndexerMainSourceIdentity } from "./indexerMainSourceAdapter.js";
 
 /** Names and counts across the selected requirement; no speculative page plan
  * or automatic exclusion. Full inventory remains owned by individual tasks. */
@@ -19,7 +20,7 @@ export async function buildPartitionNavigation(root: string, spec: MainRunSpec) 
     if (task.request.workset.requirement_ref !== spec.request.workset.requirement_ref) return undefined;
     const projection = task.validation.partition_projection as { family_key?: string; unresolved?: boolean; file_refs?: string[] } | undefined;
     return { indexer: task.request.workset.indexer_id, source: task.request.workset.source_ref, module: task.request.workset.module_ref,
-      family: projection?.family_key ?? null, unresolved: projection?.unresolved ?? false, subject: task.request.workset.stage === "partition" ? task.request.workset.partition_subject_key : null,
+      family: projection?.family_key ?? null, unresolved: projection?.unresolved ?? false,
       members: (task.validation.canonical_inventory_members as unknown[] | undefined)?.length ?? 0,
       file_count: projection?.file_refs?.length ?? 0 };
   })),
@@ -27,22 +28,35 @@ export async function buildPartitionNavigation(root: string, spec: MainRunSpec) 
   const overview = tasks.filter(task => task !== undefined);
   const { registry } = await loadIndexerRegistry(root);
   const targets = projectIndexerReadTargets({ registry, indexer_id: spec.request.workset.indexer_id });
-  const approvedArticles = partitionApprovedArticleCatalog(approvedKnowledgeSnapshotsFromStructure((await readKnowledgeStructure(root)).parsed), targets);
+  const snapshots = approvedKnowledgeSnapshotsFromStructure((await readKnowledgeStructure(root)).parsed);
+  const referenced = new Set(snapshots.flatMap(article => article.sections.flatMap(section => section.references.map(reference => reference.source_ref))));
+  const sourcePaths = new Map<string, Set<string>>();
+  for (const target of targets.filter(target => target.module_refs.length > 0 && referenced.has(target.source_ref))) {
+    const paths = sourcePaths.get(target.source_ref) ?? new Set<string>();
+    for (const module of target.module_refs) {
+      const inventory = await resolveProjectIndexerMainSourceIdentity({ projectRoot: root,
+        indexer_id: spec.request.workset.indexer_id, source_ref: target.source_ref, module_ref: module,
+        profile_contract_digest: spec.request.workset.profile_contract_digest, inventory_only: true });
+      for (const file of inventory.files) paths.add(file.normalized_path);
+    }
+    sourcePaths.set(target.source_ref, paths);
+  }
+  const approvedArticles = partitionApprovedArticleCatalog(snapshots, targets, sourcePaths);
   const digest = indexerProtocolDigest({ tasks: overview, approved_articles: approvedArticles });
   return buildIndexerAuthorizedWorksetViewSource({ request: spec.request, projection_kind: "partition-navigation",
     input_digests: [digest], items: [{ ref: "partition-navigation:current", category: "partition-navigation",
       provenance: { protocol: "context.indexer.partition-navigation/v1", digest },
       value: { tasks: overview, approved_articles: approvedArticles,
-        guidance: "Inspect the whole scope before declaring a theme ready. Task counts are not page counts; other tasks may contribute to the same subject. approved_articles provides stable identities within this Indexer's read scope for knowledge_dependencies, not source facts or proof that those versions remain current. Author rechecks versions and authorization. Do not wait on another article in the same group; use direct evidence or a separately planned upstream group. Read detailed facts or bounded source files where the overview cannot resolve ownership." } }] });
+        guidance: "Inspect the whole scope before declaring a theme ready. Task counts are not page counts. Read existing article Markdown when useful to avoid duplication; it is an interpretation, not source proof. Decide writing order dynamically, without a cross-article dependency gate. Additional source reading stays within the authorized scope." } }] });
 }
 
-export function partitionApprovedArticleCatalog(snapshots: readonly IndexerApprovedKnowledge[], targets: readonly ProjectIndexerReadTarget[]) {
-  return snapshots
-    .filter(snapshot => snapshot.source_versions.every(source => projectIndexerReadTargetAllows({ targets,
-      source_ref: source.source_ref, module_ref: source.module_ref })))
-    .map(snapshot => ({ artifact_ref: snapshot.artifact_ref, subject_key: snapshot.subject_key, path: snapshot.path,
-      sections: snapshot.sections.map(section => ({ section_ref: section.section_ref, ...(section.section_key === undefined ? {} : { section_key: section.section_key }) })),
-      approved_content_digest: snapshot.approved_content_digest }));
+export function partitionApprovedArticleCatalog(snapshots: readonly IndexerApprovedKnowledge[], targets: readonly ProjectIndexerReadTarget[],
+  sourcePaths: ReadonlyMap<string, ReadonlySet<string>> = new Map()) {
+  return snapshots.filter(article => article.sections.flatMap(section => section.references).every(reference =>
+    projectIndexerReadTargetAllows({ targets, source_ref: reference.source_ref, module_ref: null }) ||
+      (targets.some(target => target.source_ref === reference.source_ref) && sourcePaths.get(reference.source_ref)?.has(reference.locator.path))))
+    .map(article => ({ article_id: article.article_id, path: article.path,
+      collection: article.collection, sections: article.sections.map(section => ({ id: section.id })) }));
 }
 
 export async function buildPartitionSourceAccess(input: {

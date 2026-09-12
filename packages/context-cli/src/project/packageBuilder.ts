@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
+import { validateArticleStructureEntries, loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
 import { siteArticleSources } from "./packageSiteSources.js";
 import { parse as parseYaml } from "yaml";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
@@ -154,11 +154,13 @@ function packageFingerprintPath(projectRoot: string, pkg: PackageDefinition): st
 
 export async function listApprovedKnowledge(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
+  const articles = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   const files = await walkPackageFiles(join(projectRoot, KNOWLEDGE_ROOT));
   const knowledge = await Promise.all(files
     .filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/"))
     .map(async (file) => ({
       ...file,
+      article: articles.get(file.relPath),
       content: hydrateApprovedKnowledgeMarkdown({
         content: await readFile(file.absPath, "utf8"),
         relPath: file.relPath,
@@ -235,10 +237,9 @@ async function packageInputFingerprint(input: {
         ...(input.pkg.assets === undefined ? {} : { definition: input.pkg.assets }),
       })
     : null;
-  const siteRegistry = input.pkg.kind === "package.kb" && input.pkg.site
-    ? await loadSourcesRegistry({ rootDir: input.projectRoot }) : undefined;
+  const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   return stableHash({
-    siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.content, siteRegistry)) : null,
+    siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.article, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
     package: {

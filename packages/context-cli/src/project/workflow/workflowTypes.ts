@@ -30,7 +30,6 @@ export const CONTEXT_WORKFLOW_AUTHORITIES = {
   indexerDependencyInstall: "context.indexer-dependency-install",
   indexerProgramExecution: "context.indexer-program-execution",
   indexerProjectConfirmation: "context.indexer-project-confirmation",
-  evidenceMaintenance: "context.evidence-maintenance",
   repositoryRestore: "context.repository-restore",
   sourceRead: "context.source-read",
   knowledgeReview: "context.knowledge-review",
@@ -50,15 +49,11 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   verification: {
     blocking_clear: boolean;
   };
-  evidence: {
-    maintenance_clear: boolean;
-  };
   indexer: {
     lifecycle_current: boolean;
     registry_state: "missing" | "pending" | "current" | "invalid";
   };
   gates: {
-    evidence_maintenance_resolved: boolean;
     source_read_resolved: boolean;
     knowledge_review_resolved: boolean;
     package_output_resolved: boolean;

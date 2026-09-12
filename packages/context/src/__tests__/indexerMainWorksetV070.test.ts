@@ -3,13 +3,11 @@ import {
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
   buildIndexerMainTransportBatch,
-  buildIndexerTargetResolutionView,
   canonicalIndexerNodeRef,
   indexerOwnerCohortRef,
   indexerMainWorksetDigest,
   indexerMainTransportBatchSchema,
   validateIndexerMainWorkset,
-  validateIndexerTargetResolutionView,
   type IndexerMainAuthorWorkset,
   type IndexerMainPartitionWorkset,
   type IndexerSubjectKey,
@@ -39,7 +37,6 @@ const common = {
   requirement_set_digest: DIGESTS[2]!,
   primary_execution_fingerprint: DIGESTS[3]!,
   profile_contract_digest: DIGESTS[4]!,
-  subject_key_schema_digest: DIGESTS[5]!,
   source_scope_digest: DIGESTS[6]!,
   source_binding_digest: DIGESTS[7]!,
   primary_resource_binding_digest: DIGESTS[8]!,
@@ -50,7 +47,6 @@ function partitionWorkset(): IndexerMainPartitionWorkset {
   const workset = buildIndexerMainWorkset({
     ...common,
     stage: "partition",
-    partition_subject_key: SUBJECT,
     strategy_set_digest: DIGESTS[10]!,
     reader_question_refs: ["question:operations", "question:public-contract"],
     partition_input_digests: [DIGESTS[12]!, DIGESTS[11]!],
@@ -67,17 +63,6 @@ function partitionWorkset(): IndexerMainPartitionWorkset {
 function authorWorkset(
   groupProjectionDigest = DIGESTS[12]!,
 ): IndexerMainAuthorWorkset {
-  const targetView = buildIndexerTargetResolutionView({
-    requirement_ref: common.requirement_ref,
-    subject_key_schema_digest: common.subject_key_schema_digest,
-    query_digest: DIGESTS[14]!,
-    entries: [{
-      query_ref: DIGESTS[15]!,
-      state: "resolved",
-      subject_key: SUBJECT,
-      node_ref: canonicalIndexerNodeRef(SUBJECT),
-    }],
-  });
   const workset = buildIndexerMainWorkset({
     ...common,
     stage: "author",
@@ -88,7 +73,6 @@ function authorWorkset(
     member_inventory_digest: DIGESTS[12]!,
     group_projection_digest: groupProjectionDigest,
     group_dependency_view_digest: DIGESTS[13]!,
-    target_resolution_view: targetView,
     allowed_artifact_policy_variants: ["standard", "compact"],
     artifact_policy_eligibility_digest: DIGESTS[14]!,
   });
@@ -107,40 +91,14 @@ describe("MainIndexWorkset", () => {
     expect(indexerOwnerCohortRef(workset)).toMatch(/^sha256:/);
   });
 
-  test("binds an author workset to one group and a minimal target view", () => {
+  test("binds an author workset to a writing group without subject resolution", () => {
     const workset = authorWorkset();
-    const targetView = workset.target_resolution_view!;
-    expect(targetView.entries).toHaveLength(1);
-    expect(validateIndexerTargetResolutionView(targetView)).toEqual(targetView);
+    expect(workset).not.toHaveProperty("target_resolution_view");
+    expect(workset).not.toHaveProperty("subject_key_schema_digest");
     expect(validateIndexerMainWorkset(workset)).toEqual(workset);
   });
 
-  test("rejects ambiguous targets before author execution and empty policy eligibility", () => {
-    const ambiguous = buildIndexerTargetResolutionView({
-      requirement_ref: common.requirement_ref,
-      subject_key_schema_digest: common.subject_key_schema_digest,
-      query_digest: DIGESTS[14]!,
-      entries: [{
-        query_ref: DIGESTS[15]!,
-        state: "ambiguous",
-        conflicting_node_refs: ["node:second", "node:first"],
-      }],
-    });
-    expect(() => buildIndexerMainWorkset({
-      ...common,
-      stage: "author",
-      partition_plan_binding_digest: DIGESTS[10]!,
-      group_key: "component:root",
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
-      member_ids_digest: DIGESTS[11]!,
-      member_inventory_digest: DIGESTS[12]!,
-      group_projection_digest: DIGESTS[12]!,
-      group_dependency_view_digest: DIGESTS[13]!,
-      target_resolution_view: ambiguous,
-      allowed_artifact_policy_variants: ["standard"],
-      artifact_policy_eligibility_digest: DIGESTS[14]!,
-    })).toThrow(/index-target-resolution-ambiguous/);
-
+  test("rejects empty policy eligibility", () => {
     const author = authorWorkset();
     expect(() => buildIndexerMainWorkset({
       ...author,
@@ -196,7 +154,6 @@ describe("MainIndexWorkset", () => {
       ...common,
       stage: "partition",
       owner_cell_refs: [],
-      partition_subject_key: SUBJECT,
       strategy_set_digest: DIGESTS[10]!,
       reader_question_refs: [],
       partition_input_digests: [DIGESTS[11]!],

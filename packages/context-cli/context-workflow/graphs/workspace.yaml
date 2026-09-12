@@ -57,37 +57,6 @@ nodes:
         - resources/views/verification-current.yaml
       recommended: [resources/diagnostics/verification.md]
 
-  - id: choose-evidence-maintenance
-    kind: gate
-    reasonCode: route.evidence.decision-required
-    resolutionAction: actions/maintain-evidence.yaml
-    gate:
-      id: evidence-maintenance
-      prompt: Decide how to handle approved knowledge whose source evidence moved or disappeared.
-      authority: context.evidence-maintenance
-      delegatable: false
-    satisfiedBy:
-      - path: gates.evidence_maintenance_resolved
-        equals: true
-    resources:
-      required:
-        - resources/procedures/evidence-maintenance.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/evidence-maintenance.md
-        - resources/views/verification-current.yaml
-
-  - id: maintain-evidence
-    kind: action
-    reasonCode: route.evidence.maintenance-required
-    action: actions/maintain-evidence.yaml
-    satisfiedBy:
-      - path: evidence.maintenance_clear
-        equals: true
-    resources:
-      required:
-        - resources/procedures/evidence-maintenance.md
-        - resources/views/verification-current.yaml
-      recommended: [resources/diagnostics/verification.md]
 
   - id: close-approved-knowledge
     kind: action
@@ -385,9 +354,7 @@ nodes:
 edges:
   - { from: repair-project-entry, to: repair-workspace-state }
   - { from: repair-workspace-state, to: repair-verification }
-  - { from: repair-verification, to: choose-evidence-maintenance }
-  - { from: choose-evidence-maintenance, to: maintain-evidence, kind: gatedBy }
-  - { from: maintain-evidence, to: choose-source-boundary }
+  - { from: repair-verification, to: choose-source-boundary }
   - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
   - { from: ensure-repository-sources, to: configure-document-capture }
   - { from: configure-document-capture, to: authorize-document-capture }

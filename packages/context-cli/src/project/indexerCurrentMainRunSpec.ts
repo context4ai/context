@@ -1,5 +1,4 @@
 import type { IndexerArticlePlan } from "@c4a/context";
-import type { ApprovedKnowledgeAuthorInput } from "./approvedKnowledgeAuthorView.js";
 import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import { supportsPrimaryArtifact } from "./indexerPrimaryArtifactPolicy.js";
 import type { IndexerPageTemplate } from "./indexerPageTemplate.js";
@@ -252,14 +251,6 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
     throw new TypeError("partition workset no longer matches current Provider authority");
   }
   const currentFinalAuthority = finalAuthority(authority);
-  const subjectSchema = authority.profile_contract.subject_key_schemas.find((candidate) =>
-    candidate.profile === authority.profile.id
-  );
-  if (subjectSchema === undefined) {
-    throw new TypeError(`missing partition SubjectKey contract for ${authority.profile.id}`);
-  }
-  const { profile: _subjectProfile, ...subjectKeyContract } = subjectSchema;
-  void _subjectProfile;
   const enrichment = input.enrichment ?? { inspector_materializations: [], fragments: [] };
   const canonicalInventory = canonicalIndexerInventoryMembers(
     input.canonical_inventory_members ?? binding.partition_inventory,
@@ -307,7 +298,6 @@ export function buildCurrentProjectIndexerPartitionRunSpec(input: {
       canonical_inventory_members: canonicalInventory,
       authorized_source_refs: [workset.source_ref],
       authorized_strategies: strategies,
-      subject_key_contract: subjectKeyContract,
       required_question_target_refs: workset.allowed_question_target_refs,
       inspector_materializations: enrichment.inspector_materializations,
       ...(input.partition_projection === undefined
@@ -324,8 +314,6 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
   registry: IndexerRegistry;
   dependency_view: unknown;
   canonical_inventory_members: readonly IndexerInventoryMember[];
-  expected_subject_key: unknown;
-  knowledge_input?: ApprovedKnowledgeAuthorInput;
   artifact_policy_eligibility: unknown;
   allowed_question_targets: readonly {
     question_target_key: string;
@@ -453,8 +441,6 @@ export function buildCurrentProjectIndexerAuthorRunSpec(input: {
       available_templates: (input.authority.manifest.provider.templates ?? []).filter((template) => template.profile === input.authority.profile.id),
       dependency_view: dependencyView,
       canonical_inventory_members: canonicalInventory,
-      expected_subject_key: input.expected_subject_key,
-      ...(input.knowledge_input === undefined ? {} : { knowledge_input: input.knowledge_input }),
       artifact_policy_eligibility: eligibility,
       allowed_artifact_intents: artifactIntents,
       allowed_source_roles: [request.run_environment.source_role],

@@ -3,8 +3,6 @@ import { KNOWLEDGE_COLLECTIONS, type KnowledgeCollection } from "./contracts.js"
 import {
   INDEXER_COVERAGE_DOMAINS,
   INDEXER_EVIDENCE_KINDS,
-  INDEXER_SUBJECT_DERIVATION_OPERATORS,
-  INDEXER_SUBJECT_NORMALIZATIONS,
   addDuplicateIssues,
   formatIndexerSchemaIssues,
   indexerDigestSchema,
@@ -156,46 +154,6 @@ const profileVariantSchema = z.object({
   addDuplicateIssues(value.axes.map((axis) => axis.id), context, "axes");
 });
 
-const subjectKeySchemaBase = z.object({
-  version: z.number().int().positive(),
-  namespace: z.object({
-    operator: z.enum(INDEXER_SUBJECT_DERIVATION_OPERATORS),
-  }).strict(),
-  kinds: z.array(z.object({
-    id: indexerIdSchema,
-    local_key: z.object({
-      operator: z.enum(INDEXER_SUBJECT_DERIVATION_OPERATORS),
-    }).strict(),
-  }).strict()).min(1),
-  normalization: z.array(z.enum(INDEXER_SUBJECT_NORMALIZATIONS)).optional(),
-}).strict();
-
-function addSubjectKeySchemaIssues(
-  value: z.infer<typeof subjectKeySchemaBase>,
-  context: z.RefinementCtx,
-): void {
-  addDuplicateIssues(value.kinds.map((kind) => kind.id), context, "kinds");
-  addDuplicateIssues(value.normalization ?? [], context, "normalization");
-  if (
-    value.normalization?.includes("preserve-case") === true &&
-    value.normalization.includes("lowercase")
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "preserve-case and lowercase normalization are mutually exclusive",
-      path: ["normalization"],
-    });
-  }
-}
-
-export const indexerSubjectKeyContractSchema = subjectKeySchemaBase.superRefine(
-  addSubjectKeySchemaIssues,
-);
-
-export const indexerProfileSubjectKeySchema = subjectKeySchemaBase.extend({
-  profile: indexerIdSchema,
-}).superRefine(addSubjectKeySchemaIssues);
-
 export const indexerInventoryDomainSchema = z.object({
   id: indexerIdSchema,
   selector: selectorSchema,
@@ -205,8 +163,6 @@ export const indexerInventoryDomainSchema = z.object({
 export const indexerQuestionTargetDomainSchema = z.object({
   id: indexerIdSchema,
   selector: selectorSchema,
-  grouping_operator: indexerIdSchema,
-  subject_key_kind: indexerIdSchema,
   granularity: z.enum(["module", "identity"]),
 }).strict();
 
@@ -344,7 +300,6 @@ export const indexerProfileContractSchema = z.object({
     INDEXER_COVERAGE_DOMAINS.length,
   ),
   profiles: z.array(indexerProfileContractEntrySchema).min(1),
-  subject_key_schemas: z.array(indexerProfileSubjectKeySchema).min(1),
   contract_digest: indexerDigestSchema,
 }).strict().superRefine((value, context) => {
   addDuplicateIssues(value.coverage_domains, context, "coverage_domains");
@@ -358,30 +313,7 @@ export const indexerProfileContractSchema = z.object({
     }
   }
   addDuplicateIssues(value.profiles.map((profile) => profile.id), context, "profiles");
-  addDuplicateIssues(
-    value.subject_key_schemas.map((schema) => schema.profile),
-    context,
-    "subject_key_schemas",
-  );
-  const profileIds = new Set(value.profiles.map((profile) => profile.id));
-  value.subject_key_schemas.forEach((schema, index) => {
-    if (!profileIds.has(schema.profile)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `subject_key_schemas references unknown community profile ${schema.profile}`,
-        path: ["subject_key_schemas", index, "profile"],
-      });
-    }
-  });
-  value.profiles.forEach((profile) => {
-    if (!value.subject_key_schemas.some((schema) => schema.profile === profile.id)) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `community profile ${profile.id} requires exactly one subject_key_schema`,
-        path: ["subject_key_schemas"],
-      });
-    }
-  });
+
 });
 
 export type IndexerOperatorContract = z.infer<typeof indexerOperatorContractSchema>;
@@ -393,8 +325,6 @@ export type IndexerLayoutMapping = z.infer<typeof indexerLayoutMappingSchema>;
 export type IndexerReaderQuestionContract = z.infer<
   typeof indexerReaderQuestionContractSchema
 >;
-export type IndexerSubjectKeyContract = z.infer<typeof indexerSubjectKeyContractSchema>;
-export type IndexerProfileSubjectKey = z.infer<typeof indexerProfileSubjectKeySchema>;
 export type IndexerProfileContractEntry = z.infer<typeof indexerProfileContractEntrySchema>;
 export type IndexerProfileContract = z.infer<typeof indexerProfileContractSchema>;
 
@@ -465,18 +395,13 @@ export function validateIndexerProfileContract(
     throw new TypeError("profile contract digest does not match its canonical payload");
   }
   const selectors = new Set(operators.selector_operators);
-  const groupings = new Set(operators.grouping_operators);
   const metrics = new Set(operators.metric_operators);
   const selectorFacts = new Set(operators.selector_fact_paths);
   const coverageDomains: ReadonlySet<string> = new Set(contract.coverage_domains);
-  const subjectKeySchemas = new Map(
-    contract.subject_key_schemas.map((schema) => [schema.profile, schema]),
-  );
   for (const profile of contract.profiles) {
     for (const requirement of profile.parser_requirements) {
       validateIndexerParserRequirement(requirement);
     }
-    const subjectKeySchema = subjectKeySchemas.get(profile.id)!;
     for (const domain of profile.inventory_domains) {
       assertOperator(domain.selector.operator, selectors, `${profile.id}.inventory_domains.${domain.id}`);
     }
@@ -536,12 +461,6 @@ export function validateIndexerProfileContract(
     const targetDomains = new Set(profile.question_target_domains.map((domain) => domain.id));
     for (const domain of profile.question_target_domains) {
       assertOperator(domain.selector.operator, selectors, `${profile.id}.question_target_domains.${domain.id}`);
-      assertOperator(domain.grouping_operator, groupings, `${profile.id}.question_target_domains.${domain.id}`);
-      if (!subjectKeySchema.kinds.some((kind) => kind.id === domain.subject_key_kind)) {
-        throw new TypeError(
-          `${profile.id}.question_target_domains.${domain.id} references unknown SubjectKey kind`,
-        );
-      }
     }
     for (const question of profile.reader_question_contracts) {
       if (!coverageDomains.has(question.coverage_domain)) {

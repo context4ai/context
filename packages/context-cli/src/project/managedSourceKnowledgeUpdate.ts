@@ -1,6 +1,6 @@
 import { access } from "node:fs/promises";
 import { join } from "node:path";
-import { readProcessedScopes, validateFinalizedIndexerRegistry, type IndexerRegistry } from "@c4a/context";
+import { readProcessedScopes, validateArticleStructureEntries, validateFinalizedIndexerRegistry, type IndexerRegistry } from "@c4a/context";
 import { loadCurrentIndexerRegistry } from "./currentIndexerRegistry.js";
 import { readDocumentSourcesRegistry } from "./documentSources.js";
 import { boundManagedDocumentStatuses } from "./managedDocumentStatus.js";
@@ -30,18 +30,19 @@ export async function planManagedSourceKnowledgeUpdate(projectRoot: string) {
   if (await readKnowledgeUpdate(projectRoot) || await readApprovedRevision(projectRoot) || await readTaskRollback(projectRoot)) return scopes;
   if (await currentLedger(projectRoot) || (await readCandidateRecords(projectRoot)).length) return scopes;
   const structure = await readKnowledgeStructure(projectRoot);
-  if (!structure.parsed || !Array.isArray(structure.parsed.views) || !structure.parsed.views.length) return scopes;
-  const views = structure.parsed.views as Array<{ path?: string; sources?: string[] }>;
+  const articles = validateArticleStructureEntries(structure.parsed?.articles ?? []);
+  if (!articles.length) return scopes;
   // A configuration/structure fixture or an incomplete first production is not
   // an established set of approved pages.
-  if (!await Promise.all(views.map(view => typeof view.path === "string"
-    ? access(join(projectRoot, "knowledge", view.path)).then(() => true, () => false)
-    : false)).then(results => results.every(Boolean))) return scopes;
+  if (!await Promise.all(articles.map(article =>
+    access(join(projectRoot, "knowledge", article.path)).then(() => true, () => false)
+  )).then(results => results.every(Boolean))) return scopes;
   const { registry } = await loadCurrentIndexerRegistry(projectRoot);
   try { validateFinalizedIndexerRegistry(registry); } catch { return scopes; }
   const selected = await boundManagedDocumentStatuses(projectRoot, await readDocumentSourcesRegistry(projectRoot));
   const available = new Set(selected.map(source => `${source.type}:${source.name}`));
-  const referenced = views.flatMap(view => view.sources ?? []);
+  const referenced = articles.flatMap(article => article.sections.flatMap(section =>
+    section.references.map(reference => reference.source_ref)));
   const processed = readProcessedScopes(structure.parsed);
   for (const requirement of registry.requirements) {
     const targets = requirement.target_scope.targets;

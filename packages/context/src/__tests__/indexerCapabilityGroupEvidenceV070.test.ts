@@ -35,7 +35,6 @@ function workset(): IndexerMainAuthorWorkset {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),

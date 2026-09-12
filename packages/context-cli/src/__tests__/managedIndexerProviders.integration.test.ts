@@ -52,7 +52,7 @@ test.each(["note", "sessions"] as const)("%s template overrides reach Author and
     indexer, manifest: authority.manifest, providerIntegrity: authority.provider.integrity });
   const request = buildCurrentIndexerInstructionMaterializationRequest({ authority, customization, stage: "author" });
   const author = await materializeCurrentIndexerInstructions({ request, authority, customization, workspaceRoot: root });
-  const revision = await approvedRevisionContext(root, { source_refs: [saved.source_ref], markdown: "# Access help\n" });
+  const revision = await approvedRevisionContext(root, { sections: [], source_refs: [saved.source_ref], markdown: "# Access help\n" });
   const resources = revision.providers[0]!.resources;
   expect(author.resources.filter((item) => item.kind === "template").map((item) => item.content)).toEqual([override]);
   expect(resources.find((item) => item.path === overridePath)?.content).toBe(override);
@@ -64,7 +64,7 @@ test.each(["note", "sessions"] as const)("%s template overrides reach Author and
   // setup snapshot or a separately supplied ladder plan.
   const changed = `${override}\nInclude the current support channel.\n`;
   await writeFile(overridePath, changed);
-  const resumed = await approvedRevisionContext(root, { source_refs: [saved.source_ref], markdown: "# Access help\n" });
+  const resumed = await approvedRevisionContext(root, { sections: [], source_refs: [saved.source_ref], markdown: "# Access help\n" });
   expect(resumed.providers[0]!.resources.find((item) => item.path === overridePath)?.content).toBe(changed);
 }, 30_000);
 
@@ -93,7 +93,7 @@ test.each(["note", "sessions"] as const)("selected %s extension reaches the same
     operator_contract: authority.operator_contract })).toThrow("unregistered layout source role");
   expect(authority.primary_execution.resources.some((resource) => resource.ref === `bundle:${bundle.skill}/references/indexer.md`)).toBe(true);
   expect(authority.composition_plan?.active_profiles).toContainEqual(expect.objectContaining({ id: `${type}/component-library`, kind: "extension" }));
-  const context = await approvedRevisionContext(root, { source_refs: [DOCUMENT_REVISION_SOURCE_REF, saved.source_ref], markdown: "# Existing guide\n" });
+  const context = await approvedRevisionContext(root, { sections: [], source_refs: [DOCUMENT_REVISION_SOURCE_REF, saved.source_ref], markdown: "# Existing guide\n" });
   expect(context.providers).toHaveLength(1);
   expect(context.providers[0]!.resources.some((resource) => resource.provider === "contextual" && resource.path.endsWith("references/writing.md"))).toBe(true);
   expect(context.sources).toMatchObject([{ source_ref: saved.source_ref, path: await realpath(join(root, saved.path)) }]);
@@ -141,7 +141,7 @@ test("a Host-declared business Sessions Provider replaces the default without CL
   expect(await completeCurrentIndexerProviderResolution({ projectRoot: root, hostResult })).toBe("selection-applied");
   const applied = (await loadIndexerRegistry(root)).registry;
   expect(applied.indexers[0]!.providers.map((provider) => provider.skill)).toEqual([manifest.id]);
-  const context = await approvedRevisionContext(root, { source_refs: [saved.source_ref], markdown: "# Policy\n" });
+  const context = await approvedRevisionContext(root, { sections: [], source_refs: [saved.source_ref], markdown: "# Policy\n" });
   expect(context.providers[0]!.provider.skill).toBe(manifest.id);
   expect(context.providers[0]!.resources.some((resource) => resource.path.endsWith("templates/decision-record.md"))).toBe(true);
   expect(context.sources[0]!.changes).toBeUndefined();

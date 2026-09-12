@@ -18,6 +18,7 @@ import { readingObjects } from "./indexerReading.fixture.js";
 import { renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { prepareProjectIndexerWorksetViewMaterialization } from "../project/indexerWorksetViewMaterialization.js";
 import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 const roots: string[] = [];
 const authorities = contextWorkflowAuthorities({ managed: true });
@@ -44,8 +45,8 @@ async function authorFixture() {
     const members = task.spec.validation.canonical_inventory_members as IndexerInventoryMember[];
     results.push({ task_key: descriptor.task_key, result: {
       stage: "partition", outcome: "complete", groups: [{
-        key: descriptor.task_key, title: `Public constants ${descriptor.task_key}`, subject: descriptor.task_key,
-        subject_intent: "primary", reader_task: "Find the exported constant and its value.",
+        key: descriptor.task_key, title: `Public constants ${descriptor.task_key}`,
+        reader_task: "Find the exported constant and its value.",
         members: members.map((member) => member.member_id), questions: workset.reader_question_refs,
         question_targets: workset.allowed_question_target_refs.map((target) => ({ target, role: "primary-carrier" })),
         outline: ["Exports"],
@@ -94,8 +95,12 @@ async function publish(root: string, task: Task) {
   }));
   const material = [taskMaterial, ...sharedMaterial].join("\n\n");
   const taskReading = renderIndexerWorksetReading({ task_key: task.descriptor.task_key, workset: task.spec.request.workset, view: task.view });
-  const sourceItems = [...new Set(readingObjects(material).flatMap((item) => Array.isArray(item.source_items) ? item.source_items as string[] : []))];
-  const expectedSourceItems = readingObjects(taskReading).flatMap((item) => Array.isArray(item.source_items) ? item.source_items as string[] : []);
+  const sourcePaths = (text: string) => readingObjects(text).flatMap(item =>
+    typeof item.source_ref === "string" && typeof item.path === "string" && Array.isArray(item.available_ranges)
+      ? [JSON.stringify([item.source_ref, item.path, item.available_ranges])] : []);
+  const sourceItems = sourcePaths(material);
+  const expectedSourceItems = sourcePaths(taskReading);
+  expect(sourceItems.length).toBeGreaterThan(0);
   expect(new Set(sourceItems)).toEqual(new Set(expectedSourceItems));
   const validation = task.spec.validation as {
     allowed_artifact_intents: Array<{ source_role: string; document_kind: string; reader_goal: string; artifact_kind: string }>;
@@ -109,10 +114,8 @@ async function publish(root: string, task: Task) {
     artifact_intent: [intent.source_role, intent.document_kind, intent.reader_goal, intent.artifact_kind].join("/"),
     policy: validation.artifact_policy_eligibility.eligible_variants[0]!.id,
     title: `Constants ${workset.group_key}`, summary: "Locate the public constant exports.",
-    target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({ target: entry.query_ref,
-      disposition: entry.state === "resolved" ? "reuse-existing" : "create-independent" })),
     sections: [{ key: "exports", heading: "Exports", markdown: "Read the exported values in the entry point and dependency declaration.",
-      source_items: sourceItems, facts: task.view.items.filter((item) => item.category === "fact").map((item) => item.ref),
+      references: await fixtureArticleReferences(root, task.view),
       answers: validation.allowed_question_targets.map((target) => target.question_target_key) }],
     member_dispositions: validation.canonical_inventory_members.map((member) => ({ item: member.member_id, state: "covered", section: "exports" })),
     material_gaps: [], diagnostics: [],
@@ -162,12 +165,14 @@ describe("Author requests already captured dependency bodies", () => {
     expect(result.revision_advanced).toBe(true);
     expect(indexerAgentStepInputSchema.parse(result.next?.action?.input).stage).toBe("author");
     const ledger = await currentLedger(root);
-    expect(ledger?.entries.find((entry) => entry.workset_digest === peer.spec.request.workset.workset_digest)?.state).toBe("accepted");
+    // Region preparation may expand a task's source material before acceptance;
+    // its stable group, not the earlier material digest, identifies that peer.
+    expect(ledger?.entries.find((entry) => entry.group_key === materialRequest(peer, []).result.group_key)?.state).toBe("accepted");
     const current = await resolveCurrentIndexerAgentContext(root);
     expect(current?.descriptor.tasks).toHaveLength(1);
     const updated = await loadCurrentIndexerBatchTask({ projectRoot: root, descriptor: current!.descriptor, taskKey: current!.descriptor.tasks[0]!.task_key });
     expect(updated.spec.validation.canonical_inventory_members).toEqual(initialMembers);
-    expect(updated.spec.validation.expected_subject_key).toEqual(task.spec.validation.expected_subject_key);
+    expect(updated.spec.request.workset).toMatchObject({ stage: "author", group_key: materialRequest(task, []).result.group_key });
     const texts = updated.view.items.filter((item) => item.category === "source-text");
     expect(JSON.stringify(texts)).toContain("export const answer = 42");
     expect(JSON.stringify(texts)).toContain("export const secondaryAnswer = 84");
@@ -187,7 +192,7 @@ describe("Author requests already captured dependency bodies", () => {
     if (!("outcomes" in repeatResult)) throw new Error("missing outcomes");
     expect(repeatResult.outcomes[0]?.outcome).toBe("material-expanded");
     const submission = await publish(root, updated);
-    const runResult = buildIndexerAuthorRunResultFromSemantic({ request: updated.spec.request, view: updated.view,
+    const runResult = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: updated.spec.request, view: updated.view,
       semantic: submission.result, validation: updated.spec.validation } as unknown as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]);
     await expect(validateProjectIndexerMainRun({ projectRoot: root, value: {
       protocol: "context.indexer.main-run-validation-input/v1", request: updated.spec.request,
@@ -233,7 +238,9 @@ describe("Author requests already captured dependency bodies", () => {
     const { root, tasks } = await authorFixture();
     const task = tasks[0]!;
     const submission = await publish(root, task);
-    submission.result.sections[0]!.source_items = ["src/index.ts", "src/secondary.ts"];
+    submission.result.sections[0]!.references = ["src/index.ts", "src/secondary.ts"].map(path => ({
+      source_ref: task.spec.request.workset.source_ref, locator: { path, start_line: 1, end_line: 1 },
+    }));
     const result = await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
       managed: true, authorities, value: { stage: "author", results: [submission, await publish(root, tasks[1]!)] } });
     if (!("outcomes" in result)) throw new Error("missing outcomes");
@@ -244,7 +251,8 @@ describe("Author requests already captured dependency bodies", () => {
   test("invalid direct file paths fail only that task without accepting or resetting peers", async () => {
     const { root, tasks } = await authorFixture();
     const bad = await publish(root, tasks[0]!);
-    bad.result.sections[0]!.source_items = ["../outside.ts"];
+    bad.result.sections[0]!.references = [{ source_ref: tasks[0]!.spec.request.workset.source_ref,
+      locator: { path: "../outside.ts", start_line: 1, end_line: 1 } }];
     const result = await completeCurrentIndexerAction({ cwd: root, revision: (await route(root)).revision,
       managed: true, authorities, value: { stage: "author", results: [bad, await publish(root, tasks[1]!)] } });
     if (!("outcomes" in result)) throw new Error("missing outcomes");

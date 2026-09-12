@@ -270,19 +270,12 @@ function mainRunRequest(providerIntegrity: string) {
     primary_execution_fingerprint:
       primaryExecutionProjection.primary_execution_fingerprint,
     profile_contract_digest: digest("5"),
-    subject_key_schema_digest: digest("6"),
     source_scope_digest: digest("7"),
     source_binding_digest: digest("8"),
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("0"),
     stage: "partition",
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "module",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest([strategy]),
     reader_question_refs: [],
     partition_input_digests: [digest("a")],

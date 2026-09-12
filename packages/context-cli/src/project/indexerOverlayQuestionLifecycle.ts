@@ -298,7 +298,6 @@ export async function rebindProjectIndexerSelectionToOverlayRequirement(input: {
     confirmation: value.confirmation,
     rebind_receipt_digest: rebind.receipt_digest,
     rebound_selection_digest: rebind.target_final_report.report_digest,
-    subject_key_schema_set_digest: rebind.target_final_report.subject_key_schema_set_digest,
     finalized_validation_report_digests: [
       value.amendment.conformance_report_digest,
       rebind.target_final_report.report_digest,

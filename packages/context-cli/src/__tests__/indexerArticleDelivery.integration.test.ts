@@ -17,6 +17,7 @@ import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.
 import { readIndexerDelivery } from "../project/indexerDelivery.js";
 import { readPartitionStream } from "../project/indexerPartitionStream.js";
 import { readDeliveryCadence } from "../project/indexerDeliveryCadence.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 
 test("one accepted topic spanning page batches settles only after its complete article set is built", async () => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 1 });
@@ -37,15 +38,15 @@ test("one accepted topic spanning page batches settles only after its complete a
     const workset = task.spec.request.workset;
     if (workset.stage !== "author") throw new Error("expected Author");
     const validation = task.spec.validation as Parameters<typeof buildIndexerAuthorRunResultFromSemantic>[0]["validation"];
-    const fact = task.view.items.find(item => item.category === "fact")!;
+    const references = await fixtureArticleReferences(root, task.view);
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key,
       outcome: "publish", policy: "standard", articles: validation.page_plan!.articles!.map(article => ({
         key: article.key, title: article.title, summary: "A source-backed entry.",
-        sections: [{ key: "entry", heading: "Entry", markdown: `Locate ${article.key} in the public source.`, facts: [fact.ref], answers: article.question_targets }],
+        sections: [{ key: "entry", heading: "Entry", markdown: `Locate ${article.key} in the public source.`, references, answers: article.question_targets }],
       })), member_dispositions: validation.canonical_inventory_members.map(member => ({
         item: member.member_id, state: "covered", article: "article-0", section: "entry",
       })) });
-    const result = buildIndexerAuthorRunResultFromSemantic({ request: task.spec.request, view: task.view, validation, semantic });
+    const result = buildIndexerAuthorRunResultFromSemantic({ projectRoot: root, request: task.spec.request, view: task.view, validation, semantic });
     expect((await acceptIndexerMainAuthorRunsStore({ projectRoot: root, runs: [{ workset_digest: workset.workset_digest, result }] })).outcomes[0]?.outcome).toBe("accepted");
     const cadence = await readDeliveryCadence(root);
     await advanceCurrentIndexerLifecycle(root);

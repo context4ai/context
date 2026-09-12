@@ -12,7 +12,7 @@ import { z } from "zod";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerArtifactResultSchema, indexerLayoutArtifactRef, indexerProtocolDigest,
-  materializeIndexerEffectiveArtifactSet, type IndexerArtifact, type IndexerArtifactResult } from "@c4a/context";
+  materializeIndexerEffectiveArtifactSet, type IndexerArtifact } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { currentLedger, readJsonMaybe } from "./indexerMainRunStoreRecords.js";
 import { readCurrentIndexerPostAuthorEnvelopesForResults } from "./indexerPostAuthorRunStore.js";
@@ -94,15 +94,8 @@ export function selectDeliveryPages(input: {
   return ready.length >= 50 ? ready.slice(0, 50) : [];
 }
 
-export function deliveryPageContentDigest(artifact: IndexerArtifact, result: Pick<IndexerArtifactResult, "facts" | "evidence_bindings">): string {
-  const blocks = artifact.representation === "template" ? Object.values(artifact.variables)
-    : artifact.sections.flatMap((section) => section.blocks);
-  const factRefs = new Set(blocks.flatMap((block) => "fact_refs" in block ? block.fact_refs : []));
-  const facts = result.facts.filter((fact) => factRefs.has(fact.fact_ref));
-  const evidenceRefs = new Set([...blocks.flatMap((block) => "evidence_refs" in block ? block.evidence_refs : []),
-    ...facts.flatMap((fact) => fact.evidence_refs)]);
-  return indexerProtocolDigest({ artifact, facts,
-    evidence_bindings: result.evidence_bindings.filter((binding) => evidenceRefs.has(binding.evidence_ref)) });
+export function deliveryPageContentDigest(artifact: IndexerArtifact): string {
+  return indexerProtocolDigest(artifact);
 }
 
 export async function acceptedDeliveryPages(projectRoot: string, includeLinks = true): Promise<DeliveryPage[]> {
@@ -121,7 +114,7 @@ export async function acceptedDeliveryPages(projectRoot: string, includeLinks = 
       ref: indexerLayoutArtifactRef(result.logical_unit.logical_unit_ref, artifact),
       artifact_id: artifact.artifact_id, result_digest: result.output_digest,
       workset_digest: record.accepted_record.workset_digest,
-      content_digest: deliveryPageContentDigest(artifact, result),
+      content_digest: deliveryPageContentDigest(artifact),
       boundary: plan?.delivery_boundary === true && artifactIndex === effective.artifacts.length - 1, priority: plan?.priority ?? index,
     }));
   }));

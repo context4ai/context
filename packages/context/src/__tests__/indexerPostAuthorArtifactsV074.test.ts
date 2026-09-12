@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   indexerProtocolDigest,
+  indexerArtifactResultDigest,
   materializeIndexerEffectiveArtifactSet,
   materializeIndexerPrimaryResultViewFromArtifactResult,
 } from "../index.js";
@@ -25,14 +26,19 @@ describe("post-author Artifact projection", () => {
       artifacts: [{
         artifact_kind: "overview",
         variables: { representation: "sections" },
-        evidence_refs: [{
-          ref: structured.result.evidence_bindings[0]!.evidence_ref,
-          source_digest: structured.result.evidence_bindings[0]!.content_digest,
-        }],
       }],
     });
 
     const templated = candidateCompileTemplateFixture();
+    const templateArtifact = templated.result.artifacts[0]!;
+    if (templateArtifact.representation !== "template") throw new Error("Expected template fixture");
+    templateArtifact.variables.introduction = { value: "Reader explanation", references: [{
+      source_ref: templated.result.source_ref, locator: { path: "guide.md", start_line: 2, end_line: 3 },
+      content_digest: indexerProtocolDigest("quoted region"),
+    }] };
+    const { output_digest: oldDigest, ...templatePayload } = templated.result;
+    void oldDigest;
+    templated.result.output_digest = indexerArtifactResultDigest(templatePayload);
     const templateView = materializeIndexerPrimaryResultViewFromArtifactResult({
       artifact_result: templated.result,
       primary_result_digest: indexerProtocolDigest(templated.result),
@@ -41,7 +47,7 @@ describe("post-author Artifact projection", () => {
     expect(templateView.artifacts[0]?.variables).toMatchObject({
       representation: "template",
       template_id: "component-guide",
-      variables: {},
+      variables: templateArtifact.variables,
     });
 
     const tampered = structuredClone(structured.result);

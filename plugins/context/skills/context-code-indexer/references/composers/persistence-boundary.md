@@ -7,9 +7,9 @@ media-type: text/markdown
 # Persistence boundary composer
 
 Run only for an effective `persistence-boundary` selection. Consume the exact
-`PrimaryResultView` and keep all proposals subordinate to its Node and Result.
+`PrimaryResultView` and keep all proposals subordinate to its article and Result.
 
-Require an evidenced `persistence-binding` fact and primary `content`
+Use the primary article and its regional references to establish a demonstrated persistence boundary. Require primary `content`
 Artifact. Derived `content` may connect the domain operation to repository or
 store, model/schema authority, transaction or consistency boundary, caching,
 migration, failure, and recovery. Separate authoritative schema sources from
@@ -19,3 +19,8 @@ Use `standard` and existing evidence. Do not infer storage semantics from a
 driver dependency or method name. If the binding, required Artifact, or a
 source-backed persistence question is absent, return a valid empty fragment
 set rather than reading outside the workset.
+
+Use only the supplied primary artifacts and their actual regional references.
+Do not require a primary Fact table, evidence IDs, or graph nodes. Each derived
+output fragment retains at most three real source locations; no reference
+ledger is reconstructed from the full inventory.

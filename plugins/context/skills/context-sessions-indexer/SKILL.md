@@ -4,7 +4,7 @@ description: Context-managed Provider for conversation summaries with optional c
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.0.0"
+  context-provider-version: "1.0.1-alpha.1"
 ---
 
 # Context Sessions Indexer

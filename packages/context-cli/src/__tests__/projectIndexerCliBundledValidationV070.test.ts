@@ -21,8 +21,6 @@ import {
 } from "../project/indexerDistributionCodeAuthoringValidation.js";
 import { validateBundledIndexerMarkdownEditorialFixtures } from
   "../project/indexerDistributionMarkdownEditorialValidation.js";
-import { validateBundledIndexerMarkdownMigrationFixtures } from
-  "../project/indexerDistributionMarkdownMigrationValidation.js";
 import { validateBundledIndexerAuthoringFixtures } from
   "../project/indexerDistributionFixtureValidation.js";
 import { validateBundledIndexerMarkdownRoutingFixtures } from
@@ -238,40 +236,6 @@ describe("CLI bundled Indexer release validation", () => {
     })).resolves.toBeUndefined();
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("rejects Markdown migration-equivalence authority drift before release", async () => {
-    const root = await createTemporaryRoot("context-cli-markdown-migration-invalid-");
-    const sourceRoot = join(root, "skills");
-    await cp(resolve(PACKAGE_ROOT, "../..", "plugins/context/skills"), sourceRoot, {
-      recursive: true,
-    });
-    const fixturePath = join(
-      sourceRoot,
-      "context-markdown-indexer",
-      "tests",
-      "fixtures",
-      "migration-equivalence.json",
-    );
-    const fixture = JSON.parse(await readFile(fixturePath, "utf8")) as {
-      cases: Array<{ authority: string; source_shape: string }>;
-    };
-    fixture.cases[0]!.authority = "context-layout";
-    await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-    const source = join(sourceRoot, "context-markdown-indexer");
-    const input = {
-      source,
-      expectedProfiles: BUNDLED_MARKDOWN_PROFILE_IDS,
-      manifest: await loadIndexerProviderManifest(source),
-    };
-    await expect(validateBundledIndexerMarkdownMigrationFixtures(input))
-      .rejects.toThrow(/wrong authority/);
-
-    fixture.cases[0]!.authority = "community-instructions";
-    fixture.cases[0]!.source_shape =
-      "The answer is copied from https://private.example.internal/project/source.";
-    await writeFile(fixturePath, `${JSON.stringify(fixture, null, 2)}\n`, "utf8");
-    await expect(validateBundledIndexerMarkdownMigrationFixtures(input))
-      .rejects.toThrow(/not community-anonymous/);
-  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
   test("rejects incomplete chapter fixtures and private literals in runtime resources", async () => {
     const root = await createTemporaryRoot("context-cli-code-authoring-invalid-");
@@ -386,8 +350,8 @@ describe("CLI bundled Indexer release validation", () => {
     const manifestPath = join(sourceRoot, "context-code-indexer", "context-indexer.yaml");
     const manifest = YAML.parse(await readFile(manifestPath, "utf8"));
     const composer = manifest.provides.composers.find((item: { id: string }) => item.id === "public-contract");
-    expect(composer.contract.primary_requirements.fact_kinds).toContain("code-symbol");
-    composer.contract.primary_requirements.fact_kinds = ["public-surface-drift"];
+    expect(composer.contract.primary_requirements.artifact_kinds.length).toBeGreaterThan(0);
+    composer.contract.primary_requirements.artifact_kinds = ["public-surface-drift"];
     await writeFile(manifestPath, YAML.stringify(manifest), "utf8");
     await expect(validateBundledIndexerComposers({
       source,

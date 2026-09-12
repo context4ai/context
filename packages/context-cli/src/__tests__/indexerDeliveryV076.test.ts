@@ -2,14 +2,15 @@ import { expect, test } from "bun:test";
 import { deliveryPageContentDigest, selectDeliveryPages, type DeliveryPage } from "../project/indexerDelivery.js";
 import { artifactResult } from "../../../context/src/__tests__/indexerArtifactResultV070.fixture.js";
 
-test("a peer Fact update does not redeliver an unchanged page, but its own source update does", () => {
+test("a peer article update does not redeliver an unchanged page, but its own region update does", () => {
   const result = artifactResult();
   const artifact = result.artifacts[0]!;
-  const original = deliveryPageContentDigest(artifact, result);
-  result.facts.push({ ...result.facts[0]!, fact_ref: "fact:unrelated", value: "unrelated change" });
-  expect(deliveryPageContentDigest(artifact, result)).toBe(original);
-  result.evidence_bindings[0]!.content_digest = `sha256:${"f".repeat(64)}`;
-  expect(deliveryPageContentDigest(artifact, result)).not.toBe(original);
+  const original = deliveryPageContentDigest(artifact);
+  result.artifacts.push({ ...structuredClone(artifact), artifact_id: "unrelated" });
+  expect(deliveryPageContentDigest(artifact)).toBe(original);
+  if (artifact.representation !== "sections") throw new Error("Expected section fixture");
+  artifact.sections[0]!.blocks[0]!.references[0]!.content_digest = `sha256:${"f".repeat(64)}`;
+  expect(deliveryPageContentDigest(artifact)).not.toBe(original);
 });
 
 const pages = (count: number): DeliveryPage[] => Array.from({ length: count }, (_, index) => ({

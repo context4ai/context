@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { KnowledgeMap } from "@c4a/context";
+import { validateArticleStructureEntries, type ArticleStructureEntry, type KnowledgeMap } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { readApprovedKnowledgeMetadataIndex, hydrateApprovedKnowledgeMarkdown } from "./approvedKnowledgeMetadata.js";
@@ -9,18 +9,20 @@ import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
 export type KnowledgeMapArticleTarget = { artifact_ref: string; section_keys: string[]; title?: string };
-export function knowledgeMapArticleTargets(files: readonly { content: string }[]): KnowledgeMapArticleTarget[] {
+export function knowledgeMapArticleTargets(files: readonly { content: string; article?: ArticleStructureEntry | undefined }[]): KnowledgeMapArticleTarget[] {
   return files.flatMap(file => {
     const meta = parseKnowledgeFrontmatter(file.content);
-    if (typeof meta.artifact_ref !== "string" || meta.deprecated === true) return [];
-    return [{ artifact_ref: meta.artifact_ref, title: typeof meta.title === "string" ? meta.title : meta.artifact_ref,
+    if (file.article === undefined || meta.deprecated === true) return [];
+    return [{ artifact_ref: file.article!.article_id, title: typeof meta.title === "string" ? meta.title : file.article!.article_id,
       section_keys: [...file.content.matchAll(/<!--\s*context:section\b[^>]*\bid="([a-zA-Z0-9_-]+)"[^>]*-->/gu)].map(match => match[1]!) }];
   });
 }
 export async function approvedKnowledgeMapTargets(root: string): Promise<KnowledgeMapArticleTarget[]> {
   const metadata = await readApprovedKnowledgeMetadataIndex(root);
+  const articles = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   const files = await walkPackageFiles(join(root, "knowledge"));
   const content = await Promise.all(files.filter(file => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/")).map(async file => ({
+    article: articles.get(file.relPath),
     content: hydrateApprovedKnowledgeMarkdown({ content: await readFile(file.absPath, "utf8"), relPath: file.relPath, metadata }),
   })));
   return knowledgeMapArticleTargets(content);

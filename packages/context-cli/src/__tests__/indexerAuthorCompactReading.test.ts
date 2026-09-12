@@ -33,7 +33,7 @@ test("large source is navigable and lossless, with no silent excerpt truncation"
   const value = source.value as { spans: { source_span_refs: string[] }[] };
   value.spans = [{ ...value.spans[0]!, start_line: 1, end_line: 1500, text } as typeof value.spans[number]];
   const files = planIndexerReadingFiles([buildIndexerTaskReading(input)]);
-  expect(files.readings[0]!.markdown).toContain(source.ref);
+  expect(files.readings[0]!.markdown).toContain("src/component-0.ts");
   expect(files.readings[0]!.markdown).not.toContain("export const value1499");
   expect(files.details.some(file => file.markdown.includes(text))).toBe(true);
   expect(files.input_bytes).toBeLessThan(Buffer.byteLength(text));
@@ -116,7 +116,7 @@ test("800-line boundary applies even to tiny lines and to excerpts of a larger f
     const before = JSON.stringify(input);
     const task = buildIndexerTaskReading(input);
     const files = planIndexerReadingFiles([task]);
-    const material = task.material.find(block => block.section === "Source material" && block.markdown.includes(source.ref))!;
+    const material = task.material.find(block => block.section === "Source material" && block.markdown.includes("src/component-0.ts"))!;
     expect(material.markdown.includes(text)).toBe(!oversized);
     if (oversized) {
       expect(material.markdown).toContain("[Open captured source](</captured/source file.ts>)");

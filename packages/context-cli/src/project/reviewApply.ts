@@ -15,7 +15,6 @@ import {
   CANDIDATE_LEDGER_FILE,
   type CandidateRecord,
 } from "./candidateLedger.js";
-import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
 import { prepareApprovedKnowledgeSnapshotTarget } from "./approvedKnowledgeSnapshots.js";
@@ -35,13 +34,13 @@ import {
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import {
   assertSafeEntityId,
-  buildApprovedPageViewRefIndex,
+  buildApprovedArticleIndex,
   candidateIdsHash,
   candidateSetHash,
-  findApprovedPageForViewRef,
+  findApprovedPageForArticleId,
   readReviewCandidateSnapshot,
   type ApplyReviewDecisionsResult,
-  type ApprovedPageViewRefIndex,
+  type ApprovedArticleIndex,
   type ReviewDecision,
   type ReviewPayload,
   type ReviewStatus,
@@ -66,7 +65,7 @@ async function prepareApprovedPage(input: {
   projectRoot: string;
   record: CandidateRecord;
   now: string;
-  approvedPageIndex: ApprovedPageViewRefIndex;
+  approvedPageIndex: ApprovedArticleIndex;
   indexerCompileIndex: ProjectIndexerCandidateCompileIndex;
 }): Promise<PreparedApprovedPage> {
   assertProjectIndexerCandidateInCompileIndex({
@@ -88,20 +87,18 @@ async function prepareApprovedPage(input: {
       next: "Rerun the current Indexer Candidate compile before approval.",
     });
   }
-  assertSafeEntityId(input.record.node_ref);
-  assertSafeEntityId(input.record.view_ref);
   const relPath = join("knowledge", input.record.path);
-  const existingView = findApprovedPageForViewRef(
-    input.record.view_ref,
+  const existingView = findApprovedPageForArticleId(
+    input.record.indexer_candidate.artifact_ref,
     input.approvedPageIndex,
   );
   const previousPath = input.record.approved_revision?.previous_path;
   if (previousPath !== undefined && !isSafeKnowledgeTargetPath(input.record.collection, previousPath)) throw new TypeError("Unsafe original page path in a move");
   if (existingView !== undefined && existingView.relPath !== relPath && existingView.relPath !== (previousPath === undefined ? undefined : `knowledge/${previousPath}`)) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `approved page already exists for view_ref at a different path: ${input.record.view_ref}`, {
+    throw new ContextError(ExitCode.WorkspaceStateError, `approved page already exists for view_ref at a different path: ${input.record.article_id}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       candidate_id: input.record.candidate_id,
-      view_ref: input.record.view_ref,
+      view_ref: input.record.article_id,
       current_path: existingView.relPath,
       candidate_path: relPath,
       next: "Resolve the approved page path migration explicitly before approving this candidate.",
@@ -122,20 +119,13 @@ async function prepareApprovedPage(input: {
     }
   }
   if (existing !== undefined) {
-    const frontmatter = input.approvedPageIndex.byRelPath.get(relPath)?.frontmatter ??
-      parseFrontmatterLoose(existing);
-    const existingViewRef = typeof frontmatter.view_ref === "string" ? frontmatter.view_ref : undefined;
-    const existingNodeRef = typeof frontmatter.node_ref === "string" ? frontmatter.node_ref : undefined;
-    if (existingViewRef !== input.record.view_ref || existingNodeRef !== input.record.node_ref) {
-      throw new ContextError(ExitCode.WorkspaceStateError, `candidate target path already contains a different approved view: ${relPath}`, {
+    const existingArticle = input.approvedPageIndex.byRelPath.get(relPath);
+    if (existingArticle?.articleId !== input.record.indexer_candidate.artifact_ref) {
+      throw new ContextError(ExitCode.WorkspaceStateError, `candidate target path belongs to another article: ${relPath}`, {
         category: ErrorCategory.WorkspaceStateInvalid,
         candidate_id: input.record.candidate_id,
         path: relPath,
-        existing_view_ref: existingViewRef,
-        existing_node_ref: existingNodeRef,
-        candidate_view_ref: input.record.view_ref,
-        candidate_node_ref: input.record.node_ref,
-        next: "Resolve the approved page path conflict explicitly before approving this candidate.",
+        next: "Resolve the article path conflict before approval.",
       });
     }
   }
@@ -338,10 +328,10 @@ export async function applyReviewDecisions(input: {
     const indexerCompileIndex = approvesAnyCandidate
       ? await loadProjectIndexerCandidateCompileIndex(input.projectRoot)
       : undefined;
-    const approvedPageIndex: ApprovedPageViewRefIndex = approvesAnyCandidate
-      ? await buildApprovedPageViewRefIndex(input.projectRoot)
+    const approvedPageIndex: ApprovedArticleIndex = approvesAnyCandidate
+      ? await buildApprovedArticleIndex(input.projectRoot)
       : {
-          byViewRef: new Map(),
+          byArticleId: new Map(),
           byRelPath: new Map(),
           assetReferencesByRelPath: new Map(),
         };
@@ -389,7 +379,7 @@ export async function applyReviewDecisions(input: {
           index: indexerCompileIndex,
           record: row,
         });
-        const approvedRef = row.view_ref;
+        const approvedRef = row.article_id;
         assertSafeEntityId(approvedRef);
         const previousCandidate = seenApprovedIds.get(approvedRef);
         if (previousCandidate !== undefined) {

@@ -1,3 +1,4 @@
+import { validateArticleStructureEntries } from "@c4a/context";
 import { readDeliverableAuthorRecords } from "./indexerDeliveryHistory.js";
 import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
 import { loadCandidateRenderCache, saveCandidateRenderCache } from "./candidateRenderCache.js";
@@ -39,7 +40,6 @@ import {
   readApprovedKnowledgeMetadataIndex,
   type ApprovedKnowledgeMetadataIndex,
 } from "./approvedKnowledgeMetadata.js";
-import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { canonicalizeApprovedKnowledgeAssetPair } from "./knowledgeAssetRepair.js";
 import { resolveCurrentProjectIndexerPrimaryAuthority } from
@@ -237,7 +237,6 @@ export function buildProjectIndexerCandidateCompileFromRecords(input: {
     accepted_results: acceptedResults,
     profile_contract: input.profile_contract,
     operator_contract: input.operator_contract,
-    subject_key_schema_set: value.subject_key_schema_set,
   });
 }
 
@@ -305,32 +304,18 @@ async function approvedFileDigest(
     : outputPath;
   const content = await readMaybe(join(projectRoot, outputPath));
   if (content === undefined) return undefined;
-  const frontmatter = {
-    ...(metadata?.byPath.get(relPath) ?? {}),
-    ...parseFrontmatterLoose(content),
-  };
-  if (
-    frontmatter.node_ref !== file.node_ref ||
-    frontmatter.view_ref !== file.internal_view_ref
-  ) {
-    return undefined;
-  }
-  const sourceByEvidenceRef = new Map(file.evidence_bindings.map((binding) => [
-    binding.evidence_ref,
-    binding.source_ref,
-  ]));
+  const current = metadata ?? await readApprovedKnowledgeMetadataIndex(projectRoot);
+  const article = validateArticleStructureEntries(current.structure?.articles ?? []).find(entry => entry.path === relPath);
+  if (!article || article.article_id !== file.artifact_ref) return undefined;
   const expectedSections = file.sections.map((section) => ({
     id: section.section_key,
     markdown: section.markdown.trim(),
-    source_refs: [...new Set(section.evidence_refs.flatMap((evidenceRef) => {
-      const sourceRef = sourceByEvidenceRef.get(evidenceRef);
-      return sourceRef === undefined ? [] : [sourceRef];
-    }))].sort(),
+    references: section.references,
   }));
   const actualSections = approvedContextSectionsInMarkdown(content).map((section) => ({
     id: section.id,
     markdown: section.readerVisibleBody.trim(),
-    source_refs: [...section.refs].sort(),
+    references: article.sections.find(item => item.id === section.id)?.references ?? [],
   }));
   const actualById = new Map(actualSections.map((section) => [section.id, section]));
   for (const expected of expectedSections) {
@@ -341,7 +326,7 @@ async function approvedFileDigest(
       pageRelPath: outputPath,
       expectedContent: expected.markdown,
       approvedContent: actual.markdown,
-      sourceLocators: [file.source_ref, ...expected.source_refs],
+      sourceLocators: [file.source_ref, ...expected.references.map(reference => reference.source_ref)],
     });
     expected.markdown = canonical.expectedContent.trim();
     actual.markdown = canonical.approvedContent.trim();
@@ -443,10 +428,9 @@ export async function readProjectIndexerCandidateCompileStatus(
       if (
         record === undefined ||
         record.fingerprint !== file.file_digest ||
+        record.article_id !== file.artifact_ref ||
         record.structure_digest !== compile.compile_digest ||
         record.indexer_candidate?.compile_digest !== compile.compile_digest ||
-        canonicalIndexerJson(record.indexer_candidate?.evidence_bindings) !==
-          canonicalIndexerJson(file.evidence_bindings) ||
         canonicalIndexerJson(record.indexer_candidate?.sections) !==
           canonicalIndexerJson(file.sections)
       ) {
@@ -531,8 +515,7 @@ export function assertProjectIndexerCandidateInCompileIndex(input: {
     indexerCandidateId(file.file_digest) !== input.record.candidate_id ||
     input.record.indexer_candidate?.compile_digest !== input.index.compile.compile_digest ||
     input.record.fingerprint !== file.file_digest ||
-    canonicalIndexerJson(input.record.indexer_candidate.evidence_bindings) !==
-      canonicalIndexerJson(file.evidence_bindings) ||
+    input.record.article_id !== file.artifact_ref ||
     canonicalIndexerJson(input.record.indexer_candidate.sections) !==
       canonicalIndexerJson(file.sections)
   ) {
@@ -564,8 +547,7 @@ async function projectIndexerCandidates(input: {
     );
     const candidate = {
       candidate_id: candidateId,
-      node_ref: file.node_ref,
-      view_ref: file.internal_view_ref,
+      article_id: file.artifact_ref,
       collection: file.collection,
       status: previous?.fingerprint === file.file_digest
         ? previous.status
@@ -576,11 +558,7 @@ async function projectIndexerCandidates(input: {
       module: file.indexer_id,
       path: candidatePath(file.output_path, file.collection),
       structure_digest: input.compile.compile_digest,
-      source_refs: [...new Set(
-        file.evidence_bindings.length > 0
-          ? file.evidence_bindings.map((binding) => binding.source_ref)
-          : [file.source_ref],
-      )].sort(),
+      source_refs: [...new Set(file.sections.flatMap(section => section.references.map(reference => reference.source_ref)))].sort(),
       body: file.markdown,
       fingerprint: file.file_digest,
       indexer_candidate: {
@@ -588,8 +566,6 @@ async function projectIndexerCandidates(input: {
         file_digest: file.file_digest,
         artifact_ref: file.artifact_ref,
         section_refs: file.section_refs,
-        source_ref: file.source_ref,
-        evidence_bindings: file.evidence_bindings,
         sections: file.sections,
       },
       review: {

@@ -80,11 +80,7 @@ describe("Partition handoff uses only Agent-visible materials", () => {
             key: `public-constants-${task.task_key}`,
             title: "Public constants",
             reader_task: "Find the public constant exports and their declared values.",
-            subject: {
-              namespace: "sample-library", kind: workset.partition_subject_key.kind,
-              local_key: `public-constants-${task.task_key}`,
-            },
-            subject_intent: "primary",
+
             members,
             questions: [...workset.reader_question_refs],
             question_targets: workset.allowed_question_target_refs.map((target) => ({
@@ -111,8 +107,7 @@ describe("Partition handoff uses only Agent-visible materials", () => {
       const structure = await currentIndexerStructureReview(root);
       expect(structure?.preview.topics).toHaveLength(results.length);
       expect(structure?.preview.topics.every((topic) =>
-        topic.subject_key?.namespace === "sample-library" &&
-        topic.subject_key.local_key.startsWith("public-constants-")
+        topic.key.startsWith("public-constants-") && topic.title === "Public constants"
       )).toBe(true);
 
       // Inspect internals only AFTER submission to verify the CLI supplied them.

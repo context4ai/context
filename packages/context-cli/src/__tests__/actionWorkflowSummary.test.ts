@@ -23,7 +23,7 @@ test("summary preserves Graph status and reports actual bounded maintenance targ
   const projectRoot = await root();
   const request = (id: string) => ({ input: { id, operation: "regenerate" as const, timing: "priority" as const,
     targets: Array.from({ length: 7 }, (_, i) => ({ path: `guide/${id}-${i}.md`, instruction: "Refresh the API." })) },
-    targets: Array.from({ length: 7 }, (_, i) => ({ path: `guide/${id}-${i}.md`, view_ref: `view:${id}/${i}` })), delivered_before: "previous" });
+    targets: Array.from({ length: 7 }, (_, i) => ({ path: `guide/${id}-${i}.md`, article_id: `article:${id}/${i}` })), delivered_before: "previous" });
   const state: MaintenanceState = { protocol: "context.maintenance/v1", active: { ...request("active"), phase: "running" },
     pending: Array.from({ length: 7 }, (_, i) => request(`pending-${i}`)), completed: [] };
   await saveMaintenance(projectRoot, state);

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  indexerProtocolDigest,
   buildIndexerAgentStepInput,
   buildIndexerAuthorDependencyView,
   buildIndexerCapabilityGroupEvidence,
@@ -35,12 +36,6 @@ const SUBJECT: IndexerSubjectKey = {
   namespace: "sample-package",
   kind: "component",
   local_key: "button",
-};
-const PARTITION_SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component-library",
-  local_key: "root",
 };
 const STRATEGY: IndexerPartitionStrategy = {
   kind: "project-indexer",
@@ -92,7 +87,6 @@ const common = {
   primary_execution_fingerprint:
     PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
   profile_contract_digest: digest("4"),
-  subject_key_schema_digest: digest("5"),
   source_scope_digest: digest("6"),
   source_binding_digest: digest("7"),
   primary_resource_binding_digest:
@@ -125,7 +119,6 @@ function partitionWorkset(): IndexerMainPartitionWorkset {
   const workset = buildIndexerMainWorkset({
     ...common,
     stage: "partition",
-    partition_subject_key: PARTITION_SUBJECT,
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:public-contract"],
     partition_input_digests: [digest("f")],
@@ -200,11 +193,9 @@ function partitionPlan(workset: IndexerMainPartitionWorkset): IndexerPartitionPl
       indexer_id: workset.indexer_id,
       indexer_fingerprint: workset.primary_execution_fingerprint,
       requirement_digest: workset.requirement_set_digest,
-      subject_key_schema_digest: workset.subject_key_schema_digest,
       source_scope_digest: workset.source_scope_digest,
       source_refs: [workset.source_ref],
       module_ref: workset.module_ref,
-      partition_subject_key: workset.partition_subject_key,
       parent_scope_ref: workset.module_ref!,
       inventory_digest: workset.partition_inventory_digest,
       question_target_inventory_digest: workset.question_target_inventory_digest,
@@ -216,9 +207,8 @@ function partitionPlan(workset: IndexerMainPartitionWorkset): IndexerPartitionPl
     reader_question_refs: workset.reader_question_refs,
     groups: [{
       group_key: "component:button",
-      subject_key: SUBJECT,
-      subject_intent: "primary",
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: workset.indexer_id,
+        source_ref: workset.source_ref, module_ref: workset.module_ref, group_key: "component:button" }),
       label: "Button",
       reader_question_refs: workset.reader_question_refs,
       question_target_bindings: [{
@@ -258,9 +248,7 @@ function artifactResult(currentRequest: IndexerMainRunRequest): IndexerArtifactR
     source_role: "authoritative-source",
     logical_unit: {
       group_key: workset.group_key,
-      subject_key: SUBJECT,
       logical_unit_ref: workset.logical_unit_ref,
-      target_resolution_dispositions: [],
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: workset.workset_digest,
@@ -280,8 +268,6 @@ function artifactResult(currentRequest: IndexerMainRunRequest): IndexerArtifactR
         missing_capabilities: ["reader-projection"],
       }],
     }),
-    facts: [],
-    evidence_bindings: [],
     artifacts: [],
     artifact_bundle: null,
     material_question_proposals: [],
@@ -321,7 +307,7 @@ describe("main Indexer run protocol", () => {
     });
     expect(validated.operation_result).toEqual(result.result.result);
     expect(validated).not.toHaveProperty("authoring_audit");
-    expect(validated.artifact_dependency_set).toBeNull();
+    expect(validated).not.toHaveProperty("artifact_dependency_set");
   });
 
   test("validates an author ArtifactResult and consumed InputView digest", () => {
@@ -346,7 +332,6 @@ describe("main Indexer run protocol", () => {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: ELIGIBILITY,
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],
@@ -354,17 +339,7 @@ describe("main Indexer run protocol", () => {
     });
     expect(validated.operation_result).toEqual(artifact);
     expect(validated).not.toHaveProperty("authoring_audit");
-    expect(validated.artifact_dependency_set).toMatchObject({
-      protocol: "context.indexer.artifact-dependency-set/v1",
-      result_digest: artifact.output_digest,
-      author_workset_digest: workset.workset_digest,
-      logical_unit_ref: artifact.logical_unit.logical_unit_ref,
-      artifacts: [],
-      negative_dependencies: [{
-        kind: "group-input-set",
-        set_digest: indexerInventoryMembersDigest(INVENTORY),
-      }],
-    });
+    expect(validated).not.toHaveProperty("artifact_dependency_set");
 
     result.consumed_input_view_digest = digest("0");
     expect(() => validateIndexerMainRunResult({
@@ -373,7 +348,6 @@ describe("main Indexer run protocol", () => {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: ELIGIBILITY,
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],
@@ -408,7 +382,6 @@ describe("main Indexer run protocol", () => {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: ELIGIBILITY,
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],
@@ -514,7 +487,6 @@ describe("main Indexer run protocol", () => {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: ELIGIBILITY,
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],
@@ -532,7 +504,6 @@ describe("main Indexer run protocol", () => {
       validation: {
         stage: "author",
         dependency_view: dependencyView(),
-        expected_subject_key: SUBJECT,
         artifact_policy_eligibility: ELIGIBILITY,
         allowed_source_roles: ["authoritative-source"],
         allowed_question_targets: [],

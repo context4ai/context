@@ -52,7 +52,7 @@ export interface IndexerOverlayQuestionApplyReceipt {
   registry_digest: string;
   indexer_selection_digest: string;
   rebound_selection_digest: string;
-  subject_key_schema_set_digest: string;
+
   transaction: DurableMultiFileTransactionReceipt | null;
   recovered: boolean;
   observation_digest: string;
@@ -176,8 +176,6 @@ function assertRebind(input: {
     receipt.target_requirement_set_digest !==
       input.proposal.target_registry.requirement_set_digest ||
     receipt.target_final_report.report_digest !== input.proposal.rebound_selection_digest ||
-    receipt.target_final_report.subject_key_schema_set_digest !==
-      input.proposal.subject_key_schema_set_digest ||
     receipt.target_final_report.indexer_selection_digest !==
       input.proposal.target_registry.indexer_selection_digest ||
     JSON.stringify(expectedValidationReports({ proposal: input.proposal, rebind: receipt })) !==
@@ -241,7 +239,7 @@ function applyReceipt(input: {
     registry_digest: input.observation.registryDigest,
     indexer_selection_digest: input.observation.indexerSelectionDigest,
     rebound_selection_digest: input.proposal.rebound_selection_digest,
-    subject_key_schema_set_digest: input.proposal.subject_key_schema_set_digest,
+
     transaction: input.transaction,
     recovered: input.recovered,
     observation_digest: input.observation.observationDigest,

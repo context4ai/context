@@ -16,7 +16,6 @@ import { readRejectedDecisions, LEGACY_REVIEW_DECISIONS_FILE } from
   "../project/reviewDecisions.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import {
-  approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
   ensureApprovedKnowledgePresentation,
 } from "../project/approvedKnowledgeMetadata.js";
@@ -27,8 +26,7 @@ const CANDIDATE_ID = `indexer/${"a".repeat(64)}`;
 function candidate(): CandidateRecord {
   return {
     candidate_id: CANDIDATE_ID,
-    node_ref: `node:subject:${DIGEST}`,
-    view_ref: `view:artifact:${DIGEST}`,
+    article_id: `artifact:subject:${DIGEST}`,
     collection: "architecture",
     status: "draft",
     candidate_type: "indexer-artifact",
@@ -44,12 +42,10 @@ function candidate(): CandidateRecord {
       file_digest: DIGEST,
       artifact_ref: `artifact:subject:${DIGEST}`,
       section_refs: [`section:subject:${DIGEST}`],
-      source_ref: "repo:sample",
-      evidence_bindings: [],
       sections: [{
         section_ref: `section:subject:${DIGEST}`,
         section_key: "overview",
-        evidence_refs: [],
+        references: [],
         markdown: "# Sample\n\nCurrent knowledge.",
         markdown_digest: DIGEST,
       }],
@@ -118,15 +114,9 @@ describe("Indexer Review durable transaction", () => {
       "batch_digest",
     ]) expect(rendered).not.toContain(token);
 
-    expect(approvedViewMachineMetadata({
-      node_ref: `node:subject:${DIGEST}`,
-      view_ref: `view:artifact:${DIGEST}`,
-      sources: ["repo:sample"],
-      candidate_fingerprint: DIGEST,
-      current_batch_digest: DIGEST,
-      evidence_bindings: [],
-      benchmark_summary: { duration_ms: 1 },
-    })).toBeUndefined();
+    expect(rendered).not.toContain("article_id:");
+    expect(rendered).not.toContain("node_ref:");
+    expect(rendered).toContain('<!-- context:section id="overview" -->');
   });
 
   test("recovers rejected Candidate status and removes the legacy duplicate after interruption", async () => {

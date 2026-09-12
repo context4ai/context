@@ -232,19 +232,15 @@ rejects it.
 The default kb template includes:
 
 - `skills/knowledge-query/SKILL.md`, a reusable skill that teaches agents to
-  query copied knowledge pages structure-first, cite page/section evidence, use
-  `context-build-inventory.json` edge records for package-visible
-  relationships, and report gaps instead of inventing unsupported answers. The
-  build inventory also exposes `structure.relationship_coverage` so a consumer
-  can distinguish an observed zero-edge result from unknown relationship
-  coverage. The
+  navigate copied knowledge pages, cite relevant text and its exported source
+  attribution, and report gaps instead of inventing unsupported answers. The
   default entry OKF root is `wikis/`; packages that select additional internal
   collections expose
   `guides/`, `rules/`, or `feats/` indexes when those roots are selected.
 - `skills/knowledge-query/scripts/search.mjs`, a dependency-free BM25 fallback
   for exact terms, mixed keyword queries, and large Markdown indexes. It chunks
   mechanically, returns inspectable paths and line ranges, and never replaces
-  source-backed relationship evidence.
+  reading the relevant source-backed explanation.
 - `wikis/index.md`, the editable OKF bundle entry page for the generated
   `dist/<package-name>/wikis/` directory.
 
@@ -261,10 +257,8 @@ The generated
 KB entry surface. Internal collections are mapped into OKF roots during build:
 `codeindex`, `business`, and `product` go to `wikis/`; `architecture`, `sop`,
 `faq`, `decision`, and `incident` go to `guides/`; `standards` and `test` go to
-`rules/`; and `feats` goes to `feats/`. Treat `wikis/` as the structured
-entity-and-relationship layer. Guides and rules may explain, operationalize,
-or constrain that knowledge, but directory placement alone does not establish
-a relationship.
+`rules/`; and `feats` goes to `feats/`. These roots organize articles by content
+type; directory placement does not establish a relationship or a subject graph.
 
 Default navigation rules:
 
@@ -307,54 +301,36 @@ wants project-specific behavior beyond knowledge lookup.
 
 ## Context OKF Profiles
 
-Approved Markdown under `knowledge/` and its deterministic
-`knowledge/structure.yaml` projection form the authoring source of truth:
+Approved Markdown under `knowledge/` and the article index in
+`knowledge/structure.yaml` have separate responsibilities:
 
-- top-level YAML frontmatter uses OKF fields such as `type`, `title`,
-  `description`, `tags`, `timestamp`, and `resource`;
-- each Markdown page keeps reader fields, stable page identity, `sources`, and a
-  small recovery capsule (`resource`, `node_type`, containment fields, and
-  relationship mode);
-- large or repeated machine state such as complete `code_symbols`, code
-  evidence, relationship records, candidate fingerprints, and optimization
-  decisions lives once in the corresponding `structure.yaml` view record;
-- Context readers hydrate that machine state in memory before verify, audit,
-  revision, or build. Do not copy a compact page as a new page without using a
-  Context authoring command;
-- do not nest Context production metadata under `context`; fields such as
-  `context.sources` and `context.code_symbols` are not accepted production fields;
-- section provenance lives in `<!-- context:section ... source_ref="..." -->`
-  comments. When a Section needs more than one citation, the CLI preserves the
-  complete set in its adjacent `context:source_refs` block;
-- do not add frontmatter `source_refs`; page-level provenance is derived from
-  section source refs when needed;
-- do not add `context` or `schema` fields.
+- Markdown owns `title`, `type`, `description` and the ISO UTC `timestamp`.
+  `resource` and `tags` are optional reader metadata, not required identities.
+- Structure owns stable `article_id`, `path`, `collection`, `visibility`,
+  and fragment `sections` with their region `references`.
+- Markdown fragment markers contain only their stable ID:
+  `<!-- context:section id="usage" -->` and `<!-- /context:section -->`.
+  Structure records each corresponding ID and at most three source positions
+  per fragment, not three per article.
+- A reference contains `source_ref`, `locator: { path, start_line, end_line }`
+  and the Host-computed regional `content_digest`. Do not duplicate this in
+  Markdown frontmatter or comments.
+- Neither Markdown nor structure keeps a node graph, parser fact ledger,
+  evidence-binding table or a second copy of article prose.
+- Article moves retain identity through Context's existing revision workflow.
+  Direct Markdown copies alone do not include complete provenance.
 
-Package knowledge pages under `dist/<package-name>/` use a consumer projection.
-They retain reader-facing fields such as `title`, `type`, `description`, `tags`,
-`timestamp`, and custom non-lifecycle fields. Node identity, `resource`,
-`sources`, Section evidence comments, and build-only fields are omitted from the
-page. `context-build-inventory.json` records the distributed path, approved
-knowledge path, node identity, source summary, and package-visible structure.
-Maintainers return to the mapped `knowledge/` page for exact `sources` and
-`source_ref` attribution. `knowledge/` is never rewritten by this projection.
+Package pages under `dist/<package-name>/` retain reader metadata and receive
+a generated Sources section derived from the article references and source
+registry. Repository links include file and line ranges; document links retain
+the captured document attribution. This export does not rewrite `knowledge/`.
+The build inventory maps exported pages back to their approved article paths.
 
-Accepted section `source_ref` forms:
-
-```text
-src-N#symbol:<file>:<symbol-id>:<kind>@<digest>
-src-N#span:<heading-hint> L<start>-<end>@<span-hash>
-```
-
-The code symbol form includes the source-relative file so same-name symbols in
-different files resolve to one exact symbol-index row. Consumers should still
-treat the complete `source_ref` as opaque. Production pages do not expose
-Candidate fingerprints, Indexer digests, or `code_origin`.
-
-`#span:` refs retain source snapshot line ranges for human review, diffing, and
-stable re-pinning. They resolve against the stored file/Lark snapshot or the saved
-Note/Sessions Markdown, not the code symbol index. A session's optional commit/MR
-association stays in its source file; knowledge does not duplicate those fields.
+Source snapshots and regional baselines remain machine-managed. Update checks
+compare cited regions, relocating unchanged text only when its new position is
+unambiguous. Missing, changed or ambiguous regions require review; an unchanged
+region does not prove that uncited new material is irrelevant. A session's
+optional commit/MR association stays with its source document.
 
 The kb package root may contain agent files such as `AGENTS.md` and `skills/`.
 The OKF-compatible surface is the selected `wikis/`, `guides/`, `rules/`, and
@@ -377,12 +353,10 @@ The OKF-compatible surface is the selected `wikis/`, `guides/`, `rules/`, and
 file includes `selected_by` entries such as `{ "kind": "collection" }`,
 `{ "kind": "okf_root" }`, `{ "kind": "include" }`, or `{ "kind": "default" }`,
 and a `production_metadata` object for selected page-level production fields.
-Child and relationship records use the inventory's canonical structure
-projection. The inventory exposes package-visible typed
-edges under `structure.edge_records`; these records are filtered to edges whose
-endpoints are present in the selected package. Use those edge records for
-relationship citations inside the package instead of assuming the workspace
-`knowledge/structure.yaml` file is bundled.
+The `structure.articles` projection retains selected article identities and
+fragment source references. It does not contain graph nodes or typed edges.
+Published Markdown includes readable source attribution derived from these
+references; the Agent does not maintain a second source list in the page.
 
 For KB packages, the inventory records `package.distribution` as
 `layout: "flat"`, `knowledge_namespace: null`, and the four package-relative

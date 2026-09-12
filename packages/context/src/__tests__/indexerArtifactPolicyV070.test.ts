@@ -79,8 +79,7 @@ function contracts() {
       question_target_domains: [{
         id: "primary-subject",
         selector: { operator: "all-inventory" },
-        grouping_operator: "by-subject-key",
-        subject_key_kind: "component",
+
         granularity: "identity",
       }],
       reader_question_contracts: [{
@@ -113,15 +112,7 @@ function contracts() {
       }],
       variant_schema: { axes: [] },
     }],
-    subject_key_schemas: [{
-      profile: "component-library",
-      version: 1,
-      namespace: { operator: "canonical-source-module-namespace" },
-      kinds: [{
-        id: "component",
-        local_key: { operator: "canonical-export-family" },
-      }],
-    }],
+
   };
   const profiles: IndexerProfileContract = {
     ...profilePayload,
@@ -149,19 +140,16 @@ function entries(): IndexerArtifactBundleEntry[] {
     artifact_kind: "content",
     purpose: "required",
     reader_question_refs: ["question:overview"],
-    evidence_refs: ["evidence:source"],
   }, {
     artifact_id: "examples",
     artifact_kind: "examples",
     purpose: "discretionary",
     reader_question_refs: ["question:examples"],
-    evidence_refs: ["evidence:source"],
   }, {
     artifact_id: "overview-continuation",
     artifact_kind: "content",
     purpose: "semantic-split",
     reader_question_refs: ["question:overview"],
-    evidence_refs: ["evidence:source"],
     split_of: "overview",
     boundary: {
       axis: "source-namespace",
@@ -255,7 +243,6 @@ describe("CLI-owned Artifact policy eligibility", () => {
         artifact_kind: "content",
         purpose: "required",
         reader_question_refs: [],
-        evidence_refs: ["evidence:source"],
       }],
     });
     expect(validateIndexerArtifactBundlePolicy({
@@ -264,10 +251,8 @@ describe("CLI-owned Artifact policy eligibility", () => {
       actual_artifacts: [{
         artifact_id: "overview",
         artifact_kind: "content",
-        evidence_refs: ["evidence:source"],
       }],
       allowed_question_refs: [],
-      known_evidence_refs: ["evidence:source"],
     })).toEqual(bundle);
   });
 });
@@ -334,15 +319,7 @@ describe("Provider references to CLI-owned Artifact policy", () => {
             required: false,
           }],
         },
-        subject_key_schema: {
-          version: 1,
-          namespace: { operator: "canonical-source-module-namespace" },
-          kinds: [{
-            id: "component",
-            local_key: { operator: "canonical-export-family" },
-          }],
-          normalization: [],
-        },
+
       }],
     };
     const manifest = indexerProviderManifestSchema.parse(extension);
@@ -403,9 +380,7 @@ provider:
         artifact_kind: "content",
         purpose: "required",
         reader_question_refs: ["question:overview"],
-        evidence_refs: ["evidence:anonymous-component-source"],
       }],
-      evidence_refs: ["evidence:anonymous-component-source"],
     };
     expect(validateIndexerAuthoringFixture({
       fixture,
@@ -423,15 +398,6 @@ provider:
       operator_contract: operators,
     })).toThrow(/unprovided source role/);
 
-    const nonAnonymousEvidence = structuredClone(fixture);
-    nonAnonymousEvidence.artifacts[0]!.evidence_refs = ["evidence:private-source"];
-    nonAnonymousEvidence.evidence_refs = ["evidence:private-source"];
-    expect(() => validateIndexerAuthoringFixture({
-      fixture: nonAnonymousEvidence,
-      manifest,
-      profile_contract: profiles,
-      operator_contract: operators,
-    })).toThrow(/anonymous evidence namespace/);
   });
 });
 
@@ -448,10 +414,8 @@ describe("logical-unit Artifact Bundle", () => {
       actual_artifacts: bundle.artifacts.map((entry) => ({
         artifact_id: entry.artifact_id,
         artifact_kind: entry.artifact_kind,
-        evidence_refs: entry.evidence_refs,
       })),
       allowed_question_refs: ["question:examples", "question:overview"],
-      known_evidence_refs: ["evidence:source"],
     })).toEqual(bundle);
     expect(bundle).toMatchObject({
       discretionary_artifact_count: 1,
@@ -471,7 +435,6 @@ describe("logical-unit Artifact Bundle", () => {
       eligibility: eligibility(),
       actual_artifacts: missingBundle.artifacts,
       allowed_question_refs: ["question:examples"],
-      known_evidence_refs: ["evidence:source"],
     })).toThrow(/missing required kind/);
 
     const excessive = [entries()[0]!, ...["a", "b", "c"].map((suffix) => ({
@@ -479,7 +442,6 @@ describe("logical-unit Artifact Bundle", () => {
       artifact_kind: "examples",
       purpose: "discretionary" as const,
       reader_question_refs: ["question:examples"],
-      evidence_refs: ["evidence:source"],
     }))];
     const excessiveBundle = buildIndexerArtifactBundle({
       logical_unit_ref: "node:subject:sample",
@@ -491,7 +453,6 @@ describe("logical-unit Artifact Bundle", () => {
       eligibility: eligibility(),
       actual_artifacts: excessiveBundle.artifacts,
       allowed_question_refs: ["question:examples", "question:overview"],
-      known_evidence_refs: ["evidence:source"],
     })).toThrow(/fan-out/);
 
     expect(() => buildIndexerArtifactBundle({
@@ -502,7 +463,6 @@ describe("logical-unit Artifact Bundle", () => {
         artifact_kind: "content",
         purpose: "semantic-split",
         reader_question_refs: ["question:overview"],
-        evidence_refs: ["evidence:source"],
         split_of: "overview",
         boundary: { axis: "source-namespace", start_key: "q", end_key: "zz" },
       }],
@@ -518,7 +478,6 @@ describe("logical-unit Artifact Bundle", () => {
       eligibility: eligibility(),
       actual_artifacts: orphan.artifacts.slice(1),
       allowed_question_refs: ["question:examples", "question:overview"],
-      known_evidence_refs: ["evidence:source"],
     })).toThrow(/actual Artifact set/);
   });
 
@@ -528,7 +487,6 @@ describe("logical-unit Artifact Bundle", () => {
       artifact_kind: "examples",
       purpose: "discretionary" as const,
       reader_question_refs: ["question:examples"],
-      evidence_refs: ["evidence:source"],
     }))];
     const inflated = buildIndexerArtifactBundle({
       logical_unit_ref: "node:subject:single-method-service",
@@ -542,7 +500,6 @@ describe("logical-unit Artifact Bundle", () => {
       eligibility: eligibility(),
       actual_artifacts: inflated.artifacts,
       allowed_question_refs: ["question:examples", "question:overview"],
-      known_evidence_refs: ["evidence:source"],
     })).toThrow(/discretionary fan-out exceeds its CLI hard maximum/);
   });
 });

@@ -9,14 +9,12 @@ export interface BundledIndexerComposerSpec {
 
 function contract(input: {
   id: string;
-  factKinds: readonly string[];
   primaryArtifactKinds: readonly string[];
   derivedArtifactKinds: readonly string[];
 }): IndexerComposerContract {
   return {
     instruction: `references/composers/${input.id}.md`,
     primary_requirements: {
-      fact_kinds: [...input.factKinds],
       artifact_kinds: [...input.primaryArtifactKinds],
     },
     derived_artifact_policy: {
@@ -51,7 +49,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "public-contract",
-      factKinds: ["code-symbol"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["contract"],
     }),
@@ -76,7 +73,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "protocol-boundary",
-      factKinds: ["protocol-operation"],
       primaryArtifactKinds: ["contract"],
       derivedArtifactKinds: ["contract"],
     }),
@@ -101,7 +97,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "cross-module-chain",
-      factKinds: ["module-dependency"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["content"],
     }),
@@ -111,7 +106,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     supportedProfiles: ALL_CODE_PROFILES,
     contract: contract({
       id: "contracts-and-chains",
-      factKinds: ["contract-binding", "module-dependency"],
       primaryArtifactKinds: ["contract"],
       derivedArtifactKinds: ["contract"],
     }),
@@ -132,7 +126,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "event-flow",
-      factKinds: ["event-binding"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["content"],
     }),
@@ -151,7 +144,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     ],
     contract: contract({
       id: "persistence-boundary",
-      factKinds: ["persistence-binding"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["content"],
     }),
@@ -161,7 +153,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     supportedProfiles: ALL_CODE_PROFILES,
     contract: contract({
       id: "examples-and-documentation",
-      factKinds: ["example-candidate"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["examples"],
     }),
@@ -171,7 +162,6 @@ export const BUNDLED_CODE_COMPOSER_SPECS: readonly BundledIndexerComposerSpec[] 
     supportedProfiles: ALL_CODE_PROFILES,
     contract: contract({
       id: "development-and-delivery",
-      factKinds: ["development-entry"],
       primaryArtifactKinds: ["content"],
       derivedArtifactKinds: ["content"],
     }),

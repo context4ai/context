@@ -23,7 +23,11 @@ export function scaffoldAuthorTask(task: Pick<CurrentIndexerBatchTask, "spec" | 
     ...(policies.length === 1 ? { policy: policies[0]!.id } : {}),
     ...(Array.isArray(plan.articles) ? { articles: plan.articles.map(value => {
       const article = object(value);
-      return { key: article.key, title: article.title, summary: "", sections: [] };
+      const sections = Array.isArray(article.sections) ? article.sections.map(value => {
+        const section = object(value);
+        return { key: section.key, heading: section.heading, markdown: "", references: [], answers: [] };
+      }) : [];
+      return { key: article.key, title: article.title, summary: "", sections };
     }) } : { title: "", summary: "", sections: [] }),
     member_dispositions: members.map(member => ({ item: member.member_id, state: "" })),
   } };

@@ -40,7 +40,6 @@ export type IndexerInventoryMember = z.infer<typeof indexerInventoryMemberSchema
 const sectionEvidenceSchema = z.object({
   artifact_id: indexerIdSchema,
   section_key: indexerIdSchema,
-  evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
 }).strict();
 
 const inventoryDispositionSchema = z.union([
@@ -63,22 +62,19 @@ const inventoryDispositionSchema = z.union([
     member_kind: z.enum(INDEXER_INVENTORY_MEMBER_KINDS),
     inventory_disposition: z.literal("owned"),
     projection_disposition: z.literal("catalog-only"),
-    fact_refs: z.array(indexerCanonicalRefSchema).min(1),
   }).strict(),
   z.object({
     member_id: indexerCanonicalRefSchema,
     member_kind: z.enum(INDEXER_INVENTORY_MEMBER_KINDS),
     inventory_disposition: z.literal("owned"),
     projection_disposition: z.literal("boundary-only"),
-    evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
-  }).strict(),
+    }).strict(),
   z.object({
     member_id: indexerCanonicalRefSchema,
     member_kind: z.enum(INDEXER_INVENTORY_MEMBER_KINDS),
     inventory_disposition: z.literal("excluded-with-reason"),
     reason_code: indexerIdSchema,
-    evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
-  }).strict(),
+    }).strict(),
   z.object({
     member_id: indexerCanonicalRefSchema,
     member_kind: z.enum(INDEXER_INVENTORY_MEMBER_KINDS),
@@ -112,7 +108,6 @@ export type IndexerInventoryDispositionSet = z.infer<
 export interface IndexerDispositionSectionEvidenceInventoryItem {
   artifact_id: string;
   section_key: string;
-  evidence_refs: readonly string[];
 }
 
 export interface IndexerDispositionCapabilityGroupMembership {
@@ -157,63 +152,15 @@ function sectionIdentity(value: { artifact_id: string; section_key: string }): s
   return `${value.artifact_id}\u0000${value.section_key}`;
 }
 
-function canonicalDisposition(
-  value: IndexerInventoryDisposition,
-): IndexerInventoryDisposition {
+function canonicalDisposition(value: IndexerInventoryDisposition): IndexerInventoryDisposition {
   const parsed = inventoryDispositionSchema.parse(value);
-  if (parsed.inventory_disposition === "owned") {
-    if (parsed.projection_disposition === "detailed") {
-      const sectionEvidence = parsed.section_evidence.map((section) => ({
-        ...section,
-        evidence_refs: canonicalUnique(
-          section.evidence_refs,
-          `${parsed.member_id}.section_evidence.evidence_refs`,
-        ),
-      })).sort((left, right) => compareIndexerCanonicalText(
-        sectionIdentity(left),
-        sectionIdentity(right),
-      ));
-      canonicalUnique(
-        sectionEvidence.map(sectionIdentity),
-        `${parsed.member_id}.section_evidence`,
-      );
-      return { ...parsed, section_evidence: sectionEvidence };
-    }
-    if (parsed.projection_disposition === "catalog-only") {
-      return {
-        ...parsed,
-        fact_refs: canonicalUnique(parsed.fact_refs, `${parsed.member_id}.fact_refs`),
-      };
-    }
-    if (parsed.projection_disposition === "boundary-only") {
-      return {
-        ...parsed,
-        evidence_refs: canonicalUnique(
-          parsed.evidence_refs,
-          `${parsed.member_id}.evidence_refs`,
-        ),
-      };
-    }
-    return parsed;
+  if (parsed.inventory_disposition === "owned" && parsed.projection_disposition === "detailed") {
+    const sections = [...parsed.section_evidence].sort((a, b) => compareIndexerCanonicalText(sectionIdentity(a), sectionIdentity(b)));
+    canonicalUnique(sections.map(sectionIdentity), "member sections");
+    return { ...parsed, section_evidence: sections };
   }
-  if (parsed.inventory_disposition === "excluded-with-reason") {
-    return {
-      ...parsed,
-      evidence_refs: canonicalUnique(
-        parsed.evidence_refs,
-        `${parsed.member_id}.evidence_refs`,
-      ),
-    };
-  }
-  if (parsed.inventory_disposition === "unsupported") {
-    return {
-      ...parsed,
-      missing_capabilities: canonicalUnique(
-        parsed.missing_capabilities,
-        `${parsed.member_id}.missing_capabilities`,
-      ),
-    };
-  }
+  if (parsed.inventory_disposition === "unsupported") return { ...parsed,
+    missing_capabilities: canonicalUnique(parsed.missing_capabilities, "missing capabilities") };
   return parsed;
 }
 
@@ -257,36 +204,9 @@ function knownSet(values: readonly string[], field: string): ReadonlySet<string>
   return new Set(canonicalUnique(values, field));
 }
 
-function validateDetailedProjection(input: {
-  disposition: Extract<IndexerInventoryDisposition, {
-    inventory_disposition: "owned";
-    projection_disposition: "detailed";
-  }>;
-  known_evidence: ReadonlySet<string>;
-  sections: ReadonlyMap<string, ReadonlySet<string>>;
-}): void {
-  for (const section of input.disposition.section_evidence) {
-    const available = input.sections.get(sectionIdentity(section));
-    if (available === undefined) {
-      throw new TypeError(
-        `inventory member ${input.disposition.member_id} references an unknown Section`,
-      );
-    }
-    for (const evidenceRef of section.evidence_refs) {
-      if (!input.known_evidence.has(evidenceRef) || !available.has(evidenceRef)) {
-        throw new TypeError(
-          `inventory member ${input.disposition.member_id} uses evidence absent from its Section`,
-        );
-      }
-    }
-  }
-}
-
 export function validateIndexerInventoryDispositionSet(input: {
   value: unknown;
   workset: IndexerMainAuthorWorkset;
-  known_evidence_refs: readonly string[];
-  known_fact_refs: readonly string[];
   section_evidence_inventory: readonly IndexerDispositionSectionEvidenceInventoryItem[];
   capability_group_memberships: readonly IndexerDispositionCapabilityGroupMembership[];
   material_gap_proposal_refs: readonly string[];
@@ -311,23 +231,9 @@ export function validateIndexerInventoryDispositionSet(input: {
     throw new TypeError("inventory disposition set does not match its author workset");
   }
 
-  const knownEvidence = knownSet(input.known_evidence_refs, "known evidence refs");
-  const knownFacts = knownSet(input.known_fact_refs, "known fact refs");
-  const materialGaps = knownSet(
-    input.material_gap_proposal_refs,
-    "material gap proposal refs",
-  );
-  const sections = new Map<string, ReadonlySet<string>>();
-  for (const section of input.section_evidence_inventory) {
-    const identity = sectionIdentity(section);
-    if (sections.has(identity)) {
-      throw new TypeError("Section evidence inventory contains duplicate identities");
-    }
-    sections.set(identity, knownSet(
-      section.evidence_refs,
-      `${section.artifact_id}.${section.section_key}.evidence_refs`,
-    ));
-  }
+  const materialGaps = knownSet(input.material_gap_proposal_refs, "material gap proposal refs");
+  const sections = new Set(input.section_evidence_inventory.map(sectionIdentity));
+  if (sections.size !== input.section_evidence_inventory.length) throw new TypeError("Repeated Section identity");
   const capabilityGroups = new Map<string, ReadonlySet<string>>();
   for (const group of input.capability_group_memberships) {
     if (capabilityGroups.has(group.capability_group_ref)) {
@@ -342,11 +248,9 @@ export function validateIndexerInventoryDispositionSet(input: {
   for (const disposition of value.dispositions) {
     if (disposition.inventory_disposition === "owned") {
       if (disposition.projection_disposition === "detailed") {
-        validateDetailedProjection({
-          disposition,
-          known_evidence: knownEvidence,
-          sections,
-        });
+        if (disposition.section_evidence.some(section => !sections.has(sectionIdentity(section)))) {
+          throw new TypeError("Inventory member references an unknown Section");
+        }
       } else if (disposition.projection_disposition === "capability-group") {
         if (!capabilityGroups.get(disposition.capability_group_ref)?.has(
           disposition.member_id,
@@ -355,26 +259,7 @@ export function validateIndexerInventoryDispositionSet(input: {
             `inventory member ${disposition.member_id} is absent from its capability group`,
           );
         }
-      } else if (disposition.projection_disposition === "catalog-only") {
-        if (disposition.fact_refs.some((factRef) => !knownFacts.has(factRef))) {
-          throw new TypeError(
-            `inventory member ${disposition.member_id} references an unknown catalog Fact`,
-          );
-        }
-      } else if (
-        disposition.evidence_refs.some((evidenceRef) => !knownEvidence.has(evidenceRef))
-      ) {
-        throw new TypeError(
-          `inventory member ${disposition.member_id} references unknown boundary evidence`,
-        );
       }
-    } else if (
-      disposition.inventory_disposition === "excluded-with-reason" &&
-      disposition.evidence_refs.some((evidenceRef) => !knownEvidence.has(evidenceRef))
-    ) {
-      throw new TypeError(
-        `inventory member ${disposition.member_id} exclusion uses unknown evidence`,
-      );
     } else if (
       disposition.inventory_disposition === "request-material" &&
       !materialGaps.has(disposition.material_question_proposal_ref)

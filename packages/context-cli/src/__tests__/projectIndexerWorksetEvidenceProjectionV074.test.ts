@@ -81,19 +81,12 @@ function markdownRunRequest(
     primary_execution_fingerprint:
       primaryExecutionProjection.primary_execution_fingerprint,
     profile_contract_digest: digest("8"),
-    subject_key_schema_digest: digest("a"),
     source_scope_digest: digest("b"),
     source_binding_digest: binding.source_binding_digest,
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("d"),
     stage: "partition",
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "docs",
-      kind: "document-set",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest([strategy]),
     reader_question_refs: [],
     partition_input_digests: binding.partition_input_digests,

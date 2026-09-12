@@ -35,17 +35,10 @@ function workset(input: {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: input.indexer_id,
-      kind: "module",
-      local_key: input.partition_key ?? "root",
-    },
     strategy_set_digest: digest("a"),
     reader_question_refs: ["question:knowledge"],
     partition_input_digests: [input.input_digest],
@@ -71,12 +64,6 @@ function accepted(input: {
     result_digest: input.result_digest ?? indexerProtocolDigest({ results: [] }),
     receipt_digest: digest("d"),
     run_envelope_digest: digest("e"),
-    artifact_dependency_set_digest: input.workset.stage === "author"
-      ? indexerProtocolDigest({
-          protocol: "context.indexer.empty-artifact-dependency-set/v1",
-          workset_digest: input.workset.workset_digest,
-        })
-      : null,
   };
   return { ...payload, acceptance_digest: indexerProtocolDigest(payload) };
 }
@@ -97,7 +84,6 @@ function authorWorkset(
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),

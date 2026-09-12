@@ -32,7 +32,6 @@ const projectedArtifactSchema = z.object({
   artifact_kind: indexerIdSchema,
   owner: projectedArtifactOwnerSchema.nullable(),
   bundle_binding: projectedArtifactBundleBindingSchema.nullable(),
-  evidence_justification_refs: z.array(indexerCanonicalRefSchema),
 }).strict();
 
 const projectedArtifactPlanPayloadSchema = z.object({
@@ -62,15 +61,6 @@ export interface IndexerProjectedArtifactInput {
     artifact_policy_eligibility_digest: string;
     artifact_policy_variant: string;
   } | null;
-  evidence_justification_refs?: readonly string[];
-}
-
-function uniqueSorted(values: readonly string[], field: string): string[] {
-  const sorted = [...values].sort(compareIndexerCanonicalText);
-  if (new Set(sorted).size !== sorted.length) {
-    throw new TypeError(`${field} must contain unique values`);
-  }
-  return sorted;
 }
 
 function projectionRef(input: {
@@ -113,10 +103,6 @@ export function buildIndexerProjectedArtifactPlan(input: {
       artifact_kind: item.artifact_kind,
       owner: item.owner ?? null,
       bundle_binding: item.bundle_binding ?? null,
-      evidence_justification_refs: uniqueSorted(
-        item.evidence_justification_refs ?? [],
-        `${projectionKey} evidence justification refs`,
-      ),
     });
   }).sort((left, right) =>
     compareIndexerCanonicalText(left.projection_ref, right.projection_ref)

@@ -1,221 +1,77 @@
 import {
-  buildIndexerRenderedContentBlock,
-  canonicalIndexerJson,
-  projectIndexerFactValue,
-  materializeIndexerStructuredContent,
-  type IndexerArtifactResult,
-  type IndexerJson,
-  type IndexerRenderedContentBlock,
-  type IndexerTemplateContract,
+  articleFragmentReferences, buildIndexerRenderedContentBlock,
+  indexerProtocolDigest,
+  type ArticleSourceReference, type IndexerArtifactResult, type IndexerJson,
+  type IndexerRenderedContentBlock, type IndexerTemplateContract,
 } from "@c4a/context";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
 
 const PLACEHOLDER = /\{\{\s*(variable|block):([a-z0-9][a-z0-9._/-]*)\s*\}\}/gu;
+type TemplateArtifact = Extract<IndexerArtifactResult["artifacts"][number], { representation: "template" }>;
 
-type TemplateArtifact = Extract<
-  IndexerArtifactResult["artifacts"][number],
-  { representation: "template" }
->;
-
-function renderSemanticVariable(value: IndexerJson): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  throw new TypeError("collection/json variables must use a registered deterministic block");
+function renderValue(value: IndexerJson, renderer?: string): string {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (renderer === "bullet-list" && Array.isArray(value) && value.every(item => typeof item === "string")) {
+    return value.map(item => `- ${item}`).join("\n");
+  }
+  if (renderer === "key-value-table" && value !== null && !Array.isArray(value) && typeof value === "object") {
+    const escape = (item: unknown) => String(item).replaceAll("|", "\\|").replaceAll("\n", "<br>");
+    return ["| Key | Value |", "| --- | --- |", ...Object.entries(value).map(([key, item]) =>
+      `| ${escape(key)} | ${escape(item)} |`)].join("\n");
+  }
+  if (renderer === "json-code-fence") return "\x60\x60\x60json\n" + JSON.stringify(value, null, 2) + "\n\x60\x60\x60";
+  throw new TypeError("Template collection needs a supported formatter or pre-rendered Markdown");
 }
 
-function referencedFacts(input: {
-  result: Pick<IndexerArtifactResult, "facts">;
-  factRefs: readonly string[];
-  variableId: string;
-}) {
-  const facts = new Map(input.result.facts.map((fact) => [fact.fact_ref, fact]));
-  return input.factRefs.map((ref) => {
-    const fact = facts.get(ref);
-    if (fact === undefined) {
-      throw new TypeError(`template variable ${input.variableId} references unknown Fact ${ref}`);
-    }
-    return fact;
-  });
-}
-
-function sameCanonicalValue(left: IndexerJson, right: IndexerJson): boolean {
-  return canonicalIndexerJson(left) === canonicalIndexerJson(right);
-}
-
+/** Variables carry source regions directly, not a secondary fact ledger. */
 export function validateIndexerTemplateVariableLayers(input: {
-  result: IndexerArtifactResult;
-  artifact: TemplateArtifact;
-  contract: IndexerTemplateContract;
+  artifact: TemplateArtifact; contract: IndexerTemplateContract;
 }): void {
-  const contracts = new Map(input.contract.variables.map((variable) => [variable.id, variable]));
-  for (const [variableId, binding] of Object.entries(input.artifact.variables)) {
-    const contract = contracts.get(variableId);
-    if (contract === undefined) continue;
-    if (contract.content_layer === "semantic-prose") {
-      if (binding.fact_refs.length !== 0) {
-        throw new TypeError(`semantic-prose variable ${variableId} cannot cite deterministic Facts`);
-      }
-      continue;
+  for (const [id, variable] of Object.entries(input.artifact.variables)) {
+    if (!input.contract.variables.some(contract => contract.id === id)) {
+      throw new TypeError(`Unknown template variable ${id}`);
     }
-    if (binding.fact_refs.length === 0) {
-      throw new TypeError(`deterministic-fact variable ${variableId} requires canonical Facts`);
-    }
-    const facts = referencedFacts({
-      result: input.result,
-      factRefs: binding.fact_refs,
-      variableId,
-    });
-    if (!sameCanonicalValue(binding.value, projectIndexerFactValue(facts))) {
-      throw new TypeError(`deterministic-fact variable ${variableId} does not equal its Fact projection`);
-    }
-    const expectedEvidence = [...new Set(facts.flatMap((fact) => fact.evidence_refs))].sort();
-    const actualEvidence = [...binding.evidence_refs].sort();
-    if (
-      expectedEvidence.length !== actualEvidence.length ||
-      expectedEvidence.some((ref, index) => ref !== actualEvidence[index])
-    ) {
-      throw new TypeError(`deterministic-fact variable ${variableId} changes Fact evidence`);
-    }
+    articleFragmentReferences(variable.references);
   }
-}
-
-function assertStandaloneBlockDirective(
-  body: string,
-  start: number,
-  end: number,
-  blockId: string,
-): void {
-  const lineStart = body.lastIndexOf("\n", start - 1) + 1;
-  const nextLine = body.indexOf("\n", end);
-  const lineEnd = nextLine === -1 ? body.length : nextLine;
-  if (
-    body.slice(lineStart, start).trim().length > 0 ||
-    body.slice(end, lineEnd).trim().length > 0
-  ) {
-    throw new TypeError(`deterministic block ${blockId} must occupy its own template line`);
-  }
-}
-
-function trimOuterContentBlocks(
-  blocks: IndexerRenderedContentBlock[],
-): IndexerRenderedContentBlock[] {
-  const values = blocks.flatMap((block, index) => {
-    const markdown = index === 0 ? block.markdown.trimStart() : block.markdown;
-    const finalMarkdown = index === blocks.length - 1 ? markdown.trimEnd() : markdown;
-    if (finalMarkdown.length === 0) return [];
-    return [finalMarkdown === block.markdown
-      ? block
-      : buildIndexerRenderedContentBlock({
-        layer: block.layer,
-        markdown: finalMarkdown,
-        fact_refs: block.fact_refs,
-        evidence_refs: block.evidence_refs,
-      })];
-  });
-  if (values.length === blocks.length || values.length === 0) return values;
-  return trimOuterContentBlocks(values);
 }
 
 export function renderIndexerTemplateSectionLayers(input: {
   body: string;
   section: IndexerTemplateContract["sections"][number];
-  result: Pick<IndexerArtifactResult, "facts">;
   artifact: TemplateArtifact;
   contract: IndexerTemplateContract;
-  acceptedEvidenceRefs: ReadonlySet<string>;
-}): {
-  markdown: string;
-  contentBlocks: IndexerRenderedContentBlock[];
-  evidenceRefs: string[];
-} {
-  const variableContracts = new Map(
-    input.contract.variables.map((variable) => [variable.id, variable]),
-  );
-  const deterministicBlocks = new Map(
-    input.contract.deterministic_blocks.map((block) => [block.id, block]),
-  );
-  const contentBlocks: IndexerRenderedContentBlock[] = [];
-  let semanticMarkdown = "";
-  const semanticEvidence = new Set<string>();
-  let cursor = 0;
-
-  const flushSemantic = (): void => {
-    if (semanticMarkdown.length === 0) return;
-    contentBlocks.push(buildIndexerRenderedContentBlock({
-      layer: "semantic-prose",
-      markdown: semanticMarkdown,
-      evidence_refs: [...semanticEvidence].filter((ref) =>
-        input.acceptedEvidenceRefs.has(ref)
-      ),
-    }));
-    semanticMarkdown = "";
-    semanticEvidence.clear();
-  };
-
-  for (const match of input.body.matchAll(PLACEHOLDER)) {
-    const start = match.index;
-    const token = match[0];
-    const kind = match[1];
-    const id = match[2]!;
-    semanticMarkdown += input.body.slice(cursor, start);
-    cursor = start + token.length;
-    if (kind === "variable") {
-      const contract = variableContracts.get(id);
-      const binding = input.artifact.variables[id];
-      if (contract?.content_layer !== "semantic-prose") {
-        throw new TypeError(`direct template variable ${id} must use content_layer=semantic-prose`);
-      }
-      if (binding !== undefined) {
-        semanticMarkdown += renderSemanticVariable(binding.value);
-        binding.evidence_refs.forEach((ref) => semanticEvidence.add(ref));
-      }
-      continue;
-    }
-    const block = deterministicBlocks.get(id);
-    if (block === undefined) {
-      throw new TypeError(`template references unknown deterministic block ${id}`);
-    }
-    assertStandaloneBlockDirective(input.body, start, cursor, id);
-    flushSemantic();
-    const binding = input.artifact.variables[block.source_variable_id];
-    if (binding === undefined) continue;
-    const facts = referencedFacts({
-      result: input.result,
-      factRefs: binding.fact_refs,
-      variableId: block.source_variable_id,
-    });
-    // Materialize through the same boundary as final layout/Candidate compile.
-    // All additional evidence must already belong to this accepted result.
-    const rendered = materializeIndexerStructuredContent({
-      blocks: [{ block_id: id, layer: "deterministic-block", renderer: block.renderer, fact_refs: binding.fact_refs }],
-      facts: input.result.facts,
-    })[0]!;
-    if (rendered.evidence_refs.some(ref => !input.acceptedEvidenceRefs.has(ref))) {
-      throw new TypeError("template supporting fact is outside accepted evidence");
-    }
-    void facts;
-    contentBlocks.push(rendered);
-  }
-  semanticMarkdown += input.body.slice(cursor);
-  flushSemantic();
-
-  const fallbackEvidence = [...new Set(
-    input.section.variable_ids.flatMap((id) =>
-      input.artifact.variables[id]?.evidence_refs ?? []
-    ).filter((ref) => input.acceptedEvidenceRefs.has(ref)),
-  )];
-  const layered = trimOuterContentBlocks(contentBlocks.map((block) =>
-    block.layer === "semantic-prose" && block.evidence_refs.length === 0
-      ? buildIndexerRenderedContentBlock({
-        layer: block.layer,
-        markdown: block.markdown,
-        evidence_refs: fallbackEvidence,
-      })
-      : block
-  ));
-  const evidenceRefs = [...new Set(layered.flatMap((block) => block.evidence_refs))].sort();
-  return {
-    markdown: layered.map((block) => block.markdown).join(""),
-    contentBlocks: layered,
-    evidenceRefs,
-  };
+}): Array<{ section_key: string; markdown: string; contentBlocks: IndexerRenderedContentBlock[]; references: ArticleSourceReference[] }> {
+  // Parse the template, not substituted prose: one writing slot keeps its own
+  // citations, and fenced blocks or lists are never cut at arbitrary newlines.
+  const nodes = unified().use(remarkParse).parse(input.body).children;
+  const occurrences = new Map<string, number>();
+  const fragments = nodes.flatMap(node => {
+    const body = input.body.slice(node.position!.start.offset!, node.position!.end.offset!);
+    const references: ArticleSourceReference[] = [];
+    const slots: string[] = [];
+    const markdown = body.replace(PLACEHOLDER, (_token, kind: string, id: string) => {
+    const block = kind === "block" ? input.contract.deterministic_blocks.find(item => item.id === id) : undefined;
+    if (kind === "block" && !block) throw new TypeError(`Unknown template block ${id}`);
+    const variable = input.artifact.variables[block?.source_variable_id ?? id];
+    if (!variable) throw new TypeError(`Missing template variable ${id}`);
+    slots.push(`${kind}-${id}`);
+    references.push(...variable.references);
+    return renderValue(variable.value, block?.renderer);
+  }).trim();
+    if (!markdown) return [];
+    const merged = articleFragmentReferences(references);
+    const identity = slots.length ? slots.join("--") : `text-${indexerProtocolDigest(body).slice(7, 23)}`;
+    const occurrence = (occurrences.get(identity) ?? 0) + 1;
+    occurrences.set(identity, occurrence);
+    const contentBlocks = [buildIndexerRenderedContentBlock({
+    layer: "semantic-prose", markdown, references: merged,
+    })];
+    return [{ section_key: `${input.section.section_key}--${identity}${occurrence > 1 ? `--${occurrence}` : ""}`,
+      markdown, contentBlocks, references: merged }];
+  });
+  // Keep the planned section's navigation target on its opening fragment.
+  // Further fragments retain slot-derived identities instead of line numbers.
+  if (fragments[0]) fragments[0].section_key = input.section.section_key;
+  return fragments;
 }

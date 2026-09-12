@@ -1,8 +1,8 @@
+import { articleFragmentReferences, articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
 import { z } from "zod";
 import {
   indexerArtifactResultDigest,
   indexerArtifactResultSchema,
-  indexerEvidenceBindingSchema,
   type IndexerArtifactResult,
 } from "./indexerArtifactResult.js";
 import { indexerKnowledgeCollectionSchema } from "./indexerCollectionMapping.js";
@@ -76,14 +76,11 @@ const compileResultBindingSchema = z.object({
 
 const candidateFilePayloadSchema = z.object({
   artifact_ref: z.string().min(1),
-  node_ref: z.string().min(1),
-  internal_view_ref: z.string().min(1),
   collection: indexerKnowledgeCollectionSchema,
   artifact_kind: indexerIdSchema,
   output_path: portableIndexerPathSchema,
   indexer_id: indexerIdSchema,
   source_ref: z.string().min(1),
-  evidence_bindings: z.array(indexerEvidenceBindingSchema),
   acceptance_digest: indexerDigestSchema,
   indexer_result_digest: indexerDigestSchema,
   artifact_result_digest: indexerDigestSchema,
@@ -94,7 +91,7 @@ const candidateFilePayloadSchema = z.object({
   sections: z.array(z.object({
     section_ref: z.string().min(1),
     section_key: indexerIdSchema,
-    evidence_refs: z.array(z.string().min(1)),
+    references: z.array(articleSourceReferenceSchema).max(3),
     markdown: z.string().min(1),
     markdown_digest: indexerDigestSchema,
   }).strict()).min(1),
@@ -267,7 +264,7 @@ function assertSectionIntegrity(input: {
   artifactId: string;
   sectionKey: string;
   contentDigest: string;
-  evidenceRefs: readonly string[];
+  references: readonly ArticleSourceReference[];
 }): void {
   const layoutArtifact = input.proposal.artifacts.find((artifact) =>
     artifact.artifact_id === input.artifactId
@@ -279,7 +276,7 @@ function assertSectionIntegrity(input: {
     section === undefined ||
     section.state === "material-gap" ||
     section.content_digest !== input.contentDigest ||
-    canonicalIndexerJson(section.evidence_refs) !== canonicalIndexerJson(input.evidenceRefs)
+    canonicalIndexerJson(section.references) !== canonicalIndexerJson(input.references)
   ) {
     throw new TypeError(
       `Candidate compile Section ${input.artifactId}/${input.sectionKey} is stale for layout`,
@@ -293,35 +290,36 @@ function structuredArtifactSections(input: {
   artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }>;
   render_cache?: Map<string, ReturnType<typeof materializeIndexerStructuredContent>> | undefined;
 }) {
-  return input.artifact.sections.map((section) => {
+  return input.artifact.sections.flatMap((section) => {
     const blocks = materializeIndexerStructuredContent({
       blocks: section.blocks,
-      facts: input.result.facts,
       render_cache: input.render_cache,
     });
-    const evidenceRefs = [...new Set(blocks.flatMap((block) => block.evidence_refs))]
-      .sort(compareIndexerCanonicalText);
+    return blocks.map((block, index) => {
+    const sectionKey = index === 0 ? section.section_key : `${section.section_key}--${section.blocks[index]!.block_id}`;
+    const references = articleFragmentReferences(block.references);
     assertSectionIntegrity({
       proposal: input.proposal,
       artifactId: input.artifact.artifact_id,
-      sectionKey: section.section_key,
-      contentDigest: indexerProtocolDigest({ content_blocks: blocks }),
-      evidenceRefs,
+      sectionKey,
+      contentDigest: indexerProtocolDigest({ content_blocks: [block] }),
+      references,
     });
-    const markdown = blocks.map((block) => block.markdown).join("\n\n");
+    const markdown = block.markdown;
     const layoutSection = input.proposal.artifacts
       .find((candidate) => candidate.artifact_id === input.artifact.artifact_id)!
-      .sections.find((candidate) => candidate.section_key === section.section_key)!;
+      .sections.find((candidate) => candidate.section_key === sectionKey)!;
     return {
       section_ref: layoutSection.section_ref,
-      section_key: section.section_key,
-      evidence_refs: evidenceRefs,
+      section_key: sectionKey,
+      references,
       markdown,
       markdown_digest: indexerProtocolDigest({
         protocol: "context.indexer.physical-section-markdown/v1",
         markdown,
       }),
     };
+    });
   });
 }
 
@@ -355,12 +353,12 @@ function templateArtifactSections(input: {
       artifactId: input.artifact.artifact_id,
       sectionKey: section.section_key,
       contentDigest: section.content_digest,
-      evidenceRefs: section.evidence_refs,
+      references: section.references,
     });
     return {
       section_ref: layoutSection.section_ref,
       section_key: section.section_key,
-      evidence_refs: section.evidence_refs,
+      references: section.references,
       markdown: section.markdown,
       markdown_digest: indexerProtocolDigest({
         protocol: "context.indexer.physical-section-markdown/v1",
@@ -422,30 +420,13 @@ function candidateFiles(input: {
       });
     }
     const markdown = sections.map((section) => section.markdown).join("\n\n");
-    const evidenceRefs = new Set(layout.sections.flatMap((section) =>
-      section.evidence_refs
-    ));
-    const evidenceBindings = input.accepted.artifactResult.evidence_bindings
-      .filter((binding) => evidenceRefs.has(binding.evidence_ref))
-      .sort((left, right) => compareIndexerCanonicalText(
-        left.evidence_ref,
-        right.evidence_ref,
-      ));
-    if (evidenceBindings.length !== evidenceRefs.size) {
-      throw new TypeError(
-        `Candidate compile Artifact ${artifact.artifact_id} has unresolved evidence bindings`,
-      );
-    }
     const payload = candidateFilePayloadSchema.parse({
       artifact_ref: layout.artifact_ref,
-      node_ref: layout.node_ref,
-      internal_view_ref: layout.internal_view_ref,
       collection: layout.collection,
       artifact_kind: layout.artifact_kind,
       output_path: layout.output_path,
       indexer_id: input.accepted.artifactResult.indexer_id,
       source_ref: input.accepted.artifactResult.source_ref,
-      evidence_bindings: evidenceBindings,
       acceptance_digest: input.binding.acceptance_digest,
       indexer_result_digest: input.binding.indexer_result_digest,
       artifact_result_digest: input.binding.artifact_result_digest,
@@ -518,7 +499,6 @@ export function buildIndexerCandidateCompile(input: {
   accepted_results: readonly IndexerAcceptedAuthorResultInput[];
   profile_contract: unknown;
   operator_contract: unknown;
-  subject_key_schema_set: unknown;
 }): IndexerCandidateCompile {
   const layoutSet = validateIndexerLayoutProposalSet(input.layout_proposal_set);
   const transition = validateIndexerLayoutTransition(input.layout_transition);
@@ -573,7 +553,6 @@ export function buildIndexerCandidateCompile(input: {
       post_author_envelope: item.postAuthorEnvelope,
       profile_contract: input.profile_contract,
       operator_contract: input.operator_contract,
-      subject_key_schema_set: input.subject_key_schema_set,
       rendered_artifacts: item.renderedArtifacts,
       render_cache: input.render_cache,
     });

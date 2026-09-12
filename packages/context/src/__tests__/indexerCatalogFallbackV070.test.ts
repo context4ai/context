@@ -3,7 +3,6 @@ import {
   buildIndexerCatalogContinuationPlan,
   buildIndexerCatalogFallback,
   buildIndexerMainWorkset,
-  canonicalIndexerNodeRef,
   convergeIndexerPartitionPlan,
   indexerPartitionPlanCanonicalHash,
   indexerInventoryMembersDigest,
@@ -65,17 +64,10 @@ function workset(): IndexerMainPartitionWorkset {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
     question_target_inventory_digest: digest("9"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "module",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:overview"],
     partition_input_digests: [digest("0")],
@@ -92,12 +84,6 @@ function nonSemanticPlan(input: {
   axis: string;
 }): IndexerPartitionPlan {
   const selected = STRATEGIES[input.strategyOrder]!;
-  const subjectKey = {
-    protocol: "context.subject-key/v1" as const,
-    namespace: "sample",
-    kind: "capability",
-    local_key: `part-${input.strategyOrder + 1}`,
-  };
   const payload = {
     protocol: "context.indexer.partition-plan/v1" as const,
     status: "complete" as const,
@@ -106,11 +92,9 @@ function nonSemanticPlan(input: {
       indexer_id: input.workset.indexer_id,
       indexer_fingerprint: input.workset.primary_execution_fingerprint,
       requirement_digest: input.workset.requirement_set_digest,
-      subject_key_schema_digest: input.workset.subject_key_schema_digest,
       source_scope_digest: input.workset.source_scope_digest,
       source_refs: [input.workset.source_ref],
       module_ref: input.workset.module_ref,
-      partition_subject_key: input.workset.partition_subject_key,
       parent_scope_ref: input.workset.module_ref!,
       inventory_digest: input.workset.partition_inventory_digest,
       question_target_inventory_digest: input.workset.question_target_inventory_digest,
@@ -122,9 +106,8 @@ function nonSemanticPlan(input: {
     reader_question_refs: input.workset.reader_question_refs,
     groups: [{
       group_key: `part-${input.strategyOrder + 1}`,
-      subject_key: subjectKey,
-      subject_intent: "primary" as const,
-      logical_unit_ref: canonicalIndexerNodeRef(subjectKey),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: input.workset.indexer_id,
+        source_ref: input.workset.source_ref, module_ref: input.workset.module_ref, group_key: `part-${input.strategyOrder + 1}` }),
       label: `Part ${input.strategyOrder + 1}`,
       reader_question_refs: input.workset.reader_question_refs,
       question_target_bindings: TARGETS.map((targetRef) => ({
@@ -209,8 +192,8 @@ describe("catalog fallback and folded continuation", () => {
     expect(fallback.partition_plan.groups).toHaveLength(1);
     expect(group).toMatchObject({
       group_key: "catalog-root",
-      subject_intent: "primary",
-      logical_unit_ref: canonicalIndexerNodeRef(workset().partition_subject_key),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: workset().indexer_id,
+        source_ref: workset().source_ref, module_ref: workset().module_ref, group_key: "catalog-root" }),
       member_ids: MEMBERS,
     });
     expect(group.question_target_bindings).toEqual(TARGETS.map((targetRef) => ({

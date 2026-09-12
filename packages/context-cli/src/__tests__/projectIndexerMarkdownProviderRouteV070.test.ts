@@ -140,7 +140,6 @@ describe("Markdown Provider Route", () => {
       editorial,
       routeSource,
       runSource,
-      dependencySource,
     ] =
       await Promise.all([
         readFile(join(
@@ -168,10 +167,6 @@ describe("Markdown Provider Route", () => {
           REPOSITORY_ROOT,
           "packages/context/src/indexerMainRunProtocol.ts",
         ), "utf8"),
-        readFile(join(
-          REPOSITORY_ROOT,
-          "packages/context/src/indexerArtifactDependencies.ts",
-        ), "utf8"),
       ]);
     expect(manifest).toContain("consumes: context.indexer.main-workset/v2");
     expect(manifest).toContain("produces: context.indexer.main-result/v1");
@@ -190,7 +185,7 @@ describe("Markdown Provider Route", () => {
     expect(editorial).toContain("`unanswered-question-set`");
     expect(editorial).toContain("`request-input`");
     expect(editorial).toContain("Section-specific assessment");
-    expect(`${manifest}\n${routeSource}\n${runSource}\n${dependencySource}`).not.toMatch(
+    expect(`${manifest}\n${routeSource}\n${runSource}`).not.toMatch(
       /MarkdownCollectionSlice|alignProse/u,
     );
   });

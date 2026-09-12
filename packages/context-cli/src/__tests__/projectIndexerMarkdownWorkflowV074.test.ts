@@ -21,6 +21,7 @@ import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js
 import { collectProjectStatusSnapshot } from "../project/status.js";
 import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
 import { loadCurrentIndexerBatchTask } from "../project/indexerCurrentBatch.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 import type { ContextResolvedWorkflowRoute } from
   "../project/workflow/workflowTypes.js";
 
@@ -220,12 +221,7 @@ describe("0.7.4 Markdown current workflow", () => {
               key: `deployment-guide-${descriptor.task_key}`,
               title: "Deployment guide",
               reader_task: "Deploy and recover the service.",
-              subject: {
-                namespace: workset.partition_subject_key.namespace,
-                kind: workset.partition_subject_key.kind,
-                local_key: `deployment-guide-${descriptor.task_key}`,
-              },
-              subject_intent: "primary" as const,
+
               members: validation.canonical_inventory_members.map((member) => member.member_id),
               questions: [...workset.reader_question_refs],
               question_targets: (validation.required_question_target_refs ?? []).map((target) => ({
@@ -260,8 +256,7 @@ describe("0.7.4 Markdown current workflow", () => {
       node: "review-current-indexer-structure",
       availability: "immediate",
     });
-    expect((await currentIndexerStructureReview(projectRoot))?.preview.topics[0]?.target)
-      .toEqual({ mode: "create", node_ref: null });
+    expect((await currentIndexerStructureReview(projectRoot))?.preview.topics[0]?.key).toBeDefined();
     await completeCurrentIndexerAction({
       cwd: projectRoot,
       revision: structureRoute.revision,
@@ -299,12 +294,10 @@ describe("0.7.4 Markdown current workflow", () => {
             question_ref: string;
           }>;
         };
-        const evidence = validation.dependency_view.positive_nodes.find((node) =>
-          node.kind === "source-span" && node.evidence_ref !== undefined
-        )?.evidence_ref;
+        const references = await fixtureArticleReferences(projectRoot, task.view);
         const intent = validation.allowed_artifact_intents[0];
         const policy = validation.artifact_policy_eligibility.eligible_variants[0];
-        if (evidence === undefined || intent === undefined || policy === undefined) {
+        if (intent === undefined || policy === undefined) {
           throw new Error("Markdown Author lacks current source or policy");
         }
         results.push({
@@ -320,12 +313,7 @@ describe("0.7.4 Markdown current workflow", () => {
               intent.artifact_kind,
             ].join("/"),
             policy: policy.id,
-            target_resolutions: (workset.target_resolution_view?.entries ?? []).map((entry) => ({
-              target: entry.query_ref,
-              disposition: entry.state === "resolved"
-                ? "reuse-existing" as const
-                : "create-independent" as const,
-            })),
+
             title: "Deployment and recovery guide",
             summary: "How to publish the service and recover a failed release.",
             sections: [{
@@ -335,8 +323,7 @@ describe("0.7.4 Markdown current workflow", () => {
                 "Run the release command to publish the service.",
                 "If configuration fails, fix it and rerun the same command.",
               ].join("\n\n"),
-              source_items: [evidence],
-              facts: [],
+              references,
               answers: validation.allowed_question_targets.map((target) =>
                 target.question_target_key
               ),

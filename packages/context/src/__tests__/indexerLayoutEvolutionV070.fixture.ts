@@ -1,7 +1,6 @@
 import {
   buildIndexerLayoutProposalSet,
   buildIndexerSharedArtifactFingerprint,
-  canonicalIndexerNodeRef,
   indexerLayoutArtifactRef,
   indexerLayoutSectionIdentityRef,
   indexerLayoutSectionRef,
@@ -26,15 +25,8 @@ interface ArtifactSpec {
   sections: readonly SectionSpec[];
 }
 
-const subject = {
-  protocol: "context.subject-key/v1" as const,
-  namespace: "anonymous-package",
-  kind: "guide",
-  local_key: "layout-evolution",
-};
-
-const nodeRef = canonicalIndexerNodeRef(subject);
-const nodeDigest = nodeRef.replace(/^node:subject:sha256:/u, "");
+const logicalUnitRef = indexerProtocolDigest({ source: "file:anonymous-guide", group: "layout-evolution" });
+const pathNamespace = "anonymous-guide";
 const digest = (value: string) => indexerProtocolDigest({ value });
 const sharedArtifactFingerprint = buildIndexerSharedArtifactFingerprint({
   indexer_id: "markdown-indexer",
@@ -46,7 +38,7 @@ const sharedArtifactFingerprint = buildIndexerSharedArtifactFingerprint({
 function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
   const byId = new Map(specs.map((spec) => [
     spec.id,
-    indexerLayoutArtifactRef(nodeRef, {
+    indexerLayoutArtifactRef(logicalUnitRef, {
       artifact_id: spec.id,
       artifact_kind: spec.kind,
     }),
@@ -60,13 +52,11 @@ function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
       : null;
     return {
       artifact_ref: artifactRef,
-      node_ref: nodeRef,
       artifact_id: spec.id,
       artifact_kind: spec.kind,
-      internal_view_ref: `view:artifact:${digest(`${spec.id}:${collection}`)}`,
       collection,
       output_path: spec.path ??
-        `knowledge/${collection}/${nodeDigest}/${spec.id}.md`,
+        `knowledge/${collection}/${pathNamespace}/${spec.id}.md`,
       shared_artifact_fingerprint_digest:
         sharedArtifactFingerprint.fingerprint_digest,
       purpose,
@@ -76,9 +66,7 @@ function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
         : null,
       sections: spec.sections.map((section) => {
         const sectionIdentityRef = indexerLayoutSectionIdentityRef({
-          node_ref: nodeRef,
-          owner_indexer_id: "markdown-indexer",
-          artifact_kind: spec.kind,
+          artifact_ref: artifactRef,
           section_key: section.key,
         });
         return {
@@ -91,7 +79,8 @@ function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
           artifact_kind: spec.kind,
           state: "structured" as const,
           content_digest: digest(section.content),
-          evidence_refs: [`evidence:${section.key}`],
+          references: [{ source_ref: "file:anonymous-guide",
+            locator: { path: "guide.md", start_line: 1, end_line: 1 }, content_digest: digest(section.content) }],
           material_question_proposal_ref: null,
           collection_resolution_digest: digest(`${collection}:${spec.kind}`),
         };
@@ -104,12 +93,9 @@ function proposal(specs: readonly ArtifactSpec[]): IndexerLayoutProposal {
     source_ref: "file:anonymous-guide",
     profile: "technical-guide",
     profile_contract_digest: digest("profile-contract"),
-    subject_key_schema_set_digest: digest("subject-key-schema-set"),
-    subject_key_schema_digest: digest("subject-key-schema"),
     artifact_result_digest: digest(`result:${canonicalSpecs(specs)}`),
     post_author_composition_fingerprint: null,
     shared_artifact_fingerprint: sharedArtifactFingerprint,
-    node: { node_ref: nodeRef, subject_key: subject },
     artifacts,
   };
   return { ...payload, proposal_digest: indexerProtocolDigest(payload) };
@@ -161,7 +147,7 @@ export const indexerLayoutEvolutionFixture = {
   }]),
   pathMoved: proposal([{
     ...baselineSpecs[0]!,
-    path: `knowledge/codeindex/${nodeDigest}/relocated-guide.md`,
+    path: `knowledge/codeindex/${pathNamespace}/relocated-guide.md`,
   }]),
   added: proposal([...baselineSpecs, {
     id: "examples",
@@ -177,7 +163,7 @@ export const indexerLayoutEvolutionFixture = {
   outputCollision: proposal([...baselineSpecs, {
     id: "colliding-path",
     kind: "examples",
-    path: `knowledge/codeindex/${nodeDigest}/guide.md`,
+    path: `knowledge/codeindex/${pathNamespace}/guide.md`,
     sections: [{ key: "examples", content: "examples-v1" }],
   }]),
 };

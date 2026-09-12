@@ -13,8 +13,7 @@ function candidate(index: number): CandidateRecord {
   const key = String(index).padStart(2, "0");
   return {
     candidate_id: `indexer/${key}${"a".repeat(62)}`,
-    node_ref: `node:subject:${DIGEST}`,
-    view_ref: `view:artifact:${DIGEST}`,
+    article_id: `artifact:subject:${DIGEST}`,
     collection: "architecture",
     status: "draft",
     candidate_type: "indexer-artifact",
@@ -30,12 +29,10 @@ function candidate(index: number): CandidateRecord {
       file_digest: DIGEST,
       artifact_ref: `artifact:subject:${DIGEST}`,
       section_refs: [`section:subject:${DIGEST}`],
-      source_ref: `repo:module-${key}`,
-      evidence_bindings: [],
       sections: [{
         section_ref: `section:subject:${DIGEST}`,
         section_key: "overview",
-        evidence_refs: [],
+        references: [],
         markdown: `Reader-facing content ${key}.`,
         markdown_digest: DIGEST,
       }],

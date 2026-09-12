@@ -18,7 +18,7 @@ import { createIndexerAuthorSourceResolver } from "../project/indexerAuthorSourc
 import type { IndexerPartitionValidationInput } from "@c4a/context";
 import type { IndexerConsumerWorksetProjection } from "../project/indexerConsumerWorksetPlanner.js";
 
-test("application planning avoids language parsing; accepted file batches deliver deep facts to Author", async () => {
+test("application planning and Author use captured files without a mandatory deep-parser pass", async () => {
   const root = await createDocumentRevisionWorkspace({ profile: "web-application", sourceCount: 1,
     sourceFiles: { "src/feature/entry.ts": "export function calculate(value: number) { return value + 1; }\n",
       ...Object.fromEntries(Array.from({ length: 65 }, (_, index) => [
@@ -38,18 +38,20 @@ test("application planning avoids language parsing; accepted file batches delive
     }
     const preparations = await readdir(join(root, ".tmp/context-runtime/parser-preparations")).catch(() => []);
     expect(preparations).toEqual([]);
-    await completePartitionStage(root, false, false, "application");
+    // Each inventory partition plans a distinct page; a shared key would
+    // incorrectly claim the same article identity for unrelated file groups.
+    await completePartitionStage(root);
     const structure = (await currentIndexerStructureReview(root))!;
     await completeCurrentIndexerStructureReview({ projectRoot: root, revision: structure.revision, decision: "approved" });
     const current = (await resolveCurrentIndexerAgentContext(root))!;
     expect(current.descriptor.stage).toBe("author");
     const task = await loadCurrentIndexerBatchTask({ projectRoot: root, descriptor: current.descriptor,
       taskKey: current.descriptor.tasks[0]!.task_key });
-    const dependency = task.spec.validation.dependency_view as { positive_nodes: { kind: string }[] };
-    expect(dependency.positive_nodes.some(node => node.kind === "selected-fact")).toBe(true);
-    expect(JSON.stringify(task.view)).toContain("code-symbol");
-    expect(JSON.stringify(task.view)).toContain("calculate");
-    await completeAuthorStage(root, { includeFacts: true });
+    const access = task.view.items.find(item => item.category === "source-access")!;
+    expect(access).toBeDefined();
+    expect(JSON.stringify(access)).toContain("src/feature/");
+    expect(await readdir(join(root, ".tmp/context-runtime/parser-preparations")).catch(() => [])).toEqual([]);
+    await completeAuthorStage(root);
     expect((await readCandidateRecords(root)).length).toBeGreaterThan(0);
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
@@ -60,7 +62,7 @@ test("application planning avoids language parsing; accepted file batches delive
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120_000);
 
-test("Author prepares only files assigned to accepted groups, leaving other inventory entries deferred", async () => {
+test("Author reuses the selected Partition inventory without extracting a second fact ledger", async () => {
   const root = await createDocumentRevisionWorkspace({ profile: "web-application", sourceCount: 1,
     sourceFiles: { "src/chosen.ts": "export const chosen = 1;", "src/support.ts": "export const support = 2;" } });
   try {
@@ -79,8 +81,10 @@ test("Author prepares only files assigned to accepted groups, leaving other inve
       canonical_inventory_members: spec.validation.canonical_inventory_members,
       plan: { status: "complete", groups: [{ member_ids: [chosen.file_ref] }] },
     } as unknown as IndexerPartitionValidationInput);
-    expect(binding.source_identity_inventory.files.map(file => file.normalized_path)).toEqual(["src/chosen.ts"]);
+    expect(binding.source_identity_inventory.files.map(file => file.normalized_path)).toContain("src/chosen.ts");
+    expect(binding.adapter === "parser-facts" && binding.inventory_only).toBe(true);
     expect(binding.adapter === "parser-facts" && binding.parser_fact_view.files.some(file =>
-      file.facts.some(fact => fact.kind === "code-symbol"))).toBe(true);
+      file.facts.some(fact => fact.kind === "code-symbol"))).toBe(false);
+    expect(await readdir(join(root, ".tmp/context-runtime/parser-preparations")).catch(() => [])).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120_000);

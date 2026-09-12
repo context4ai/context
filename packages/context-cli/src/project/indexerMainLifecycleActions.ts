@@ -4,20 +4,14 @@ import { partitionDependencyDigest } from "./indexerPartitionDependencies.js";
 import {
   buildIndexerMainPartitionWorksets,
   buildIndexerMainWorksetSet,
-  buildIndexerSubjectCatalog,
-  buildIndexerTargetResolutionViews,
   evaluateIndexerCandidateMaterialization,
   indexerInventoryMembersDigest,
   indexerPartitionStrategySetDigest,
   indexerProtocolDigest,
-  indexerSubjectKeySchemaDigest,
   observeIndexerMainWorksetState,
   ownerCells,
-  projectIndexerPartitionSubjects,
   validateIndexerQuestionTargetInventory,
-  type IndexerProfileContract,
   type IndexerRegistry,
-  type IndexerPartitionValidationInput,
 } from "@c4a/context";
 import { resolveProjectIndexerMainSourceBinding } from "./indexerMainSourceAdapter.js";
 import { projectIndexerReadTargets } from "./indexerReadScopeAuthorization.js";
@@ -29,7 +23,6 @@ import { materializeCurrentIndexerExtensionFacts } from "./indexerCurrentInspect
 import {
   array,
   assertCurrentRequirement,
-  assertRequirementRefs,
   protocol,
   record,
 } from "./indexerMainLifecycleSupport.js";
@@ -115,75 +108,6 @@ function questionCarrierShardIndex(
     }
   }
   return selectedIndex;
-}
-
-function referenceIdentity(value: string): string {
-  const separator = value.indexOf(":");
-  const body = separator < 0 ? value : value.slice(separator + 1);
-  const parts = body.split("/").filter(Boolean);
-  return parts.at(-1) ?? body;
-}
-
-function normalizedSubjectValue(value: string, rules: readonly string[]): string {
-  let normalized = rules.includes("trim") ? value.trim() : value;
-  if (rules.includes("unicode-nfc")) normalized = normalized.normalize("NFC");
-  if (rules.includes("lowercase")) normalized = normalized.toLocaleLowerCase("en-US");
-  return normalized;
-}
-
-function questionTargetSubjectKey(input: {
-  profile_contract: IndexerProfileContract;
-  profile_id: string;
-  subject_kind: string;
-  source_ref: string;
-  module_ref: string | null;
-  normalized_path: string | null;
-}) {
-  const schema = input.profile_contract.subject_key_schemas.find((candidate) =>
-    candidate.profile === input.profile_id
-  );
-  const kind = schema?.kinds.find((candidate) => candidate.id === input.subject_kind);
-  if (schema === undefined || kind === undefined) {
-    throw new TypeError(`question target SubjectKey schema is missing for ${input.profile_id}`);
-  }
-  const sourceIdentity = referenceIdentity(input.source_ref);
-  const moduleIdentity = input.module_ref === null
-    ? sourceIdentity
-    : referenceIdentity(input.module_ref);
-  const namespace = (() => {
-    switch (schema.namespace.operator) {
-      case "canonical-source-module-namespace":
-      case "canonical-service-namespace":
-        return moduleIdentity;
-      default:
-        throw new TypeError(
-          `unsupported question target namespace operator ${schema.namespace.operator}`,
-        );
-    }
-  })();
-  const localIdentity = (() => {
-    switch (kind.local_key.operator) {
-      case "canonical-module-identity":
-        return input.normalized_path === null
-          ? moduleIdentity
-          : input.normalized_path.replace(/\.[^./]+$/u, "");
-      case "canonical-export-family":
-        return input.normalized_path === null
-          ? moduleIdentity
-          : input.normalized_path.replace(/\.[^./]+$/u, "");
-      default:
-        throw new TypeError(
-          `unsupported question target local-key operator ${kind.local_key.operator}`,
-        );
-    }
-  })();
-  const rules = schema.normalization ?? [];
-  return {
-    protocol: "context.subject-key/v1" as const,
-    namespace: normalizedSubjectValue(namespace, rules),
-    kind: normalizedSubjectValue(input.subject_kind, rules),
-    local_key: normalizedSubjectValue(localIdentity, rules),
-  };
 }
 
 export async function buildProjectIndexerMainPartitionWorksets(input: {
@@ -277,19 +201,10 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     const authorizedQuestionRefs = new Set(
       (requirement.questions ?? []).map((question) => question.ref),
     );
-    const subjectSchema = authority.profile_contract.subject_key_schemas.find((candidate) =>
-      candidate.profile === authority.profile.id
-    );
-    const targetDomain = authority.profile.question_target_domains[0];
-    if (subjectSchema === undefined || targetDomain === undefined) {
-      throw new TypeError(`missing partition identity contract for ${authority.profile.id}`);
-    }
     const strategies = authority.partition_strategies.strategies.map((entry) => ({
       strategy_ref: entry.strategy_ref,
       strategy_digest: entry.strategy_digest,
     }));
-    const { profile: _subjectProfile, ...subjectKeyContract } = subjectSchema;
-    void _subjectProfile;
     const base = {
       stage: "partition" as const,
       indexer_id: indexerId,
@@ -302,10 +217,6 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       primary_execution_fingerprint:
         authority.primary_execution.primary_execution_fingerprint,
       profile_contract_digest: authority.profile_contract.contract_digest,
-      subject_key_schema_digest: indexerSubjectKeySchemaDigest(
-        authority.profile.id,
-        subjectKeyContract,
-      ),
       source_scope_digest: indexerProtocolDigest({
         indexer_id: indexerId,
         read_targets: projectIndexerReadTargets({ registry, indexer_id: indexerId }),
@@ -314,14 +225,6 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
       primary_resource_binding_digest:
         authority.primary_execution.primary_resource_binding_digest,
       question_target_inventory_digest: questionTargets.inventory_digest,
-      partition_subject_key: questionTargetSubjectKey({
-        profile_contract: authority.profile_contract,
-        profile_id: authority.profile.id,
-        subject_kind: targetDomain.subject_key_kind,
-        source_ref: first.source_ref,
-        module_ref: first.module_ref,
-        normalized_path: null,
-      }),
       strategy_set_digest: indexerPartitionStrategySetDigest(strategies),
       reader_question_refs: authority.profile.reader_question_contracts
         .filter((question) =>
@@ -404,77 +307,6 @@ export async function buildProjectIndexerMainPartitionWorksets(input: {
     workset_set: buildIndexerMainWorksetSet(currentWorksets),
     run_specs: currentRuns,
     graph_outcome: "completed" as const,
-  };
-}
-
-export async function buildProjectIndexerSubjectCatalog(input: {
-  projectRoot: string;
-  value: unknown;
-}) {
-  const value = record(input.value, "subject catalog input");
-  protocol(
-    value,
-    "context.indexer.subject-catalog-build-input/v1",
-    "subject catalog input",
-  );
-  const partitions = array(
-    value.partitions,
-    "subject catalog input.partitions",
-  ) as unknown as IndexerPartitionValidationInput[];
-  const requirementDigests = new Set(partitions.map((partition) =>
-    partition.workset.requirement_set_digest
-  ));
-  if (requirementDigests.size !== 1) {
-    throw new TypeError("subject catalog partitions must target one requirement set");
-  }
-  const registry = await assertCurrentRequirement(
-    input.projectRoot,
-    [...requirementDigests][0],
-  );
-  assertRequirementRefs(registry, [value.requirement_ref]);
-  return buildIndexerSubjectCatalog({
-    requirement_ref: String(value.requirement_ref ?? ""),
-    subject_key_schema_digest: String(value.subject_key_schema_digest ?? ""),
-    approved_subjects: array(value.approved_subjects, "approved_subjects"),
-    partition_subjects: projectIndexerPartitionSubjects(partitions),
-  });
-}
-
-export async function buildProjectIndexerTargetResolutionViews(input: {
-  projectRoot: string;
-  value: unknown;
-}) {
-  const value = record(input.value, "target resolution input");
-  protocol(
-    value,
-    "context.indexer.target-resolution-build-input/v1",
-    "target resolution input",
-  );
-  const catalog = record(value.catalog, "target resolution catalog");
-  const requirementDigest = value.requirement_set_digest;
-  const registry = await assertCurrentRequirement(input.projectRoot, requirementDigest);
-  assertRequirementRefs(registry, [catalog.requirement_ref]);
-  const built = buildIndexerTargetResolutionViews({
-    catalog,
-    queries: array(value.queries, "target resolution queries") as Parameters<
-      typeof buildIndexerTargetResolutionViews
-    >[0]["queries"],
-  });
-  const conflicts = built.views.flatMap(({ group_ref, view }) =>
-    view.entries.flatMap((entry) => entry.state === "ambiguous" ? [{
-      group_ref,
-      query_ref: entry.query_ref,
-      conflicting_node_refs: entry.conflicting_node_refs,
-    }] : [])
-  );
-  return {
-    protocol: "context.indexer.target-resolution-build/v1" as const,
-    ...built,
-    outcome: conflicts.length === 0
-      ? "target-resolution-current" as const
-      : "index-target-resolution-ambiguous" as const,
-    conflicts,
-    graph_outcome: conflicts.length === 0 ? "completed" as const : "blocked" as const,
   };
 }
 

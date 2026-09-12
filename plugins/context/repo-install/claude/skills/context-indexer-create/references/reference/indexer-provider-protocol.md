@@ -254,27 +254,19 @@ continue with a warning, and counts above 300 return the non-Gate
 partial outcome reopens the owning semantic step; it does not create a profile
 revision ledger or an override route.
 
-Artifact content has three mechanically separate layers. `facts[]` contains
-canonical, source-bound values and never reader prose. A structured
-`deterministic-block` contains only a registered renderer and `fact_refs`; the
-CLI resolves those Facts and derives both Markdown and evidence, so a Provider
-cannot relabel arbitrary JSON or prose as a catalog. A `semantic-prose` block
-contains evidence-bound Markdown and cannot cite Facts as a way to increase
-deterministic coverage. The normalized rendered Section retains ordered
-`content_blocks` with the layer, Fact refs, evidence refs and per-block digest;
-its Section digest covers that ledger and the exact reader-visible Markdown.
+Artifact content contains reader Markdown and actual source-region references.
+Each semantic-prose block supplies at most three positions using `source_ref`
+and a file/line `locator`; the Host verifies the current authorized source and
+computes the region `content_digest`. The limit applies to an output fragment,
+not the whole article. Select necessary references or split the writing by
+meaning; never truncate necessary references or merge disjoint source regions.
+An article has no Fact table, evidence ID table, or per-binding ledger.
+Parser output remains a reading aid, not a required submission representation.
 
-`ArtifactResult` also carries
-`context.indexer.capability-group-evidence/v1`. It repeats the complete member
-set bound by the author workset even when no capability group is selected. A
-non-empty capability group has a stable ref derived only from the logical unit
-and capability key, at least two explicit member-to-evidence bindings, and one
-or more actual Artifact Section evidence bindings. A member cannot belong to
-two capability groups. Every member evidence ref must be a current Result
-evidence binding and must be visible in one of the declared Sections. Unknown
-members or Sections, page-level evidence without Section consumption, and
-workset/member-set drift are rejected. This protocol does not assign projection
-dispositions to members outside capability groups.
+The Host retains the current workset's inventory accounting in the internal
+Result. Author supplies member dispositions, not member-to-evidence bindings
+or an independent capability evidence graph. This accounting is not copied
+into the approved article index.
 
 ## Full-path example identity
 
@@ -294,35 +286,14 @@ for the same complete example identity are a hard
 forge an empty collision list. Candidate disposition and linkage are separate
 downstream contracts.
 
-## SubjectKey schema authority
+## Article identity and source scope
 
-Community profile identity rules have one authority: the top-level
-`subject_key_schemas` array in the CLI profile contract. A community Provider
-manifest cannot copy or replace that schema. A namespaced additional profile
-has the other allowed authority: the exact owner Provider's
-`composition.extensions[].subject_key_schema`. The extension declaration is
-required and may use only the CLI's closed namespace/local-key derivation
-operators, kind identifiers and normalization rules.
-
-Final selection resolves both forms to
-`context.indexer.resolved-subject-key-schema/v1`. The record binds the Indexer,
-profile, base-contract or Provider authority, schema digest and resolution
-digest. Its canonical set digest is part of the stable final selection report;
-transport paths and runtime receipts are not. Subject keys must match a kind in
-the resolved schema and satisfy its normalization before they can become a
-canonical NodeRef.
-
-An unchanged schema is equivalent. Adding a kind while preserving the existing
-namespace, normalization and local-key operators is compatible. Removing or
-changing an existing identity derivation is identity-breaking: the owning
-authority must advance its major version and the schema version must increase.
-When approved Nodes exist, Context requires a non-delegable
-`confirm-subject-reidentification` authorization bound to the exact old/new
-schema digests, approved catalog, complete deterministic mapping and report.
-Missing mappings, one old Node mapping to multiple Nodes, multiple old Nodes
-colliding on one new Node, stale authorization or digest drift blocks
-activation. With no approved Node, the human Gate is omitted but conformance
-and major-version checks still apply.
+Production does not build a subject graph or require SubjectKey schemas.
+Provider extensions declare their reading and writing capabilities without
+namespace/kind normalization or subject re-identification gates. Context keeps
+article identity and fragment identity separately from reader titles and paths.
+Sources remain registered and authorized; removing graph modeling does not
+permit reading an undeclared source or changing another article's identity.
 
 ## Requirement change authority
 
@@ -423,7 +394,7 @@ identity, operations, scopes, profile composition, requirement bindings, owner
 closure and read authority are byte-identical. It revalidates overlay
 conformance,
 reuses the exact staged Bundles, and reruns both static and final selection
-against the target requirement digest. Provider and SubjectKey authority must
+against the target requirement digest. Provider authority must
 remain unchanged. Final selection resolves every CLI-base question back to its
 exact selected profile contract and requires one current validation proof
 for every overlay question; forged bindings and duplicate, stale, or unused
@@ -431,7 +402,7 @@ proofs fail before the final report is issued. The report binds the resulting
 question authority set digest. The resulting
 `context.indexer.overlay-question-registry-apply-proposal/v1` contains the full
 target `src/indexers.yaml` snapshot and binds the amendment, confirmation,
-overlay validation, rebound selection, SubjectKey schema set and finalized reports.
+overlay validation, rebound selection and finalized reports.
 The proposal goes through the same `stage-indexer-project-proposal` and
 `apply-indexer-project` Actions as ordinary registry/customization proposals.
 The latter dispatches this typed proposal to one expected-base CAS, project
@@ -442,15 +413,12 @@ temporary Provider path.
 
 ## Controlled invocation
 
-Author result acceptance checks the actual task, source/module, subject and
-Provider layer. Provider integrity, bundle/config/customization fingerprints
-remain recorded metadata, not byte-equality gates between a resumed request and
-its result. Selected Facts are resolved by their supplied identity and source
-references; their current values are recorded without comparing a previous
-parser payload digest. Source-span line ranges may expand within the same file
-content. Structured declarations resolve actual file/item identities, not a
-previous inventory or signature fingerprint. Source file content checks,
-unknown-reference rejection and atomic write protection remain in force.
+Author result acceptance checks the actual task, source/module and selected
+Provider authority, including its current bundle and configuration. Article
+content supplies actual source regions, not selected Fact IDs or structured
+claim ledgers. The Host computes region fingerprints from the current captured
+text. Unknown or unauthorized paths, source-version drift and write conflicts
+remain errors.
 
 These continuation rules do not relax executable program authorization or allow
 an Agent to select undeclared sources.
@@ -577,24 +545,18 @@ may route different Sections to different collections only by declaring
 separate Artifacts in its validated Bundle; the CLI does not silently split or
 merge reader pages to repair a Provider Result.
 
-The compile-internal resolver emits `context.indexer.layout-proposal/v1`. It
-binds the exact Artifact Result, profile contract, validated SubjectKey schema
-set and exact schema digest, Indexer and source. The resolver validates the
-SubjectKey against the selected schema normalization before deriving NodeRef;
-a caller-supplied digest is not accepted as schema authority. NodeRef plus the
-logical Artifact id/kind derives ArtifactRef. NodeRef, owner Indexer, Artifact
-kind and Section key derive a stable logical Section identity; its placement
-under one Artifact derives SectionRef. This lets a diff distinguish a moved
-Section from new content without allowing the same logical Section to have two
-primary placements. The ViewRef is an internal projection. Output paths are
-derived under `knowledge/<collection>/` and never accepted from a Provider.
+The compile-internal resolver emits `context.indexer.layout-proposal/v1`.
+It binds the accepted Result, profile contract, Indexer and source. A stable
+article reference derives from the accepted writing group and artifact identity;
+the fragment key belongs to that article. There is no independent Node or View
+identity. Output paths live under `knowledge/<collection>/`; layout validates
+article ownership, fragment placement and path collisions before writing.
 
 Template Artifacts enter layout only after validated rendering. Only rendered
 Sections exist; an omitted optional projection does not create an empty
 Section, while a retained material gap remains unresolved without
 reader-visible placeholder content. Artifact Bundle purpose and `split_of`
-lineage are retained in the proposal. A proposal set rejects duplicate Node
-owners, Artifact identities, logical Section identities, Section placements
+lineage are retained in the proposal. A proposal set rejects duplicate Artifact identities, logical Section identities, Section placements
 and output paths across Indexers, as well as missing, nested or kind-changing
 semantic-split parents.
 
@@ -779,24 +741,16 @@ a rendered byte budget. Every body Section uses exact markers:
 <!-- /context:indexer-section -->
 ```
 
-Only `{{variable:<id>}}` and `{{block:<id>}}` are accepted. Direct variables are
-semantic prose. A block source variable is a deterministic Fact projection,
-must bind canonical `fact_refs`, and must equal the CLI's normalized projection
-of those Facts. Blocks select one of
-the CLI-owned `bullet-list`, `key-value-table`, `json-code-block` or `public-contract-table` renderers;
-templates cannot register code or helpers. A block directive occupies its own
-template line so the renderer can retain an exact content-layer boundary. The
-contract and body must declare exactly the same Sections and placeholders.
+Only `{{variable:<id>}}` and `{{block:<id>}}` are accepted. Variables carry
+their declared typed values and actual source-region references. Registered
+block renderers format those values; authors do not construct canonical Fact
+records or bind Fact IDs. Templates cannot register executable helpers.
+The contract and body must declare the same sections and placeholders.
 
-`ArtifactResult` binds every template variable to current evidence refs and
-binds every declared Section to `section_key`, owner Indexer, document kind,
-reader goal and Artifact kind. Rendering validates the Provider/customization
-fingerprints, template digest, current CLI-owned applicability conditions,
-variable types and expansion limits, per-variable evidence boundary and exact
-CLI-owned question target. An optional Section without data
-or sufficient evidence is absent from the rendered Candidate. A required
-Section in the same state becomes the already-declared material-question
-transition and makes `review_ready` false.
+`ArtifactResult` binds each fragment to its owner and article classification.
+Rendering validates the current template, variable types and expansion limits.
+Optional sections without data are omitted; an unresolved required section
+uses the existing material-question path rather than fabricated prose.
 
 Context validates template-program directives, declared variable types and
 expansion limits before rendering. Supplied variable values and Section prose
@@ -810,13 +764,9 @@ digests. Deterministic blocks contribute catalog completeness but never
 semantic-prose density. Later `build` projects this approved body; it does not
 perform a first render or change its structure.
 
-An ArtifactResult may emit
-`context.indexer.structured-claim-set/v1`. Every claim binds a stable claim
-kind and subject to one real Artifact/Section owner and one or more evidence
-refs carried by that exact Section. The subject must be the current logical
-unit, one of its CLI-owned inventory members, or an authorized target-resolution
-identity. Missing owners, outside subjects, unknown evidence and evidence that
-is known globally but absent from the owner Section all fail Result validation.
+Articles do not submit structured claims, subject identities or evidence-binding
+tables. Actual source references support traceability and change detection;
+their existence does not prove semantic correctness.
 
 Main-run validation does not produce a prose-quality audit. Content usefulness,
 completeness and faithfulness belong to the existing Agent or user Review.
@@ -839,16 +789,16 @@ in knowledge frontmatter and is not proof that remaining material is useful.
 ## Incremental planning handoff
 
 A semantic Partition group may declare `ready_for_author: true` when the Agent
-has resolved its subject, primary ownership, reader task and shared dependencies.
+has resolved the writing boundary, primary ownership, reader task and shared dependencies.
 The CLI can then deliver an initial wave before all Partition tasks are accepted.
 This is an optional scheduling declaration, not a new evidence or approval gate.
 Absent/false groups wait; every inventory member still needs a final disposition.
 The original Partition ledger resumes after normal structure review, Author,
 Composer, content Review, close and successful build. Later material for the same
-subject reuses its page identity and approved prose. A wave finishing never means
+article reuses its identity and approved prose. A wave finishing never means
 the remaining source scope is complete.
 
 Known code-symbol planning views provide member overviews with immutable full
 fact links and bounded captured-source access. Providers must inspect details
 when semantic boundaries are uncertain; unknown payload formats retain full
-reading. Author receives full selected facts and source material.
+reading. Author reads the selected source material and cites the regions actually used.

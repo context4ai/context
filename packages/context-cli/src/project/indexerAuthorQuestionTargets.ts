@@ -1,14 +1,11 @@
 import {
   compareIndexerCanonicalText,
   indexerMaterialQuestionKey,
-  indexerPartitionGroupRef,
   indexerResolvedMaterialQuestionDigest,
   ownerCells,
-  validateIndexerTargetResolutionView,
   type IndexerPartitionPlan,
   type IndexerQuestionTargetInventory,
   type IndexerRegistry,
-  type IndexerTargetResolutionView,
 } from "@c4a/context";
 import type { resolveCurrentProjectIndexerPrimaryAuthority } from
   "./indexerCurrentPrimaryAuthority.js";
@@ -18,37 +15,6 @@ type PartitionGroup = CompletePartitionPlan["groups"][number];
 type CurrentPrimaryAuthority = Awaited<
   ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>
 >;
-
-export interface ProjectIndexerTargetResolutionViewBinding {
-  group_ref: string;
-  view: IndexerTargetResolutionView;
-}
-
-function object(value: unknown, label: string): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError(`${label} must be an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-export function parseProjectIndexerTargetResolutionViewBindings(
-  values: readonly unknown[],
-): ProjectIndexerTargetResolutionViewBinding[] {
-  const bindings = values.map((candidate) => {
-    const item = object(candidate, "target resolution view binding");
-    if (typeof item.group_ref !== "string" || item.group_ref.length === 0) {
-      throw new TypeError("target resolution view binding.group_ref must be a string");
-    }
-    return {
-      group_ref: item.group_ref,
-      view: validateIndexerTargetResolutionView(item.view),
-    };
-  }).sort((left, right) => compareIndexerCanonicalText(left.group_ref, right.group_ref));
-  if (new Set(bindings.map((item) => item.group_ref)).size !== bindings.length) {
-    throw new TypeError("target resolution view bindings must have unique group refs");
-  }
-  return bindings;
-}
 
 function resolvedQuestionDigest(input: {
   authority: CurrentPrimaryAuthority;
@@ -148,27 +114,4 @@ export function resolveProjectIndexerAuthorQuestionTargets(input: {
     throw new TypeError("author question target authority contains duplicate keys");
   }
   return result;
-}
-
-export function takeProjectIndexerGroupTargetView(input: {
-  views: Map<string, IndexerTargetResolutionView>;
-  partition_workset_digest: string;
-  group: PartitionGroup;
-}): IndexerTargetResolutionView | undefined {
-  const groupRef = indexerPartitionGroupRef({
-    partition_workset_digest: input.partition_workset_digest,
-    group_key: input.group.group_key,
-  });
-  const view = input.views.get(groupRef);
-  if (input.group.subject_intent === "primary") {
-    if (view !== undefined) {
-      throw new TypeError("primary partition group must not receive a TargetResolutionView");
-    }
-    return undefined;
-  }
-  if (view === undefined) {
-    throw new TypeError("enrich-or-independent group requires a TargetResolutionView");
-  }
-  input.views.delete(groupRef);
-  return view;
 }

@@ -384,7 +384,7 @@ Selection/customization is complete only when all of these are true:
 - every required owner cell has exactly one primary owner;
 - every Provider is exact-versioned, integrity-checked and staged from a
   portable distribution;
-- profile variants, SubjectKey authority, config and resources pass final
+- profile variants, config and resources pass final
   validation;
 - each local change is the smallest proven ladder level and has no unrelated
   copied resources;

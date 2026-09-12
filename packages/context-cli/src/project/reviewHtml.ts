@@ -69,16 +69,11 @@ function renderReviewHtml(
     candidates_sha256: candidateSetHash(candidates.map(({ record }) => record)),
   };
   const candidateData = candidates.map(({ record, snapshot }) => {
-    const sourceByEvidenceRef = new Map(record.indexer_candidate.evidence_bindings.map((binding) => [
-      binding.evidence_ref,
-      binding.source_ref,
-    ]));
     return {
     candidate_id: record.candidate_id,
     collection: record.collection,
     path: record.path,
-    node_ref: record.node_ref,
-    view_ref: record.view_ref,
+      article_id: record.article_id,
     module: record.module,
     status: record.status,
     kind: record.kind,
@@ -86,7 +81,7 @@ function renderReviewHtml(
     source_refs: record.source_refs,
     source_paths: record.indexer_candidate === undefined
       ? []
-      : [...new Set(record.indexer_candidate.evidence_bindings.map((binding) =>
+      : [...new Set(record.indexer_candidate.sections.flatMap(section => section.references).map((binding) =>
           binding.locator.path
         ))].sort(),
     sections: record.indexer_candidate.sections.map((section) => ({
@@ -94,10 +89,7 @@ function renderReviewHtml(
       kind: record.kind,
       summary: section.section_key,
       body: section.markdown,
-      source_refs: [...new Set(section.evidence_refs.flatMap((evidenceRef) => {
-        const sourceRef = sourceByEvidenceRef.get(evidenceRef);
-        return sourceRef === undefined ? [] : [sourceRef];
-      }))].sort(),
+      source_refs: [...new Set(section.references.map(reference => `${reference.source_ref}/${reference.locator.path}#L${reference.locator.start_line}-L${reference.locator.end_line}`))].sort(),
       content_mode: "authored",
     })),
     group_key: reviewScope === "all"

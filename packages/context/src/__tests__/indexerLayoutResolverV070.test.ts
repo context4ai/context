@@ -8,30 +8,21 @@ import {
   buildIndexerLayoutProposalSet,
   buildIndexerLayoutChangeConfirmation,
   buildIndexerSharedArtifactFingerprint,
-  canonicalIndexerNodeRef,
   compareIndexerLayout,
   indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerProfileContractDigest,
   indexerProtocolDigest,
   indexerRenderedArtifactDigest,
   resolveIndexerLayout as resolveIndexerLayoutRaw,
-  resolveIndexerSubjectKeySchemas,
   validateIndexerLayoutProposal,
   validateIndexerLayoutProposalSet,
   type IndexerArtifactResult,
   type IndexerRenderedArtifact,
-  type IndexerSubjectKey,
 } from "../index.js";
 import { artifactPolicyContractsFixture } from "./indexerArtifactPolicyV070.fixture.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "anonymous-package",
-  kind: "component",
-  local_key: "button",
-};
+const REFERENCE = { source_ref: "repo:anonymous@revision", locator: { path: "src/button.ts", start_line: 1, end_line: 10 }, content_digest: digest("a") };
 const SHARED_ARTIFACT_FINGERPRINT = buildIndexerSharedArtifactFingerprint({
   indexer_id: "component-indexer",
   program_digest: null,
@@ -51,45 +42,15 @@ function resolveIndexerLayout(
   });
 }
 
-function subjectKeySchemaSet(
-  profileContract: unknown,
-  operatorContract: unknown,
-  indexerIds: readonly string[] = ["component-indexer"],
-) {
-  return resolveIndexerSubjectKeySchemas({
-    profile_contract: profileContract,
-    operator_contract: operatorContract,
-    selections: indexerIds.map((indexerId) => ({
-      indexer_id: indexerId,
-      profile: "component-library",
-      role: "primary" as const,
-      provider_layer_id: "primary",
-    })),
-    providers: [],
-  });
-}
-
 function artifactResult(
   extraSections: Array<{
     section_key: string;
     document_kind: string;
     reader_goal: string;
   }> = [],
-  subject: IndexerSubjectKey = SUBJECT,
+  groupKey = "button",
 ): IndexerArtifactResult {
-  const evidencePayload = {
-    evidence_ref: "evidence:anonymous-component-source",
-    kind: "code" as const,
-    source_ref: "repo:anonymous@revision",
-    module_ref: "module:components",
-    locator: { path: "src/button.ts", start_line: 1, end_line: 10 },
-    content_digest: digest("a"),
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
+  const logicalUnitRef = indexerProtocolDigest({ indexer_id: "component-indexer", source_ref: "module:components", group_key: groupKey });
   const sections = [{
     section_key: "summary",
     document_kind: "reference",
@@ -102,7 +63,7 @@ function artifactResult(
       block_id: `${section.section_key}-block`,
       layer: "semantic-prose" as const,
       markdown: "Anonymous capability evidence.",
-      evidence_refs: [evidence.evidence_ref],
+      references: [REFERENCE],
     }],
   }));
   const payload: Omit<IndexerArtifactResult, "output_digest"> = {
@@ -117,26 +78,26 @@ function artifactResult(
     config_fingerprint: digest("6"),
     customization_fingerprint: null,
     requirement_ref: "requirement:anonymous-knowledge",
-    source_ref: evidence.source_ref,
-    module_ref: evidence.module_ref,
+    source_ref: REFERENCE.source_ref,
+    module_ref: "module:components",
     source_role: "authoritative-source",
     logical_unit: {
-      group_key: "component:button",
-      subject_key: subject,
-      logical_unit_ref: canonicalIndexerNodeRef(subject),
-      target_resolution_dispositions: [],
+      group_key: groupKey,
+
+      logical_unit_ref: logicalUnitRef,
+
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(subject),
+      logical_unit_ref: logicalUnitRef,
       member_ids: ["member:button"],
       capability_groups: [],
     }),
     inventory_dispositions: buildIndexerInventoryDispositionSet({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(subject),
+      logical_unit_ref: logicalUnitRef,
       dispositions: [{
         member_id: "member:button",
         member_kind: "component",
@@ -145,12 +106,11 @@ function artifactResult(
         section_evidence: [{
           artifact_id: "button-overview",
           section_key: "summary",
-          evidence_refs: [evidence.evidence_ref],
         }],
       }],
     }),
-    facts: [],
-    evidence_bindings: [evidence],
+
+
     artifacts: [{
       artifact_id: "button-overview",
       artifact_kind: "overview",
@@ -159,14 +119,13 @@ function artifactResult(
       sections,
     }],
     artifact_bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: canonicalIndexerNodeRef(subject),
+      logical_unit_ref: logicalUnitRef,
       artifact_policy_variant: "standard",
       artifacts: [{
         artifact_id: "button-overview",
         artifact_kind: "overview",
         purpose: "required",
         reader_question_refs: ["question:overview"],
-        evidence_refs: [evidence.evidence_ref],
       }],
     }),
     material_question_proposals: [],
@@ -207,17 +166,17 @@ function templateFixture(): {
   void _digest;
   result.output_digest = indexerArtifactResultDigest(resultPayload);
   const markdown = "# Anonymous capability\n";
-  const evidenceRefs = ["evidence:anonymous-component-source"];
+  const references = [REFERENCE];
   const contentBlocks = [{
     layer: "semantic-prose" as const,
     markdown,
-    fact_refs: [],
-    evidence_refs: evidenceRefs,
+
+    references,
     content_digest: indexerProtocolDigest({
       layer: "semantic-prose",
       markdown,
-      fact_refs: [],
-      evidence_refs: evidenceRefs,
+
+      references,
     }),
   }];
   const renderedPayload: Omit<IndexerRenderedArtifact, "rendered_digest"> = {
@@ -238,11 +197,11 @@ function templateFixture(): {
       artifact_kind: "overview",
       markdown,
       content_blocks: contentBlocks,
-      evidence_refs: evidenceRefs,
+      references,
       content_digest: indexerProtocolDigest({
         markdown,
         content_blocks: contentBlocks,
-        evidence_refs: evidenceRefs,
+        references,
       }),
     }],
     material_question_gaps: [],
@@ -258,7 +217,7 @@ function templateFixture(): {
 }
 
 describe("compile-internal deterministic Indexer layout resolver", () => {
-  test("derives Node, Artifact, internal View, Section, collection, and path", () => {
+  test("derives articles, fragments, collection and path without a subject graph", () => {
     const { operators, profiles } = artifactPolicyContractsFixture();
     const result = artifactResult();
     const proposal = resolveIndexerLayout({
@@ -266,43 +225,40 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     });
-    expect(proposal.node.node_ref).toBe(canonicalIndexerNodeRef(SUBJECT));
+    expect(proposal).not.toHaveProperty("node");
     expect(proposal.artifacts[0]).toMatchObject({
       artifact_id: "button-overview",
       collection: "codeindex",
       sections: [{ section_key: "summary", state: "structured" }],
     });
     expect(proposal.artifacts[0]!.output_path).toBe(
-      "knowledge/codeindex/anonymous-package/button.md",
+      "knowledge/codeindex/anonymous-revision/button.md",
     );
     expect(proposal.artifacts[0]!.output_path).not.toContain("anonymous@revision");
     expect(proposal.artifacts[0]!.output_path).not.toContain("module:components");
     expect(proposal.artifacts[0]!.output_path).not.toMatch(/[a-f\d]{32,}/u);
-    expect(proposal.artifacts[0]!.internal_view_ref).toStartWith("view:artifact:");
+    expect(proposal.artifacts[0]).not.toHaveProperty("internal_view_ref");
     expect(validateIndexerLayoutProposal({
       proposal,
       artifact_result: result,
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     })).toEqual(proposal);
     expect(proposal).not.toHaveProperty("align");
   });
 
   test("rejects machine identity from a reader-facing path", () => {
     const { operators, profiles } = artifactPolicyContractsFixture();
-    const result = artifactResult([], {
-      ...SUBJECT,
-      local_key: "a".repeat(64),
-    });
+    const result = artifactResult([], "a".repeat(64));
     expect(() => resolveIndexerLayout({
       artifact_result: result,
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     })).toThrow(/machine identity/u);
   });
 
@@ -320,7 +276,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     });
     expect(proposal.artifacts).toEqual([]);
     expect(validateIndexerLayoutProposal({
@@ -328,7 +284,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       artifact_result: result,
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     })).toEqual(proposal);
   });
 
@@ -344,7 +300,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     })).toThrow(/exactly one CLI collection/);
 
     const mixedProfiles = structuredClone(profiles);
@@ -368,7 +324,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: mixedProfiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(mixedProfiles, operators),
+
     })).toThrow(/multiple collections/);
 
     const proposal = resolveIndexerLayout({
@@ -376,7 +332,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     });
     proposal.artifacts[0]!.output_path = "knowledge/codeindex/forged.md";
     expect(() => validateIndexerLayoutProposal({
@@ -384,82 +340,19 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       artifact_result: artifactResult(),
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     })).toThrow(/stale or forged/);
   });
 
-  test("enforces the resolved SubjectKey normalization and logical Section collision rules", () => {
-    const { operators, profiles } = artifactPolicyContractsFixture();
-    const normalizedProfiles = structuredClone(profiles);
-    normalizedProfiles.subject_key_schemas[0]!.normalization = [
-      "trim",
-      "unicode-nfc",
-      "lowercase",
-    ];
-    const { contract_digest: _profileDigest, ...profilePayload } = normalizedProfiles;
-    void _profileDigest;
-    normalizedProfiles.contract_digest = indexerProfileContractDigest(profilePayload);
-    const nonNormalized = artifactResult();
-    nonNormalized.logical_unit.subject_key.namespace = "Anonymous-Package";
-    nonNormalized.logical_unit.logical_unit_ref = canonicalIndexerNodeRef(
-      nonNormalized.logical_unit.subject_key,
-    );
-    const { output_digest: _outputDigest, ...nonNormalizedPayload } = nonNormalized;
-    void _outputDigest;
-    nonNormalized.output_digest = indexerArtifactResultDigest(nonNormalizedPayload);
-    expect(() => resolveIndexerLayout({
-      artifact_result: nonNormalized,
-      profile: "component-library",
-      profile_contract: normalizedProfiles,
-      operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(normalizedProfiles, operators),
-    })).toThrow(/violates lowercase normalization/);
-
-    const colliding = artifactResult();
-    const originalArtifact = colliding.artifacts[0]!;
-    colliding.artifacts.push({
-      ...structuredClone(originalArtifact),
-      artifact_id: "button-overview-copy",
-    });
-    colliding.artifact_bundle = buildIndexerArtifactBundle({
-      logical_unit_ref: colliding.logical_unit.logical_unit_ref,
-      artifact_policy_variant: "standard",
-      artifacts: [
-        ...colliding.artifact_bundle!.artifacts,
-        {
-          artifact_id: "button-overview-copy",
-          artifact_kind: "overview",
-          purpose: "required",
-          reader_question_refs: ["question:overview"],
-          evidence_refs: ["evidence:anonymous-component-source"],
-        },
-      ],
-    });
-    const { output_digest: _collisionDigest, ...collisionPayload } = colliding;
-    void _collisionDigest;
-    colliding.output_digest = indexerArtifactResultDigest(collisionPayload);
-    expect(() => resolveIndexerLayout({
-      artifact_result: colliding,
-      profile: "component-library",
-      profile_contract: profiles,
-      operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
-    })).toThrow(/colliding logical Section identities/);
-  });
-
-  test("closes a proposal set and rejects multiple Indexers owning one Node", () => {
+  test("closes a proposal set and rejects multiple owners of one article", () => {
     const { operators, profiles } = artifactPolicyContractsFixture();
     const result = artifactResult();
-    const sharedSchemaSet = subjectKeySchemaSet(profiles, operators, [
-      "component-indexer",
-      "another-indexer",
-    ]);
     const proposal = resolveIndexerLayout({
       artifact_result: result,
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: sharedSchemaSet,
+
     });
     const proposalSet = buildIndexerLayoutProposalSet([proposal]);
     expect(validateIndexerLayoutProposalSet(proposalSet)).toEqual(proposalSet);
@@ -479,7 +372,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: sharedSchemaSet,
+
       shared_artifact_fingerprint: buildIndexerSharedArtifactFingerprint({
         indexer_id: "another-indexer",
         program_digest: null,
@@ -488,7 +381,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       }),
     });
     expect(() => buildIndexerLayoutProposalSet([proposal, conflicting])).toThrow(
-      /conflicting Node ownership/,
+      /conflicting Artifact identities/,
     );
   });
 
@@ -500,7 +393,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
     });
     const base = buildIndexerApprovedLayoutProjection(baseProposal);
     const first = compareIndexerLayout({ base: null, target: baseProposal });
@@ -517,7 +410,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: movedProfiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(movedProfiles, operators),
+
     });
     const moved = compareIndexerLayout({ base, target: movedProposal });
     expect(moved).toMatchObject({
@@ -552,7 +445,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
       rendered_artifacts: [rendered],
     });
     expect(proposal.artifacts[0]!.sections).toHaveLength(1);
@@ -572,7 +465,7 @@ describe("compile-internal deterministic Indexer layout resolver", () => {
       profile: "component-library",
       profile_contract: profiles,
       operator_contract: operators,
-      subject_key_schema_set: subjectKeySchemaSet(profiles, operators),
+
       rendered_artifacts: [changedProjection],
     })).toThrow(/changes projection intent/);
   });

@@ -1,5 +1,4 @@
 import {
-  canonicalIndexerNodeRef,
   indexerLayoutArtifactRef,
   indexerLayoutSectionIdentityRef,
   indexerLayoutSectionRef,
@@ -16,33 +15,23 @@ export function readerLayoutProposal(
   const base = options.multiple
     ? indexerLayoutEvolutionFixture.added
     : indexerLayoutEvolutionFixture.baseline;
-  const subject = { ...base.node.subject_key, local_key: localKey };
-  const nodeRef = canonicalIndexerNodeRef(subject);
+  const logicalUnitRef = indexerProtocolDigest({ source_ref: base.source_ref, group_key: localKey });
   const { proposal_digest: _digest, ...original } = base;
   void _digest;
   const payload = {
     ...original,
-    node: { node_ref: nodeRef, subject_key: subject },
     artifact_result_digest: indexerProtocolDigest({ localKey, options }),
     artifacts: base.artifacts.map((artifact, index) => {
-      const ref = indexerLayoutArtifactRef(nodeRef, artifact);
+      const ref = indexerLayoutArtifactRef(logicalUnitRef, artifact);
       return {
         ...artifact,
-        node_ref: nodeRef,
         artifact_ref: ref,
-        internal_view_ref: `view:artifact:${indexerProtocolDigest({
-          protocol: "context.indexer.internal-view-identity/v1",
-          artifact_ref: ref,
-          collection: artifact.collection,
-        })}`,
         output_path: index === 0
           ? options.path ?? "knowledge/codeindex/anonymous-package/shared-guide.md"
           : `knowledge/codeindex/anonymous-package/${artifact.artifact_id}.md`,
         sections: artifact.sections.map((section) => {
           const identity = indexerLayoutSectionIdentityRef({
-            node_ref: nodeRef,
-            owner_indexer_id: section.owner_indexer_id,
-            artifact_kind: artifact.artifact_kind,
+            artifact_ref: ref,
             section_key: section.section_key,
           });
           return {
@@ -59,12 +48,12 @@ export function readerLayoutProposal(
 
 export function approvedReaderStructure(proposals: readonly IndexerLayoutProposal[]) {
   return {
-    views: proposals.flatMap((proposal) => proposal.artifacts.map((artifact) => ({
-      node_ref: proposal.node.node_ref,
-      view_ref: artifact.internal_view_ref,
+    articles: proposals.flatMap((proposal) => proposal.artifacts.map((artifact) => ({
+      article_id: artifact.artifact_ref,
       path: artifact.output_path.replace(/^knowledge\//u, ""),
       collection: artifact.collection,
-      title: proposal.node.subject_key.local_key,
+      visibility: "public",
+      sections: artifact.sections.map((section) => ({ id: section.section_key, references: section.references })),
     }))),
   };
 }

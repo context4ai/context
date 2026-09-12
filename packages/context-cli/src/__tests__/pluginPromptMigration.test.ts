@@ -91,7 +91,6 @@ describe("plugin prompt and workflow resource contract", () => {
       "document-capture.md",
       "knowledge-review.md",
       "package-output.md",
-      "evidence-maintenance.md",
       "workflow-mode-after-creation.md",
     ]) {
       const resourcePath = `resources/dialogue/${file}`;
@@ -140,7 +139,6 @@ describe("plugin prompt and workflow resource contract", () => {
       expect.objectContaining({ from: "close-approved-knowledge", to: "choose-package-output" }),
     ]));
     expect(graph.edges.some((edge) =>
-      (edge.from === "maintain-evidence" && edge.to === "close-approved-knowledge") ||
       (edge.from === "close-approved-knowledge" && edge.to === "revise-document")
     )).toBe(false);
   });

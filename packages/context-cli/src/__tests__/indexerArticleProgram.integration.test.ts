@@ -1,4 +1,5 @@
 import { prepareIndexerAuthorSubmission } from "../project/indexerAuthorSubmission.js";
+import { fixtureArticleReferences } from "./articleReferences.fixture.js";
 import { renderIndexerWorksetReading } from "../project/indexerAgentReading.js";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -37,14 +38,16 @@ test("selected article program binds semantic slots through Author and produces 
     expect(reading).toContain(guidance["component-guide"]!.content.trim());
     expect(reading).not.toContain("minimum_evidence_items");
     expect(reading).toContain('"template_id": "component-library-l02-page"');
-    const facts = task.view.items.filter(item => item.category === "fact").map(item => item.ref);
+    const references = await fixtureArticleReferences(root, task.view, "src/index.ts");
     const semantic = indexerAuthorSemanticInputSchema.parse({ stage: "author", group_key: workset.group_key,
       outcome: "publish", policy: "standard", articles: [{
         key: "component-guide", title: "Component guide", summary: "Public component entry.",
-        sections: [{ key: "purpose", heading: "Purpose", markdown: "Original supported entry.", facts, source_items: ["src/index.ts"], answers: validation.page_plan!.articles![0]!.question_targets }],
+        sections: [{ key: "purpose", heading: "Purpose", markdown: "Original supported entry.", references, answers: validation.page_plan!.articles![0]!.question_targets }],
         template_variables: {
-          purpose: { value: "Use the exported component entry.", facts, source_items: ["src/index.ts"] },
-          setup: { value: "Inspect the source export before choosing integration options.", source_items: ["package.json"] },
+          purpose: { value: "Use the exported component entry.", references },
+          setup: { value: "Inspect the source export before choosing integration options.", references: [{
+            source_ref: workset.source_ref, locator: { path: "package.json", start_line: 1, end_line: 1 },
+          }] },
         },
       }], member_dispositions: validation.canonical_inventory_members.map(member => ({
         item: member.member_id, state: "covered", article: "component-guide", section: "purpose",
