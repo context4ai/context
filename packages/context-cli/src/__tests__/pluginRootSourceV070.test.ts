@@ -210,11 +210,10 @@ test("distributes the creation assistant with SDK references but no command or P
   const canonical = await readFile(join(SOURCE_ROOT, "skills", name, "SKILL.md"), "utf8");
   expect(frontmatter(canonical)["user-invocable"]).toBe(false);
   expect(frontmatter(canonical)["disable-model-invocation"]).toBeUndefined();
-  // The manifest example is reached only through the guide's link, so it also
-  // covers the reference sync following links inside the docs tree.
+  // The authoring guide is SDK-owned and ships unchanged to each host. Old
+  // Provider protocol manuals must not re-enter the creation assistant.
   const guides = [
     "indexer-skill-creation.md",
-    "indexer-manifest-example.md",
   ].map((file) => ({
     copied: `references/guides/${file}`,
     source: join(REPOSITORY_ROOT, "packages/context/docs/guides", file),
@@ -227,6 +226,7 @@ test("distributes the creation assistant with SDK references but no command or P
           .toBe(await readFile(guide.source, "utf8"));
       }
       await expect(readFile(join(root, host, "skills", name, "context-indexer.yaml"))).rejects.toThrow();
+      await expect(readFile(join(root, host, "skills", name, "references/reference/indexer-provider-protocol.md"))).rejects.toThrow();
       const commands = await readdir(join(root, host, "commands")).catch(() => [] as string[]);
       expect(commands.some(file => file.includes(name))).toBe(false);
     }

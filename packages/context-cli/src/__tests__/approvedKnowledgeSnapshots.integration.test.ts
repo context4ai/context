@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
+import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
+import { produceFixtureArticles } from "./productionArticleWorkflow.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { approvedKnowledgeSnapshotsFromStructure } from "../project/approvedKnowledgeSnapshots.js";
@@ -17,10 +17,13 @@ import { approvedKnowledgeDependencyWarnings } from "../project/approvedKnowledg
 test.each([false, true])("Review and close retain approved source evidence across cache cleanup (interrupted: %s)", async interrupted => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 1 });
   try {
-    await completePartitionStage(root);
-    const structure = (await currentIndexerStructureReview(root))!;
-    await completeCurrentIndexerStructureReview({ projectRoot: root, revision: structure.revision, decision: "approved" });
-    await completeAuthorStage(root);
+    await produceFixtureArticles(root, [{
+      path: "architecture/answer.md", question: "What does the public entry export?",
+      sources: [DOCUMENT_REVISION_SOURCE_REF],
+      markdown: '---\ntitle: Exported answer\ndescription: Public entry contract.\n---\n\n<!-- context:section id="answer" -->\nThe entry exports answer with value 42.\n<!-- /context:section -->\n',
+      references: { sections: [{ id: "answer", references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF,
+        locator: { path: "src/index.ts", start_line: 1, end_line: 1 } }] }] },
+    }]);
     const candidates = await readCandidateRecords(root);
     const readSnapshots = async () => approvedKnowledgeSnapshotsFromStructure(YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")));
     if (interrupted) {
@@ -47,9 +50,8 @@ test.each([false, true])("Review and close retain approved source evidence acros
     expect(markdown).not.toContain("evidence_ref");
     expect(markdown).not.toContain("article_id:");
     expect(markdown).toContain('<!-- context:section id="');
-    // The committed article index remains sufficient after temporary Parser
-    // receipts are gone. Region baselines are only needed for later relocation.
-    await rm(join(root, ".tmp/context-runtime/indexer"), { recursive: true, force: true });
+    // Formal references remain sufficient without any prior production state.
+    await rm(join(root, ".tmp"), { recursive: true, force: true });
     const references = snapshot.sections.flatMap(section => section.references);
     const authorizedTargets = [...new Set(references.map(reference => reference.source_ref))]
       .map(source_ref => ({ source_ref, module_refs: [] }));

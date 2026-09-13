@@ -5,7 +5,6 @@ import type { PackageFreshness } from "./packageBuilder.js";
 import type { PackageTemplateReviewStatus } from "./packageTemplateReview.js";
 import type { RepoSourceStatus } from "./repoSources.js";
 import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
-import type { IndexerCurrentProgress } from "./indexerCurrentProgress.js";
 
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
 export type EvidenceStatus =
@@ -92,7 +91,6 @@ export interface ProjectStatus {
   evidenceStatus: EvidenceStatus;
   evidenceWarnings: EvidenceWarningState;
   close: ProjectCloseStatus;
-  codeIndexMigrationRequired: boolean;
   indexerRegistry: {
     state: "missing" | "pending" | "current" | "invalid";
   };
@@ -102,7 +100,6 @@ export interface ProjectStatus {
     delivery_pending?: boolean;
     state: "missing" | "current" | "stale" | "invalid";
   };
-  indexerProgress?: IndexerCurrentProgress;
   pendingReview?: {
     scope: "collection" | "all";
     collections: KnowledgeCollection[];

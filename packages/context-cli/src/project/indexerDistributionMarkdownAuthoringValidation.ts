@@ -189,34 +189,12 @@ async function validateSemanticInstructionCoverage(input: {
   const contents = await Promise.all(paths.map((path) =>
     readFile(join(input.source, path), "utf8")
   ));
-  const classification = contents[0];
-  const structure = contents[1];
-  if (classification === undefined || structure === undefined) {
+  if (contents.some(content => !content.trim())) {
     throw new TypeError("Markdown semantic instruction files are incomplete");
   }
-  const markdownProfiles = input.profileContract.profiles.filter((profile) =>
-    input.expectedProfiles.includes(profile.id)
-  );
-  for (const mapping of markdownProfiles.flatMap((profile) => profile.layout_mappings)) {
-    if (
-      !classification.includes(`\`${mapping.document_kind}\``)
-      || !classification.includes(`\`${mapping.reader_goal}\``)
-    ) {
-      throw new TypeError("Markdown classification guidance misses a registered projection intent");
-    }
-  }
-  for (const anchor of [
-    ...DENSITY_MODES,
-    ...CANDIDATE_RESOLUTIONS,
-    ...BOUNDARY_DECISIONS,
-  ]) {
-    if (!structure.includes(`\`${anchor}\``)) {
-      throw new TypeError(`Markdown structure guidance misses semantic anchor ${anchor}`);
-    }
-  }
-  if (/\b(?:collection|output_path|knowledge)\s*:/u.test(`${classification}\n${structure}`)) {
-    throw new TypeError("Markdown semantic guidance must not declare a collection or output path");
-  }
+  // Resources must ship and be readable. Their wording is not a runtime
+  // schema: planning now supplies article paths and reader questions without
+  // repeating legacy projection tuples, density modes or disposition labels.
 }
 
 export async function validateBundledIndexerMarkdownRoutingFixtures(input: {

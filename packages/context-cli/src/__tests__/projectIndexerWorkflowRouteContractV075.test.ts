@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import YAML from "yaml";
 import {
-  type IndexerRegistry,
   validateIndexerCurrentActionInput,
 } from "@c4a/context";
 import { validateSchemaDocument } from "@c4a/agent-graph";
-import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
 import { projectCurrentIndexerWorkflowRoute } from
   "../project/indexerCurrentWorkflowRoute.js";
 import { contextWorkflowAuthorities } from
@@ -58,12 +55,6 @@ describe("current Indexer workflow Route contract", () => {
         decision: "request-adjustment",
         feedback: "Merge duplicate subjects.",
       },
-      { stage: "layout-confirmation", decision: "approved" },
-      {
-        stage: "layout-confirmation",
-        decision: "rejected",
-        feedback: "Preserve the existing public path.",
-      },
     ];
     for (const value of accepted) {
       expect(() => validateSchemaDocument(schema, value, "Gate Result")).not.toThrow();
@@ -71,7 +62,6 @@ describe("current Indexer workflow Route contract", () => {
     }
     const rejected = [
       { stage: "structure-review", decision: "request-adjustment" },
-      { stage: "layout-confirmation", decision: "rejected" },
     ];
     for (const value of rejected) {
       expect(() => validateSchemaDocument(schema, value, "Gate Result")).toThrow();
@@ -86,76 +76,21 @@ describe("current Indexer workflow Route contract", () => {
     expect(() => validateIndexerCurrentActionInput(retiredAgentFinalization)).toThrow();
   });
 
-  test("projects deterministic lifecycle advance without an Agent output contract", async () => {
-    const root = await mkdtemp(join(tmpdir(), "context-indexer-route-contract-"));
-    roots.push(root);
+  test("current requirements lead directly to deterministic preparation without an Agent output contract", async () => {
+    const parent = resolve(".tmp/production-route-tests");
+    await mkdir(parent, { recursive: true });
+    const root = await mkdtemp(join(parent, "case-")); roots.push(root);
     await mkdir(join(root, "src"), { recursive: true });
-    const provider = (await listCliBundledIndexers()).bundles.find((candidate) =>
-      candidate.skill === "context-markdown-indexer"
-    );
-    if (provider === undefined) throw new Error("missing bundled Markdown Indexer");
-    const registry: IndexerRegistry = {
-      protocol: "context.indexer.registry/v1",
-      requirements: [{
-        id: "documentation-knowledge",
-        reader_goals: ["understand-documentation"],
-        coverage_domains: { "business-semantics": "required" },
-        target_scope: {
-          targets: [{ source_ref: "file:fixture/docs", module_refs: [] }],
-        },
-        evidence_source_scope: {
-          targets: [{ source_ref: "file:fixture/docs", module_refs: [] }],
-        },
-      }],
-      indexers: [{
-        id: "workspace-markdown",
-        operations: ["main-index"],
-        requirement_bindings: [{
-          requirement_ref: "documentation-knowledge",
-          coverage_domains: ["business-semantics"],
-          owned_scope: { ref: "requirement:documentation-knowledge#target_scope" },
-          role: "primary",
-        }],
-        read_scope: {
-          refs: ["requirement:documentation-knowledge#evidence_source_scope"],
-        },
-        profile: {
-          primary: { id: "documentation-site", provider: "community" },
-        },
-        providers: [{
-          id: "community",
-          role: "primary",
-          skill: provider.skill,
-          version: provider.version,
-          integrity: provider.integrity,
-          distribution: provider.distribution,
-        }],
-      }],
-    };
-    await writeFile(
-      join(root, "src", "indexers.yaml"),
-      YAML.stringify(registry),
-      "utf8",
-    );
-
-    const route = await projectCurrentIndexerWorkflowRoute({
-      projectRoot: root,
-      route: outerIndexerAgentRoute(),
-      authorities: contextWorkflowAuthorities({ managed: true }),
-      managed: true,
-    });
-
-    expect(route).toMatchObject({
-      node: "advance-current-indexer-lifecycle",
-      availability: "immediate",
-      resources: { required: [], recommended: [] },
-      commands: [{
-        command: expect.stringContaining(" run --managed --format json"),
-        effect: "write",
-        managed_execution: "automatic",
-      }],
-    });
+    const configuration = YAML.stringify({ requirements: [{ id: "documentation", purpose: "Explain documentation",
+      target_scope: { targets: [{ source_ref: "file:fixture/docs" }] } }] });
+    const path = join(root, "src/indexers.yaml");
+    await writeFile(path, configuration);
+    const route = await projectCurrentIndexerWorkflowRoute({ projectRoot: root,
+      route: outerIndexerAgentRoute(), authorities: contextWorkflowAuthorities({ managed: true }), managed: true });
+    expect(route).toMatchObject({ node: "prepare-production-planning", availability: "immediate",
+      commands: [{ command: expect.stringContaining("action prepare-current"), effect: "write", managed_execution: "automatic" }] });
     expect(route?.action).toBeUndefined();
     expect(route?.gate).toBeUndefined();
+    expect(await readFile(path, "utf8")).toBe(configuration);
   });
 });

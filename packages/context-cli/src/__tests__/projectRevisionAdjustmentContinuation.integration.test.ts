@@ -1,11 +1,11 @@
+import { initialRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile, rm, cp } from "node:fs/promises";
+import { readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
@@ -16,7 +16,6 @@ import { collectProjectStatus } from "../project/status.js";
 import { adjustCurrentTaskSources } from "../project/taskSourceAdjustment.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
-import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -27,28 +26,8 @@ async function complete(root: string, value: unknown) {
   return completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true, value });
 }
 
-async function initialKnowledge() {
-  const root = await createDocumentRevisionWorkspace(); roots.push(root);
-  await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
-    join(root, "src/package-templates/kb"), { recursive: true });
-  const entryPath = join(root, "src/index.ts");
-  const entry = await readFile(entryPath, "utf8");
-  await writeFile(entryPath, entry.replace("defineProject, source", "defineProject, kbPackage, source")
-    .replace("packages: []", 'packages: [kbPackage({ name: "revision-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
-  await completePartitionStage(root);
-  const structure = (await currentIndexerStructureReview(root))!;
-  await completeCurrentIndexerAction({ cwd: root, revision: structure.revision, managed: true,
-    value: { stage: "structure-review", decision: "approved" } });
-  await completeAuthorStage(root);
-  await approveCandidates(root, await readCandidateRecords(root));
-  await closeProjectWorkspace(root);
-  await acceptStarterPackageTemplates({ projectRoot: root });
-  await buildProjectPackages(root);
-  return root;
-}
-
 async function reviewedCurrentPage() {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this explanation." })),
@@ -136,7 +115,7 @@ test("revising the already approved current page keeps its unfinished batch peer
 }, 45_000);
 
 test.each([{ modules: ["module:public-entry"] }, { modules: [] as string[] }])("a confirmed module scope adjustment replaces the obsolete update boundary (%j)", async ({ modules }) => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const path = join(root, "src/indexers.yaml");
   const registry = YAML.parse(await readFile(path, "utf8"));

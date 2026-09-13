@@ -6,7 +6,7 @@ smallest source span supporting each claim; link the stored summary when that
 is all you read. Never pretend its original conversation or linked document was
 available. Missing originals limit confidence, not permission to invent detail.
 
-Select the declared profile template for the actual reader task. Its headings
+Choose an outline for the actual reader task; a supplied template is optional guidance. Its headings
 are prompts, not required empty sections. A FAQ answers a coherent reader question
 or related set of questions; a guide teaches a task; a decision explains a choice and its
 limits. Do not make one page per source heading or one page per input file.
@@ -50,8 +50,8 @@ only when writing choices cannot solve the missing capability. Explain an actual
 tooling gap and the available recovery in the user's language, outside the
 knowledge page; do not turn an unfamiliar topic into a request for a new Provider.
 
-Before returning the current Route payload, read the page as a reader: can they
+Before submitting the draft files, read the page as a reader: can they
 answer the selected question without reconstructing the conversation? Check
-that each meaningful source topic is included, supporting, deferred or excluded
-with a concrete reason. A generic overview that drops the actual decision,
+that the article answers its planned reader question. Keep remaining investigation
+and real gaps visible in the stage; do not submit a per-passage disposition ledger. A generic overview that drops the actual decision,
 exception or resolution is incomplete even if its headings look correct.

@@ -1,84 +1,48 @@
 # Source and article planning
 
-Use the current task, authorized sources and selected page plan. Context owns
-source access, article identities, paths, revision checks, review and writes.
-Do not construct nodes, SubjectKeys, relationships or target-resolution results.
+The CLI supplies mechanical navigation: titles, a bounded opening excerpt,
+heading hierarchy and existing article titles, descriptions and references.
+Start there, then optionally read the full authorized material wherever the
+reader question, grouping or authority is unclear. Do not require every source
+to be fully read before any plan can be submitted.
 
-## Grouping reader topics
+## Topics and batches
 
-Group document material by durable reader purpose, not by file, heading or
-transport batch. Read enough of the authorized text to establish that purpose;
-titles and filenames are navigation signals, not proof of behavior or authority.
-Choose clear group keys and titles. Keep existing article identity on updates;
-a title change does not create another article.
+Consider code-related topics already discovered, then document topics. Reuse
+an existing article when it answers the same question for the same audience.
+Document business definitions may correct a mechanical code-topic name; explain
+the proposed change in the plan instead of forcing the document into a path
+mirror. This does not authorize renaming formal files outside the current task.
 
-Combine material that jointly answers one reader task. Split platform/runtime
-variants when their contracts, behavior or reader actions materially differ.
-Do not make a page for every heading or inventory member. Navigation-only lists,
-duplicates and empty placeholders receive an appropriate inventory disposition,
-not filler prose. Account for every supplied inventory member.
+A coherent document can directly suggest one target. A long document may need
+several articles; several documents may jointly answer one question. Neither
+file count nor heading count determines article count. Choose batches based
+on reader tasks, dependencies and useful shared reading, not source or skill
+identity. Do not create per-member dispositions or a separate semantic graph.
 
-## Reading and authority
+Submit article targets, questions, authorized sources and batches through the
+current planning schema. Keep remaining investigation in pending_scopes when
+only part is ready. An unread source is unfinished, not implicitly excluded.
+Missing essential evidence remains a scoped gap. Long-term exclusions need
+the applicable user authorization.
 
-Use only the authorized sources and roles supplied with the task. Read the
-actual code or text needed for each explanation; use optional parser output
-only when it helps inspect or format that material. Preserve exact commands,
-identifiers, conditions, numbers, links and source-authored uncertainty.
-A source's polished wording or filename does not increase its authority.
+The first executable plan is presented in the work-start report and waits for
+feedback before bulk writing. Within the confirmed purpose and scope, later
+investigation can append tasks or explicitly replace unfinished tasks through
+the current plan-amendment action. Accepted content requires a revision task,
+not replacement of the successful submission. No separate completion receipt
+or mandatory planning pass per article is needed.
 
-Missing required material becomes the current material-gap disposition. Newly
-captured material uses the same production and review workflow; do not create
-an answer-only result or a second review ledger.
+## Authority and updates
 
-## Writing and source references
+Titles, age, archive locations and polished language do not prove authority or
+irrelevance. Compare substantive content, intended audience and applicability.
+Historical decisions or procedures may still answer the reader's question.
+Ask about a missing decision when including or excluding it materially changes
+the agreed scope; do not ask again when the purpose is already established.
 
-Start from the selected article and current approved content when revising.
-Preserve useful explanations, examples, images and confirmed contributions.
-Plan independent pages only when they have a distinct reader task and useful
-standalone content. Keep a short warning, example or local clarification in the
-relevant article instead of inventing a graph subject for it.
-
-Apply classification.md and structure-and-artifacts.md to select the current
-content intent. Context resolves its collection; do not supply a new taxonomy.
-A page's title and description belong to Markdown, not a second subject catalog.
-
-For each output fragment, cite the actual source regions used, at most three
-locations. Use references with source_ref and a locator identifying the file
-and inclusive line range. Context computes the content digest. Do not copy
-parser facts, evidence IDs, binding digests or whole-workset ledgers into the
-result. Split genuinely distinct prose when it needs distinct references;
-never invent a continuous region for unrelated locations to evade the limit.
-
-## Meaning, conflicts and updates
-
-Relationships can be explained in prose, links and diagrams when the source
-supports them; no structured graph claim is required. Two names in a See also
-list do not establish a runtime dependency. Preserve unresolved contradictions
-or uncertainty rather than selecting whichever source appears first.
-
-Choose the narrowest supported content purpose:
-- decisions explain choices, alternatives and rationale;
-- incidents preserve impact, sequence, cause, response and follow-up as available;
-- tests describe a checkable target, scenario or observed result;
-- standards distinguish normative requirements from suggestions;
-- guides give actions, verification and applicable recovery;
-- examples retain literal sample material;
-- comparisons distinguish objects along meaningful dimensions.
-
-Collapse duplicate statements only when meaning, authority and reader task
-match. Source-region changes identify material to reconsider, not an instruction
-to rewrite every page. Region deletion or ambiguous relocation is not proof
-that the old guidance is still valid. New uncited material may justify a new
-topic or a revision after semantic review.
-
-## Completion and recovery
-
-Return one result for each supplied task. Preserve stable fragment keys when
-editing the same content and remove references for deleted fragments. Context
-handles final Markdown markers, metadata and durable structure writes.
-
-On stale revision, use the returned recovery route. On a path or identity
-collision, do not invent aliases or bypass review. Keep unresolved material
-explicit. Before submitting, check inventory dispositions, the selected
-article plan, useful prose and the real regional references; do not perform
-a separate subject or relation modeling pass.
+Read the current article when proposing a substantive revision. Preserve useful
+steps, examples, images and limitations. A source change is a reason to
+reconsider affected content, not to rewrite every article. Follow current CLI
+recovery on a changed source, stale input or identity collision; never invent
+an alias or restore an old workflow from formal storage.

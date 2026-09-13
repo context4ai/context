@@ -256,7 +256,7 @@ export async function runProjectPhaseCommand(input: {
   cwd: string;
   phaseId?: string;
   deliver?: boolean;
-  deliverySize?: string;
+  resumeWriting?: boolean;
   list?: boolean;
   dryRun?: boolean;
   managed?: boolean;
@@ -291,7 +291,7 @@ export async function runProjectPhaseCommand(input: {
       authorities: input.authorities ?? [],
       ...(input.dryRun === undefined ? {} : { dryRun: input.dryRun }),
       ...(input.deliver === undefined ? {} : { deliver: input.deliver }),
-      ...(input.deliverySize === undefined ? {} : { deliverySize: input.deliverySize }),
+      ...(input.resumeWriting === undefined ? {} : { resumeWriting: input.resumeWriting }),
     });
     if (format === "json") {
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -299,8 +299,8 @@ export async function runProjectPhaseCommand(input: {
     }
     process.stdout.write(formatFeedback({
       symbol: "✓",
-      action: result.advanced ? "advanced" : "observed",
-      subject: "Indexer lifecycle",
+      action: input.dryRun !== true && (input.deliver || input.resumeWriting) ? "updated" : "observed",
+      subject: "Production workflow",
       headline: result.state,
       next: result.workflow.current?.configuration === undefined
         ? result.workflow.current?.commands[0]?.command ?? "context status --format json"

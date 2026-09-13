@@ -1,12 +1,12 @@
+import { initialRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile, rm, cp, mkdir } from "node:fs/promises";
+import { readFile, writeFile, rm, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import YAML from "yaml";
 import { readProcessedScopes } from "@c4a/context";
-import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
@@ -14,7 +14,6 @@ import { buildFixturePackages as buildProjectPackages } from "./workspaceVersion
 import { beginKnowledgeUpdate, readKnowledgeUpdate } from "../project/knowledgeUpdate.js";
 import { completeApprovedRevision, readApprovedRevision, type ApprovedRevision } from "../project/approvedRevision.js";
 import { collectProjectStatus } from "../project/status.js";
-import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -33,25 +32,6 @@ async function approveOne(root: string, path: string) {
     decisions: [{ candidate_id: selected.candidate_id, status: "approved" }] } });
 }
 
-async function initialKnowledge() {
-  const root = await createDocumentRevisionWorkspace(); roots.push(root);
-  await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"),
-    join(root, "src/package-templates/kb"), { recursive: true });
-  const entryPath = join(root, "src/index.ts");
-  const entry = await readFile(entryPath, "utf8");
-  await writeFile(entryPath, entry.replace("defineProject, source", "defineProject, kbPackage, source")
-    .replace("packages: []", 'packages: [kbPackage({ name: "update-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
-  await completePartitionStage(root);
-  const structure = (await currentIndexerStructureReview(root))!;
-  await completeCurrentIndexerAction({ cwd: root, revision: structure.revision, managed: true,
-    value: { stage: "structure-review", decision: "approved" } });
-  await completeAuthorStage(root);
-  await approveCandidates(root, await readCandidateRecords(root));
-  await closeProjectWorkspace(root);
-  await acceptStarterPackageTemplates({ projectRoot: root });
-  await buildProjectPackages(root);
-  return root;
-}
 async function complete(root: string, value: unknown) {
   const status = await collectProjectStatus(root, { managed: true });
   const route = status.workflow.current!;
@@ -71,7 +51,7 @@ async function commitSource(root: string, content = "export const answer = 43;\n
 }
 
 test("source update preserves old baseline until every revised page is built and resumes after temporary loss", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const first = (await readKnowledgeUpdate(root))!;
   expect(first.candidates).toHaveLength(2);
@@ -119,7 +99,7 @@ test("source update preserves old baseline until every revised page is built and
 }, 60_000);
 
 test("a newly discovered topic uses the existing review writer and does not overwrite old pages", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope], changes: "A new reader task needs a separate guide." });
   const update = (await readKnowledgeUpdate(root))!;
   const oldPages = new Map(await Promise.all(update.candidates.map(async (candidate) =>
@@ -147,7 +127,7 @@ test("a newly discovered topic uses the existing review writer and does not over
 }, 60_000);
 
 test("late development context updates one code page without moving its code version or restarting Parser", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const { importManagedDocument } = await import("../project/managedDocumentImport.js");
   const { currentLedger } = await import("../project/indexerMainRunStoreRecords.js");
   const note = await importManagedDocument(root, { type: "sessions", name: "20260907/constant-rationale.md",
@@ -155,7 +135,6 @@ test("late development context updates one code page without moving its code ver
   const registryPath = join(root, "src/indexers.yaml");
   const registry = YAML.parse(await readFile(registryPath, "utf8"));
   registry.requirements[0].evidence_source_scope.targets.push({ source_ref: note.source_ref, module_refs: [] });
-  registry.indexers[0].read_scope.refs.push("requirement:workspace-knowledge#evidence_source_scope");
   await writeFile(registryPath, YAML.stringify(registry));
   await beginKnowledgeUpdate(root, { scopes: [scope, { requirement_ref: scope.requirement_ref, source_ref: note.source_ref }] });
   const update = (await readKnowledgeUpdate(root))!;
@@ -188,7 +167,7 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
   const { rollbackProjectTask, finishTaskRollback, readTaskRollback } = await import("../project/taskRollback.js");
   const { beginDocumentRevision } = await import("../project/documentRevision.js");
   const { durableContentDigest } = await import("../project/durableSingleFileTransaction.js");
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
   const path = structure.articles[0].path;
   const original = await readFile(join(root, "knowledge", path), "utf8");
@@ -225,7 +204,7 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
 test("explicit page move preserves its identity and updates incoming navigation through Review apply", async () => {
   const { beginDocumentRevision } = await import("../project/documentRevision.js");
   const { access } = await import("node:fs/promises");
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
   const view = structure.articles[0];
   const peerPath = structure.articles[1].path;
@@ -252,7 +231,7 @@ test("explicit page move preserves its identity and updates incoming navigation 
 }, 60_000);
 
 test("same-task input adjustment keeps the approved body and queued pages and rejects old completion", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Explain the source change." })),
@@ -277,7 +256,6 @@ test("same-task input adjustment keeps the approved body and queued pages and re
   const registryPath = join(root, "src/indexers.yaml");
   const registry = YAML.parse(await readFile(registryPath, "utf8"));
   registry.requirements[0].evidence_source_scope.targets.push({ source_ref: note.source_ref, module_refs: [] });
-  registry.indexers[0].read_scope.refs.push("requirement:workspace-knowledge#evidence_source_scope");
   await writeFile(registryPath, YAML.stringify(registry));
   const addition = { scopes: [{ source_ref: note.source_ref, requirement_ref: scope.requirement_ref }], instruction: "Use the extra confirmed explanation on the current page." };
   await adjustCurrentTaskSources(root, addition);
@@ -292,7 +270,7 @@ test("same-task input adjustment keeps the approved body and queued pages and re
 
 
 test("a newer same-task source revisits already delivered pages before advancing its scope", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Refresh this explanation." })), scope_summary: "Both pages are affected.", new_topics: [] });
@@ -315,7 +293,7 @@ test("a newer same-task source revisits already delivered pages before advancing
 }, 30_000);
 
 test("Review rejection returns Author in both modes without a reset or repeated close", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const { prepareApprovedRevision, APPROVED_REVISION_PATH } = await import("../project/approvedRevision.js");
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
   await prepareApprovedRevision({ projectRoot: root, selector: structure.articles[0].path, instruction: "Clarify the explanation." });
@@ -328,8 +306,8 @@ test("Review rejection returns Author in both modes without a reset or repeated 
     scope: { kind: "collection", collection: candidates[0]!.collection, count: candidates.length,
       ids_sha256: candidateIdsHash(candidates.map((item) => item.candidate_id).sort()), candidates_sha256: candidateSetHash(candidates) },
     decisions: candidates.map((item) => ({ candidate_id: item.candidate_id, status: "rejected" as const })) } });
-  const { readProjectIndexerCandidateCompileStatus } = await import("../project/indexerCandidateCompileActions.js");
-  const state = await readProjectIndexerCandidateCompileStatus(root);
+  const { observeApprovedRevisionBatch } = await import("../project/approvedRevisionBatch.js");
+  const state = await observeApprovedRevisionBatch(root, (await readApprovedRevision(root))!);
   expect(state.state).toBe("current"); expect(state.candidates[0]?.status).toBe("rejected");
   const saved = await readFile(join(root, APPROVED_REVISION_PATH), "utf8");
   for (const managed of [false, true]) {
@@ -349,7 +327,7 @@ test("Review rejection returns Author in both modes without a reset or repeated 
 
 
 test("multiple revised pages share one Review close and build, including a rejected batch member", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this explanation." })), scope_summary: "Both pages need clarification.", new_topics: [] });
@@ -382,7 +360,7 @@ test("multiple revised pages share one Review close and build, including a rejec
 }, 30_000);
 
 test.each([false, true])("reopening a batch page retains the interrupted Author, including new pages (%s)", async (newPage) => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const version = await commitSource(root);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
@@ -420,10 +398,10 @@ test.each([false, true])("reopening a batch page retains the interrupted Author,
 }, 30_000);
 
 test("an approved revision remains current after close relocates source images", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   const { createDocumentSnapshotManifest, computeDocumentContentHash } = await import("@c4a/extract");
   const { prepareApprovedRevision, completeApprovedRevision } = await import("../project/approvedRevision.js");
-  const { readProjectIndexerCandidateCompileStatus } = await import("../project/indexerCandidateCompileActions.js");
+  const { observeApprovedRevisionBatch } = await import("../project/approvedRevisionBatch.js");
   const sourceRoot = join(root, "sources/lark/20260907");
   const sourceRef = "lark:20260907/illustrated";
   const asset = "assets/illustrated/materialized/image/example.png";
@@ -442,7 +420,6 @@ test("an approved revision remains current after close relocates source images",
   const registryPath = join(root, "src/indexers.yaml");
   const registry = YAML.parse(await readFile(registryPath, "utf8"));
   registry.requirements[0].evidence_source_scope.targets.push({ source_ref: sourceRef, module_refs: [] });
-  registry.indexers[0].read_scope.refs.push("requirement:workspace-knowledge#evidence_source_scope");
   await writeFile(registryPath, YAML.stringify(registry));
   const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
   const { request } = await prepareApprovedRevision({ projectRoot: root, selector: structure.articles[0].path,
@@ -457,38 +434,36 @@ test("an approved revision remains current after close relocates source images",
   const pagePath = join(root, "knowledge", request.target.path);
   const applied = await readFile(pagePath, "utf8");
   expect(applied).toMatch(/assets\/image\/[a-f0-9]{64}\.png/u);
-  expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("current");
+  expect((await observeApprovedRevisionBatch(root, (await readApprovedRevision(root))!)).state).toBe("current");
   await writeFile(pagePath, `${applied}\nUnrelated concurrent edit.\n`);
-  expect((await readProjectIndexerCandidateCompileStatus(root)).state).toBe("stale");
+  expect((await observeApprovedRevisionBatch(root, (await readApprovedRevision(root))!)).state).toBe("stale");
   await writeFile(pagePath, applied);
   await buildProjectPackages(root);
   expect(await readApprovedRevision(root)).toBeUndefined();
 }, 30_000);
 
-test("revision Route includes selected Provider resources and expands current API tables", async () => {
-  const root = await initialKnowledge();
+test("ordinary source revision exposes current requirements without restoring Providers or running parsers", async () => {
+  const root = await initialRevisionKnowledge(roots);
   await commitSource(root, "export interface Options { label: string; count?: number }\nexport const answer = 43;\n");
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }, index) => index ? { path } : { path, instruction: "Document the current Options fields." }), scope_summary: "Only the API explanation changes.", new_topics: [] });
   const request = (await readApprovedRevision(root))!;
   const status = await collectProjectStatus(root, { managed: true });
-  const action = status.workflow.current?.action?.input as { writing_context: { providers: Array<{ resources: unknown[] }> } };
-  expect(action.writing_context.providers.length).toBeGreaterThan(0);
-  expect(action.writing_context.providers[0]!.resources.length).toBeGreaterThan(0);
-  const block = request.program_blocks?.find((item) => item.markdown.includes("label") && item.markdown.includes("count"));
-  expect(block).toBeDefined();
+  const action = status.workflow.current?.action?.input as { writing_context: { requirements: Array<{ id: string }>; indexer_usage: unknown[]; providers?: unknown } };
+  expect(action.writing_context.requirements.map(item => item.id)).toContain(scope.requirement_ref);
+  expect(action.writing_context.indexer_usage).toEqual([]);
+  expect(action.writing_context.providers).toBeUndefined();
+  expect(request.program_blocks ?? []).toEqual([]);
   const { expandRevisionProgramBlocks } = await import("../project/approvedRevisionPrograms.js");
-  expect(() => expandRevisionProgramBlocks("{{context:program:foreign}}", request.program_blocks ?? [])).toThrow();
-  await complete(root, { stage: "approved-revision", markdown: request.target.markdown +
-    `\n<!-- context:section id="options" -->\n${block!.token}\n<!-- /context:section -->\n` });
+  expect(() => expandRevisionProgramBlocks("{{context:program:foreign}}", [])).toThrow();
+  await complete(root, { stage: "approved-revision", markdown: request.target.markdown.replace("value 42", "value 43") });
   const candidates = await readCandidateRecords(root);
-  expect(candidates[0]!.body).toContain(block!.markdown);
-  expect(candidates[0]!.body).not.toContain(block!.token);
+  expect(candidates[0]!.body).toContain("value 43");
 }, 30_000);
 
 test("partial revision delivery returns to remaining Review and never advances the source baseline early", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Improve this explanation." })), scope_summary: "Both pages.", new_topics: [] });
@@ -509,14 +484,14 @@ test("partial revision delivery returns to remaining Review and never advances t
   await complete(root, { stage: "approved-revision", markdown: second.target.markdown.replace("public entry point", "documented public entry point") });
   await approveOne(root, first.target.path);
   expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("review-current-batch");
-  const { requestIndexerEarlyDelivery, readIndexerDelivery } = await import("../project/indexerDelivery.js");
-  await requestIndexerEarlyDelivery(root);
+  const { requestRevisionDelivery, readRevisionDelivery } = await import("../project/revisionDelivery.js");
+  await requestRevisionDelivery(root);
   const pending = await readCandidateRecords(root);
   expect(pending).toHaveLength(1);
   expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("close-approved-knowledge");
   await closeProjectWorkspace(root);
   await buildProjectPackages(root);
-  expect((await readIndexerDelivery(root))?.partial).toBeUndefined();
+  expect(await readRevisionDelivery(root)).toBeUndefined();
   expect(await readCandidateRecords(root)).toEqual(pending);
   expect(await baseline(root)).toEqual([]);
   expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("review-current-batch");
@@ -527,7 +502,7 @@ test("partial revision delivery returns to remaining Review and never advances t
 }, 30_000);
 
 test("partial delivery preserves pending linked pages and survives a failed build before resuming Review", async () => {
-  const root = await initialKnowledge();
+  const root = await initialRevisionKnowledge(roots);
   await beginKnowledgeUpdate(root, { scopes: [scope] });
   const update = (await readKnowledgeUpdate(root))!;
   await complete(root, { stage: "source-update", decisions: update.candidates.map(({ path }) => ({ path, instruction: "Clarify this page." })), scope_summary: "Both pages.", new_topics: [] });
@@ -540,9 +515,9 @@ test("partial delivery preserves pending linked pages and survives a failed buil
   const second = (await readApprovedRevision(root))!;
   await complete(root, { stage: "approved-revision", markdown: second.target.markdown.replace("public entry point", "documented public entry point") });
   await approveOne(root, first.target.path);
-  const { requestIndexerEarlyDelivery, readIndexerDelivery } = await import("../project/indexerDelivery.js");
-  await expect(requestIndexerEarlyDelivery(root)).rejects.toThrow("linked page");
-  expect((await readIndexerDelivery(root))?.partial).toBeUndefined();
+  const { requestRevisionDelivery, readRevisionDelivery } = await import("../project/revisionDelivery.js");
+  await expect(requestRevisionDelivery(root)).rejects.toThrow("linked page");
+  expect(await readRevisionDelivery(root)).toBeUndefined();
   expect(await readCandidateRecords(root)).toHaveLength(1);
   // The dependent set must finish Review together; approval of the peer unlocks delivery.
   await approveCandidates(root, await readCandidateRecords(root));

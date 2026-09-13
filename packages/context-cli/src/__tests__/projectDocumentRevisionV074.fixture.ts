@@ -1,10 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { mkdir, mkdtemp, realpath, symlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import YAML from "yaml";
-import type { IndexerRegistry } from "@c4a/context";
-import { listCliBundledIndexers } from "../project/indexerCliBundledProvider.js";
+import type { ProductionRequirements } from "../project/productionRequirements.js";
 import type { ContextResolvedWorkflowRoute } from
   "../project/workflow/workflowTypes.js";
 
@@ -29,13 +27,10 @@ export async function createDocumentRevisionWorkspace(
     sourceFiles?: Record<string, string>; packageJson?: Record<string, unknown>;
     profile?: string; readerGoals?: string[] } = {},
 ): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "context-indexer-revise-"));
-  const bundle = (await listCliBundledIndexers()).bundles.find((item) =>
-    item.skill === "context-code-indexer"
-  );
-  if (bundle === undefined) throw new Error("missing bundled Code Indexer");
-  const registry: IndexerRegistry = {
-    protocol: "context.indexer.registry/v1",
+  const parent = resolve(import.meta.dir, "../../../../.tmp/revision-fixtures");
+  await mkdir(parent, { recursive: true });
+  const root = await realpath(await mkdtemp(join(parent, "case-")));
+  const registry: ProductionRequirements = {
     requirements: [{
       id: "workspace-knowledge",
       ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
@@ -53,26 +48,6 @@ export async function createDocumentRevisionWorkspace(
           module_refs: ["module:app"],
         }],
       },
-    }],
-    indexers: [{
-      id: "revision-fixture",
-      operations: ["main-index"],
-      requirement_bindings: [{
-        requirement_ref: "workspace-knowledge",
-        coverage_domains: ["architecture"],
-        owned_scope: { ref: "requirement:workspace-knowledge#target_scope" },
-        role: "primary",
-      }],
-      read_scope: { refs: ["requirement:workspace-knowledge#target_scope"] },
-      profile: { primary: { id: options.profile ?? "component-library", provider: "community" } },
-      providers: [{
-        id: "community",
-        role: "primary",
-        skill: bundle.skill,
-        version: bundle.version,
-        integrity: bundle.integrity,
-        distribution: bundle.distribution,
-      }],
     }],
   };
   await mkdir(join(root, "src"), { recursive: true });
@@ -93,23 +68,7 @@ export async function createDocumentRevisionWorkspace(
     "export default defineProject({ sources: [fixture], phases: [], packages: [] });",
     "",
   ].join("\n"));
-  await writeFile(join(root, "knowledge", "structure.yaml"), YAML.stringify({
-    schema_version: "context.approved-structure.v1",
-    nodes: [{
-      node_ref: "node:revision-fixture",
-      title: "Revision fixture",
-      node_type: "entity",
-    }],
-    views: [{
-      view_ref: "architecture:revision-fixture",
-      node_ref: "node:revision-fixture",
-      title: "Revision fixture",
-      path: "architecture/revision-fixture.md",
-      sources: [DOCUMENT_REVISION_SOURCE_REF],
-      sections: [],
-    }],
-    edges: [],
-  }));
+  await writeFile(join(root, "knowledge", "structure.yaml"), YAML.stringify({ articles: [] }));
   const sourceRoot = join(root, "fixture-source");
   await mkdir(join(sourceRoot, "src"), { recursive: true });
   await writeFile(join(sourceRoot, "package.json"), `${JSON.stringify({

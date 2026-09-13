@@ -9,7 +9,6 @@ import { continueAfterProjectReview } from "./project/workflow/workflowContinuat
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
 import { registerVersionCommands } from "./commands/versionCommands.js";
-import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { registerProjectActionCommands } from "./commands/actionCommands.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
@@ -202,7 +201,6 @@ export function createCliProgram(): Command {
 
   registerDebugCommands(program);
   registerDocumentRevisionCommand(program);
-  registerCodeIndexMigrationCommands(program);
 
   registerContextWorkflowResourceCommands(program);
   registerProjectActionCommands(program);

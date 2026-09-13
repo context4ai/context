@@ -1,8 +1,11 @@
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
-import { readPartitionStream } from "./indexerPartitionStream.js";
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { removeLegacyReviewDecisions } from "./reviewDecisions.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
+import { readCandidateRecords } from "./candidateLedger.js";
+import { readProjectCloseStatus } from "./close.js";
+import { clearCompletedProduction } from "./productionCleanup.js";
+import { APPROVED_REVISION_PATH } from "./maintenanceStorage.js";
 import {
   CANDIDATE_SNAPSHOT_ROOT,
   INDEXER_RUNTIME_ROOT,
@@ -22,11 +25,15 @@ const COMPLETED_RUNTIME_PATHS = [
 ] as const;
 
 export async function clearCompletedLifecycle(projectRoot: string): Promise<void> {
-  const stream = await readPartitionStream(projectRoot);
-  if (stream && (stream.phase !== "planning" || (await currentLedger(projectRoot))?.entries.some(entry => entry.state !== "accepted"))) {
-    throw new TypeError("Pending Partition work must resume before lifecycle cleanup");
+  const production = await readProductionStage(projectRoot);
+  if (production) {
+    if (production.delivery) throw new TypeError("Partial delivery must retain the production stage and its unfinished tasks; finish the build or explicitly resume writing.");
+    const candidates = await readCandidateRecords(projectRoot);
+    await assertRequiredArticlesReviewed(projectRoot, candidates);
+    if (candidates.some(candidate => candidate.status === "draft") || (await readProjectCloseStatus(projectRoot)).state !== "ready") {
+      throw new TypeError("Review and close must complete before production cleanup; run context status --format json");
+    }
   }
-  await removeLegacyReviewDecisions(projectRoot);
   // Keep the current compile/revision/rollback pointer until every other task
   // artifact has been removed. A failed cleanup must still block a new task.
   for (const path of COMPLETED_RUNTIME_PATHS) {
@@ -51,4 +58,6 @@ export async function clearCompletedLifecycle(projectRoot: string): Promise<void
   await rm(join(compile, "current.json"), { force: true });
   // Empty directory removal is cosmetic; no task state remains at this point.
   await rm(indexer, { recursive: true, force: true });
+  await rm(join(projectRoot, APPROVED_REVISION_PATH), { force: true });
+  if (production) await clearCompletedProduction(projectRoot, production);
 }

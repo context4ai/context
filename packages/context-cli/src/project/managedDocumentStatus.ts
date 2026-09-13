@@ -1,4 +1,4 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { inspectProductionRequirements } from "./productionRequirements.js";
 
 import { loadContextProjectModule } from "./workspace.js";
 import { readManagedDocumentSnapshot } from "./managedDocumentSnapshot.js";
@@ -23,9 +23,9 @@ export async function boundManagedDocumentStatuses(projectRoot: string, sources:
     }
   }
   try {
-    const { registry } = await loadIndexerRegistry(projectRoot);
-    for (const requirement of registry.requirements) {
-      for (const target of [...requirement.target_scope.targets, ...requirement.evidence_source_scope.targets]) {
+    const inspected = await inspectProductionRequirements(projectRoot);
+    for (const requirement of inspected?.requirements.requirements ?? []) {
+      for (const target of [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []]) {
         refs.add(target.source_ref);
       }
     }

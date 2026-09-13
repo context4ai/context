@@ -415,14 +415,14 @@ describe("0.6.0 project init and source ensure", () => {
     }
   });
 
-  test("source add repo writes registry, materializes a symlink, and status recommends extraction", async () => {
+  test("source add repo writes registry, materializes a symlink, and status requests reader requirements", async () => {
     const root = makeTmp();
     const repo = join(root, "sample-lib");
     const project = join(root, "kb");
     try {
       await mkdir(repo, { recursive: true });
       const head = initGitRepo(repo);
-      await runCliInDir(root, ["init", "kb"]);
+      await runCliInDir(root, ["init", "kb", "--dev"]);
       await writeSampleLibProjectEntry(project);
 
       const addResult = await addRepoSource({
@@ -470,10 +470,13 @@ describe("0.6.0 project init and source ensure", () => {
       const link = join(project, "sources", "repo", REPO_NAMESPACE, "sample-lib");
       expect(lstatSync(link).isSymbolicLink()).toBe(true);
 
-      const status = await runCliInDir(project, ["status"]);
-      expect(status).toContain("state: route.indexer.lifecycle-required");
-      expect(status).toContain("registry-and-Provider indexing lifecycle");
-      expect(status).not.toContain("migrate codeindex --format json");
+      const status = JSON.parse(await runCliInDir(project, ["status", "--format", "json"]));
+      expect(status.next_route.node).toBe("configure-production-requirements");
+      const route = JSON.parse(await readFile(status.next_route.file, "utf8"));
+      expect(route).toMatchObject({
+        node: "configure-production-requirements", configuration: { file: "src/indexers.yaml" },
+      });
+      expect(route.commands).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

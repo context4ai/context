@@ -1,4 +1,5 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readProductionRequirements } from "./productionRequirements.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -18,8 +19,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
   instruction: string; refresh?: boolean | undefined;
 }) {
   const { readMaintenance } = await import("./maintenanceStorage.js");
-  const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
-  if ((await readMaintenance(root)).active && await currentLedger(root)) throw new TypeError("Finish or cancel the active maintenance draft before adjusting shared source inputs through the production task's task adjust route. The original ledger still uses those fixed inputs.");
+  if ((await readMaintenance(root)).active && await readProductionStage(root)) throw new TypeError("Finish or cancel the active maintenance draft before adjusting shared source inputs. The current production stage still uses those fixed inputs.");
   const revision = await readApprovedRevision(root);
   const update = revision ? undefined : await readKnowledgeUpdate(root);
   const current = revision ?? update;
@@ -27,11 +27,11 @@ export async function adjustLocalRevisionSources(root: string, input: {
   const selected = [...new Set(input.scopes.map((scope) => scope.source_ref))];
   const bound = revision ? [...revision.target.source_refs, ...(revision.processed_scopes ?? []).map((scope) => scope.source_ref)]
     : update!.scopes.map((scope) => scope.source_ref);
-  const { registry } = await loadIndexerRegistry(root);
+  const registry = await readProductionRequirements(root);
   const additions = input.scopes.filter((scope) => !bound.includes(scope.source_ref));
   for (const scope of additions) {
     const requirement = registry.requirements.find((item) => item.id === scope.requirement_ref);
-    const targets = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope.targets];
+    const targets = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []];
     if (!targets?.some((target) => target.source_ref === scope.source_ref) || !targets.some((target) => bound.includes(target.source_ref))) {
       throw new TypeError("A new same-task source requires its explicit requirement_ref and a confirmed scope connecting it to this task; no independent task is inferred.");
     }
@@ -93,7 +93,10 @@ export async function adjustLocalRevisionSources(root: string, input: {
         return false;
       });
       const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
-      const programBlocks = affected ? await prepareRevisionProgramBlocks(root, revision.target.source_refs, scopes.filter((scope) => selected.includes(scope.source_ref))) : revision.program_blocks;
+      const programBlocks = affected && revision.regenerate
+        ? await prepareRevisionProgramBlocks(root, revision.target.source_refs, scopes.filter((scope) => selected.includes(scope.source_ref)),
+          currentTarget.sections.flatMap(section => section.references))
+        : revision.program_blocks;
       const payload = { ...rest, ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
         target: affected ? { ...currentTarget, markdown: candidate?.body ?? currentTarget.markdown, source_refs: [...new Set([...currentTarget.source_refs, ...additions.map((scope) => scope.source_ref)])] } : revision.target,
         instruction: affected ? `${revision.instruction}\n\n${input.instruction}` : revision.instruction };
@@ -123,6 +126,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
         : { path: CANDIDATE_LEDGER_FILE, operation: "write", base_digest: durableContentDigest(ledger), target_digest: durableContentDigest(kept), content: kept });
     }
   }
+  targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   await runDurableMultiFileTransaction({ projectRoot: root, kind: "adjust-local-update", proposal_digest: indexerProtocolDigest(targets), targets });
   return { action: input.refresh ? "adjusted" : "acquisition-authorized", source_refs: selected,
     retained_pending_pages: revision?.pending_targets?.length ?? update?.candidates.length ?? 0,

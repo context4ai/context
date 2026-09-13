@@ -1,4 +1,4 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readProductionRequirements, productionRequirementsSchema, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
@@ -7,7 +7,7 @@ import { join, relative, isAbsolute } from "node:path";
 import { z } from "zod";
 import YAML from "yaml";
 import { articleSectionSchema, validateArticleStructureEntries, indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema,
-  indexRequirementSchema, readProcessedScopes, processedVersionForScope, type IndexRequirement, type ProcessedScope } from "@c4a/context";
+  type ProcessedScope } from "@c4a/context";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { candidateRecordsContent, indexerCandidateId, isSafeKnowledgeTargetPath, readCandidateRecords,
@@ -20,9 +20,7 @@ import { runDurableMultiFileTransaction } from "./durableMultiFileTransaction.js
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { captureProcessedScopes, commitProcessedScopes } from "./processedScopeStorage.js";
 
-// The current compile container holds either a normal accepted-Indexer compile
-// or a direct revision of an approved page. Neither retains previous runs.
-export const APPROVED_REVISION_PATH = join(".tmp", "context-runtime", "indexer", "candidate-compile", "current.json");
+export { APPROVED_REVISION_PATH } from "./maintenanceStorage.js";
 const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/u);
 const revisionTargetSchema = z.object({
   path: z.string().min(1), article_id: z.string().min(1),
@@ -41,7 +39,7 @@ const requestSchema = z.object({
     supporting_sources: z.array(z.string().min(1)).min(1).optional(),
     create: z.object({ path: z.string().min(1), title: z.string().min(1), source_refs: z.array(z.string().min(1)).min(1), instruction: z.string().min(1) }).strict().optional() }).strict()).optional(),
   regenerate: z.boolean().optional(),
-  requirements: z.array(indexRequirementSchema).optional(),
+  requirements: productionRequirementsSchema.shape.requirements.optional(),
   processed_scopes: processedScopesSchema.optional(),
   candidate: z.unknown().optional(),
   batch_candidates: z.array(z.unknown()).optional(),
@@ -205,7 +203,7 @@ export async function prepareApprovedRevision(input: {
   replace_current?: boolean;
   persist?: boolean;
   batch_candidates?: CandidateRecord[];
-  requirements?: IndexRequirement[];
+  requirements?: ProductionRequirements["requirements"];
   processed_scopes?: ProcessedScope[];
 }) {
   return withProjectWriteLock(input.projectRoot, "prepare-approved-revision", async () => {
@@ -267,8 +265,7 @@ export async function prepareApprovedRevision(input: {
     }
     if (input.processed_scopes) await captureProcessedScopes(input.projectRoot, input.processed_scopes);
     const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
-    const programScopes = input.processed_scopes?.filter((scope) => processedVersionForScope(readProcessedScopes(structure.parsed), scope) !== scope.processed_version);
-    const { registry } = await loadIndexerRegistry(input.projectRoot);
+    const registry = await readProductionRequirements(input.projectRoot);
     const requirements = input.requirements ?? registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
       target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
     const { currentScopeSourceVersion } = await import("./processedScopeStorage.js");
@@ -276,10 +273,13 @@ export async function prepareApprovedRevision(input: {
       requirement.target_scope.targets.filter(source => source.source_ref.startsWith("repo:") && target.source_refs.some(ref =>
         ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`)))
         .map(async source => ({ requirement_ref: requirement.id, source_ref: source.source_ref,
-          ...(source.module_refs.length ? { module_refs: source.module_refs } : {}),
+          ...(source.module_refs?.length ? { module_refs: source.module_refs } : {}),
           processed_version: await currentScopeSourceVersion(input.projectRoot, source.source_ref) })))) : undefined;
-    const programBlocks = regenerationScopes || programScopes
-      ? await prepareRevisionProgramBlocks(input.projectRoot, target.source_refs, regenerationScopes ?? programScopes!) : undefined;
+    // Updating a source authorizes reassessment, not automatic whole-source
+    // parsing or a Provider lookup. Only explicit regeneration requests it.
+    const programBlocks = regenerationScopes
+      ? await prepareRevisionProgramBlocks(input.projectRoot, target.source_refs, regenerationScopes,
+        target.sections.flatMap(section => section.references)) : undefined;
     if (input.regenerate && !programBlocks?.length) throw new TypeError("No applicable program blocks in the selected page sources. Inspect its Provider/materials; do not submit the old table as regenerated. Cancel or adjust this maintenance request before continuing.");
     const payload = { target, instruction: input.instruction.trim(), requirements,
       ...(input.regenerate ? { regenerate: true } : {}),
@@ -434,7 +434,7 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
 
 async function assertRevisionRequirements(projectRoot: string, request: ApprovedRevision): Promise<void> {
   if (!request.requirements) return;
-  const { registry } = await loadIndexerRegistry(projectRoot);
+  const registry = await readProductionRequirements(projectRoot);
   const ids = new Set(request.requirements.map((requirement) => requirement.id));
   if (indexerProtocolDigest(registry.requirements.filter((requirement) => ids.has(requirement.id))) !== indexerProtocolDigest(request.requirements)) {
     throw new TypeError("Revision purpose or scope changed; adjust the pending update before continuing. No baseline was advanced.");

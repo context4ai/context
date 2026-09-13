@@ -5,11 +5,42 @@ import { readAcceptedIndexerMainAuthorResultRecords } from "./indexerMainRunStor
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
+import { readProductionStage, productionStageDirectory } from "./productionStageStore.js";
+import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
+import { productionAgentDirectory } from "./productionSubmissionFiles.js";
+import { assertProductionPlanRequirementsCurrent } from "./productionPlanning.js";
+import { readMaintenance } from "./maintenanceStorage.js";
 
 /** Review may reject prose, but rejection alone does not cancel a required
  * article in the accepted plan. Keep the Author available for repair. */
 export async function assertRequiredArticlesReviewed(root: string, candidates: readonly CandidateRecord[]): Promise<void> {
+  // Maintenance has its own revision/Review authority; it cannot settle the
+  // suspended production stage. Build completion keeps that stage intact.
+  if ((await readMaintenance(root)).active) return;
   const rejected = candidates.filter(candidate => candidate.status === "rejected" && candidate.indexer_candidate);
+  const production = await readProductionStage(root);
+  if (production) {
+    await assertProductionPlanRequirementsCurrent(root, production);
+    if (production.delivery) {
+      const { assertProductionDeliveryReady } = await import("./productionDelivery.js");
+      await assertProductionDeliveryReady(root);
+      return;
+    }
+    if (dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended") {
+      throw new ContextError(ExitCode.WorkspaceStateError, "Production still has unfinished tasks, investigation or report confirmation; close cannot finish them.", {
+        category: ErrorCategory.WorkspaceStateInvalid, reason_code: "production-not-complete",
+        next_action: { command: "context status --format json" },
+      });
+    }
+    if (rejected.length) throw new ContextError(ExitCode.WorkspaceStateError,
+      "Planned articles remain rejected. Add revision tasks using the Review feedback before closing this production stage.", {
+        category: ErrorCategory.WorkspaceStateInvalid, reason_code: "production-articles-need-repair",
+        paths: rejected.map(candidate => candidate.path),
+        next_action: { command: `context action complete-current --revision ${production.id} --input ${productionAgentDirectory(production.id)}/submissions/plan-amendment.yaml --format json` },
+        input_schema: { path: `${productionStageDirectory(production.id)}/planning.schema.json` },
+      });
+    return;
+  }
   if (!rejected.length) return;
   const ledger = await currentLedger(root);
   // Legacy approved-page revision does not carry an Indexer article plan.

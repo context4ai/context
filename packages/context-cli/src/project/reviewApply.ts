@@ -10,6 +10,7 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   isSafeKnowledgeTargetPath,
+  knowledgeTargetPathKey,
   readCandidateRecords,
   candidateRecordsContent,
   CANDIDATE_LEDGER_FILE,
@@ -19,13 +20,10 @@ import { withProjectWriteLock } from "./writeLock.js";
 import { renderApprovedIndexerMarkdown } from "./reviewApplyIndexer.js";
 import { prepareApprovedKnowledgeSnapshotTarget } from "./approvedKnowledgeSnapshots.js";
 import {
-  assertProjectIndexerCandidateInCompileIndex,
-  loadProjectIndexerCandidateCompileIndex,
-  type ProjectIndexerCandidateCompileIndex,
-} from "./indexerCandidateCompileActions.js";
-import {
-  LEGACY_REVIEW_DECISIONS_FILE,
-} from "./reviewDecisions.js";
+  assertReviewCandidateCurrent,
+  loadReviewCandidateAuthority,
+  type ReviewCandidateAuthority,
+} from "./reviewCandidateAuthority.js";
 import {
   type DurableMultiFileFailureInjector,
   recoverDurableMultiFileTransactions,
@@ -66,10 +64,10 @@ async function prepareApprovedPage(input: {
   record: CandidateRecord;
   now: string;
   approvedPageIndex: ApprovedArticleIndex;
-  indexerCompileIndex: ProjectIndexerCandidateCompileIndex;
+  candidateAuthority: ReviewCandidateAuthority;
 }): Promise<PreparedApprovedPage> {
-  assertProjectIndexerCandidateInCompileIndex({
-    index: input.indexerCompileIndex,
+  assertReviewCandidateCurrent({
+    index: input.candidateAuthority,
     record: input.record,
   });
   if (!isSafeKnowledgeTargetPath(input.record.collection, input.record.path)) {
@@ -77,14 +75,14 @@ async function prepareApprovedPage(input: {
       category: ErrorCategory.SchemaInvalid,
       candidate_id: input.record.candidate_id,
       path: input.record.path,
-      next: "Rerun the current Indexer Candidate compile before approval.",
+      next: "Refresh the current production or article revision, then reopen Review before approval.",
     });
   }
   if (await readReviewCandidateSnapshot(input.projectRoot, input.record) === undefined) {
     throw new ContextError(ExitCode.WorkspaceStateError, `candidate snapshot is missing or stale: ${input.record.candidate_id}`, {
       category: ErrorCategory.WorkspaceStateInvalid,
       candidate_id: input.record.candidate_id,
-      next: "Rerun the current Indexer Candidate compile before approval.",
+      next: "Refresh the current production or article revision, then reopen Review before approval.",
     });
   }
   const relPath = join("knowledge", input.record.path);
@@ -315,18 +313,14 @@ export async function applyReviewDecisions(input: {
       input.projectRoot,
       CANDIDATE_LEDGER_FILE,
     );
-    const rejectedDecisionsBase = await readProjectFileMaybe(
-      input.projectRoot,
-      LEGACY_REVIEW_DECISIONS_FILE,
-    );
     const rows = await readCandidateRecords(input.projectRoot);
     const nextRows = [...rows];
     const decisions = expandReviewPayload(input.payload, rows);
     const approvesAnyCandidate = decisions.some((decision) =>
       decision.status === "approved"
     );
-    const indexerCompileIndex = approvesAnyCandidate
-      ? await loadProjectIndexerCandidateCompileIndex(input.projectRoot)
+    const candidateAuthority = approvesAnyCandidate
+      ? await loadReviewCandidateAuthority(input.projectRoot)
       : undefined;
     const approvedPageIndex: ApprovedArticleIndex = approvesAnyCandidate
       ? await buildApprovedArticleIndex(input.projectRoot)
@@ -374,9 +368,9 @@ export async function applyReviewDecisions(input: {
             next: "The durable rejection remains until the candidate fingerprint changes. Review the changed draft before approving it.",
           });
         }
-        if (indexerCompileIndex === undefined) throw new TypeError("Indexer Candidate compile index is missing");
-        assertProjectIndexerCandidateInCompileIndex({
-          index: indexerCompileIndex,
+        if (candidateAuthority === undefined) throw new TypeError("Current review candidate authority is missing");
+        assertReviewCandidateCurrent({
+          index: candidateAuthority,
           record: row,
         });
         const approvedRef = row.article_id;
@@ -392,7 +386,7 @@ export async function applyReviewDecisions(input: {
         }
         seenApprovedIds.set(approvedRef, row.candidate_id);
         const approvedPath = join("knowledge", row.path);
-        const previousPathCandidate = seenApprovedPaths.get(approvedPath);
+        const previousPathCandidate = seenApprovedPaths.get(knowledgeTargetPathKey(approvedPath));
         if (previousPathCandidate !== undefined) {
           throw new ContextError(ExitCode.UserError, `multiple approved review decisions target the same knowledge path: ${approvedPath}`, {
             category: ErrorCategory.UserInputInvalid,
@@ -401,13 +395,13 @@ export async function applyReviewDecisions(input: {
             next: "Approve only one current candidate per knowledge path.",
           });
         }
-        seenApprovedPaths.set(approvedPath, row.candidate_id);
+        seenApprovedPaths.set(knowledgeTargetPathKey(approvedPath), row.candidate_id);
         const page = await prepareApprovedPage({
           projectRoot: input.projectRoot,
           record: row,
           now,
           approvedPageIndex,
-          indexerCompileIndex,
+          candidateAuthority,
         });
         pagesToWrite.push(page);
         pages.push(page.relPath);
@@ -465,12 +459,6 @@ export async function applyReviewDecisions(input: {
             path: CANDIDATE_LEDGER_FILE,
             baseContent: candidateLedgerBase,
             targetContent: candidateRecordsContent(nextRows),
-          })]
-        : []),
-      ...(rejectedDecisionsBase !== undefined
-        ? [reviewFileTarget({
-            path: LEGACY_REVIEW_DECISIONS_FILE,
-            baseContent: rejectedDecisionsBase,
           })]
         : []),
     ].filter((target): target is IndexerProjectFileTarget => target !== undefined)

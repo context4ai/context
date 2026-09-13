@@ -120,17 +120,14 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 `node_modules/@c4a/context/docs/guides/agent-dialogue.md` 只介绍稳定原则和发现方式。
 修改门禁语义时必须更新 Graph 资源引用、可达性测试和必要的 SDK 概览。
 
-### Indexer Author 覆盖进度
+### 当前生产覆盖进度
 
-- Author 按 current Partition group 逐项收敛：读取 Route 返回的 instructions、
-  Authorized Workset View 和输入 schema，再通过唯一
-  `context action complete-current` 提交语义结果。不要 shell 循环或并发写入；
-  失败、coverage warning、schema error 和 unsupported material 都在当前 group
-  内收敛。
-- 当前 group 的 member/question disposition 是完成信号。“写出第一节正文”
-  不代表 group 已关闭。
-- 不要求把所有来源片段写进正文。重复、导航、placeholder、同一事实延续、
-  无读者价值的材料可以排除，但排除必须来自内容判断，不是为了提速。
+- 按 Route 发放的阶段和批次目录工作，读取当前任务说明及文件提交 schema；
+  协调者通过 `context action complete-current` 提交已完成子集，不并发写共享状态。
+- 完成以当前任务接收和阶段范围结算为准，不要求 Partition 逐成员账本、
+  Provider 主生产者绑定或技能版本／摘要核对。首篇完成不代表其余任务完成。
+- 重复或无读者价值的材料可以由 Agent 判断排除；明确排除保存到长期需求，
+  候选、计划和接收记录仅在 `.tmp`。清理临时区后全新生产，不兼容旧过程。
 
 ### 命名边界（必须遵守）
 
@@ -283,9 +280,9 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 ## 模块职责
 
-- `project/run.ts` 只执行 capture 和明确声明的非知识 `customPhase`；知识生产由 `project/indexer*.ts` 当前生命周期负责。
+- `project/run.ts` 只执行 capture 和明确声明的非知识 `customPhase`；知识生产由当前 Graph 与 `project/production*.ts` 的阶段协议负责。
 - `project/indexerParser*.ts` 负责 parser 计划、受控执行和结果导入；不得直接写 approved Markdown。
-- `project/indexerCandidateCompileActions.ts` 将已验证 Result 投影为唯一 current Candidate；不得新增旁路 Candidate writer。
+- `project/productionSubmission.ts` 按固定文件接收任务，将候选和任务回执同事务写入临时区；正式修订走当前维护入口，不绕过审核直接写正式文章。
 - `project/review*.ts` 负责 current Candidate HTML、用户决策和原子 apply；`project/close.ts` 负责 approved `knowledge/structure.yaml` projection 与 final verify gate。
 - 800 行限制是**事后体检**（详见根 `CLAUDE.md` §代码规模规则）：实现过程禁止主动探测当前行数，正常完成功能；**每个阶段结束后**才统一检查实际超 800 的文件并走分拆流程。拆分时默认目标 ≤600 行，内聚顶住才接受 600-800。
 

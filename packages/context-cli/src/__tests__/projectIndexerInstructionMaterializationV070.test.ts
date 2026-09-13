@@ -1,63 +1,36 @@
-import { createHash } from "node:crypto";
 import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
-import {
-  hostActionInputDigest,
-  type HostActionResult,
+hostActionInputDigest,
+type HostActionResult,
 } from "@c4a/agent-graph";
 import {
-  buildIndexerMainRunRequest,
-  buildIndexerMainRunWorksetViewSources,
-  buildIndexerMainWorkset,
-  buildIndexerParserWorksetViewSource,
-  buildIndexerParserFactView,
-  buildIndexerPartitionInventoryFromParserFactView,
-  buildIndexerPrimaryExecutionProjection,
-  buildIndexerRunEnvironment,
-  buildIndexerCustomizationPlan,
-  composeIndexerLayerInput,
-  indexerEvidenceAdapterFactRef,
-  indexerEvidenceAdapterFileRef,
-  indexerEvidenceAdapterOutputDigest,
-  indexerInventoryMembersDigest,
-  indexerProtocolDigest,
-  indexerPartitionStrategySetDigest,
-  loadIndexerProviderManifest,
-  type IndexerEvidenceAdapterResult,
-  type ExpectedProviderResolution,
-  type IndexerRegistryEntry,
+buildIndexerCustomizationPlan,
+loadIndexerProviderManifest,
+type ExpectedProviderResolution,
+type IndexerRegistryEntry
 } from "@c4a/context";
-import { loadIndexerCustomization } from "../project/indexerCustomization.js";
+import { afterAll,afterEach,beforeAll,describe,expect,test } from "bun:test";
+import {
+mkdir,
+mkdtemp,
+rm,
+writeFile
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join,resolve } from "node:path";
 import { resolveCliBundledIndexerProvider } from "../project/indexerCliBundledProvider.js";
+import { loadIndexerCustomization } from "../project/indexerCustomization.js";
 import { materializeBundledIndexerDistribution } from "../project/indexerDistributionBuild.js";
 import {
-  buildIndexerInstructionMaterializationRequest,
-  materializeIndexerInstructions,
-  validateMaterializedIndexerInstructions,
-} from "../project/indexerInstructionMaterialization.js";
-import {
-  consumeIndexerInstructionHostResult,
-  indexerInstructionHostLocation,
-  materializeIndexerInstructionHostAction,
+consumeIndexerInstructionHostResult,
+indexerInstructionHostLocation,
+materializeIndexerInstructionHostAction,
 } from "../project/indexerInstructionHost.js";
+import {
+buildIndexerInstructionMaterializationRequest,
+materializeIndexerInstructions,
+validateMaterializedIndexerInstructions,
+} from "../project/indexerInstructionMaterialization.js";
 import { stageIndexerProviderBundle } from "../project/indexerProviderStage.js";
-import {
-  buildIndexerAgentStepRoute,
-} from "../project/indexerAgentStepRoute.js";
-import {
-  materializeIndexerWorksetViewHostAction,
-  prepareIndexerWorksetViewMaterialization,
-} from "../project/indexerWorksetViewMaterialization.js";
-
-const REQUIREMENT_DIGEST = `sha256:${"a".repeat(64)}`;
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS = 120_000;
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -232,206 +205,7 @@ function materializationAuthority(
   };
 }
 
-function mainRunRequest(providerIntegrity: string) {
-  const strategy = {
-    strategy_ref: {
-      kind: "project-indexer" as const,
-      indexer_id: "sample-code-indexer",
-      strategy_id: "module",
-      implementation_digest: digest("1"),
-    },
-    strategy_digest: digest("2"),
-  };
-  const primaryExecutionProjection = buildIndexerPrimaryExecutionProjection({
-    indexer_id: "sample-code-indexer",
-    primary_registry_projection_digest: digest("3"),
-    program_digest: null,
-    instructions_digest: providerIntegrity,
-    template_set_digest: digest("4"),
-    config_digest: digest("d"),
-    cli_contract_digest: digest("e"),
-    profile_contract_digest: digest("5"),
-    resources: [{
-      layer_ref: "provider:community#layer:primary",
-      phase: "primary",
-      kind: "instructions",
-      ref: "bundle:community/instructions/main.md",
-      digest: providerIntegrity,
-    }],
-  });
-  const workset = buildIndexerMainWorkset({
-    indexer_id: "sample-code-indexer",
-    requirement_ref: "requirement:workspace-knowledge",
-    owner_cell_refs: ["owner-cell:workspace-knowledge#technical-structure"],
-    source_ref: "repo:sample@revision",
-    module_ref: "module:packages/sample",
-    primary_registry_projection_digest: digest("3"),
-    requirement_set_digest: REQUIREMENT_DIGEST,
-    primary_execution_fingerprint:
-      primaryExecutionProjection.primary_execution_fingerprint,
-    profile_contract_digest: digest("5"),
-    source_scope_digest: digest("7"),
-    source_binding_digest: digest("8"),
-    primary_resource_binding_digest:
-      primaryExecutionProjection.primary_resource_binding_digest,
-    question_target_inventory_digest: digest("0"),
-    stage: "partition",
-    strategy_set_digest: indexerPartitionStrategySetDigest([strategy]),
-    reader_question_refs: [],
-    partition_input_digests: [digest("a")],
-    partition_inventory_digest: indexerInventoryMembersDigest(
-      buildIndexerPartitionInventoryFromParserFactView(parserFactView()),
-    ),
-    allowed_question_target_refs: [],
-  });
-  return buildIndexerMainRunRequest({
-    workset,
-    partition_strategy_attempt: {
-      strategy_order: 0,
-      strategy_ref: strategy.strategy_ref,
-      strategy_digest: strategy.strategy_digest,
-      previous_attempt_digest: null,
-    },
-    composition_input: composeIndexerLayerInput({
-      workset_digest: workset.workset_digest,
-      final_authority_layer_ref: "provider:community#layer:primary",
-      fragments: [],
-    }),
-    final_authority: {
-      layer_ref: "provider:community#layer:primary",
-      integrity: providerIntegrity,
-      bundle_digest: digest("c"),
-      config_fingerprint: digest("d"),
-      customization_fingerprint: null,
-    },
-    run_environment: buildIndexerRunEnvironment({
-      source_snapshot_digest: digest("1"),
-      source_dependency_fingerprint: workset.source_binding_digest,
-      source_role: "authoritative-source",
-      source_precedence_digest: digest("3"),
-      metric_set_digest: digest("4"),
-      dependency_view_digest: null,
-      primary_execution_projection: primaryExecutionProjection,
-    }),
-  });
-}
-
-function parserFactView() {
-  const sourceRef = "repo:sample@revision";
-  const moduleRef = "module:packages/sample";
-  const normalizedPath = "src/index.ts";
-  const locator = {
-    source_ref: sourceRef,
-    module_ref: moduleRef,
-    normalized_path: normalizedPath,
-    qualified_item_path: "sample",
-    signature_digest: indexerProtocolDigest({ symbol: "sample" }),
-  };
-  const factRef = indexerEvidenceAdapterFactRef({
-    ...locator,
-    kind: "exported-symbol",
-  });
-  const payload = { name: "sample", export_kind: "named" };
-  const scope = {
-    source_ref: sourceRef,
-    module_refs: [moduleRef],
-    scope_digest: indexerProtocolDigest({
-      source_ref: sourceRef,
-      module_refs: [moduleRef],
-    }),
-  };
-  const resultPayload: Omit<IndexerEvidenceAdapterResult, "output_digest"> = {
-    protocol: "context.indexer.evidence-adapter-result/v1",
-    adapter: {
-      id: "sample-parser",
-      package: "@example/sample-parser",
-      export: "materializeEvidence",
-      version: "1.0.0",
-      digest: digest("1"),
-    },
-    authorized_scope: scope,
-    input_digest: digest("2"),
-    precedence: 10,
-    files: [{
-      file_ref: indexerEvidenceAdapterFileRef({
-        source_ref: sourceRef,
-        module_ref: moduleRef,
-        normalized_path: normalizedPath,
-      }),
-      source_ref: sourceRef,
-      module_ref: moduleRef,
-      normalized_path: normalizedPath,
-      role: "primary-owner",
-      coverage_tier: "ast-catalog",
-      disposition: "analyzed",
-      facts: [{
-        fact_ref: factRef,
-        kind: "exported-symbol",
-        locator,
-        payload_digest: indexerProtocolDigest(payload),
-        denominator: "symbol",
-      }],
-    }],
-    diagnostics: [],
-    toolchain: [{
-      step: "parse-typescript",
-      package: "@example/sample-parser",
-      export: "materializeEvidence",
-      version: "1.0.0",
-      digest: digest("1"),
-      capabilities: ["parser.typescript"],
-      input_digest: digest("2"),
-      output_digest: digest("3"),
-    }],
-  };
-  const result = {
-    ...resultPayload,
-    output_digest: indexerEvidenceAdapterOutputDigest(resultPayload),
-  };
-  return buildIndexerParserFactView({
-    adapter_results: [result],
-    fact_payloads: [{ fact_ref: factRef, payload }],
-    inventory_digest: digest("4"),
-  });
-}
-
 describe("resolved-indexer-instructions materialization", () => {
-  test("binds exact Provider, requirement, workset, resource set, payload, and Context receipt", async () => {
-    const root = await temporaryRoot("context-indexer-instructions-");
-    const distribution = distributionFixture();
-    const { bundle, staged } = await resolveAndStage({
-      root,
-      assetsRoot: distribution.assetsRoot,
-      releaseVersion: distribution.release.version,
-      expected: distribution.expected,
-    });
-    const { request, customization } = await buildRequest({
-      root,
-      expected: distribution.expected,
-      bundle,
-      staged,
-    });
-    const result = await materializeIndexerInstructions({
-      request,
-      currentAuthority: materializationAuthority(request),
-      bundle,
-      staged,
-      customization,
-      workspaceRoot: root,
-    });
-
-    expect(request.handler).toBe("context.materialize-indexer-instructions/v1");
-    expect(request.resource_id).toBe("resolved-indexer-instructions");
-    expect(new Set(result.resources.map((resource) => resource.resource_ref)).size).toBe(result.resources.length);
-    expect(result.resources.some((resource) => resource.kind === "provider")).toBe(true);
-    expect(result.resources.filter((resource) => resource.kind === "template")).toHaveLength(1);
-    expect(result.resources.some((resource) => resource.content.includes("For partition work"))).toBe(true);
-    expect(result.resources.find((resource) => resource.kind === "template")?.content).toContain("Component library template");
-    expect(JSON.stringify(result)).not.toContain(staged.stage_path);
-    expect(JSON.stringify(result)).not.toContain(bundle.transport.path);
-    validateMaterializedIndexerInstructions(result, request);
-  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
-
   test("adds only the selected composer instruction to a post-author request", async () => {
     const root = await temporaryRoot("context-indexer-composer-instructions-");
     const distribution = distributionFixture();
@@ -663,112 +437,4 @@ describe("resolved-indexer-instructions materialization", () => {
     })).rejects.toThrow();
   }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 
-  test("projects the static thin Agent Action with ready instruction and View files", async () => {
-    const root = await temporaryRoot("context-indexer-agent-route-");
-    const distribution = distributionFixture();
-    const resolved = await resolveAndStage({
-      root,
-      assetsRoot: distribution.assetsRoot,
-      releaseVersion: distribution.release.version,
-      expected: distribution.expected,
-    });
-    const runRequest = mainRunRequest(distribution.expected.integrity);
-    const input = await buildRequest({
-      root,
-      expected: distribution.expected,
-      ...resolved,
-    });
-    const instructionHost = await materializeIndexerInstructionHostAction({
-      request: input.request,
-      currentAuthority: materializationAuthority(input.request),
-      ...resolved,
-      customization: input.customization,
-      workspaceRoot: root,
-      adapter: "context-cli",
-      adapterVersion: "0.7.0",
-    });
-    const worksetView = prepareIndexerWorksetViewMaterialization({
-      run_request: runRequest,
-      resource_id: "authorized-indexer-workset-view/task-001",
-      projection_sources: buildIndexerMainRunWorksetViewSources({
-        request: runRequest,
-        source_projection_sources: buildIndexerParserWorksetViewSource({
-          request: runRequest,
-          parser_fact_view: parserFactView(),
-        }),
-        canonical_inventory_members:
-          buildIndexerPartitionInventoryFromParserFactView(parserFactView()),
-      }),
-    });
-    const worksetViewHost = await materializeIndexerWorksetViewHostAction({
-      request: worksetView.request,
-      run_request: runRequest,
-      projection: worksetView.projection,
-      workspaceRoot: root,
-      adapter: "context-cli",
-      adapterVersion: "0.7.4",
-    });
-    expect(JSON.parse(await readFile(
-      worksetViewHost.managed_output.file_path,
-      "utf8",
-    ))).toEqual(worksetView.projection.view);
-    expect(`sha256:${createHash("sha256").update(await readFile(
-      worksetViewHost.managed_output.file_path,
-    )).digest("hex")}`).toBe(worksetViewHost.managed_output.digest);
-    expect(worksetViewHost.result.output).toMatchObject({
-      resource: {
-        ref: worksetViewHost.managed_output.ref,
-        digest: worksetViewHost.managed_output.digest,
-      },
-    });
-    await writeFile(join(root, "ready-instructions.json"), JSON.stringify(instructionHost.materialized));
-    const initial = await buildIndexerAgentStepRoute({
-      run_requests: [runRequest],
-      instruction_request: input.request,
-      workset_view_requests: [worksetView.request],
-      ready_instruction: {
-        path: join(root, "ready-instructions.json"),
-        digest: instructionHost.materialized.payload_digest,
-      },
-      ready_workset_views: [{
-        resource_id: worksetView.request.resource_id,
-        path: worksetViewHost.managed_output.file_path,
-        digest: worksetView.request.payload_digest,
-      }],
-      workspaceRoot: root,
-    });
-    expect(initial.route.action).toMatchObject({
-      id: "run-indexer-agent-step",
-      runner: "agent",
-      input: initial.step_input,
-    });
-    expect(initial.route.action?.skill?.path).toContain(
-      "context-workflow/skills/run-indexer-agent-step/SKILL.md",
-    );
-    const instructions = initial.route.resources.required.find((resource) =>
-      resource.id === "resolved-indexer-instructions"
-    );
-    expect(instructions).toMatchObject({
-      read_state: "read-required",
-      media_type: "text/markdown",
-    });
-    const reading = await readFile(instructions!.path!, "utf8");
-    expect(reading).toContain("#");
-    expect(instructions?.digest).toBe(`sha256:${createHash("sha256").update(reading).digest("hex")}`);
-    expect(instructions?.command).toBeUndefined();
-    expect(instructions?.materialize).toBeUndefined();
-    expect(JSON.stringify(initial.route)).not.toContain("__runtime__");
-    expect(JSON.stringify(initial.route)).not.toContain(resolved.staged.stage_path);
-
-    expect(initial.route.resources.required.find((resource) =>
-      resource.id === "authorized-indexer-workset-view/task-001"
-    )).toMatchObject({
-      read_state: "read-required",
-      media_type: "text/markdown",
-    });
-    expect(initial.route.resources.required.some((resource) =>
-      resource.command?.includes("resource materialize") === true
-    )).toBe(false);
-
-  }, INDEXER_DISTRIBUTION_TEST_TIMEOUT_MS);
 });

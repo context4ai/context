@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, lstat, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parse, stringify } from "yaml";
 import { z } from "zod";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -35,23 +35,33 @@ export async function workspaceVersion(root: string): Promise<string> {
   return semver.parse(manifest.version ?? "0.0.0");
 }
 function excluded(path: string) {
-  return /^(?:\.tmp|\.git|node_modules|dist)(?:\/|$)/u.test(path) ||
+  return /(?:^|\/)(?:\.tmp|\.git|node_modules)(?:\/|$)/u.test(path) || /^dist(?:\/|$)/u.test(path) ||
     ["changelog.yaml", "CHANGELOG.md", ".context-version.json", ".context-builds.json", ".context-published.json"].includes(path);
 }
 export async function workspaceContentSnapshot(root: string) {
-  let paths: string[];
-  try { paths = (await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."], { cwd: root, maxBuffer: 16 * 1024 * 1024 })).stdout.split("\0").filter(Boolean); }
-  catch {
-    paths = [];
+  let paths: string[] | undefined;
+  try {
+    paths = (await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "."], { cwd: root, maxBuffer: 16 * 1024 * 1024 })).stdout.split("\0").filter(Boolean);
+    // An independent workspace may live in an ignored directory of a parent
+    // repository. Its empty parent Git listing is not an empty knowledge base.
+    // Nonempty listings keep the usual Git ignore behavior without another call.
+    if (paths.length === 0) {
+      const gitRoot = (await exec("git", ["rev-parse", "--show-toplevel"], { cwd: root })).stdout.trim();
+      if (resolve(gitRoot) !== resolve(root)) paths = undefined;
+    }
+  } catch { paths = undefined; }
+  if (paths === undefined) {
+    const discovered: string[] = [];
     const visit = async (dir: string) => {
       for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
         const path = dir ? `${dir}/${entry.name}` : entry.name;
         if (excluded(path)) continue;
         if (entry.isDirectory()) await visit(path);
-        else if (entry.isFile()) paths.push(path);
+        else if (entry.isFile()) discovered.push(path);
       }
     };
     await visit("");
+    paths = discovered;
   }
   const files: Record<string, string> = {};
   for (const path of [...new Set(paths)].filter(path => !excluded(path)).sort()) {

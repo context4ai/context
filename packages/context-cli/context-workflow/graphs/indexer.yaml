@@ -1,31 +1,116 @@
 schema: agent-graph.graph.v1
 id: indexer
-description: Static Agent route for digest-bound Indexer work, including ready-theme delivery followed by resumption of remaining planning.
+description: Current directory-based investigation, writing, source updates and
+  article maintenance.
 entrypoints:
+  production-planning: configure-production-requirements
+  production: confirm-production-report
   maintenance: advance-knowledge-maintenance
   source-update: inspect-source-update
   approved-revision: author-approved-revision
   approved-revision-recovery: merge-approved-revision
   update-structure-review: review-current-indexer-structure
-  agent-step: run-indexer-agent-step
-  provider-selection: configure-indexer-providers
-  current-provider-resolution: resolve-current-indexer-provider
-  current-provider-program-authorization: authorize-current-indexer-provider-program
-  current-provider-finalization: finalize-current-indexer-provider-selection
-  markdown-provider: inspect-markdown-provider-capture
-  requirement-confirmation: route-index-requirement-confirmation
-  contract-overlay-validation: validate-indexer-contract-overlays
-  dependency-authorization: authorize-indexer-dependencies
-  program-execution-authorization: authorize-indexer-program-execution
-  overlay-question-proposal: propose-overlay-question-amendment
-  overlay-question-rebind: rebind-indexer-selection-to-requirement
-  project-confirmation: confirm-indexer-project
-  main-index: advance-current-indexer-lifecycle
-  current-lifecycle: advance-current-indexer-lifecycle
-  main-run-validation: validate-main-index-author-result
-  post-author-composer-step: run-indexer-post-author-composer
-  candidate-compile: compile-indexer-candidates
 nodes:
+  - id: configure-production-requirements
+    kind: action
+    reasonCode: route.production.requirements-required
+    action: actions/configure-production-requirements.yaml
+    satisfiedBy:
+      - path: production.requirements_present
+        equals: true
+    resources:
+      required:
+        - resources/procedures/production-requirements.md
+        - resources/views/source-boundary.yaml
+  - id: prepare-production-planning
+    kind: action
+    reasonCode: route.production.planning-prepare
+    action: actions/prepare-production-stage.yaml
+    resources:
+      recommended:
+        - resources/procedures/production-requirements.md
+    satisfiedBy:
+      - path: production.planning_prepared
+        equals: true
+  - id: plan-production-stage
+    kind: action
+    reasonCode: route.production.planning-required
+    action: actions/work-production-stage.yaml
+    satisfiedBy:
+      - path: production.planning_complete
+        equals: true
+  - id: production-planning-ready
+    kind: terminal
+    terminalOutcome: completed
+  - id: confirm-production-report
+    kind: gate
+    reasonCode: route.production.report-required
+    resolutionAction: actions/approve-production-report.yaml
+    gate:
+      id: production-work-start-report
+      prompt: Present the lightweight plan and work-start report, then wait for
+        explicit user feedback before writing. Managed authority does not waive
+        confirmation.
+      delegatable: false
+    satisfiedBy:
+      - path: production.report_approved
+        equals: true
+    resources:
+      required:
+        - resources/procedures/work-start-report.md
+        - resources/templates/work-start-report.md
+  - id: prepare-production-stage
+    kind: action
+    reasonCode: route.production.prepare-required
+    action: actions/prepare-production-stage.yaml
+    satisfiedBy:
+      - path: production.prepared
+        equals: true
+  - id: work-production-stage
+    kind: action
+    reasonCode: route.production.writing-required
+    action: actions/work-production-stage.yaml
+    satisfiedBy:
+      - path: production.writing_complete
+        equals: true
+    resources:
+      required:
+        - resources/procedures/production-stage-files.md
+      recommended:
+        - resources/procedures/parallel-agent-batch.md
+        - resources/templates/indexer-agent-worker.md
+  - id: continue-production-investigation
+    kind: action
+    reasonCode: route.production.investigation-required
+    action: actions/work-production-stage.yaml
+    satisfiedBy:
+      - path: production.investigation_clear
+        equals: true
+  - id: resolve-production-gap
+    kind: gate
+    reasonCode: route.production.scope-incomplete
+    gate:
+      id: production-scope-incomplete
+      prompt: The stage has unresolved investigation, dependencies or material gaps.
+        Resolve the reported scope before calling the stage complete; accepted
+        articles remain saved.
+      delegatable: false
+    satisfiedBy:
+      - path: production.complete
+        equals: true
+  - id: repair-production-articles
+    kind: action
+    reasonCode: route.production.repair-required
+    action: actions/work-production-stage.yaml
+    satisfiedBy:
+      - path: production.review_clear
+        equals: true
+    resources:
+      required:
+        - resources/procedures/production-stage-files.md
+  - id: production-ready
+    kind: terminal
+    terminalOutcome: completed
   - id: merge-approved-revision
     kind: action
     reasonCode: route.indexer.approved-revision-recovery
@@ -61,543 +146,50 @@ nodes:
       recommended:
         - resources/procedures/note.md
         - resources/procedures/sessions.md
-  - id: advance-current-indexer-lifecycle
-    kind: action
-    reasonCode: route.indexer.lifecycle-advance
-    action: actions/advance-current-indexer-lifecycle.yaml
-    satisfiedBy:
-      - path: indexer_current.advance_complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/homogeneous-source-review.md
-
-  - id: run-current-indexer-agent
-    kind: action
-    reasonCode: route.indexer.agent-step
-    action: actions/run-indexer-agent-step.yaml
-    satisfiedBy:
-      - path: indexer_current.agent_complete
-        equals: true
-    resources:
-      required:
-        - resources/procedures/parallel-agent-batch.md
-        - resources/procedures/homogeneous-source-review.md
-        - resources/views/resolved-indexer-instructions.yaml
-        - resources/views/authorized-indexer-workset-view.yaml
-      recommended:
-        - resources/templates/indexer-agent-worker.md
-        - resources/procedures/work-start-report.md
-        - resources/templates/work-start-report.md
-  - id: confirm-current-indexer-obsolete-scope
-    kind: gate
-    reasonCode: route.indexer.obsolete-scope-confirmation
-    resolutionAction: actions/resolve-current-indexer-gate.yaml
-    gate:
-      id: indexer-obsolete-scope-confirmation
-      prompt: Resolve the obsolete scope against the current user request and existing requirements. Reuse an applicable explicit include/exclude decision or explicit delegation of this scope choice; managed review authorization alone does not decide scope. Otherwise explain the affected pages, files and consequences, ask the user and wait. This is a scope question, not a CLI failure. Inspect the full structure before submitting its approval or exclusion action.
-      authority: context.knowledge-review
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_current.obsolete_scope_confirmed
-        equals: true
   - id: review-current-indexer-structure
     kind: gate
     reasonCode: route.indexer.semantic-structure-review
     resolutionAction: actions/resolve-current-indexer-gate.yaml
     gate:
       id: indexer-semantic-structure-review
-      prompt: Review the complete semantic structure and its create-or-enrich targets before authoring.
+      prompt: Present the work-start report from the lightweight plan, explain reader
+        topics, scope, first delivery and gaps, then wait for explicit user
+        feedback before bulk writing. Managed execution does not waive this
+        gate. Reuse approval of unchanged scope across batches; task counts add
+        no separate confirmation.
       authority: context.knowledge-review
-      delegatable: true
+      delegatable: false
     satisfiedBy:
       - path: indexer_current.structure_review_complete
         equals: true
-  - id: run-current-indexer-composer
-    kind: action
-    reasonCode: route.indexer.post-author-agent-step
-    action: actions/run-indexer-post-author-composer.yaml
-    satisfiedBy:
-      - path: indexer_current.composer_complete
-        equals: true
     resources:
       required:
-        - resources/views/resolved-indexer-instructions.yaml
-  - id: resolve-current-indexer-block
-    kind: gate
-    reasonCode: route.indexer.recovery-required
-    gate:
-      id: indexer-recovery
-      prompt: Resolve the reported source, material, or execution failure before retrying the current Indexer lifecycle.
-      delegatable: false
-    satisfiedBy:
-      - path: indexer_current.blockers_clear
-        equals: true
-  - id: confirm-current-indexer-layout
-    kind: gate
-    reasonCode: route.indexer.layout-confirmation-required
-    resolutionAction: actions/resolve-current-indexer-gate.yaml
-    gate:
-      id: confirm-layout-change
-      prompt: Confirm the proposed knowledge layout change or reject it with revision feedback.
-      delegatable: false
-    satisfiedBy:
-      - path: indexer_current.layout_confirmed
-        equals: true
-  - id: current-indexer-ready
-    kind: terminal
-    terminalOutcome: completed
-  - id: configure-indexer-providers
-    kind: action
-    reasonCode: route.indexer.provider-configuration
-    action: actions/configure-indexer-providers.yaml
-    resources:
-      required:
-        - resources/procedures/homogeneous-source-review.md
-        - resources/contracts/indexer-provider-guide.yaml
-      recommended:
         - resources/procedures/work-start-report.md
         - resources/templates/work-start-report.md
-  - id: resolve-current-indexer-provider
-    kind: action
-    reasonCode: route.indexer.provider-host-resolution-required
-    action: actions/resolve-current-indexer-provider.yaml
-  - id: authorize-current-indexer-provider-program
-    kind: gate
-    reasonCode: route.indexer.program-execution-authorization
-    resolutionAction: actions/authorize-current-indexer-provider-program.yaml
-    gate:
-      id: authorize-indexer-program-execution
-      prompt: Authorize the exact current Provider program for trusted non-sandboxed execution.
-      authority: context.indexer-program-execution
-      delegatable: true
-  - id: finalize-current-indexer-provider-selection
-    kind: action
-    reasonCode: route.indexer.provider-finalization-required
-    action: actions/finalize-current-indexer-provider-selection.yaml
-  - id: inspect-markdown-provider-capture
-    kind: action
-    reasonCode: route.indexer.markdown-capture-validation
-    action: actions/inspect-markdown-provider-capture.yaml
-  - id: discover-markdown-indexer-providers
-    kind: action
-    reasonCode: route.indexer.markdown-provider-discovery
-    action: actions/discover-markdown-indexer-providers.yaml
-    resources:
-      required:
-        - resources/contracts/indexer-provider-guide.yaml
-  - id: route-markdown-indexer-provider-selection
-    kind: action
-    reasonCode: route.indexer.provider-selection
-    action: actions/route-indexer-provider-selection.yaml
-  - id: configure-markdown-community-indexer-fallback
-    kind: action
-    reasonCode: route.indexer.community-fallback
-    action: actions/configure-community-indexer-fallback.yaml
-    resources:
-      required:
-        - resources/contracts/indexer-provider-guide.yaml
-  - id: route-markdown-community-indexer-fallback
-    kind: action
-    reasonCode: route.indexer.provider-selection
-    action: actions/route-indexer-provider-selection.yaml
-  - id: validate-markdown-indexer-selection-proposal
-    kind: action
-    join: any
-    reasonCode: route.indexer.selection-validation
-    action: actions/validate-indexer-selection-proposal.yaml
-  - id: validate-markdown-provider-selection
-    kind: action
-    reasonCode: route.indexer.markdown-provider-validation
-    action: actions/validate-markdown-provider-selection.yaml
-  - id: markdown-document-capture-not-current
-    kind: terminal
-    terminalOutcome: blocked
-  - id: markdown-provider-selection-current
-    kind: terminal
-    terminalOutcome: completed
-  - id: markdown-provider-host-resolution-required
-    kind: terminal
-    terminalOutcome: blocked
-  - id: markdown-provider-selection-invalid
-    kind: terminal
-    terminalOutcome: failed
-  - id: route-index-requirement-confirmation
-    kind: action
-    reasonCode: route.indexer.requirement-confirmation-routing
-    action: actions/route-index-requirement-confirmation.yaml
-  - id: confirm-index-requirements
-    kind: gate
-    reasonCode: route.indexer.requirement-confirmation
-    inspectionAction: actions/route-index-requirement-confirmation.yaml
-    resolutionAction: actions/confirm-index-requirement-workset.yaml
-    gate:
-      id: confirm-index-requirements
-      prompt: Confirm the exact current Indexer requirement workset.
-      authority: context.indexer-requirement-confirmation
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_requirements.confirmed
-        equals: true
-  - id: confirm-index-requirement-contraction
-    kind: gate
-    reasonCode: route.indexer.requirement-contraction
-    inspectionAction: actions/route-index-requirement-confirmation.yaml
-    resolutionAction: actions/confirm-index-requirement-workset.yaml
-    gate:
-      id: confirm-index-requirement-contraction
-      prompt: Confirm the exact requirement contraction or incomparable obligation replacement.
-      authority: context.indexer-requirement-contraction
-      delegatable: false
-    satisfiedBy:
-      - path: indexer_requirements.confirmed
-        equals: true
-  - id: indexer-requirements-confirmed
-    kind: terminal
-    join: any
-    terminalOutcome: completed
-  - id: route-indexer-provider-selection
-    kind: action
-    reasonCode: route.indexer.provider-selection
-    action: actions/route-indexer-provider-selection.yaml
-  - id: configure-community-indexer-fallback
-    kind: action
-    reasonCode: route.indexer.community-fallback
-    action: actions/configure-community-indexer-fallback.yaml
-    resources:
-      required:
-        - resources/contracts/indexer-provider-guide.yaml
-  - id: route-community-indexer-fallback
-    kind: action
-    reasonCode: route.indexer.provider-selection
-    action: actions/route-indexer-provider-selection.yaml
-  - id: validate-indexer-selection-proposal
-    kind: action
-    join: any
-    reasonCode: route.indexer.selection-validation
-    action: actions/validate-indexer-selection-proposal.yaml
-  - id: indexer-provider-conflict
-    kind: terminal
-    join: any
-    terminalOutcome: waiting-user
-  - id: indexer-capability-gap
-    kind: terminal
-    join: any
-    terminalOutcome: blocked
-  - id: indexer-customization-required
-    kind: terminal
-    join: any
-    terminalOutcome: blocked
-  - id: propose-indexer-customization
-    kind: action
-    join: any
-    reasonCode: route.indexer.customization-proposal
-    action: actions/propose-indexer-customization.yaml
-    resources:
-      required:
-        - resources/contracts/indexer-provider-guide.yaml
-  - id: validate-indexer-customization
-    kind: action
-    reasonCode: route.indexer.customization-validation
-    action: actions/validate-indexer-customization.yaml
-  - id: prepare-indexer-customization-project
-    kind: action
-    reasonCode: route.indexer.customization-project-preparation
-    action: actions/prepare-indexer-customization-project.yaml
-    resources:
-      required:
-        - resources/contracts/indexer-provider-guide.yaml
-  - id: indexer-customization-validation-required
-    kind: terminal
-    terminalOutcome: partial
-  - id: indexer-selection-invalid
-    kind: terminal
-    terminalOutcome: failed
-  - id: run-indexer-agent-step
-    kind: action
-    reasonCode: route.indexer.agent-step
-    action: actions/run-indexer-agent-step.yaml
-    resources:
-      required:
-        - resources/procedures/parallel-agent-batch.md
-        - resources/procedures/homogeneous-source-review.md
-        - resources/views/resolved-indexer-instructions.yaml
-        - resources/views/authorized-indexer-workset-view.yaml
-      recommended:
-        - resources/templates/indexer-agent-worker.md
-        - resources/procedures/work-start-report.md
-        - resources/templates/work-start-report.md
-  - id: propose-overlay-question-amendment
-    kind: action
-    reasonCode: route.indexer.overlay-question-proposal
-    action: actions/propose-overlay-question-amendment.yaml
-  - id: rebind-indexer-selection-to-requirement
-    kind: action
-    reasonCode: route.indexer.overlay-question-rebind
-    action: actions/rebind-indexer-selection-to-requirement.yaml
-  - id: done
-    kind: terminal
-    join: any
-    terminalOutcome: completed
-  - id: validate-indexer-contract-overlays
-    kind: action
-    reasonCode: route.indexer.contract-overlay-validation
-    action: actions/validate-indexer-contract-overlays.yaml
-  - id: contract-overlay-valid
-    kind: terminal
-    terminalOutcome: completed
-  - id: authorize-indexer-dependencies
-    kind: gate
-    reasonCode: route.indexer.dependency-authorization
-    inspectionAction: actions/inspect-indexer-dependencies.yaml
-    resolutionAction: actions/authorize-indexer-dependencies.yaml
-    gate:
-      id: authorize-indexer-dependencies
-      prompt: Authorize the exact dependency identities and locked artifacts with install scripts disabled.
-      authority: context.indexer-dependency-install
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_dependencies.authorized
-        equals: true
-  - id: dependency-authorization-done
-    kind: terminal
-    terminalOutcome: completed
-  - id: authorize-indexer-program-execution
-    kind: gate
-    reasonCode: route.indexer.program-execution-authorization
-    inspectionAction: actions/inspect-indexer-program-execution.yaml
-    resolutionAction: actions/authorize-indexer-program-execution.yaml
-    gate:
-      id: authorize-indexer-program-execution
-      prompt: Authorize the exact non-allowlisted Provider program for trusted non-sandboxed execution.
-      authority: context.indexer-program-execution
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_program_execution.authorized
-        equals: true
-  - id: program-execution-authorization-done
-    kind: terminal
-    terminalOutcome: completed
-  - id: confirm-indexer-project
-    kind: gate
-    reasonCode: route.indexer.project-confirmation
-    inspectionAction: actions/inspect-indexer-project-proposal.yaml
-    resolutionAction: actions/apply-indexer-project.yaml
-    gate:
-      id: confirm-indexer-project
-      prompt: Confirm the exact Indexer registry/customization proposal and dependency intents.
-      authority: context.indexer-project-confirmation
-      delegatable: true
-    satisfiedBy:
-      - path: indexer_project.confirmed
-        equals: true
-  - id: project-done
-    kind: terminal
-    terminalOutcome: completed
-  - id: observe-indexer-project
-    kind: action
-    reasonCode: route.indexer.project-observation
-    action: actions/observe-indexer-project.yaml
-  - id: validate-main-index-author-result
-    kind: action
-    reasonCode: route.indexer.main-run-validation
-    action: actions/validate-main-index-run.yaml
-  - id: run-indexer-post-author-composer
-    kind: action
-    reasonCode: route.indexer.post-author-agent-step
-    action: actions/run-indexer-post-author-composer.yaml
-    resources:
-      required:
-        - resources/views/resolved-indexer-instructions.yaml
-  - id: post-author-blocked
-    kind: terminal
-    join: any
-    terminalOutcome: blocked
-  - id: compile-indexer-candidates
-    kind: action
-    reasonCode: route.indexer.candidate-compile
-    action: actions/compile-indexer-candidates.yaml
-  - id: indexer-candidates-compiled
+  - id: update-structure-ready
     kind: terminal
     terminalOutcome: completed
 edges:
-  - { from: advance-current-indexer-lifecycle, to: run-current-indexer-agent }
-  - { from: run-current-indexer-agent, to: confirm-current-indexer-obsolete-scope }
-  - { from: confirm-current-indexer-obsolete-scope, to: review-current-indexer-structure, kind: gatedBy }
-  - { from: review-current-indexer-structure, to: run-current-indexer-composer, kind: gatedBy }
-  - { from: run-current-indexer-composer, to: resolve-current-indexer-block }
-  - { from: resolve-current-indexer-block, to: confirm-current-indexer-layout, kind: gatedBy }
-  - { from: confirm-current-indexer-layout, to: current-indexer-ready, kind: gatedBy }
-  - from: inspect-markdown-provider-capture
-    to: discover-markdown-indexer-providers
-    outcomes: [completed]
-  - from: inspect-markdown-provider-capture
-    to: markdown-document-capture-not-current
-    outcomes: [blocked]
-  - from: discover-markdown-indexer-providers
-    to: route-markdown-indexer-provider-selection
-    outcomes: [completed]
-  - from: route-markdown-indexer-provider-selection
-    to: validate-markdown-indexer-selection-proposal
-    outcomes: [completed]
-  - from: route-markdown-indexer-provider-selection
-    to: configure-markdown-community-indexer-fallback
-    outcomes: [partial]
-  - from: route-markdown-indexer-provider-selection
-    to: indexer-provider-conflict
-    outcomes: [waiting-user]
-  - from: route-markdown-indexer-provider-selection
-    to: indexer-customization-required
-    outcomes: [blocked]
-  - from: configure-markdown-community-indexer-fallback
-    to: route-markdown-community-indexer-fallback
-    outcomes: [completed]
-  - from: route-markdown-community-indexer-fallback
-    to: validate-markdown-indexer-selection-proposal
-    outcomes: [completed]
-  - from: route-markdown-community-indexer-fallback
-    to: indexer-provider-conflict
-    outcomes: [waiting-user]
-  - from: route-markdown-community-indexer-fallback
-    to: propose-indexer-customization
-    outcomes: [partial, blocked]
-  - from: validate-markdown-indexer-selection-proposal
-    to: validate-markdown-provider-selection
-    outcomes: [completed]
-  - from: validate-markdown-indexer-selection-proposal
-    to: markdown-provider-selection-invalid
-    outcomes: [failed]
-  - from: validate-markdown-provider-selection
-    to: markdown-provider-selection-current
-    outcomes: [completed]
-  - from: validate-markdown-provider-selection
-    to: markdown-provider-host-resolution-required
-    outcomes: [partial]
-  - from: validate-markdown-provider-selection
-    to: indexer-customization-required
-    outcomes: [blocked]
-  - from: validate-markdown-provider-selection
-    to: markdown-provider-selection-invalid
-    outcomes: [failed]
-  - from: configure-indexer-providers
-    to: route-indexer-provider-selection
-    outcomes: [completed]
-  - from: route-index-requirement-confirmation
-    to: confirm-index-requirements
-    outcomes: [waiting-user]
-  - from: route-index-requirement-confirmation
-    to: confirm-index-requirement-contraction
-    outcomes: [blocked]
-  - from: confirm-index-requirements
-    to: indexer-requirements-confirmed
-    outcomes: [completed]
-  - from: confirm-index-requirement-contraction
-    to: indexer-requirements-confirmed
-    outcomes: [completed]
-  - from: route-indexer-provider-selection
-    to: validate-indexer-selection-proposal
-    outcomes: [completed]
-  - from: route-indexer-provider-selection
-    to: configure-community-indexer-fallback
-    outcomes: [partial]
-  - from: route-indexer-provider-selection
-    to: indexer-provider-conflict
-    outcomes: [waiting-user]
-  - from: route-indexer-provider-selection
-    to: indexer-customization-required
-    outcomes: [blocked]
-  - from: configure-community-indexer-fallback
-    to: route-community-indexer-fallback
-    outcomes: [completed]
-  - from: route-community-indexer-fallback
-    to: validate-indexer-selection-proposal
-    outcomes: [completed]
-  - from: route-community-indexer-fallback
-    to: indexer-provider-conflict
-    outcomes: [waiting-user]
-  - from: route-community-indexer-fallback
-    to: propose-indexer-customization
-    outcomes: [partial, blocked]
-  - from: propose-indexer-customization
-    to: validate-indexer-customization
-    outcomes: [completed]
-  - from: propose-indexer-customization
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: validate-indexer-customization
-    to: prepare-indexer-customization-project
-    outcomes: [completed]
-  - from: prepare-indexer-customization-project
-    to: confirm-indexer-project
-    outcomes: [completed]
-  - from: prepare-indexer-customization-project
-    to: authorize-indexer-dependencies
-    outcomes: [partial]
-  - from: prepare-indexer-customization-project
-    to: authorize-indexer-program-execution
-    outcomes: [waiting-user]
-  - from: prepare-indexer-customization-project
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: validate-indexer-customization
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: validate-indexer-selection-proposal
-    to: done
-    outcomes: [completed]
-  - from: validate-indexer-selection-proposal
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: run-indexer-agent-step
-    to: done
-    outcomes: [completed]
-  - from: propose-overlay-question-amendment
-    to: done
-    outcomes: [completed]
-  - from: rebind-indexer-selection-to-requirement
-    to: done
-    outcomes: [completed]
-  - from: validate-indexer-contract-overlays
-    to: contract-overlay-valid
-    outcomes: [completed]
-  - from: authorize-indexer-dependencies
-    to: prepare-indexer-customization-project
-    kind: repeat
-    outcomes: [completed]
-  - from: authorize-indexer-dependencies
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: authorize-indexer-program-execution
-    to: prepare-indexer-customization-project
-    kind: repeat
-    outcomes: [completed]
-  - from: authorize-indexer-program-execution
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: confirm-indexer-project
-    to: observe-indexer-project
-    outcomes: [completed]
-  - from: confirm-indexer-project
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: observe-indexer-project
-    to: validate-indexer-selection-proposal
-    outcomes: [completed]
-  - from: observe-indexer-project
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: validate-main-index-author-result
-    to: done
-    outcomes: [completed]
-  - from: validate-main-index-author-result
-    to: indexer-selection-invalid
-    outcomes: [failed]
-  - from: run-indexer-post-author-composer
-    to: done
-    outcomes: [completed]
-  - from: run-indexer-post-author-composer
-    to: post-author-blocked
-    outcomes: [failed]
-  - from: compile-indexer-candidates
-    to: indexer-candidates-compiled
-    outcomes: [completed]
+  - from: configure-production-requirements
+    to: prepare-production-planning
+  - from: prepare-production-planning
+    to: plan-production-stage
+  - from: plan-production-stage
+    to: production-planning-ready
+  - from: confirm-production-report
+    to: prepare-production-stage
+    kind: gatedBy
+  - from: prepare-production-stage
+    to: work-production-stage
+  - from: work-production-stage
+    to: continue-production-investigation
+  - from: continue-production-investigation
+    to: resolve-production-gap
+  - from: resolve-production-gap
+    to: repair-production-articles
+    kind: gatedBy
+  - from: repair-production-articles
+    to: production-ready
+  - from: review-current-indexer-structure
+    to: update-structure-ready
+    kind: gatedBy

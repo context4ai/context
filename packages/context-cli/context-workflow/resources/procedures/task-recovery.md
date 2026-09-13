@@ -21,28 +21,23 @@ its progress is changing. Never start a competing writer or delete a writer lock
   the recorded effect, then apply its digest when completion of those writes is
   authorized. This finishes prior writes and may touch approved knowledge; it is
   not draft rollback. Invalid journals or unclear ownership require escalation.
-- Failed Author work: preview `task recover --operation author --workset <digest...>
-  --instruction <concrete correction> --format json`. Explicit article dependencies
-  can expand the affected worksets. Read the entire affected scope before applying.
-- Restore the active accepted planning baseline: use `--operation plan` with the
-  same selection/instruction arguments. The checkpoint contains references to the
-  already stored immutable requests, not copies of all source or parser data. It
-  is available only after structure acceptance and is removed by lifecycle cleanup.
-  A changed registered source/configuration/approved-knowledge baseline prevents
-  restoration; use normal revision or replan instead. It does not recover deleted
-  runtime data from Git or choose arbitrary historical versions.
+- Failed writing: repair the reported article or fragment in the current stage
+  directory and resubmit its files. Accepted peers remain valid. If the selected
+  article has already been accepted, use its ordinary `context revise` action.
+- Changed materials or plan: use the current preparation or plan-amendment route.
+  There is no separate workset/accepted-plan restoration operation. If temporary
+  state has been removed, begin a new production run from formal content and
+  long-term requirements; do not reconstruct old candidates or process state.
 
-The preview lists affected worksets and discarded candidates. Within an explicit
-repair task or delegated authorization covering those unfinished drafts, explain
-that scope and apply without another ritual approval. Obtain a decision only if
-the expanded scope discards work outside that authorization. Never treat a digest
-as permission to undo published knowledge. CLI validates mechanical identities,
+The transaction preview lists affected files and previously started writes.
+Complete them only within existing authorization. Never treat a digest as
+permission to undo published knowledge. CLI checks current task identities,
 references and transaction consistency; the Agent diagnoses prose and planning.
 
-A repair changes request identities, archives replaced local draft/projection state,
-and preserves approved pages, menu, sources and existing packages. Read the fresh
-Route after success; do not reuse old task keys/results. Unrelated accepted results
-stay valid. Rebuilding whole-batch projections is not re-authoring their content.
+A task refresh may change its input identity; use the refreshed files and receipt.
+Ordinary failed-draft repair retains the task when its inputs are unchanged.
+Approved pages, navigation, sources and existing packages are not discarded by
+inspection. Unrelated accepted results stay valid.
 Do not silently exclude a failing module, weaken evidence or mark unfinished work
 complete to escape an error.
 
@@ -50,7 +45,7 @@ complete to escape an error.
 
 If the same cause persists after a correction without new evidence, do not repeat
 the same operation. Try a different supported recovery only when its prerequisites
-and effect justify it. If the ledger/checkpoint is unreadable, ownership cannot be
+and effect justify it. If the current stage is unreadable, ownership cannot be
 established, the baseline changed, or a CLI defect prevents safe recovery, retain
 current work and write `issue/YYYY-MM-DD-short-description.md` using
 [the issue template](../templates/recovery-issue.md). Use the user's local date and

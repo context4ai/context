@@ -62,15 +62,10 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
               : {}),
           },
         }),
-    ...(status.workflow.current?.delivery ? { delivery: status.workflow.current.delivery } : {}),
     progress: {
       pendingCapturePhases: status.pendingCapturePhases.length,
       indexerRegistry: status.indexerRegistry.state,
       indexerCandidateCompile: status.indexerCandidateCompile.state,
-      legacyCodeIndexMigrationRequired: status.codeIndexMigrationRequired,
-      ...(status.indexerProgress === undefined
-        ? {}
-        : { indexer: status.indexerProgress }),
     },
     delivery_status: {
       approved_pages: status.approvedPages,

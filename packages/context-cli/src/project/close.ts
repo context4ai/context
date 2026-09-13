@@ -1,6 +1,7 @@
 import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
-import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
+import { closeRevisionDelivery, readRevisionDelivery } from "./revisionDelivery.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -153,8 +154,8 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
       ? parsed as Record<string, unknown>
       : {};
     const recorded = record.input_hash;
-    const delivery = await readIndexerDelivery(projectRoot);
-    const deliveryNeedsClose = ((delivery?.current.length ?? 0) > 0 || delivery?.partial !== undefined) && delivery?.closed !== true;
+    const delivery = await readProductionStage(projectRoot) ? undefined : await readRevisionDelivery(projectRoot);
+    const deliveryNeedsClose = delivery !== undefined && delivery.closed !== true;
     return recorded === inputHash && !deliveryNeedsClose
       ? { state: "ready", inputHash, diagnostics: [] }
       : { state: "stale", inputHash, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
@@ -173,7 +174,8 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     const draftCandidates = candidates.filter((candidate) =>
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
-    const delivery = await readIndexerDelivery(projectRoot);
+    const production = await readProductionStage(projectRoot);
+    const delivery = production ? undefined : await readRevisionDelivery(projectRoot);
     if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
     else await assertRequiredArticlesReviewed(projectRoot, candidates);
     if (draftCandidates.length > 0 && !delivery?.partial) {
@@ -209,7 +211,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
     const { readTaskRollback } = await import("./taskRollback.js");
-    if (!await readTaskRollback(projectRoot)) await closeIndexerDelivery(projectRoot);
+    if (!production && !await readTaskRollback(projectRoot)) await closeRevisionDelivery(projectRoot);
     return {
       action: "closed",
       projectRoot,

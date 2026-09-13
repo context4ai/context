@@ -1,71 +1,9 @@
-import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { indexerArticleSectionKey, indexerTemplateContractSchema, articleFragmentReferences, type ArticleSourceReference, type IndexerTemplateContract,
-  type IndexerArtifactResult } from "@c4a/context";
-import { loadIndexerCustomization } from "./indexerCustomization.js";
-import type { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
-import { parseSectionBodies, splitFrontmatter, validateTemplateBody } from "./indexerTemplateRendering.js";
+import { indexerArticleSectionKey, articleFragmentReferences, type ArticleSourceReference, type IndexerTemplateContract, type IndexerArtifactResult } from "@c4a/context";
 import { renderIndexerTemplateSectionLayers } from "./indexerTemplateContentLayers.js";
 
 export interface IndexerPageTemplate {
   contract: IndexerTemplateContract;
   section_bodies: Record<string, string>;
-}
-
-async function loadSelectedPageSource(input: {
-  projectRoot: string;
-  authority: Awaited<ReturnType<typeof resolveCurrentProjectIndexerPrimaryAuthority>>;
-  templateId?: string | undefined;
-}) {
-  if (input.templateId === undefined) return undefined;
-  const { authority } = input;
-  const template = authority.manifest.provider.templates?.find((item) =>
-    item.id === input.templateId && item.profile === authority.profile.id);
-  if (template === undefined) throw new TypeError(`selected page template is unavailable: ${input.templateId}`);
-  const customization = await loadIndexerCustomization({ workspaceRoot: input.projectRoot,
-    projectRef: input.projectRoot, indexer: authority.indexer, manifest: authority.manifest,
-    providerIntegrity: authority.provider.integrity });
-  const override = customization.files.find((item) => item.capability === "template-override" &&
-    item.origin.profile === authority.profile.id && item.path === `templates/${template.id}.md`);
-  const path = override === undefined ? join(authority.bundle_root, template.path)
-    : join(input.projectRoot, "src", "indexer", authority.indexer.id, override.path);
-  const raw = await readFile(path, "utf8");
-  const source = override === undefined ? raw : raw.replace(/^[^\n]*(?:\n|$)/u, "");
-  const parsed = splitFrontmatter(source);
-  return { template, authority, parsed };
-}
-
-export async function loadSelectedArticleGuidance(input: Parameters<typeof loadSelectedPageSource>[0]) {
-  const source = await loadSelectedPageSource(input);
-  if (source === undefined) return undefined;
-  if (source.template.guidance_path !== undefined) {
-    const raw = await readFile(join(source.authority.bundle_root, source.template.guidance_path), "utf8");
-    return { template_id: source.template.id, content: splitFrontmatter(raw).body };
-  }
-  if ((source.parsed.metadata as { kind?: unknown })?.kind !== "procedure") return undefined;
-  return { template_id: source.template.id, content: source.parsed.body };
-}
-
-export async function loadSelectedPageTemplate(input: Parameters<typeof loadSelectedPageSource>[0]): Promise<IndexerPageTemplate | undefined> {
-  const source = await loadSelectedPageSource(input);
-  if (source === undefined) return undefined;
-  const { template, authority, parsed } = source;
-  const shared = template.kind === "page-program" ? expandArticleBlueprint(parsed.metadata, template) : undefined;
-  if (shared !== undefined) return shared;
-  // Procedure resources guide prose; executable resources additionally render
-  // fields. Keep that distinction explicit in the current Provider catalog.
-  if ((parsed.metadata as { kind?: unknown })?.kind === "procedure") return undefined;
-  const contract = indexerTemplateContractSchema.parse(parsed.metadata);
-  if (contract.template_id !== template.id || contract.profile !== authority.profile.id) {
-    throw new TypeError("selected template program has a mismatched identity");
-  }
-  if (template.reader_goal !== undefined && template.reader_goal !== contract.reader_goal) {
-    throw new TypeError("selected template program differs from its registered reader goal");
-  }
-  const section_bodies = parseSectionBodies(parsed.body);
-  validateTemplateBody(contract, section_bodies);
-  return { contract, section_bodies };
 }
 
 /** Templates format explicit writing slots. Missing slots preserve authored

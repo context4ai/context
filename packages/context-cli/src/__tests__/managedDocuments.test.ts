@@ -184,10 +184,11 @@ for (const type of ["note", "sessions"] as const) {
       expect(selected.sourceCount).toBe(1);
       expect(selected.documentSources.map((source) => source.name)).toEqual([name]);
       expect(selected.workflow.current).toMatchObject({
-        node: "run-indexer-lifecycle", configuration: { file: "src/indexers.yaml" },
+        node: "configure-production-requirements", configuration: { file: "src/indexers.yaml" },
       });
       expect(selected.workflow.current?.resources.required.map((resource) => resource.id))
-        .toEqual(expect.arrayContaining(["context.indexer.provider-guide", "context.indexer.registry-bootstrap"]));
+        .toEqual(expect.arrayContaining(["procedure.production-requirements", "context.source-boundary"]));
+      expect(selected.workflow.current?.commands).toEqual([]);
     }
     await writeFile(join(root, "src/index.ts"), `import { defineProject, allSources } from "@c4a/context";\nexport default defineProject({ sources: allSources(${JSON.stringify(type)}), phases: [], packages: [] });\n`);
     expect((await collectProjectStatus(root)).sourceCount).toBe(2);

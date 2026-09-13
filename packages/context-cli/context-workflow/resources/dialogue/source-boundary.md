@@ -6,13 +6,11 @@ mediaType: text/markdown
 
 # Source-boundary dialogue
 
-For the first production task in a new workspace, use the required work-start
-procedure before presenting this source registration action. Read a supplied
-plan as task guidance, read batch metadata titles under that procedure's limits and
-10-document failure fallback (no bodies or outlines; retain URLs when titles are unavailable),
-resolve every required start condition, present the report and wait for feedback.
-Do not register the plan itself or begin capture merely because it contains source
-paths. Once confirmed, include the report path required by the current input schema.
+Confirm the reader purpose and source boundary, reusing explicit choices already
+provided by the user. Read a supplied plan as task guidance, not automatically as
+source material. Register and capture confirmed sources for lightweight
+investigation; the work-start report follows planning and must receive feedback
+before bulk writing. Source registration carries no report path or digest.
 
 Describe the boundary in user terms before showing a registration command. For
 code, distinguish a whole repository/subspace from one concrete package or

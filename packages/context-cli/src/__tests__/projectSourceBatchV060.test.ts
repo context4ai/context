@@ -42,7 +42,7 @@ async function createMonorepo(root: string): Promise<{ root: string; head: strin
 }
 
 describe("0.6.0 source registration concurrency and batch input", () => {
-  test("requires a presented work-start report for Route-bound first source registration", async () => {
+  test("registers the authorized source boundary before the planning report without report credentials", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-source-batch-work-start-"));
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "context", dev: true });
@@ -54,21 +54,6 @@ describe("0.6.0 source registration concurrency and batch input", () => {
       const revision = status.workflow.current?.revision;
       expect(revision).toBeDefined();
 
-      const missing = await invokeCliInDir(initialized.projectRoot, [
-        "--workflow-revision", revision!, "source", "add", "batch", "20260712",
-        "--input", inputPath, "--format", "json",
-      ]);
-      expect(missing.status).not.toBe(0);
-      expect(missing.stderr).toContain("requires work_start_report");
-
-      await mkdir(join(initialized.projectRoot, ".tmp"), { recursive: true });
-      await writeFile(join(initialized.projectRoot, ".tmp", "work-start-report.md"),
-        "# Work-start report\n\nAll required start conditions were resolved and presented.\n", "utf8");
-      await writeFile(inputPath, YAML.stringify({
-        work_start_report: { path: ".tmp/work-start-report.md" },
-        sources: [{ type: "lark", wikiToken: "wiki-secret-token", title: "User Manual" }],
-      }), "utf8");
-
       const registered = await invokeCliInDir(initialized.projectRoot, [
         "--workflow-revision", revision!, "source", "add", "batch", "20260712",
         "--input", inputPath, "--format", "json",
@@ -76,11 +61,9 @@ describe("0.6.0 source registration concurrency and batch input", () => {
       expect(registered.status).toBe(0);
       expect(JSON.parse(registered.stdout)).toMatchObject({
         kind: "source.registration.batch",
-        work_start_report: {
-          path: ".tmp/work-start-report.md",
-          digest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
-        },
+        total: 1,
       });
+      expect(JSON.parse(registered.stdout)).not.toHaveProperty("work_start_report");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

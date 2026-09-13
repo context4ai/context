@@ -37,7 +37,7 @@ that limitation behind a change URL.
 
 ## Diagrams
 
-Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to older templates, source diagrams and Composer summaries. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
+Use the materialized [diagram guidance](diagrams.md) when a diagram clarifies the reader task. This also applies to source diagrams and combined articles. Preserve source strength, version and external boundaries; diagram presence is not a completion requirement.
 
 ## Existing source images and tables
 
@@ -45,4 +45,8 @@ For authorized visual material, follow [source visual processing](visual-source-
 
 ## Reading selected article material
 
-Use the current task's combined writing brief: it includes selected article guidance, examples when supplied, and section/variable slots. Profile bindings can share one article Markdown source; do not open every binding or regenerate every listed article. Keep short collaboration notes and examples beside the relevant guidance instead of requesting separate files. Read extra source or full technical contracts only when this task needs them. The CLI checks source authorization, regional references and safe writes; the Agent decides applicability, substance and useful diagrams. Reuse an already-read unchanged shared resource while it remains in context.
+Read the current task's brief and source navigation; choose relevant examples
+and source passages rather than enumerating profile bindings. For a revision,
+use the supplied base article and references. Reuse unchanged shared material
+already in context. The CLI checks source authorization, regional references
+and safe writes; the Agent decides the topic, meaning and useful diagrams.

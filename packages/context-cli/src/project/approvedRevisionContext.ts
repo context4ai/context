@@ -1,37 +1,20 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readProductionRequirements } from "./productionRequirements.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest, type ArticleStructureEntry } from "@c4a/context";
-import { loadIndexerCustomization } from "./indexerCustomization.js";
-import { resolveCurrentProjectIndexerPrimaryAuthority } from "./indexerCurrentPrimaryAuthority.js";
-import { currentCliInstructionDescriptors } from "./indexerCurrentInstructionMaterialization.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 
 /** Resolve current selected writing resources even for an explicit page revise
  * with no source-update request. No Parser or remote acquisition runs here. */
 export async function approvedRevisionContext(root: string, target: { source_refs: string[]; markdown: string; sections: ArticleStructureEntry["sections"] }) {
-  const { registry } = await loadIndexerRegistry(root);
+  const registry = await readProductionRequirements(root);
   const requirements = registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
     target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
-  const ids = new Set(requirements.map((item) => item.id));
-  const indexers = registry.indexers.filter((indexer) => indexer.requirement_bindings.some((binding) => ids.has(binding.requirement_ref) && binding.role === "primary"));
-  const providers = [];
-  for (const indexer of indexers) {
-    const authority = await resolveCurrentProjectIndexerPrimaryAuthority({ projectRoot: root, registry, indexer_id: indexer.id });
-    const customization = await loadIndexerCustomization({ workspaceRoot: root, projectRef: root,
-      indexer, manifest: authority.manifest, providerIntegrity: authority.provider.integrity });
-    const resources = [];
-    for (const resource of currentCliInstructionDescriptors({ authority, customization, composerId: null })) {
-      const path = resource.location === "workspace"
-        ? join(root, "src/indexer", indexer.id, resource.path)
-        : join(resource.bundle_root!, resource.path);
-      resources.push({ provider: resource.provider_id, path, digest: resource.digest,
-        content: await readFile(path, "utf8") });
-    }
-    providers.push({ indexer_id: indexer.id, profile: indexer.profile, provider: authority.provider,
-      reader_profile: authority.profile, resources,
-      customization });
-  }
+  // Planning guidance is useful within this run, not permanent production provenance.
+  // A new run does not recover skills from the formal article.
+  const stage = await readProductionStage(root);
+  const indexerUsage = stage?.indexer_usage.filter(usage =>
+    usage.scopes.some(scope => target.source_refs.includes(scope))) ?? [];
   const sources = await Promise.all([...new Set(target.source_refs.map((ref) => ref.split("#")[0]!))]
     .filter((ref) => /^(note|sessions):/u.test(ref)).map(async (source_ref) => {
       const separator = source_ref.indexOf(":");
@@ -43,7 +26,7 @@ export async function approvedRevisionContext(root: string, target: { source_ref
       return { source_ref, path, digest: indexerProtocolDigest(markdown),
         ...(changes === undefined ? {} : { changes }) };
     }));
-  return { requirements, providers, sources,
+  return { requirements, indexer_usage: indexerUsage, sources,
     current_sections: approvedContextSectionsInMarkdown(target.markdown).map((section) => ({
       id: section.id, references: target.sections.find(item => item.id === section.id)?.references ?? [], markdown: section.readerVisibleBody,
     })) };

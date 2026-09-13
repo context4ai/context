@@ -1,4 +1,7 @@
 import { readKnowledgeMap } from "./knowledgeMap.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { assertProductionDeliveryReady, finishProductionDelivery } from "./productionDelivery.js";
+import { withProjectWriteLock } from "./writeLock.js";
 import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
 import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
@@ -7,9 +10,8 @@ import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
 import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
 import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
 import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
-import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
-import { completeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
+import { completeRevisionDelivery, readRevisionDelivery } from "./revisionDelivery.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -26,7 +28,6 @@ import {
   type RuntimeEventPendingAgentHint,
 } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
-import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 import {
   packageBuildInventory,
   packageScopedKnowledgeStructure,
@@ -434,27 +435,17 @@ export async function collectPackageFreshness(
 }
 
 export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
-  try {
+  return withProjectWriteLock(projectRoot, "build-packages", async () => {
+    const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery;
+    if (partial) await assertProductionDeliveryReady(projectRoot);
     const result = await buildProjectPackagesInternal(projectRoot, options);
     await recordWorkspaceBuild(projectRoot);
+    if (partial) await finishProductionDelivery(projectRoot);
     return result;
-  }
-  catch (error) {
-    if (options.delivery !== false && (await readIndexerDelivery(projectRoot))?.current.length) {
-      await interruptDeliveryCadence(projectRoot);
-    }
-    throw error;
-  }
+  });
 }
 
 async function buildProjectPackagesInternal(projectRoot: string, options: { delivery?: boolean }): Promise<ProjectBuildResult> {
-  if (await legacyCodeIndexMigrationRequired(projectRoot)) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      reason_code: "package/codeindex-migration-required",
-      next: "Run context status --format json and execute the Route-returned context migrate codeindex command.",
-    });
-  }
   const loaded = await loadContextProjectModule(projectRoot);
   const packages = loaded.project.packages;
   assertDistinctPackageOutputs(packages);
@@ -659,13 +650,13 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     const { readTaskRollback } = await import("./taskRollback.js");
     const { readMaintenance } = await import("./maintenanceStorage.js");
     const maintenanceActive = !!(await readMaintenance(projectRoot)).active;
-    if ((!maintenanceActive || (await readIndexerDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+    const production = await readProductionStage(projectRoot);
+    if (!production && (!maintenanceActive || (await readRevisionDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeRevisionDelivery(projectRoot);
     const { finishApprovedRevision } = await import("./approvedRevision.js");
     await finishApprovedRevision(projectRoot);
-    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
     const { readApprovedRevision } = await import("./approvedRevision.js");
     const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
-    if (!maintenanceActive && !await readTaskRollback(projectRoot) && !await currentLedger(projectRoot) && !await readApprovedRevision(projectRoot) &&
+    if (!production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
         !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(projectRoot);

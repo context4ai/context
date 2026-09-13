@@ -11,6 +11,10 @@ test("cleanup failure retains the current task pointer until retry removes all a
   await mkdir(review, { recursive: true });
   await mkdir(join(current, ".."), { recursive: true });
   await writeFile(current, '{"task":"current"}\n');
+  const retired = join(root, ".tmp/context-runtime/indexer/main-index");
+  await mkdir(retired, { recursive: true });
+  await writeFile(join(retired, "current.json"), "invalid retired run state");
+  await writeFile(join(root, ".tmp/context-runtime/indexer/partition-stream.json"), "invalid retired partition state");
   await writeFile(join(review, "decision.json"), "{}");
   await chmod(review, 0o500);
   try {

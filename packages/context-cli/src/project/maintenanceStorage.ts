@@ -4,6 +4,7 @@ import { z } from "zod";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 
 export const MAINTENANCE_ROOT = join(".tmp", "context-runtime", "maintenance");
+export const APPROVED_REVISION_PATH = join(".tmp", "context-runtime", "revision", "current.json");
 const targetSchema = z.object({ path: z.string().min(1), instruction: z.string().trim().min(1) }).strict();
 export const maintenanceInputSchema = z.object({
   id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$/u),
@@ -31,10 +32,10 @@ export async function readMaintenance(root: string): Promise<MaintenanceState> {
 export function saveMaintenance(root: string, state: MaintenanceState) {
   return atomicWriteFile(join(root, MAINTENANCE_ROOT, "current.json"), `${JSON.stringify(stateSchema.parse(state))}\n`);
 }
-/** Existing local updates keep their compatible path; an in-flight maintenance
- * batch has its own compile pointer and never replaces the production one. */
+/** Page revisions and source updates have their own temporary pointer. They
+ * never interpret a retired Indexer compile container as a revision request. */
 export async function revisionStoragePath(root: string): Promise<string> {
   return (await readMaintenance(root)).active
     ? join(MAINTENANCE_ROOT, "revision.json")
-    : join(".tmp", "context-runtime", "indexer", "candidate-compile", "current.json");
+    : APPROVED_REVISION_PATH;
 }

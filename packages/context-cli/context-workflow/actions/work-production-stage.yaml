@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: work-production-stage
+runner: agent
+effect: write
+skill: skills/work-production-stage/SKILL.md

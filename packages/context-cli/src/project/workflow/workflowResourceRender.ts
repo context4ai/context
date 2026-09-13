@@ -63,7 +63,6 @@ ${currentRoute(status)}
 - Pending capture phases: ${status.pendingCapturePhases.length}
 - Indexer registry: ${inline(status.indexerRegistry.state)}
 - Indexer Candidate compile: ${inline(status.indexerCandidateCompile.state)}
-- Legacy code-index migration: ${inline(status.codeIndexMigrationRequired ? "required" : "not-required")}
 - Close projection: ${inline(status.close.state)}
 
 ## Diagnostics

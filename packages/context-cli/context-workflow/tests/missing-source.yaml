@@ -27,8 +27,6 @@ expect:
     - dialogue.source-boundary
     - dialogue.workflow-mode-after-creation
     - context.source-current
-    - procedure.work-start-report
-    - template.work-start-report
   gateResolution: user
   resolutionCommand: context source add batch --input .tmp/agent-payloads/source-batch.json --format json
   resolutionInputSchema: schema.register-source-batch.input

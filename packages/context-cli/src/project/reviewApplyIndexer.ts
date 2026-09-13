@@ -28,7 +28,8 @@ export function renderApprovedIndexerMarkdown(input: {
     const content = compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(input.record.body));
     return content.replace(/^---\r?\n([\s\S]*?)\r?\n---/u, (_match, header: string) => {
       const metadata = YAML.parse(header) as Record<string, unknown>;
-      return ["---", YAML.stringify({ ...metadata, timestamp: input.timestamp }).trimEnd(), "---"].join("\n");
+      return ["---", YAML.stringify({ ...metadata, type: metadata.type ?? okfTypeForCollection(input.record.collection),
+        timestamp: input.timestamp }).trimEnd(), "---"].join("\n");
     });
   }
   const binding = input.record.indexer_candidate;

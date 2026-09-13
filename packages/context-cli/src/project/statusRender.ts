@@ -60,7 +60,6 @@ export function formatProjectStatus(status: ProjectStatus): string {
       `- pending capture phases: ${status.pendingCapturePhases.length}`,
       `- indexer registry: ${status.indexerRegistry.state}`,
       `- indexer candidate compile: ${status.indexerCandidateCompile.state}`,
-      `- legacy code-index migration: ${status.codeIndexMigrationRequired ? "required" : "not-required"}`,
       `- close: ${status.close.state}`,
       `- evidence status: ${status.evidenceStatus}`,
       `- evidence warning: ${status.evidenceWarnings}`,

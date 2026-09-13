@@ -1,7 +1,9 @@
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
-import { readPartitionStream } from "./indexerPartitionStream.js";
+import { productionRequirementsAreCurrent } from "./productionPlanning.js";
 import { readTaskPreparation } from "./taskResumption.js";
-import { readIndexerDelivery } from "./indexerDelivery.js";
+import { readApprovedRevision } from "./approvedRevision.js";
+import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
+import { observeApprovedRevisionBatch } from "./approvedRevisionBatch.js";
+import { readRevisionDelivery } from "./revisionDelivery.js";
 import { assertPreparationComplete } from "./workspacePreparation.js";
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
@@ -39,14 +41,13 @@ import {
 } from "./debugTrace.js";
 import { observeContextRuntimeEventDelivery } from "../runtimeEvents.js";
 import { inspectWorkspaceVersion } from "./workspaceChangelog.js";
-import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
-import { readProjectIndexerCandidateCompileStatus } from "./indexerCandidateCompileActions.js";
 import {
   pendingDocumentCaptureCommands,
-  readIndexerWorkflowRegistryStatus,
 } from "./statusRouting.js";
 import { projectCurrentIndexerWorkflowRoute } from "./indexerCurrentWorkflowRoute.js";
-import { currentIndexerProgress } from "./indexerCurrentProgress.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
+import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 
 export {
   pendingDocumentCaptureCommands,
@@ -159,40 +160,50 @@ async function collectProjectStatusSnapshotInternal(
   const evidenceStatus = evidenceStatusForStatus({ verifyErrors, verifyWarnings });
   const evidenceWarnings = evidenceWarningState(verifyStatus.issues);
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
-  const indexerRegistry = await readIndexerWorkflowRegistryStatus(projectRoot);
-  const { planManagedSourceKnowledgeUpdate } = await import("./managedSourceKnowledgeUpdate.js");
-  const managedSourceUpdatePending = phaseStatus.projectEntryValid && indexerRegistry.state === "current" &&
-    (await planManagedSourceKnowledgeUpdate(projectRoot)).length > 0;
-  const indexerCandidateCompile = await readProjectIndexerCandidateCompileStatus(projectRoot);
-  const indexerDelivery = await readIndexerDelivery(projectRoot);
-  const indexerDrafts = indexerCandidateCompile.state === "current"
-    ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "draft")
-    : [];
-  const indexerRejected = indexerCandidateCompile.state === "current"
-    ? indexerCandidateCompile.candidates.filter((candidate) => candidate.status === "rejected")
-    : [];
+  const production = await readProductionStage(projectRoot);
+  // There is only one production protocol. Missing current state never
+  // falls back to a Provider registry or a retired production ledger.
+  const indexerRegistry: ContextWorkflowObservation["indexerRegistry"] = { state: "missing", sourceRefs: [] };
+  const localRevision = await readApprovedRevision(projectRoot);
+  const localUpdate = localRevision ? undefined : await readKnowledgeUpdate(projectRoot);
+  const { readTaskRollback } = await import("./taskRollback.js");
+  const localRollback = await readTaskRollback(projectRoot);
+  const indexerCandidateCompile: {
+    state: "missing" | "current" | "stale" | "invalid";
+    candidates: CandidateRecord[];
+    rollback_pending?: boolean;
+    revision_pending?: boolean;
+    diagnostic?: string;
+  } = localRevision
+    ? await observeApprovedRevisionBatch(projectRoot, localRevision)
+    : localRollback ? { state: "current", candidates: [], rollback_pending: true }
+    : localUpdate ? { state: "missing", candidates: [], revision_pending: true }
+    : { state: "missing", candidates: [] };
+  const productionCandidates = await readCandidateRecords(projectRoot);
+  // Revision delivery remains a temporary checkpoint even with the new
+  // requirements protocol. It must not be hidden by the absence of a stage.
+  const indexerDelivery = production || !localRevision
+    ? undefined : await readRevisionDelivery(projectRoot);
+  const indexerDrafts = productionCandidates.filter(candidate => candidate.status === "draft");
+  const indexerRejected = productionCandidates.filter(candidate => candidate.status === "rejected");
   const draftCollections = [...new Set(indexerDrafts.map((candidate) => candidate.collection))].sort();
-  const codeIndexMigrationRequired = phaseStatus.projectEntryValid
-    ? await legacyCodeIndexMigrationRequired(projectRoot)
-    : false;
   const { readMaintenance } = await import("./maintenanceStorage.js");
   const maintenance = (await readMaintenance(projectRoot)).active;
   // Output-only maintenance owns this evaluation; an unfinished production
   // ledger must not hide package configuration/Review recovery gates.
   const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
     (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
-  const taskPreparation = await readTaskPreparation(projectRoot);
-  const taskLedger = await currentLedger(projectRoot);
-  const partitionStream = await readPartitionStream(projectRoot);
-  // A settled planning ledger can still contain themes not selected for this
-  // Author wave. Only the stream's final-wave receipt closes that remainder.
-  const unfinishedIndexerTasks = (partitionStream !== undefined && partitionStream.final_wave !== true) ||
-    [taskLedger, partitionStream?.partition_ledger].some(ledger =>
-      ledger?.entries.some(entry => entry.state !== "accepted"));
+  // An explicitly prepared revision/update is a new task, not a request to
+  // restore the production that previously cleared its temporary workspace.
+  const taskPreparation = localRevision || localUpdate ? undefined : await readTaskPreparation(projectRoot);
   const observation: ContextWorkflowObservation = {
     versionCurrent: phaseStatus.projectEntryValid ? (await inspectWorkspaceVersion(projectRoot)).current : false,
     taskPreparation,
-    unfinishedIndexerTasks,
+    localRevisionActive: !!localRevision || !!localUpdate,
+    unfinishedIndexerTasks: false,
+    ...(production ? { productionState: await productionRequirementsAreCurrent(projectRoot, production)
+      ? dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state : "active" as const,
+      productionDelivery: !!production.delivery && await productionRequirementsAreCurrent(projectRoot, production) } : {}),
     projectRoot,
     projectEntryValid: phaseStatus.projectEntryValid,
     stateDiagnostics: [
@@ -230,9 +241,8 @@ async function collectProjectStatusSnapshotInternal(
     close: closeStatus,
     indexerRegistry,
     indexerCandidateCompile: { partial_delivery: indexerDelivery?.partial !== undefined, state: maintenanceOutputOnly ? "current" : indexerCandidateCompile.state,
-      delivery_ready: !maintenanceOutputOnly && (indexerDelivery?.current.length ?? 0) > 0,
+      delivery_ready: !maintenanceOutputOnly && indexerDelivery?.partial !== undefined,
       maintenance_output_only: maintenanceOutputOnly,
-      managed_source_pending: !maintenanceOutputOnly && managedSourceUpdatePending,
       ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
       ...(!maintenanceOutputOnly && indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
       ...(maintenanceOutputOnly || indexerDelivery === undefined ? {} : { delivery_pending: true }) },
@@ -260,11 +270,9 @@ async function collectProjectStatusSnapshotInternal(
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
     ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
+    ...(currentRoute?.reason_code.startsWith("route.production.") ? { status: currentRoute.availability === "requires-user"
+      ? "waiting-user" as const : currentRoute.availability === "blocked" ? "blocked" as const : "actionable" as const } : {}),
   };
-  const indexerProgress = await currentIndexerProgress({
-    projectRoot,
-    ...(currentRoute === undefined ? {} : { route: currentRoute }),
-  });
   await recordWorkflowEvaluation(projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({
     workflow,
@@ -298,13 +306,11 @@ async function collectProjectStatusSnapshotInternal(
     evidenceStatus,
     evidenceWarnings,
     close: closeStatus,
-    codeIndexMigrationRequired,
     indexerRegistry: { state: indexerRegistry.state },
     indexerCandidateCompile: { state: indexerCandidateCompile.state,
       ...(indexerCandidateCompile.rollback_pending ? { rollback_pending: true } : {}),
       ...(indexerCandidateCompile.revision_pending ? { revision_pending: true } : {}),
       ...(indexerDelivery === undefined ? {} : { delivery_pending: true }) },
-    ...(indexerProgress === undefined ? {} : { indexerProgress }),
     packageCount: packages.length,
     verifyErrors,
     verifyWarnings,
@@ -315,15 +321,11 @@ async function collectProjectStatusSnapshotInternal(
       ...packageFreshnessStatus.diagnostics,
       ...closeStatus.diagnostics,
       ...draftStatus.diagnostics,
-      ...(indexerRegistry.diagnostic === undefined ? [] : [indexerRegistry.diagnostic]),
       ...(indexerCandidateCompile.state === "invalid" &&
           indexerCandidateCompile.diagnostic !== undefined
         ? [`Indexer Candidate compile invalid: ${indexerCandidateCompile.diagnostic}`]
         : []),
       ...verifyStatus.diagnostics,
-      ...(codeIndexMigrationRequired
-        ? ["Legacy code-index state is present; use the explicit context migrate codeindex command before authoring new knowledge."]
-        : []),
       ...(projectionRefreshIssues > 0
         ? [`verify info approved-projection-stale: ${projectionRefreshIssues} derived projection issue(s) will be rebuilt by context close`]
         : compactProjectVerifyDiagnostics(verifyStatus.issues)),
@@ -388,6 +390,8 @@ export async function reevaluateProjectStatusWorkflow(input: {
     ...(currentRoute === undefined ? {} : { current: currentRoute }),
     ...(currentRoute === undefined ? {} : { revision: currentRoute.revision }),
     ...(currentRoute?.node === "advance-knowledge-maintenance" ? { status: "actionable" as const } : {}),
+    ...(currentRoute?.reason_code.startsWith("route.production.") ? { status: currentRoute.availability === "requires-user"
+      ? "waiting-user" as const : currentRoute.availability === "blocked" ? "blocked" as const : "actionable" as const } : {}),
   };
   await recordWorkflowEvaluation(input.snapshot.observation.projectRoot, workflow);
   const routeProjection = projectWorkflowRoute({

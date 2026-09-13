@@ -1,6 +1,9 @@
 schema: agent-graph.action.v1
 id: run-indexer-lifecycle
-description: Continue the unique registry-and-Provider Indexer lifecycle until current Candidates exist.
+files:
+  - resources/manuals/guides/code-indexer-skill-authoring.md
+  - resources/manuals/guides/markdown-indexer-skill-authoring.md
+description: Continue the current directory-based investigation and article production Route.
 runner: agent
 effect: write
 skill: skills/run-indexer-lifecycle/SKILL.md

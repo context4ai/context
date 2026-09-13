@@ -109,7 +109,7 @@ export function createContextWorkflowFacts(
   const reviewGateClear = observation.draftCandidates === 0 || partialDelivery;
   const hasApprovedKnowledge = observation.approvedPages > 0;
   const rollback = observation.indexerCandidateCompile.rollback_pending === true;
-  const indexerLifecycleCurrent = (!observation.unfinishedIndexerTasks || partialDelivery || deliveryReady || outputOnlyMaintenance) && observation.taskPreparation !== "resume-requested" && !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
+  const indexerLifecycleCurrent = (!observation.unfinishedIndexerTasks || partialDelivery || deliveryReady || outputOnlyMaintenance) && observation.taskPreparation !== "resume-requested" && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
     (
@@ -142,7 +142,9 @@ export function createContextWorkflowFacts(
       blocking_clear: blockingVerificationClear(observation),
     },
     indexer: {
-      lifecycle_current: indexerLifecycleCurrent,
+      lifecycle_current: outputOnlyMaintenance || (observation.localRevisionActive ? !observation.indexerCandidateCompile.revision_pending
+        : observation.productionState === undefined ? indexerLifecycleCurrent
+        : observation.productionDelivery === true || observation.productionState === "ended" && observation.rejectedCandidates === 0),
       registry_state: observation.indexerRegistry.state,
     },
     gates: {

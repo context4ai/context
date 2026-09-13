@@ -1,4 +1,4 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { inspectProductionRequirements } from "./productionRequirements.js";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { digestText } from "@c4a/agent-graph";
@@ -16,17 +16,14 @@ export interface CurrentReviewBatchDocument {
   digest: string;
 }
 
-async function readerPurposes(projectRoot: string, owners: ReadonlySet<string>): Promise<string[]> {
-  try {
-    const loaded = await loadIndexerRegistry(projectRoot);
-    const required = new Set(loaded.registry.indexers.filter((indexer) => owners.has(indexer.id))
-      .flatMap((indexer) => indexer.requirement_bindings.map((binding) => binding.requirement_ref)));
-    return loaded.registry.requirements.filter((requirement) => required.has(requirement.id)).map((requirement) =>
-      `- ${requirement.id}: ${requirement.purpose ?? requirement.reader_goals.join(", ")}`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw error;
-  }
+async function readerPurposes(projectRoot: string, sources: ReadonlySet<string>): Promise<string[]> {
+  const current = await inspectProductionRequirements(projectRoot);
+  if (!current) return [];
+  return current.requirements.requirements.filter(requirement =>
+    [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []]
+      .some(target => sources.has(target.source_ref)))
+    .map(requirement => `- ${requirement.id}: ${requirement.purpose ??
+      [...requirement.reader_goals ?? [], ...requirement.questions ?? []].join(", ")}`);
 }
 
 function renderReviewCandidate(candidate: ReviewCandidateView, index: number): string {
@@ -147,7 +144,7 @@ export async function materializeCurrentReviewBatchSet(input: {
     "",
     "## Reader purposes",
     "",
-    ...await readerPurposes(input.projectRoot, new Set(input.candidates.map((candidate) => candidate.record.module))),
+    ...await readerPurposes(input.projectRoot, new Set(input.candidates.flatMap(candidate => candidate.record.source_refs))),
     "",
     `Candidates: ${input.candidates.length}`,
     `Reader-facing batches: ${entries.length}`,

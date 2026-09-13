@@ -1,9 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
-import { indexerEvidenceAdapterFileRef, validateIndexerCurrentActionInput } from "@c4a/context";
+import { indexerEvidenceAdapterFileRef,validateIndexerCurrentActionInput } from "@c4a/context";
+import { describe,expect,test } from "bun:test";
 import { summarizeIndexerObsoleteScope } from "../project/indexerObsoleteScope.js";
-import { loadContextWorkflowProvider } from "../project/workflow/workflowProvider.js";
-import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
 
 function spec(paths: string[], supporting: string[] = []) {
   return { request: { workset: { source_ref: "repo:sample" } }, validation: {
@@ -53,27 +50,5 @@ describe("obsolete scope confirmation", () => {
   test("excluding an entirely obsolete scope stops instead of sending an empty Partition", () => {
     expect(summarizeIndexerObsoleteScope(Array.from({ length: 5 }, (_, i) => spec([`deprecated/api-${i}.ts`]))))
       .toMatchObject({ requires_confirmation: true, exclusion_leaves_no_current_pages: true, exclude_action: null });
-  });
-  test("scope resolution remains required; managed review can delegate judgment without auto-completing it", async () => {
-    const provider = await loadContextWorkflowProvider();
-    for (const managed of [false, true]) {
-      const context = { facts: { indexer_current: { advance_complete: true, agent_complete: true,
-        obsolete_scope_confirmed: false, structure_review_complete: false,
-        composer_complete: true, blockers_clear: true, layout_confirmed: true } },
-        authorities: contextWorkflowAuthorities({ managed }), workspace: "/unused" };
-      const evaluated = await evaluateGraph(provider, "indexer", "current-lifecycle", context);
-      const route = await resolveRoute(provider, "indexer", "current-lifecycle", evaluated.evaluation.primaryRoute!.routeId,
-        context, evaluated.evaluation.revision);
-      expect(route.node).toBe("confirm-current-indexer-obsolete-scope");
-      expect(route.availability).toBe(managed ? "immediate" : "requires-user");
-      expect(route.gate?.delegatable).toBe(true);
-      expect(route.gate?.authority).toBe("context.knowledge-review");
-      expect(route.gate?.resolutionAction?.action.runner).toBe("agent");
-      expect(evaluated.evaluation.statusCode).not.toBe("complete");
-      const after = await evaluateGraph(provider, "indexer", "current-lifecycle", { ...context, facts: {
-        indexer_current: { ...context.facts.indexer_current, obsolete_scope_confirmed: true, structure_review_complete: true },
-      } });
-      expect(after.evaluation.statusCode).toBe("complete");
-    }
   });
 });

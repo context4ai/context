@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CandidateRecord } from "../project/candidateLedger.js";
@@ -12,7 +12,7 @@ import { recoverDurableMultiFileTransactions } from
   "../project/durableMultiFileTransaction.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { renderApprovedIndexerMarkdown } from "../project/reviewApplyIndexer.js";
-import { readRejectedDecisions, LEGACY_REVIEW_DECISIONS_FILE } from
+import { readRejectedDecisions } from
   "../project/reviewDecisions.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import {
@@ -119,13 +119,12 @@ describe("Indexer Review durable transaction", () => {
     expect(rendered).toContain('<!-- context:section id="overview" -->');
   });
 
-  test("recovers rejected Candidate status and removes the legacy duplicate after interruption", async () => {
+  test("recovers rejected Candidate status after an interrupted review transaction", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "context-indexer-review-transaction-"));
     try {
       const row = candidate();
       await writeCandidateRecords(projectRoot, [row]);
       await mkdir(join(projectRoot, "knowledge"), { recursive: true });
-      await writeFile(join(projectRoot, LEGACY_REVIEW_DECISIONS_FILE), "obsolete decision data");
       await expect(applyReviewDecisions({
         projectRoot,
         payload: {
@@ -155,7 +154,6 @@ describe("Indexer Review durable transaction", () => {
       expect((await readRejectedDecisions(projectRoot)).get(row.candidate_id)).toBe(
         row.fingerprint,
       );
-      expect(await Bun.file(join(projectRoot, LEGACY_REVIEW_DECISIONS_FILE)).exists()).toBe(false);
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

@@ -15,6 +15,17 @@ import { CONTEXT_WORKFLOW_AUTHORITIES } from "../project/workflow/workflowTypes.
 import { emptyObservation } from "./projectWorkflowProviderV0610.fixtures.js";
 
 describe("Context workflow Provider", () => {
+  test("current production stages reach review without inheriting Provider readiness", async () => {
+    const pending = createContextWorkflowFacts({ ...emptyObservation(), productionState: "active" }, []);
+    expect(pending.indexer.lifecycle_current).toBe(false);
+    const completed = await evaluateContextWorkflow({ observation: { ...emptyObservation(), sourceCount: 1,
+      productionState: "ended", draftCandidates: 2, draftCollections: ["architecture"] }, authorities: [] });
+    expect(completed.route?.node).toBe("review-current-batch");
+    const rejected = await evaluateContextWorkflow({ observation: { ...emptyObservation(), sourceCount: 1,
+      productionState: "ended", rejectedCandidates: 1 }, authorities: [] });
+    expect(rejected.route?.node).toBe("run-indexer-lifecycle");
+  });
+
   test("passes its graph contract scenarios", async () => {
     const provider = await loadContextWorkflowProvider();
     const results = await runGraphTests(

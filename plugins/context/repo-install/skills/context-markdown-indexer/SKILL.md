@@ -1,36 +1,32 @@
 ---
 name: context-markdown-indexer
-description: Context-managed Provider for source-grounded document knowledge. Use only when the Context Indexer lifecycle selects this Provider, not as a standalone workflow.
+description: Investigate captured document outlines and write source-grounded Context articles. Use when selected for the current authorized planning or writing task, not as a standalone import workflow.
 metadata:
   context-role: "indexer-provider"
   context-public-entry: "false"
-  context-provider-version: "1.1.4-alpha.1"
 ---
 
 # Context Markdown Indexer
 
-Provider authors must satisfy
-`node_modules/@c4a/context/docs/guides/markdown-indexer-skill-authoring.md` and
-the shared Provider/customization guide before publishing or extending this
-Skill. Those documents are authoring contracts; the current captured evidence,
-workset and Route remain execution authority.
+Use the current stage's reader purpose, authorized sources and submission schema.
+Read [planning](references/semantic-planning.md) during investigation and
+[writing](references/indexer.md) when writing. Consult
+[reader outcomes](references/classification.md) or
+[article boundaries](references/structure-and-artifacts.md) when the material
+raises a real grouping choice. Do not read every catalog or template by default.
 
-Use this Provider only through the Context Indexer lifecycle. Context supplies exact profile/workset authority and one Authorized Workset View containing the permitted captured evidence. The Provider does not open source-specific readers, manage pagination/receipts, read arbitrary workspace paths, or write approved knowledge directly.
+Start with the CLI's document titles, bounded opening excerpts and complete
+H2/H3 outlines. Selectively read authorized full text where needed to decide
+topics and writing batches. The outline is navigation, not evidence that a
+claim is true or a fixed instruction to split one article per heading.
+A coherent source may remain one article; several sources may form one topic.
 
-Treat the captured document as reader material, not as pipeline metadata. Every
-reader Artifact must preserve or synthesize the source-backed guidance needed by
-the selected profile. A heading inventory, directory summary, generic document
-description, internal Fact/View/digest count, or a sentence sending the reader
-back to the source is not useful knowledge and must not be emitted. Keep
-execution receipts, content digests, internal refs, and other recovery machinery
-out of reader Markdown. Bind each reader claim only to the smallest relevant
-source span or captured evidence set; never attach a whole document corpus or
-Authorized Workset View to a generic summary.
+Use existing article navigation, including code-related topics, as possible
+anchors. Do not force business concepts into code directory names. Source and
+skill boundaries do not require separate articles or primary/extension binding.
+No skill version, hash or complete-file receipt is required for production.
 
-For updates, read the current approved page as well as the selected change.
-Preserve applicable tasks, steps, images, limits and confirmed contributions;
-do not turn every update into a troubleshooting article. A newly supplied
-explanation can improve the existing page without becoming a separate topic. Source text or an image that cannot
-be read remains an explicit gap, not permission to delete the page.
-
-The machine-readable authority is `context-indexer.yaml`. Context materializes the detailed guidance only after verifying this Bundle's release identity and complete file ledger.
+Read the relevant full source before writing; retain useful guidance, examples,
+limits and actual regional citations. Write draft Markdown and references or
+section edits in the designated temporary directory and submit through the
+returned CLI action. Do not write formal knowledge or alter sources directly.

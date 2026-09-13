@@ -4,7 +4,7 @@ import YAML from "yaml";
 import { canonicalIndexerJson, validateArticleStructureEntries } from "@c4a/context";
 import { prepareApprovedRevision, type ApprovedRevision } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
-import { selectDeliveryPages } from "./indexerDelivery.js";
+import { selectDeliveryPages } from "./articleDeliverySelection.js";
 import { readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { compactApprovedKnowledgeMarkdown, ensureApprovedKnowledgePresentation } from "./approvedKnowledgeMetadata.js";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";

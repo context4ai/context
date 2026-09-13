@@ -1,5 +1,15 @@
 schema: agent-graph.code-catalog.v1
 codes:
+  - { code: route.production.investigation-required, kind: route-reason, summary: Continue the remaining authorized investigation and append its article tasks. }
+  - { code: route.production.repair-required, kind: route-reason, summary: Add revision tasks for rejected planned articles before closing production. }
+  - { code: route.production.requirements-required, kind: route-reason, summary: Record confirmed reader purposes and authorized production sources. }
+  - { code: route.production.requirements-migration, kind: route-reason, summary: Preserve long-term requirements while removing legacy Provider configuration. }
+  - { code: route.production.planning-prepare, kind: route-reason, summary: Prepare lightweight navigation for confirmed requirements. }
+  - { code: route.production.planning-required, kind: route-reason, summary: Investigate source skeletons and submit article goals and batches. }
+  - { code: route.production.report-required, kind: route-reason, summary: Present the planned work-start report and wait for user feedback. }
+  - { code: route.production.prepare-required, kind: route-reason, summary: Prepare the next eligible production directories. }
+  - { code: route.production.writing-required, kind: route-reason, summary: Complete the issued production tasks using stage-local files. }
+  - { code: route.production.scope-incomplete, kind: route-reason, summary: Resolve remaining investigation and material gaps without discarding accepted articles. }
   - { code: route.version.content-changed, kind: route-reason, summary: Record an increasing workspace version and changelog for formal content changes. }
   - { code: route.workspace.recovery, kind: route-reason, summary: Inspect a stuck task independently of normal workflow evaluation., document: resources/procedures/task-recovery.md }
   - { code: route.indexer.maintenance, kind: route-reason, summary: Advance registered knowledge maintenance at a safe boundary., document: resources/procedures/knowledge-maintenance.md }

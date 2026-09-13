@@ -174,6 +174,23 @@ function refTarget(importer: string, raw: string): { targetPath: string; pointer
   return portablePath(targetPath) ? { targetPath, pointer, external: true } : null;
 }
 
+/** Discover local dependencies with the same syntax and scope rules as parsing.
+ * The caller supplies captured file access; this helper never reads or fetches. */
+export function openApiSourceDependencies(path: string, source: string): string[] {
+  if (!/\.(?:json|ya?ml)$/iu.test(path)) return [];
+  if (!portablePath(path)) throw new TypeError(`contract source path is not portable: ${path}`);
+  const parsed = parseYaml(path, source);
+  if (parsed.parseError) throw new TypeError(`${path}: ${parsed.parseError}`);
+  const dependencies = new Set<string>();
+  for (const ref of collectRefs(parsed)) {
+    if (ref.underBaseId && !ref.raw.startsWith("#")) throw new TypeError(`${path}: reference under $id requires an explicit registered URI mapping: ${ref.raw}`);
+    const target = refTarget(path, ref.raw);
+    if (!target) throw new TypeError(`${path}: reference leaves registered source scope: ${ref.raw}`);
+    if (target.external) dependencies.add(target.targetPath);
+  }
+  return [...dependencies];
+}
+
 function cycleMembers(graph: ReadonlyMap<string, ReadonlySet<string>>): Set<string> {
   const cycles = new Set<string>();
   const visiting = new Set<string>();

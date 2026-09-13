@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { loadSourcesRegistry, type SourcesRegistry } from "@c4a/context";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
+
+const execute = promisify(execFile);
 
 function inside(root: string, path: string): void {
   const value = relative(root, path);
@@ -26,8 +30,9 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       sources.set(`${kind}:${entry.name}`, { kind, entry });
     }
   }
-  const descriptors = new Map<string, Promise<{ root: string; files?: Map<string, string> }>>();
-  const texts = new Map<string, Promise<{ text: string; contentDigest: string; expected: string | undefined }>>();
+  const descriptors = new Map<string, Promise<{ root: string; files?: Map<string, string>; commit?: string }>>();
+  const texts = new Map<string, Promise<{ text: string; contentDigest: string; expected: string | undefined; root: string; commit?: string }>>();
+  const captured = new Map<string, Promise<string>>();
   async function descriptor(sourceRef: string) {
     const source = sources.get(sourceRef);
     if (!source) throw new TypeError(`Source is no longer registered: ${sourceRef}`);
@@ -36,7 +41,12 @@ export async function registeredArticleSourceReader(projectRoot: string) {
     const root = await realpath(resolve(workspace, managed ? dirname(entry.materializedAt) : entry.materializedAt));
     inside(workspace, root);
     if (managed) return { root, files: new Map([[basename(entry.materializedAt), ""]]) };
-    if (kind === "repo") return { root };
+    if (kind === "repo") {
+      if (!("ref" in entry) || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(entry.ref)) {
+        throw new TypeError("Article source requires a captured fixed commit, not a moving ref");
+      }
+      return { root, commit: entry.ref };
+    }
     const manifestPath = resolve(workspace, ("snapshot" in entry ? entry.snapshot?.manifest : undefined)
       ?? `${entry.materializedAt}/manifest.json`);
     inside(workspace, manifestPath);
@@ -53,7 +63,7 @@ export async function registeredArticleSourceReader(projectRoot: string) {
       pending = (async () => {
         let scope = descriptors.get(sourceRef);
         if (!scope) { scope = descriptor(sourceRef); descriptors.set(sourceRef, scope); }
-        const { root, files } = await scope;
+        const { root, files, commit } = await scope;
         if (files && !files.has(path)) throw new TypeError("Source path is not owned by the registered document");
         const lexical = resolve(root, path);
         inside(root, lexical);
@@ -64,12 +74,30 @@ export async function registeredArticleSourceReader(projectRoot: string) {
         const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
         if (text.includes("\0")) throw new TypeError("Article source is not text");
         return { text, contentDigest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
-          expected: files?.get(path) };
+          expected: files?.get(path), root, ...(commit ? { commit } : {}) };
       })();
       texts.set(key, pending);
     }
     const result = await pending;
-    if (requireCapturedVersion && result.expected && result.expected !== result.contentDigest) {
+    let expected = result.expected;
+    if (requireCapturedVersion && result.commit) {
+      let version = captured.get(key);
+      if (!version) {
+        version = (async () => {
+          try {
+            const blob = await execute("git", ["-C", result.root, "show", `${result.commit}:./${path}`], {
+              encoding: "buffer", timeout: 5000, maxBuffer: 16 * 1024 * 1024,
+            });
+            return `sha256:${createHash("sha256").update(blob.stdout).digest("hex")}`;
+          } catch {
+            throw new TypeError(`Cannot read the cited file from the captured commit: ${path}. Use a tracked file within the captured source or refresh the source before citing it.`);
+          }
+        })();
+        captured.set(key, version);
+      }
+      expected = await version;
+    }
+    if (requireCapturedVersion && expected && expected !== result.contentDigest) {
       throw new TypeError("Captured source changed; refresh the source before submitting a revision");
     }
     return result.text;

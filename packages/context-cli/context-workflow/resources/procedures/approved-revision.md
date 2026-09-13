@@ -49,13 +49,22 @@ For selected `note` inputs, read [note guidance](note.md). For `sessions`,
 read [sessions guidance](sessions.md). Read only the applicable source guide.
 
 
-Read `writing_context` for the selected Provider, reader profile, current sections
-and actual template resources. These apply to direct page corrections too.
+Read `writing_context` for the confirmed reader requirements, current sections,
+authorized source entries and any available skill guidance from this temporary
+work session. A missing skill selection does not invalidate the approved page
+or require restoring a former Provider registration. These inputs apply to
+direct page corrections too.
 Preserve the current page form; choose a different form only for an explicit
 change of purpose. Do not replace API tables with generic explanatory prose.
 The current sections are approved content, not freshly extracted API facts.
-For source updates or an explicit regeneration request, `program_blocks` contains API tables computed from current
-scoped Parser facts with the ordinary deterministic renderer. Select only the
+Ordinary source updates do not automatically parse the repository or generate
+API tables. Read the changed material relevant to the requested correction;
+use a suitable scoped analysis capability when needed. Do not wait for a
+Provider selection, version check or program block before revising ordinary
+prose. Keep actual source citations and the current revision baseline.
+
+When an explicit regeneration request supplies `program_blocks`, they contain
+API tables computed from scoped Parser facts with the deterministic renderer. Select only the
 relevant blocks and place their exact `token` inside the corresponding sourced
 section. The CLI expands it at submission; do not retype its rows. Do not use an
 unrelated declaration merely because it shares a module. If a needed block is

@@ -114,6 +114,11 @@ function assertExactFields(
   }
 }
 
+/** Compare portable article paths without changing their reader-facing spelling. */
+export function knowledgeTargetPathKey(value: string): string {
+  return value.normalize("NFC").toLowerCase();
+}
+
 export function isSafeKnowledgeTargetPath(collection: string, value: string): boolean {
   return value.startsWith(`${collection}/`) &&
     value.endsWith(".md") &&

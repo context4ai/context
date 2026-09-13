@@ -1,0 +1,5 @@
+schema: agent-graph.action.v1
+id: prepare-production-stage
+runner: command
+effect: write
+command: context action prepare-current --format json

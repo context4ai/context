@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { configureDeliveryCadence, deliveryWaveSize, interruptDeliveryCadence, readDeliveryCadence, settleDeliveryCadence } from "../project/indexerDeliveryCadence.js";
-import { selectDeliveryPages, type DeliveryPage } from "../project/indexerDelivery.js";
+import { selectDeliveryPages, type DeliveryPage } from "../project/articleDeliverySelection.js";
 
 test("successful waves advance once, repairs hold the step, fixed size is task-local", async () => {
   const root = await mkdtemp(join(tmpdir(), "cadence-"));
