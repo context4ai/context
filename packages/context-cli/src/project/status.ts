@@ -124,6 +124,21 @@ async function collectProjectStatusSnapshotInternal(
   const capturedDocumentSources = documentSources.filter((source) => source.snapshotReady).length;
   const readySources = readyRepoSources + capturedDocumentSources;
   const draftStatus = await readDraftCandidateStatus(projectRoot);
+  const production = await readProductionStage(projectRoot);
+  const localRevision = await readApprovedRevision(projectRoot);
+  const localUpdate = localRevision ? undefined : await readKnowledgeUpdate(projectRoot);
+  const taskPreparation = localRevision || localUpdate ? undefined : await readTaskPreparation(projectRoot);
+  const { readTaskRollback } = await import("./taskRollback.js");
+  const localRollback = await readTaskRollback(projectRoot);
+  const { readMaintenance } = await import("./maintenanceStorage.js");
+  const maintenance = (await readMaintenance(projectRoot)).active;
+  // A cleared task has no delivery action. Do not re-audit all delivered files
+  // just to tell the caller to start a new task. Explicit Verify and every
+  // delivery command continue to inspect their actual inputs.
+  const authoring = production && !production.delivery &&
+    dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended";
+  const deferDeliveryChecks = !maintenance && !localRevision && !localUpdate && !localRollback &&
+    ((taskPreparation === "cleared" && !production) || !!authoring);
   const collectionsWithPages = new Set<string>();
   const approvedPages = await countFiles(
     join(projectRoot, "knowledge"),
@@ -134,20 +149,20 @@ async function collectProjectStatusSnapshotInternal(
     },
   );
   const approvedCollections = KNOWLEDGE_COLLECTIONS.filter((collection) => collectionsWithPages.has(collection));
-  const closeStatus = await readCloseStatus(projectRoot);
+  const closeStatus = deferDeliveryChecks ? { state: "not-checked" as const, diagnostics: [] } : await readCloseStatus(projectRoot);
   const distFiles = await countFiles(join(projectRoot, "dist"), () => true);
-  const verifyStatus = draftStatus.diagnostics.length === 0
+  const verifyStatus = !deferDeliveryChecks && draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(projectRoot)
     : { issues: [], diagnostics: [] };
   const pendingCapture = pendingDocumentCaptureCommands({
     phases,
     documentSources,
   });
-  const packageFreshnessStatus = phaseStatus.projectEntryValid
+  const packageFreshnessStatus = phaseStatus.projectEntryValid && !deferDeliveryChecks
     ? await readPackageFreshnessStatus(projectRoot, packages)
     : { packages: [], diagnostics: [] };
   const packageFreshness = packageFreshnessStatus.packages;
-  const packageTemplateReviews = phaseStatus.projectEntryValid
+  const packageTemplateReviews = phaseStatus.projectEntryValid && !deferDeliveryChecks
     ? await inspectPackageTemplateReviews(projectRoot, packages)
     : [];
   const rawVerifyErrors = verifyStatus.issues.filter((issue) => issue.severity === "error").length;
@@ -157,17 +172,12 @@ async function collectProjectStatusSnapshotInternal(
     : 0;
   const verifyErrors = rawVerifyErrors - projectionRefreshIssues;
   const verifyWarnings = verifyStatus.issues.filter((issue) => issue.severity === "warning").length;
-  const evidenceStatus = evidenceStatusForStatus({ verifyErrors, verifyWarnings });
+  const evidenceStatus = deferDeliveryChecks ? "not-checked" as const : evidenceStatusForStatus({ verifyErrors, verifyWarnings });
   const evidenceWarnings = evidenceWarningState(verifyStatus.issues);
   const runtimeEvents = observeContextRuntimeEventDelivery(projectRoot);
-  const production = await readProductionStage(projectRoot);
   // There is only one production protocol. Missing current state never
   // falls back to a Provider registry or a retired production ledger.
   const indexerRegistry: ContextWorkflowObservation["indexerRegistry"] = { state: "missing", sourceRefs: [] };
-  const localRevision = await readApprovedRevision(projectRoot);
-  const localUpdate = localRevision ? undefined : await readKnowledgeUpdate(projectRoot);
-  const { readTaskRollback } = await import("./taskRollback.js");
-  const localRollback = await readTaskRollback(projectRoot);
   const indexerCandidateCompile: {
     state: "missing" | "current" | "stale" | "invalid";
     candidates: CandidateRecord[];
@@ -187,17 +197,14 @@ async function collectProjectStatusSnapshotInternal(
   const indexerDrafts = productionCandidates.filter(candidate => candidate.status === "draft");
   const indexerRejected = productionCandidates.filter(candidate => candidate.status === "rejected");
   const draftCollections = [...new Set(indexerDrafts.map((candidate) => candidate.collection))].sort();
-  const { readMaintenance } = await import("./maintenanceStorage.js");
-  const maintenance = (await readMaintenance(projectRoot)).active;
   // Output-only maintenance owns this evaluation; an unfinished production
   // ledger must not hide package configuration/Review recovery gates.
   const maintenanceOutputOnly = maintenance?.input.operation === "rebuild" || maintenance?.phase === "finishing" ||
     (maintenance?.phase === "cancelling" && indexerDrafts.length === 0);
   // An explicitly prepared revision/update is a new task, not a request to
   // restore the production that previously cleared its temporary workspace.
-  const taskPreparation = localRevision || localUpdate ? undefined : await readTaskPreparation(projectRoot);
   const observation: ContextWorkflowObservation = {
-    versionCurrent: phaseStatus.projectEntryValid ? (await inspectWorkspaceVersion(projectRoot)).current : false,
+    versionCurrent: phaseStatus.projectEntryValid && !deferDeliveryChecks ? (await inspectWorkspaceVersion(projectRoot)).current : false,
     taskPreparation,
     localRevisionActive: !!localRevision || !!localUpdate,
     unfinishedIndexerTasks: false,
@@ -316,6 +323,7 @@ async function collectProjectStatusSnapshotInternal(
     verifyWarnings,
     projectionRefreshIssues,
     diagnostics: [
+      ...(deferDeliveryChecks ? ["Delivery checks were not run for this progress query. Use context verify for a current workspace audit; delivery actions check their inputs."] : []),
       ...phaseStatus.diagnostics,
       ...sourceStatus.diagnostics,
       ...packageFreshnessStatus.diagnostics,

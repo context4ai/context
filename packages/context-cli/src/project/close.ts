@@ -1,9 +1,10 @@
 import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
+import { readApprovedMarkdownFiles, readApprovedStructureValue } from "./approvedFileRead.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
 import { closeRevisionDelivery, readRevisionDelivery } from "./revisionDelivery.js";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import YAML from "yaml";
 import { readProcessedScopes, validateArticleStructureEntries } from "@c4a/context";
@@ -18,7 +19,6 @@ import { findContextProjectRoot } from "./workspace.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { approvedStructureInputHash, sha256Text, type ApprovedStructureInputFile } from "./approvedStructureInputHash.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import {
@@ -33,7 +33,7 @@ interface ApprovedKnowledgeFile {
 }
 
 export interface ProjectCloseStatus {
-  state: "missing" | "ready" | "stale";
+  state: "missing" | "ready" | "stale" | "not-checked";
   inputHash?: string;
   diagnostics: string[];
 }
@@ -74,13 +74,7 @@ function isDeprecated(content: string): boolean {
 }
 
 async function approvedKnowledgeFiles(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
-  const files = await walkApprovedMarkdown(join(projectRoot, KNOWLEDGE_ROOT));
-  const markdown = await Promise.all(files
-    .filter((file) => !isKnowledgeAssetPath(file.relPath))
-    .map(async (file) => ({
-      ...file,
-      content: await readFile(file.absPath, "utf8"),
-    })));
+  const markdown = await readApprovedMarkdownFiles(projectRoot);
   return markdown.filter((file) => !isDeprecated(file.content));
 }
 
@@ -149,7 +143,7 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
   const inputHash = await approvedKnowledgeInputHash(projectRoot);
   if (!existsSync(structurePath)) return { state: "missing", inputHash, diagnostics: [`close structure is missing: ${STRUCTURE_PATH}`] };
   try {
-    const parsed = YAML.parse(await readFile(structurePath, "utf8")) as unknown;
+    const parsed = await readApprovedStructureValue(projectRoot);
     const record = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};

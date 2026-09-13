@@ -68,11 +68,14 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
       indexerCandidateCompile: status.indexerCandidateCompile.state,
     },
     delivery_status: {
+      verification: status.evidenceStatus,
       approved_pages: status.approvedPages,
       awaiting_review: status.draftCandidates,
       current_node: status.workflow.current?.node ?? null,
       packages: status.packages.map(item => ({ name: item.name, state: item.state })),
-      meaning: "Approved pages may not yet be built. Package freshness describes dist; task completion describes the current stage only.",
+      meaning: status.evidenceStatus === "not-checked"
+        ? "Progress only: workspace verification and delivery freshness were not checked. Delivery actions validate their inputs; context verify performs an explicit audit."
+        : "Approved pages may not yet be built. Package freshness describes dist; task completion describes the current stage only.",
     },
     counts: {
       sources: status.sourceSummary,

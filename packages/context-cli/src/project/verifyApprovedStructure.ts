@@ -1,11 +1,9 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readApprovedMarkdownFiles, readApprovedStructureValue } from "./approvedFileRead.js";
 import { join } from "node:path";
-import YAML from "yaml";
 import { validateArticleStructureEntries } from "@c4a/context";
 import { approvedStructureInputHash, sha256Text } from "./approvedStructureInputHash.js";
 import { isDeprecatedApprovedMarkdown, isRecord } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { compactApprovedKnowledgeMarkdown } from "./approvedKnowledgeMetadata.js";
@@ -25,7 +23,7 @@ export async function validateApprovedStructure(input: {
   let parsed: Record<string, unknown>;
   let articles: ReturnType<typeof validateArticleStructureEntries>;
   try {
-    const raw: unknown = input.structureOverride ?? YAML.parse(await readFile(path, "utf8"));
+    const raw: unknown = input.structureOverride ?? await readApprovedStructureValue(input.projectRoot);
     if (!isRecord(raw)) throw new TypeError("Structure must be an object");
     parsed = raw;
     articles = validateArticleStructureEntries(raw.articles);
@@ -39,9 +37,8 @@ export async function validateApprovedStructure(input: {
   const byPath = new Map(articles.map(article => [article.path, article]));
   const seen = new Set<string>();
   const inputFiles = [];
-  for (const file of await walkApprovedMarkdown(join(input.projectRoot, "knowledge"))) {
-    if (isKnowledgeAssetPath(file.relPath)) continue;
-    const content = await readFile(file.absPath, "utf8");
+  for (const file of await readApprovedMarkdownFiles(input.projectRoot)) {
+    const content = file.content;
     if (isDeprecatedApprovedMarkdown(content)) continue;
     seen.add(file.relPath);
     inputFiles.push({ path: file.relPath, sha256: sha256Text(compactApprovedKnowledgeMarkdown(content)) });

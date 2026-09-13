@@ -1,7 +1,7 @@
 import { validateArticleStructureEntries } from "@c4a/context";
 import { existsSync } from "node:fs";
 import { approvedKnowledgeDependencyWarnings } from "./approvedKnowledgeDependencyWarnings.js";
-import { readFile } from "node:fs/promises";
+import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { join } from "node:path";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -9,7 +9,6 @@ import { ExitCode } from "../types/exitCode.js";
 import { CANDIDATE_LEDGER_FILE, readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
 import { validateApprovedStructure } from "./verifyApprovedStructure.js";
 import { parseFrontmatterLoose, validateApprovedMarkdown } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { knowledgeAssetReferences, unprojectedSourceAssetLinks } from "./knowledgeAssets.js";
@@ -86,9 +85,8 @@ export async function verifyProjectWorkspace(
   });
 
   const articlesByPath = new Map(validateArticleStructureEntries(approvedMetadata.structure?.articles ?? []).map(article => [article.path, article]));
-  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
-    if (isKnowledgeAssetPath(file.relPath)) continue;
-    const rawContent = await readFile(file.absPath, "utf8");
+  for (const file of await readApprovedMarkdownFiles(projectRoot)) {
+    const rawContent = file.content;
     const content = hydrateApprovedKnowledgeMarkdown({
       content: rawContent,
       relPath: file.relPath,

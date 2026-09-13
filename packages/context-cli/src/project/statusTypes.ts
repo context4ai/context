@@ -8,6 +8,7 @@ import type { ContextWorkflowStatus } from "./workflow/workflowTypes.js";
 
 export type EvidenceWarningState = "none" | "degraded" | "stale" | "orphaned";
 export type EvidenceStatus =
+  | "not-checked"
   | "pass"
   | "pass-with-unverifiable-evidence"
   | "fail";

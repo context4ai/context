@@ -1,10 +1,9 @@
 import { reuseCommandFileRead } from "./commandReadCache.js";
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { readProcessedScopes, validateArticleStructureEntries, type PackageDefinition } from "@c4a/context";
-import { parse as parseYaml } from "yaml";
+import { readApprovedStructureDocument } from "./approvedFileRead.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { packageNavigation } from "./packageNavigation.js";
 import {
@@ -36,11 +35,6 @@ export function knowledgeStructurePath(projectRoot: string): string {
   return join(projectRoot, "knowledge", "structure.yaml");
 }
 
-async function readOptionalText(path: string): Promise<string | null> {
-  if (!existsSync(path)) return null;
-  return readFile(path, "utf8");
-}
-
 export async function readKnowledgeStructure(projectRoot: string): Promise<KnowledgeStructureInfo> {
   const snapshot = await reuseCommandFileRead({ key: "approved-knowledge-structure",
     paths: [knowledgeStructurePath(projectRoot)], read: () => readKnowledgeStructureUncached(projectRoot) });
@@ -51,11 +45,13 @@ export async function readKnowledgeStructure(projectRoot: string): Promise<Knowl
 
 async function readKnowledgeStructureUncached(projectRoot: string): Promise<KnowledgeStructureInfo> {
   const path = "knowledge/structure.yaml";
-  const content = await readOptionalText(knowledgeStructurePath(projectRoot));
-  if (content === null) {
+  let document: Awaited<ReturnType<typeof readApprovedStructureDocument>>;
+  try { document = await readApprovedStructureDocument(projectRoot); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return { path, content: null, sha256: null, parsed: null, articles: 0 };
   }
-  const parsed = parseYaml(content) as unknown;
+  const { content, parsed } = document;
   const record = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : null;

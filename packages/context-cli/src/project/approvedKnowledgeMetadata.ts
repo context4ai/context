@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readApprovedStructureValue } from "./approvedFileRead.js";
 import { reuseCommandFileRead } from "./commandReadCache.js";
 import { join } from "node:path";
 import YAML from "yaml";
@@ -65,7 +65,7 @@ export async function readApprovedKnowledgeMetadataIndex(
   if (!existsSync(path)) return approvedKnowledgeMetadataIndex(undefined);
   try {
     return await reuseCommandFileRead({ key: "approved-knowledge-metadata", paths: [path], read: async () => {
-      const parsed = YAML.parse(await readFile(path, "utf8")) as unknown;
+      const parsed = await readApprovedStructureValue(projectRoot);
       if (!isRecord(parsed)) throw new TypeError("Knowledge structure must be an object");
       return approvedKnowledgeMetadataIndex(parsed);
     } });

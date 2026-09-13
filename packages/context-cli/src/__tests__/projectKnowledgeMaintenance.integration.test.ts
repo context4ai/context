@@ -7,7 +7,7 @@ import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { maintenanceProductionWorkspace, submitMaintenanceProductionArticle } from "./maintenanceProduction.fixture.js";
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
-import { closeProjectWorkspace } from "../project/close.js";
+import { closeProjectWorkspace, readProjectCloseStatus } from "../project/close.js";
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
 import { readProductionStage } from "../project/productionStageStore.js";
 import { collectProjectStatus } from "../project/status.js";
@@ -120,7 +120,8 @@ test("two approved revisions share delivery and resume untouched production task
   expect(await readProductionStage(root)).toBeUndefined();
   for (const path of acceptedBodies) expect(await readFile(join(root, "knowledge", path), "utf8")).toContain("documented public entry point");
   const final = await collectProjectStatus(root, { managed: true });
-  expect(final.close.state).toBe("ready");
+  expect(final.close.state).toBe("not-checked");
+  expect((await readProjectCloseStatus(root)).state).toBe("ready");
   expect(final.packages.every(item => item.state === "ready")).toBe(true);
   expect(final.workflow.current?.node).toBe("reopen-cleared-task");
   expect(final.workflow.current?.commands.every(command => command.availability === "after-human-confirmation")).toBe(true);
