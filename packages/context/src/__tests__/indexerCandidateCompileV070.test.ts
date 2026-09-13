@@ -24,11 +24,30 @@ function compile(fixture: ReturnType<typeof candidateCompileFixture>) {
     accepted_results: [fixture.accepted],
     profile_contract: fixture.profiles,
     operator_contract: fixture.operators,
-    subject_key_schema_set: fixture.subjectKeySchemaSet,
+
   });
 }
 
 describe("explicit IndexerResult Candidate compile", () => {
+  test("keeps each writing block's regions and stable identity rather than capping a chapter", () => {
+    const sample = candidateCompileFixture(result => {
+      const article = result.artifacts[0]!;
+      if (article.representation !== "sections") throw new Error("Expected structured fixture");
+      const section = article.sections[0]!;
+      const original = section.blocks[0]!;
+      section.blocks = ["first", "second"].map((block_id, offset) => ({
+        ...original, block_id, markdown: `${block_id} paragraph`,
+        references: [1, 2, 3].map(line => ({ source_ref: result.source_ref,
+          locator: { path: "src/toggle.ts", start_line: offset * 3 + line, end_line: offset * 3 + line },
+          content_digest: indexerProtocolDigest({ line, offset }) })),
+      }));
+    });
+    const file = compile(sample).files[0]!;
+    expect(file.sections.map(section => section.section_key)).toEqual(["summary", "summary--second"]);
+    expect(file.sections.map(section => section.references.length)).toEqual([3, 3]);
+    expect(file.markdown).toBe("first paragraph\n\nsecond paragraph");
+  });
+
   test("compiles only an accepted author Result and preserves its complete authority binding", () => {
     const fixture = candidateCompileFixture();
     const result = compile(fixture);
@@ -66,7 +85,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [fixture.accepted],
       profile_contract: fixture.profiles,
       operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     })).toEqual(result);
   });
 
@@ -78,7 +97,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [fixture.accepted],
       profile_contract: fixture.profiles,
       operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     });
     expect(result.files[0]!.markdown).toBe("# Toggle template\n\nRendered evidence.");
 
@@ -89,7 +108,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [missingRendered],
       profile_contract: fixture.profiles,
       operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     })).toThrow(/must be rendered before layout/);
   });
 
@@ -106,10 +125,10 @@ describe("explicit IndexerResult Candidate compile", () => {
       output_path: file.output_path,
     }))).toEqual([{
       artifact_kind: "examples",
-      output_path: "knowledge/codeindex/anonymous-package/toggle-examples.md",
+      output_path: "knowledge/codeindex/anonymous-revision/component-toggle-examples.md",
     }, {
       artifact_kind: "overview",
-      output_path: "knowledge/codeindex/anonymous-package/toggle.md",
+      output_path: "knowledge/codeindex/anonymous-revision/component-toggle.md",
     }]);
     expect(result.files[0]!.markdown).toContain("Use the public Toggle capability.");
 
@@ -120,7 +139,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [withoutEnvelope],
       profile_contract: fixture.profiles,
       operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     })).toThrow(/stale|forged/);
   });
 
@@ -143,7 +162,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       layout_transition: fixture.transition,
       profile_contract: fixture.profiles,
       operator_contract: fixture.operators,
-      subject_key_schema_set: fixture.subjectKeySchemaSet,
+
     };
     expect(() => buildIndexerCandidateCompile({
       ...input,
@@ -239,7 +258,7 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [target.accepted],
       profile_contract: target.profiles,
       operator_contract: target.operators,
-      subject_key_schema_set: target.subjectKeySchemaSet,
+
     })).toThrow(/requires the exact layout change confirmation/);
 
     const confirmation = buildIndexerLayoutChangeConfirmation({
@@ -253,53 +272,9 @@ describe("explicit IndexerResult Candidate compile", () => {
       accepted_results: [target.accepted],
       profile_contract: target.profiles,
       operator_contract: target.operators,
-      subject_key_schema_set: target.subjectKeySchemaSet,
+
     }).files).toHaveLength(1);
   });
-});
-
-test.each([false, true])("final Candidate reconciles defaults with a catalog-only component=%s", (supportingOnly) => {
-  const fixture = candidateCompileFixture(result => {
-    const common = { fact_kind: "code-symbol", subject_key: result.logical_unit.subject_key,
-      evidence_refs: [result.evidence_bindings[0]!.evidence_ref] };
-    const members = [
-      { name: "visible", typeAnnotation: "boolean", defaultValue: "true" },
-      { name: "showMonth", typeAnnotation: "boolean", defaultValue: "true" },
-      { name: "locale", typeAnnotation: "string", defaultValue: "'en-US'" },
-      { name: "items", typeAnnotation: "string[]", defaultValue: "[]" },
-    ].map(member => ({ ...member, kind: "prop", visibility: "exported", optional: true }));
-    result.facts = [{ ...common, fact_ref: "fact:component", value: {
-      name: "Widget", kind: "component", visibility: "exported", file: "view.tsx",
-      propsType: "Props", typeAnnotation: "FC<Props>", members, publicEntrypoints: ["index.ts"],
-    } }, { ...common, fact_ref: "fact:props", value: {
-      name: "Props", kind: "type", visibility: "exported", file: "view.tsx",
-      typeAnnotation: "{ visible?: boolean; showMonth?: boolean; locale?: string; items?: string[] }",
-      members: [...members.map(({ defaultValue, ...member }) => {
-        void defaultValue;
-        return { ...member, ...(member.name === "visible" ? { defaultValue: "false" } : {}) };
-      }), { name: "label", kind: "prop", visibility: "exported", typeAnnotation: "string", optional: false }],
-    } }];
-    const artifact = result.artifacts[0]!;
-    if (artifact.representation !== "sections") throw new Error("fixture must remain structured");
-    artifact.sections[0]!.blocks.push({ block_id: "api", layer: "deterministic-block",
-      renderer: "public-contract-table", fact_refs: supportingOnly ? ["fact:props"] : result.facts.map(fact => fact.fact_ref) });
-  });
-  const before = JSON.stringify(fixture.accepted);
-  const candidate = compile(fixture);
-  const markdown = candidate.files[0]!.markdown;
-  for (const [name, value] of [["visible", "true"], ["showMonth", "true"], ["locale", "'en-US'"], ["items", "[]"]]) {
-    const rows = markdown.split("\n").filter(line => line.includes(`| ${name} |`));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toContain(`| Props | ${name} |`);
-    expect(rows[0]).toContain(`| ${value} |`);
-  }
-  if (!supportingOnly) expect(markdown).toContain("export entry");
-  else expect(markdown).not.toContain("| Widget | export entry |");
-  expect(markdown).toContain("declaration documents false");
-  expect(markdown).not.toContain("| Widget | visible |");
-  expect(markdown).toContain("| Props | label | string | required | unknown |");
-  expect(JSON.stringify(fixture.accepted)).toBe(before);
-  expect(compile(fixture).files[0]!.markdown).toBe(markdown);
 });
 
 test("command render memo preserves authority checks and refreshes link projection without mutating cached sections", () => {
@@ -307,9 +282,9 @@ test("command render memo preserves authority checks and refreshes link projecti
   const render_cache = new Map<string, ReturnType<typeof materializeIndexerStructuredContent>>();
   const input = { layout_proposal_set: fixture.layoutSet, layout_transition: fixture.transition,
     accepted_results: [fixture.accepted], profile_contract: fixture.profiles,
-    operator_contract: fixture.operators, subject_key_schema_set: fixture.subjectKeySchemaSet, render_cache };
+    operator_contract: fixture.operators, render_cache };
   const first = buildIndexerCandidateCompile(input);
-  expect(render_cache.size).toBe(1);
+  expect(render_cache.size).toBe(0);
   const originalCache = structuredClone([...render_cache]);
   const projected = buildIndexerCandidateCompile({ ...input, markdown_projection: ({ markdown }) => markdown + "\nChanged navigation." });
   expect(projected.files[0]!.markdown).toContain("Changed navigation.");

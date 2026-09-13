@@ -14,7 +14,7 @@ function operatorContract(): IndexerOperatorContract {
     protocol: "context.indexer.operator-contract/v1",
     version: "1.0.0",
     selector_operators: ["all-inventory", "public-identities", "eligible-standard"],
-    grouping_operators: ["by-subject-key"],
+    grouping_operators: [],
     metric_operators: ["disposition-ratio", "discretionary-artifact-count"],
     threshold_operators: ["explicit", "inflation-sensitive"],
     selector_fact_paths: ["evidence.current", "target.visibility"],
@@ -77,8 +77,7 @@ function profileContract(
       question_target_domains: [{
         id: "component",
         selector: { operator: "public-identities" },
-        grouping_operator: "by-subject-key",
-        subject_key_kind: "component",
+
         granularity: "identity",
       }],
       reader_question_contracts: [{
@@ -118,22 +117,13 @@ function profileContract(
         }],
       },
     }],
-    subject_key_schemas: [{
-      profile: "component-library",
-      version: 1,
-      namespace: { operator: "canonical-source-module-namespace" },
-      kinds: [{
-        id: "component",
-        local_key: { operator: "canonical-export-family" },
-      }],
-      normalization: ["trim", "unicode-nfc", "preserve-case"],
-    }],
+
   };
   return { ...payload, contract_digest: indexerProfileContractDigest(payload) };
 }
 
 describe("CLI Indexer profile contract", () => {
-  test("validates canonical operators, profile variants, SubjectKey, questions, and metrics", () => {
+  test("validates canonical operators, profile variants, questions, and metrics without subject modeling", () => {
     const operators = operatorContract();
     const contract = profileContract(operators);
 
@@ -159,7 +149,7 @@ describe("CLI Indexer profile contract", () => {
     }, operators)).toThrow(/digest/);
   });
 
-  test("rejects unregistered selector, grouping, and metric operators", () => {
+  test("rejects unregistered selector operators", () => {
     const operators = operatorContract();
     const contract = profileContract(operators);
     contract.profiles[0]!.inventory_domains[0]!.selector.operator = "provider-evaluator";
@@ -199,7 +189,7 @@ describe("CLI Indexer profile contract", () => {
     );
   });
 
-  test("rejects unknown target domains and SubjectKey kinds", () => {
+  test("rejects unknown target domains", () => {
     const operators = operatorContract();
     const unknownTarget = profileContract(operators);
     unknownTarget.profiles[0]!.reader_question_contracts[0]!.target_domain_ref = "unknown";
@@ -211,44 +201,20 @@ describe("CLI Indexer profile contract", () => {
       /unknown target domain/,
     );
 
-    const unknownKind = profileContract(operators);
-    unknownKind.profiles[0]!.question_target_domains[0]!.subject_key_kind = "service";
-    unknownKind.contract_digest = indexerProfileContractDigest({
-      ...unknownKind,
-      contract_digest: undefined,
-    } as unknown as Omit<IndexerProfileContract, "contract_digest">);
-    expect(() => validateIndexerProfileContract(unknownKind, operators)).toThrow(
-      /unknown SubjectKey kind/,
-    );
   });
 
-  test("does not accept Provider-defined thresholds or arbitrary SubjectKey operators", () => {
+  test("does not accept Provider-defined thresholds", () => {
     const operators = operatorContract();
     const contract = profileContract(operators) as unknown as Record<string, unknown>;
     const profiles = contract.profiles as Array<Record<string, unknown>>;
     profiles[0]!.provider_thresholds = { hard_min: 0.5 };
     expect(() => validateIndexerProfileContract(contract, operators)).toThrow(/Unrecognized key/);
 
-    const invalidSubject = profileContract(operators) as unknown as Record<string, unknown>;
-    const subjects = invalidSubject.subject_key_schemas as Array<Record<string, unknown>>;
-    const subject = subjects[0]!;
-    subject.namespace = { operator: "display-title-template" };
-    expect(() => validateIndexerProfileContract(invalidSubject, operators)).toThrow(/namespace/);
   });
 
-  test("requires exactly one top-level SubjectKey authority for every community profile", () => {
+  test("does not expose the retired subject schema in the production profile contract", () => {
     const operators = operatorContract();
-    const missing = profileContract(operators) as unknown as Record<string, unknown>;
-    missing.subject_key_schemas = [];
-    expect(() => validateIndexerProfileContract(missing, operators)).toThrow(
-      /subject_key_schemas|requires exactly one/,
-    );
-
-    const unknown = profileContract(operators) as unknown as Record<string, unknown>;
-    const schemas = unknown.subject_key_schemas as Array<Record<string, unknown>>;
-    schemas.push({ ...schemas[0], profile: "unknown-profile" });
-    expect(() => validateIndexerProfileContract(unknown, operators)).toThrow(
-      /unknown community profile/,
-    );
+    const contract = profileContract(operators);
+    expect(validateIndexerProfileContract(contract, operators)).not.toHaveProperty("subject_key_schemas");
   });
 });

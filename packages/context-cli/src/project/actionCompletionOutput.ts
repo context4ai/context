@@ -34,10 +34,15 @@ export async function prepareActionCompletionOutput(input: {
   const result = record(input.result);
   if (result === undefined) return input.result;
   const full = serializeActionCompletion(result, "json");
+  const production = typeof result.stage_state === "string";
+  if (production && Buffer.byteLength(full) <= INLINE_LIMIT) return input.result;
   const digest = createHash("sha256").update(full).digest("hex");
   const root = join(input.projectRoot, ".tmp/context-runtime/action-results");
   const resultFile = join(root, `${digest}.json`);
   await atomicWriteFile(resultFile, full);
+  if (production) return { stage_state: result.stage_state,
+    accepted_count: Array.isArray(result.accepted) ? result.accepted.length : 0, failed_count: Array.isArray(result.failed) ? result.failed.length : 0,
+    details: resultFile, ...pick(result, ["next", "next_preparation"]) };
   const next = record(result.next) ?? record(record(result.workflow)?.current) ??
     record(record(result.continuation)?.next);
   const nextFile = next === undefined ? undefined : join(root, `${digest}.next.json`);

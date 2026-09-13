@@ -1,43 +1,30 @@
 import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
+import { readApprovedMarkdownFiles, readApprovedStructureValue } from "./approvedFileRead.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { assertPartialDeliveryCurrent } from "./partialDelivery.js";
-import { closeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
+import { closeRevisionDelivery, readRevisionDelivery } from "./revisionDelivery.js";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import YAML from "yaml";
-import { readProcessedScopes } from "@c4a/context";
+import { readProcessedScopes, validateArticleStructureEntries } from "@c4a/context";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
-import { isCodeIndexCollection } from "./codeIndexCollection.js";
 import { queueContextRuntimeEvent } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
-import { readApprovedStructureEdges } from "./approvedStructureEdges.js";
 import { verifyProjectWorkspace } from "./verify.js";
-import { validateStructureEdgeContract, type StructureEdgeContractResult } from "./structureEdgeContract.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { withProjectWriteLock } from "./writeLock.js";
-import { PARENT_INDEX_GENERATED_KIND } from "./approvedParentIndex.js";
 import { approvedStructureInputHash, sha256Text, type ApprovedStructureInputFile } from "./approvedStructureInputHash.js";
-import {
-  codegraphEdgesFromFrontmatter,
-  codegraphRelationshipCoverage,
-  currentCodegraphEdges,
-  type CodegraphRelationshipCoverage,
-} from "./codegraphRelationshipProjection.js";
 import { readCandidateRecords } from "./candidateLedger.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
 import { repairApprovedKnowledgeAssetProjections } from "./knowledgeAssetRepair.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import {
-  approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
   ensureApprovedKnowledgePresentation,
-  hydrateApprovedKnowledgeMarkdown,
-  readApprovedKnowledgeMetadataIndex,
 } from "./approvedKnowledgeMetadata.js";
-import { packageKnowledgeDescription } from "./packageKnowledgeProjection.js";
 
 interface ApprovedKnowledgeFile {
   relPath: string;
@@ -46,9 +33,8 @@ interface ApprovedKnowledgeFile {
 }
 
 export interface ProjectCloseStatus {
-  state: "missing" | "ready" | "stale";
+  state: "missing" | "ready" | "stale" | "not-checked";
   inputHash?: string;
-  relationshipCoverage?: CodegraphRelationshipCoverage;
   diagnostics: string[];
 }
 
@@ -56,10 +42,7 @@ export interface ProjectCloseResult {
   action: "closed";
   projectRoot: string;
   structure: string;
-  nodes: number;
-  views: number;
-  edges: number;
-  edgeContract: StructureEdgeContractResult;
+  articles: number;
   references: {
     status: "deferred";
     rewritesVerbatim: false;
@@ -69,8 +52,6 @@ export interface ProjectCloseResult {
     writtenAssets: number;
     removedAssets: number;
   };
-  edgeWarnings: string[];
-  relationshipCoverage: CodegraphRelationshipCoverage;
   inputHash: string;
   verifyErrors: number;
   verifyWarnings: number;
@@ -79,37 +60,6 @@ export interface ProjectCloseResult {
 const KNOWLEDGE_ROOT = "knowledge";
 const STRUCTURE_PATH = join(KNOWLEDGE_ROOT, "structure.yaml");
 const STRUCTURE_SCHEMA_VERSION = "context.approved-structure.v1";
-const LOCAL_REF = /^src-(\d+)(#(?:span|symbol):.+)$/u;
-const APPROVED_NODE_TYPES = new Set(["entity", "domain", "action"]);
-
-function isApprovedStructureRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function viewLocationFromRelPath(relPath: string): { collection: string; containment: string; slug: string } {
-  const parts = relPath.split("/");
-  const collection = parts[0] ?? "architecture";
-  const bodyParts = parts.slice(1);
-  const fileName = bodyParts.at(-1) ?? "index.md";
-  const slug = fileName.replace(/\.md$/u, "") || "index";
-  const containment = bodyParts.slice(0, -1).join("/") || "root";
-  return { collection, containment, slug };
-}
-
-function requiredFrontmatterString(
-  frontmatter: Record<string, unknown>,
-  field: "node_ref" | "view_ref",
-  relPath: string,
-): string {
-  const value = frontmatter[field];
-  if (typeof value === "string" && value.trim().length > 0) return value.trim();
-  throw new ContextError(ExitCode.WorkspaceStateError, `approved Markdown is missing ${field}: ${relPath}`, {
-    category: ErrorCategory.WorkspaceStateInvalid,
-    path: relPath,
-    next: "Repair approved Markdown through review apply, then rerun context close --format json.",
-  });
-}
-
 function parseFrontmatter(content: string): Record<string, unknown> {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/u.exec(content);
   if (match?.[1] === undefined) return {};
@@ -124,13 +74,7 @@ function isDeprecated(content: string): boolean {
 }
 
 async function approvedKnowledgeFiles(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
-  const files = await walkApprovedMarkdown(join(projectRoot, KNOWLEDGE_ROOT));
-  const markdown = await Promise.all(files
-    .filter((file) => !isKnowledgeAssetPath(file.relPath))
-    .map(async (file) => ({
-      ...file,
-      content: await readFile(file.absPath, "utf8"),
-    })));
+  const markdown = await readApprovedMarkdownFiles(projectRoot);
   return markdown.filter((file) => !isDeprecated(file.content));
 }
 
@@ -146,285 +90,46 @@ function approvedStructureInputFiles(files: readonly ApprovedKnowledgeFile[]): A
   }));
 }
 
-function canonicalizeSourceRef(ref: string, sources: readonly string[]): string {
-  const match = LOCAL_REF.exec(ref);
-  if (match === null) return ref;
-  const index = Number(match[1]);
-  const suffix = match[2];
-  const source = sources[index - 1];
-  return source === undefined || suffix === undefined ? ref : `${source}${suffix}`;
-}
-
-function nodeTypeFromRef(id: string): string | undefined {
-  const first = id.split("/")[0] ?? "";
-  return APPROVED_NODE_TYPES.has(first) ? first : undefined;
-}
-
-function nodeTypeFromFrontmatter(frontmatter: Record<string, unknown>, id: string, collection: string, relPath: string): string {
-  const nodeType = typeof frontmatter.node_type === "string" && frontmatter.node_type.trim().length > 0
-    ? frontmatter.node_type.trim()
-    : undefined;
-  const expected = nodeTypeFromRef(id);
-  if (nodeType === undefined) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `approved Markdown is missing node_type: ${relPath}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      path: relPath,
-      next: "Repair approved Markdown through review apply, then rerun context close --format json.",
-    });
-  }
-  const indexerNode = /^node:subject:sha256:[a-f0-9]{64}$/u.test(id);
-  if (
-    !APPROVED_NODE_TYPES.has(nodeType) ||
-    (!indexerNode && !isCodeIndexCollection(collection) &&
-      (expected === undefined || nodeType !== expected))
-  ) {
-    throw new ContextError(ExitCode.WorkspaceStateError, `approved Markdown node_type does not match node_ref: ${relPath}`, {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      path: relPath,
-      node_ref: id,
-      node_type: nodeType,
-      expected_node_type: isCodeIndexCollection(collection) ? "entity|domain|action" : expected ?? "entity|domain|action",
-      next: "Repair approved Markdown through review apply, then rerun context close --format json.",
-    });
-  }
-  return nodeType;
-}
-
-function parseSections(content: string, sources: readonly string[]): Array<Record<string, unknown>> {
-  return approvedContextSectionsInMarkdown(content).map((section, index) => ({
-    id: section.id ?? `section-${index + 1}`,
-    kind: section.kind ?? "body",
-    ...(section.summary !== undefined ? { summary: section.summary } : {}),
-    source_refs: section.refs.map((ref) => canonicalizeSourceRef(ref, sources)),
-    ...(section.contentMode !== undefined ? { content_mode: section.contentMode } : {}),
-  }));
-}
-
-function parseParentIndexChildren(frontmatter: Record<string, unknown>): Array<Record<string, unknown>> | undefined {
-  if (frontmatter.generated !== PARENT_INDEX_GENERATED_KIND) return undefined;
-  const rawChildren = frontmatter.children;
-  if (!Array.isArray(rawChildren)) return [];
-  return rawChildren.flatMap((rawChild) => {
-    if (rawChild === null || typeof rawChild !== "object" || Array.isArray(rawChild)) return [];
-    const child = rawChild as Record<string, unknown>;
-    const viewRef = typeof child.view_ref === "string" && child.view_ref.trim().length > 0 ? child.view_ref.trim() : undefined;
-    const nodeRef = typeof child.node_ref === "string" && child.node_ref.trim().length > 0 ? child.node_ref.trim() : undefined;
-    const title = typeof child.title === "string" && child.title.trim().length > 0 ? child.title.trim() : undefined;
-    const path = typeof child.path === "string" && child.path.trim().length > 0 ? child.path.trim() : undefined;
-    if (viewRef === undefined || nodeRef === undefined || title === undefined || path === undefined) return [];
-    const location = viewLocationFromRelPath(path);
-    return [{
-      view_ref: viewRef,
-      node_ref: nodeRef,
-      containment: location.containment,
-      slug: location.slug,
-      title,
-      path,
-      ...(typeof child.summary === "string" && child.summary.trim().length > 0 ? { summary: child.summary.trim() } : {}),
-    }];
-  });
-}
-
-async function deriveApprovedStructure(projectRoot: string): Promise<{
-  inputHash: string;
-  structure: Record<string, unknown>;
-  edgeWarnings: string[];
-  compactFiles: ApprovedKnowledgeFile[];
-}> {
-  const rawFiles = await approvedKnowledgeFiles(projectRoot);
-  const previousStructure = (await readKnowledgeStructure(projectRoot)).parsed;
-  const processedScopes = readProcessedScopes(previousStructure);
-  const approvedKnowledge = approvedKnowledgeSnapshotsFromStructure(previousStructure);
-  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
-  const files = rawFiles.map((file) => ({
-    ...file,
-    content: hydrateApprovedKnowledgeMarkdown({ content: file.content, relPath: file.relPath, metadata }),
-  }));
-  const views = files.map((file) => {
-    const frontmatter = parseFrontmatter(file.content);
-    const location = viewLocationFromRelPath(file.relPath);
-    const nodeRef = requiredFrontmatterString(frontmatter, "node_ref", file.relPath);
-    const viewRef = requiredFrontmatterString(frontmatter, "view_ref", file.relPath);
-    const collection = viewRef.startsWith("view:artifact:")
-      ? location.collection
-      : viewRef.split(":", 1)[0] ?? location.collection;
-    const sources = Array.isArray(frontmatter.sources)
-      ? frontmatter.sources.filter((item): item is string => typeof item === "string")
-      : [];
-    const nodeTags = Array.isArray(frontmatter.node_tags)
-      ? frontmatter.node_tags.filter((item): item is string => typeof item === "string")
-      : undefined;
-    const summary = packageKnowledgeDescription(frontmatter.description);
-    const tags = Array.isArray(frontmatter.tags)
-      ? frontmatter.tags.filter((item): item is string => typeof item === "string")
-      : undefined;
-    const structureTags = tags?.includes("indexer") ? undefined : tags;
-    return {
-      view_ref: viewRef,
-      node_ref: nodeRef,
-      collection,
-      containment: location.containment,
-      slug: location.slug,
-      title: typeof frontmatter.title === "string" ? frontmatter.title : nodeRef,
-      node_type: nodeTypeFromFrontmatter(frontmatter, nodeRef, collection, file.relPath),
-      path: file.relPath,
-      ...(frontmatter.generated === PARENT_INDEX_GENERATED_KIND ? { generated: PARENT_INDEX_GENERATED_KIND } : {}),
-      ...(parseParentIndexChildren(frontmatter) !== undefined ? { children: parseParentIndexChildren(frontmatter) } : {}),
-      ...(typeof summary === "string" ? { summary } : {}),
-      ...(nodeTags !== undefined ? { node_tags: nodeTags } : {}),
-      ...(structureTags === undefined ? {} : { tags: structureTags }),
-      ...(typeof frontmatter.relationship_mode === "string"
-        ? { relationship_mode: frontmatter.relationship_mode }
-        : {}),
-      ...(frontmatter.evidence_status === "source-orphaned" ? { source_orphaned: true } : {}),
-      ...(approvedViewMachineMetadata(frontmatter) === undefined
-        ? {}
-        : { machine: approvedViewMachineMetadata(frontmatter) }),
-      code_edges: codegraphEdgesFromFrontmatter(frontmatter, file.relPath),
-      sources,
-      sections: parseSections(file.content, sources).map((section) => ({
-        ...section,
-        section_ref: `${viewRef}#${String(section.id)}`,
-      })),
-    };
-  });
-  const nodeByRef = new Map<string, Record<string, unknown>>();
-  for (const view of views) {
-    if (!nodeByRef.has(view.node_ref)) {
-      nodeByRef.set(view.node_ref, {
-        node_ref: view.node_ref,
-        title: view.title,
-        node_type: view.node_type,
-        ...(view.summary !== undefined ? { summary: view.summary } : {}),
-        ...(Array.isArray(view.node_tags) ? { tags: view.node_tags } : {}),
-      });
+async function deriveApprovedStructure(projectRoot: string) {
+  const files = await approvedKnowledgeFiles(projectRoot);
+  const previous = (await readKnowledgeStructure(projectRoot)).parsed;
+  const processedScopes = readProcessedScopes(previous);
+  const byPath = new Map(approvedKnowledgeSnapshotsFromStructure(previous).map(article => [article.path, article]));
+  const articles = validateArticleStructureEntries(files.map(file => {
+    const article = byPath.get(file.relPath);
+    if (!article) throw new TypeError(`Approved article is missing structure metadata: ${file.relPath}`);
+    const markers = approvedContextSectionsInMarkdown(file.content);
+    const ids = markers.map(section => section.id);
+    if (ids.some(id => !id) || new Set(ids).size !== ids.length ||
+        ids.length !== article.sections.length || article.sections.some(section => !ids.includes(section.id))) {
+      throw new TypeError(`Article fragment IDs differ from structure: ${file.relPath}`);
     }
-  }
-  const nodes = [...nodeByRef.values()];
-  const projectedViews = views.map(({ code_edges: codeEdges, ...view }) => {
-    void codeEdges;
-    return view;
+    return article;
+  }));
+  const compactFiles = files.flatMap(file => {
+    const content = compactApprovedKnowledgeMarkdown(file.content);
+    return content === file.content ? [] : [{ ...file, content }];
   });
-  const approvedEndpointRefs = new Set<string>();
-  for (const view of projectedViews) {
-    approvedEndpointRefs.add(view.node_ref);
-    approvedEndpointRefs.add(view.view_ref);
-    for (const section of view.sections) {
-      if (typeof section.section_ref === "string" && section.section_ref.length > 0) {
-        approvedEndpointRefs.add(section.section_ref);
-      }
-    }
-  }
-  const edgeWarnings: string[] = [];
-  const existingEdges = await readApprovedStructureEdges(projectRoot, approvedEndpointRefs, {
-    tolerateInvalidYaml: true,
-    tolerateMissingSourceBackedAstEndpoints: true,
-    onInvalidYaml: (message) => {
-      edgeWarnings.push(`Dropped existing approved edges because ${STRUCTURE_PATH} could not be parsed: ${message}`);
-    },
-    onMissingEndpoint: (message) => edgeWarnings.push(message),
-  });
-  const markdownCodeEdges = views.flatMap((view) => view.code_edges);
-  const edges = uniqueEdges(currentCodegraphEdges({
-    baseEdges: existingEdges,
-    markdownEdges: markdownCodeEdges,
-    endpointRefs: approvedEndpointRefs,
-    onMissingEndpoint: (message) => edgeWarnings.push(message),
-  }));
-  const compactFiles = rawFiles.map((file) => ({
-    ...file,
-    content: compactApprovedKnowledgeMarkdown(file.content),
-  }));
-  const metadataHashRecords = projectedViews.map((view) => ({
-    view_ref: view.view_ref,
-    node_ref: view.node_ref,
-    sources: view.sources,
-    node_type: view.node_type,
-    ...(view.node_tags === undefined ? {} : { node_tags: view.node_tags }),
-    ...(view.generated === undefined ? {} : { generated: view.generated }),
-    ...(view.children === undefined ? {} : { children: view.children }),
-    ...(view.relationship_mode === undefined ? {} : { relationship_mode: view.relationship_mode }),
-    ...(view.source_orphaned === undefined ? {} : { source_orphaned: view.source_orphaned }),
-    ...(view.machine === undefined ? {} : { machine: view.machine }),
-  }));
+  const changed = new Map(compactFiles.map(file => [file.relPath, file]));
   const inputHash = approvedStructureInputHash({
     schemaVersion: STRUCTURE_SCHEMA_VERSION,
-    files: approvedStructureInputFiles(compactFiles),
-    edges,
-    metadata: metadataHashRecords,
+    files: approvedStructureInputFiles(files.map(file => changed.get(file.relPath) ?? file)),
+    metadata: articles,
   });
   return {
-    inputHash,
-    structure: {
-      schema_version: STRUCTURE_SCHEMA_VERSION,
-      input_hash: inputHash,
-      nodes,
-      views: projectedViews,
-      edges,
-      ...(approvedKnowledge.length === 0 ? {} : { approved_knowledge: approvedKnowledge.filter(snapshot => projectedViews.some(view => view.path === snapshot.path)) }),
-      ...(processedScopes.length === 0 ? {} : { processed_scopes: processedScopes }),
-    },
-    edgeWarnings,
-    compactFiles,
+    inputHash, compactFiles,
+    structure: { schema_version: STRUCTURE_SCHEMA_VERSION, input_hash: inputHash, articles,
+      ...(processedScopes.length ? { processed_scopes: processedScopes } : {}) },
   };
 }
 
-function uniqueEdges(edges: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const seen = new Set<string>();
-  const unique: Array<Record<string, unknown>> = [];
-  for (const edge of edges) {
-    const key = JSON.stringify(edge);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(edge);
-  }
-  return unique.sort((left, right) => edgeSortKey(left).localeCompare(edgeSortKey(right)));
-}
-
-function edgeSortKey(edge: Record<string, unknown>): string {
-  return JSON.stringify({
-    type: edge.type,
-    from: edge.from,
-    to: edge.to,
-    source_refs: edge.source_refs,
-    relationship_mode: edge.relationship_mode,
-    relation_type: edge.relation_type,
-    confidence: edge.confidence,
-    note: edge.note,
-  });
-}
-
-export async function writeApprovedStructureProjection(projectRoot: string): Promise<{
-  edgeWarnings: string[];
-  edges: number;
-  inputHash: string;
-  nodes: number;
-  structure: string;
-  views: number;
-}> {
-  const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
-  const edgeContract = validateStructureEdgeContract(structure);
-  if (!edgeContract.valid) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "approved structure projection produced invalid edge contract", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      structure: STRUCTURE_PATH,
-      edge_contract: edgeContract,
-    });
-  }
+export async function writeApprovedStructureProjection(projectRoot: string) {
+  const { inputHash, structure, compactFiles } = await deriveApprovedStructure(projectRoot);
   const outputPath = join(projectRoot, STRUCTURE_PATH);
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
-  await Promise.all(compactFiles.map((file) =>
-    file.content === undefined ? Promise.resolve() : writeFile(file.absPath, file.content, "utf8")
-  ));
-  return {
-    edgeWarnings,
-    edges: Array.isArray(structure.edges) ? structure.edges.length : 0,
-    inputHash,
-    nodes: Array.isArray(structure.nodes) ? structure.nodes.length : 0,
-    structure: STRUCTURE_PATH,
-    views: Array.isArray(structure.views) ? structure.views.length : 0,
-  };
+  await writeFile(outputPath, YAML.stringify(structure), "utf8");
+  await Promise.all(compactFiles.map(file => writeFile(file.absPath, file.content, "utf8")));
+  return { inputHash, articles: structure.articles.length, structure: STRUCTURE_PATH };
 }
 
 function referencesReceipt(): ProjectCloseResult["references"] {
@@ -438,20 +143,16 @@ export async function readProjectCloseStatus(projectRoot: string): Promise<Proje
   const inputHash = await approvedKnowledgeInputHash(projectRoot);
   if (!existsSync(structurePath)) return { state: "missing", inputHash, diagnostics: [`close structure is missing: ${STRUCTURE_PATH}`] };
   try {
-    const parsed = YAML.parse(await readFile(structurePath, "utf8")) as unknown;
+    const parsed = await readApprovedStructureValue(projectRoot);
     const record = parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};
     const recorded = record.input_hash;
-    const relationshipCoverage = codegraphRelationshipCoverage({
-      views: Array.isArray(record.views) ? record.views.filter(isApprovedStructureRecord) : [],
-      edges: Array.isArray(record.edges) ? record.edges.filter(isApprovedStructureRecord) : [],
-    });
-    const delivery = await readIndexerDelivery(projectRoot);
-    const deliveryNeedsClose = ((delivery?.current.length ?? 0) > 0 || delivery?.partial !== undefined) && delivery?.closed !== true;
+    const delivery = await readProductionStage(projectRoot) ? undefined : await readRevisionDelivery(projectRoot);
+    const deliveryNeedsClose = delivery !== undefined && delivery.closed !== true;
     return recorded === inputHash && !deliveryNeedsClose
-      ? { state: "ready", inputHash, relationshipCoverage, diagnostics: [] }
-      : { state: "stale", inputHash, relationshipCoverage, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
+      ? { state: "ready", inputHash, diagnostics: [] }
+      : { state: "stale", inputHash, diagnostics: [`close structure is stale: ${STRUCTURE_PATH}`] };
   } catch (error) {
     return {
       state: "stale",
@@ -467,7 +168,8 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     const draftCandidates = candidates.filter((candidate) =>
       candidate.candidate_type === "indexer-artifact" && candidate.status === "draft"
     );
-    const delivery = await readIndexerDelivery(projectRoot);
+    const production = await readProductionStage(projectRoot);
+    const delivery = production ? undefined : await readRevisionDelivery(projectRoot);
     if (delivery?.partial) await assertPartialDeliveryCurrent(projectRoot, delivery.partial);
     else await assertRequiredArticlesReviewed(projectRoot, candidates);
     if (draftCandidates.length > 0 && !delivery?.partial) {
@@ -487,22 +189,7 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await Promise.all(descriptionRepairs.map((file) =>
       writeFile(file.absPath, file.content, "utf8")
     ));
-    const { inputHash, structure, edgeWarnings, compactFiles } = await deriveApprovedStructure(projectRoot);
-    const nodes = Array.isArray(structure.nodes) ? structure.nodes.length : 0;
-    const views = Array.isArray(structure.views) ? structure.views.length : 0;
-    const edges = Array.isArray(structure.edges) ? structure.edges.length : 0;
-    const relationshipCoverage = codegraphRelationshipCoverage({
-      views: Array.isArray(structure.views) ? structure.views.filter(isApprovedStructureRecord) : [],
-      edges: Array.isArray(structure.edges) ? structure.edges.filter(isApprovedStructureRecord) : [],
-    });
-    const edgeContract = validateStructureEdgeContract(structure);
-    if (!edgeContract.valid) {
-      throw new ContextError(ExitCode.WorkspaceStateError, "close produced invalid approved structural edge contract", {
-        category: ErrorCategory.WorkspaceStateInvalid,
-        structure: STRUCTURE_PATH,
-        edge_contract: edgeContract,
-      });
-    }
+    const { inputHash, structure, compactFiles } = await deriveApprovedStructure(projectRoot);
     const verify = await verifyProjectWorkspace(projectRoot, { approvedStructureOverride: structure });
     const verifyErrors = verify.issues.filter((issue) => issue.severity === "error").length;
     const verifyWarnings = verify.issues.length - verifyErrors;
@@ -518,23 +205,18 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await writeFile(outputPath, `${YAML.stringify(structure)}`, "utf8");
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
     const { readTaskRollback } = await import("./taskRollback.js");
-    if (!await readTaskRollback(projectRoot)) await closeIndexerDelivery(projectRoot);
+    if (!production && !await readTaskRollback(projectRoot)) await closeRevisionDelivery(projectRoot);
     return {
       action: "closed",
       projectRoot,
       structure: STRUCTURE_PATH,
-      nodes,
-      views,
-      edges,
-      edgeContract,
+      articles: structure.articles.length,
       references: referencesReceipt(),
       resourceProjection: {
         repairedPages: resourceProjection.repairedPages.length,
         writtenAssets: resourceProjection.writtenAssets.length,
         removedAssets: resourceProjection.removedAssets.length,
       },
-      edgeWarnings,
-      relationshipCoverage,
       inputHash,
       verifyErrors,
       verifyWarnings,
@@ -553,11 +235,8 @@ export async function runProjectCloseCommand(input: {
     cwd: result.projectRoot,
     kind: "knowledge.closed",
     properties: {
-      node_count: result.nodes,
-      view_count: result.views,
-      edge_count: result.edges,
+      article_count: result.articles,
       verify_warning_count: result.verifyWarnings,
-      relationship_coverage: result.relationshipCoverage.state,
     },
   });
   if (input.format === "json") {
@@ -566,12 +245,7 @@ export async function runProjectCloseCommand(input: {
     process.stdout.write([
       `closed context project`,
       `structure: ${result.structure}`,
-      `nodes: ${result.nodes}`,
-      `views: ${result.views}`,
-      `edges: ${result.edges}`,
-      `code-index relationships: ${result.relationshipCoverage.state} (${result.relationshipCoverage.emitted_edges} edge(s))`,
-      `edge structural contract: ${result.edgeContract.valid ? "valid" : "invalid"} (${result.edgeContract.checked} edge(s))`,
-      ...(result.edgeWarnings.length > 0 ? [`edge warnings: ${result.edgeWarnings.join("; ")}`] : []),
+      `articles: ${result.articles}`,
       `references: ${result.references.status}, rewrites verbatim: ${result.references.rewritesVerbatim}`,
       `verify: ${result.verifyErrors} error(s), ${result.verifyWarnings} warning(s)`,
       "",

@@ -1,23 +1,17 @@
+import { validateArticleStructureEntries } from "@c4a/context";
 import { existsSync } from "node:fs";
 import { approvedKnowledgeDependencyWarnings } from "./approvedKnowledgeDependencyWarnings.js";
-import { readFile } from "node:fs/promises";
+import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { join } from "node:path";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { CANDIDATE_LEDGER_FILE, readCandidateRecords, type CandidateRecord } from "./candidateLedger.js";
-import { validateApprovedStructureEdges } from "./verifyApprovedStructure.js";
+import { validateApprovedStructure } from "./verifyApprovedStructure.js";
 import { parseFrontmatterLoose, validateApprovedMarkdown } from "./verifyFrontmatter.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
-import {
-  loadSourceRegistryLookup,
-  loadVerifiedSymbolIndex,
-  type EvidenceIndexCache,
-} from "./verifySourceRefs.js";
 import type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { knowledgeAssetReferences, unprojectedSourceAssetLinks } from "./knowledgeAssets.js";
-import { parseDocumentSourceLocator } from "@c4a/extract";
 import {
   groupProjectVerifyIssues,
   pagedProjectVerifyIssues,
@@ -28,19 +22,6 @@ import {
 } from "./approvedKnowledgeMetadata.js";
 
 export type { ProjectVerifyIssue, ProjectVerifyResult } from "./verifyTypes.js";
-
-function approvedDocumentSourceKeys(frontmatter: Record<string, unknown>): string[] {
-  const candidates = [
-    ...(typeof frontmatter.resource === "string" ? [frontmatter.resource] : []),
-    ...(Array.isArray(frontmatter.sources)
-      ? frontmatter.sources.filter((value): value is string => typeof value === "string")
-      : []),
-  ];
-  return [...new Set(candidates.flatMap((candidate) => {
-    const locator = parseDocumentSourceLocator(candidate);
-    return locator === null ? [] : [`${locator.sourceType}:${locator.sourceName}`];
-  }))].sort();
-}
 
 function evidenceStatusForIssues(issues: readonly ProjectVerifyIssue[]): ProjectVerifyResult["evidenceStatus"] {
   if (issues.some((issue) => issue.severity === "error")) return "fail";
@@ -63,16 +44,16 @@ async function readCandidateDecisionState(input: {
         input.issues.push({ severity: "error", code: "candidate-id-duplicate", path: CANDIDATE_LEDGER_FILE, message: `duplicate candidate_id: ${record.candidate_id}` });
       }
       candidateIds.add(record.candidate_id);
-      const existingView = candidatesByViewRef.get(record.view_ref);
+      const existingView = candidatesByViewRef.get(record.article_id);
       if (existingView !== undefined) {
         input.issues.push({
           severity: "error",
           code: "candidate-view-ref-duplicate",
           path: CANDIDATE_LEDGER_FILE,
-          message: `multiple Candidates target the same view_ref: ${record.view_ref}`,
+          message: `multiple Candidates target the same view_ref: ${record.article_id}`,
         });
       }
-      candidatesByViewRef.set(record.view_ref, record);
+      candidatesByViewRef.set(record.article_id, record);
       if (record.status === "rejected") rejectedDecisions.set(record.candidate_id, record.fingerprint);
     }
   } catch (error) {
@@ -93,12 +74,6 @@ export async function verifyProjectWorkspace(
   } = {},
 ): Promise<ProjectVerifyResult> {
   const issues: ProjectVerifyIssue[] = [];
-  const symbolIndex = await loadVerifiedSymbolIndex(projectRoot);
-  const sourceRegistry = await loadSourceRegistryLookup(projectRoot, issues);
-  const evidenceIndexCache: EvidenceIndexCache = {
-    entries: new Map(),
-    ignoredPaths: new Map(),
-  };
   const approvedMetadata = await readApprovedKnowledgeMetadataIndex(
     projectRoot,
     options.approvedStructureOverride,
@@ -109,18 +84,18 @@ export async function verifyProjectWorkspace(
     issues,
   });
 
-  const seenViewRefs = new Set<string>();
-  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
-    if (isKnowledgeAssetPath(file.relPath)) continue;
-    const rawContent = await readFile(file.absPath, "utf8");
+  const articlesByPath = new Map(validateArticleStructureEntries(approvedMetadata.structure?.articles ?? []).map(article => [article.path, article]));
+  for (const file of await readApprovedMarkdownFiles(projectRoot)) {
+    const rawContent = file.content;
     const content = hydrateApprovedKnowledgeMarkdown({
       content: rawContent,
       relPath: file.relPath,
       metadata: approvedMetadata,
     });
     const frontmatter = parseFrontmatterLoose(content);
-    const viewRef = typeof frontmatter.view_ref === "string" ? frontmatter.view_ref : undefined;
-    const sourceKeys = approvedDocumentSourceKeys(frontmatter);
+    const article = articlesByPath.get(file.relPath);
+    const viewRef = article?.article_id;
+    const sourceKeys = [...new Set(article?.sections.flatMap(section => section.references.map(reference => reference.source_ref)) ?? [])];
     const unprojectedResourceLinks = unprojectedSourceAssetLinks(content);
     if (unprojectedResourceLinks.length > 0) {
       issues.push({
@@ -176,22 +151,15 @@ export async function verifyProjectWorkspace(
     }
     const pageIssues: ProjectVerifyIssue[] = [];
     await validateApprovedMarkdown({
-      projectRoot,
       relPath: file.relPath,
-      content,
-      seenViewRefs,
-      sourceRegistry,
-      symbolIndex,
-      evidenceIndexCache,
+      content: rawContent,
       issues: pageIssues,
     });
     issues.push(...pageIssues);
   }
 
-  await validateApprovedStructureEdges({
+  await validateApprovedStructure({
     projectRoot,
-    sourceRegistry,
-    evidenceIndexCache,
     issues,
     ...(options.approvedStructureOverride !== undefined ? { structureOverride: options.approvedStructureOverride } : {}),
   });

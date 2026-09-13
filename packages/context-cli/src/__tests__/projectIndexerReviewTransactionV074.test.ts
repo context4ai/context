@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CandidateRecord } from "../project/candidateLedger.js";
@@ -12,11 +12,10 @@ import { recoverDurableMultiFileTransactions } from
   "../project/durableMultiFileTransaction.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
 import { renderApprovedIndexerMarkdown } from "../project/reviewApplyIndexer.js";
-import { readRejectedDecisions, LEGACY_REVIEW_DECISIONS_FILE } from
+import { readRejectedDecisions } from
   "../project/reviewDecisions.js";
 import { candidateIdsHash, candidateSetHash } from "../project/reviewShared.js";
 import {
-  approvedViewMachineMetadata,
   compactApprovedKnowledgeMarkdown,
   ensureApprovedKnowledgePresentation,
 } from "../project/approvedKnowledgeMetadata.js";
@@ -27,8 +26,7 @@ const CANDIDATE_ID = `indexer/${"a".repeat(64)}`;
 function candidate(): CandidateRecord {
   return {
     candidate_id: CANDIDATE_ID,
-    node_ref: `node:subject:${DIGEST}`,
-    view_ref: `view:artifact:${DIGEST}`,
+    article_id: `artifact:subject:${DIGEST}`,
     collection: "architecture",
     status: "draft",
     candidate_type: "indexer-artifact",
@@ -44,12 +42,10 @@ function candidate(): CandidateRecord {
       file_digest: DIGEST,
       artifact_ref: `artifact:subject:${DIGEST}`,
       section_refs: [`section:subject:${DIGEST}`],
-      source_ref: "repo:sample",
-      evidence_bindings: [],
       sections: [{
         section_ref: `section:subject:${DIGEST}`,
         section_key: "overview",
-        evidence_refs: [],
+        references: [],
         markdown: "# Sample\n\nCurrent knowledge.",
         markdown_digest: DIGEST,
       }],
@@ -118,24 +114,17 @@ describe("Indexer Review durable transaction", () => {
       "batch_digest",
     ]) expect(rendered).not.toContain(token);
 
-    expect(approvedViewMachineMetadata({
-      node_ref: `node:subject:${DIGEST}`,
-      view_ref: `view:artifact:${DIGEST}`,
-      sources: ["repo:sample"],
-      candidate_fingerprint: DIGEST,
-      current_batch_digest: DIGEST,
-      evidence_bindings: [],
-      benchmark_summary: { duration_ms: 1 },
-    })).toBeUndefined();
+    expect(rendered).not.toContain("article_id:");
+    expect(rendered).not.toContain("node_ref:");
+    expect(rendered).toContain('<!-- context:section id="overview" -->');
   });
 
-  test("recovers rejected Candidate status and removes the legacy duplicate after interruption", async () => {
+  test("recovers rejected Candidate status after an interrupted review transaction", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "context-indexer-review-transaction-"));
     try {
       const row = candidate();
       await writeCandidateRecords(projectRoot, [row]);
       await mkdir(join(projectRoot, "knowledge"), { recursive: true });
-      await writeFile(join(projectRoot, LEGACY_REVIEW_DECISIONS_FILE), "obsolete decision data");
       await expect(applyReviewDecisions({
         projectRoot,
         payload: {
@@ -165,7 +154,6 @@ describe("Indexer Review durable transaction", () => {
       expect((await readRejectedDecisions(projectRoot)).get(row.candidate_id)).toBe(
         row.fingerprint,
       );
-      expect(await Bun.file(join(projectRoot, LEGACY_REVIEW_DECISIONS_FILE)).exists()).toBe(false);
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

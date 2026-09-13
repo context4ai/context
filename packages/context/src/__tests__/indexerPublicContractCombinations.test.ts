@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { materializeIndexerStructuredContent, type IndexerArtifactFact, type IndexerJson } from "../index.js";
+import { renderIndexerDeterministicFacts, type IndexerArtifactFact, type IndexerJson } from "../index.js";
 
 const subject = { protocol: "context.subject-key/v1" as const, namespace: "sample", kind: "component", local_key: "panel" };
 const member = (name: string, extra: Record<string, IndexerJson> = {}) => ({
@@ -14,9 +14,10 @@ const props = fact("props", { name: "Props", kind: "interface", members: [
   member("label", { typeAnnotation: "string", readonly: true, optional: false }),
 ] });
 const component = (id: string, value: string) => fact(id, { name: id, kind: "component", propsType: "Props", members: [member("enabled", { defaultValue: value })] });
-const render = (facts: IndexerArtifactFact[], selected = ["fact:props"]) => materializeIndexerStructuredContent({
-  facts, blocks: [{ block_id: "api", layer: "deterministic-block", renderer: "public-contract-table", fact_refs: selected }],
-})[0]!;
+const render = (facts: IndexerArtifactFact[], selected = ["fact:props"]) => ({
+  markdown: renderIndexerDeterministicFacts({ renderer: "public-contract-table",
+    facts: facts.filter(item => selected.includes(item.fact_ref)), supporting_facts: facts }),
+});
 
 test.each([false, true])("partial implementation preserves declared fields and metadata; direct=%s", direct => {
   const facts = [props, component("Panel", "true")];
@@ -54,7 +55,7 @@ test.each([
   support.value = { ...(support.value as Record<string, IndexerJson>), ...difference };
   const output = render([props, support]);
   expect(output.markdown).toContain("| optional | false |");
-  expect(output.fact_refs).toEqual(["fact:props"]);
+
 });
 
 test("non-component contracts retain service fields, defaults and response types", () => {
@@ -63,5 +64,5 @@ test("non-component contracts retain service fields, defaults and response types
   const output = render([method, component("Panel", "true")], [method.fact_ref]);
   expect(output.markdown).toContain("| List | limit | int32 | optional | 20 |");
   expect(output.markdown).toContain("| List | response | Results |");
-  expect(output.fact_refs).toEqual([method.fact_ref]);
+
 });

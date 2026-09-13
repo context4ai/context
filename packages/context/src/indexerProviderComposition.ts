@@ -101,10 +101,6 @@ function canonicalComposerContract(
   return indexerComposerContractSchema.parse({
     ...contract,
     primary_requirements: {
-      fact_kinds: uniqueSorted(
-        contract.primary_requirements.fact_kinds,
-        "composer primary fact kinds",
-      ),
       artifact_kinds: uniqueSorted(
         contract.primary_requirements.artifact_kinds,
         "composer primary Artifact kinds",

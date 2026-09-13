@@ -6,23 +6,9 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "work_start_report",
     "sources"
   ],
   "properties": {
-    "work_start_report": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "path"
-      ],
-      "properties": {
-        "path": {
-          "const": ".tmp/work-start-report.md"
-        }
-      },
-      "description": "The complete report already presented at the first-task source-boundary gate."
-    },
     "sources": {
       "$ref": "#/$defs/sources"
     }

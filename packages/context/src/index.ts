@@ -102,10 +102,8 @@ export {
   indexerProfileContractDigest,
   indexerProfileContractEntrySchema,
   indexerProfileContractSchema,
-  indexerProfileSubjectKeySchema,
   indexerQuestionTargetDomainSchema,
   indexerReaderQuestionContractSchema,
-  indexerSubjectKeyContractSchema,
   inflationSensitiveHardMaximum,
   validateIndexerOperatorContract,
   validateIndexerProfileContract,
@@ -115,9 +113,7 @@ export type {
   IndexerOperatorContract,
   IndexerProfileContract,
   IndexerProfileContractEntry,
-  IndexerProfileSubjectKey,
   IndexerReaderQuestionContract,
-  IndexerSubjectKeyContract,
 } from "./indexerProfileContract.js";
 export {
   createIndexerOverlayValidationReceipt,
@@ -167,7 +163,6 @@ export {
   indexerSubjectKeySchema,
 } from "./indexerSubjectIdentity.js";
 export type { IndexerSubjectKey } from "./indexerSubjectIdentity.js";
-export * from "./indexerSubjectKeyAuthority.js";
 export {
   buildIndexerPostAuthorFragmentRequest,
   composeIndexerPostAuthorEnvelope,
@@ -205,7 +200,6 @@ export type {
   IndexerPostAuthorWorkset,
   IndexerPostAuthorWorksetSet,
   IndexerPrimaryArtifactView,
-  IndexerPrimaryFactView,
   IndexerPrimaryResultView,
 } from "./indexerPostAuthorComposition.js";
 export {
@@ -213,19 +207,15 @@ export {
   buildIndexerMainWorksetSet,
   buildIndexerRepairIntent,
   buildIndexerMainTransportBatch,
-  buildIndexerTargetResolutionView,
   indexerMainWorksetDigest,
   indexerMainWorksetSchema,
   indexerMainWorksetSetDigest,
   indexerMainWorksetSetSchema,
   indexerMainTransportBatchSchema,
   indexerOwnerCohortRef,
-  indexerTargetResolutionViewDigest,
-  indexerTargetResolutionViewSchema,
   validateIndexerMainWorkset,
   validateIndexerMainWorksetSet,
   validateIndexerRepairIntent,
-  validateIndexerTargetResolutionView,
 } from "./indexerMainWorkset.js";
 export type {
   IndexerMainAuthorWorkset,
@@ -234,7 +224,6 @@ export type {
   IndexerMainWorksetSet,
   IndexerRepairIntent,
   IndexerMainTransportBatch,
-  IndexerTargetResolutionView,
 } from "./indexerMainWorkset.js";
 export {
   indexerPartitionGroupBindingDigest,
@@ -254,14 +243,11 @@ export type {
 } from "./indexerPartitionPlan.js";
 export * from "./indexerPartitionInventory.js";
 export * from "./indexerPartitionConvergence.js";
-export * from "./indexerArtifactDependencies.js";
 export * from "./indexerDependencyView.js";
 export * from "./indexerRunEnvelope.js";
 export * from "./indexerSharedArtifactFingerprint.js";
-export * from "./indexerIncrementalImpact.js";
 export * from "./indexerMainRunProtocol.js";
 export * from "./indexerMainLifecycle.js";
-export * from "./indexerSubjectCatalog.js";
 export * from "./indexerProgramRunProtocol.js";
 export * from "./indexerAgentStepProtocol.js";
 export * from "./indexerSemanticInput.js";
@@ -745,5 +731,5 @@ export { indexerArticleKeySchema, indexerArticlePlanSchema, validateIndexerArtic
 export type { IndexerArticlePlan } from "./indexerArticlePlan.js";
 
 export * from "./knowledgeMap.js";
-export * from "./indexerKnowledgeDependency.js";
 export * from "./indexerApprovedKnowledge.js";
+export * from "./articleStructure.js";

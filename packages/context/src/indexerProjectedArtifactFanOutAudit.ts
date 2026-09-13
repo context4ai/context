@@ -33,7 +33,6 @@ const DIAGNOSTIC_SAMPLE_LIMIT = 100;
 const MISSING_REQUIREMENT_ORDER = [
   "logical-unit-owner",
   "bundle-variant",
-  "evidence-justification",
 ] as const;
 
 const missingRequirementSchema = z.enum(MISSING_REQUIREMENT_ORDER);
@@ -183,12 +182,8 @@ function validatePlanningInput(input: {
       actual_artifacts: bundle.artifacts.map((entry) => ({
         artifact_id: entry.artifact_id,
         artifact_kind: entry.artifact_kind,
-        evidence_refs: entry.evidence_refs,
       })),
       allowed_question_refs: group.reader_question_refs,
-      known_evidence_refs: [...new Set(bundle.artifacts.flatMap((entry) =>
-        entry.evidence_refs
-      ))],
     });
   }
   const projectionCountByEntry = new Map<string, number>();
@@ -270,13 +265,6 @@ function missingRequirements(input: {
   if (!validOwner(input)) missing.push("logical-unit-owner");
   const match = matchedBundleEntry(input);
   if (match === null) missing.push("bundle-variant");
-  if (
-    match === null ||
-    canonicalIndexerJson(input.projection.evidence_justification_refs) !==
-      canonicalIndexerJson(match.entry.evidence_refs)
-  ) {
-    missing.push("evidence-justification");
-  }
   return missing;
 }
 

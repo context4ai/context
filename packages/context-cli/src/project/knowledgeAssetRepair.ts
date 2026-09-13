@@ -13,7 +13,8 @@ import {
   unprojectedSourceAssetLinks,
 } from "./knowledgeAssets.js";
 import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
-import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
+import { readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
+import { validateArticleStructureEntries } from "@c4a/context";
 import {
   defaultDocumentManifest,
   defaultDocumentMaterializedAt,
@@ -22,22 +23,13 @@ import {
   registeredDocumentSource,
   type EvidenceIndexCache,
   type SourceRegistryLookup,
-} from "./verifySourceRefs.js";
+} from "./assetSourceRegistry.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
 
 export interface KnowledgeAssetRepairResult {
   repairedPages: string[];
   writtenAssets: string[];
   removedAssets: string[];
-}
-
-function sourceLocators(frontmatter: Record<string, unknown>): string[] {
-  return [...new Set([
-    ...(typeof frontmatter.resource === "string" ? [frontmatter.resource] : []),
-    ...(Array.isArray(frontmatter.sources)
-      ? frontmatter.sources.filter((value): value is string => typeof value === "string")
-      : []),
-  ])];
 }
 
 function moduleSourceIdentity(source: string): {
@@ -76,6 +68,7 @@ async function sourceProjectionDocuments(input: {
   source: string;
   sourceRegistry: SourceRegistryLookup;
   cache: EvidenceIndexCache;
+  documentPath?: string;
 }) {
   const locator = parseDocumentSourceLocator(input.source);
   const moduleIdentity = moduleSourceIdentity(input.source);
@@ -110,7 +103,9 @@ async function sourceProjectionDocuments(input: {
   });
   return {
     evidence,
-    documentPaths: locatorRegistryEntry === undefined
+    documentPaths: input.documentPath !== undefined
+      ? evidence.index.documents.filter(document => document.path === input.documentPath).map(document => document.path)
+      : locatorRegistryEntry === undefined
       ? evidence.index.documents.map((document) => document.path)
       : [locator!.documentPath],
   };
@@ -181,14 +176,18 @@ export async function repairApprovedKnowledgeAssetProjections(
   const cache: EvidenceIndexCache = { entries: new Map(), ignoredPaths: new Map() };
   const pages: Array<{ relPath: string; absPath: string; content: string }> = [];
   const assets = new Map<string, PreparedKnowledgeAsset>();
+  const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
+  const articles = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   for (const file of affected) {
     const { content } = file;
-    const frontmatter = parseFrontmatterLoose(content);
+    const references = articles.get(file.relPath)?.sections.flatMap(section => section.references) ?? [];
+    const locations = new Map(references.map(reference => [JSON.stringify([reference.source_ref, reference.locator.path]), reference]));
     let projectedContent = content;
-    for (const source of sourceLocators(frontmatter)) {
+    for (const reference of locations.values()) {
       const projectionSource = await sourceProjectionDocuments({
         projectRoot,
-        source,
+        source: reference.source_ref,
+        documentPath: reference.locator.path,
         sourceRegistry,
         cache,
       });

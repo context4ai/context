@@ -36,6 +36,20 @@ optional: preserve the original URL without falling back to body retrieval or
 changing credentials. Resolve intent from the conversation; refine provisional
 chapters and module boundaries from evidence after formal capture.
 
+## Agent-planned writing order
+
+Within the tasks available in the current Route, the Agent may choose a writing
+order from the reader's needs and relationships between topics. There is no
+fixed code-first or document-first rule. Prefer foundational concepts and shared
+terminology before walkthroughs or summaries that benefit from them, when this
+reduces rework. Independent topics can proceed without waiting; adjust the order
+as writing progresses instead of maintaining a separate scheduling artifact.
+
+This is an Agent working preference, not a new dependency or completion gate.
+Do not add dependency fields, fetch extra material, or delay useful work merely
+to establish an order. Keep current task boundaries, source permissions and
+submission rules; do not pull future batches forward or change the CLI Route.
+
 ## Workspace versions and changelog
 
 `package.json.version` is the workspace SemVer. At completed-scope delivery the
@@ -138,6 +152,13 @@ ordered `content` list of `{ "markdown": "new text" }` and/or
 `{ "program": "exact current program token" }`. Unchanged sections and the
 selected section's source references remain intact. Use full Markdown when
 changing structure, adding a page or when a section has no unambiguous ID.
+
+To change a fragment's citations, include `references` alongside its `section_id`:
+each entry supplies `source_ref` and `locator` (`path`, `start_line`, `end_line`).
+Context computes the region fingerprint. This uses the same revision submission,
+with at most three source positions per fragment. Full Markdown may include a
+`sections` list of reference edits; local section edits may change content,
+references, or both. Omission preserves citations; an empty list removes them.
 
 For an optional check, append `--preview` to the current `action complete-current`
 command with the same revision and input file. It validates and returns the
@@ -412,17 +433,17 @@ Indexer's read scope. Its `task adjust` scope also supplies the explicit
 `requirement_ref`. This extends the current page's available sources and keeps
 queued pages; it does not silently start another task or another Indexer.
 
-### Replacing supporting article identities
+### Revising material reused from another article
 
-When an upstream article is split, merged or removed, start `context revise` for
-its consumer and use `context task adjust --input - --format json` with
-`instruction` and `knowledge_dependencies: { dependencies }`. Each dependency
-uses an approved `artifact_ref`, optional `section_refs`, and `required` flag.
-The current Author input returns authorized replacement facts and their evidence.
-Repeat the adjustment with `knowledge_dependencies.sections`, selecting each
-retained `section_key` and its full `fact_refs` and `evidence_refs` support. Then
-revise the explanation and complete normal Review, close and build. An explicit
-empty dependency list removes the relationship only when remaining sections have
-valid direct support. Missing dependencies, changed approvals and invalid source
-references cannot silently become current evidence. Writing quality remains an
-Agent/Review decision; no chapter-count or wording gate is introduced.
+When a supporting article changes, revise the affected explanation using
+`context revise`. Read the relevant approved text and, where needed, its original
+sources. Keep direct source regions on the affected output fragments; do not
+recreate an article dependency graph or copy facts and evidence IDs.
+
+Revision section edits may supply `references` as `source_ref` plus a
+`locator` containing `path`, `start_line`, and `end_line`. Context computes the
+regional digest. Omitted references preserve the current fragment's citations;
+an explicit empty list removes them, and deleting a fragment removes its
+citations. Each fragment may cite at most three source positions. Register and
+authorize new material before citing it, then follow normal Review, close and
+build. Article links alone do not authorize reading new sources or prove a claim.

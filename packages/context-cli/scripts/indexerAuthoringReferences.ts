@@ -6,9 +6,7 @@ export async function syncIndexerAuthoringReferences(repositoryRoot: string): Pr
   const docs = resolve(repositoryRoot, "packages/context/docs");
   const target = resolve(repositoryRoot, "plugins/context/skills/context-indexer-create/references");
   await rm(target, { recursive: true, force: true });
-  const queue = ["guides/indexer-skill-creation.md", "reference/indexer-provider-protocol.md",
-    "guides/code-indexer-skill-authoring.md", "guides/markdown-indexer-skill-authoring.md",
-    "guides/note.md", "guides/sessions.md", "guides/indexer-provider-and-customization.md"];
+  const queue = ["guides/indexer-skill-creation.md"];
   const seen = new Set<string>();
   while (queue.length) {
     const path = queue.shift()!;

@@ -15,7 +15,6 @@ import {
   indexerSnakeCaseIdSchema,
   portableIndexerPathSchema,
 } from "./indexerProtocolCommon.js";
-import { indexerSubjectKeyContractSchema } from "./indexerProfileContract.js";
 
 const executionArgumentSchema = z.string().superRefine((value, context) => {
   if (
@@ -111,7 +110,6 @@ export const indexerProviderLayerFragmentSchema = z.discriminatedUnion("kind", [
 export const indexerComposerContractSchema = z.object({
   instruction: portableIndexerPathSchema,
   primary_requirements: z.object({
-    fact_kinds: z.array(indexerIdSchema).min(1),
     artifact_kinds: z.array(indexerIdSchema).min(1),
   }).strict(),
   derived_artifact_policy: z.object({
@@ -125,11 +123,6 @@ export const indexerComposerContractSchema = z.object({
     behavior: z.literal("empty-fragment-set"),
   }).strict(),
 }).strict().superRefine((value, context) => {
-  addDuplicateIssues(
-    value.primary_requirements.fact_kinds,
-    context,
-    "composer primary fact kinds",
-  );
   addDuplicateIssues(
     value.primary_requirements.artifact_kinds,
     context,
@@ -342,7 +335,6 @@ const compositionSchema = z.object({
     profile: indexerIdSchema,
     extends: indexerIdSchema,
     variant_schema: variantSchema.optional(),
-    subject_key_schema: indexerSubjectKeyContractSchema,
   }).strict()).min(1),
 }).strict().superRefine((value, context) => {
   addDuplicateIssues(

@@ -1,6 +1,6 @@
 import { readReviewPayloadFile } from "../project/review.js";
 import { describe, expect, test } from "bun:test";
-import { writeFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { writeFile, mkdtemp, readFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CandidateRecord } from "../project/candidateLedger.js";
@@ -13,8 +13,7 @@ function candidate(index: number): CandidateRecord {
   const key = String(index).padStart(2, "0");
   return {
     candidate_id: `indexer/${key}${"a".repeat(62)}`,
-    node_ref: `node:subject:${DIGEST}`,
-    view_ref: `view:artifact:${DIGEST}`,
+    article_id: `artifact:subject:${DIGEST}`,
     collection: "architecture",
     status: "draft",
     candidate_type: "indexer-artifact",
@@ -30,12 +29,10 @@ function candidate(index: number): CandidateRecord {
       file_digest: DIGEST,
       artifact_ref: `artifact:subject:${DIGEST}`,
       section_refs: [`section:subject:${DIGEST}`],
-      source_ref: `repo:module-${key}`,
-      evidence_bindings: [],
       sections: [{
         section_ref: `section:subject:${DIGEST}`,
         section_key: "overview",
-        evidence_refs: [],
+        references: [],
         markdown: `Reader-facing content ${key}.`,
         markdown_digest: DIGEST,
       }],
@@ -52,6 +49,30 @@ function candidate(index: number): CandidateRecord {
 }
 
 describe("managed Review batching", () => {
+  test("loads current reader purposes by source without registering an Indexer", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-review-purpose-"));
+    try {
+      await mkdir(join(root, "src"));
+      const path = join(root, "src/indexers.yaml");
+      const requirement = (id: string, source: string, purpose: string) => ({ id, purpose,
+        target_scope: { targets: [{ source_ref: source }] } });
+      await writeFile(path, JSON.stringify({ requirements: [
+        requirement("current", "repo:module-01", "Explain the public entry point"),
+        requirement("other", "repo:unrelated", "Unrelated reader purpose"),
+      ] }));
+      const candidates = [{ record: candidate(1), snapshot: undefined }];
+      const first = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
+      expect(first.content).toContain("Explain the public entry point");
+      expect(first.content).not.toContain("Unrelated reader purpose");
+      await writeFile(path, JSON.stringify({ requirements: [
+        requirement("current", "repo:module-01", "Explain updated usage"),
+      ] }));
+      const next = await materializeCurrentReviewBatchSet({ projectRoot: root, candidates });
+      expect(next.content).toContain("Explain updated usage");
+      expect(next.digest).not.toBe(first.digest);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("assigns every Candidate to exactly one bounded reader-facing batch", () => {
     const candidates = Array.from({ length: 13 }, (_, index) => ({
       record: candidate(index + 1),

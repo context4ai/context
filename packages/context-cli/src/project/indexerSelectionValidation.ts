@@ -9,7 +9,6 @@ import {
   loadIndexerProviderManifest,
   resolveIndexerBaseQuestionBindingAuthority,
   resolveIndexerOverlayQuestionBindingAuthority,
-  resolveIndexerSubjectKeySchemas,
   resolvedProviderStableFingerprint,
   validateFinalizedIndexerRegistry,
   validateIndexerProviderContractReferences,
@@ -20,9 +19,6 @@ import {
   type IndexerRegistryEntry,
   type IndexerOverlayQuestionAuthorityProof,
   type IndexerProviderCompositionPlan,
-  type IndexerResolvedSubjectKeySchema,
-  type IndexerSubjectKeyProviderAuthority,
-  type IndexerSubjectKeyProfileSelection,
   type ResolvedProviderBundle,
 } from "@c4a/context";
 import type { IndexerCustomizationView } from "./indexerCustomization.js";
@@ -64,8 +60,8 @@ export interface IndexerSelectionFinalReport {
   requirement_set_digest: string;
   indexer_selection_digest: string;
   question_authority_set_digest: string;
-  subject_key_schema_set_digest: string;
-  subject_key_schemas: IndexerResolvedSubjectKeySchema[];
+
+
   composition_plans: IndexerProviderCompositionPlan[];
   providers: Array<{
     indexer_id: string;
@@ -338,7 +334,6 @@ export async function validateIndexerSelectionFinal(input: {
   const providerReports: IndexerSelectionFinalReport["providers"] = [];
   const runtimeReceipts: IndexerSelectionFinalReport["runtime_receipts"] = [];
   const manifestsByIndexer = new Map<string, Map<string, IndexerProviderManifest>>();
-  const subjectKeyProviders: IndexerSubjectKeyProviderAuthority[] = [];
   for (const request of expectedStatic.provider_requests) {
     const resolved = resolvedByKey.get(selectionKey(request.indexer_id, request.provider_id));
     if (resolved === undefined) throw new TypeError("final selection is missing a resolved Provider");
@@ -369,13 +364,6 @@ export async function validateIndexerSelectionFinal(input: {
     const manifestMap = manifestsByIndexer.get(indexer.id) ?? new Map();
     manifestMap.set(layer.id, manifest);
     manifestsByIndexer.set(indexer.id, manifestMap);
-    subjectKeyProviders.push({
-      indexer_id: indexer.id,
-      provider_layer_id: layer.id,
-      provider_integrity: resolved.bundle.resolved.integrity,
-      manifest_digest: resolved.bundle.resolved.manifest_digest,
-      manifest,
-    });
     providerReports.push({
       indexer_id: indexer.id,
       provider_id: layer.id,
@@ -393,24 +381,6 @@ export async function validateIndexerSelectionFinal(input: {
       staged_receipt_digest: resolved.staged.receipt_digest,
     });
   }
-  const subjectKeySelections: IndexerSubjectKeyProfileSelection[] = input.registry.indexers
-    .flatMap((indexer) => [{
-      indexer_id: indexer.id,
-      profile: indexer.profile.primary.id,
-      role: "primary" as const,
-      provider_layer_id: indexer.profile.primary.provider,
-    }, ...(indexer.profile.additional ?? []).map((profile) => ({
-      indexer_id: indexer.id,
-      profile: profile.id,
-      role: profile.kind,
-      provider_layer_id: profile.provider,
-    }))]);
-  const subjectKeySchemas = resolveIndexerSubjectKeySchemas({
-    profile_contract: profileContract,
-    operator_contract: input.operator_contract,
-    selections: subjectKeySelections,
-    providers: subjectKeyProviders,
-  });
   const overlayProofs = input.overlay_question_authorities ?? [];
   const usedOverlayProofs = new Set<number>();
   const resolvedQuestions = input.registry.requirements.flatMap((requirement) =>
@@ -534,8 +504,8 @@ export async function validateIndexerSelectionFinal(input: {
     question_authority_set_digest: indexerProtocolDigest({
       questions: resolvedQuestions,
     }),
-    subject_key_schema_set_digest: subjectKeySchemas.set_digest,
-    subject_key_schemas: subjectKeySchemas.schemas,
+
+
     composition_plans: compositionPlans,
     providers: providerReports,
   };

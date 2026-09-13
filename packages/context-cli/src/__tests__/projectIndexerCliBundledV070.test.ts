@@ -73,17 +73,6 @@ describe("CLI bundled Indexer release", () => {
     expect(profiles.profiles).toHaveLength(
       BUNDLED_CODE_PROFILE_IDS.length + BUNDLED_MARKDOWN_PROFILE_IDS.length,
     );
-    expect(profiles.subject_key_schemas).toHaveLength(profiles.profiles.length);
-    expect(profiles.subject_key_schemas.find((schema) =>
-      schema.profile === "component-library"
-    )).toMatchObject({
-      namespace: { operator: "canonical-source-module-namespace" },
-      kinds: expect.arrayContaining([
-        { id: "component", local_key: { operator: "canonical-export-family" } },
-        { id: "library", local_key: { operator: "canonical-module-identity" } },
-        { id: "design-system", local_key: { operator: "canonical-module-identity" } },
-      ]),
-    });
     expect(JSON.stringify(profiles.profiles)).not.toContain("subject_key_schema");
     expect(profiles.profiles.find((profile) => profile.id === "web-application")
       ?.variant_schema.axes[0]).toMatchObject({
@@ -226,15 +215,6 @@ describe("CLI bundled Indexer release", () => {
           BUNDLED_MARKDOWN_PROFILE_IDS.length,
         );
         expect(markdownFixtures.every((entry) => entry.anonymized)).toBe(true);
-        expect(profiles.subject_key_schemas.find((schema) =>
-          schema.profile === "documentation-site"
-        )?.kinds.map((kind) => kind.id)).toEqual(["document-set"]);
-        expect(BUNDLED_MARKDOWN_PROFILE_IDS.filter((profile) =>
-          profile !== "documentation-site"
-        ).every((profile) =>
-          profiles.subject_key_schemas.find((schema) => schema.profile === profile)
-            ?.kinds.some((kind) => kind.id === "document-section")
-        )).toBe(true);
         const markdownContracts = profiles.profiles.filter((profile) =>
           BUNDLED_MARKDOWN_PROFILE_IDS.includes(
             profile.id as typeof BUNDLED_MARKDOWN_PROFILE_IDS[number],
@@ -325,26 +305,6 @@ describe("CLI bundled Indexer release", () => {
           .toEqual(new Set(["keep", "repair", "reshape", "omit", "request-input"]));
         expect(editorialFixtures.cases.filter((entry) => entry.assessment !== null))
           .toHaveLength(2);
-        const migrationFixtures = JSON.parse(await readFile(
-          join(
-            fixture.assetsRoot,
-            "bundles",
-            bundle.skill,
-            "tests",
-            "fixtures",
-            "migration-equivalence.json",
-          ),
-          "utf8",
-        )) as {
-          anonymized: boolean;
-          cases: Array<{ rule_id: string; authority: string }>;
-        };
-        expect(migrationFixtures.anonymized).toBe(true);
-        expect(migrationFixtures.cases).toHaveLength(20);
-        expect(new Set(migrationFixtures.cases.map((entry) => entry.rule_id)).size).toBe(20);
-        expect(new Set(migrationFixtures.cases.map((entry) => entry.authority))).toEqual(
-          new Set(["community-instructions", "context-layout", "context-revision"]),
-        );
       }
       const composerReferences = bundle.skill === "context-code-indexer"
         ? BUNDLED_CODE_COMPOSER_IDS.map((composer) =>

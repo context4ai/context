@@ -6,19 +6,16 @@ import {
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
   buildIndexerRepairIntent,
-  buildIndexerTargetResolutionView,
-  canonicalIndexerNodeRef,
   indexerPartitionPlanCanonicalHash,
   indexerInventoryMembersDigest,
   indexerPartitionStrategySetDigest,
-  indexerTargetQueryRef,
+  indexerProtocolDigest,
   observeIndexerMainWorksetState,
   validateIndexerMainAcceptedRecord,
   type IndexerMainAuthorWorkset,
   type IndexerMainPartitionWorkset,
   type IndexerPartitionPlan,
   type IndexerPartitionStrategy,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -32,17 +29,10 @@ const common = {
   requirement_set_digest: digest("2"),
   primary_execution_fingerprint: digest("3"),
   profile_contract_digest: digest("4"),
-  subject_key_schema_digest: digest("5"),
   source_scope_digest: digest("6"),
   source_binding_digest: digest("7"),
   primary_resource_binding_digest: digest("8"),
   question_target_inventory_digest: digest("9"),
-};
-const GROUP_SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample",
-  kind: "component",
-  local_key: "button",
 };
 const STRATEGY: IndexerPartitionStrategy = {
   kind: "cli-builtin",
@@ -56,12 +46,6 @@ function partition(): IndexerMainPartitionWorkset {
   const workset = buildIndexerMainWorkset({
     ...common,
     stage: "partition",
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "module",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest(STRATEGIES),
     reader_question_refs: ["question:public-contract"],
     partition_input_digests: [digest("b")],
@@ -81,11 +65,9 @@ function partitionPlan(workset: IndexerMainPartitionWorkset): IndexerPartitionPl
       indexer_id: workset.indexer_id,
       indexer_fingerprint: workset.primary_execution_fingerprint,
       requirement_digest: workset.requirement_set_digest,
-      subject_key_schema_digest: workset.subject_key_schema_digest,
       source_scope_digest: workset.source_scope_digest,
       source_refs: [workset.source_ref],
       module_ref: workset.module_ref,
-      partition_subject_key: workset.partition_subject_key,
       parent_scope_ref: workset.module_ref!,
       inventory_digest: workset.partition_inventory_digest,
       question_target_inventory_digest: workset.question_target_inventory_digest,
@@ -97,9 +79,8 @@ function partitionPlan(workset: IndexerMainPartitionWorkset): IndexerPartitionPl
     reader_question_refs: workset.reader_question_refs,
     groups: [{
       group_key: "component:button",
-      subject_key: GROUP_SUBJECT,
-      subject_intent: "enrich-or-independent" as const,
-      logical_unit_ref: canonicalIndexerNodeRef(GROUP_SUBJECT),
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: workset.indexer_id,
+        source_ref: workset.source_ref, module_ref: workset.module_ref, group_key: "component:button" }),
       label: "Button",
       reader_question_refs: workset.reader_question_refs,
       question_target_bindings: [{
@@ -152,7 +133,6 @@ function acceptedRecord(workset: IndexerMainPartitionWorkset) {
     run_envelope: {
       envelope_digest: digest("1"),
     } as Parameters<typeof buildIndexerMainAcceptedRecord>[0]["run_envelope"],
-    artifact_dependency_set: null,
   });
 }
 
@@ -193,7 +173,7 @@ describe("main workset lifecycle facts", () => {
     expect(status.accepted_result_set_digest).toMatch(/^sha256:/);
   });
 
-  test("derives one author workset per fully validated group and binds its exact target query", () => {
+  test("derives one author workset per validated group and preserves repair intent", () => {
     const basePartition = partition();
     const { workset_digest: _digest, ...partitionPayload } = basePartition;
     void _digest;
@@ -206,17 +186,6 @@ describe("main workset lifecycle facts", () => {
     });
     if (partitionWorkset.stage !== "partition") throw new Error("expected partition workset");
     const plan = partitionPlan(partitionWorkset);
-    const queryRef = indexerTargetQueryRef({
-      subject_intent: "enrich-or-independent",
-      subject_key: GROUP_SUBJECT,
-      subject_key_schema_digest: partitionWorkset.subject_key_schema_digest,
-    });
-    const targetView = buildIndexerTargetResolutionView({
-      requirement_ref: partitionWorkset.requirement_ref,
-      subject_key_schema_digest: partitionWorkset.subject_key_schema_digest,
-      query_digest: digest("0"),
-      entries: [{ query_ref: queryRef, state: "absent" }],
-    });
     const built = buildIndexerMainAuthorWorksets({
       partitions: [{
         plan,
@@ -232,14 +201,12 @@ describe("main workset lifecycle facts", () => {
         group_dependency_view_digest: digest("1"),
         allowed_artifact_policy_variants: ["standard"],
         artifact_policy_eligibility_digest: digest("2"),
-        target_resolution_view: targetView,
       }],
     });
     expect(built.worksets).toHaveLength(1);
     expect(built.worksets[0]).toMatchObject({
       stage: "author",
       group_key: "component:button",
-      target_resolution_view: targetView,
       repair_intent: partitionWorkset.repair_intent,
     });
     expect(built.workset_set.items[0]?.stage).toBe("author");
@@ -267,6 +234,6 @@ describe("main workset lifecycle facts", () => {
     expect(() => validateIndexerMainAcceptedRecord({
       ...accepted,
       stage: "author",
-    })).toThrow(/author records require an Artifact dependency set/);
+    })).toThrow(/invalid digest/);
   });
 });

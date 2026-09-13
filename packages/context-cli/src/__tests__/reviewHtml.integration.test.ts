@@ -3,11 +3,7 @@ import { expect, test } from "bun:test";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createContext, runInContext } from "node:vm";
-import { completeAuthorStage, completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
-import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
-import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
-import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
-import { contextWorkflowAuthorities } from "../project/workflow/workflowFacts.js";
+import { prepareRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { readCandidateRecords, writeCandidateRecords } from "../project/candidateLedger.js";
 import { writeReviewHtml } from "../project/reviewHtml.js";
 import { readReviewPayloadFile } from "../project/review.js";
@@ -46,14 +42,8 @@ function openReport(html: string, languages: string[] = ["en-US"]) {
 }
 
 test("HTML review preserves complete sections, sources and an applicable copied decision payload", async () => {
-  const root = await createDocumentRevisionWorkspace();
+  const root = await prepareRevisionKnowledge([]);
   try {
-    await completePartitionStage(root);
-    const structure = (await currentIndexerStructureReview(root))!;
-    await completeCurrentIndexerAction({ cwd: root, revision: structure.revision, managed: true,
-      authorities: contextWorkflowAuthorities({ managed: true }),
-      value: { stage: "structure-review", decision: "approved" } });
-    await completeAuthorStage(root);
     const candidates = await readCandidateRecords(root);
     expect(candidates).toHaveLength(2);
     for (const all of [false, true]) {

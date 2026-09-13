@@ -2,7 +2,7 @@ import { replaceMarkdownInlineLinkTargets } from "./markdownLinks.js";
 import { readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
 import YAML from "yaml";
-import { assertManagedDocumentPath, indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
+import { assertManagedDocumentPath, indexerProtocolDigest, validateArticleStructureEntries, type IndexerProjectFileTarget } from "@c4a/context";
 import { currentLedger } from "./indexerMainRunStoreRecords.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { readApprovedRevision } from "./approvedRevision.js";
@@ -78,9 +78,9 @@ export async function renameManagedDocument(input: {
       { path: `sources/${type}/${input.name}`, operation: "write", base_digest: null, target_digest: durableContentDigest(content), content },
     ];
     const structure = await readKnowledgeStructure(input.projectRoot);
-    const views = structure.parsed?.views as Array<{ path: string }> | undefined;
+    const articles = validateArticleStructureEntries(structure.parsed?.articles ?? []);
     const paths = ["src/indexers.yaml", "src/index.ts", "knowledge/structure.yaml",
-      ...(views ?? []).map((view) => `knowledge/${view.path}`)];
+      ...articles.map(article => `knowledge/${article.path}`)];
     for (const path of [...new Set(paths)]) {
       if (path.split("/").includes("..") || path.startsWith("/")) throw new TypeError("Source references contain an unsafe knowledge path; repair it before renaming.");
       await safeProjectTarget(input.projectRoot, path);
@@ -90,6 +90,16 @@ export async function renameManagedDocument(input: {
       if (path.endsWith(".yaml")) {
         const parsed: unknown = YAML.parse(before);
         const updated = replace(parsed);
+        if (path === "knowledge/structure.yaml") {
+          // Managed documents are located relative to their containing folder.
+          // The source name changes, not its bytes or regional content digest.
+          const rewritten = articles.map(article => ({ ...article, sections: article.sections.map(section => ({
+            ...section, references: section.references.map(citation => citation.source_ref !== input.source_ref
+              ? citation : { ...citation, source_ref: nextRef,
+                locator: { ...citation.locator, path: posix.basename(input.name) } }),
+          })) }));
+          (updated as Record<string, unknown>).articles = rewritten;
+        }
         if (JSON.stringify(parsed) === JSON.stringify(updated)) continue;
         after = YAML.stringify(updated);
       } else after = before.replace(reference, nextRef);

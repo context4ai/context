@@ -3,11 +3,9 @@ import {
   buildIndexerMainWorkset,
   buildIndexerMainWorksetSet,
   validateIndexerMainWorksetSet,
-  validateIndexerTargetResolutionView,
   type IndexerMainAuthorWorkset,
   type IndexerMainPartitionWorkset,
   type IndexerMainWorksetSet,
-  type IndexerTargetResolutionView,
 } from "./indexerMainWorkset.js";
 import {
   validateIndexerMainRunResult,
@@ -32,10 +30,6 @@ import {
   indexerInventoryMembersDigest,
   type IndexerInventoryMember,
 } from "./indexerInventoryDisposition.js";
-import {
-  indexerTargetQueryRef,
-  type IndexerPartitionSubject,
-} from "./indexerSubjectCatalog.js";
 
 export interface IndexerPartitionValidationInput {
   plan: unknown;
@@ -65,26 +59,6 @@ export function indexerPartitionGroupRef(input: {
   return `partition-group:${indexerProtocolDigest(input)}`;
 }
 
-export function projectIndexerPartitionSubjects(
-  inputs: readonly IndexerPartitionValidationInput[],
-): IndexerPartitionSubject[] {
-  return validateIndexerPartitionInputs(inputs).flatMap(({ workset, plan }) => {
-    if (plan.status !== "complete") {
-      throw new TypeError("failed PartitionPlan cannot enter the subject catalog");
-    }
-    return plan.groups.map((group) => ({
-      partition_workset_digest: workset.workset_digest,
-      partition_plan_digest: plan.canonical_hash,
-      group_key: group.group_key,
-      node_ref: group.logical_unit_ref,
-      subject_key: group.subject_key,
-    }));
-  }).sort((left, right) => compareIndexerCanonicalText(
-    `${left.partition_workset_digest}\u0000${left.group_key}`,
-    `${right.partition_workset_digest}\u0000${right.group_key}`,
-  ));
-}
-
 type PartitionWorksetInput = Parameters<typeof buildIndexerMainWorkset>[0] & {
   stage: "partition";
 };
@@ -106,7 +80,6 @@ export interface IndexerAuthorGroupContext {
   group_dependency_view_digest: string;
   allowed_artifact_policy_variants: readonly string[];
   artifact_policy_eligibility_digest: string;
-  target_resolution_view?: IndexerTargetResolutionView;
 }
 
 export function buildIndexerMainAuthorWorksets(input: {
@@ -131,30 +104,6 @@ export function buildIndexerMainAuthorWorksets(input: {
       if (context === undefined) {
         throw new TypeError(`author group context is missing for ${group.group_key}`);
       }
-      const view = context.target_resolution_view === undefined
-        ? undefined
-        : validateIndexerTargetResolutionView(context.target_resolution_view);
-      if (group.subject_intent === "primary" && view !== undefined) {
-        throw new TypeError("primary partition group must not receive a TargetResolutionView");
-      }
-      if (group.subject_intent === "enrich-or-independent") {
-        if (view === undefined) {
-          throw new TypeError("enrich-or-independent group requires a TargetResolutionView");
-        }
-        const expectedQuery = indexerTargetQueryRef({
-          subject_intent: group.subject_intent,
-          subject_key: group.subject_key,
-          subject_key_schema_digest: workset.subject_key_schema_digest,
-        });
-        if (
-          view.requirement_ref !== workset.requirement_ref ||
-          view.subject_key_schema_digest !== workset.subject_key_schema_digest ||
-          view.entries.length !== 1 ||
-          view.entries[0]?.query_ref !== expectedQuery
-        ) {
-          throw new TypeError("TargetResolutionView does not match its partition group query");
-        }
-      }
       const author = buildIndexerMainWorkset({
         stage: "author",
         indexer_id: workset.indexer_id,
@@ -166,7 +115,6 @@ export function buildIndexerMainAuthorWorksets(input: {
         requirement_set_digest: workset.requirement_set_digest,
         primary_execution_fingerprint: workset.primary_execution_fingerprint,
         profile_contract_digest: workset.profile_contract_digest,
-        subject_key_schema_digest: workset.subject_key_schema_digest,
         source_scope_digest: workset.source_scope_digest,
         source_binding_digest: context.group_dependency_view_digest,
         primary_resource_binding_digest: workset.primary_resource_binding_digest,
@@ -198,7 +146,6 @@ export function buildIndexerMainAuthorWorksets(input: {
           group.group_key,
         ),
         group_dependency_view_digest: context.group_dependency_view_digest,
-        ...(view === undefined ? {} : { target_resolution_view: view }),
         allowed_artifact_policy_variants: [...context.allowed_artifact_policy_variants],
         artifact_policy_eligibility_digest: context.artifact_policy_eligibility_digest,
       });
@@ -221,7 +168,6 @@ export const indexerMainAcceptedRecordSchema = z.object({
   result_digest: indexerDigestSchema,
   receipt_digest: indexerDigestSchema,
   run_envelope_digest: indexerDigestSchema,
-  artifact_dependency_set_digest: indexerDigestSchema.nullable(),
   acceptance_digest: indexerDigestSchema,
 }).strict();
 
@@ -233,13 +179,9 @@ export function validateIndexerMainAcceptedRecord(
   value: unknown,
 ): IndexerMainAcceptedRecord {
   const record = indexerMainAcceptedRecordSchema.parse(value);
-  if (
-    (record.stage === "author") !==
-      (record.artifact_dependency_set_digest !== null)
-  ) {
-    throw new TypeError(
-      "accepted author records require an Artifact dependency set and partition records forbid one",
-    );
+  const { acceptance_digest, ...payload } = record;
+  if (indexerProtocolDigest(payload) !== acceptance_digest) {
+    throw new TypeError("accepted main result record has an invalid digest");
   }
   return record;
 }
@@ -248,9 +190,6 @@ export function buildIndexerMainAcceptedRecord(input: {
   request: IndexerMainRunRequest;
   result: IndexerMainRunResult;
   run_envelope: ReturnType<typeof validateIndexerMainRunResult>["run_envelope"];
-  artifact_dependency_set: ReturnType<
-    typeof validateIndexerMainRunResult
-  >["artifact_dependency_set"];
 }): IndexerMainAcceptedRecord {
   const payload = {
     protocol: "context.indexer.main-accepted-result/v1" as const,
@@ -264,8 +203,6 @@ export function buildIndexerMainAcceptedRecord(input: {
       execution_request_digest: input.request.execution_request_digest,
     }),
     run_envelope_digest: input.run_envelope.envelope_digest,
-    artifact_dependency_set_digest:
-      input.artifact_dependency_set?.dependency_set_digest ?? null,
   };
   return validateIndexerMainAcceptedRecord({
     ...payload,
@@ -378,7 +315,6 @@ export function observeIndexerMainWorksetState(input: {
         result_digest: record.result_digest,
         receipt_digest: record.receipt_digest,
         run_envelope_digest: record.run_envelope_digest,
-        artifact_dependency_set_digest: record.artifact_dependency_set_digest,
       };
       if (
         record.stage !== item.stage ||
@@ -429,7 +365,6 @@ export function observeIndexerMainWorksetState(input: {
     result_digest: record.result_digest,
     receipt_digest: record.receipt_digest,
     run_envelope_digest: record.run_envelope_digest,
-    artifact_dependency_set_digest: record.artifact_dependency_set_digest,
   })).sort((left, right) => compareIndexerCanonicalText(
     left.workset_digest,
     right.workset_digest,

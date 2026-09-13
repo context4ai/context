@@ -1,9 +1,9 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readProductionRequirements } from "./productionRequirements.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
-  readProcessedScopes, indexerProtocolDigest, type IndexRequirement, type ProcessedScope } from "@c4a/context";
+  readProcessedScopes, indexerProtocolDigest, type ProcessedScope } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
@@ -37,22 +37,15 @@ export async function currentScopeSourceVersion(projectRoot: string, sourceRef: 
 /** Pin already acquired local inputs. This function does not fetch upstream. */
 export async function captureProcessedScopes(projectRoot: string, requested: readonly ProcessedScope[]): Promise<ProcessedScope[]> {
   const scopes = processedScopesSchema.parse(requested);
-  const { registry } = await loadIndexerRegistry(projectRoot);
+  const registry = await readProductionRequirements(projectRoot);
   const versions = new Map<string, Promise<string>>();
   for (const scope of scopes) {
     const requirement = registry.requirements.find((item) => item.id === scope.requirement_ref);
-    const target = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope.targets]
+    const target = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []]
       .find((item) => item.source_ref === scope.source_ref);
-    if (!target || (target.module_refs.length > 0 &&
-        (!scope.module_refs || scope.module_refs.some((module) => !target.module_refs.includes(module))))) {
-      throw new TypeError("Processing scope is outside its confirmed requirement source/module boundary");
+    if (!target) {
+      throw new TypeError("Processing scope is outside its confirmed requirement source boundary");
     }
-    const { projectIndexerReadTargets, projectIndexerReadTargetAllows } = await import("./indexerReadScopeAuthorization.js");
-    const owners = registry.indexers.filter((indexer) => indexer.requirement_bindings.some((binding) => binding.requirement_ref === scope.requirement_ref));
-    if (!owners.some((indexer) => {
-      const targets = projectIndexerReadTargets({ registry, indexer_id: indexer.id });
-      return (scope.module_refs ?? [null]).every((module_ref) => projectIndexerReadTargetAllows({ targets, source_ref: scope.source_ref, module_ref }));
-    })) throw new TypeError("Processing source is outside the selected Indexer's explicit read_scope; confirm that existing scope before reading supporting material.");
     if (!versions.has(scope.source_ref)) versions.set(scope.source_ref, currentScopeSourceVersion(projectRoot, scope.source_ref));
     if (await versions.get(scope.source_ref) !== scope.processed_version) {
       throw new TypeError("Processing target differs from the acquired source version; import the fixed target before starting this update");
@@ -76,7 +69,7 @@ export async function commitProcessedScopes(projectRoot: string, scopes: readonl
  * configuration. A failed configuration write may leave an unknown baseline,
  * never a false claim that the new purpose was processed under an old one. */
 export async function invalidateChangedProcessedRequirements(projectRoot: string,
-  previous: readonly IndexRequirement[], current: readonly IndexRequirement[]): Promise<void> {
+  previous: readonly { id: string }[], current: readonly { id: string }[]): Promise<void> {
   const targets = new Map(current.map((requirement) => [requirement.id, indexerProtocolDigest(requirement)]));
   const changed = new Set(previous.filter((requirement) => targets.get(requirement.id) !== indexerProtocolDigest(requirement)).map((requirement) => requirement.id));
   if (changed.size === 0) return;

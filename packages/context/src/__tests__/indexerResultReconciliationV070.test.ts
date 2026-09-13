@@ -5,7 +5,6 @@ import {
   buildIndexerInventoryDispositionSet,
   canonicalOwnerCellRef,
   indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerMaterialQuestionKey,
   indexerProtocolDigest,
   indexerRegistryDigests,
@@ -14,7 +13,6 @@ import {
   type IndexerArtifactResult,
   type IndexerRegistry,
   type IndexerResolvedMaterialQuestion,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
@@ -24,12 +22,6 @@ const SOURCE_REF = "repo:sample";
 const MODULE_REF = "module:service";
 const DOMAIN = "operations";
 const QUESTION_REF = "question:failure-recovery";
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample",
-  kind: "service",
-  local_key: "worker",
-};
 
 function question(): IndexerResolvedMaterialQuestion {
   const payload: Omit<IndexerResolvedMaterialQuestion, "contract_digest"> = {
@@ -127,7 +119,7 @@ function authority(registryValue = registry()) {
       owner_cell_ref: ownerRef,
       source_ref: SOURCE_REF,
       module_ref: MODULE_REF,
-      subject_key: SUBJECT,
+
       canonical_fact_slice_digest: digest("e"),
     }],
   });
@@ -148,19 +140,6 @@ function result(input: {
   questionKey: string;
   disposition: "answered" | "material-gap" | "omitted";
 }): IndexerArtifactResult {
-  const evidencePayload = {
-    evidence_ref: "evidence:worker-recovery",
-    kind: "code" as const,
-    source_ref: SOURCE_REF,
-    module_ref: MODULE_REF,
-    locator: { path: "src/worker.ts", start_line: 1, end_line: 20 },
-    content_digest: digest("f"),
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
-  };
   const proposal = {
     proposal_ref: "proposal:worker-recovery",
     requirement_ref: REQUIREMENT_REF,
@@ -185,9 +164,9 @@ function result(input: {
     source_role: "authoritative-source",
     logical_unit: {
       group_key: "service:worker",
-      subject_key: SUBJECT,
+
       logical_unit_ref: "node:worker",
-      target_resolution_dispositions: [],
+
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: digest("1"),
@@ -212,11 +191,11 @@ function result(input: {
             member_kind: "service",
             inventory_disposition: "owned",
             projection_disposition: "boundary-only",
-            evidence_refs: [evidence.evidence_ref],
+
           }],
     }),
-    facts: [],
-    evidence_bindings: [evidence],
+
+
     artifacts: [],
     artifact_bundle: null,
     material_question_proposals: input.disposition === "material-gap" ? [proposal] : [],
@@ -224,7 +203,7 @@ function result(input: {
       ? [{
           question_target_key: input.questionKey,
           state: "answered",
-          evidence_binding_digest: evidence.binding_digest,
+
         }]
       : input.disposition === "material-gap"
       ? [{
@@ -267,7 +246,6 @@ function reconcile(input: {
           owner_cell_ref: current.target.owner_cell_ref,
           source_ref: current.target.source_ref,
           module_ref: current.target.module_ref,
-          subject_key: current.target.subject_key,
           canonical_fact_slice_digest: current.target.canonical_fact_slice_digest,
         }, {
           target_domain_ref: current.target.target_domain_ref,
@@ -275,10 +253,6 @@ function reconcile(input: {
           owner_cell_ref: current.target.owner_cell_ref,
           source_ref: current.target.source_ref,
           module_ref: current.target.module_ref,
-          subject_key: {
-            ...current.target.subject_key,
-            local_key: "scheduler",
-          },
           canonical_fact_slice_digest: digest("9"),
         }],
       })
@@ -314,7 +288,6 @@ function reconcile(input: {
     registered_material_sources: input.withMaterial ? [{
       source_ref: "source:runbook",
       source_input_digest: digest("8"),
-      evidence_kinds: ["runbook"],
     }] : [],
   });
 }
@@ -451,7 +424,7 @@ describe("Indexer result reconciliation and domain completion", () => {
         owner_cell_ref: first.ownerRef,
         source_ref: SOURCE_REF,
         module_ref: MODULE_REF,
-        subject_key: SUBJECT,
+
         canonical_fact_slice_digest: digest("e"),
       }],
     });

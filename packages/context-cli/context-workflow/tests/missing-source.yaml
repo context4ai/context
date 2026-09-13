@@ -6,9 +6,7 @@ state:
   facts:
     workspace: { task_start_authorized: true, project_entry_valid: true, state_valid: true }
     verification: { blocking_clear: true }
-    evidence: { maintenance_clear: true }
     indexer: { lifecycle_current: true, registry_state: current }
-    gates: { evidence_maintenance_resolved: true }
     close: { current: true }
     resume:
       prose_declarations_complete: true
@@ -29,8 +27,6 @@ expect:
     - dialogue.source-boundary
     - dialogue.workflow-mode-after-creation
     - context.source-current
-    - procedure.work-start-report
-    - template.work-start-report
   gateResolution: user
   resolutionCommand: context source add batch --input .tmp/agent-payloads/source-batch.json --format json
   resolutionInputSchema: schema.register-source-batch.input

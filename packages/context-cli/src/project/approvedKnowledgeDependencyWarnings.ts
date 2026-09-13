@@ -1,46 +1,54 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { impactedIndexerKnowledgeArticles, indexerProtocolDigest, type IndexerApprovedKnowledge } from "@c4a/context";
+import { articleSourceRegionDigest, locateArticleRegion } from "@c4a/context";
+import { registeredArticleSourceReader } from "./articleSourceReader.js";
+import { readArticleRegionBaseline } from "./articleRegionBaselines.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
-import { approvedKnowledgeContentDigest, approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
+import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
 
-export function staleApprovedKnowledgeRefs(snapshots: readonly IndexerApprovedKnowledge[], current: ReadonlyMap<string, string>) {
-  const byRef = new Map(snapshots.map(snapshot => [snapshot.artifact_ref, snapshot]));
-  const changed = new Set<string>();
-  for (const snapshot of snapshots.filter(snapshot => snapshot.dependencies.length)) {
-    if (current.get(snapshot.artifact_ref) !== snapshot.approved_content_digest) changed.add(snapshot.artifact_ref);
-    for (const dependency of snapshot.dependencies) {
-      const version = snapshot.dependency_versions?.find(version => version.artifact_ref === dependency.artifact_ref);
-      if (!dependency.required && !version) continue;
-      const parent = byRef.get(dependency.artifact_ref);
-      const sections = parent && (dependency.section_refs.length ? dependency.section_refs : parent.sections.map(section => section.section_ref));
-      if (!version || !parent || current.get(parent.artifact_ref) !== version.approved_content_digest ||
-          parent.approved_content_digest !== version.approved_content_digest ||
-          indexerProtocolDigest({ snapshot: parent.snapshot_digest, sections: [...sections!].sort() }) !== version.projection_digest) changed.add(snapshot.artifact_ref);
+/** Read only cited captured files, once per verification. No parser invocation,
+ * article dependency graph, or mutation of approved references. Changed regions
+ * are revision hints, not a claim that every source change is covered. */
+export async function approvedKnowledgeDependencyWarnings(
+  projectRoot: string, structureOverride?: Record<string, unknown>,
+): Promise<ProjectVerifyIssue[]> {
+  const articles = approvedKnowledgeSnapshotsFromStructure(
+    structureOverride ?? (await readKnowledgeStructure(projectRoot)).parsed,
+  );
+  if (!articles.some(article => article.sections.some(section => section.references.length))) return [];
+  const read = await registeredArticleSourceReader(projectRoot);
+  const issues: ProjectVerifyIssue[] = [];
+  for (const article of articles) {
+    const changed: string[] = [];
+    const moved: string[] = [];
+    for (const section of article.sections) {
+      for (const reference of section.references) {
+        try {
+          const text = await read(reference.source_ref, reference.locator.path);
+          let current: string | undefined;
+          try { current = articleSourceRegionDigest(text, reference.locator); }
+          catch (error) { if (!(error instanceof RangeError)) throw error; }
+          if (current === reference.content_digest) continue;
+          const previous = readArticleRegionBaseline(projectRoot, reference.content_digest);
+          const relocated = previous === undefined ? null : locateArticleRegion(previous, text, reference.locator.path);
+          if (relocated) {
+            moved.push(`${section.id}: ${reference.source_ref}/${relocated.path} L${relocated.start_line}–L${relocated.end_line}`);
+            continue;
+          }
+        } catch {
+          // Missing, unreadable, invalid or shorter sources all need review.
+        }
+        changed.push(section.id);
+        break;
+      }
     }
+    if (changed.length) issues.push({
+      severity: "warning", code: "approved-source-region-changed", path: article.path,
+      message: `Source regions changed or are unavailable for fragments: ${changed.join(", ")}. Inspect current sources and revise this article; verification does not rewrite approved references.`,
+    });
+    if (moved.length) issues.push({
+      severity: "warning", code: "approved-source-region-moved", path: article.path,
+      message: `Unchanged source regions have new positions: ${moved.join("; ")}. Refresh these locators during the source update; do not rewrite unaffected prose.`,
+    });
   }
-  return new Set([...changed, ...impactedIndexerKnowledgeArticles(snapshots.map(snapshot => ({
-    artifact_ref: snapshot.artifact_ref, dependencies: snapshot.dependencies,
-  })), changed)]);
-}
-
-/** Structural version diagnostics, not a content-quality gate. Existing
- * approved pages remain readable while the Agent follows the revision flow. */
-export async function approvedKnowledgeDependencyWarnings(projectRoot: string, structureOverride?: Record<string, unknown>): Promise<ProjectVerifyIssue[]> {
-  const snapshots = approvedKnowledgeSnapshotsFromStructure(structureOverride ?? (await readKnowledgeStructure(projectRoot)).parsed);
-  const readers = snapshots.filter(snapshot => snapshot.dependencies.length);
-  if (!readers.length) return [];
-  const byRef = new Map(snapshots.map(snapshot => [snapshot.artifact_ref, snapshot]));
-  const needed = new Set(readers.flatMap(snapshot => [snapshot.artifact_ref, ...snapshot.dependencies.map(dependency => dependency.artifact_ref)]));
-  const current = new Map<string, string>();
-  for (const ref of needed) {
-    const snapshot = byRef.get(ref);
-    if (!snapshot) continue;
-    try { current.set(ref, approvedKnowledgeContentDigest(await readFile(join(projectRoot, "knowledge", snapshot.path), "utf8"))); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-  }
-  const stale = staleApprovedKnowledgeRefs(snapshots, current);
-  return snapshots.filter(snapshot => stale.has(snapshot.artifact_ref)).map(snapshot => ({ severity: "warning", code: "approved-knowledge-dependency-stale",
-    path: snapshot.path, message: "This article's approved supporting version changed or disappeared. Treat its synthesis as needing review. Use context revise for this path to inspect current supporting knowledge, then complete Review, close and build. If support is missing, update or restore the upstream entry first; unchanged approved pages remain available." }));
+  return issues;
 }

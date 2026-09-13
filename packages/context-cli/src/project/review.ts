@@ -8,13 +8,8 @@ import { ExitCode } from "../types/exitCode.js";
 import { applyReviewDecisions } from "./reviewApply.js";
 import { collectAllReviewCandidates, collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
 import {
-  applyEvidenceMaintenance,
   deprecateApprovedPage,
-  keepOrphanedApprovedPage,
-  parseEvidenceMaintenancePayload,
-  rePinApprovedPage,
 } from "./reviewMaintenance.js";
-import { readYamlOrJsonInput } from "./payloadInput.js";
 import {
   assertCollection,
   candidateIdsHash,
@@ -36,7 +31,7 @@ import type { ReviewContinuation } from "./workflow/workflowContinuation.js";
 
 export { applyReviewDecisions } from "./reviewApply.js";
 export { collectReviewCandidates, writeReviewHtml } from "./reviewHtml.js";
-export { deprecateApprovedPage, rePinApprovedPage } from "./reviewMaintenance.js";
+export { deprecateApprovedPage } from "./reviewMaintenance.js";
 export type { ApplyReviewDecisionsResult } from "./reviewShared.js";
 
 function parseReviewStatus(value: unknown, label: string): ReviewStatus {
@@ -404,8 +399,7 @@ export async function runReviewListCommand(input: {
   if (input.format === "json") {
     process.stdout.write(`${JSON.stringify(candidates.map(({ record, snapshot }) => ({
       candidate_id: record.candidate_id,
-      node_ref: record.node_ref,
-      view_ref: record.view_ref,
+      article_id: record.article_id,
       collection: record.collection,
       status: record.status,
       module: record.module,
@@ -575,18 +569,6 @@ export async function runReviewMarkCommand(input: {
   process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
 }
 
-export async function runReviewRePinCommand(input: {
-  cwd: string;
-  viewRef: string;
-  format?: ReviewFormat;
-}): Promise<void> {
-  const projectRoot = projectRootFromCwd(input.cwd);
-  const result = await rePinApprovedPage({
-    projectRoot,
-    viewRef: input.viewRef,
-  });
-  process.stdout.write(formatMaintenanceResult("re-pinned", result, input.format ?? "text"));
-}
 
 export async function runReviewDeprecateCommand(input: {
   cwd: string;
@@ -599,55 +581,4 @@ export async function runReviewDeprecateCommand(input: {
     viewRef: input.viewRef,
   });
   process.stdout.write(formatMaintenanceResult("deprecated", result, input.format ?? "text"));
-}
-
-export async function runReviewKeepOrphanedCommand(input: {
-  cwd: string;
-  viewRef: string;
-  format?: ReviewFormat;
-}): Promise<void> {
-  const projectRoot = projectRootFromCwd(input.cwd);
-  const result = await keepOrphanedApprovedPage({
-    projectRoot,
-    viewRef: input.viewRef,
-  });
-  process.stdout.write(
-    formatMaintenanceResult(
-      "kept source-orphaned",
-      result,
-      input.format ?? "text",
-    ),
-  );
-}
-
-export async function runReviewMaintainCommand(input: {
-  cwd: string;
-  payloadInput: string;
-  format?: ReviewFormat;
-}): Promise<void> {
-  const projectRoot = projectRootFromCwd(input.cwd);
-  const payload = await readYamlOrJsonInput({
-    path: input.payloadInput,
-    label: "review maintain",
-    missingNext:
-      "Pass a context.evidence-maintenance.v1 payload with explicit decisions.",
-    readFailureNext: "Fix the input path or pass --input - for stdin.",
-    parseFailureNext: "Fix the evidence-maintenance YAML/JSON payload.",
-  });
-  const decisions = parseEvidenceMaintenancePayload(payload);
-  const result = await applyEvidenceMaintenance({ projectRoot, decisions });
-  if ((input.format ?? "text") === "json") {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-    return;
-  }
-  process.stdout.write(formatFeedback({
-    symbol: "✓",
-    action: "applied",
-    subject: "evidence maintenance",
-    headline: `${result.applied} decision(s)`,
-    body: result.results.map((item) =>
-      `${item.action}: ${item.id} (${item.changed ? "updated" : "unchanged"})`
-    ),
-    next: "context status --format json",
-  }));
 }

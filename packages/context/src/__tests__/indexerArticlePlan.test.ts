@@ -5,13 +5,13 @@ import type { IndexerArtifactResult } from "../indexerArtifactResult.js";
 const article = indexerArticlePlanSchema.parse({ key: "entry", title: "Entry", reader_task: "Locate the exported capability",
   artifact_intent: "authoritative-source/usage-guide/integrate-capability/content", required: true,
   sections: [{ key: "usage", heading: "Usage", required: true }] });
-function result(): IndexerArtifactResult {
+function result(): Pick<IndexerArtifactResult, "source_role" | "artifacts"> {
   // This validator uses only the artifact projection; digest/provenance and
   // evidence safety are exercised by the full run acceptance integration.
   return { source_role: "authoritative-source", artifacts: [{ artifact_id: "entry", artifact_kind: "content",
     artifact_policy_variant: "standard", representation: "sections", sections: [{ section_key: "entry--usage",
       owner_indexer_id: "fixture", document_kind: "usage-guide", reader_goal: "integrate-capability", artifact_kind: "content",
-      blocks: [{ block_id: "usage", layer: "semantic-prose", markdown: "Use the public entry", evidence_refs: ["source:entry"] }] }] }] } as IndexerArtifactResult;
+      blocks: [{ block_id: "usage", layer: "semantic-prose", markdown: "Use the public entry", references: [] }] }] }] };
 }
 
 test("article plans keep unique identities and explicit question responsibility", () => {

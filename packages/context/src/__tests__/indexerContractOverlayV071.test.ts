@@ -87,8 +87,7 @@ function baseContract(operatorContract = operators()): IndexerProfileContract {
       question_target_domains: [{
         id: "service",
         selector: { operator: "service-targets" },
-        grouping_operator: "by-subject-key",
-        subject_key_kind: "service",
+
         granularity: "module",
       }],
       reader_question_contracts: [],
@@ -101,15 +100,7 @@ function baseContract(operatorContract = operators()): IndexerProfileContract {
       }],
       variant_schema: { axes: [] },
     }],
-    subject_key_schemas: [{
-      profile: "service",
-      version: 1,
-      namespace: { operator: "canonical-service-namespace" },
-      kinds: [{
-        id: "service",
-        local_key: { operator: "canonical-module-identity" },
-      }],
-    }],
+
   };
   return { ...payload, contract_digest: indexerProfileContractDigest(payload) };
 }
@@ -134,8 +125,7 @@ function overlay(
       question_target_domains: [{
         id: "service-operation",
         selector: { operator: "service-targets" },
-        grouping_operator: "by-subject-key",
-        subject_key_kind: "service",
+
         granularity: "identity",
       }],
       reader_question_contracts: [{

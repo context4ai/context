@@ -10,14 +10,13 @@ import { recoverDurableMultiFileTransactions, runDurableMultiFileTransaction, sa
 import { withProjectWriteLock } from "./writeLock.js";
 import { CANDIDATE_SNAPSHOT_ROOT, INDEXER_RUNTIME_ROOT, LIFECYCLE_ROOT, REVIEW_ACTION_ROOT, REVIEW_RUNTIME_ROOT, STRUCTURE_REPORT_ROOT } from "./lifecyclePaths.js";
 import { MAINTENANCE_ROOT } from "./maintenanceStorage.js";
-import { LEGACY_REVIEW_DECISIONS_FILE } from "./reviewDecisions.js";
+import { PRODUCTION_STAGES_ROOT } from "./productionStageStore.js";
 
 // Only Context-owned task state. Never own .tmp/repo, reports outside runtime,
 // source snapshots, approved pages, package output, locks or transaction journals.
-// The legacy decisions file is the sole obsolete knowledge metadata exception.
 export const PREPARATION_ROOTS = [LIFECYCLE_ROOT, INDEXER_RUNTIME_ROOT, MAINTENANCE_ROOT,
   REVIEW_RUNTIME_ROOT, REVIEW_ACTION_ROOT, STRUCTURE_REPORT_ROOT, CANDIDATE_SNAPSHOT_ROOT,
-  LEGACY_REVIEW_DECISIONS_FILE];
+  PRODUCTION_STAGES_ROOT];
 const KIND = "prepare-workspace";
 const previewCommand = "context task prepare --format json";
 const applyCommand = (revision: string) => `${previewCommand} --apply --plan-digest '${revision}'`;

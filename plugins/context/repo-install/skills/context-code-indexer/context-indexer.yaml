@@ -1,6 +1,6 @@
 protocol: context.indexer.provider/v1
 id: context-code-indexer
-version: 1.2.1
+version: 1.2.2-alpha.1
 domains:
   - code
 activation:
@@ -95,8 +95,6 @@ provides:
       contract:
         instruction: references/composers/public-contract.md
         primary_requirements:
-          fact_kinds:
-            - code-symbol
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -127,8 +125,6 @@ provides:
       contract:
         instruction: references/composers/protocol-boundary.md
         primary_requirements:
-          fact_kinds:
-            - protocol-operation
           artifact_kinds:
             - contract
         derived_artifact_policy:
@@ -159,8 +155,6 @@ provides:
       contract:
         instruction: references/composers/cross-module-chain.md
         primary_requirements:
-          fact_kinds:
-            - module-dependency
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -193,9 +187,6 @@ provides:
       contract:
         instruction: references/composers/contracts-and-chains.md
         primary_requirements:
-          fact_kinds:
-            - contract-binding
-            - module-dependency
           artifact_kinds:
             - contract
         derived_artifact_policy:
@@ -222,8 +213,6 @@ provides:
       contract:
         instruction: references/composers/event-flow.md
         primary_requirements:
-          fact_kinds:
-            - event-binding
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -248,8 +237,6 @@ provides:
       contract:
         instruction: references/composers/persistence-boundary.md
         primary_requirements:
-          fact_kinds:
-            - persistence-binding
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -282,8 +269,6 @@ provides:
       contract:
         instruction: references/composers/examples-and-documentation.md
         primary_requirements:
-          fact_kinds:
-            - example-candidate
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -316,8 +301,6 @@ provides:
       contract:
         instruction: references/composers/development-and-delivery.md
         primary_requirements:
-          fact_kinds:
-            - development-entry
           artifact_kinds:
             - content
         derived_artifact_policy:
@@ -336,7 +319,7 @@ provides:
     - operational-source
   logical_units:
     - id: semantic-subject
-      identity: canonical-subject-key
+      identity: stable-article
       artifacts:
         recommended:
           - content

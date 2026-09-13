@@ -8,9 +8,7 @@ import {
   buildIndexerCapabilityGroupEvidence,
   buildIndexerInventoryDispositionSet,
   buildIndexerCustomizationPlan,
-  canonicalIndexerNodeRef,
   indexerArtifactResultDigest,
-  indexerEvidenceBindingDigest,
   indexerProviderBundleIntegrity,
   indexerRenderedArtifactDigest,
   resolvedProviderReceiptDigest,
@@ -18,7 +16,7 @@ import {
   type ExpectedProviderResolution,
   type IndexerArtifactResult,
   type IndexerRegistryEntry,
-  type IndexerSubjectKey,
+  type ArticleSourceReference,
   type ResolvedProviderBundle,
 } from "@c4a/context";
 import { loadIndexerCustomization } from "../project/indexerCustomization.js";
@@ -31,12 +29,7 @@ import { stageIndexerProviderBundle } from "../project/indexerProviderStage.js";
 
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component",
-  local_key: "button",
-};
+const LOGICAL_UNIT = "logical-unit:button";
 
 function templateSource(summaryBody = "# {{variable:title}}\n\n{{variable:summary}}") {
   return [
@@ -53,19 +46,16 @@ function templateSource(summaryBody = "# {{variable:title}}\n\n{{variable:summar
     "    type: string",
     "    content_layer: semantic-prose",
     "    required: true",
-    "    evidence_required: true",
     "    maximum_length: 120",
     "  - id: summary",
     "    type: string",
     "    content_layer: semantic-prose",
     "    required: true",
-    "    evidence_required: true",
     "    maximum_length: 2000",
     "  - id: examples",
     "    type: string-list",
     "    content_layer: deterministic-fact",
     "    required: false",
-    "    evidence_required: true",
     "    maximum_items: 8",
     "deterministic_blocks:",
     "  - id: example-list",
@@ -78,8 +68,6 @@ function templateSource(summaryBody = "# {{variable:title}}\n\n{{variable:summar
     "    reader_goal: understand-capability",
     "    variable_ids: [title, summary]",
     "    deterministic_block_ids: []",
-    "    accepted_evidence_kinds: [code, documentation]",
-    "    minimum_evidence_items: 1",
     "    on_missing: request-input",
     "    deletion_condition: Never delete; request current source evidence.",
     "  - section_key: examples",
@@ -88,8 +76,6 @@ function templateSource(summaryBody = "# {{variable:title}}\n\n{{variable:summar
     "    reader_goal: integrate-safely",
     "    variable_ids: [examples]",
     "    deterministic_block_ids: [example-list]",
-    "    accepted_evidence_kinds: [code, documentation]",
-    "    minimum_evidence_items: 1",
     "    on_missing: omit",
     "    deletion_condition: Omit when no current example evidence exists.",
     "page_policy:",
@@ -284,45 +270,27 @@ function artifactResult(input: {
   providerIntegrity?: string;
   customizationFingerprint?: string | null;
 } = {}): IndexerArtifactResult {
-  const evidencePayload = {
-    evidence_ref: "evidence:button-source",
-    kind: "code" as const,
+  const reference: ArticleSourceReference = {
     source_ref: "repo:sample@revision",
-    module_ref: "module:sample",
     locator: { path: "src/button.ts", start_line: 1, end_line: 20 },
     content_digest: digest("a"),
-    coverage_tier: "ast-catalog" as const,
-  };
-  const evidence = {
-    ...evidencePayload,
-    binding_digest: indexerEvidenceBindingDigest(evidencePayload),
   };
   const variables: Record<string, {
     value: string | string[];
-    fact_refs: string[];
-    evidence_refs: string[];
+    references: ArticleSourceReference[];
   }> = {
-    title: { value: "Button", fact_refs: [], evidence_refs: [evidence.evidence_ref] },
+    title: { value: "Button", references: [reference] },
   };
   if (input.summary !== undefined) {
     variables.summary = {
       value: input.summary,
-      fact_refs: [],
-      evidence_refs: [evidence.evidence_ref],
+      references: [reference],
     };
   }
-  const facts = (input.examples ?? []).map((example, index) => ({
-    fact_ref: `fact:button-example-${index + 1}`,
-    fact_kind: "component-example",
-    subject_key: SUBJECT,
-    value: example,
-    evidence_refs: [evidence.evidence_ref],
-  }));
   if (input.examples !== undefined) {
     variables.examples = {
       value: input.examples,
-      fact_refs: facts.map((fact) => fact.fact_ref),
-      evidence_refs: [evidence.evidence_ref],
+      references: [reference],
     };
   }
   const gap = input.gap === true;
@@ -338,26 +306,24 @@ function artifactResult(input: {
     config_fingerprint: digest("6"),
     customization_fingerprint: input.customizationFingerprint ?? null,
     requirement_ref: "requirement:workspace-knowledge",
-    source_ref: evidence.source_ref,
-    module_ref: evidence.module_ref,
+    source_ref: reference.source_ref,
+    module_ref: "module:sample",
     source_role: "authoritative-source",
     logical_unit: {
       group_key: "component:button",
-      subject_key: SUBJECT,
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
-      target_resolution_dispositions: [],
+      logical_unit_ref: LOGICAL_UNIT,
     },
     capability_group_evidence: buildIndexerCapabilityGroupEvidence({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT,
       member_ids: ["member:button"],
       capability_groups: [],
     }),
     inventory_dispositions: buildIndexerInventoryDispositionSet({
       author_workset_digest: digest("1"),
       group_projection_digest: digest("3"),
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT,
       dispositions: gap
         ? [{
             member_id: "member:button",
@@ -373,12 +339,9 @@ function artifactResult(input: {
             section_evidence: [{
               artifact_id: "button-guide",
               section_key: "summary",
-              evidence_refs: [evidence.evidence_ref],
             }],
           }],
     }),
-    facts,
-    evidence_bindings: [evidence],
     artifacts: [{
       artifact_id: "button-guide",
       artifact_kind: "overview",
@@ -404,14 +367,13 @@ function artifactResult(input: {
       ],
     }],
     artifact_bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: canonicalIndexerNodeRef(SUBJECT),
+      logical_unit_ref: LOGICAL_UNIT,
       artifact_policy_variant: "standard",
       artifacts: [{
         artifact_id: "button-guide",
         artifact_kind: "overview",
         purpose: "required",
         reader_question_refs: ["question:component-summary"],
-        evidence_refs: [evidence.evidence_ref],
       }],
     }),
     material_question_proposals: gap ? [{
@@ -419,7 +381,7 @@ function artifactResult(input: {
       requirement_ref: "requirement:workspace-knowledge",
       question_ref: "question:component-summary",
       question_target_key: "question-target:button-summary",
-      source_hints: [evidence.source_ref],
+      source_hints: [reference.source_ref],
     }] : [],
     question_target_dispositions: gap ? [{
       question_target_key: "question-target:button-summary",
@@ -428,7 +390,6 @@ function artifactResult(input: {
     }] : [{
       question_target_key: "question-target:button-summary",
       state: "answered",
-      evidence_binding_digest: evidence.binding_digest,
     }],
     diagnostics: [],
     input_digest: digest("7"),
@@ -471,8 +432,8 @@ describe("Indexer template materialization and rendering", () => {
       applicabilityConditionRefs: CONDITIONS,
     });
     expect(withoutExamples.review_ready).toBe(true);
-    expect(withoutExamples.sections.map((section) => section.section_key)).toEqual(["summary"]);
-    expect(withoutExamples.sections[0]?.markdown).toContain("A reusable public control.");
+    expect(withoutExamples.sections.map((section) => section.section_key)).toEqual(["summary", "summary--variable-summary"]);
+    expect(withoutExamples.sections.map(section => section.markdown).join("\n\n")).toContain("A reusable public control.");
     expect(validateIndexerRenderedArtifact(withoutExamples)).toEqual(withoutExamples);
     const forgedRendered = structuredClone(withoutExamples);
     forgedRendered.sections[0]!.markdown += "\nforged";
@@ -492,16 +453,15 @@ describe("Indexer template materialization and rendering", () => {
       questionBindings: QUESTION_BINDINGS,
       applicabilityConditionRefs: CONDITIONS,
     });
-    expect(withExamples.sections[1]?.markdown).toContain("- Use a stable label.");
-    expect(withExamples.sections[1]?.evidence_refs).toEqual(["evidence:button-source"]);
-    expect(withExamples.sections[1]?.content_blocks.map((block) => block.layer)).toEqual([
+    const examples = withExamples.sections.find(section => section.markdown.includes("- Use a stable label."))!;
+    expect(examples.markdown).toContain("- Bind the public event.");
+    expect(examples.references).toEqual([{
+      source_ref: "repo:sample@revision", locator: { path: "src/button.ts", start_line: 1, end_line: 20 }, content_digest: digest("a"),
+    }]);
+    expect(examples.content_blocks.map((block) => block.layer)).toEqual([
       "semantic-prose",
-      "deterministic-block",
     ]);
-    expect(withExamples.sections[1]?.content_blocks[1]?.fact_refs).toEqual([
-      "fact:button-example-1",
-      "fact:button-example-2",
-    ]);
+    expect(JSON.stringify(withExamples)).not.toContain("fact_refs");
   });
 
   test("turns a required data/evidence gap into the exact material question before Review", async () => {
@@ -581,7 +541,7 @@ describe("Indexer template materialization and rendering", () => {
         questionBindings: QUESTION_BINDINGS,
         applicabilityConditionRefs: CONDITIONS,
       });
-      expect(rendered.sections[0]!.markdown).toContain(summary);
+      expect(rendered.sections.map(section => section.markdown).join("\n\n")).toContain(summary);
       expect(rendered.review_ready).toBe(true);
     }
 
@@ -593,7 +553,7 @@ describe("Indexer template materialization and rendering", () => {
       template: setupValue.materialized,
       questionBindings: QUESTION_BINDINGS,
       applicabilityConditionRefs: CONDITIONS,
-    }).sections[0]!.markdown).toContain("known TODO");
+    }).sections.map(section => section.markdown).join("\n")).toContain("known TODO");
 
     const wrongType = boundArtifactResult(setupValue.materialized, {
       summary: "Valid summary.",
@@ -613,26 +573,6 @@ describe("Indexer template materialization and rendering", () => {
       applicabilityConditionRefs: CONDITIONS,
     })).toThrow("wrong type");
 
-    const deterministicDrift = boundArtifactResult(setupValue.materialized, {
-      summary: "Valid summary.",
-      examples: ["Source-backed example."],
-    });
-    const deterministicArtifact = deterministicDrift.artifacts[0]!;
-    if (deterministicArtifact.representation !== "template") {
-      throw new Error("expected template");
-    }
-    deterministicArtifact.variables.examples!.value = ["Invented example."];
-    const deterministicPayload = Object.fromEntries(
-      Object.entries(deterministicDrift).filter(([key]) => key !== "output_digest"),
-    ) as Omit<IndexerArtifactResult, "output_digest">;
-    deterministicDrift.output_digest = indexerArtifactResultDigest(deterministicPayload);
-    expect(() => renderIndexerTemplateArtifact({
-      artifactResult: deterministicDrift,
-      artifactId: "button-guide",
-      template: setupValue.materialized,
-      questionBindings: QUESTION_BINDINGS,
-      applicabilityConditionRefs: CONDITIONS,
-    })).toThrow("does not equal its Fact projection");
 
     const diagnostics: Array<{ code: string; message: string }> = [];
     const longProse = renderIndexerTemplateArtifact({
@@ -649,37 +589,6 @@ describe("Indexer template materialization and rendering", () => {
     expect(longProse.sections.some(section => section.markdown.includes("x".repeat(2001)))).toBe(true);
     expect(diagnostics.map(item => item.code)).toContain("template-variable-length-guidance-exceeded");
 
-    const wrongEvidenceKind = boundArtifactResult(setupValue.materialized, {
-      summary: "A summary with the wrong evidence kind.",
-    });
-    const originalEvidence = wrongEvidenceKind.evidence_bindings[0]!;
-    const unsupportedPayload = {
-      evidence_ref: "evidence:unsupported-summary",
-      kind: "configuration" as const,
-      source_ref: originalEvidence.source_ref,
-      module_ref: originalEvidence.module_ref,
-      locator: { path: "config/sample.json", start_line: 1, end_line: 2 },
-      content_digest: digest("e"),
-      coverage_tier: "lightweight-evidence" as const,
-    };
-    wrongEvidenceKind.evidence_bindings.push({
-      ...unsupportedPayload,
-      binding_digest: indexerEvidenceBindingDigest(unsupportedPayload),
-    });
-    const wrongEvidenceArtifact = wrongEvidenceKind.artifacts[0]!;
-    if (wrongEvidenceArtifact.representation !== "template") throw new Error("expected template");
-    wrongEvidenceArtifact.variables.summary!.evidence_refs = [unsupportedPayload.evidence_ref];
-    const evidencePayload = Object.fromEntries(
-      Object.entries(wrongEvidenceKind).filter(([key]) => key !== "output_digest"),
-    ) as Omit<IndexerArtifactResult, "output_digest">;
-    wrongEvidenceKind.output_digest = indexerArtifactResultDigest(evidencePayload);
-    expect(() => renderIndexerTemplateArtifact({
-      artifactResult: wrongEvidenceKind,
-      artifactId: "button-guide",
-      template: setupValue.materialized,
-      questionBindings: QUESTION_BINDINGS,
-      applicabilityConditionRefs: CONDITIONS,
-    })).toThrow("material question transition");
   });
 
   test("uses only the declared same-name local override and binds its origin digest", async () => {
@@ -695,7 +604,7 @@ describe("Indexer template materialization and rendering", () => {
       questionBindings: QUESTION_BINDINGS,
       applicabilityConditionRefs: CONDITIONS,
     });
-    expect(rendered.sections[0]?.markdown).toContain("Local: A source-backed");
+    expect(rendered.sections.map(section => section.markdown).join("\n\n")).toContain("Local: A source-backed");
     expect(rendered.template_origin).toBe("customization-override");
   });
 });

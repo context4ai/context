@@ -1,6 +1,0 @@
-schema: agent-graph.action.v1
-id: configure-indexer-providers
-runner: agent
-effect: write
-skill: skills/configure-indexer-providers/SKILL.md
-outputSchema: schemas/indexer-agent-step-result.schema.json

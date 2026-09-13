@@ -9,8 +9,9 @@ import { withProjectWriteLock } from "../project/writeLock.js";
 import { resolveContextEntry } from "../project/entryCommand.js";
 import { collectProjectStatus } from "../project/status.js";
 import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage } from "./projectDocumentRevisionStages.fixture.js";
-import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
+import { productionPlanningRequest } from "../project/productionPlanning.js";
+import { prepareCurrentProductionStage } from "../project/productionStagePreparation.js";
+import { readProductionStage } from "../project/productionStageStore.js";
 import { repositoryRecoveryPlan } from "../project/repoSourceRecovery.js";
 
 const roots: string[] = [];
@@ -29,7 +30,7 @@ const taskFile = ".tmp/context-runtime/indexer/current.json";
 
 test("preparation removes all selected task/maintenance state and retains sources and results", async () => {
   const root = await fixture();
-  const discarded = ["knowledge/decisions.json", taskFile, ".tmp/context-runtime/indexer/Z.json", ".tmp/context-runtime/indexer/a.json", ".tmp/context-runtime/maintenance/current.json", ".tmp/context-runtime/lifecycle/candidates.jsonl"];
+  const discarded = [taskFile, ".tmp/context-runtime/indexer/Z.json", ".tmp/context-runtime/indexer/a.json", ".tmp/context-runtime/maintenance/current.json", ".tmp/context-runtime/lifecycle/candidates.jsonl"];
   const kept = ["knowledge/page.md", "knowledge/structure.yaml", "sources/lark/body.md", "sources/note/n.md", "sources/sessions/s.md", "src/index.ts", ".tmp/repo/local.ts", ".tmp/work-start-report.md", "dist/page.md"];
   for (const path of [...discarded, ...kept]) await put(root, path);
   const preview = await prepareWorkspace({ projectRoot: root });
@@ -124,17 +125,17 @@ test("Agent Git recipe commits and restores embedded workspace without unrelated
   expect(git("show", ":unrelated.md")).toBe("staged");
 });
 
-test("a real lifecycle after Partition can be abandoned without losing repository readiness", async () => {
+test("a current production stage can be abandoned without losing repository readiness", async () => {
   const root = await createDocumentRevisionWorkspace(); roots.push(root);
-  await completePartitionStage(root);
-  expect((await currentLedger(root))!.entries.length).toBeGreaterThan(0);
+  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision });
+  expect((await readProductionStage(root))!.pending_scopes.length).toBeGreaterThan(0);
   const before = await readFile(join(root, "sources/repo/index.yaml"), "utf8");
   const plan = await prepareWorkspace({ projectRoot: root });
   await prepareWorkspace({ projectRoot: root, apply: true, plan_digest: plan.revision });
-  expect(await currentLedger(root)).toBeUndefined();
+  expect(await readProductionStage(root)).toBeUndefined();
   expect(await readFile(join(root, "sources/repo/index.yaml"), "utf8")).toBe(before);
   const sources = await repositoryRecoveryPlan({ projectRoot: root });
   expect(sources).toMatchObject({ pending_groups: 0, next_action: null });
   await collectProjectStatus(root);
-  expect(await currentLedger(root)).toBeUndefined();
+  expect(await readProductionStage(root)).toBeUndefined();
 });

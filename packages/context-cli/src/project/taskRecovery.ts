@@ -1,15 +1,21 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { indexerProtocolDigest } from "@c4a/context";
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
-import { readRecoveryCheckpoint, recoveryText } from "./taskRecoveryCheckpoint.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { productionAgentDirectory } from "./productionSubmissionFiles.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { recoverDurableMultiFileTransactions, safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { contextWorkflowProviderPath } from "./workflow/workflowProvider.js";
 
 export const RECOVERY_COMMAND = "context task recover --format json";
 export const TRANSACTIONS_PATH = ".tmp/context-runtime/transactions";
+
+async function recoveryText(root: string, path: string): Promise<string | undefined> {
+  const target = await safeProjectTarget(root, path);
+  try { return await readFile(target, "utf8"); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+}
 
 /** Inventory journals by bytes, without interpreting/replaying them or loading
  * project code. The transaction engine is the only writer/recovery authority. */
@@ -51,22 +57,19 @@ export async function inspectTaskRecovery(root: string) {
       findings.push({ area, error: error instanceof Error ? error.message : String(error) }); return null;
     }
   }
-  const ledger = await probe("task-ledger", () => currentLedger(root));
-  const checkpoint = await probe("accepted-plan", () => readRecoveryCheckpoint(root));
+  const stage = await probe("production-stage", () => readProductionStage(root));
   const journals = await probe("transactions", () => recoveryJournals(root));
   const lock = await probe("writer-lock", async () => {
     const text = await recoveryText(root, ".tmp/context-runtime/locks/project-write.lock/owner.json");
     return text === undefined ? null : JSON.parse(text) as unknown;
   });
   return { action: "recovery-inspected", resources: recoveryResources(), findings,
-    tasks: ledger?.entries.map(entry => ({ workset_digest: entry.workset_digest, stage: entry.stage, state: entry.state })) ?? [],
-    checkpoint: checkpoint ? { digest: checkpoint.digest, structure_revision: checkpoint.structure_revision,
-      worksets: checkpoint.entries.map(entry => entry.workset_digest) } : null,
+    tasks: stage?.tasks.map(task => ({ task: task.id, path: task.path, state: task.status })) ?? [],
+    ...(stage ? { stage: stage.id, directory: productionAgentDirectory(stage.id) } : {}),
     transactions: journals, writer_lock: lock,
     actions: [
       ...(journals?.length ? [{ operation: "transactions", command: `${RECOVERY_COMMAND} --operation transactions` }] : []),
-      ...(ledger?.entries.some(entry => entry.stage === "author") ? [{ operation: "author", command: `${RECOVERY_COMMAND} --operation author --workset <listed-digest> --instruction <correction>` }] : []),
-      ...(checkpoint ? [{ operation: "plan", command: `${RECOVERY_COMMAND} --operation plan --workset <listed-digest> --instruction <correction>` }] : []),
+      ...(stage ? [{ operation: "continue", command: "context status --format json" }] : []),
     ],
     guidance: "Read the recovery skill. Preview impact before applying an authorized repair. Do not pass an old --workflow-revision. Do not delete locks/runtime files, replay accepted payloads or repeat an unchanged failed action. If no safe repair works, write a sanitized issue report using issue_template; retain current knowledge and output.",
   };

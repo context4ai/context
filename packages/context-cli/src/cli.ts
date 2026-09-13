@@ -9,7 +9,6 @@ import { continueAfterProjectReview } from "./project/workflow/workflowContinuat
 import { registerDebugCommands } from "./commands/debugCommands.js";
 import { registerDocumentRevisionCommand } from "./commands/documentRevisionCommands.js";
 import { registerVersionCommands } from "./commands/versionCommands.js";
-import { registerCodeIndexMigrationCommands } from "./commands/codeIndexMigrationCommands.js";
 import { registerRuntimeEventLogCommands } from "./commands/runtimeEventLogs.js";
 import { registerProjectActionCommands } from "./commands/actionCommands.js";
 import { runDoctorCleanClaudePluginCache } from "./commands/cleanClaudePluginCache.js";
@@ -27,11 +26,8 @@ import {
   runReviewApproveAllCommand,
   runReviewDeprecateCommand,
   runReviewHtmlCommand,
-  runReviewKeepOrphanedCommand,
   runReviewListCommand,
-  runReviewMaintainCommand,
   runReviewMarkCommand,
-  runReviewRePinCommand,
 } from "./project/review.js";
 import { contextWorkflowAuthorities } from "./project/workflow/workflowFacts.js";
 import {
@@ -205,7 +201,6 @@ export function createCliProgram(): Command {
 
   registerDebugCommands(program);
   registerDocumentRevisionCommand(program);
-  registerCodeIndexMigrationCommands(program);
 
   registerContextWorkflowResourceCommands(program);
   registerProjectActionCommands(program);
@@ -363,25 +358,9 @@ export function createCliProgram(): Command {
       });
     });
 
-  review
-    .command("re-pin <view-ref>")
-    .description("Accept document source drift by updating approved prose source_ref metadata only")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (viewRef: string, options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(ExitCode.UserError, "--format must be text or json", {
-          category: ErrorCategory.UserInputInvalid,
-        });
-      }
-      await runReviewRePinCommand({
-        cwd: process.cwd(),
-        viewRef,
-        format: options.format === "json" ? "json" : "text",
-      });
-    });
 
   review
-    .command("deprecate <view-ref>")
+    .command("deprecate <article-id>")
     .description("Mark an approved knowledge page as deprecated without deleting it")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (viewRef: string, options: Record<string, unknown>) => {
@@ -397,55 +376,6 @@ export function createCliProgram(): Command {
       });
     });
 
-  review
-    .command("keep-orphaned <view-ref>")
-    .description(
-      "Keep an approved page with an explicit source-orphaned evidence warning",
-    )
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (viewRef: string, options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(
-          ExitCode.UserError,
-          "--format must be text or json",
-          { category: ErrorCategory.UserInputInvalid },
-        );
-      }
-      await runReviewKeepOrphanedCommand({
-        cwd: process.cwd(),
-        viewRef,
-        format: options.format === "json" ? "json" : "text",
-      });
-    });
-
-  review
-    .command("maintain")
-    .description(
-      "Apply a typed batch of approved evidence-maintenance decisions",
-    )
-    .requiredOption("--input <file>", "YAML/JSON payload path, or - for stdin")
-    .option("--format <format>", "output format: text | json", "text")
-    .action(async (options: Record<string, unknown>) => {
-      if (options.format !== "text" && options.format !== "json") {
-        throw new ContextError(
-          ExitCode.UserError,
-          "--format must be text or json",
-          { category: ErrorCategory.UserInputInvalid },
-        );
-      }
-      if (typeof options.input !== "string") {
-        throw new ContextError(
-          ExitCode.UserError,
-          "review maintain requires --input <file> or --input -",
-          { category: ErrorCategory.UserInputInvalid },
-        );
-      }
-      await runReviewMaintainCommand({
-        cwd: process.cwd(),
-        payloadInput: options.input,
-        format: options.format === "json" ? "json" : "text",
-      });
-    });
 
   registerProjectCloseAndBuildCommands(program);
   registerVersionCommands(program);

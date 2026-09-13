@@ -1,15 +1,15 @@
 import {
   indexerArtifactResultSchema,
+  indexerArtifactReferences,
+  articleFragmentReferences,
   indexerLayerFragmentDigest,
   indexerProtocolDigest,
   validateIndexerPostAuthorFragmentRequest,
   type IndexerLayerFragment,
   type IndexerPostAuthorSemanticInput,
-  type IndexerPrimaryResultView,
 } from "@c4a/context";
 import { renderMarkdownSection } from "./markdownPageTitle.js";
 
-type PrimaryEvidenceRef = IndexerPrimaryResultView["facts"][number]["evidence_refs"][number];
 
 function slug(value: string): string {
   const normalized = value.normalize("NFC").toLocaleLowerCase("en-US")
@@ -48,41 +48,15 @@ export function buildIndexerPostAuthorResultFromSemantic(input: {
     canonical: target,
     aliases: [`target:${index + 1}`],
   })));
-  const evidence = new Map(request.primary_result_view.facts.flatMap((fact) =>
-    fact.evidence_refs.map((item) => [item.ref, item] as const)
-  ));
-  for (const artifact of request.primary_result_view.artifacts) {
-    for (const item of artifact.evidence_refs) evidence.set(item.ref, item);
-  }
-  const sources = aliasMap([
-    ...request.primary_result_view.facts.map((fact, index) => ({
-      canonical: fact.fact_ref,
-      aliases: [`fact:${index + 1}`],
-    })),
-    ...request.primary_result_view.artifacts.map((artifact, index) => ({
-      canonical: artifact.artifact_ref,
-      aliases: [`artifact:${index + 1}`],
-    })),
-    ...[...evidence.keys()].map((ref) => ({ canonical: ref, aliases: [] })),
-  ]);
-  const evidenceFor = (values: readonly string[]) => {
-    const refs = new Map<string, PrimaryEvidenceRef>();
-    for (const value of values) {
-      const canonical = sources.get(value);
-      if (canonical === undefined) throw new TypeError(`post-author source is not authorized: ${value}`);
-      const direct = evidence.get(canonical);
-      if (direct !== undefined) refs.set(direct.ref, direct);
-      const fact = request.primary_result_view.facts.find((item) => item.fact_ref === canonical);
-      const artifact = request.primary_result_view.artifacts.find((item) =>
-        item.artifact_ref === canonical
-      );
-      for (const item of [...(fact?.evidence_refs ?? []), ...(artifact?.evidence_refs ?? [])]) {
-        refs.set(item.ref, item);
-      }
-    }
-    if (refs.size === 0) throw new TypeError("post-author section has no primary evidence");
-    return [...refs.values()].sort((left, right) => left.ref.localeCompare(right.ref));
-  };
+  const primaryReferences = primary.artifacts.flatMap(indexerArtifactReferences);
+  const referencesFor = (values: IndexerPostAuthorSemanticInput["proposals"][number]["sections"][number]["references"]) =>
+    articleFragmentReferences(values.map(value => {
+      const reference = primaryReferences.find(ref => ref.source_ref === value.source_ref &&
+        ref.locator.path === value.locator.path && ref.locator.start_line === value.locator.start_line &&
+        ref.locator.end_line === value.locator.end_line);
+      if (!reference) throw new TypeError("Post-author source region is absent from the accepted primary articles");
+      return reference;
+    }));
   const primarySection = primary.artifacts.flatMap((artifact) =>
     artifact.representation === "sections" ? artifact.sections : []
   )[0];
@@ -106,12 +80,9 @@ export function buildIndexerPostAuthorResultFromSemantic(input: {
           heading: section.heading,
           ...(index === 0 ? { pageTitle: proposal.title, summary: proposal.summary } : {}),
         }),
-        evidence_refs: evidenceFor(section.source_refs).map((item) => item.ref),
+        references: referencesFor(section.references),
       }],
     }));
-    const proposalEvidence = new Map(proposal.sections.flatMap((section) =>
-      evidenceFor(section.source_refs).map((item) => [item.ref, item] as const)
-    ));
     return {
       composer_ref: request.composer_ref,
       target_node_ref: target,
@@ -122,9 +93,6 @@ export function buildIndexerPostAuthorResultFromSemantic(input: {
         representation: "sections" as const,
         sections,
       },
-      evidence_refs: [...proposalEvidence.values()].sort((left, right) =>
-        left.ref.localeCompare(right.ref)
-      ),
     };
   });
   const fragments: IndexerLayerFragment[] = proposals.length === 0

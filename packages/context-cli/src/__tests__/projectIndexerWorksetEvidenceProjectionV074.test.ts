@@ -26,11 +26,6 @@ import {
   buildCapturedDocumentWorksetViewSource,
 } from
   "../project/indexerWorksetEvidenceProjection.js";
-import {
-  materializeIndexerWorksetViewHostAction,
-  prepareProjectIndexerWorksetViewMaterialization,
-} from "../project/indexerWorksetViewMaterialization.js";
-import { normalizeRunSpec } from "../project/indexerMainRunStoreRecords.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
 
@@ -81,19 +76,12 @@ function markdownRunRequest(
     primary_execution_fingerprint:
       primaryExecutionProjection.primary_execution_fingerprint,
     profile_contract_digest: digest("8"),
-    subject_key_schema_digest: digest("a"),
     source_scope_digest: digest("b"),
     source_binding_digest: binding.source_binding_digest,
     primary_resource_binding_digest:
       primaryExecutionProjection.primary_resource_binding_digest,
     question_target_inventory_digest: digest("d"),
     stage: "partition",
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "docs",
-      kind: "document-set",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest([strategy]),
     reader_question_refs: [],
     partition_input_digests: binding.partition_input_digests,
@@ -222,7 +210,7 @@ function enrichmentRegistry(evidenceSourceRef: string): IndexerRegistry {
 }
 
 describe("0.7.4 Indexer workset evidence projection", () => {
-  test("projects a captured Markdown snapshot through the single main Workset View path", async () => {
+  test("projects captured Markdown paths and outlines without copying document bodies", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-indexer-markdown-view-"));
     const registry = markdownRegistry();
     await mkdir(join(root, "src"), { recursive: true });
@@ -285,36 +273,14 @@ describe("0.7.4 Indexer workset evidence projection", () => {
       requirement_set_digest: indexerRegistryDigests(registry).requirementSetDigest,
       primary_registry_projection_digest: buildIndexerPrimaryRegistryProjection({ registry, indexer_id: "sample-markdown-indexer", pre_authority_provider_ids: [] }).projection_digest,
     });
-    const runSpec = normalizeRunSpec({
-      protocol: "context.indexer.main-run-spec/v1",
-      request: runRequest,
-      validation: {
-        stage: "partition",
-        canonical_inventory_members: binding.partition_inventory,
-      },
+    const projection = await buildCapturedDocumentWorksetViewSource({
+      projectRoot: root, request: runRequest, evidence,
+      authorized_document_paths: files.map(file => file.path),
     });
-    const worksetView = await prepareProjectIndexerWorksetViewMaterialization({
-      projectRoot: root,
-      run_spec: runSpec,
-    });
-    const host = await materializeIndexerWorksetViewHostAction({
-      request: worksetView.request,
-      run_request: runRequest,
-      projection: worksetView.projection,
-      workspaceRoot: root,
-      adapter: "context-cli",
-      adapterVersion: "0.7.4",
-    });
-    expect(worksetView.projection.view.items.filter((item) =>
+    expect(projection.items.filter((item) =>
       item.category === "document"
     )).toHaveLength(2);
-    expect(worksetView.projection.view.items.find((item) =>
-      item.category === "index-requirement"
-    )?.value).toMatchObject({
-      id: "documentation",
-      reader_goals: ["understand-system"],
-    });
-    const projectedDocuments = worksetView.projection.view.items.filter((item) =>
+    const projectedDocuments = projection.items.filter((item) =>
       item.category === "document"
     );
     expect(JSON.stringify(projectedDocuments)).toContain("guide/overview.md");
@@ -335,9 +301,6 @@ describe("0.7.4 Indexer workset evidence projection", () => {
     expect(projectedDocuments.every((item) =>
       !Object.prototype.hasOwnProperty.call(item.value, "markdown")
     )).toBe(true);
-    expect(host.result.output).toMatchObject({
-      resource: { digest: host.managed_output.digest },
-    });
     await expect(buildCapturedDocumentWorksetViewSource({
       projectRoot: root,
       request: runRequest,

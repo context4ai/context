@@ -1,4 +1,3 @@
-import { approvedKnowledgeContentDigest } from "../project/approvedKnowledgeSnapshots.js";
 import { initContextProject } from "../project/workspace.js";
 import type { PackageDefinition } from "@c4a/context";
 import { describe, expect, test } from "bun:test";
@@ -56,15 +55,15 @@ describe("source visual processing", () => {
     expect(first.warnings).toEqual([]);
     await mkdir(join(root, "knowledge/docs"), { recursive: true });
     await writeFile(join(root, "knowledge/docs/flow.md"), first.markdown.replace("A --> B", "A -->|Request| B"));
-    // Model the accepted file digest; unapproved on-disk edits must not be reused.
+    // Only indexed articles participate; Markdown is the current prose authority.
     const acceptedBody = await readFile(join(root, "knowledge/docs/flow.md"), "utf8");
-    await writeFile(join(root, "knowledge/structure.yaml"), JSON.stringify({ approved_knowledge: [
-      { path: "docs/flow.md", approved_content_digest: approvedKnowledgeContentDigest(acceptedBody) },
+    await writeFile(join(root, "knowledge/structure.yaml"), JSON.stringify({ articles: [
+      { article_id: "docs:flow", path: "docs/flow.md", collection: "architecture", visibility: "public", sections: [] },
     ] }));
     const previous = await approvedVisualResults(root);
     expect(previous).toHaveLength(1);
-    await writeFile(join(root, "knowledge/docs/flow.md"), acceptedBody + "\nUnapproved change");
-    expect(await approvedVisualResults(root)).toEqual([]);
+    await writeFile(join(root, "knowledge/docs/flow.md"), acceptedBody + "\nUnrelated article correction");
+    expect(await approvedVisualResults(root)).toEqual(previous);
     await writeFile(join(root, "knowledge/docs/flow.md"), acceptedBody);
     const again = renderVisualDecisions([{ ...decision, markdown: undefined }], resources(body + "\nUnrelated change", previous));
     expect(again.markdown).toContain("A -->|Request| B");

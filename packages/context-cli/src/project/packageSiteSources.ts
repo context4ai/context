@@ -1,7 +1,14 @@
-import type { SourcesRegistry } from "@c4a/context";
-import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
+import type { ArticleStructureEntry, SourcesRegistry } from "@c4a/context";
 
 export interface SiteSource { label: string; href?: string }
+/** Generated only for exported Markdown; the workspace keeps a single reference record. */
+export function articleProvenanceMarkdown(article: ArticleStructureEntry | undefined, registry: SourcesRegistry): string {
+  const sources = siteArticleSources(article, registry);
+  if (!sources.length) return "";
+  const label = (value: string) => value.replace(/[\\[\]<>`*]/gu, "\\$&").replace(/[\r\n]/gu, " ");
+  return ["", "---", "", "## Sources", "", ...sources.map(source => source.href
+    ? `- [${label(source.label)}](<${source.href}>)` : `- ${label(source.label)}`), ""].join("\n");
+}
 function webUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;
   try {
@@ -17,35 +24,31 @@ function repoUrl(remote: string): string | undefined {
 const encodedPath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
 /** Project recorded provenance only; do not infer source files from prose or titles. */
-export function siteArticleSources(content: string, registry: SourcesRegistry): SiteSource[] {
-  const meta = parseKnowledgeFrontmatter(content);
-  const refs = new Set<string>(Array.isArray(meta.sources) ? meta.sources.filter((v): v is string => typeof v === "string") : []);
-  for (const match of content.matchAll(/<!--\s*context:section\b[^>]*\bsource_ref="([^"]+)"/gu)) refs.add(match[1]!);
+export function siteArticleSources(article: ArticleStructureEntry | undefined, registry: SourcesRegistry): SiteSource[] {
   const sources: SiteSource[] = [];
-  for (const ref of refs) {
-    const repo = registry.repos.find(entry => ref === `repo:${entry.id}` || ref.startsWith(`repo:${entry.id}/`) || ref.startsWith(`repo:${entry.id}#`));
+  for (const reference of article?.sections.flatMap(section => section.references) ?? []) {
+    const ref = reference.source_ref;
+    const locator = reference.locator;
+    const region = `L${locator.start_line}–L${locator.end_line}`;
+    const repo = registry.repos.find(entry => ref === `repo:${entry.id}` || ref === `repo:${entry.name}`);
     if (repo) {
       const base = repoUrl(repo.remote);
-      const suffix = ref.slice(`repo:${repo.id}`.length).split("#")[0]!;
-      const file = suffix.startsWith("/") ? suffix.slice(1) : "";
-      // Only registry-relative paths belong in a repository URL.
-      const parts = [repo.subpath ?? "", file].filter(Boolean);
-      const safe = parts.every(part => !part.startsWith("/") && !part.split("/").includes(".."));
-      const path = parts.join("/");
-      const name = base ? new URL(base).pathname.replace(/^\//u, "") : repo.module;
-      const href = base && safe ? `${base}/${file ? "blob" : "tree"}/${encodeURIComponent(repo.ref)}/${encodedPath(path)}` : undefined;
-      const revisionLabel = /^[a-f0-9]{7,64}$/iu.test(repo.ref) ? repo.ref.slice(0, 6) : repo.ref;
-      sources.push({ label: `${name}${safe && path ? `/${path}` : ""} # ${revisionLabel}`, ...(href ? { href } : {}) });
+      const path = [repo.subpath ?? "", locator.path].filter(Boolean).join("/");
+      const safe = !path.startsWith("/") && !path.split("/").some(part => part === ".." || part === ".");
+      const href = base && safe
+        ? `${base}/blob/${encodeURIComponent(repo.ref)}/${encodedPath(path)}#L${locator.start_line}-L${locator.end_line}`
+        : undefined;
+      const revision = /^[a-f0-9]{7,64}$/iu.test(repo.ref) ? repo.ref.slice(0, 7) : repo.ref;
+      sources.push({ label: `${repo.module}/${locator.path} ${region} · ${revision}`, ...(href ? { href } : {}) });
       continue;
     }
-    const doc = registry.larks.find(entry => ref === `lark:${entry.id}` || ref.startsWith(`lark:${entry.id}#`));
+    const doc = registry.larks.find(entry => ref === `lark:${entry.id}` || ref === `lark:${entry.name}`);
     if (doc) {
       const href = webUrl(doc.url);
-      sources.push({ label: doc.title ?? doc.name, ...(href ? { href } : {}) });
+      sources.push({ label: `${doc.title ?? doc.name} · ${locator.path} ${region}`, ...(href ? { href } : {}) });
       continue;
     }
-    const local = [ ...registry.files.map(entry => ({ ...entry, prefix: "file" })), ...registry.notes.map(entry => ({ ...entry, prefix: "note" })), ...registry.sessions.map(entry => ({ ...entry, prefix: "sessions" })) ].find(entry => ref === `${entry.prefix}:${entry.id}` || ref.startsWith(`${entry.prefix}:${entry.id}#`));
-    if (local) sources.push({ label: local.name });
+    sources.push({ label: `${ref} · ${locator.path} ${region}` });
   }
-  return [...new Map(sources.map(source => [source.href ?? source.label, source])).values()];
+  return [...new Map(sources.map(source => [JSON.stringify(source), source])).values()];
 }

@@ -1,18 +1,15 @@
 import {
-  canonicalIndexerNodeRef,
+  indexerProtocolDigest,
   validateIndexerArticlePlan,
   compareIndexerCanonicalText,
   indexerPartitionPlanCanonicalHash,
-  validateIndexerSubjectKeyForContract,
   type IndexerAuthorizedWorksetView,
   type IndexerInventoryMember,
   type IndexerMainRunRequest,
   type IndexerMainRunResult,
   type IndexerPartitionPlan,
   type IndexerPartitionSemanticInput,
-  type IndexerSubjectKey,
 } from "@c4a/context";
-import { qualifyIndexerPartitionEntrySubject } from "./indexerPartitionEntrySubject.js";
 
 function uniqueSorted(values: readonly string[], label: string): string[] {
   const sorted = [...new Set(values)].sort(compareIndexerCanonicalText);
@@ -91,25 +88,6 @@ function inventoryAliases(input: {
   return aliases;
 }
 
-function subjectKey(
-  value: IndexerPartitionSemanticInput["groups"][number]["subject"],
-  base: IndexerSubjectKey,
-): IndexerSubjectKey {
-  if (typeof value !== "string") {
-    return { protocol: "context.subject-key/v1", ...value };
-  }
-  const localKey = value.startsWith("subject-choice:")
-    ? value.slice("subject-choice:".length)
-    : value;
-  if (localKey.length === 0) throw new TypeError("partition subject choice is empty");
-  return {
-    protocol: "context.subject-key/v1",
-    namespace: base.namespace,
-    kind: base.kind,
-    local_key: localKey,
-  };
-}
-
 export function buildIndexerPartitionRunResultFromSemantic(input: {
   request: IndexerMainRunRequest;
   view: IndexerAuthorizedWorksetView;
@@ -117,7 +95,6 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
   validation: {
     canonical_inventory_members: readonly IndexerInventoryMember[];
     authorized_source_refs: readonly string[];
-    subject_key_contract: unknown;
     partition_unit_type: string;
     required_question_target_refs?: readonly string[];
     available_artifact_intents?: readonly string[];
@@ -220,22 +197,14 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       question_targets: article.question_targets.map(target => resolveAlias(targets, target, "article question target")).sort(),
     }));
     if (articles !== undefined) validateIndexerArticlePlan(articles, resolvedTargets.filter(target => target.role === "primary-carrier").map(target => target.target_ref));
-    const subject = qualifyIndexerPartitionEntrySubject({
-      subject: subjectKey(group.subject, workset.partition_subject_key),
-      explicit_subject: typeof group.subject !== "string",
-      members: resolvedMembers,
-      view: input.view,
-    });
-    validateIndexerSubjectKeyForContract(
-      subject,
-      input.validation.subject_key_contract,
-      workset.indexer_id,
-    );
     return {
       group_key: group.key,
-      subject_key: subject,
-      subject_intent: group.subject_intent,
-      logical_unit_ref: canonicalIndexerNodeRef(subject),
+      logical_unit_ref: indexerProtocolDigest({
+        indexer_id: workset.indexer_id,
+        source_ref: workset.source_ref,
+        module_ref: workset.module_ref,
+        group_key: group.key,
+      }),
       label: group.title,
       reader_task: group.reader_task,
       outline: group.outline,
@@ -286,11 +255,9 @@ export function buildIndexerPartitionRunResultFromSemantic(input: {
       indexer_id: workset.indexer_id,
       indexer_fingerprint: workset.primary_execution_fingerprint,
       requirement_digest: workset.requirement_set_digest,
-      subject_key_schema_digest: workset.subject_key_schema_digest,
       source_scope_digest: workset.source_scope_digest,
       source_refs: uniqueSorted(input.validation.authorized_source_refs, "authorized sources"),
       module_ref: workset.module_ref,
-      partition_subject_key: workset.partition_subject_key,
       parent_scope_ref: workset.module_ref ?? workset.source_ref,
       inventory_digest: workset.partition_inventory_digest,
       question_target_inventory_digest:

@@ -6,7 +6,7 @@ import { authorOptionalSource, authorRecordRows, projectAuthorAuthority, project
 import { compactPartitionNavigation, partitionOverview } from "./indexerPartitionOverview.js";
 import { projectIndexerPublicContractTable } from "@c4a/context";
 import type {
-  IndexerAuthorDependencyView, IndexerAuthorizedWorksetView,
+  IndexerAuthorizedWorksetView,
   IndexerAuthorizedWorksetViewItem, IndexerMainWorkset,
 } from "@c4a/context";
 import { buildIndexerAuthorSourceItems } from "./indexerAuthorSourceItems.js";
@@ -131,7 +131,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
       const members = view.items.filter(item => item.category === category);
       if (members.length > 0) output.push("### inventory-member", "",
         readingBlock(JSON.stringify(authorRecordRows(authorInventoryReading(view)))), "",
-        "Member facts list exact authorized references with parser names/kinds and explicit propsType when present. Use these references for section facts or contract selection; the mapping does not imply public visibility or coverage. Do not guess another fact from a name suffix.", "");
+        "Members identify the inventory covered by this task. Parser names and locations, when available, help find source text; they do not establish behavior or public visibility. Submit member dispositions separately from the exact source regions cited in section references.", "");
       continue;
     }
     for (const item of view.items.filter((candidate) => candidate.category === category)) {
@@ -173,15 +173,15 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
           category === "inventory-member" ? displayed : { ref: item.ref, ...displayed }), "");
       }
       if (category === "partition-authority") {
-        output.push("For a required cross-topic article, declare articles[].knowledge_dependencies using supplied stable artifact_ref values, optional approved section_refs, and required. Keep one legal primary subject and member owner; supporting references do not own upstream members. Context schedules available upstream articles first. If no dependency can become ready, use structure review request-adjustment to correct the plan. A navigation-only grouping does not need a synthesis article or Composer.", "");
+        output.push("Use existing articles to avoid duplicate explanations. Plan writing order dynamically when one page helps explain another; this is not a dependency gate. Source references point to actual captured regions, not assertions inherited from another article. Navigation-only grouping does not require a synthesis article.", "");
         output.push("Plan from the whole member overview, following full-fact links and captured source paths where boundaries are unclear. Set ready_for_author=true only for an independently useful theme with resolved ownership and relevant dependencies. Leave unresolved themes in planning. This permits early delivery, not skipping remaining inventory or Review.", "");
-        output.push("Naming: group.key identifies the group; title labels the content. The main page path uses knowledge/<collection>/<subject.namespace>/<subject.local_key>.md as readable slugs. A string subject inherits the base namespace. For a new page with an opaque capture-ID namespace, choose a readable namespace and local_key using the explicit subject object and a permitted kind. Preserve existing subjects on updates; approved paths are reused and collisions go through layout confirmation.", "");
+        output.push("Naming: group.key identifies a writing group; title labels its content. Use readable group keys and article titles. Context derives stable article identity and paths; existing article paths are reused on revisions, and collisions go through layout confirmation. Do not extract subject identities or entity types.", "");
       }
       if (category === "source-access" && workset.stage === "author") {
-        output.push("The excerpts below are recommended reading, not the whole reading scope. If necessary, read the listed files directly under captured_root with your file tool. These are captured sources, not the live repository. Cite their repository-relative paths in sections[].source_items; Context resolves source associations automatically. For other missing files, request-material accepts exact paths or directories in this registered module. Do not scan unrelated repositories, recollect, or repartition.", "");
+        output.push("The excerpts below are recommended reading, not the whole reading scope. If necessary, read the listed files directly under captured_root with your file tool. These are captured sources, not the live repository. Cite exact source_ref and repository-relative path with the actual start_line/end_line in sections[].references; Context computes the regional digest. For other missing files, request-material accepts exact paths or directories in this registered module. Do not scan unrelated repositories, recollect, or repartition.", "");
       }
       if (category === "author-authority") {
-        output.push("Approved supporting knowledge, when supplied, separates supporting-fact from approved-interpretation. Use the former with its original source/version evidence; attribute the latter as approved interpretation. Neither authorizes broader source access. Do not replace a required planned article with an optional Composer proposal.", "");
+        output.push("Approved supporting articles provide prior explanations and their source regions, not a separate fact ledger. Preserve confirmed contributions, distinguish interpretation from source behavior, and stay within the current source scope. Do not replace a required planned article with an optional Composer proposal.", "");
         if (record(record(item.value).page_plan).scope_change !== undefined) {
           output.push("Scope changed: some members were explicitly excluded. The old topic, reader task and outline are historical context, not evidence that the remaining members still form a useful page. Reassess the remaining sources before writing. Correct the title/summary and choose an allowed page form only if justified; otherwise use a supported non-publishing outcome with truthful member dispositions. Do not reinstate excluded members, invent an API, or repartition unaffected work.", "");
         }
@@ -209,14 +209,12 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
   if (workset.stage === "partition" && workset.allowed_question_target_refs.length > 0) {
     output.push("Assign each required question target to exactly one group's question_targets as primary-carrier, based on which group will answer it.", "");
   }
-  const nodes = view.items.filter((item) => item.category === "dependency")
-    .map((item) => item.value) as IndexerAuthorDependencyView["positive_nodes"];
-  const sources = buildIndexerAuthorSourceItems({ view, nodes });
+  const sources = buildIndexerAuthorSourceItems({ view });
   if (workset.stage === "author") {
-    output.push("Use source_items from Source material in sections[].source_items. Facts are optional supporting references in sections[].facts; do not reproduce their internal bookkeeping in prose.", "");
+    output.push("Write section content and references: source_ref plus locator { path, start_line, end_line }. Choose only the regions actually used, at most three per fragment; split the fragment when necessary. Context computes regional digests. Do not submit parser facts, evidence IDs or file-wide unions.", "");
     for (const source of sources.choices) {
       const body = [`### ${source.path}`, "", readingBlock({
-        source_items: [source.ref], source: source.source_ref, ranges: source.ranges,
+        source_ref: source.source_ref, path: source.path, available_ranges: source.ranges,
       }), ""];
       const sourceItem = view.items.find((item) => item.ref === source.ref);
       const value = record(sourceItem?.value);
@@ -228,7 +226,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
       } else if (sourceItem?.category === "document") {
         body.push(readingBlock(value), "");
       } else {
-        body.push("Use this source reference only with the associated facts below; a locator alone does not establish behavior.", "");
+        body.push("Read the captured source at this location before citing it; a locator alone does not establish behavior.", "");
       }
       const markdown = body.join("\n");
       // Large sources are read by relevant ranges, not sampled or discarded.
@@ -244,7 +242,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
       material.push({ section: "Source material", identity: JSON.stringify({
         source: source.source_ref, ref: source.ref, provenance: readingOrigin(sourceItem),
       }), markdown: detail
-        ? `### ${source.path}\n\n${readingBlock({ source_items: [source.ref], source: source.source_ref, ranges: source.ranges,
+        ? `### ${source.path}\n\n${readingBlock({ source_ref: source.source_ref, path: source.path, available_ranges: source.ranges,
           ...(optional && "fields" in optional && optional.fields ? { package_fields: optional.fields } : {}) })}\n\n${oversized ? `Source omitted from this reading: file exceeds 800 lines (${sourceLines} known lines). Use symbol locations to read only needed ranges; this omission is not evidence that behavior is absent.\n\n` : ""}${typeof value.read_path === "string" ? `[Open captured source](<${value.read_path}>)\n\n` : ""}Complete captured source: ./${detail.digest.slice(7)}.md (${Buffer.byteLength(markdown)} UTF-8 bytes). ${optional?.hint ?? "Read the implementations for this page's members and relevant dependencies before writing; use symbol locations below to select ranges. This is a source index, not evidence of behavior. If boundaries are unclear, read the complete file."}\n`
         : markdown, ...(detail ? { detail } : {}) });
     }
@@ -252,7 +250,7 @@ export function buildIndexerTaskReading(input: IndexerTaskReadingInput): Indexer
   const handled = new Set(priorities);
   const projection = workset.stage === "author" ? projectIndexerAuthorFactReading(view) : undefined;
   if (projection !== undefined && projection.omitted.size > 0) {
-    output.push("Detailed parser bookkeeping is not repeated when the source is readable. Read the source bodies and follow their complete-file paths as needed; the navigation is not a substitute for implementation. Cite source_items or repository-relative file paths, not hidden parser IDs.", "");
+    output.push("Detailed parser bookkeeping is not repeated when the source is readable. Read the source bodies and follow their complete-file paths as needed; the navigation is not a substitute for implementation. Use references with source_ref and exact locator { path, start_line, end_line }, not parser IDs.", "");
     for (const navigation of projection.navigation) {
       material.push({ section: "Source navigation", identity: JSON.stringify({
         source: navigation.source_ref, module: navigation.module_ref, path: navigation.path,

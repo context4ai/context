@@ -11,8 +11,6 @@ import {
 } from "../index.js";
 
 const digest = (character: string) => `sha256:${character.repeat(64)}`;
-const EVIDENCE_REF = "evidence:inventory-source";
-const FACT_REF = "fact:route-catalog";
 const CAPABILITY_GROUP_REF = "capability-group:entry-family";
 const MATERIAL_PROPOSAL_REF = "proposal:example-material";
 const INVENTORY: IndexerInventoryMember[] = [
@@ -44,7 +42,6 @@ function workset(): IndexerMainAuthorWorkset {
     requirement_set_digest: digest("2"),
     primary_execution_fingerprint: digest("3"),
     profile_contract_digest: digest("4"),
-    subject_key_schema_digest: digest("5"),
     source_scope_digest: digest("6"),
     source_binding_digest: digest("7"),
     primary_resource_binding_digest: digest("8"),
@@ -72,7 +69,7 @@ function dispositions(): IndexerInventoryDisposition[] {
     section_evidence: [{
       artifact_id: "module-guide",
       section_key: "overview",
-      evidence_refs: [EVIDENCE_REF],
+
     }],
   }, {
     member_id: "member:entry",
@@ -85,19 +82,19 @@ function dispositions(): IndexerInventoryDisposition[] {
     member_kind: "route",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:component",
     member_kind: "component",
     inventory_disposition: "owned",
     projection_disposition: "boundary-only",
-    evidence_refs: [EVIDENCE_REF],
+
   }, {
     member_id: "member:service",
     member_kind: "service",
     inventory_disposition: "excluded-with-reason",
     reason_code: "outside-reader-scope",
-    evidence_refs: [EVIDENCE_REF],
+
   }, {
     member_id: "member:method",
     member_kind: "method",
@@ -113,43 +110,43 @@ function dispositions(): IndexerInventoryDisposition[] {
     member_kind: "protocol-method",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:handler",
     member_kind: "handler",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:event-branch",
     member_kind: "event-branch",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:timer-branch",
     member_kind: "timer-branch",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:downstream-callsite",
     member_kind: "downstream-callsite",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:store",
     member_kind: "store",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }, {
     member_id: "member:state-transition",
     member_kind: "state-transition",
     inventory_disposition: "owned",
     projection_disposition: "catalog-only",
-    fact_refs: [FACT_REF],
+
   }];
 }
 
@@ -174,12 +171,12 @@ function validate(
   return validateIndexerInventoryDispositionSet({
     value,
     workset: current,
-    known_evidence_refs: [EVIDENCE_REF],
-    known_fact_refs: [FACT_REF],
+
+
     section_evidence_inventory: [{
       artifact_id: "module-guide",
       section_key: "overview",
-      evidence_refs: [EVIDENCE_REF],
+
     }],
     capability_group_memberships: [{
       capability_group_ref: CAPABILITY_GROUP_REF,
@@ -196,12 +193,12 @@ describe("inventory disposition protocol", () => {
     expect(validateIndexerInventoryDispositionSet({
       value,
       workset: workset(),
-      known_evidence_refs: [EVIDENCE_REF],
-      known_fact_refs: [FACT_REF],
+
+
       section_evidence_inventory: [{
         artifact_id: "module-guide",
         section_key: "overview",
-        evidence_refs: [EVIDENCE_REF],
+
       }],
       capability_group_memberships: [{
         capability_group_ref: CAPABILITY_GROUP_REF,
@@ -234,7 +231,7 @@ describe("inventory disposition protocol", () => {
     expect(() => validate(relabelled)).toThrow(/author workset/);
   });
 
-  test("binds every projection to current Section, group, Fact, evidence, or material gap", () => {
+  test("binds every projection to current fragment, group, or material gap", () => {
     expect(() => validate(dispositions(), {
       section_evidence_inventory: [],
     })).toThrow(/unknown Section/);
@@ -244,10 +241,6 @@ describe("inventory disposition protocol", () => {
         member_ids: ["member:project"],
       }],
     })).toThrow(/absent from its capability group/);
-    expect(() => validate(dispositions(), { known_fact_refs: [] }))
-      .toThrow(/unknown catalog Fact/);
-    expect(() => validate(dispositions(), { known_evidence_refs: [] }))
-      .toThrow(/evidence absent|unknown boundary evidence|unknown evidence/);
     expect(() => validate(dispositions(), { material_gap_proposal_refs: [] }))
       .toThrow(/lacks a blocking material gap/);
   });

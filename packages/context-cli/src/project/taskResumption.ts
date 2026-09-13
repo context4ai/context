@@ -1,11 +1,11 @@
 import { safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerProtocolDigest } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
 import { withProjectWriteLock } from "./writeLock.js";
-import { loadCurrentIndexerRegistry } from "./currentIndexerRegistry.js";
+import { inspectProductionRequirements } from "./productionRequirements.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { recoverDurableMultiFileTransactions } from "./durableMultiFileTransaction.js";
 
 export const TASK_PREPARATION_PATH = ".tmp/context-runtime/task-preparation.json";
 type PreparationState = "cleared" | "resume-requested";
@@ -20,25 +20,21 @@ export async function readTaskPreparation(root: string): Promise<PreparationStat
   if (record.protocol !== "context.task-preparation/v1" || !["cleared", "resume-requested"].includes(record.state)) {
     throw new TypeError("Invalid task preparation record; preserve the workspace for recovery");
   }
-  // A resumed ledger takes over scheduling; this marker never reopens completed work.
-  return await currentLedger(root) === undefined ? record.state : undefined;
+  return record.state;
 }
 
-/** Explicit user intent, including workspaces cleared before preparation markers existed. */
+/** Explicit user intent starts new production from formal results and sources. */
 export async function resumeWorkspaceTask(projectRoot: string) {
   return withProjectWriteLock(projectRoot, "resume-workspace-task", async () => {
     const { assertPreparationComplete } = await import("./workspacePreparation.js");
     await assertPreparationComplete(projectRoot);
-    const ledger = await currentLedger(projectRoot);
-    if (ledger) return { action: "task-already-present", next: "context status --managed --format json" };
-    const registry = await loadCurrentIndexerRegistry(projectRoot);
-    if (!registry.registry.requirements.length) throw new TypeError("No applied Indexer requirements; configure Providers through the current Context Route first");
-    await safeProjectTarget(projectRoot, TASK_PREPARATION_PATH);
-    await atomicWriteFile(join(projectRoot, TASK_PREPARATION_PATH), JSON.stringify(taskPreparationRecord("resume-requested")));
-    return { action: "task-resume-requested", requirement_set_digest: registry.requirementSetDigest,
-      request_digest: indexerProtocolDigest({ requirement_set_digest: registry.requirementSetDigest, state: "resume-requested" }),
-      preserves: ["approved pages and Subject identities", "captured sources", "configuration", "existing build"],
-      progress: "Rebuild the task ledger from current registered scope. Reuse matching retained receipts; deleted receipts require replanning, not fabricated completion.",
-      next: "context status --managed --format json" };
+    await recoverDurableMultiFileTransactions(projectRoot);
+    const requirements = await inspectProductionRequirements(projectRoot);
+    if (await readProductionStage(projectRoot)) return { action: "task-already-present", next: "context status --format json" };
+    await atomicWriteFile(await safeProjectTarget(projectRoot, TASK_PREPARATION_PATH), JSON.stringify(taskPreparationRecord("resume-requested")));
+    return { action: "task-resume-requested", preserves: ["approved articles and references", "captured sources", "long-term requirements", "existing build"],
+      progress: !requirements ? "Confirm long-term reader requirements through the current route before fresh investigation."
+        : "Begin fresh investigation from current authorized sources and existing articles. Previous temporary plans, candidates and skill declarations are not restored.",
+      next: "context status --format json" };
   });
 }

@@ -1,16 +1,17 @@
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { parseFrontmatterLoose } from "./verifyFrontmatter.js";
+import { readProductionRequirements, productionRequirementsSchema } from "./productionRequirements.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
-  processedVersionForScope, indexRequirementSchema, } from "@c4a/context";
+import { validateArticleStructureEntries, indexerCurrentActionInputDefinitions, indexerProtocolDigest, processedScopesSchema, readProcessedScopes,
+  processedVersionForScope, } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
-import { prepareApprovedRevision, readApprovedRevision } from "./approvedRevision.js";
+import { prepareApprovedRevision, readApprovedRevision, targetBytes } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScopes } from "./processedScopeStorage.js";
-import { currentLedger } from "./indexerMainRunStoreRecords.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
@@ -22,7 +23,7 @@ export const knowledgeUpdateInputSchema = z.object({
 const updateSchema = z.object({
   protocol: z.literal("context.source-update/v1"), revision: z.string(),
   scopes: processedScopesSchema,
-  requirements: z.array(indexRequirementSchema),
+  requirements: productionRequirementsSchema.shape.requirements,
   candidates: z.array(z.object({ path: z.string(), title: z.string(), source_refs: z.array(z.string()),
     view_ref: z.string() }).strict()),
   refresh_sources: z.array(z.string().min(1)).min(1).optional(),
@@ -46,7 +47,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
   return withProjectWriteLock(projectRoot, "begin-knowledge-update", async () => {
     const input = knowledgeUpdateInputSchema.parse(value);
     const { readTaskRollback } = await import("./taskRollback.js");
-    if (await readTaskRollback(projectRoot) || await readApprovedRevision(projectRoot) || await readKnowledgeUpdate(projectRoot) || await currentLedger(projectRoot) || (await readCandidateRecords(projectRoot)).length > 0) {
+    if (await readTaskRollback(projectRoot) || await readApprovedRevision(projectRoot) || await readKnowledgeUpdate(projectRoot) || await readProductionStage(projectRoot) || (await readCandidateRecords(projectRoot)).length > 0) {
       throw new TypeError("Finish or explicitly roll back the active task before starting an independent source update.");
     }
     const versions = new Map<string, Promise<string>>();
@@ -56,15 +57,16 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
     })));
     const structure = await readKnowledgeStructure(projectRoot);
     if (!structure.parsed) throw new TypeError("Close the existing knowledge before checking source updates");
-    const views: unknown[] = Array.isArray(structure.parsed.views) ? structure.parsed.views : [];
-    const candidates = views.flatMap((value) => {
-      if (!value || typeof value !== "object") return [];
-      const view = value as Record<string, unknown>;
-      const refs = Array.isArray(view.sources) ? view.sources.filter((ref): ref is string => typeof ref === "string") : [];
-      if (!refs.some((ref) => scopes.some((scope) => ref === scope.source_ref || ref.startsWith(`${scope.source_ref}/`) || ref.startsWith(`${scope.source_ref}#`)))) return [];
-      return [{ path: String(view.path), title: String(view.title), view_ref: String(view.view_ref), source_refs: refs }];
-    });
-    const { registry } = await loadIndexerRegistry(projectRoot);
+    const candidates = await Promise.all(validateArticleStructureEntries(structure.parsed.articles ?? [])
+      .filter(article => article.sections.some(section => section.references.some(reference =>
+        scopes.some(scope => scope.source_ref === reference.source_ref))))
+      .map(async article => {
+        const title = parseFrontmatterLoose(await targetBytes(projectRoot, article.path)).title;
+        return { path: article.path, title: typeof title === "string" ? title : article.path,
+          view_ref: article.article_id,
+          source_refs: [...new Set(article.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
+      }));
+    const registry = await readProductionRequirements(projectRoot);
     const requirementIds = new Set(scopes.map((scope) => scope.requirement_ref));
     const requirements = registry.requirements.filter((requirement) => requirementIds.has(requirement.id));
     const payload = { protocol: "context.source-update/v1" as const, scopes, requirements, candidates,
@@ -83,7 +85,7 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
     const request = await readKnowledgeUpdate(input.projectRoot);
     if (!request || request.revision !== input.revision) throw new TypeError("Source update revision is stale; refresh context status --format json");
     if (request.refresh_sources) throw new TypeError("Import adjusted source inputs, then run context task adjust with refresh: true before deciding pages.");
-    const { registry } = await loadIndexerRegistry(input.projectRoot);
+    const registry = await readProductionRequirements(input.projectRoot);
     const ids = new Set(request.scopes.map((scope) => scope.requirement_ref));
     if (indexerProtocolDigest(registry.requirements.filter((requirement) => ids.has(requirement.id))) !== indexerProtocolDigest(request.requirements)) {
       throw new TypeError("The confirmed purpose or scope changed. Refresh the source update before deciding its pages; no baseline was advanced.");

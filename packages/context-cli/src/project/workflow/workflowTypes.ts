@@ -1,4 +1,3 @@
-import type { IndexerDeliveryGuidance } from "../indexerDeliveryGuidance.js";
 import type {
   Evaluation,
   HostActionResult,
@@ -30,7 +29,6 @@ export const CONTEXT_WORKFLOW_AUTHORITIES = {
   indexerDependencyInstall: "context.indexer-dependency-install",
   indexerProgramExecution: "context.indexer-program-execution",
   indexerProjectConfirmation: "context.indexer-project-confirmation",
-  evidenceMaintenance: "context.evidence-maintenance",
   repositoryRestore: "context.repository-restore",
   sourceRead: "context.source-read",
   knowledgeReview: "context.knowledge-review",
@@ -50,15 +48,11 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   verification: {
     blocking_clear: boolean;
   };
-  evidence: {
-    maintenance_clear: boolean;
-  };
   indexer: {
     lifecycle_current: boolean;
     registry_state: "missing" | "pending" | "current" | "invalid";
   };
   gates: {
-    evidence_maintenance_resolved: boolean;
     source_read_resolved: boolean;
     knowledge_review_resolved: boolean;
     package_output_resolved: boolean;
@@ -91,6 +85,9 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
 }
 
 export interface ContextWorkflowObservation {
+  productionState?: "active" | "waiting-user" | "blocked" | "ended";
+  productionDelivery?: boolean;
+  localRevisionActive?: boolean;
   versionCurrent?: boolean;
   unfinishedIndexerTasks?: boolean;
   taskPreparation?: "cleared" | "resume-requested" | undefined;
@@ -129,7 +126,6 @@ export interface ContextWorkflowObservation {
     diagnostic?: string;
   };
   indexerCandidateCompile: {
-    managed_source_pending?: boolean;
     partial_delivery?: boolean;
     rollback_pending?: boolean;
   revision_pending?: boolean;
@@ -219,7 +215,6 @@ export interface ContextResolvedWorkflowRoute {
   node: string;
   reason_code: string;
   summary?: string;
-  delivery?: IndexerDeliveryGuidance;
   batch_budget?: { input_bytes_scope?: "required-reading-excludes-optional-details"; tasks: number; input_bytes: number; output_reserve_bytes: number; view_items: number; task_limit: number; packing_limits: string[]; shared_instruction_bytes?: number | undefined; deduplicated_input_bytes?: number | undefined };
   availability: "immediate" | "requires-user" | "blocked";
   commands: ContextWorkflowCommand[];

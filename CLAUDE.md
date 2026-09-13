@@ -64,7 +64,8 @@ bun run --filter @c4a/dev-cli start
   followed by Node dist smoke checks; build required artifacts first.
   The CLI package's `test:full` runs both collections; `test:full-only` runs only
   the heavy collection. Append `--list` to inspect selection without execution.
-  Release CI uses `verify`; registry installation smoke remains a separate gate.
+  Release CI uses `verify`; registry installation smoke is manual-only via
+  `bun run release:install-smoke`, not a publishing or post-release CI gate.
   Successful publication triggers independent post-release `verify:full` on the
   published commit. Full CLI runs default to a 20-minute per-test timeout (explicit
   test budgets still apply); the streaming stress case also allows 20 minutes.

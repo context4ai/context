@@ -9,7 +9,6 @@ import {
   type IndexerOperatorContract,
   type IndexerProfileContract,
   type IndexerProfileContractEntry,
-  type IndexerProfileSubjectKey,
   type KnowledgeCollection,
 } from "@c4a/context";
 import {
@@ -22,7 +21,7 @@ import { bundledMarkdownReaderQuestionContracts } from
   "./indexerBaseMarkdownAuthoringCatalog.js";
 
 const BASE_CONTRACT_VERSION = "1.1.0";
-export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.9";
+export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.10-alpha.2";
 const BUNDLED_PARSER_REQUIREMENTS = buildIndexerParserCapabilityRequirements(
   BUNDLED_INDEXER_PARSER_PACKAGE_VERSION,
 );
@@ -347,8 +346,6 @@ function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEn
     question_target_domains: [{
       id: "primary-subject",
       selector: { operator: "all-inventory" },
-      grouping_operator: "by-subject-key",
-      subject_key_kind: spec.subjectKind,
       granularity: spec.domain === "markdown" ? "identity" : "module",
     }],
     reader_question_contracts: spec.domain === "code"
@@ -366,30 +363,13 @@ function profileEntry(spec: BundledIndexerProfileSpec): IndexerProfileContractEn
   };
 }
 
-function profileSubjectKeySchema(
-  spec: BundledIndexerProfileSpec,
-): IndexerProfileSubjectKey {
-  return {
-    profile: spec.id,
-    version: 1,
-    namespace: { operator: spec.namespaceOperator },
-    kinds: [{
-      id: spec.subjectKind,
-      local_key: { operator: spec.localKeyOperator },
-    }, ...(spec.additionalSubjectKinds ?? []).map((kind) => ({
-      id: kind.id,
-      local_key: { operator: kind.localKeyOperator },
-    }))],
-    normalization: ["trim", "unicode-nfc", "preserve-case"],
-  };
-}
 
 export function bundledIndexerOperatorContract(): IndexerOperatorContract {
   const payload: Omit<IndexerOperatorContract, "contract_digest"> = {
     protocol: "context.indexer.operator-contract/v1",
     version: BASE_CONTRACT_VERSION,
     selector_operators: ["all-inventory", "eligible-standard"],
-    grouping_operators: ["by-subject-key"],
+    grouping_operators: [],
     metric_operators: [
       "disposition-ratio",
       "duplicated-fact-ratio",
@@ -427,7 +407,6 @@ export function bundledIndexerProfileContract(
     operator_contract_digest: operators.contract_digest,
     coverage_domains: [...INDEXER_COVERAGE_DOMAINS],
     profiles: BUNDLED_INDEXER_PROFILE_SPECS.map(profileEntry),
-    subject_key_schemas: BUNDLED_INDEXER_PROFILE_SPECS.map(profileSubjectKeySchema),
   };
   return validateIndexerProfileContract({
     ...payload,

@@ -28,12 +28,16 @@ test("the existing task adjustment updates only organization and rejects stale c
   const root = await mkdtemp(join(tmpdir(), "reading-adjustment-"));
   try {
     await mkdir(join(root, "knowledge"));
-    await writeFile(join(root, "knowledge/entry.md"), "---\nartifact_ref: artifact:approved-entry\n---\n# Approved body\n");
+    const content = "---\ntitle: Approved body\ntype: Wiki\n---\n# Approved body\n";
+    await writeFile(join(root, "knowledge/entry.md"), content);
+    await writeFile(join(root, "knowledge/structure.yaml"), JSON.stringify({ articles: [{
+      article_id: "artifact:approved-entry", path: "entry.md", collection: "codeindex", visibility: "public", sections: [],
+    }] }));
     await adjustCurrentTaskSources(root, { knowledge_map: update });
     const first = (await readKnowledgeMap(root))!;
     const next = { expected_revision: first.revision, upsert: [{ ...first.entries[0]!, title: "New reader label" }], remove: [] };
     expect(await adjustCurrentTaskSources(root, { knowledge_map: next })).toMatchObject({ outcome: "knowledge-map-updated" });
-    expect(await readFile(join(root, "knowledge/entry.md"), "utf8")).toBe("---\nartifact_ref: artifact:approved-entry\n---\n# Approved body\n");
+    expect(await readFile(join(root, "knowledge/entry.md"), "utf8")).toBe(content);
     await expect(adjustCurrentTaskSources(root, { knowledge_map: next })).rejects.toThrow("reread");
     expect((await readKnowledgeMap(root))?.entries[0]?.title).toBe("New reader label");
   } finally { await rm(root, { recursive: true, force: true }); }

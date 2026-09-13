@@ -19,13 +19,7 @@
       "purpose": "required",
       "reader_question_refs": [
         "question:reader-structure"
-      ],
-      "evidence_refs": [
-        "evidence:anonymous-guide-source"
       ]
     }
-  ],
-  "evidence_refs": [
-    "evidence:anonymous-guide-source"
   ]
 }

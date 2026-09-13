@@ -1,4 +1,5 @@
 export { parseContractSources } from "./contractParser.js";
+export { openApiSourceDependencies } from "./openApiParser.js";
 export {
   contractSourcesToEvidenceAdapterMaterialization,
   contractSourcesToEvidenceAdapterResult,

@@ -2,23 +2,25 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
+import { evaluateGraph, loadProvider, resolveRoute } from "@c4a/agent-graph";
 import { clearCompletedLifecycle } from "../project/lifecycleCleanup.js";
 import { INDEXER_RUNTIME_ROOT } from "../project/lifecyclePaths.js";
-import { loadContextWorkflowProvider } from "../project/workflow/workflowProvider.js";
 
-test("the packaged Partition route exposes report resources without adding report state or a gate", async () => {
-  const provider = await loadContextWorkflowProvider();
-  const evaluated = evaluateGraph(provider, "indexer", "agent-step");
+test("the packaged production route requires report resources and explicit user confirmation", async () => {
+  const provider = await loadProvider(resolve(import.meta.dir, "../../dist/providers/context/manifest.json"));
+  const evaluated = evaluateGraph(provider, "indexer", "production");
   const selected = evaluated.evaluation.primaryRoute!;
-  const route = await resolveRoute(provider, "indexer", "agent-step", selected.routeId,
+  const route = await resolveRoute(provider, "indexer", "production", selected.routeId,
     { workspace: "/isolated-report-workspace" }, evaluated.evaluation.revision);
-  expect(route.action?.id).toBe("run-indexer-agent-step");
+  expect(route.node).toBe("confirm-production-report");
+  expect(route.availability).toBe("requires-user");
+  expect(route.gate?.delegatable).toBe(false);
+  expect(route.gate?.resolutionAction?.action.id).toBe("approve-production-report");
   for (const [id, relative] of [
     ["procedure.work-start-report", "resources/procedures/work-start-report.md"],
     ["template.work-start-report", "resources/templates/work-start-report.md"],
   ]) {
-    const resource = route.resources.recommended.find((item) => item.id === id)!;
+    const resource = route.resources.required.find((item) => item.id === id)!;
     expect(resource.schema).toBe("agent-graph.resource-location.file.v1");
     if (resource.schema !== "agent-graph.resource-location.file.v1") throw new Error("expected file resource");
     expect(await readFile(resource.filePath, "utf8")).toBe(await readFile(

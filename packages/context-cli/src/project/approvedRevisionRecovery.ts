@@ -11,8 +11,9 @@ export async function approvedRevisionRecovery(root: string, request: ApprovedRe
   const batch = [...(request.batch_candidates ?? []), ...(request.candidate ? [request.candidate] : [])];
   const rows = await readCandidateRecords(root);
   const targets: Array<{ candidate?: CandidateRecord; target: ApprovedRevision["target"] }> = batch.map(candidate => ({ candidate, target: {
-    path: candidate.path, node_ref: candidate.node_ref, view_ref: candidate.view_ref,
-    collection: candidate.collection, markdown: candidate.body, source_refs: candidate.source_refs,
+    path: candidate.path, article_id: candidate.article_id,
+    collection: candidate.collection, visibility: candidate.visibility,
+    sections: candidate.indexer_candidate.sections.map(section => ({ id: section.section_key, references: section.references })), markdown: candidate.body, source_refs: candidate.source_refs,
     base_digest: candidate.approved_revision!.base_digest,
     ...(candidate.approved_revision!.previous_path ? { previous_path: candidate.approved_revision!.previous_path } : {}),
   } }));
@@ -29,9 +30,8 @@ export async function approvedRevisionRecovery(root: string, request: ApprovedRe
       content: bytes, relPath: target.previous_path ?? target.path,
       metadata: await readApprovedKnowledgeMetadataIndex(root),
     });
-    const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, knowledge_input: _knowledge, ...previous } = request;
-    void _candidate; void _ready; void _blocks; void _knowledge;
-    const knowledge = candidate?.approved_revision?.knowledge_input ?? (target.path === request.target.path ? request.knowledge_input : undefined);
+    const { candidate: _candidate, review_ready: _ready, program_blocks: _blocks, ...previous } = request;
+    void _candidate; void _ready; void _blocks;
     const payload = { ...previous,
       target: { ...target, markdown, base_digest: actual },
       instruction: candidate?.review.reason ?? request.instruction,
@@ -40,7 +40,6 @@ export async function approvedRevisionRecovery(root: string, request: ApprovedRe
       merge_context: { approved_markdown: bytes ?? null,
         draft_markdown: candidate?.body ?? request.target.markdown },
       ...(target.path === request.target.path && request.program_blocks ? { program_blocks: request.program_blocks } : {}),
-      ...(knowledge === undefined ? {} : { knowledge_input: knowledge }),
     };
     return { request: { ...payload, revision: requestDigest(payload) }, deleted: bytes === undefined };
   }

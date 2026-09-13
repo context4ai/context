@@ -1,136 +1,59 @@
 # Markdown Indexer Skill authoring
 
-Markdown Providers use the same `context.indexer.provider/v1` manifest,
-versioning, Bundle, requirement, trust, Result and customization contracts as
-Code Providers. Read the shared
-[Code Indexer author checklist](./code-indexer-skill-authoring.md) and
-[Provider selection/customization guide](./indexer-provider-and-customization.md)
-first. This page defines the boundary for captured file/Lark documents.
-Saved notes and conversation summaries use their dedicated Note/Sessions
-Providers, or an explicitly selected business replacement, on the same protocol.
-They reuse Markdown reading without a second capture phase. A Markdown page may
-still consume either as authorized supporting material; specialized extension
-guidance does not transfer primary ownership.
+Use the shared [planning and writing guidance](./indexer-provider-and-customization.md).
+Document Skills help interpret captured articles; notes and sessions have their
+own guidance but can support the same reader topic. No unique primary owner,
+version lock or per-document disposition ledger is required.
 
-## Capture before semantics
+## Captured sources
 
-Capture owns source authorization, retrieval, revision identity, complete bytes,
-Markdown/MDX parsing and evidence spans. A Markdown Indexer starts only from a
-current captured source report and authorized evidence view. URLs, titles,
-filenames, headings and capture success are activation candidates, not semantic
-classification or proof that the whole document was read.
+Start from authorized captured Markdown and its source identity. Capture proves
+which bytes are available, not what they mean. Titles, headings and filenames are
+navigation aids, not proof that the Agent has read the body.
 
-The Provider cannot fetch the document again, follow new links, rewrite source
-revisions or widen capture scope. Missing/unsupported capture capability is an
-explicit unsupported result, never a prose fallback.
+Do not fetch new documents, follow external links or widen source authorization
+implicitly. Request missing material through the current workflow. Keep the
+distinction between a source being unavailable and its contents being irrelevant.
 
-## Activation and source roles
+## Planning
 
-Declare document activation signals and map evidence-backed sources to declared
-roles such as authoritative, explanatory, operational, decision or example
-material. Keep role selection separate from collection placement. One document
-may support multiple reader questions, but every consumed span retains its
-source/revision identity and cannot be promoted to a stronger authority by an
-instruction.
+Read the supplied titles, bounded introductions and complete H2/H3 outlines.
+The Agent may read additional sections or the full document when needed, then
+chooses article targets and writing batches. Do not require full-body reading of
+every document or a separate planning submission for an already explicit target.
 
-## Section projection and collection mapping
+Consult code topics and existing article descriptions and references. Reuse a
+topic when its reader question fits, or propose a clearer business topic instead
+of forcing a document under a code directory. One document may support several
+articles and several authorized documents may support one article.
 
-Author Results propose logical Sections and their intent; they do not write
-`knowledge/` paths. Each Section binds:
+The final work-start report follows the relevant source overview and plan, and
+must wait for the user before bulk writing, including in managed mode.
 
-- the canonical SubjectKey/Node target or an explicit independent target;
-- its reader-question refs and exact evidence spans;
-- an Artifact kind and Section key stable across content-only changes;
-- a projection intent describing purpose, not a physical filename;
-- structured content layers and their digests.
+## Writing and repairs
 
-Context owns the closed mapping from profile/Section intent to collection and
-path. The layout resolver reuses an existing Artifact by stable identity,
-detects add/remove/rename/split/merge/move changes. Ordinary production reviews
-the proposed new structure before Author, including new topics in an update.
-Protected changes to an approved layout have their own human-only Gate; this
-is distinct from ordinary structure review and its managed delegation. A Provider cannot
-avoid that Gate by emitting a path or relabeling the change.
+Read the actual passages needed for the article. Distinguish authoritative rules,
+examples, decisions and proposals; a session suggestion is not an implemented
+behavior. Write Markdown and references in the supplied temporary directory and
+submit the short stage-relative manifest. Title and description belong to the
+article, not an internal layout-mapping tuple.
 
-## Reusing Code Nodes
+Keep stable article and fragment identities when revising. Each fragment cites
+at most three actual source regions. The CLI handles source digests and safety;
+the Agent judges whether the evidence supports the explanation. For a local
+failure, use the returned fragment identifier or position to repair the affected
+part. Completed independent tasks can be submitted without the rest of the batch.
 
-Use the supplied subject catalog and TargetResolutionView. Equal SubjectKeys use
-the same NodeRef across Code and Markdown. `resolved` enriches the existing
-Node; `absent` may create an explicitly independent subject or a material gap;
-`ambiguous` fails before authoring. Titles, heading similarity and filenames
-are never identity fallback. Unrelated catalog changes must not make a workset
-stale.
+Do not inflate page counts, produce a page for every heading, or turn missing
+evidence into speculative prose. A genuine material gap remains unfinished work;
+an explicit exclusion uses the existing exclusion mechanism. Neither requires
+a new reconciliation ledger or additional content-review stage.
 
-## Artifact and Section planning
+## Useful fixtures
 
-One logical unit may produce an Artifact Bundle with multiple meaningful
-Sections or semantic split Artifacts. Do not use fixed-count, ordinal or
-alphabetic batches. Do not create one page per heading/member or inflate page
-count to satisfy a metric. The CLI owns Artifact-policy eligibility, physical
-fan-out audit, layout actualization and the final Candidate compile.
-
-The first actual Section of each reader Artifact begins with one concise,
-source-backed level-one heading. Context uses that heading as the outline and
-Candidate Review display title. It never participates in SubjectKey derivation
-or ownership, and later Sections in the same Artifact do not repeat it.
-
-Each Section carries exact positive and negative dependency refs. Incremental
-impact is Section/Artifact-local: a source membership, question denominator,
-candidate pool, evidence span or run-envelope change invalidates only the
-dependent scope. A Provider must not replace this with source-wide or
-collection-wide recomputation.
-
-## Editorial policy
-
-Editorial instructions may guide clarity, consolidation, ordering and
-reader-facing terminology. They cannot alter facts, evidence, source role,
-requirement scope, protected values, revision identity or collection authority.
-Deterministic blocks render only registered facts; semantic prose cites consumed
-evidence. The Agent or user assesses missing explanations, speculation and
-unfilled placeholders in the existing content Review. Context does not scan
-words, braces, comments or headings to reject content, and an editorial hint
-does not create another gate or require a signal-clearing receipt.
-
-## Missing material
-
-When current material cannot answer a required canonical question, return the
-exact material-question disposition for the supplied owner cell, question
-contract and Subject target. Do not invent a new question contract or landing.
-Context reports the unresolved set in current reconciliation state; it does not
-create a second checkpoint ledger or published gap artifact.
-
-Capture the missing Markdown or other source normally, then rerun `main-index`.
-The new Result updates the same knowledge Candidate and enters the same final
-content Review. There is no answer-only operation or evidence-specific Review.
-A blocking gap closes only through current source or an explicit non-delegable
-requirement change.
-
-## Bounded execution
-
-Each captured document remains an independently recoverable Partition input,
-but Context may transport several documents in one bounded Agent step. Return
-one result for every supplied task key and let global convergence merge
-documents that establish the same Subject. Batch order, filename order and
-heading order never create Subject identity. Author and Review use the same
-bounded transport rule without adding intermediate user approvals.
-
-## Markdown author fixture checklist
-
-Release fixtures should cover:
-
-- complete Markdown and MDX capture plus unsupported parser/capture paths;
-- authoritative reference, guide, runbook, FAQ, decision, incident, policy,
-  test and release/migration document shapes using anonymous content;
-- per-Section projection into every supported collection intent;
-- existing Code Node reuse, independent subject, ambiguity and material gap;
-- content-only reuse plus add/remove/rename/split/merge/collection/path/Section
-  move in both directions;
-- protected values, links, images/assets and source-span fidelity;
-- editorial positives and placeholder/speculation/unsupported negatives;
-- material-gap runtime recovery, main-index retry and no-output-leak;
-- Section-local incremental invalidation, new membership/denominator/candidate
-  pool changes and unaffected Section reuse.
-
-Source authorization, capture revision safety, canonical question/collection
-contracts, layout confirmation, review and build remain Context authority and
-cannot be replaced by the Skill.
+Cover an ordinary one-to-one article, multi-document synthesis, reuse of an
+existing topic, fragment repair, source line changes, links and images, and
+missing material for the document forms the Skill supports. Verify both source
+fidelity and the final page. Keep examples anonymous and check packaged links.
+Drafts and scheduling details remain temporary; deleting `.tmp` starts fresh
+production from formal knowledge and available sources, not a workflow migration.

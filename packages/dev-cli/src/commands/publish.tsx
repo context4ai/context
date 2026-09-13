@@ -300,7 +300,7 @@ export async function prepareDistPackageJson(
   // use the bundled dist entry explicitly instead of Node's index.js fallback.
   if (LIBRARY_PACKAGE_DIRS.has(dir)) {
     distPkg.main = "./index.js";
-    if (dir === "core" || dir === "context") {
+    if (await stat(resolve(distDir, "index.d.ts")).then(() => true, () => false)) {
       distPkg.types = "./index.d.ts";
     }
   }

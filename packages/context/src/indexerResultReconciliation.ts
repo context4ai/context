@@ -19,7 +19,6 @@ import {
   type IndexerResolvedMaterialQuestion,
 } from "./indexerQuestionAuthority.js";
 import {
-  INDEXER_EVIDENCE_KINDS,
   compareIndexerCanonicalText,
   indexerDigestSchema,
   indexerIdSchema,
@@ -37,7 +36,6 @@ import { evaluateIndexerRestrictedSelector } from "./indexerRestrictedSelector.j
 const registeredMaterialSourceSchema = z.object({
   source_ref: indexerCanonicalRefSchema,
   source_input_digest: indexerDigestSchema,
-  evidence_kinds: z.array(z.enum(INDEXER_EVIDENCE_KINDS)).min(1),
 }).strict();
 
 export const capabilityGapSchema = z.object({
@@ -219,10 +217,6 @@ export function ownerCells(registry: IndexerRegistry): OwnerCell[] {
 
 export function canonicalSources(values: readonly unknown[]): IndexerRegisteredMaterialSource[] {
   const sources = values.map((value) => registeredMaterialSourceSchema.parse(value))
-    .map((source) => ({
-      ...source,
-      evidence_kinds: [...new Set(source.evidence_kinds)].sort(compareIndexerCanonicalText),
-    }))
     .sort((left, right) => compareIndexerCanonicalText(left.source_ref, right.source_ref));
   if (new Set(sources.map((source) => source.source_ref)).size !== sources.length) {
     throw new TypeError("registered material sources must be unique by source_ref");
@@ -416,29 +410,6 @@ function materialSources(input: {
     item.source_ref
   ));
   return input.sources.filter((source) => authorized.has(source.source_ref));
-}
-
-export function mainEvidenceMeetsContract(input: {
-  pair: QuestionPair;
-  result: IndexerArtifactResult;
-  evidence_binding_digest: string;
-  evidence_facts: Readonly<Record<string, unknown>>;
-  allowed_selector_fact_paths: ReadonlySet<string>;
-}): boolean {
-  const binding = input.result.evidence_bindings.find((item) =>
-    item.binding_digest === input.evidence_binding_digest
-  );
-  const contract = input.pair.question.evidence_contract;
-  return binding !== undefined &&
-    contract.accepted_kinds.includes(binding.kind) &&
-    contract.minimum_items <= 1 &&
-    contract.minimum_distinct_sources <= 1 &&
-    (contract.provenance_constraints === undefined ||
-      evaluateIndexerRestrictedSelector({
-        selector: contract.provenance_constraints,
-        facts: input.evidence_facts,
-        allowed_fact_paths: input.allowed_selector_fact_paths,
-      }));
 }
 
 export function materialGap(input: {

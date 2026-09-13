@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   acceptIndexerPostAuthorRun,
   buildIndexerPostAuthorFragmentRequest,
-  canonicalIndexerNodeRef,
   composeIndexerPostAuthorEnvelope,
   failIndexerPostAuthorRun,
   initializeIndexerPostAuthorRunLedger,
@@ -23,8 +22,6 @@ import {
   type IndexerPostAuthorPlan,
   type IndexerPostAuthorRunLedger,
   type IndexerPrimaryArtifactView,
-  type IndexerPrimaryFactView,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const AUTHOR_WORKSET_DIGEST = `sha256:${"1".repeat(64)}`;
@@ -36,40 +33,15 @@ const LAYER_INTEGRITY = `sha256:${"6".repeat(64)}`;
 const BUNDLE_DIGEST = `sha256:${"7".repeat(64)}`;
 const SELECTION_A_DIGEST = `sha256:${"8".repeat(64)}`;
 const SELECTION_B_DIGEST = `sha256:${"9".repeat(64)}`;
-const SUBJECT_KEY: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component",
-  local_key: "public-button",
-};
-const NODE_REF = canonicalIndexerNodeRef(SUBJECT_KEY);
+const NODE_REF = "article:public-button";
+const REFERENCE = { source_ref: "file:button", locator: { path: "button.md", start_line: 1, end_line: 1 }, content_digest: `sha256:${"a".repeat(64)}` };
 
-function facts(summary = "public control"): IndexerPrimaryFactView[] {
-  return [{
-    fact_ref: "fact:component-summary",
-    subject_key: SUBJECT_KEY,
-    fact_kind: "component-summary",
-    value: { summary },
-    evidence_refs: [{
-      ref: "evidence:component-source",
-      kind: "code",
-      source_digest: `sha256:${"a".repeat(64)}`,
-    }],
-  }];
-}
-
-function artifacts(): IndexerPrimaryArtifactView[] {
+function artifacts(title = "Public button"): IndexerPrimaryArtifactView[] {
   return [{
     artifact_ref: "artifact:component-overview",
-    subject_key: SUBJECT_KEY,
     artifact_kind: "overview",
     artifact_policy_variant: "standard",
-    variables: { title: "Public button" },
-    evidence_refs: [{
-      ref: "evidence:component-source",
-      kind: "code",
-      source_digest: `sha256:${"a".repeat(64)}`,
-    }],
+    variables: { title },
   }];
 }
 
@@ -103,7 +75,7 @@ function plan(ids: readonly ("examples" | "reference")[]): IndexerPostAuthorPlan
     effective_composer_set: effectiveSet(ids),
     author_workset_digest: AUTHOR_WORKSET_DIGEST,
     primary_result_digest: PRIMARY_RESULT_DIGEST,
-    primary_facts: facts(),
+
     primary_artifacts: artifacts(),
     validator_contract_digest: VALIDATOR_DIGEST,
     current_profile_binding_digest: PROFILE_BINDING_DIGEST,
@@ -149,15 +121,10 @@ function proposalFragment(
               block_id: "example",
               layer: "semantic-prose",
               markdown: variableValue,
-              evidence_refs: ["evidence:component-source"],
+              references: [REFERENCE],
             }],
           }],
         },
-        evidence_refs: [{
-          ref: "evidence:component-source",
-          kind: "code",
-          source_digest: `sha256:${"a".repeat(64)}`,
-        }],
       }],
     },
   };
@@ -212,7 +179,6 @@ describe("PrimaryResultView and effective composers", () => {
     const contract = {
       instruction: "references/composers/examples.md",
       primary_requirements: {
-        fact_kinds: ["example-candidate"],
         artifact_kinds: ["overview"],
       },
       derived_artifact_policy: {
@@ -252,7 +218,7 @@ describe("PrimaryResultView and effective composers", () => {
       effective_composer_set: effective,
       author_workset_digest: AUTHOR_WORKSET_DIGEST,
       primary_result_digest: PRIMARY_RESULT_DIGEST,
-      primary_facts: facts(),
+
       primary_artifacts: artifacts(),
       validator_contract_digest: VALIDATOR_DIGEST,
       current_profile_binding_digest: PROFILE_BINDING_DIGEST,
@@ -263,15 +229,15 @@ describe("PrimaryResultView and effective composers", () => {
     );
   });
 
-  test("materializes consumable primary facts and artifacts with a bound receipt", () => {
+  test("materializes consumable primary articles with a bound receipt", () => {
     const view = materializeIndexerPrimaryResultView({
       workset_digest: AUTHOR_WORKSET_DIGEST,
       primary_result_digest: PRIMARY_RESULT_DIGEST,
-      facts: facts(),
+
       artifacts: artifacts(),
       validator_contract_digest: VALIDATOR_DIGEST,
     });
-    expect(view.facts[0]?.value).toEqual({ summary: "public control" });
+    expect(view).not.toHaveProperty("facts");
     expect(view.artifacts[0]?.variables).toEqual({ title: "Public button" });
     expect(validateIndexerPrimaryResultView(view)).toEqual(view);
   });
@@ -323,9 +289,7 @@ describe("post-author composer worksets and invocation", () => {
       workset: pending.worksets[0]!,
       primary_result_view: pending.primary_result_view,
     });
-    expect(request.primary_result_view.facts[0]?.value).toEqual({
-      summary: "public control",
-    });
+    expect(request.primary_result_view.artifacts[0]?.variables).toEqual({ title: "Public button" });
     const validated = validateIndexerPostAuthorFragmentResult({
       request,
       result: runResult(request, [proposalFragment(request)]),
@@ -364,7 +328,7 @@ describe("post-author composer worksets and invocation", () => {
       primary_result_view: pending.primary_result_view,
     });
     const tampered = structuredClone(request);
-    tampered.primary_result_view.facts[0]!.value = { summary: "tampered" };
+    tampered.primary_result_view.artifacts[0]!.variables = { title: "tampered" };
     expect(() => validateIndexerPostAuthorFragmentResult({
       request: tampered,
       result: runResult(request, []),
@@ -428,7 +392,7 @@ describe("ComposedIndexerResultEnvelope", () => {
       effective_composer_set: effective,
       author_workset_digest: AUTHOR_WORKSET_DIGEST,
       primary_result_digest: `sha256:${"b".repeat(64)}`,
-      primary_facts: facts("changed public control"),
+
       primary_artifacts: artifacts(),
       validator_contract_digest: VALIDATOR_DIGEST,
       current_profile_binding_digest: PROFILE_BINDING_DIGEST,
@@ -457,7 +421,7 @@ describe("ComposedIndexerResultEnvelope", () => {
     const view = materializeIndexerPrimaryResultView({
       workset_digest: AUTHOR_WORKSET_DIGEST,
       primary_result_digest: PRIMARY_RESULT_DIGEST,
-      facts: facts(),
+
       artifacts: artifacts(),
       validator_contract_digest: VALIDATOR_DIGEST,
     });
@@ -644,7 +608,7 @@ describe("post-author runtime ledger and completion predicate", () => {
       effective_composer_set: changedSet,
       author_workset_digest: AUTHOR_WORKSET_DIGEST,
       primary_result_digest: PRIMARY_RESULT_DIGEST,
-      primary_facts: facts(),
+
       primary_artifacts: artifacts(),
       validator_contract_digest: VALIDATOR_DIGEST,
       current_profile_binding_digest: PROFILE_BINDING_DIGEST,

@@ -6,10 +6,6 @@ import {
   type IndexerArtifactResult,
 } from "./indexerArtifactResult.js";
 import {
-  buildIndexerArtifactDependencySet,
-  type IndexerArtifactDependencySet,
-} from "./indexerArtifactDependencies.js";
-import {
   indexerLayerCompositionInputSchema,
   validateIndexerLayerCompositionInput,
 } from "./indexerLayerComposition.js";
@@ -172,7 +168,6 @@ interface AuthorValidationContext {
   page_plan?: { articles?: IndexerArticlePlan[] };
   stage: "author";
   dependency_view: unknown;
-  expected_subject_key: unknown;
   artifact_policy_eligibility: unknown;
   allowed_source_roles: readonly string[];
   authorized_evidence_targets?: readonly {
@@ -198,7 +193,6 @@ export function validateIndexerMainRunResult(input: {
   request: IndexerMainRunRequest;
   result: IndexerMainRunResult;
   operation_result: IndexerPartitionPlan | IndexerArtifactResult;
-  artifact_dependency_set: IndexerArtifactDependencySet | null;
   run_envelope: IndexerRunEnvelope;
 } {
   const request = validateIndexerMainRunRequest(input.request);
@@ -213,7 +207,6 @@ export function validateIndexerMainRunResult(input: {
     throw new TypeError("main run Result does not match its request/stage/input view");
   }
   let operationResult: IndexerPartitionPlan | IndexerArtifactResult;
-  let artifactDependencySet: IndexerArtifactDependencySet | null = null;
   const runEnvelope = buildIndexerRunEnvelope({
     workset: request.workset,
     execution_request_digest: request.execution_request_digest,
@@ -260,7 +253,6 @@ export function validateIndexerMainRunResult(input: {
       workset: request.workset as IndexerMainAuthorWorkset,
       expected_provider: request.final_authority,
       expected_input_digest: request.execution_request_digest,
-      expected_subject_key: input.validation.expected_subject_key,
       ...(input.validation.page_plan?.articles === undefined ? {} : { planned_articles: input.validation.page_plan.articles }),
       artifact_policy_eligibility: input.validation.artifact_policy_eligibility,
       allowed_source_roles: input.validation.allowed_source_roles,
@@ -284,19 +276,6 @@ export function validateIndexerMainRunResult(input: {
     if (operationResult.source_role !== request.run_environment.source_role) {
       throw new TypeError("author Result source role does not match the run environment");
     }
-    artifactDependencySet = buildIndexerArtifactDependencySet({
-      result: operationResult,
-      workset: request.workset as IndexerMainAuthorWorkset,
-      run_envelope: runEnvelope,
-      dependency_view: input.validation.dependency_view,
-      composition_input: request.composition_input,
-      ...(input.validation.authorized_evidence_targets === undefined
-        ? {}
-        : {
-            authorized_evidence_targets:
-              input.validation.authorized_evidence_targets,
-          }),
-    });
   } else {
     throw new TypeError("main run Result stage union is inconsistent");
   }
@@ -304,7 +283,6 @@ export function validateIndexerMainRunResult(input: {
     request,
     result,
     operation_result: operationResult,
-    artifact_dependency_set: artifactDependencySet,
     run_envelope: runEnvelope,
   };
 }

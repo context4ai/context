@@ -3,9 +3,9 @@ import { applyKnowledgeMapUpdate, readKnowledgeMap } from "../project/knowledgeM
 import { expect, test } from "bun:test";
 import { cp, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview, completeCurrentIndexerStructureReview } from "./knowledgeMapReview.fixture.js";
+import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from "./projectDocumentRevisionV074.fixture.js";
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
+import { produceFixtureArticles } from "./productionArticleWorkflow.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
@@ -25,16 +25,15 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     const entry = (await readFile(entryPath, "utf8")).replace("defineProject, source", "defineProject, kbPackage, llmsPackage, source")
       .replace("packages: []", 'packages: [kbPackage({ name: "site-test", site: { title: "Sample knowledge" }, template: { path: "src/package-templates/kb", vars: {} } }), llmsPackage({ name: "llms-test", template: { path: "src/package-templates/llms", vars: {} } })]');
     await writeFile(entryPath, entry);
-    await completePartitionStage(root);
-    const structure = (await currentIndexerStructureReview(root))!;
-    await completeCurrentIndexerStructureReview({ projectRoot: root, revision: structure.revision, decision: "approved" });
-    await completeAuthorStage(root, { markdown: "Use the public entry point." });
+    await produceFixtureArticles(root, [{ path: "architecture/entry.md", question: "How is the entry point used?",
+      sources: [DOCUMENT_REVISION_SOURCE_REF],
+      markdown: '---\ntitle: Guide\ndescription: Using the public entry point.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point.\n<!-- /context:section -->\n',
+      references: { sections: [{ id: "entry", references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF,
+        locator: { path: "src/index.ts", start_line: 1, end_line: 1 } }] }] },
+    }]);
     await approveCandidates(root, await readCandidateRecords(root));
     await closeProjectWorkspace(root);
     await acceptStarterPackageTemplates({ projectRoot: root });
-    // The legacy single-page author fixture chooses identities after planning.
-    // It must place those approved pages before packaging as well.
-    await expect(buildProjectPackages(root)).rejects.toMatchObject({ detail: { reason_code: "knowledge-map-incomplete" } });
     await applyKnowledgeMapUpdate(root, { expected_revision: (await readKnowledgeMap(root))?.revision ?? null, remove: [],
       upsert: (await approvedKnowledgeMapTargets(root)).map(article => ({ key: article.artifact_ref, parent: null, title: "Guide", order: 0, target: { artifact_ref: article.artifact_ref } })) });
     const version = await inspectWorkspaceVersion(root);

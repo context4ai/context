@@ -39,16 +39,7 @@ describe("bundled Indexer base contracts", () => {
     const operators = bundledIndexerOperatorContract();
     const contract = bundledIndexerProfileContract(operators);
     const application = contract.profiles.find((profile) => profile.id === "web-application")!;
-    const applicationSubjects = contract.subject_key_schemas.find((schema) =>
-      schema.profile === "web-application"
-    )!;
     const component = contract.profiles.find((profile) => profile.id === "component-library")!;
-    const domainSubjects = contract.subject_key_schemas.find((schema) =>
-      schema.profile === "domain-service"
-    )!;
-    const runtimeSubjects = contract.subject_key_schemas.find((schema) =>
-      schema.profile === "background-runtime"
-    )!;
     const markdown = contract.profiles.find((profile) => profile.id === "technical-guide")!;
     expect(application.reader_question_contracts.map((question) => question.ref)).toEqual([
       "question:behavior-and-purpose",
@@ -59,34 +50,9 @@ describe("bundled Indexer base contracts", () => {
       "question:failure-recovery",
       "question:development-and-delivery",
     ]);
-    expect(applicationSubjects.kinds).toEqual([{
-      id: "application",
-      local_key: { operator: "canonical-module-identity" },
-    }, {
-      id: "capability",
-      local_key: { operator: "canonical-export-family" },
-    }]);
-    const componentSubjects = contract.subject_key_schemas.find(schema => schema.profile === "component-library")!;
-    expect(componentSubjects.kinds).toEqual(expect.arrayContaining([
-      { id: "component", local_key: { operator: "canonical-export-family" } },
-      { id: "library", local_key: { operator: "canonical-module-identity" } },
-      { id: "design-system", local_key: { operator: "canonical-module-identity" } },
-    ]));
     expect(component.reader_question_contracts.map((question) => question.ref)).toContain(
       "question:examples-and-usage",
     );
-    expect(domainSubjects.kinds.map((kind) => kind.id)).toEqual([
-      "domain-capability",
-      "operation-entrypoint",
-      "operation-flow",
-      "runtime-context-family",
-    ]);
-    expect(runtimeSubjects.kinds.map((kind) => kind.id)).toEqual([
-      "runtime",
-      "scheduled-operation",
-      "dispatch-contract",
-      "dependency-boundary",
-    ]);
     expect(markdown.reader_question_contracts.map((question) => [
       question.ref,
       question.coverage_domain,

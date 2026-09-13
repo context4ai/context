@@ -258,19 +258,19 @@ try {
     maxBuffer: 32 * 1024 * 1024,
   });
   const catalog = JSON.parse(catalogRun.stdout) as {
-    protocol?: string;
-    version?: string;
-    bundles?: Array<{ skill?: string }>;
+    skills?: Array<{ name?: string; entry?: string }>;
   };
   const expectedSkills = new Set(["context-code-indexer", "context-markdown-indexer", "context-note-indexer", "context-sessions-indexer"]);
-  const actualSkills = new Set((catalog.bundles ?? []).map((bundle) => bundle.skill));
+  const actualSkills = new Set((catalog.skills ?? []).map((skill) => skill.name));
   if (
-    catalog.protocol !== "context.indexer.cli-bundled-catalog/v1" ||
-    catalog.version !== version ||
     expectedSkills.size !== actualSkills.size ||
     [...expectedSkills].some((skill) => !actualSkills.has(skill))
   ) {
     throw new TypeError("installed Context CLI catalog does not match its release manifest");
+  }
+  for (const skill of catalog.skills ?? []) {
+    if (typeof skill.entry !== "string") throw new TypeError("installed skill entry is missing");
+    await readFile(skill.entry, "utf8");
   }
 
   await writeFile(resolve(installRoot, "smoke.mjs"), runnerSource);

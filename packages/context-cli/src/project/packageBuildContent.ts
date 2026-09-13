@@ -1,3 +1,5 @@
+import { articleProvenanceMarkdown } from "./packageSiteSources.js";
+import { loadSourcesRegistry } from "@c4a/context";
 import { projectPackageArticleLinks, type PackageArticleLinkWarning } from "./packageArticleLinks.js";
 import { buildLlmsDocuments, llmsArticles } from "./packageLlms.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
@@ -154,6 +156,7 @@ export async function packageKnowledgeBundle(
     const map = await readKnowledgeMap(projectRoot);
     return buildLlmsDocuments({ title: pkg.name, articles: llmsArticles(pkg, files), ...(map ? { map } : {}) }).files.get("llms.txt")!;
   }
+  const registry = await loadSourcesRegistry({ rootDir: projectRoot });
   const projected = await Promise.all(files.map(async (file) => {
     const content = file.content;
     const distPath = packageKnowledgeOutputPath(pkg, file.relPath);
@@ -161,7 +164,7 @@ export async function packageKnowledgeBundle(
     if (file.relPath !== distPath) lines.push(`<!-- approved_path: ${file.relPath} -->`, "");
     lines.push((await cachedPackageKnowledgeMarkdown({ projectRoot,
       key: `${pkg.name}/bundle/${file.relPath}`, content })).trim());
-    return lines.join("\n");
+    return lines.join("\n") + articleProvenanceMarkdown(file.article, registry);
   }));
   return projected.join("\n\n---\n\n");
 }
@@ -256,6 +259,8 @@ export async function writeSelectedPackageKnowledge(input: {
   const linkWarnings: PackageArticleLinkWarning[] = [];
   const outputByApproved = new Map(input.files.map(file => [file.relPath, packageKnowledgeOutputPath(input.pkg, file.relPath)]));
   const approvedByOutput = new Map([...outputByApproved].map(([approved, output]) => [output, approved]));
+  const byPath = new Map(input.files.map(file => [file.relPath, file]));
+  const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   for (const projected of projectedPages) {
     assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
     const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
@@ -274,7 +279,8 @@ export async function writeSelectedPackageKnowledge(input: {
     linkWarnings.push(...links.warnings);
     const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
       key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
-    await writeFile(outputPath, markdown, "utf8");
+    const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);
+    await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry), "utf8");
   }
   const deliveredAssets = new Map(delivered.assets.map((asset) => [asset.packageRelPath, asset]));
   for (const asset of deliveredAssets.values()) {

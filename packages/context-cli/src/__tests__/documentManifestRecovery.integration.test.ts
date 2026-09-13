@@ -51,7 +51,8 @@ test.each([false, true])("a damaged file manifest returns to authorized capture 
   expect(await backups(projectRoot)).toContain(damaged);
   const next = await observe(projectRoot, managed);
   expect(next.readySources).toBe(1);
-  expect(next.workflow.current?.node).toBe("run-indexer-lifecycle");
+  expect(next.workflow.current?.node).toBe("configure-production-requirements");
+  expect(next.workflow.current?.configuration?.file).toBe("src/indexers.yaml");
 });
 
 test.each(["entry", "json", "identity"])("repairing a damaged batch preserves source files and advances remaining capture (%s)", async (damage) => {

@@ -1,180 +1,78 @@
 # Code Indexer Skill authoring
 
-This guide defines the release checklist for a Code Indexer Provider Skill.
-It does not reproduce Context's internal Agent Graph lifecycle. The Provider
-receives validated requirements, scopes, worksets and evidence views and
-returns only its declared structured Results/fragments.
+An Indexer exposes the source skeleton and guides source-grounded writing.
+Read [planning and writing guidance](./indexer-provider-and-customization.md)
+for the current workflow. Do not recreate routing inside a Skill.
 
-## Minimal package
+## Skill responsibilities
 
-Use one `context-indexer.yaml` with protocol
-`context.indexer.provider/v1`. Give the Skill a SemVer version and publish the
-complete Bundle with a reproducible integrity digest. Instructions, templates,
-fixtures and portable program entries live below the Skill root. Do not invent
-source-specific manifest names or a second schema tree.
+Describe the supported technology, activation signals, useful reader questions,
+and how to investigate an authorized module. A module may use several Skills for
+different concerns. There is no exclusive primary owner, version pin, integrity
+receipt or production registration prerequisite. Skill names and optional usage
+configuration are temporary planning guidance, not article metadata.
 
-Programs use a structured `runtime: node`, portable `entry` and literal `args`.
-They never use a free-form command. A detector only reports activation signals;
-an inspector only returns bounded evidence/enrichment. Neither is a hard-gate
-authority. CLI profile contracts and verified data-only overlays own mechanical
-rules, metric operators and thresholds.
+Keep `SKILL.md` focused on discovery and decisions. Put optional detailed writing
+guidance and reusable scripts beside it, with relative links and clear triggers.
+Distribution metadata does not impose workspace version validation.
 
-## Author contract checklist
+## Skeleton first
 
-For generated API tables, test the final Candidate as well as the parser payload
-and template preview. Cover direct and supporting references, partial contracts,
-shared types with different implementation defaults, ambiguous or cross-file
-links, and an approved-page regeneration after the source changes. Keep a known
-field when only part of its implementation can be extracted. Do not equate an
-accepted result with a corrected page.
+During planning, prefer directories, manifests, registration points and bounded
+search. Either let the Agent inspect these directly or offer a fast helper suited
+to the stack. Report matching names, known counts and file locations. Do not
+require complete symbol extraction, call graphs or reading every implementation
+before proposing articles.
 
-Document what each supported language adapter actually establishes. Preserve
-written expressions without evaluating arbitrary code, distinguish declaration
-defaults from implementation defaults, and explain unresolved imports or types.
-Unknown material, an unsupported parse, and a renderer contradicting a known fact
-need different responses. Use existing material requests and repair routes;
-neither a new content-quality gate nor a Provider-specific retry ledger is needed.
+Distinguish file-list counts from syntax-derived feature counts. A helper with a
+budget must identify inspected and uninspected scope, return a continuation when
+available, and label partial counts. Never present a stopped scan as a full total.
+Representative deeper reading is optional when it clarifies a topic boundary.
 
-1. **Responsibility.** Classify supported code modules and produce evidence-
-   bound partitions, logical units, Artifact Bundles and Results. Do not own
-   source authorization, requirement approval, final review, CLI metrics or
-   package publication. Source-specific Note/Sessions layers may contribute
-   declared guidance to a code page; they do not become another primary or
-   turn a conversation's proposed change into implemented code behavior.
-2. **Manifest.** Use the sole `context-indexer.yaml` field tree. Bind domains,
-   profiles, operations/fragments, resources, source roles, logical units,
-   customization support and composition without duplicate aliases.
-3. **Resource composition.** Combine only declared programs, profile-bound
-   instructions, templates and optional detector/inspector resources. Omitted
-   capabilities remain unsupported; natural language cannot add them.
-   Put any Agent-executed grouping rules in those declared instructions or
-   templates so Context delivers them with the current View. A partition
-   strategy id or digest is not an instruction resource. Context selects and
-   records strategy attempts; the Agent returns semantic groups and dispositions,
-   without discovering strategy implementations or managing fallback order.
-4. **Activation and profiles.** Declare strong/supporting/negative signals.
-   Dependency names are candidates, not runtime proof. One module may combine
-   one primary profile with supporting/extensions and selected composers.
-5. **Sources and Artifacts.** Write for a reader outside the indexed module:
-   make responsibility, stable interfaces/entrypoints, handoffs and the core
-   state, failure, operation and source-of-truth facts needed for correct use
-   and attribution discoverable. Declare source roles and logical-unit intent;
-   select only CLI-registered Artifact kinds/policy variants. Keep logical unit
-   identity separate from physical Artifact count, and measure useful coverage
-   by answered profile questions rather than symbol or path counts.
-6. **Inventory protocols.** Close every input member with an explicit
-   disposition. Use stable aggregation, full-path example identity and
-   structured chain decisions; do not substitute page prose for inventory.
-7. **Metrics.** Reference registered metric ids as reader-quality guidance.
-   The CLI may report advisory observations, but a Provider cannot return a
-   pass, threshold, retry count, or risk-acceptance decision.
-8. **Revision boundary.** Hard contract or source failures block at their
-   owner. Reader-quality feedback reopens the same Author or Composer through
-   `context revise`; it does not create a metric retry ledger or risk Gate.
-9. **Reader questions.** Declare reusable question templates with stable refs,
-   target domains and allowed evidence contracts. Do not make a question id
-   globally unique to one SubjectKey group.
-10. **Inspector safety.** Accept only the versioned stdin request and bounded
-    authorized evidence view; emit strict JSON within limits. Never read the
-    repository, environment or network implicitly, and never expose raw
-    config values, secrets or unbounded stderr/stdout.
-11. **Base gates.** Do not reduce source scope integrity, identity, evidence,
-    requirement, disposition, reference-only or provenance gates. Provider
-    integrity identifies content; it does not grant pass authority.
-12. **Anonymous fixtures.** Cover at least a component library, Web app, API
-    service, SDK/library and runtime/worker with neutral paths and identifiers.
-13. **Release tests.** Validate the manifest/resource ledger, run positive and
-    negative fixtures, forward-test the complete Skill, pack it, reinstall the
-    exact artifact and compare Bundle bytes/digest.
-14. **Content ownership.** Public technology belongs in the community Skill;
-    company-wide infrastructure belongs in a separate namespaced Provider;
-    repository, service, team and business mappings belong in business/project
-    Providers. Community fixtures remain anonymous.
-15. **Marketplace layout.** Archives keep one top-level Skill directory with
-    `SKILL.md`, the manifest and referenced runtime resources. Exclude tests,
-    caches, credentials, local paths and Host-specific temporary manifests.
-16. **Material gaps.** Return a canonical question disposition in the same
-    main Result when required evidence is missing. Never render a gap as an
-    empty page or speculative prose. Registered Markdown or tool material may
-    enrich the same main indexing batch before Candidate generation; do not
-    create a separate answer operation, Candidate, checkpoint or Review. The
-    CLI projects allowed enrichment material into that same Authorized
-    Workset View; Providers must not reopen registered sources themselves.
-17. **Backend profiles.** Test neutral RPC/HTTP, Gateway, Event/function,
-    Cron/worker, sync/reconciliation, stateful service/storage and library
-    shapes. Local facts remain baseline when optional remote metadata is absent.
-18. **Versioning.** Use Skill/Provider SemVer, exact Provider pins and Bundle
-    integrity. Fixed dependencies require exact versions and resolved
-    integrity. `@context-indexer-origin` is required on workspace-local customization
-    files and grants no authority. It is not required on Provider bundle files.
-19. **Trust boundary.** Skill/manifest describes capabilities; the verified
-    Bundle supplies bytes; workspace customization supplies project deltas;
-    CLI contracts supply hard rules. Keep these four authorities distinct.
-20. **Requirement direction.** `IndexRequirementSet` constrains registry,
-    extractor and Result in one direction. Apply requirement/registry changes
-    through staged, digest-bound proposals and transactional apply; do not edit
-    a live registry around the Route.
-21. **Program and remote authority.** Programs must pass static policy and the
-    applicable trusted/sandbox authorization. Optional remote tools use a
-    versioned Host Action, exact source-bound request and readable receipt;
-    they never expand scope or perform writes.
-22. **End-to-end recovery.** Test discovery, exact Provider resolution,
-    content-addressed staging, controlled execution, Artifact/Evidence Result
-    validation and crash recovery. A resumed run reuses only complete accepted
-    records and never infers success from a partial receipt.
-23. **Customization ladder.** Preserve this order: Provider only → config →
-    instructions append → one template override → program extension →
-    restricted replace. Document the proof and exit condition at every step;
-    see [Provider selection and customization](./indexer-provider-and-customization.md).
-24. **Batch neutrality.** Write instructions for one semantic task and accept
-    that Context may transport several independent tasks in one Agent step.
-    Never derive identity, ordering, ownership or evidence scope from a task
-    key or batch position. Partition should decide consumer-facing ownership
-    from public anchors and unresolved material; detailed supporting Facts are
-    consumed in the bounded Author View rather than copied into every
-    Partition decision.
+Signals suggest topics; they do not prove semantics. A route registration can
+suggest an API topic, but not its error behavior or business meaning. Prefer
+reader questions to a mechanical page for each directory, symbol or heading.
+Keep module directories explicit in task guidance when needed, without adding
+a separate persisted boundary protocol or a new validation gate.
 
-The current Route delivers readable task material with goals and constraints
-first, followed by the authorized sources and facts. For behavioral explanations,
-read the complete source excerpts. Copy the displayed `source_items` into the
-section's `source_items`; use Fact references in `facts`, not as source items.
-Context resolves a text item's authorized source spans internally. Inventory
-identities and a repository reference do not identify section source material.
-These process-local excerpts are not new Facts or reader-page metadata. Do not
-reopen the repository or infer behavior from a locator alone when the supplied
-lines do not establish it. Batch size does not define a knowledge page boundary.
+## Writing and evidence
 
-Author task resources may point to one shared batch reading file. Read that path
-once, use shared material only for its listed task keys, and consider each task's
-own goals and source excerpts. Context shares identical material, not conclusions:
-prepare a separate result for each task and submit the `results[]` together through
-the current completion command. A retry includes the remaining tasks' material in
-full; no earlier batch file or additional reading command is required.
+Once the current report is confirmed, read the source needed for each assigned
+article. Describe contracts, state changes, failure behavior and integration
+points where relevant. Optional parsing can help locate declarations; it is not
+proof of runtime behavior. Preserve expressions without executing project code,
+distinguish declaration defaults from implementation defaults, and state unknowns.
 
-## Result and composition rules
+Use the current stage's Markdown and reference-file schemas. Each fragment cites
+at most three actual source locations; the CLI computes regional digests. Split
+an explanation when it needs separate evidence, not to fill a fixed template.
+Reuse stable article and fragment identities when revising. Supporting documents,
+notes or sessions may contribute to the same article without becoming code facts.
 
-Exactly one primary layer returns a complete partition/author Result for an
-operation. Pre-author extensions return only declared fragments and cannot
-change ownership, denominator or Subject identity. Post-author composers bind
-one current `PrimaryResultView` and return only a derived proposal fragment;
-an empty composer run still has a receipt. Composer selection is the
-intersection of registry selection, manifest declaration and current profile
-applicability, not array order.
+The Agent plans batches and chooses reading order within the work released by
+the CLI. If supported, workers write assigned drafts and the coordinator submits
+completed subsets. Do not require every batch to finish before submission.
+Use the existing missing-material and repair outputs, not a per-member ledger,
+another content audit or a Skill-specific retry protocol.
 
-Use canonical SubjectKey schemas and the Context NodeRef formula. All selected
-Providers must reuse the same Node when the SubjectKey is equal. An
-enricher uses the supplied TargetResolutionView (`resolved`, `absent` or
-`ambiguous`) and never guesses identity from a title or path resemblance.
+## Optional scripts
 
-Every Section uses the exact `document_kind`, `reader_goal` and
-`artifact_kind` tuple from the current profile's unique layout mapping. The
-Provider never returns a collection name; Context resolves the collection from
-that tuple and rejects missing or ambiguous mappings.
+Scripts serve a concrete repeated task; they are not mandatory for every stack.
+Take explicit authorized paths and bounded options, keep source files read-only,
+and return concise output or a file in the supplied temporary area. Do not execute
+repository code, read credentials, traverse unrelated directories or contact
+external services implicitly. Full parsing belongs to selected writing tasks.
+Report unsupported syntax and incomplete traversal separately from zero matches.
 
-## Publication gate
+## Validation and distribution
 
-Do not publish until the exact packed artifact passes manifest/schema
-validation, anonymous positive/negative fixtures, no-scope-expansion and
-secret-leak tests, deterministic Bundle reconstruction, exact-version install,
-controlled execution and forward tests. Publishing a new version does not make
-existing workspace pins current; workspace selection must re-resolve it.
+Test supported technology with anonymous fixtures: feature discovery, bounded
+stopping, unsupported input, repeated names in different paths, and final article
+references. For generated API explanations, verify defaults, shared types and
+unresolved cross-file links in the final page as well as the parser output.
+Use relevant fixtures, not a mandatory matrix for unrelated technologies.
+
+Verify packaged relative links and executable helpers. Keep community examples
+free of company-specific services; organization and project knowledge belongs in
+their own Skills. Publishing or installing a Skill requires the appropriate
+authorization and does not add a hash or version check to knowledge production.

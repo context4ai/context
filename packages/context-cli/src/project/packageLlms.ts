@@ -16,10 +16,10 @@ const articlePath = (identity: string) => `llms/pages/${createHash("sha256").upd
 export function llmsArticles(pkg: PackageDefinition, selected: readonly ApprovedKnowledgeFile[]): LlmsArticle[] {
   return selected.map(file => {
     const meta = parseKnowledgeFrontmatter(file.content);
-    return { identity: typeof meta.artifact_ref === "string" ? meta.artifact_ref : `path:${file.relPath}`,
+    return { identity: file.article?.article_id ?? `path:${file.relPath}`,
       path: packageKnowledgeOutputPath(pkg, file.relPath), content: file.content,
       title: typeof meta.title === "string" ? meta.title : posix.basename(file.relPath, ".md"),
-      sections: [...file.content.matchAll(/<!--\s*context:section\b[^>]*\bid="([a-zA-Z0-9_-]+)"[^>]*-->/gu)].map(match => match[1]!) };
+      sections: file.article?.sections.map(section => section.id) ?? [] };
   });
 }
 
@@ -51,7 +51,7 @@ export function buildLlmsDocuments(input: {
     }
   }
   visit(entries, 0);
-  // Legacy pages without registered identities still belong to the selected output.
+  // Include selected articles not placed in the navigation map.
   for (const article of input.articles) if (!seen.has(article.identity)) {
     seen.add(article.identity); ordered.push(article);
     lines.push(`- [${label(article.title)}](<${targets.get(article.identity)!}>)`);

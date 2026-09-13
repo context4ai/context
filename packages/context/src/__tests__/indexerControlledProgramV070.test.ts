@@ -192,18 +192,11 @@ function partitionRequest(customizationFingerprint: string | null = null) {
     primary_execution_fingerprint:
       PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
     profile_contract_digest: digest("6"),
-    subject_key_schema_digest: digest("7"),
     source_scope_digest: digest("8"),
     source_binding_digest: digest("9"),
     primary_resource_binding_digest:
       PRIMARY_EXECUTION_PROJECTION.primary_resource_binding_digest,
     question_target_inventory_digest: digest("a"),
-    partition_subject_key: {
-      protocol: "context.subject-key/v1",
-      namespace: "sample",
-      kind: "component-library",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest([{
       strategy_ref: strategy,
       strategy_digest: digest("b"),
@@ -264,11 +257,9 @@ function partitionPlan(input: {
       indexer_id: input.workset.indexer_id,
       indexer_fingerprint: input.workset.primary_execution_fingerprint,
       requirement_digest: input.workset.requirement_set_digest,
-      subject_key_schema_digest: input.workset.subject_key_schema_digest,
       source_scope_digest: input.workset.source_scope_digest,
       source_refs: [SOURCE_REF],
       module_ref: MODULE_REF,
-      partition_subject_key: input.workset.partition_subject_key,
       parent_scope_ref: MODULE_REF,
       inventory_digest: input.workset.partition_inventory_digest,
       question_target_inventory_digest: input.workset.question_target_inventory_digest,

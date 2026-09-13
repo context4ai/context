@@ -134,7 +134,6 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
     primary_execution_fingerprint:
       projections.executionProjection.primary_execution_fingerprint,
     profile_contract_digest: digest("9"),
-    subject_key_schema_digest: digest("b"),
     source_scope_digest: digest("c"),
     source_binding_digest: digest("d"),
     primary_resource_binding_digest:
@@ -152,11 +151,6 @@ function worksets(registry: IndexerRegistry, resourceDigest = digest("8")) {
   const partition = buildIndexerMainWorkset({
     ...common,
     stage: "partition",
-    partition_subject_key: {
-      ...SUBJECT,
-      kind: "component-library",
-      local_key: "root",
-    },
     strategy_set_digest: indexerPartitionStrategySetDigest([partitionStrategy]),
     reader_question_refs: ["question:public-contract"],
     partition_input_digests: [digest("0")],

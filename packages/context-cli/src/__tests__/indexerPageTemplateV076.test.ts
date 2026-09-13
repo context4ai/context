@@ -1,136 +1,90 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { indexerTemplateContractSchema, renderIndexerDeterministicFacts, materializeIndexerStructuredContent,
-  type IndexerArtifactResult, type IndexerArtifactFact } from "@c4a/context";
+import { indexerTemplateContractSchema, type ArticleSourceReference, type IndexerArtifactResult } from "@c4a/context";
 import { applySelectedPageTemplate } from "../project/indexerPageTemplate.js";
 import { splitFrontmatter, parseSectionBodies } from "../project/indexerTemplateRendering.js";
 
-test("selected page program combines source-backed API reference and semantic prose in one Artifact", async () => {
-  const source = await readFile(join(import.meta.dir,
-    "../../../../plugins/context/skills/context-code-indexer/templates/component-library-usage-guide.md"), "utf8");
-  const parsed = splitFrontmatter(source);
-  const template = { contract: indexerTemplateContractSchema.parse(parsed.metadata), section_bodies: parseSectionBodies(parsed.body) };
-  // A local override may change the heading without replacing accepted prose.
-  template.section_bodies.api = template.section_bodies.api!.replace("## API", "## Declared properties");
-  const artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }> = {
-    artifact_id: "panel-guide", artifact_kind: "content", artifact_policy_variant: "standard", representation: "sections",
-    sections: [{ section_key: "usage", owner_indexer_id: "widgets", document_kind: "usage-guide",
-      reader_goal: "integrate-capability", artifact_kind: "content", blocks: [{ block_id: "usage-body",
-        layer: "semantic-prose", markdown: "# Panel\n\nPass a label when rendering the panel.", evidence_refs: ["evidence:panel"] }] }],
-  };
-  const fact: IndexerArtifactFact = { fact_ref: "fact:panel", fact_kind: "symbol", subject_key: {
-    protocol: "context.subject-key/v1", namespace: "widgets", kind: "component", local_key: "panel" },
-    evidence_refs: ["evidence:panel"], value: { name: "Panel", members: [
-      { name: "label", typeAnnotation: "string", optional: false, readonly: true },
-      { name: "mode", typeAnnotation: '"inline" | "block"', optional: true, defaultValue: '"inline"' },
-    ] },
-  };
-  const derived = applySelectedPageTemplate({ artifact, template, facts: [fact] });
-  expect(artifact.template_id).toBe("component-library-usage-guide");
-  expect(artifact.sections).toHaveLength(2);
-  expect(artifact.sections[0]?.blocks[0]).toMatchObject({ markdown: "# Panel\n\nPass a label when rendering the panel." });
-  expect(derived[0]?.evidence_refs).toEqual(["evidence:panel"]);
-  const markdown = artifact.sections.flatMap((section) => section.blocks.map((block) => block.layer === "semantic-prose"
-    ? block.markdown : renderIndexerDeterministicFacts({ renderer: block.renderer,
-      facts: derived.filter((item) => block.fact_refs.includes(item.fact_ref)) }))).join("\n");
-  expect(markdown).toContain("## Declared properties");
-  expect(markdown).toContain("| Panel | label | string | required | unknown | readonly |");
-  expect(markdown).toContain("&#124;");
-  expect(markdown).not.toContain("fact:");
-  expect(markdown).not.toContain("sha256:");
-  const props: IndexerArtifactFact = { ...fact, fact_ref: "fact:props", value: {
-    name: "PanelProps", kind: "type", file: "panel.tsx", visibility: "exported",
-    members: [{ name: "mode", kind: "prop", typeAnnotation: "string", defaultValue: "old" }],
-  } };
-  const supporting: IndexerArtifactFact = { ...fact, fact_ref: "fact:implementation", evidence_refs: ["evidence:implementation"], value: {
-    name: "Panel", kind: "component", file: "panel.tsx", visibility: "exported", propsType: "PanelProps",
-    members: [{ name: "mode", kind: "prop", typeAnnotation: "string", defaultValue: "new" }],
-  } };
-  const repaired = structuredClone(artifact);
-  repaired.sections = repaired.sections.slice(0, 1);
-  applySelectedPageTemplate({ artifact: repaired, template, facts: [props], supportingFacts: [supporting] });
-  const api = repaired.sections[1]!.blocks.find(block => block.layer === "deterministic-block")!;
-  if (api.layer !== "deterministic-block") throw new Error("missing program block");
-  expect(api.fact_refs).toEqual([props.fact_ref]);
-  const final = materializeIndexerStructuredContent({ blocks: [api], facts: [props, supporting] })[0]!;
-  expect(final.markdown).toContain("| new |");
-  expect(final.markdown).not.toContain("| Panel | mode |");
-  expect(final.evidence_refs).toContain("evidence:implementation");
-
-});
-
-async function semanticTemplateFixture() {
+const reference: ArticleSourceReference = { source_ref: "repo:widgets", locator: {
+  path: "panel.tsx", start_line: 2, end_line: 8 }, content_digest: "sha256:" + "a".repeat(64) };
+async function fixture() {
   const source = await readFile(join(import.meta.dir,
     "../../../../plugins/context/skills/context-code-indexer/templates/component-library-usage-guide.md"), "utf8");
   const parsed = splitFrontmatter(source);
   const contract = indexerTemplateContractSchema.parse(parsed.metadata);
-  contract.variables = [{ id: "explanation", type: "string", content_layer: "semantic-prose",
-    required: true, evidence_required: true }];
-  contract.deterministic_blocks = [];
-  contract.sections = [{ ...contract.sections[0]!, section_key: "usage", presence: "required",
-    on_missing: "request-input", minimum_evidence_items: 1, variable_ids: ["explanation"], deterministic_block_ids: [] }];
   const artifact: Extract<IndexerArtifactResult["artifacts"][number], { representation: "sections" }> = {
     artifact_id: "panel-guide", artifact_kind: "content", artifact_policy_variant: "standard", representation: "sections",
     sections: [{ section_key: "panel-guide--usage", owner_indexer_id: "widgets", document_kind: "usage-guide",
-      reader_goal: "integrate-capability", artifact_kind: "content", blocks: [{ block_id: "usage-body",
-        layer: "semantic-prose", markdown: "# Panel\n\nSource-backed usage.", evidence_refs: ["evidence:panel"] }] }],
+      reader_goal: "integrate-capability", artifact_kind: "content", blocks: [{ block_id: "usage",
+        layer: "semantic-prose", markdown: "# Panel\n\nPass a label.", references: [reference] }] }],
   };
-  return { artifact, template: { contract: indexerTemplateContractSchema.parse(contract),
-    section_bodies: { usage: "## Usage\n\n{{variable:explanation}}" } } };
+  return { artifact, template: { contract, section_bodies: parseSectionBodies(parsed.body) } };
 }
 
-test("missing writing slots preserve Author content and report a nonblocking diagnostic", async () => {
-  const fixture = await semanticTemplateFixture();
-  const sections = structuredClone(fixture.artifact.sections);
+test("page program formats supplied API Markdown and its region without copying parser facts", async () => {
+  const input = await fixture();
+  input.template.section_bodies.api = input.template.section_bodies.api!.replace("## API", "## Declared properties");
+  const api = "| Property | Type |\n| --- | --- |\n| label | string |";
+  applySelectedPageTemplate({ ...input, articleKey: "panel-guide",
+    semanticVariables: { api: { value: api, references: [reference] } } });
+  expect(input.artifact.sections).toHaveLength(2);
+  expect(input.artifact.sections[0]!.blocks[0]).toMatchObject({ markdown: "# Panel\n\nPass a label." });
+  expect(input.artifact.sections[1]!.blocks.map(block => block.markdown).join("\n\n"))
+    .toBe("## Declared properties\n\n" + api);
+  expect(input.artifact.sections[1]!.blocks.flatMap(block => block.references)).toEqual([reference]);
+  expect(JSON.stringify(input.artifact)).not.toContain("fact_refs");
+  applySelectedPageTemplate({ ...input, articleKey: "panel-guide",
+    semanticVariables: { api: { value: api, references: [reference] } } });
+  expect(input.artifact.sections).toHaveLength(2);
+});
+
+test("missing slots and unknown slots retain authored content without blocking production", async () => {
+  const input = await fixture();
+  const before = structuredClone(input.artifact.sections);
   const diagnostics: Array<{ code: string; message: string }> = [];
-  expect(applySelectedPageTemplate({ ...fixture, articleKey: "panel-guide", facts: [], diagnostics })).toEqual([]);
-  expect(fixture.artifact.sections).toEqual(sections);
-  expect(diagnostics.map(item => item.code)).toContain("template-section-not-rendered");
-});
-
-test("rendered size guidance warns without truncating prose or duplicating the section", async () => {
-  const fixture = await semanticTemplateFixture();
-  fixture.template.contract.maximum_rendered_bytes = 1;
-  const diagnostics: Array<{ code: string; message: string }> = [];
-  applySelectedPageTemplate({ ...fixture, articleKey: "panel-guide", facts: [], diagnostics,
-    semanticVariables: { explanation: "Source-backed explanation with a code entry." } });
-  expect(diagnostics.map(item => item.code)).toContain("template-size-guidance-exceeded");
-  expect(fixture.artifact.sections).toHaveLength(1);
-  expect(fixture.artifact.sections[0]?.blocks).toContainEqual(expect.objectContaining({
-    markdown: "## Usage\n\nSource-backed explanation with a code entry.", evidence_refs: ["evidence:panel"],
-  }));
-});
-
-test("writing flexibility cannot borrow evidence from a different article section", async () => {
-  const fixture = await semanticTemplateFixture();
-  fixture.artifact.sections[0]!.section_key = "different-article--usage";
-  expect(() => applySelectedPageTemplate({ ...fixture, articleKey: "panel-guide", facts: [],
-    semanticVariables: { explanation: "A claim without its own source binding." } })).toThrow("needs evidence in its own section");
-});
-
-test("explicit semantic slot bindings retain their own evidence without a duplicate prose section", async () => {
-  const fixture = await semanticTemplateFixture();
-  fixture.artifact.sections[0]!.section_key = "panel-guide--introduction";
-  applySelectedPageTemplate({ ...fixture, articleKey: "panel-guide", facts: [],
-    authorizedEvidenceRefs: new Set(["evidence:panel", "evidence:usage-document"]),
-    semanticVariables: { explanation: { value: "Use the documented entry.", evidence_refs: ["evidence:usage-document"] } } });
-  const usage = fixture.artifact.sections.find(section => section.section_key === "panel-guide--usage")!;
-  expect(usage.blocks).toContainEqual(expect.objectContaining({ markdown: "## Usage\n\nUse the documented entry.",
-    evidence_refs: ["evidence:usage-document"] }));
-  expect(fixture.artifact.sections.filter(section => section.section_key === usage.section_key)).toHaveLength(1);
-  const invalid = await semanticTemplateFixture();
-  expect(() => applySelectedPageTemplate({ ...invalid, articleKey: "panel-guide", facts: [],
-    semanticVariables: { explanation: { value: "Unsupported claim.", evidence_refs: ["evidence:outside"] } } }))
-    .toThrow("unauthorized evidence");
-});
-
-test("an unavailable writing slot warns and retains the supplied Author sections", async () => {
-  const fixture = await semanticTemplateFixture();
-  const before = structuredClone(fixture.artifact.sections);
-  const diagnostics: Array<{ code: string; message: string }> = [];
-  applySelectedPageTemplate({ ...fixture, articleKey: "panel-guide", facts: [], diagnostics,
-    semanticVariables: { additional_guidance: "A proposed chapter outside this template version." } });
+  applySelectedPageTemplate({ ...input, diagnostics });
+  expect(input.artifact.sections).toEqual(before);
+  applySelectedPageTemplate({ ...input, diagnostics, semanticVariables: { other: "A proposed chapter." } });
+  expect(input.artifact.sections).toEqual(before);
   expect(diagnostics.map(item => item.code)).toContain("template-unknown-writing-slot");
-  expect(fixture.artifact.sections).toEqual(before);
+});
+
+test("a string slot never inherits citations from another fragment", async () => {
+  const input = await fixture();
+  applySelectedPageTemplate({ ...input, articleKey: "panel-guide", semanticVariables: { api: "A general explanation." } });
+  expect(input.artifact.sections.find(section => section.section_key === "panel-guide--api")!.blocks[0]!.references).toEqual([]);
+});
+
+test("a slot keeps its own references and never truncates long prose", async () => {
+  const input = await fixture();
+  input.template.contract.maximum_rendered_bytes = 1;
+  const text = "A detailed explanation. ".repeat(50);
+  applySelectedPageTemplate({ ...input, articleKey: "panel-guide", semanticVariables: { api: { value: text, references: [reference] } } });
+  const block = input.artifact.sections.find(section => section.section_key === "panel-guide--api")!.blocks
+    .find(item => item.references.length > 0)!;
+  expect(block.markdown).toContain(text.trim());
+  expect(block.references).toEqual([reference]);
+});
+
+test("separate template paragraphs can cite six regions while a single paragraph is capped at three", async () => {
+  const input = await fixture();
+  const api = input.template.contract.sections.find(section => section.section_key === "api")!;
+  const variable = input.template.contract.variables.find(item => item.id === "api")!;
+  input.template.contract.variables = [{ ...variable, id: "first" }, { ...variable, id: "second" }];
+  input.template.contract.sections = [{ ...api, variable_ids: ["first", "second"] }];
+  input.template.section_bodies.api = "## API\n\n{{variable:first}}\n\n{{variable:second}}";
+  const regions = (offset: number) => [1, 2, 3].map(line => ({ ...reference,
+    locator: { ...reference.locator, start_line: line + offset, end_line: line + offset } }));
+  const semanticVariables = { first: { value: "First paragraph", references: regions(0) },
+    second: { value: "Second paragraph", references: regions(3) } };
+  applySelectedPageTemplate({ ...input, semanticVariables });
+  const blocks = input.artifact.sections.find(section => section.section_key === "api")!.blocks;
+  expect(blocks.map(block => block.references.length)).toEqual([0, 3, 3]);
+  expect(blocks.map(block => block.markdown).join("\n\n")).toBe("## API\n\nFirst paragraph\n\nSecond paragraph");
+  const ids = blocks.map(block => block.block_id);
+  semanticVariables.first.value = "Updated first paragraph";
+  applySelectedPageTemplate({ ...input, semanticVariables });
+  expect(input.artifact.sections.find(section => section.section_key === "api")!.blocks.map(block => block.block_id)).toEqual(ids);
+  input.template.section_bodies.api = "{{variable:first}} and {{variable:second}}";
+  expect(() => applySelectedPageTemplate({ ...input, semanticVariables })).toThrow();
 });

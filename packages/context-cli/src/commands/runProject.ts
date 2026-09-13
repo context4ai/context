@@ -94,7 +94,7 @@ function projectPhaseRunInput(input: {
     ...(input.phaseId === undefined ? {} : { phaseId: input.phaseId }),
     ...(input.options.list === true ? { list: true } : {}),
     ...(input.options.deliver === true ? { deliver: true } : {}),
-    ...(typeof input.options.deliverySize === "string" ? { deliverySize: input.options.deliverySize } : {}),
+    ...(input.options.resumeWriting === true ? { resumeWriting: true } : {}),
     ...(input.options.dryRun === true ? { dryRun: true } : {}),
     ...(input.managed ? { managed: true } : {}),
     ...(input.workflowRevision === undefined
@@ -202,8 +202,8 @@ export function registerProjectRunCommand(
     .command("run [phase-id]")
     .description("Inspect or run a declared project phase")
     .option("--list", "list declared phases")
-    .option("--delivery-size <size>", "set future delivery waves to auto or a fixed 1–50 themes for this task")
-    .option("--deliver", "request an early page delivery after current Author work finishes")
+    .option("--deliver", "pause writing to review and deliver completed articles")
+    .option("--resume-writing", "cancel a delivery pause without discarding approved articles or unfinished tasks")
     .option("--dry-run", "print phase reads/writes or the next managed workflow command without mutating project files")
     .option("--managed", "continue this command under explicit current-conversation managed approval")
     .addOption(
@@ -219,8 +219,9 @@ export function registerProjectRunCommand(
       phaseId: string | undefined,
       options: Record<string, unknown>,
     ) => {
-      if ((options.deliver === true || options.deliverySize !== undefined) && (phaseId !== undefined || options.until !== undefined || options.list === true)) {
-        throw new ContextError(ExitCode.UserError, "--deliver and --delivery-size apply to the current Indexer lifecycle without a phase id, --list or --until.");
+      if (options.deliver === true && options.resumeWriting === true) throw new ContextError(ExitCode.UserError, "Choose --deliver or --resume-writing, not both.");
+      if ((options.deliver === true || options.resumeWriting === true) && (phaseId !== undefined || options.until !== undefined || options.list === true)) {
+        throw new ContextError(ExitCode.UserError, "--deliver and --resume-writing apply to the current lifecycle without a phase id, --list or --until.");
       }
       const format = projectRunFormat(options.format);
       const rootOptions = program.opts() as Record<string, unknown>;

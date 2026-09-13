@@ -1,24 +1,21 @@
 import { withContextRuntimeEventDelivery, type ContextRuntimeEventBatch } from "../runtimeEvents.js";
 import { afterEach, expect, test } from "bun:test";
-import { cp, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
-import { createDocumentRevisionWorkspace } from "./projectDocumentRevisionV074.fixture.js";
-import { completePartitionStage, completeAuthorStage, approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
-import { currentIndexerStructureReview } from "../project/indexerStructureReview.js";
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
+import { maintenanceProductionWorkspace, submitMaintenanceProductionArticle } from "./maintenanceProduction.fixture.js";
 import { completeCurrentIndexerAction } from "./knowledgeMapReview.fixture.js";
 import { readCandidateRecords } from "../project/candidateLedger.js";
-import { closeProjectWorkspace } from "../project/close.js";
+import { closeProjectWorkspace, readProjectCloseStatus } from "../project/close.js";
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
-import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
-import { currentLedger } from "../project/indexerMainRunStoreRecords.js";
+import { readProductionStage } from "../project/productionStageStore.js";
 import { collectProjectStatus } from "../project/status.js";
 import { readApprovedRevision } from "../project/approvedRevision.js";
 import { readMaintenance } from "../project/maintenanceStorage.js";
-import { advanceCurrentIndexerLifecycle } from "../project/indexerCurrentLifecycle.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 import { beginDocumentRevision } from "../project/documentRevision.js";
-import { readIndexerDelivery, requestIndexerEarlyDelivery } from "../project/indexerDelivery.js";
+import { requestProductionDelivery, resumeProductionWriting } from "../project/productionDelivery.js";
 import { registerKnowledgeMaintenance, advanceKnowledgeMaintenance, maintenanceRevision, cancelKnowledgeMaintenance } from "../project/knowledgeMaintenance.js";
 
 async function captureRuntimeEvents(work: () => Promise<unknown>) {
@@ -37,22 +34,7 @@ async function captureRuntimeEvents(work: () => Promise<unknown>) {
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 
-async function deliveryWorkspace(sourceCount = 12) {
-  const root = await createDocumentRevisionWorkspace({ sourceCount }); roots.push(root);
-  await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"), join(root, "src/package-templates/kb"), { recursive: true });
-  const path = join(root, "src/index.ts");
-  await writeFile(path, (await readFile(path, "utf8")).replace("defineProject, source", "defineProject, kbPackage, source")
-    .replace("packages: []", 'packages: [kbPackage({ name: "maintenance-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
-  await completePartitionStage(root);
-  const structure = (await currentIndexerStructureReview(root))!;
-  await completeCurrentIndexerAction({ cwd: root, revision: structure.revision, managed: true, value: { stage: "structure-review", decision: "approved" } });
-  await completeAuthorStage(root);
-  await approveCandidates(root, await readCandidateRecords(root));
-  await closeProjectWorkspace(root);
-  await acceptStarterPackageTemplates({ projectRoot: root });
-  const views = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")).views as Array<{ path: string }>;
-  return { root, views };
-}
+const deliveryWorkspace = () => maintenanceProductionWorkspace(roots);
 
 async function advance(root: string) {
   const status = await collectProjectStatus(root, { managed: true });
@@ -62,20 +44,17 @@ async function advance(root: string) {
 }
 
 test("priority repairs a current Candidate and returns to its early delivery without consuming queued maintenance", async () => {
-  const { root, views } = await deliveryWorkspace(12);
+  const { root, views } = await deliveryWorkspace();
   await buildProjectPackages(root);
-  await completePartitionStage(root);
-  const nextStructure = (await currentIndexerStructureReview(root))!;
-  if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
-    managed: true, value: { stage: "structure-review", decision: "approved" } });
-  await requestIndexerEarlyDelivery(root);
-  await advanceCurrentIndexerLifecycle(root);
-  await completeAuthorStage(root);
+  await submitMaintenanceProductionArticle(root, "architecture/examples.md");
+  await requestProductionDelivery(root);
+  await resumeProductionWriting(root);
   const candidates = await readCandidateRecords(root);
   expect(candidates.length).toBeGreaterThan(0);
   const target = candidates[0]!;
-  const before = (await currentLedger(root))!;
-  expect(before.entries.some(entry => entry.state === "pending")).toBe(true);
+  const before = (await readProductionStage(root))!;
+  const unfinished = before.tasks.filter(task => task.status === "issued");
+  expect(unfinished).toHaveLength(1);
   await registerKnowledgeMaintenance(root, { id: "later-approved-revision", operation: "revise", timing: "priority",
     targets: [{ path: views[0]!.path, instruction: "Clarify an already delivered page." }] });
   const queue = await readMaintenance(root);
@@ -83,34 +62,32 @@ test("priority repairs a current Candidate and returns to its early delivery wit
   await expect(beginDocumentRevision({ projectRoot: root, selector: target.path, instruction, regenerate: true }))
     .rejects.toMatchObject({ detail: { reason_code: "current-candidate-requires-repair",
       next_action: { command: expect.stringContaining("context revise ") } } });
-  expect(await currentLedger(root)).toEqual(before);
+  expect(await readProductionStage(root)).toEqual(before);
   expect(await readCandidateRecords(root)).toEqual(candidates);
   const result = JSON.parse(await runCliInDir(root, ["revise", `./knowledge/${target.path}`,
     "--instruction", instruction, "--timing", "priority", "--format", "json"]));
-  expect(result).toMatchObject({ status: "author-reopened", candidate_id: target.candidate_id });
+  expect(result).toMatchObject({ status: "production-revision-prepared", path: target.path });
   expect(await readMaintenance(root)).toEqual(queue);
-  const repairing = (await currentLedger(root))!;
-  expect(repairing.entries.filter(entry => entry.state === "running")).toHaveLength(1);
-  expect(repairing.entries.filter(entry => entry.state === "accepted")).toHaveLength(
-    before.entries.filter(entry => entry.state === "accepted").length - 1);
-  expect((await readIndexerDelivery(root))?.early_requested).toBe(true);
-  await completeAuthorStage(root, { revisionSuffix: "Corrected public API." });
+  const repairing = (await readProductionStage(root))!;
+  expect(repairing.tasks.filter(task => task.status === "issued")).toHaveLength(2);
+  expect(await readCandidateRecords(root)).toEqual(candidates);
+  await submitMaintenanceProductionArticle(root, target.path, "Corrected public API: answer is exported with value 42.");
   const repaired = await readCandidateRecords(root);
   expect(repaired.map(candidate => candidate.path).sort()).toEqual(candidates.map(candidate => candidate.path).sort());
-  expect((await currentLedger(root))!.entries.filter(entry => entry.state === "pending")).toEqual(
-    before.entries.filter(entry => entry.state === "pending"));
+  expect((await readProductionStage(root))!.tasks.filter(task => task.status === "issued")).toEqual(unfinished);
+  await requestProductionDelivery(root);
   expect((await collectProjectStatus(root, { managed: true })).workflow.current?.node).toBe("review-current-batch");
   expect(await readMaintenance(root)).toEqual(queue);
 }, 60_000);
 
-test("two approved revisions share delivery and resume the untouched production ledger", async () => {
+test("two approved revisions share delivery and resume untouched production tasks", async () => {
   const { root, views } = await deliveryWorkspace();
   const input = { id: "clarify", operation: "revise", targets: views.slice(0, 2).map(view => ({ path: `knowledge/${view.path}`, instruction: "Clarify the public entry point." })) };
   await registerKnowledgeMaintenance(root, input);
   expect((await registerKnowledgeMaintenance(root, input)).outcome).toBe("already-registered");
   expect((await maintenanceRevision(root)).action).toBeUndefined();
   await buildProjectPackages(root);
-  const ledger = await currentLedger(root);
+  const ledger = await readProductionStage(root);
   expect(ledger).toBeDefined();
   await advance(root);
   const acceptedBodies: string[] = [];
@@ -120,35 +97,35 @@ test("two approved revisions share delivery and resume the untouched production 
     acceptedBodies.push(request.target.path);
     const route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
     expect(route.reason_code).toBe("route.indexer.approved-revision");
-    await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true, value: { stage: "approved-revision", markdown } });
+    const payload = join(root, ".tmp/maintenance-revision.json");
+    await writeFile(payload, JSON.stringify({ stage: "approved-revision", markdown }));
+    await runCliInDir(root, ["action", "complete-current", "--revision", route.revision,
+      "--input", payload, "--managed", "--format", "json"]);
   }
   expect(await readCandidateRecords(root)).toHaveLength(2);
   await approveCandidates(root, await readCandidateRecords(root));
   await closeProjectWorkspace(root);
   await buildProjectPackages(root);
-  expect(await currentLedger(root)).toEqual(ledger);
+  expect(await readProductionStage(root)).toEqual(ledger);
   expect((await readMaintenance(root)).active).toBeUndefined();
   expect((await registerKnowledgeMaintenance(root, input)).outcome).toBe("already-completed");
   for (const path of acceptedBodies) expect(await readFile(join(root, "knowledge", path), "utf8")).toContain("documented public entry point");
   const next = await collectProjectStatus(root, { managed: true });
   expect(next.workflow.current).toBeDefined();
   expect(next.workflow.current?.reason_code).not.toBe("route.indexer.approved-revision");
-  for (let wave = 0; wave < 20 && await currentLedger(root); wave++) {
-    await completePartitionStage(root);
-    const nextStructure = await currentIndexerStructureReview(root);
-    if (nextStructure && !nextStructure.approved) await completeCurrentIndexerAction({ cwd: root,
-      revision: nextStructure.revision, managed: true, value: { stage: "structure-review", decision: "approved" } });
-    await advanceCurrentIndexerLifecycle(root);
-    await completeAuthorStage(root);
-    await advanceCurrentIndexerLifecycle(root);
-    const remaining = await readCandidateRecords(root);
-    expect(remaining.length).toBeGreaterThan(0);
-    await approveCandidates(root, remaining); await closeProjectWorkspace(root); await buildProjectPackages(root);
-  }
-  expect(await currentLedger(root)).toBeUndefined();
+  for (const task of ledger!.tasks.filter(task => task.status === "issued")) await submitMaintenanceProductionArticle(root, task.path);
+  const remaining = await readCandidateRecords(root);
+  expect(remaining).toHaveLength(2);
+  await approveCandidates(root, remaining); await closeProjectWorkspace(root); await buildProjectPackages(root);
+  expect(await readProductionStage(root)).toBeUndefined();
   for (const path of acceptedBodies) expect(await readFile(join(root, "knowledge", path), "utf8")).toContain("documented public entry point");
-  expect((await collectProjectStatus(root, { managed: true })).workflow.status).toBe("complete");
-// This case finishes two revisions and all twelve sources across subsequent waves.
+  const final = await collectProjectStatus(root, { managed: true });
+  expect(final.close.state).toBe("not-checked");
+  expect((await readProjectCloseStatus(root)).state).toBe("ready");
+  expect(final.packages.every(item => item.state === "ready")).toBe(true);
+  expect(final.workflow.current?.node).toBe("reopen-cleared-task");
+  expect(final.workflow.current?.commands.every(command => command.availability === "after-human-confirmation")).toBe(true);
+// Complete the outstanding work after the two-article maintenance delivery.
 }, 180_000);
 
 test("same-version regeneration supplies current program blocks without advancing source baselines", async () => {
@@ -165,7 +142,7 @@ test("same-version regeneration supplies current program blocks without advancin
   const block = request.program_blocks![0]!;
   const route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
   await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
-    value: { stage: "approved-revision", markdown: request.target.markdown + `\n<!-- context:section id="api" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n` } });
+    value: { stage: "approved-revision", markdown: request.target.markdown + `\n<!-- context:section id="api" -->\n${block.token}\n<!-- /context:section -->\n` } });
   expect((await readCandidateRecords(root))[0]!.body).toContain(block.markdown);
   await approveCandidates(root, await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
   expect(YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8")).processed_scopes).toEqual(before);
@@ -174,7 +151,7 @@ test("same-version regeneration supplies current program blocks without advancin
 test("approved-output rebuild does not finish or clear production", async () => {
   const { root } = await deliveryWorkspace();
   await buildProjectPackages(root);
-  const ledger = await currentLedger(root);
+  const ledger = await readProductionStage(root);
   expect(ledger).toBeDefined();
   await registerKnowledgeMaintenance(root, { id: "repack", operation: "rebuild" });
   const inspected = JSON.parse(await runCliInDir(root, ["task", "maintenance-status", "--format", "json"]));
@@ -182,7 +159,7 @@ test("approved-output rebuild does not finish or clear production", async () => 
   const events = await captureRuntimeEvents(() => advance(root));
   expect(events.map(event => event.kind)).toEqual(["package.build.completed"]);
   expect(events[0]!.properties).toMatchObject({ package_count: 1, created_count: 0, updated_count: 0, unchanged_count: 1 });
-  expect(await currentLedger(root)).toEqual(ledger);
+  expect(await readProductionStage(root)).toEqual(ledger);
   expect((await readMaintenance(root)).completed.map(item => item.id)).toContain("repack");
 }, 60_000);
 
@@ -194,20 +171,20 @@ test("failed preparation retains a cancellable request and rejects stale transit
   await expect(advanceKnowledgeMaintenance(root, `sha256:${"0".repeat(64)}`)).rejects.toThrow("route changed");
   const path = join(root, "knowledge/structure.yaml");
   const structure = YAML.parse(await readFile(path, "utf8"));
-  structure.views[0].path = "guides/moved.md";
+  structure.articles[0].path = "guides/moved.md";
   await writeFile(path, YAML.stringify(structure));
   await expect(advanceKnowledgeMaintenance(root, next.revision)).rejects.toThrow("changed identity");
   expect((await maintenanceRevision(root)).action).toBe("advance");
   await cancelKnowledgeMaintenance(root, "obsolete-path");
   expect((await readMaintenance(root)).active).toBeUndefined();
-  expect(await currentLedger(root)).toBeDefined();
+  expect(await readProductionStage(root)).toBeDefined();
 }, 60_000);
 
 test("priority requests early delivery; explicit draft cancellation leaves production and approved prose intact", async () => {
   const { root, views } = await deliveryWorkspace();
   await registerKnowledgeMaintenance(root, { id: "cancel-draft", operation: "revise", targets: [{ path: views[0]!.path, instruction: "Clarify." }] });
   await buildProjectPackages(root);
-  const ledger = await currentLedger(root);
+  const ledger = await readProductionStage(root);
   const original = await readFile(join(root, "knowledge", views[0]!.path), "utf8");
   await advance(root);
   const before = await maintenanceRevision(root);
@@ -217,16 +194,14 @@ test("priority requests early delivery; explicit draft cancellation leaves produ
     value: { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "unreviewed entry point") } });
   await expect(cancelKnowledgeMaintenance(root, "cancel-draft", before.revision)).rejects.toThrow("explicit discard");
   await cancelKnowledgeMaintenance(root, "cancel-draft", (await maintenanceRevision(root)).revision);
-  expect(await currentLedger(root)).toEqual(ledger);
+  expect(await readProductionStage(root)).toEqual(ledger);
   expect(await readFile(join(root, "knowledge", views[0]!.path), "utf8")).toBe(original);
   expect(await readCandidateRecords(root)).toHaveLength(0);
-  await completePartitionStage(root);
-  const nextStructure = (await currentIndexerStructureReview(root))!;
-  if (!nextStructure.approved) await completeCurrentIndexerAction({ cwd: root, revision: nextStructure.revision,
-    managed: true, value: { stage: "structure-review", decision: "approved" } });
+  await submitMaintenanceProductionArticle(root, "architecture/examples.md");
   await registerKnowledgeMaintenance(root, { id: "urgent", operation: "revise", timing: "priority", targets: [{ path: views[0]!.path, instruction: "Clarify next." }] });
-  expect((await maintenanceRevision(root)).action).toBe("early-delivery");
-  await advance(root);
+  // Current candidates must be reviewed before the queue can trigger delivery.
+  expect((await maintenanceRevision(root)).action).toBeUndefined();
+  await requestProductionDelivery(root);
   expect((await maintenanceRevision(root)).action).toBeUndefined();
   expect((await collectProjectStatus(root, { managed: true })).workflow.current).toBeDefined();
 }, 60_000);
@@ -234,7 +209,7 @@ test("priority requests early delivery; explicit draft cancellation leaves produ
 test("a rebuild blocked by missing outputs returns the existing package Gate instead of a retry loop", async () => {
   const { root } = await deliveryWorkspace();
   await buildProjectPackages(root);
-  const ledger = await currentLedger(root);
+  const ledger = await readProductionStage(root);
   const path = join(root, "src/index.ts");
   await writeFile(path, (await readFile(path, "utf8")).replace(/packages: \[kbPackage\([^\n]+\)\]/u, "packages: []"));
   await registerKnowledgeMaintenance(root, { id: "repack-without-output", operation: "rebuild" });
@@ -245,6 +220,6 @@ test("a rebuild blocked by missing outputs returns the existing package Gate ins
   const status = await collectProjectStatus(root);
   expect(status.workflow.current?.node).toBe("choose-package-output");
   expect(status.workflow.current?.availability).toBe("requires-user");
-  expect(await currentLedger(root)).toEqual(ledger);
+  expect(await readProductionStage(root)).toEqual(ledger);
   await cancelKnowledgeMaintenance(root, "repack-without-output");
 }, 60_000);

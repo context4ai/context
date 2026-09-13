@@ -1,6 +1,0 @@
-schema: agent-graph.action.v1
-id: maintain-evidence
-runner: command
-effect: write
-command: context review maintain --input .tmp/agent-payloads/evidence-maintenance.json --format json
-inputSchema: schemas/evidence-maintenance-input.schema.json

@@ -10,6 +10,63 @@
         "markdown": {
           "type": "string",
           "minLength": 1
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "section_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "references": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "source_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "locator": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "start_line": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "end_line": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "start_line",
+                        "end_line"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "source_ref",
+                    "locator"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "section_id",
+              "references"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -66,11 +123,13 @@
                   ]
                 },
                 "minItems": 1
+              },
+              "references": {
+                "$ref": "#/anyOf/0/properties/sections/items/properties/references"
               }
             },
             "required": [
-              "section_id",
-              "content"
+              "section_id"
             ],
             "additionalProperties": false
           },

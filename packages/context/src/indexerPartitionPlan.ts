@@ -16,18 +16,15 @@ import {
   type IndexerInventoryMember,
 } from "./indexerInventoryDisposition.js";
 import type { IndexerMainPartitionWorkset } from "./indexerMainWorkset.js";
-import { canonicalIndexerNodeRef, indexerSubjectKeySchema } from "./indexerSubjectIdentity.js";
 
 const partitionBindingSchema = z.object({
   partition_workset_digest: indexerDigestSchema,
   indexer_id: indexerIdSchema,
   indexer_fingerprint: indexerDigestSchema,
   requirement_digest: indexerDigestSchema,
-  subject_key_schema_digest: indexerDigestSchema,
   source_scope_digest: indexerDigestSchema,
   source_refs: z.array(indexerCanonicalRefSchema).min(1),
   module_ref: indexerCanonicalRefSchema.nullable(),
-  partition_subject_key: indexerSubjectKeySchema,
   parent_scope_ref: indexerCanonicalRefSchema,
   inventory_digest: indexerDigestSchema,
   question_target_inventory_digest: indexerDigestSchema,
@@ -67,8 +64,6 @@ const questionTargetBindingSchema = z.object({
 
 const partitionGroupSchema = z.object({
   group_key: z.string().min(1),
-  subject_key: indexerSubjectKeySchema,
-  subject_intent: z.enum(["primary", "enrich-or-independent"]),
   logical_unit_ref: indexerCanonicalRefSchema,
   label: z.string().min(1),
   scope_change: z.object({ removed_member_ids: z.array(indexerCanonicalRefSchema).min(1) }).strict().optional(),
@@ -241,14 +236,11 @@ function validateBinding(
     binding.indexer_id !== workset.indexer_id ||
     binding.indexer_fingerprint !== workset.primary_execution_fingerprint ||
     binding.requirement_digest !== workset.requirement_set_digest ||
-    binding.subject_key_schema_digest !== workset.subject_key_schema_digest ||
     binding.source_scope_digest !== workset.source_scope_digest ||
     binding.module_ref !== workset.module_ref ||
     binding.inventory_digest !== workset.partition_inventory_digest ||
     binding.question_target_inventory_digest !==
       workset.question_target_inventory_digest ||
-    canonicalIndexerJson(binding.partition_subject_key) !==
-      canonicalIndexerJson(workset.partition_subject_key) ||
     canonicalIndexerJson(binding.source_refs) !== canonicalIndexerJson(expectedSourceRefs) ||
     binding.parent_scope_ref !== (workset.module_ref ?? workset.source_ref)
   ) {
@@ -264,6 +256,7 @@ function validateGroups(
   plan: IndexerPartitionPlan,
   allowedQuestions: ReadonlySet<string>,
   allowedTargets: ReadonlySet<string>,
+  workset: IndexerMainPartitionWorkset,
 ): Map<string, IndexerPartitionGroup> {
   assertCanonicalUnique(plan.reader_question_refs, "reader_question_refs");
   if (
@@ -273,20 +266,20 @@ function validateGroups(
     throw new TypeError("PartitionPlan must bind the complete workset reader question set");
   }
   const groups = new Map<string, IndexerPartitionGroup>();
-  const subjectKeys = new Set<string>();
   assertCanonicalUnique(plan.groups.map((group) => group.group_key), "groups.group_key");
   for (const group of plan.groups) {
     if (groups.has(group.group_key)) {
       throw new TypeError(`duplicate partition group ${group.group_key}`);
     }
-    if (canonicalIndexerNodeRef(group.subject_key) !== group.logical_unit_ref) {
-      throw new TypeError(`partition group ${group.group_key} has a non-canonical logical unit ref`);
+    const expectedUnit = indexerProtocolDigest({
+      indexer_id: plan.binding.indexer_id,
+      source_ref: workset.source_ref,
+      module_ref: workset.module_ref,
+      group_key: group.group_key,
+    });
+    if (group.logical_unit_ref !== expectedUnit) {
+      throw new TypeError(`partition group ${group.group_key} has an invalid identity`);
     }
-    const subjectIdentity = canonicalIndexerJson(group.subject_key);
-    if (subjectKeys.has(subjectIdentity)) {
-      throw new TypeError("different partition groups cannot reuse one SubjectKey");
-    }
-    subjectKeys.add(subjectIdentity);
     assertCanonicalUnique(group.reader_question_refs, `${group.group_key}.reader_question_refs`);
     if (group.reader_question_refs.some((ref) => !allowedQuestions.has(ref))) {
       throw new TypeError(`partition group ${group.group_key} references an unauthorized question`);
@@ -418,7 +411,7 @@ export function validateIndexerPartitionPlan(input: {
   }
   const allowedQuestions = new Set(input.workset.reader_question_refs);
   const allowedTargets = new Set(input.workset.allowed_question_target_refs);
-  const groups = validateGroups(plan, allowedQuestions, allowedTargets);
+  const groups = validateGroups(plan, allowedQuestions, allowedTargets, input.workset);
   validateDispositions({
     plan,
     groups,

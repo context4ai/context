@@ -3,13 +3,13 @@ import { expandArticleBlueprint } from "../project/indexerArticleBlueprint.js";
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
-import { renderIndexerDeterministicFacts, type IndexerArtifactFact, type IndexerArtifactResult } from '@c4a/context';
+import { type IndexerArtifactResult } from '@c4a/context';
 import { applySelectedPageTemplate } from '../project/indexerPageTemplate.js';
 import { splitFrontmatter } from '../project/indexerTemplateRendering.js';
 import { readerKnowledgeDescription } from '../project/packageKnowledgeProjection.js';
 
 for (const name of ['web-application-f03', 'api-service-s02', 'api-service-s03', 'sdk-library-l01', 'component-library-l02']) {
-  test(`${name} renders authorized contract facts without inventing unavailable contracts`, async () => {
+  test(`${name} preserves authored content when no writing slots were supplied`, async () => {
     const root = join(import.meta.dir, '../../../../plugins/context/skills/context-code-indexer');
     const manifest = YAML.parse(await readFile(join(root, 'context-indexer.yaml'), 'utf8'));
     const binding = manifest.provider.templates.find((item: { id: string }) => item.id === `${name}-page`);
@@ -18,20 +18,14 @@ for (const name of ['web-application-f03', 'api-service-s02', 'api-service-s03',
     const make = (): Extract<IndexerArtifactResult['artifacts'][number], {representation: 'sections'}> => ({
       artifact_id: 'entry', artifact_kind: 'content', artifact_policy_variant: 'standard', representation: 'sections',
       sections: [{ section_key: 'entry--intro', owner_indexer_id: 'sample', document_kind: 'reference', reader_goal: template.contract.reader_goal,
-        artifact_kind: 'content', blocks: [{ block_id: 'intro', layer: 'semantic-prose', markdown: 'Read the declared input before tracing its consumer.', evidence_refs: ['evidence:input'] }] }],
+        artifact_kind: 'content', blocks: [{ block_id: 'intro', layer: 'semantic-prose', markdown: 'Read the declared input before tracing its consumer.', references: [] }] }],
     });
-    const fact: IndexerArtifactFact = { fact_ref: 'fact:input', fact_kind: 'symbol', subject_key: { protocol: 'context.subject-key/v1', namespace: 'sample', kind: 'component', local_key: 'input' },
-      evidence_refs: ['evidence:input'], value: { name: 'Request', members: [{ name: 'id', typeAnnotation: 'string', optional: false }] } };
     const artifact = make();
-    const used = applySelectedPageTemplate({ artifact, template, facts: [fact], articleKey: 'entry' });
-    const blocks = artifact.sections.flatMap(section => section.blocks).filter(block => block.layer === 'deterministic-block');
-    expect(blocks.length).toBeGreaterThan(0);
-    const rendered = blocks.map(block => renderIndexerDeterministicFacts({ renderer: block.renderer, facts: used.filter(item => block.fact_refs.includes(item.fact_ref)) })).join('\n');
-    expect(rendered).toContain('| Request | id | string | required |');
-    expect(used).toEqual([fact]);
-    const empty = make();
-    applySelectedPageTemplate({ artifact: empty, template, facts: [], articleKey: 'entry' });
-    expect(empty.sections.flatMap(section => section.blocks).some(block => block.layer === 'deterministic-block')).toBe(false);
+    const original = structuredClone(artifact.sections);
+    applySelectedPageTemplate({ artifact, template, articleKey: 'entry' });
+    expect(artifact.sections).toEqual(original);
+    expect(artifact.template_id).toBe(template.contract.template_id);
+    expect(JSON.stringify(artifact)).not.toContain('fact_refs');
   });
 }
 

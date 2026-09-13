@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { inspectWorkspaceVersion, recordWorkspaceVersion, readWorkspaceChangelog } from "../project/workspaceChangelog.js";
+import { inspectWorkspaceVersion, recordWorkspaceVersion, readWorkspaceChangelog, workspaceContentSnapshot } from "../project/workspaceChangelog.js";
 
 test("formal changes require increasing versions and typed history; temporary progress does not", async () => {
   const root = await mkdtemp(join(tmpdir(), "context-versions-"));
@@ -32,4 +32,31 @@ test("formal changes require increasing versions and typed history; temporary pr
     const noChange = await inspectWorkspaceVersion(root);
     await expect(recordWorkspaceVersion(root, { ...input, expected_digest: noChange.expected_digest, version: "0.1.2" })).rejects.toThrow("No formal content");
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("an independent workspace ignored by its parent Git still versions formal content, not nested Git or temporary files", async () => {
+  const parent = resolve(".tmp/workspace-version-tests");
+  await mkdir(parent, { recursive: true });
+  const outer = await mkdtemp(join(parent, "ignored-"));
+  try {
+    execFileSync("git", ["init", "-q", outer]);
+    await writeFile(join(outer, ".gitignore"), "workspace/\n");
+    const root = join(outer, "workspace");
+    await mkdir(join(root, "knowledge"), { recursive: true });
+    await mkdir(join(root, "sources/repo/sample/.git"), { recursive: true });
+    await mkdir(join(root, "sources/repo/sample/.tmp"), { recursive: true });
+    await writeFile(join(root, "package.json"), JSON.stringify({ version: "0.0.0" }));
+    await writeFile(join(root, "knowledge/answer.md"), "Answer");
+    await writeFile(join(root, "sources/repo/sample/source.ts"), "export const answer = 42;");
+    await writeFile(join(root, "sources/repo/sample/.git/config"), "Process metadata");
+    await writeFile(join(root, "sources/repo/sample/.tmp/task.md"), "Temporary task");
+    expect(Object.keys(await workspaceContentSnapshot(root))).toEqual(["knowledge/answer.md", "package.json", "sources/repo/sample/source.ts"]);
+    const initial = await inspectWorkspaceVersion(root);
+    expect(initial.changed).toBe(true);
+    await recordWorkspaceVersion(root, { expected_digest: initial.expected_digest, version: "0.0.1", title: "Initial delivery",
+      changes: ["Add the answer"], triggers: [{ kind: "initial", description: "Fixture" }], actor: { kind: "user", name: "Fixture" } });
+    expect((await inspectWorkspaceVersion(root)).current).toBe(true);
+    await writeFile(join(root, "knowledge/answer.md"), "Corrected answer");
+    expect((await inspectWorkspaceVersion(root)).updated).toEqual(["knowledge/answer.md"]);
+  } finally { await rm(outer, { recursive: true, force: true }); }
 });

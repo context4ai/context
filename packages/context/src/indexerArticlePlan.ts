@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { IndexerArtifactResult } from "./indexerArtifactResult.js";
-import { indexerKnowledgeDependencySchema } from "./indexerKnowledgeDependency.js";
 
 /** Reader titles can change; these keys remain stable across revisions. */
 export const indexerArticleKeySchema = z.string().regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u);
@@ -17,7 +16,6 @@ export const indexerArticlePlanSchema = z.object({
     required: z.boolean(),
   }).strict()).min(1),
   question_targets: z.array(z.string().min(1)).default([]),
-  knowledge_dependencies: z.array(indexerKnowledgeDependencySchema).optional(),
 }).strict();
 
 export type IndexerArticlePlan = z.infer<typeof indexerArticlePlanSchema>;
@@ -51,7 +49,7 @@ export function indexerArticleSectionKey(article: string, section: string): stri
 }
 
 /** Applies to both semantic submissions and programmatic Providers. */
-export function validateIndexerPlannedArticles(result: IndexerArtifactResult, articles: readonly IndexerArticlePlan[]): Array<{ code: string; message: string }> {
+export function validateIndexerPlannedArticles(result: Pick<IndexerArtifactResult, "source_role" | "artifacts">, articles: readonly IndexerArticlePlan[]): Array<{ code: string; message: string }> {
   const warnings: Array<{ code: string; message: string }> = [];
   validateIndexerArticlePlan(articles);
   const planned = new Map(articles.map(article => [article.key, article]));

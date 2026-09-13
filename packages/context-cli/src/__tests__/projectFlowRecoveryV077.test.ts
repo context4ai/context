@@ -1,16 +1,20 @@
+import { initialRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { test, expect, afterEach } from 'bun:test';
-import { readFile, writeFile, rm, cp } from 'node:fs/promises';
+import { readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import YAML from 'yaml';
 import { createDocumentRevisionWorkspace, DOCUMENT_REVISION_SOURCE_REF } from './projectDocumentRevisionV074.fixture.js';
-import { completePartitionStage, completeAuthorStage, approveCandidates } from './projectDocumentRevisionStages.fixture.js';
-import { currentIndexerStructureReview } from '../project/indexerStructureReview.js';
+import { approveCandidates } from './projectDocumentRevisionStages.fixture.js';
+import { readProductionRequirements } from '../project/productionRequirements.js';
+import { prepareProductionPlanningMaterials } from '../project/productionPlanningMaterials.js';
+import { produceFixtureArticles } from './productionArticleWorkflow.fixture.js';
+import { readProductionStage } from '../project/productionStageStore.js';
+import { prepareCurrentProductionStage } from '../project/productionStagePreparation.js';
 import { completeCurrentIndexerAction } from './knowledgeMapReview.fixture.js';
 import { readCandidateRecords } from '../project/candidateLedger.js';
 import { closeProjectWorkspace } from '../project/close.js';
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
-import { acceptStarterPackageTemplates } from '../project/packageTemplateReview.js';
 import { beginDocumentRevision } from '../project/documentRevision.js';
 import { readApprovedRevision, completeApprovedRevision } from '../project/approvedRevision.js';
 import { collectProjectStatus } from '../project/status.js';
@@ -19,18 +23,9 @@ import { readMaintenance } from '../project/maintenanceStorage.js';
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root,{recursive:true,force:true}); });
 async function setup() {
- const root=await createDocumentRevisionWorkspace(); roots.push(root);
- await cp(new URL('../../../context/templates/package-templates/kb', import.meta.url),join(root,'src/package-templates/kb'),{recursive:true});
- const p=join(root,'src/index.ts');
- await writeFile(p,(await readFile(p,'utf8')).replace('defineProject, source','defineProject, kbPackage, source').replace('packages: []','packages: [kbPackage({ name: "review-kb", template: { path: "src/package-templates/kb", vars: {} } })]'));
- await completePartitionStage(root);
- const structure=(await currentIndexerStructureReview(root))!;
- await completeCurrentIndexerAction({cwd:root,revision:structure.revision,managed:true,value:{stage:'structure-review',decision:'approved'}});
- await completeAuthorStage(root);
- await approveCandidates(root,await readCandidateRecords(root));
- await closeProjectWorkspace(root); await acceptStarterPackageTemplates({projectRoot:root}); await buildProjectPackages(root);
- const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).views;
- return {root,path:views[0].path};
+ const root = await initialRevisionKnowledge(roots);
+ const articles = YAML.parse(await readFile(join(root, 'knowledge/structure.yaml'), 'utf8')).articles;
+ return {root, path: articles[0].path};
 }
 test('concurrent approved edit provides a merge Route and rejects an outdated merge',async()=>{
  const {root,path}=await setup();
@@ -73,7 +68,7 @@ test('repeated CLI regeneration starts a new cycle after completion, preserving 
  const revision=(await readApprovedRevision(root))!;
  expect(revision.program_blocks!.length).toBeGreaterThan(0);
  const block=revision.program_blocks![0]!;
- await completeApprovedRevision({projectRoot:root,revision:revision.revision,markdown:revision.target.markdown+`\n<!-- context:section id="api-audit" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n`});
+ await completeApprovedRevision({projectRoot:root,revision:revision.revision,markdown:revision.target.markdown+`\n<!-- context:section id="api-audit" -->\n${block.token}\n<!-- /context:section -->\n`});
  await approveCandidates(root,await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
  const source=join(root,'fixture-source');
  await writeFile(join(source,'src/index.ts'),'export const answer = 43;\n');
@@ -84,31 +79,35 @@ test('repeated CLI regeneration starts a new cycle after completion, preserving 
  expect(second).toMatchObject({outcome:'registered'});expect(state.pending).toHaveLength(1);
  expect((await beginDocumentRevision(request))).toMatchObject({outcome:'already-registered',id: "id" in second ? second.id : undefined});
 },60000);
-test('module adjustment retains independent same-source worksets and accepted cache',async()=>{
+test('multiple module labels guide same-source production without path mappings or Provider records',async()=>{
  const root=await createDocumentRevisionWorkspace();roots.push(root);
  const file=join(root,'src/indexers.yaml');const registry=YAML.parse(await readFile(file,'utf8'));
  registry.requirements.push({...registry.requirements[0],id:'peer-purpose',purpose:'Explain a separately selected module.',target_scope:{targets:[{source_ref:DOCUMENT_REVISION_SOURCE_REF,module_refs:['module:peer']}]},evidence_source_scope:{targets:[{source_ref:DOCUMENT_REVISION_SOURCE_REF,module_refs:['module:peer']}]}});
- registry.indexers.push({...registry.indexers[0],id:'peer-indexer',requirement_bindings:[{...registry.indexers[0].requirement_bindings[0],requirement_ref:'peer-purpose',owned_scope:{ref:'requirement:peer-purpose#target_scope'}}],read_scope:{refs:['requirement:peer-purpose#target_scope']}});
- await writeFile(file,YAML.stringify(registry));await completePartitionStage(root);
- const structure=(await currentIndexerStructureReview(root))!;
- await completeCurrentIndexerAction({cwd:root,revision:structure.revision,managed:true,value:{stage:'structure-review',decision:'approved'}});
- await completeAuthorStage(root);
- const {currentLedger,currentSpec}=await import('../project/indexerMainRunStoreRecords.js');
- const {adjustCurrentTaskSources}=await import('../project/taskSourceAdjustment.js');
- const before=(await currentLedger(root))!;
- const entries=await Promise.all(before.entries.map(async entry=>({workset:entry.workset_digest,state:entry.state,module:(await currentSpec({projectRoot:root,request_digest:entry.execution_request_digest})).request.workset.module_ref})));
- const result=await adjustCurrentTaskSources(root,{instruction:'Refresh only app for its original reader purpose.',scopes:[{source_ref:DOCUMENT_REVISION_SOURCE_REF,requirement_ref:'workspace-knowledge',module_refs:['module:app']}]});
- const after=(await currentLedger(root))!;
- const peers=entries.filter(e=>e.module==='module:peer');expect(peers.length).toBeGreaterThan(0);
- expect(peers.every(peer=>after.entries.find(e=>e.workset_digest===peer.workset)?.state===peer.state)).toBe(true);
- expect("retained_worksets" in result && result.retained_worksets).toBe(peers.length);
- const {acceptedCachePath}=await import('../project/indexerMainRunStoreRecords.js');
- for(const peer of peers.filter(item=>item.state==='accepted')) { const entry=before.entries.find(item=>item.workset_digest===peer.workset)!; expect((await readFile(join(root,acceptedCachePath(entry.execution_request_digest)),'utf8')).length).toBeGreaterThan(0); }
+ await writeFile(file,YAML.stringify(registry));
+ const requirements=await readProductionRequirements(root);
+ const materials=await prepareProductionPlanningMaterials({projectRoot:root,requirements});
+ expect(materials.gaps).toEqual([]);
+ const skeleton=materials.materials.sources.get(DOCUMENT_REVISION_SOURCE_REF)!;
+ expect(skeleton).toContain('module:app');expect(skeleton).toContain('module:peer');
+ expect(skeleton).toContain('src/index.ts');expect(skeleton).toContain('src/secondary.ts');
+ const configuration=await readFile(file,'utf8');
+ await produceFixtureArticles(root,['index','secondary'].map(name=>({
+   path:`architecture/${name}-entry.md`,question:`Explain ${name}`,sources:[DOCUMENT_REVISION_SOURCE_REF],
+   markdown:`---\ntitle: ${name}\ndescription: Explain the exported value\n---\n\n<!-- context:section id="value" -->\nThe ${name} entry exports its value.\n<!-- /context:section -->\n`,
+   references:{sections:[{id:'value',references:[{source_ref:DOCUMENT_REVISION_SOURCE_REF,locator:{path:`src/${name}.ts`,start_line:1,end_line:1}}]}]},
+ })));
+ const before=await readCandidateRecords(root);
+ const stage=(await readProductionStage(root))!;
+ await prepareCurrentProductionStage({projectRoot:root,revision:stage.id});
+ expect(await readCandidateRecords(root)).toEqual(before);
+ expect(await readFile(file,'utf8')).toBe(configuration);
+ expect(stage.tasks.every(task=>task.status==='accepted')).toBe(true);
+ expect(stage.tasks.every(task=>!('module_paths' in task))).toBe(true);
 },60000);
 test('revisiting an earlier page preserves interrupted sibling regeneration and program blocks',async()=>{
  const {root}=await setup();
  const {registerKnowledgeMaintenance}=await import('../project/knowledgeMaintenance.js');
- const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).views;
+ const views=YAML.parse(await readFile(join(root,'knowledge/structure.yaml'),'utf8')).articles;
  await registerKnowledgeMaintenance(root,{id:'two-api-pages',operation:'regenerate',targets:views.map((view: { path: string })=>({path:view.path,instruction:'Regenerate this page API table.'}))});
  await advanceKnowledgeMaintenance(root,(await maintenanceRevision(root)).revision);
  const first=(await readApprovedRevision(root))!;
@@ -120,7 +119,7 @@ test('revisiting an earlier page preserves interrupted sibling regeneration and 
  const resumed=(await readApprovedRevision(root))!;
  expect(resumed.target.path).toBe(second.target.path);expect(resumed.regenerate).toBe(true);expect(resumed.program_blocks).toEqual(second.program_blocks);
  const block=resumed.program_blocks![0]!;
- await completeApprovedRevision({projectRoot:root,revision:resumed.revision,markdown:resumed.target.markdown+`\n<!-- context:section id="regenerated" kind="content" source_ref="${block.source_ref}" -->\n${block.token}\n<!-- /context:section -->\n`});
+ await completeApprovedRevision({projectRoot:root,revision:resumed.revision,markdown:resumed.target.markdown+`\n<!-- context:section id="regenerated" -->\n${block.token}\n<!-- /context:section -->\n`});
  expect((await readCandidateRecords(root)).find(item=>item.path===second.target.path)!.body).toContain(block.markdown);
  await approveCandidates(root,await readCandidateRecords(root)); await closeProjectWorkspace(root); await buildProjectPackages(root);
  expect((await readMaintenance(root)).active).toBeUndefined();

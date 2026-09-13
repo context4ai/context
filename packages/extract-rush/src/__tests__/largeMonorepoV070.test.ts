@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import YAML from "yaml";
 import {
   buildIndexerMainWorkset,
-  canonicalIndexerNodeRef,
+  indexerProtocolDigest,
   indexerAuthorizedPartitionStrategies,
   indexerInventoryMembersDigest,
   indexerPartitionPlanCanonicalHash,
@@ -139,17 +139,11 @@ function completeProjectPlan(input: {
 }): IndexerPartitionPlan {
   const groups = input.inventory.map((member) => {
     const localKey = member.member_id.slice("member:project/".length);
-    const subjectKey = {
-      protocol: "context.subject-key/v1" as const,
-      namespace: "anonymous-rush",
-      kind: "rush-project",
-      local_key: localKey,
-    };
     return {
       group_key: `project:${localKey}`,
-      subject_key: subjectKey,
-      subject_intent: "primary" as const,
-      logical_unit_ref: canonicalIndexerNodeRef(subjectKey),
+
+      logical_unit_ref: indexerProtocolDigest({ indexer_id: input.workset.indexer_id,
+        source_ref: input.workset.source_ref, module_ref: input.workset.module_ref, group_key: `project:${localKey}` }),
       label: localKey,
       reader_question_refs: ["question:responsibility-and-entry"],
       question_target_bindings: [{
@@ -168,11 +162,11 @@ function completeProjectPlan(input: {
       indexer_id: input.workset.indexer_id,
       indexer_fingerprint: input.workset.primary_execution_fingerprint,
       requirement_digest: input.workset.requirement_set_digest,
-      subject_key_schema_digest: input.workset.subject_key_schema_digest,
+
       source_scope_digest: input.workset.source_scope_digest,
       source_refs: [SOURCE_REF],
       module_ref: input.workset.module_ref,
-      partition_subject_key: input.workset.partition_subject_key,
+
       parent_scope_ref: input.workset.module_ref!,
       inventory_digest: input.workset.partition_inventory_digest,
       question_target_inventory_digest: input.workset.question_target_inventory_digest,
@@ -271,17 +265,12 @@ describe("anonymous large Rush project-first fixture", () => {
       requirement_set_digest: digest("3"),
       primary_execution_fingerprint: digest("b"),
       profile_contract_digest: digest("4"),
-      subject_key_schema_digest: digest("5"),
+
       source_scope_digest: digest("6"),
       source_binding_digest: digest("7"),
       primary_resource_binding_digest: digest("8"),
       question_target_inventory_digest: digest("9"),
-      partition_subject_key: {
-        protocol: "context.subject-key/v1",
-        namespace: "anonymous-rush",
-        kind: "monorepo-container",
-        local_key: "root",
-      },
+
       strategy_set_digest: indexerPartitionStrategySetDigest(authorized),
       reader_question_refs: ["question:responsibility-and-entry"],
       partition_input_digests: [digest("a")],

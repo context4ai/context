@@ -130,14 +130,7 @@ function manifest(input: {
                   required: true,
                 }],
               },
-              subject_key_schema: {
-                version: 1,
-                namespace: { operator: "canonical-source-module-namespace" },
-                kinds: [{
-                  id: "component",
-                  local_key: { operator: "canonical-export-family" },
-                }],
-              },
+
             }],
           },
         }

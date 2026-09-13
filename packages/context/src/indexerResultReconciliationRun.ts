@@ -16,7 +16,6 @@ import {
   coverageDomainCompletionSchema,
   dispositionMap,
   indexerCoverageCompletionReportSchema,
-  mainEvidenceMeetsContract,
   materialGap,
   ownerCells,
   questionPairs,
@@ -66,21 +65,6 @@ function ownerCapabilityGaps(
         gaps.push(capabilityGap(
           owner,
           "inventory-material-gap-missing",
-          owner.owner_indexer_ids,
-        ));
-      }
-    }
-    for (const disposition of result.logical_unit.target_resolution_dispositions) {
-      if (disposition.disposition === "unsupported") {
-        gaps.push(capabilityGap(
-          owner,
-          "target-resolution-unsupported",
-          owner.owner_indexer_ids,
-        ));
-      } else if (disposition.disposition === "request-material") {
-        gaps.push(capabilityGap(
-          owner,
-          "target-resolution-material-required",
           owner.owner_indexer_ids,
         ));
       }
@@ -172,25 +156,11 @@ export function reconcileIndexerResults(input: {
         ? "provider-requested-material"
         : "provider-omitted-required-question",
     });
-    if (current?.disposition.state === "answered" && mainEvidenceMeetsContract({
-      pair,
-      result: current.result,
-      evidence_binding_digest: current.disposition.evidence_binding_digest,
-      evidence_facts: input.target_facts[pair.target.target_ref] ?? {},
-      allowed_selector_fact_paths: input.allowed_selector_fact_paths,
-    })) {
+    if (current?.disposition.state === "answered") {
       answered.add(pair.question_key);
       continue;
     }
-    materialGaps.push(current?.disposition.state === "answered"
-      ? materialGap({
-          registry,
-          pair,
-          sources,
-          disposition: current,
-          reason_code: "main-evidence-contract-not-met",
-        })
-      : placeholder);
+    materialGaps.push(placeholder);
   }
   const uniqueCapabilityGaps = [...new Map(capabilityGaps.map((gap) => [
     `${gap.owner_cell_ref}\u0000${gap.reason_code}`,

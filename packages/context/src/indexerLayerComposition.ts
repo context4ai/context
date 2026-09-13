@@ -42,10 +42,6 @@ const evidenceRefsSchema = z.array(indexerEvidenceRefSchema).superRefine((value,
   addDuplicateIssues(value.map((item) => item.ref), context, "evidence_refs");
 });
 
-const nonEmptyEvidenceRefsSchema = z.array(indexerEvidenceRefSchema).min(1)
-  .superRefine((value, context) => {
-    addDuplicateIssues(value.map((item) => item.ref), context, "evidence_refs");
-  });
 
 const factEnrichmentSchema = z.object({
   target_ref: indexerCanonicalRefSchema,
@@ -66,7 +62,6 @@ const derivedArtifactProposalSchema = z.object({
   composer_ref: indexerComposerRefSchema,
   target_node_ref: indexerCanonicalRefSchema,
   artifact: indexerArtifactSchema,
-  evidence_refs: nonEmptyEvidenceRefsSchema,
 }).strict();
 
 const factPayloadSchema = z.object({
@@ -222,7 +217,7 @@ function fragmentItems(payload: IndexerLayerFragmentPayload): Array<{
   target_ref?: string;
   target_node_ref?: string;
   composer_ref?: string;
-  evidence_refs: Array<{ ref: string }>;
+  evidence_refs?: Array<{ ref: string }>;
 }> {
   if (payload.protocol === "context.indexer.fragment.fact-enrichment/v1") {
     return payload.facts;
@@ -284,7 +279,7 @@ function validateFragmentPayload(
       throw new TypeError(`layer fragment repeats item identity ${identity}`);
     }
     identities.add(identity);
-    const evidenceRefs = item.evidence_refs.map((evidence) => evidence.ref);
+    const evidenceRefs = item.evidence_refs?.map((evidence) => evidence.ref) ?? [];
     if ([...evidenceRefs].sort().some((value, i) => value !== evidenceRefs[i])) {
       throw new TypeError("layer fragment evidence_refs must use canonical ordering");
     }

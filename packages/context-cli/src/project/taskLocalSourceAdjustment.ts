@@ -1,9 +1,9 @@
-import { withApprovedKnowledgeSupportSources } from "./approvedKnowledgeRebinding.js";
-import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentIndexerRegistry.js";
+import { readProductionRequirements } from "./productionRequirements.js";
+import { readProductionStage } from "./productionStageStore.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
+import { validateArticleStructureEntries, indexerProtocolDigest, type IndexerProjectFileTarget } from "@c4a/context";
 import { readApprovedRevision, requestDigest, currentApprovedRevisionTarget } from "./approvedRevision.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
@@ -19,8 +19,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
   instruction: string; refresh?: boolean | undefined;
 }) {
   const { readMaintenance } = await import("./maintenanceStorage.js");
-  const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
-  if ((await readMaintenance(root)).active && await currentLedger(root)) throw new TypeError("Finish or cancel the active maintenance draft before adjusting shared source inputs through the production task's task adjust route. The original ledger still uses those fixed inputs.");
+  if ((await readMaintenance(root)).active && await readProductionStage(root)) throw new TypeError("Finish or cancel the active maintenance draft before adjusting shared source inputs. The current production stage still uses those fixed inputs.");
   const revision = await readApprovedRevision(root);
   const update = revision ? undefined : await readKnowledgeUpdate(root);
   const current = revision ?? update;
@@ -28,11 +27,11 @@ export async function adjustLocalRevisionSources(root: string, input: {
   const selected = [...new Set(input.scopes.map((scope) => scope.source_ref))];
   const bound = revision ? [...revision.target.source_refs, ...(revision.processed_scopes ?? []).map((scope) => scope.source_ref)]
     : update!.scopes.map((scope) => scope.source_ref);
-  const { registry } = await loadIndexerRegistry(root);
+  const registry = await readProductionRequirements(root);
   const additions = input.scopes.filter((scope) => !bound.includes(scope.source_ref));
   for (const scope of additions) {
     const requirement = registry.requirements.find((item) => item.id === scope.requirement_ref);
-    const targets = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope.targets];
+    const targets = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []];
     if (!targets?.some((target) => target.source_ref === scope.source_ref) || !targets.some((target) => bound.includes(target.source_ref))) {
       throw new TypeError("A new same-task source requires its explicit requirement_ref and a confirmed scope connecting it to this task; no independent task is inferred.");
     }
@@ -65,8 +64,8 @@ export async function adjustLocalRevisionSources(root: string, input: {
     if (revision) {
       const affected = additions.length > 0 || revision.target.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)));
       const currentTarget = affected ? await currentApprovedRevisionTarget(root, revision) : revision.target;
-      const { refresh_sources: _refresh, candidate, knowledge_input: _knowledge, ...rest } = revision;
-      void _refresh; void _knowledge;
+      const { refresh_sources: _refresh, candidate, ...rest } = revision;
+      void _refresh;
       // A scope baseline covers already delivered pages too. Revisit every
       // approved source-bound page after changing its fixed input, without
       // replacing approved prose or introducing per-page version records.
@@ -76,12 +75,11 @@ export async function adjustLocalRevisionSources(root: string, input: {
       const pending = [...(revision.pending_targets ?? [])];
       const known = new Set([revision.target.path, ...pending.map((item) => item.path)]);
       const structure = await readKnowledgeStructure(root);
-      for (const view of Array.isArray(structure.parsed?.views) ? structure.parsed.views : []) {
-        if (!view || typeof view !== "object" || typeof view.path !== "string" || known.has(view.path)) continue;
-        if (!Array.isArray(view.sources) || !view.sources.some((ref: unknown) => typeof ref === "string" &&
-          changedSources.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)))) continue;
-        pending.push({ path: view.path, instruction: `Reassess the current approved page against the adjusted source. Preserve its text if unaffected.\n${input.instruction}` });
-        known.add(view.path);
+      for (const article of validateArticleStructureEntries(structure.parsed?.articles ?? [])) {
+        if (known.has(article.path) || !article.sections.some(section =>
+          section.references.some(reference => changedSources.includes(reference.source_ref)))) continue;
+        pending.push({ path: article.path, instruction: `Reassess this page against the changed source. Preserve unaffected text and inspect changes outside cited regions for new topics.\n${input.instruction}` });
+        known.add(article.path);
       }
       const keptBatch = (revision.batch_candidates ?? []).filter((item) => {
         if (!item.source_refs.some((ref) => selected.some((source) => ref === source || ref.startsWith(`${source}#`) || ref.startsWith(`${source}/`)))) return true;
@@ -95,13 +93,13 @@ export async function adjustLocalRevisionSources(root: string, input: {
         return false;
       });
       const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
-      const programBlocks = affected ? await prepareRevisionProgramBlocks(root, revision.target.source_refs, scopes.filter((scope) => selected.includes(scope.source_ref))) : revision.program_blocks;
-      const { prepareApprovedKnowledgeRevision } = await import("./approvedKnowledgeRevision.js");
-      const knowledge = affected ? await prepareApprovedKnowledgeRevision(root, currentTarget.previous_path ?? currentTarget.path, registry, revision.knowledge_input?.rebinding) : revision.knowledge_input;
-      const payload = { ...rest, ...(knowledge === undefined ? {} : { knowledge_input: knowledge }), ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
+      const programBlocks = affected && revision.regenerate
+        ? await prepareRevisionProgramBlocks(root, revision.target.source_refs, scopes.filter((scope) => selected.includes(scope.source_ref)),
+          currentTarget.sections.flatMap(section => section.references))
+        : revision.program_blocks;
+      const payload = { ...rest, ...(programBlocks ? { program_blocks: programBlocks } : {}), review_ready: false, batch_candidates: keptBatch, pending_targets: pending, ...(revision.processed_scopes || additions.length ? { processed_scopes: scopes, requirements } : {}),
         target: affected ? { ...currentTarget, markdown: candidate?.body ?? currentTarget.markdown, source_refs: [...new Set([...currentTarget.source_refs, ...additions.map((scope) => scope.source_ref)])] } : revision.target,
         instruction: affected ? `${revision.instruction}\n\n${input.instruction}` : revision.instruction };
-      if (knowledge?.rebinding) payload.target = withApprovedKnowledgeSupportSources(payload.target, knowledge);
       next = { ...payload, revision: requestDigest(payload), ...(!affected && candidate ? { candidate } : {}) };
       if (affected && candidate) discardIds.add(candidate.candidate_id);
     } else {
@@ -128,6 +126,7 @@ export async function adjustLocalRevisionSources(root: string, input: {
         : { path: CANDIDATE_LEDGER_FILE, operation: "write", base_digest: durableContentDigest(ledger), target_digest: durableContentDigest(kept), content: kept });
     }
   }
+  targets.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
   await runDurableMultiFileTransaction({ projectRoot: root, kind: "adjust-local-update", proposal_digest: indexerProtocolDigest(targets), targets });
   return { action: input.refresh ? "adjusted" : "acquisition-authorized", source_refs: selected,
     retained_pending_pages: revision?.pending_targets?.length ?? update?.candidates.length ?? 0,

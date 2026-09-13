@@ -1,55 +1,39 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+buildIndexerCustomizationPlan,
+buildIndexerFixedDependencySet,
+deriveIndexerProgramExecutionPolicy,
+indexerProtocolDigest,
+indexerProviderBundleIntegrity,
+loadIndexerProviderManifest,
+parseIndexerRegistry,
+resolvedProviderReceiptDigest,
+type IndexerJson,
+type IndexerRegistry,
+type ResolvedProviderBundle
+} from "@c4a/context";
+import { describe,expect,test } from "bun:test";
+import { mkdir,mkdtemp,writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
 import YAML from "yaml";
 import {
-  buildIndexerDependencyIntentSet,
-  buildIndexerProjectProposal,
-  buildIndexerProviderSelectionProposal,
-  buildIndexerCustomizationPlan,
-  buildIndexerFixedDependencySet,
-  deriveIndexerProgramExecutionPolicy,
-  indexerProtocolDigest,
-  indexerProjectContentDigest,
-  indexerRegistryDigests,
-  indexerProviderBundleIntegrity,
-  loadIndexerProviderManifest,
-  parseIndexerRegistry,
-  resolvedProviderReceiptDigest,
-  type IndexerJson,
-  type IndexerRegistry,
-  type ResolvedProviderBundle,
-} from "@c4a/context";
-import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
-import { buildIndexerProjectConfirmationRoute } from "../project/indexerProjectGateRoute.js";
-import { buildIndexerProgramExecutionAuthorizationRoute } from
-  "../project/indexerProgramExecutionAuthorizationRoute.js";
-import { CONTEXT_WORKFLOW_AUTHORITIES } from "../project/workflow/workflowTypes.js";
+bundledIndexerOperatorContract,
+bundledIndexerProfileContract,
+} from "../project/indexerBaseContracts.js";
 import { loadIndexerCustomization } from "../project/indexerCustomization.js";
 import { collectIndexerBundleFiles } from "../project/indexerDistributionBuild.js";
+import {
+authorizeProjectIndexerProgramExecution,
+buildIndexerProgramExecutionAuthorizationInput,
+buildProjectIndexerProgramExecutionAuthorizationReport,
+buildProjectLocalIndexerProgramExecutionAuthorizationReportFromWorkspace,
+} from "../project/indexerProgramExecutionAuthorization.js";
 import { stageIndexerProviderBundle } from "../project/indexerProviderStage.js";
 import {
-  buildIndexerProgramExecutionAuthorizationInput,
-  buildProjectIndexerProgramExecutionAuthorizationReport,
-  buildProjectLocalIndexerProgramExecutionAuthorizationReportFromWorkspace,
-} from "../project/indexerProgramExecutionAuthorization.js";
-import {
-  bundledIndexerOperatorContract,
-  bundledIndexerProfileContract,
-} from "../project/indexerBaseContracts.js";
-import {
-  validateIndexerSelectionFinal,
-  validateIndexerSelectionStatic,
-  type IndexerResolvedSelectionInput,
+validateIndexerSelectionFinal,
+validateIndexerSelectionStatic,
+type IndexerResolvedSelectionInput,
 } from "../project/indexerSelectionValidation.js";
-import { persistCurrentIndexerProviderSetup } from
-  "../project/indexerCurrentProviderState.js";
-import {
-  advanceCurrentIndexerProviderFinalizationIfReady,
-  buildCurrentIndexerProviderContinuationRoute,
-  completeCurrentIndexerProviderProgramAuthorization,
-} from "../project/indexerCurrentProviderContinuation.js";
 
 const NOW = new Date("2026-08-27T12:00:00.000Z");
 const POLICY_DIGEST = `sha256:${"d".repeat(64)}`;
@@ -265,108 +249,7 @@ async function fixture(
 }
 
 describe("two-stage Indexer selection validation", () => {
-  test("keeps non-allowlisted Provider program authorization on the current Route", async () => {
-    const sample = await fixture(true, "project-authorized");
-    await mkdir(join(sample.workspace, "src"), { recursive: true });
-    await writeFile(join(sample.workspace, "src", "indexers.yaml"), YAML.stringify({
-      ...sample.registry,
-      indexers: [],
-    }), "utf8");
-    const proposal = buildIndexerProviderSelectionProposal({
-      protocol: "context.indexer.selection-proposal-input/v1",
-      project_ref: "project:sample",
-      registry: sample.registry,
-    });
-    await persistCurrentIndexerProviderSetup({
-      projectRoot: sample.workspace,
-      proposal,
-      resolved: [{ ...sample.resolved, execution_policy_digest: null }],
-    });
 
-    const route = await buildCurrentIndexerProviderContinuationRoute({
-      projectRoot: sample.workspace,
-      authorities: [],
-      managed: false,
-    });
-    expect(route).toMatchObject({
-      node: "authorize-current-indexer-provider-program",
-      availability: "requires-user",
-      gate: {
-        id: "authorize-indexer-program-execution",
-        authority: CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution,
-        resolution: "user",
-        resolution_action: {
-          id: "authorize-current-indexer-provider-program",
-          runner: "agent",
-          effect: "external",
-          input: { stage: "provider-program-authorization" },
-          output_schema: {
-            id: "schema.authorize-current-indexer-provider-program.output",
-          },
-        },
-      },
-    });
-    expect(route?.action).toBeUndefined();
-    expect(route?.commands[0]?.command).toContain("action complete-current");
-
-    expect(await completeCurrentIndexerProviderProgramAuthorization({
-      projectRoot: sample.workspace,
-      decision: "rejected",
-    })).toBe("selection-rejected");
-    expect(await buildCurrentIndexerProviderContinuationRoute({
-      projectRoot: sample.workspace,
-      authorities: [],
-      managed: false,
-    })).toBeUndefined();
-  });
-
-  test("projects completed Provider setup as deterministic Graph finalization", async () => {
-    const sample = await fixture();
-    await mkdir(join(sample.workspace, "src"), { recursive: true });
-    await writeFile(join(sample.workspace, "src", "indexers.yaml"), YAML.stringify({
-      ...sample.registry,
-      indexers: [],
-    }), "utf8");
-    const proposal = buildIndexerProviderSelectionProposal({
-      protocol: "context.indexer.selection-proposal-input/v1",
-      project_ref: "project:sample",
-      registry: sample.registry,
-    });
-    await persistCurrentIndexerProviderSetup({
-      projectRoot: sample.workspace,
-      proposal,
-      resolved: [sample.resolved],
-    });
-
-    const route = await buildCurrentIndexerProviderContinuationRoute({
-      projectRoot: sample.workspace,
-      authorities: [],
-      managed: true,
-    });
-    expect(route).toMatchObject({
-      node: "finalize-current-indexer-provider-selection",
-      availability: "immediate",
-      commands: [{
-        command: expect.stringContaining(" run --managed --format json"),
-        effect: "write",
-        managed_execution: "automatic",
-      }],
-    });
-    expect(route?.action).toBeUndefined();
-    expect(route?.gate).toBeUndefined();
-    expect(await advanceCurrentIndexerProviderFinalizationIfReady(
-      sample.workspace,
-    )).toBe(true);
-    expect(await buildCurrentIndexerProviderContinuationRoute({
-      projectRoot: sample.workspace,
-      authorities: [],
-      managed: true,
-    })).toBeUndefined();
-    expect(parseIndexerRegistry(await readFile(
-      join(sample.workspace, "src", "indexers.yaml"),
-      "utf8",
-    )).indexers).toHaveLength(1);
-  });
 
   test("keeps static validation pure and finalizes an exact staged Provider", async () => {
     const sample = await fixture();
@@ -390,13 +273,7 @@ describe("two-stage Indexer selection validation", () => {
     });
     expect(finalReport.static_report_digest).toBe(staticReport.report_digest);
     expect(finalReport.providers[0]?.bundle_integrity).toBe(sample.bundle.resolved.integrity);
-    expect(finalReport.subject_key_schemas).toHaveLength(1);
-    expect(finalReport.subject_key_schemas[0]).toMatchObject({
-      indexer_id: "sample-indexer",
-      profile: "component-library",
-      authority: { kind: "community-base" },
-    });
-    expect(finalReport.subject_key_schema_set_digest).toMatch(/^sha256:/);
+    expect(finalReport).not.toHaveProperty("subject_key_schemas");
     expect(finalReport.composition_plans).toHaveLength(1);
     expect(finalReport.composition_plans[0]).toMatchObject({
       indexer_id: "sample-indexer",
@@ -513,136 +390,6 @@ describe("two-stage Indexer selection validation", () => {
     })).resolves.toMatchObject({ protocol: "context.indexer.selection-final-report/v1" });
   });
 
-  test("stages and atomically applies a registry-only proposal through the CLI", async () => {
-    const sample = await fixture();
-    const staticReport = validateIndexerSelectionStatic(sample.registry);
-    const finalReport = await validateIndexerSelectionFinal({
-      registry: sample.registry,
-      static_report: staticReport,
-      resolved: [sample.resolved],
-      customizations: [sample.customization],
-      ...BASE_CONTRACTS,
-    });
-    const baseRegistry = parseIndexerRegistry(YAML.stringify({
-      protocol: "context.indexer.registry/v1",
-      requirements: sample.registry.requirements,
-      indexers: [],
-    }));
-    const baseContent = YAML.stringify(baseRegistry);
-    const targetContent = YAML.stringify(sample.registry);
-    const baseDigests = indexerRegistryDigests(baseRegistry);
-    const targetDigests = indexerRegistryDigests(sample.registry);
-    const proposal = buildIndexerProjectProposal({
-      protocol: "context.indexer.project-proposal/v1",
-      project_ref: "project:sample",
-      mode: "registry-only",
-      requirement_set_digest: baseDigests.requirementSetDigest,
-      base_registry: {
-        document_digest: indexerProjectContentDigest(baseContent),
-        requirement_set_digest: baseDigests.requirementSetDigest,
-        indexer_selection_digest: baseDigests.indexerSelectionDigest,
-        registry_digest: baseDigests.registryDigest,
-      },
-      target_registry: {
-        document_digest: indexerProjectContentDigest(targetContent),
-        requirement_set_digest: targetDigests.requirementSetDigest,
-        indexer_selection_digest: targetDigests.indexerSelectionDigest,
-        registry_digest: targetDigests.registryDigest,
-      },
-      target_document: sample.registry,
-      targets: [{
-        path: "src/indexers.yaml",
-        operation: "write",
-        base_digest: indexerProjectContentDigest(baseContent),
-        target_digest: indexerProjectContentDigest(targetContent),
-        content: targetContent,
-      }],
-      dependencies: buildIndexerDependencyIntentSet([]),
-      capability_gap_digest: null,
-      finalized_validation_report_digests: [finalReport.report_digest],
-      program_execution_policy_digest: null,
-    });
-    await mkdir(join(sample.workspace, "src"), { recursive: true });
-    await writeFile(join(sample.workspace, "src", "indexers.yaml"), baseContent, "utf8");
-    await writeFile(join(sample.workspace, "package.json"), `${JSON.stringify({
-      name: "indexer-project-proposal-fixture",
-      private: true,
-      context: { project: true, entry: "src/index.ts" },
-    }, null, 2)}\n`, "utf8");
-    const proposalPath = join(sample.workspace, "proposal.json");
-    const validationPath = join(sample.workspace, "validation.json");
-    const validationInput = {
-      protocol: "context.indexer.project-staging-validation-input/v1" as const,
-      static_report: staticReport,
-      resolved: [sample.resolved],
-      customizations: [sample.customization],
-      ...BASE_CONTRACTS,
-    };
-    await writeFile(proposalPath, `${JSON.stringify(proposal, null, 2)}\n`, "utf8");
-    await writeFile(validationPath, `${JSON.stringify(validationInput, null, 2)}\n`, "utf8");
-
-    const staged = JSON.parse(await runCliInDir(sample.workspace, [
-      "indexer", "stage-indexer-project-proposal",
-      "--input", proposalPath,
-      "--format", "json",
-    ]));
-    expect(staged.proposal_digest).toBe(proposal.proposal_digest);
-    expect(await readFile(join(sample.workspace, "src", "indexers.yaml"), "utf8"))
-      .toBe(baseContent);
-
-    const ordinary = await buildIndexerProjectConfirmationRoute({
-      projectRoot: sample.workspace,
-      proposal_digest: proposal.proposal_digest,
-      validation: validationInput,
-      validationInputRef: validationPath,
-    });
-    const managed = await buildIndexerProjectConfirmationRoute({
-      projectRoot: sample.workspace,
-      proposal_digest: proposal.proposal_digest,
-      validation: validationInput,
-      validationInputRef: validationPath,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.indexerProjectConfirmation],
-    });
-    expect(ordinary.route.gate).toMatchObject({
-      id: "confirm-indexer-project",
-      resolution: "user",
-      resolution_action: { input: ordinary.gate_input },
-    });
-    expect(ordinary.route.commands).toHaveLength(1);
-    expect(ordinary.gate_input).toMatchObject({
-      proposal_digest: proposal.proposal_digest,
-      target_paths: ["src/indexers.yaml"],
-      providers: [{
-        indexer_id: "sample-indexer",
-        provider_id: "community",
-        role: "primary",
-        version: "1.2.0",
-      }],
-      customizations: [],
-      dependencies: [],
-      validation_report_digests: [finalReport.report_digest],
-    });
-    expect(ordinary.gate_input.confirmation_batch_digest).toMatch(
-      /^sha256:[a-f0-9]{64}$/,
-    );
-    expect(ordinary.route.commands[0]?.availability).toBe("after-human-confirmation");
-    expect(managed.route.gate?.resolution).toBe("session-authority");
-    expect(managed.route.commands[0]?.availability).toBe("immediate");
-    expect(managed.route.revision).toBe(ordinary.route.revision);
-    expect(managed.gate_input).toEqual(ordinary.gate_input);
-
-    const applied = JSON.parse(await runCliInDir(sample.workspace, [
-      "indexer", "apply-indexer-project",
-      "--proposal", proposal.proposal_digest,
-      "--validation-input", validationPath,
-      "--format", "json",
-    ]));
-    expect(applied.proposal_digest).toBe(proposal.proposal_digest);
-    expect(applied.validation_report_digests).toEqual([finalReport.report_digest]);
-    expect(await readFile(join(sample.workspace, "src", "indexers.yaml"), "utf8"))
-      .toBe(targetContent);
-  });
-
   test("authorizes only one exact non-allowlisted program through its independent Gate", async () => {
     const sample = await fixture(true, "project-authorized");
     await writeFile(join(sample.workspace, "package.json"), `${JSON.stringify({
@@ -673,41 +420,14 @@ describe("two-stage Indexer selection validation", () => {
     });
     expect(() => buildIndexerProgramExecutionAuthorizationInput({
       report,
-      authority_ref: "context.evidence-maintenance",
+      authority_ref: "context.package-output",
       authority_scope_digest: `sha256:${"7".repeat(64)}`,
     })).toThrow(/incomplete/);
     const inputPath = join(sample.workspace, "program-authorization.json");
     await writeFile(inputPath, `${JSON.stringify(authorizationInput, null, 2)}\n`, "utf8");
 
-    const ordinary = await buildIndexerProgramExecutionAuthorizationRoute({
-      projectRoot: sample.workspace,
-      authorization_input: authorizationInput,
-      authorizationInputRef: inputPath,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance],
-    });
-    const managed = await buildIndexerProgramExecutionAuthorizationRoute({
-      projectRoot: sample.workspace,
-      authorization_input: authorizationInput,
-      authorizationInputRef: inputPath,
-      authorities: [CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution],
-    });
-    expect(ordinary.route.gate).toMatchObject({
-      id: "authorize-indexer-program-execution",
-      authority: CONTEXT_WORKFLOW_AUTHORITIES.indexerProgramExecution,
-      resolution: "user",
-      resolution_action: { input: ordinary.gate_input },
-    });
-    expect(ordinary.route.commands[0]?.availability).toBe("after-human-confirmation");
-    expect(managed.route.gate?.resolution).toBe("session-authority");
-    expect(managed.route.commands[0]?.availability).toBe("immediate");
-    expect(managed.route.revision).toBe(ordinary.route.revision);
-    expect(managed.gate_input.report.sandboxed_program).toBe(false);
 
-    const result = JSON.parse(await runCliInDir(sample.workspace, [
-      "indexer", "authorize-indexer-program-execution",
-      "--input", inputPath,
-      "--format", "json",
-    ]));
+    const result = authorizeProjectIndexerProgramExecution(authorizationInput);
     expect(result.authorization).toMatchObject({
       project_ref: "project:sample",
       provider_integrity: sample.bundle.resolved.integrity,

@@ -6,14 +6,13 @@ import {
   buildIndexerLayoutProposalSet,
   buildIndexerNavigationArtifactPlan,
   buildIndexerSharedArtifactFingerprint,
-  canonicalIndexerNodeRef,
   indexerLayoutSectionIdentityRef,
+  indexerLayoutArtifactRef,
   indexerProtocolDigest,
   validateIndexerArtifactManifest,
   validateIndexerPhysicalArtifactAudit,
   type IndexerArtifactBundle,
   type IndexerLayoutProposal,
-  type IndexerSubjectKey,
 } from "../index.js";
 
 const digest = (value: string) => indexerProtocolDigest({ value });
@@ -37,36 +36,27 @@ function logicalUnit(namespace: string, specs: readonly ArtifactSpec[]): {
   proposal: IndexerLayoutProposal;
   bundle: IndexerArtifactBundle;
 } {
-  const subject: IndexerSubjectKey = {
-    protocol: "context.subject-key/v1",
-    namespace,
-    kind: "capability",
-    local_key: "overview",
-  };
-  const nodeRef = canonicalIndexerNodeRef(subject);
-  const nodeDigest = nodeRef.replace(/^node:subject:sha256:/u, "");
+  const logicalUnitRef = digest(namespace);
   const artifactRefs = new Map(specs.map((spec) => [
     spec.id,
-    `artifact:subject:${digest(`${namespace}:${spec.id}`)}`,
+    indexerLayoutArtifactRef(logicalUnitRef, { artifact_id: spec.id, artifact_kind: spec.kind }),
   ]));
   const artifacts = specs.map((spec) => {
     const artifactRef = artifactRefs.get(spec.id)!;
     const state = spec.state ?? "ready";
     const sectionKey = `${spec.id}-summary`;
     const sectionIdentityRef = indexerLayoutSectionIdentityRef({
-      node_ref: nodeRef,
-      owner_indexer_id: "sample-indexer",
-      artifact_kind: spec.kind,
+      artifact_ref: artifactRef,
       section_key: sectionKey,
     });
     return {
       artifact_ref: artifactRef,
-      node_ref: nodeRef,
+
       artifact_id: spec.id,
       artifact_kind: spec.kind,
-      internal_view_ref: `view:artifact:${digest(`${namespace}:${spec.id}:view`)}`,
+
       collection: "codeindex" as const,
-      output_path: `knowledge/codeindex/${nodeDigest}/${spec.id}.md`,
+      output_path: `knowledge/codeindex/${namespace}/${spec.id}.md`,
       shared_artifact_fingerprint_digest:
         SHARED_ARTIFACT_FINGERPRINT.fingerprint_digest,
       purpose: spec.purpose,
@@ -84,7 +74,7 @@ function logicalUnit(namespace: string, specs: readonly ArtifactSpec[]): {
         artifact_kind: spec.kind,
         state: state === "ready" ? "structured" as const : "material-gap" as const,
         content_digest: state === "ready" ? digest(`${namespace}:${spec.id}:content`) : null,
-        evidence_refs: state === "ready" ? ["evidence:anonymous-source"] : [],
+        references: state === "ready" ? [{ source_ref: `repo:${namespace}@revision`, locator: { path: "src/index.ts", start_line: 1, end_line: 1 }, content_digest: digest("region") }] : [],
         material_question_proposal_ref: state === "ready"
           ? null
           : `proposal:material-gap:${digest(`${namespace}:${spec.id}:gap`)}`,
@@ -98,18 +88,18 @@ function logicalUnit(namespace: string, specs: readonly ArtifactSpec[]): {
     source_ref: `repo:${namespace}@revision`,
     profile: "component-library",
     profile_contract_digest: digest("profile-contract"),
-    subject_key_schema_set_digest: digest("subject-schema-set"),
-    subject_key_schema_digest: digest("subject-schema"),
+
+
     artifact_result_digest: digest(`${namespace}:result`),
     post_author_composition_fingerprint: null,
     shared_artifact_fingerprint: SHARED_ARTIFACT_FINGERPRINT,
-    node: { node_ref: nodeRef, subject_key: subject },
+
     artifacts,
   };
   return {
     proposal: { ...payload, proposal_digest: indexerProtocolDigest(payload) },
     bundle: buildIndexerArtifactBundle({
-      logical_unit_ref: nodeRef,
+      logical_unit_ref: logicalUnitRef,
       artifact_policy_variant: "standard",
       artifacts: specs.map((spec) => spec.purpose === "semantic-split"
         ? {
@@ -119,14 +109,14 @@ function logicalUnit(namespace: string, specs: readonly ArtifactSpec[]): {
           split_of: spec.splitOf!,
           boundary: spec.boundary!,
           reader_question_refs: ["question:overview"],
-          evidence_refs: ["evidence:anonymous-source"],
+
         }
         : {
           artifact_id: spec.id,
           artifact_kind: spec.kind,
           purpose: spec.purpose,
           reader_question_refs: ["question:overview"],
-          evidence_refs: ["evidence:anonymous-source"],
+
         }),
     }),
   };

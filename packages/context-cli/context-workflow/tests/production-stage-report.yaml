@@ -1,0 +1,21 @@
+schema: agent-graph.test.v1
+name: stage work-start report cannot inherit managed review authority
+graph: indexer
+entry: production
+state:
+  authorities: [context.knowledge-review]
+  facts:
+    production:
+      report_approved: false
+      prepared: false
+      writing_complete: false
+      complete: false
+expect:
+  statusCode: waiting-user
+  primaryNode: confirm-production-report
+  primaryReasonCode: route.production.report-required
+  availability: requires-user
+  gateResolution: user
+  requiredResources:
+    - procedure.work-start-report
+    - template.work-start-report

@@ -33,7 +33,7 @@ Provider 将长期知识生产生命周期转化为依据事实选择、可以�
 |---|---|
 | `provider.yaml` | Provider 身份、Graph 目录和导出资源 |
 | `graphs/workspace.yaml` | 稳定的知识工作任务类别和合法转换 |
-| `graphs/indexer.yaml` | digest-bound Indexer 选择、执行、reconciliation 与 gap 子 Route |
+| `graphs/indexer.yaml` | 轻量规划、目录写作、来源更新及文章修订 |
 | `actions/` | 由 Context Host adapter 解析的 Action 契约 |
 | `resources/` | Procedure、对话、诊断、手册、Schema 和动态 View 定义 |
 | `schemas/` | Agent 提交的结构化 Payload 契约 |
@@ -62,18 +62,17 @@ Provider 将长期知识生产生命周期转化为依据事实选择、可以�
 13. Route 为所有直接必需文件返回一个 `resources.after_read.command`；动态资源物化返回自己的本地 receipt-set 文件和精确 post-read command。
 14. managed host runtime 只对参数形态已识别且没有外部副作用的命令复用进程；未知形态和外部副作用在子进程执行，两种路径返回相同回执契约。
 15. execution scope 只拥有短生命周期运行资源，不拥有持久工作区状态；知识写入继续使用 revision 校验、写锁和原子提交。
-16. 每个完整代码索引批次在知识 Review 前必须经过一次 Agent 语义审核。CLI 信号只作为审核证据，Agent 必须选择接受、修订或请求补充材料；全托管遇到真实问题时自动回到 Preview、提取和复审循环。完整报告留在工作区，构建清单只保留精简审核摘要，不发布报告文件。
-17. Indexer Graph 只能通过 CLI 校验后的 workset-set Facts 从 partition 进入 author。精确 SubjectKey 解析必须先于 author；post-author composer 只能读取受限 PrimaryResultView。独立 composer 集合未明确标记为 not-required，或尚未全部 accepted 并形成 current envelope 时，不得进入 reconciliation。
-18. Main Indexer 调度前必须恢复本机内容寻址 run ledger。Context 为当前 run 暴露唯一 Host-managed Authorized Workset View；Agent 不管理证据专用 reader、cursor 或读取回执。Partition、Author 与 Composer Route 只暴露一个紧凑语义 schema 和一个 `context action complete-current` 提交命令；Agent 不拼装内部 Result envelope，也不创建工作区 payload 脚本。通过校验的 Result 与 accepted 转换共用一个 durable journal；中断且不完整的 running 项恢复为 pending，完整 accepted 缓存（包括合法空结果）不得再次调度。ordinal/fixed-count partition 会自动进入下一项授权策略；策略耗尽后 Graph 启动绑定 CLI release 的 catalog-fallback request，并机械接受唯一父单元。该路径必须存在已持久化的耗尽前驱，不调用 Agent，也不进入用户 Gate。
-19. post-author composer 使用独立的本机 ledger。每项 accepted Result/receipt 可独立恢复；只有当前集合全部 accepted 后才原子发布 current envelope。若仅 envelope 指针缺失，只重组 envelope，不得重跑 composer。
-20. Result reconciliation 是 CLI 拥有的完成边界。它重新计算 required domain owner，只消费 main author store 中完整 accepted 的 Result，并枚举全部 current question-target pair；Provider 未 emit 的 pair 自动形成 material gap。缺 owner、accepted cache 丢失、unsupported target 或 blocking material gap 时，不得进入 reconciliation ready，也不得报告 complete。
-21. material gap 只保留在 current reconciliation report 中，不建立第二份 checkpoint ledger、创作产物或审核界面。
-22. 新采集的 Markdown 或其他授权材料重新进入普通 main Indexer 路径。同一次 Result reconciliation 要么从当前来源关闭问题，要么继续保留 unresolved。不存在 answer-only operation、planned landing、post-layout actualization 或第二次内容 Review。
-23. 没有必需 gap 时才能 final close；close 只写 approved knowledge structure，然后清理已完成的运行时生命周期状态。可选且未解决的 gap 不进入发布知识元数据。
-24. requirement confirmation 必须使用 CLI 重新计算的 canonical comparator。普通变化只能使用显式 session authority；contraction 与不可比较的义务替换进入不可委托人工 Gate。
-25. SubjectKey schema authority 只来自 CLI base contract 或唯一 owner extension Provider。已有 approved Node 上的 identity-breaking 变化必须 Provider major，并取得绑定精确映射的人工授权；无效映射在 Gate 前失败。target-resolution ambiguous/invalid 是阻塞或失败的类型化 Outcome，不能进入 author work。
-26. 首次 Provider 选择属于同一条 current Indexer Route。Agent Action 直接收到精确 requirements 与 CLI-bundled catalog，只通过 `context action complete-current` 返回非 CLI 的 Host 可见 Skill 身份和语义 Indexer 条目；routing、fallback/conflict、静态校验、解析、stage、最终校验和 registry 原子应用均由 CLI 完成。外部 Bundle 复用现有 Host resolver continuation，非 allowlist program 复用现有执行 Gate，成功 Host result 可恢复且不暴露低层 payload 命令。
-27. 全部 Partition shard current 后，Context 暴露一次语义大纲审核；Author/Composer 编译完成后，再暴露普通的最终 Candidate Review。普通模式把两次判断都展示给用户；用户明确授权全托管后，由 Agent 完成两次判断且不向用户展示。destructive 或 ambiguous Layout transition 在所有模式下仍不可委托。
+16. 内容判断由既有审核承担，命令行不通过扫描措辞、标题或占位符另设质量门禁。
+17. 索引工作图负责轻量规划、开工报告和目录写作。命令行发放已就绪批次，智能体在范围内决定阅读、写作及可用子智能体的调度。
+18. 正式开工报告在规划后、批量写作前等待用户确认，托管模式也不能跳过。目标已明确时可省去独立规划提交，不能省去报告。
+19. 技能声明和使用配置仅为临时指导；同一模块可使用多个技能。不要求生产过程核对技能版本、摘要、唯一主生产者或逐成员账本。
+20. 草稿、候选、计划、接收回执和事务全部留在 `.tmp`。临时区完整时可重试、恢复本轮工作；清理后或克隆后基于正式知识和来源全新开始。
+21. 写作通过阶段相对路径提交正文与引用文件，支持已完成子集；局部错误给出修复位置，不推翻其他任务的成功接收。
+22. 来源授权、安全读取、真实引用及并发写入保护继续生效，技能选择不会扩大来源权限。
+23. 必需材料缺失仍为未完成工作；明确排除使用既有需求机制，不另建逐成员账本，也不把可选缺口写成正式内容。
+24. 文章及片段稳定身份用于修订；引用记录真实路径和行号，区域摘要由命令行计算。
+25. 正式文章修订、来源更新保留当前路由。审批只核对本轮接收或修订内容，不回退旧生产编译文件。
+26. 临时区外只保留正式知识、必要来源和长期需求，不支持历史生产过程迁移。
 
 ## 全托管宿主循环
 

@@ -10,7 +10,7 @@ interface ArticleProgram {
 /** A profile binding selects a shared blueprint; it does not change its prose.
  * Legacy full template contracts remain supported by their existing loader. */
 export function expandArticleBlueprint(metadata: unknown, binding: {
-  id: string; profile: string; reader_goal?: string | undefined; accepted_evidence_kinds?: string[];
+  id: string; profile: string; reader_goal?: string | undefined;
 }): { contract: IndexerTemplateContract; section_bodies: Record<string, string> } | undefined {
   const program = (metadata as { program?: ArticleProgram } | null)?.program;
   if (program === undefined) return undefined;
@@ -26,11 +26,10 @@ export function expandArticleBlueprint(metadata: unknown, binding: {
   const sections = slots.map(([key]) => ({
     section_key: key, presence: "optional", question_ref: `question:${program.article}-${key}`,
     reader_goal: binding.reader_goal, variable_ids: [key], deterministic_block_ids: [] as string[],
-    accepted_evidence_kinds: binding.accepted_evidence_kinds ?? ["code", "contract", "configuration", "documentation"],
-    minimum_evidence_items: 0, on_missing: "omit",
+    on_missing: "omit",
     deletion_condition: "Omit when not applicable or no supported value is supplied.",
   }));
-  const variables = slots.map(([id]) => ({ id, type: "string", content_layer: "semantic-prose", required: false, evidence_required: true }));
+  const variables = slots.map(([id]) => ({ id, type: "string", content_layer: "semantic-prose", required: false }));
   const bodies = slots.map(([key, heading]) => [key, `## ${heading}\n\n{{variable:${key}}}`]);
   if (api) {
     sections.splice(3, 0, { ...sections[0]!, section_key: api, question_ref: "question:public-contract", variable_ids: [api], deterministic_block_ids: ["api-table"] });
@@ -39,7 +38,7 @@ export function expandArticleBlueprint(metadata: unknown, binding: {
   const contract = indexerTemplateContractSchema.parse({
     protocol: "context.indexer.template/v1", template_id: binding.id, profile: binding.profile, reader_goal: binding.reader_goal,
     applicability: { artifact_policy_variants: program.policies, condition_refs: [] },
-    variables: [...variables, ...(api ? [{ id: api, type: "json", content_layer: "deterministic-fact", required: false, evidence_required: true }] : [])],
+    variables: [...variables, ...(api ? [{ id: api, type: "json", content_layer: "deterministic-fact", required: false }] : [])],
     deterministic_blocks: api ? [{ id: "api-table", renderer: "public-contract-table", source_variable_id: api }] : [],
     sections,
     page_policy: { split_suggestion: "Split by independently useful reader task when supported; preserve stable article identities.", semantic_boundaries: ["reader-task", "source-boundary"], keep_single_page_conditions: ["one-reader-subject"] },

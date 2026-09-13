@@ -41,7 +41,7 @@ export const indexerOverlayQuestionRegistryApplyProposalSchema = z.object({
   overlay_validation_receipt_digest: indexerDigestSchema,
   rebind_receipt_digest: indexerDigestSchema,
   rebound_selection_digest: indexerDigestSchema,
-  subject_key_schema_set_digest: indexerDigestSchema,
+
   finalized_validation_report_digests: z.array(indexerDigestSchema).min(1),
   proposal_digest: indexerDigestSchema,
 }).strict();
@@ -122,7 +122,7 @@ export function buildIndexerOverlayQuestionRegistryApplyProposal(input: {
   confirmation: unknown;
   rebind_receipt_digest: string;
   rebound_selection_digest: string;
-  subject_key_schema_set_digest: string;
+
   finalized_validation_report_digests: readonly string[];
 }): IndexerOverlayQuestionRegistryApplyProposal {
   validateFinalizedIndexerRegistry(input.base_registry);
@@ -178,7 +178,7 @@ export function buildIndexerOverlayQuestionRegistryApplyProposal(input: {
     overlay_validation_receipt_digest: amendment.overlay_validation_receipt_digest,
     rebind_receipt_digest: input.rebind_receipt_digest,
     rebound_selection_digest: input.rebound_selection_digest,
-    subject_key_schema_set_digest: input.subject_key_schema_set_digest,
+
     finalized_validation_report_digests: reports,
   };
   return validateIndexerOverlayQuestionRegistryApplyProposal({

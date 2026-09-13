@@ -3,7 +3,7 @@ import { prepareRevisionMarkdown } from "../project/approvedRevisionEdits.js";
 import { approvedContextSectionsInMarkdown } from "../project/verifyContextSections.js";
 import { parseIndexerCurrentActionSubmission } from "@c4a/context";
 
-const section = (id: string, body: string) => `<!-- context:section id="${id}" source_ref="repo:source#symbol" -->\n\n${body}\n\n<!-- /context:section -->`;
+const section = (id: string, body: string) => `<!-- context:section id="${id}" -->\n\n${body}\n\n<!-- /context:section -->`;
 const base = `---\ntitle: Guide\n---\n${section("first", "Original.")}\n${section("second", "Untouched.")}`;
 const token = "{{context:program:abc}}";
 const blocks = [{ token, source_ref: "repo:source", fact_ref: "fact:one", markdown: "| Field | Type |\n| --- | --- |\n| value | string |" }];
@@ -15,7 +15,8 @@ test("section edits preserve all untouched bytes and source scope while using cu
   expect(result).toStartWith("---\ntitle: Guide\n---\n");
   expect(result).toContain(blocks[0]!.markdown);
   expect(result).not.toContain("Original.");
-  expect(approvedContextSectionsInMarkdown(result).map(item => item.refs)).toEqual([["repo:source#symbol"], ["repo:source#symbol"]]);
+  expect(approvedContextSectionsInMarkdown(result).map(item => item.id)).toEqual(["first", "second"]);
+  expect(result).not.toContain("source_ref=");
   expect(parseIndexerCurrentActionSubmission({ stage: "approved-revision", ...input })).toEqual({ stage: "approved-revision", ...input });
 });
 

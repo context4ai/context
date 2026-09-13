@@ -13,7 +13,7 @@ export function authorReadingFixture(index: number, sharedFacts = 80) {
     owner_cell_refs: ["owner-cell:components#public-api"], source_ref: sourceRef, module_ref: null,
     primary_registry_projection_digest: digest("registry"), requirement_set_digest: digest("requirements"),
     primary_execution_fingerprint: digest("execution"), profile_contract_digest: digest("contract"),
-    subject_key_schema_digest: digest("schema"), source_scope_digest: digest("scope"),
+     source_scope_digest: digest("scope"),
     source_binding_digest: digest("source"), primary_resource_binding_digest: digest("resources"),
     question_target_inventory_digest: digest("questions"), partition_plan_binding_digest: digest("plan"),
     group_key: `component-${index}`, logical_unit_ref: `node:component-${index}`,

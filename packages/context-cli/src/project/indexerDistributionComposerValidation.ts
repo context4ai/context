@@ -13,7 +13,7 @@ interface ComposerFixture {
   anonymized: true;
   composer: string;
   profile: string;
-  primary_input: { fact_kinds: string[]; artifact_kinds: string[] };
+  primary_input: { artifact_kinds: string[] };
   expected_proposal: { artifact_policy_variant: string; artifact_kind: string };
   empty_result: {
     protocol: "context.indexer.layer-fragment-result/v1";
@@ -56,7 +56,7 @@ function parseComposerFixture(value: unknown): ComposerFixture {
     "empty_result",
   ], "composer fixture");
   const primary = record(fixture.primary_input, "composer fixture primary_input");
-  exactKeys(primary, ["fact_kinds", "artifact_kinds"], "composer fixture primary_input");
+  exactKeys(primary, ["artifact_kinds"], "composer fixture primary_input");
   const proposal = record(fixture.expected_proposal, "composer fixture expected_proposal");
   exactKeys(
     proposal,
@@ -91,7 +91,6 @@ function parseComposerFixture(value: unknown): ComposerFixture {
     composer: fixture.composer,
     profile: fixture.profile,
     primary_input: {
-      fact_kinds: strings(primary.fact_kinds, "composer fixture fact_kinds"),
       artifact_kinds: strings(primary.artifact_kinds, "composer fixture artifact_kinds"),
     },
     expected_proposal: {
@@ -161,10 +160,6 @@ export async function validateBundledIndexerComposers(input: {
     const contract = expected.contract;
     if (
       !expected.supportedProfiles.includes(fixture.profile)
-      || !sameValues(
-        fixture.primary_input.fact_kinds,
-        contract.primary_requirements.fact_kinds,
-      )
       || !sameValues(
         fixture.primary_input.artifact_kinds,
         contract.primary_requirements.artifact_kinds,

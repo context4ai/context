@@ -19,15 +19,13 @@ function requireProjectRoot(): string {
 export function registerDocumentRevisionCommand(program: Command): void {
   const task = program.command("task").description("Explicit current-task recovery");
   task.command("recover").description("Inspect or preview scoped recovery independently of the normal workflow Route")
-    .option("--operation <operation>", "inspect, author, plan or transactions", "inspect")
-    .option("--workset <digest...>", "current workset identities to recover")
-    .option("--instruction <text>", "concrete correction for reopened Author work")
+    .option("--operation <operation>", "inspect or transactions; use ordinary file submission/revise for article repair", "inspect")
     .option("--apply", "apply the reviewed recovery scope within existing user authorization")
     .option("--plan-digest <digest>", "exact current recovery preview")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { operation: string; workset?: string[]; instruction?: string; apply?: boolean; planDigest?: string; format: string }) => {
+    .action(async (options: { operation: string; apply?: boolean; planDigest?: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");
-      if (!["inspect", "author", "plan", "transactions"].includes(options.operation)) throw new TypeError("Unknown recovery operation; use inspect, author, plan or transactions.");
+      if (!["inspect", "transactions"].includes(options.operation)) throw new TypeError("Use inspect or transactions. Repair current task files or use context revise for an accepted article; old workset/plan recovery is not supported.");
       if (options.operation === "inspect" && options.apply) throw new TypeError("Inspection is read-only; select a recovery operation to apply.");
       const projectRoot = requireProjectRoot();
       const { inspectTaskRecovery, recoverTaskTransactions } = await import("../project/taskRecovery.js");
@@ -35,9 +33,7 @@ export function registerDocumentRevisionCommand(program: Command): void {
         ...(options.planDigest ? { plan_digest: options.planDigest } : {}) };
       try {
         const result = options.operation === "inspect" ? await inspectTaskRecovery(projectRoot)
-          : options.operation === "transactions" ? await recoverTaskTransactions(base)
-          : await (await import("../project/taskRecoveryAuthor.js")).recoverAuthorTask({ ...base,
-            operation: options.operation as "author" | "plan", worksets: options.workset ?? [], instruction: options.instruction ?? "" });
+          : await recoverTaskTransactions(base);
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       } catch (error) {
         process.exitCode = ExitCode.WorkspaceStateError;
@@ -99,7 +95,7 @@ export function registerDocumentRevisionCommand(program: Command): void {
       process.stdout.write(`${JSON.stringify(await cancelKnowledgeMaintenance(requireProjectRoot(), id, options.discardRevision))}\n`);
     });
   task.command("adjust").description("Adjust current source/module inputs or reader organization while preserving unrelated work")
-    .requiredOption("--input <file>", "YAML/JSON scopes or knowledge_dependencies with instruction, or knowledge_map; - for stdin")
+    .requiredOption("--input <file>", "YAML/JSON source scopes with instruction, or knowledge_map; - for stdin")
     .option("--format <format>", "output format: json", "json")
     .action(async (options: { input: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");

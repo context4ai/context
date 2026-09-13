@@ -297,11 +297,11 @@ describe("0.6.2 capture:file runtime", () => {
       expect(status).toMatchObject({
         sourceCount: 1,
         readySources: 1,
-        state: "route.indexer.lifecycle-required",
+        state: "route.production.requirements-required",
       });
       expect(status).toMatchObject({
         routing: {
-          current_state: "route.indexer.lifecycle-required",
+          current_state: "route.production.requirements-required",
           human_gate: {
             required: false,
             kind: "none",
@@ -309,7 +309,9 @@ describe("0.6.2 capture:file runtime", () => {
           command_plan: [],
         },
       });
-      expect(String(status.next)).toContain("sole registry-and-Provider indexing lifecycle");
+      expect(status.workflow).toMatchObject({ current: {
+        node: "configure-production-requirements", configuration: { file: "src/indexers.yaml" },
+      } });
 
       const secondOutput = JSON.parse(await runCliInDir(projectRoot, [
         "run",

@@ -21,6 +21,7 @@ export function assertActionInputWorkspace(cwd: string, inputPath: string): void
   throw new ContextError(ExitCode.WorkspaceStateError,
     "The completion input belongs to a different Context workspace. Run the workflow CLI and read/write this task's .tmp files in the same intended workspace. No tasks were submitted.", {
       category: "workflow-workspace-mismatch",
+      reason_code: "workflow-workspace-mismatch",
       project_root: current.projectRoot,
       input_project_root: owner.projectRoot,
       input_file: file,

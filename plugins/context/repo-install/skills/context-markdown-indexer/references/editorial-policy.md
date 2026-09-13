@@ -92,5 +92,5 @@ Protected-value and reference checks remain mechanical safeguards.
 - Struck-through text that is the only surviving historical record may be kept
   when it has continuing reader value; no signal-specific receipt is required.
 
-Before returning a decision, confirm every Section has one outcome and no
-revision accidentally changes authority, evidence, identity, or protected values.
+Before submitting, check that the revision preserves authority, evidence,
+identity and protected values. Do not submit an outcome ledger for every section.

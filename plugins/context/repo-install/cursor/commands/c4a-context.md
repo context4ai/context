@@ -187,13 +187,12 @@ or scope; discussion and save-only requests can end without production.
   condition and do not register the same request repeatedly.
 - When the user asks to compile, build or deliver a batch, use the current Route
   to choose early delivery or rebuilding; do not guess a command name.
-- **Delivery batch size:** use `context run --delivery-size <1–50|auto> --format json`
-  for an explicit user preference; it applies to future theme waves in this task.
-- **Earlier delivery of newly authored pages:** use the Author Route's
-  `delivery.request.command` (`context run --deliver --format json`). Finish any
-  running command first. Complete the current Author batch, then follow the
-  returned composition, Review and build steps. This does not approve content
-  or merely rebuild old approved pages; all Author tasks need not finish first.
+- **Earlier delivery of completed articles:** when explicitly requested, finish
+  any running command, then use `context run --deliver --format json` and follow
+  its Review, close and build routes. This pauses further writing without
+  approving content. Successful delivery resumes remaining tasks; an explicit
+  `context run --resume-writing --format json` cancels the pause without losing
+  drafts or approvals. Batch grouping belongs to the current Agent plan.
 - **An independent new task while work remains:** explain saved results,
   unfinished scope and concrete rollback losses. Reuse or obtain the user's
   choice to finish the current task or roll back an explicit scope. Do not

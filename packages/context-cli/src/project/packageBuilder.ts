@@ -1,4 +1,7 @@
 import { readKnowledgeMap } from "./knowledgeMap.js";
+import { readProductionStage } from "./productionStageStore.js";
+import { assertProductionDeliveryReady, finishProductionDelivery } from "./productionDelivery.js";
+import { withProjectWriteLock } from "./writeLock.js";
 import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
 import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
@@ -7,14 +10,13 @@ import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
 import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
 import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
 import { inspectPackageMarkdownDirectory } from "./packageMarkdownAnchors.js";
-import { interruptDeliveryCadence } from "./indexerDeliveryCadence.js";
 import { withStagedPackageOutput } from "./packageBuildStage.js";
-import { completeIndexerDelivery, readIndexerDelivery } from "./indexerDelivery.js";
+import { completeRevisionDelivery, readRevisionDelivery } from "./revisionDelivery.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
+import { validateArticleStructureEntries, loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
 import { siteArticleSources } from "./packageSiteSources.js";
 import { parse as parseYaml } from "yaml";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
@@ -26,7 +28,6 @@ import {
   type RuntimeEventPendingAgentHint,
 } from "../runtimeEvents.js";
 import { ExitCode } from "../types/exitCode.js";
-import { legacyCodeIndexMigrationRequired } from "./codeIndexMigration.js";
 import {
   packageBuildInventory,
   packageScopedKnowledgeStructure,
@@ -154,11 +155,13 @@ function packageFingerprintPath(projectRoot: string, pkg: PackageDefinition): st
 
 export async function listApprovedKnowledge(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
+  const articles = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   const files = await walkPackageFiles(join(projectRoot, KNOWLEDGE_ROOT));
   const knowledge = await Promise.all(files
     .filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/"))
     .map(async (file) => ({
       ...file,
+      article: articles.get(file.relPath),
       content: hydrateApprovedKnowledgeMarkdown({
         content: await readFile(file.absPath, "utf8"),
         relPath: file.relPath,
@@ -235,10 +238,9 @@ async function packageInputFingerprint(input: {
         ...(input.pkg.assets === undefined ? {} : { definition: input.pkg.assets }),
       })
     : null;
-  const siteRegistry = input.pkg.kind === "package.kb" && input.pkg.site
-    ? await loadSourcesRegistry({ rootDir: input.projectRoot }) : undefined;
+  const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   return stableHash({
-    siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.content, siteRegistry)) : null,
+    siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.article, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
     package: {
@@ -433,27 +435,17 @@ export async function collectPackageFreshness(
 }
 
 export async function buildProjectPackages(projectRoot: string, options: { delivery?: boolean } = {}): Promise<ProjectBuildResult> {
-  try {
+  return withProjectWriteLock(projectRoot, "build-packages", async () => {
+    const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery;
+    if (partial) await assertProductionDeliveryReady(projectRoot);
     const result = await buildProjectPackagesInternal(projectRoot, options);
     await recordWorkspaceBuild(projectRoot);
+    if (partial) await finishProductionDelivery(projectRoot);
     return result;
-  }
-  catch (error) {
-    if (options.delivery !== false && (await readIndexerDelivery(projectRoot))?.current.length) {
-      await interruptDeliveryCadence(projectRoot);
-    }
-    throw error;
-  }
+  });
 }
 
 async function buildProjectPackagesInternal(projectRoot: string, options: { delivery?: boolean }): Promise<ProjectBuildResult> {
-  if (await legacyCodeIndexMigrationRequired(projectRoot)) {
-    throw new ContextError(ExitCode.WorkspaceStateError, "package build cannot publish the legacy codegraph collection", {
-      category: ErrorCategory.WorkspaceStateInvalid,
-      reason_code: "package/codeindex-migration-required",
-      next: "Run context status --format json and execute the Route-returned context migrate codeindex command.",
-    });
-  }
   const loaded = await loadContextProjectModule(projectRoot);
   const packages = loaded.project.packages;
   assertDistinctPackageOutputs(packages);
@@ -658,13 +650,13 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     const { readTaskRollback } = await import("./taskRollback.js");
     const { readMaintenance } = await import("./maintenanceStorage.js");
     const maintenanceActive = !!(await readMaintenance(projectRoot)).active;
-    if ((!maintenanceActive || (await readIndexerDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeIndexerDelivery(projectRoot, summaries.map((pkg) => pkg.outDir));
+    const production = await readProductionStage(projectRoot);
+    if (!production && (!maintenanceActive || (await readRevisionDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeRevisionDelivery(projectRoot);
     const { finishApprovedRevision } = await import("./approvedRevision.js");
     await finishApprovedRevision(projectRoot);
-    const { currentLedger } = await import("./indexerMainRunStoreRecords.js");
     const { readApprovedRevision } = await import("./approvedRevision.js");
     const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
-    if (!maintenanceActive && !await readTaskRollback(projectRoot) && !await currentLedger(projectRoot) && !await readApprovedRevision(projectRoot) &&
+    if (!production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
         !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(projectRoot);

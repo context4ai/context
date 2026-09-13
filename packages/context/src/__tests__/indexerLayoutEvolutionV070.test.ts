@@ -29,14 +29,12 @@ function kinds(base: IndexerLayoutProposal, target: IndexerLayoutProposal) {
 type LayoutChangeKind = ReturnType<typeof compareIndexerLayout>["changes"][number]["kind"];
 
 describe("layout resolver evolution fixtures", () => {
-  test("reports split and merge as reversible Artifact lineage with Section movement", () => {
+  test("reports split and merge while fragment identities stay article-local", () => {
     expect(kinds(fixture.baseline, fixture.split).sort()).toEqual([
       "artifact-split",
-      "section-move",
     ]);
     expect(kinds(fixture.split, fixture.baseline).sort()).toEqual([
       "artifact-merge",
-      "section-move",
     ]);
     expect(compare(fixture.baseline, fixture.split)).toMatchObject({
       requires_confirmation: true,
@@ -51,10 +49,6 @@ describe("layout resolver evolution fixtures", () => {
       forward: LayoutChangeKind;
       reverse: LayoutChangeKind;
     }> = [{
-      target: fixture.renamed,
-      forward: "artifact-rename",
-      reverse: "artifact-rename",
-    }, {
       target: fixture.collectionMoved,
       forward: "collection-move",
       reverse: "collection-move",
@@ -69,6 +63,10 @@ describe("layout resolver evolution fixtures", () => {
       expect(compare(fixture.baseline, scenario.target).requires_confirmation).toBe(true);
       expect(compare(scenario.target, fixture.baseline).requires_confirmation).toBe(true);
     }
+    // Replacing a writing identity is a removal plus addition, not an inferred
+    // subject-graph rename. A mere file move above preserves article identity.
+    expect(kinds(fixture.baseline, fixture.renamed).sort()).toEqual(["artifact-added", "artifact-removed"]);
+    expect(compare(fixture.baseline, fixture.renamed).requires_confirmation).toBe(true);
     const addition = compare(fixture.baseline, fixture.added);
     expect(addition).toMatchObject({
       requires_confirmation: false,
@@ -110,10 +108,14 @@ describe("layout resolver evolution fixtures", () => {
     expect(first.requires_confirmation).toBe(false);
   });
 
-  test("rejects logical Section and output path collisions before transition", () => {
-    expect(() => buildIndexerLayoutProposalSet([fixture.collision])).toThrow(
-      /logical Section identities/,
-    );
+  test("allows the same fragment key in different articles and rejects actual collisions", () => {
+    expect(buildIndexerLayoutProposalSet([fixture.collision]).proposals).toHaveLength(1);
+    const duplicateFragment = structuredClone(fixture.baseline);
+    duplicateFragment.artifacts[0]!.sections.push(duplicateFragment.artifacts[0]!.sections[0]!);
+    const { proposal_digest: _digest, ...payload } = duplicateFragment;
+    void _digest;
+    duplicateFragment.proposal_digest = indexerProtocolDigest(payload);
+    expect(() => buildIndexerLayoutProposalSet([duplicateFragment])).toThrow();
     expect(() => buildIndexerLayoutProposalSet([fixture.outputCollision])).toThrow(
       /Artifact output paths/,
     );

@@ -40,7 +40,7 @@ protocol and its commands are not a user-facing dependency.
 |---|---|
 | `provider.yaml` | Provider identity, graph catalog, and exported resources |
 | `graphs/workspace.yaml` | Stable knowledge-work task categories and legal transitions |
-| `graphs/indexer.yaml` | Digest-bound Indexer selection, execution, reconciliation, and gap subroutes |
+| `graphs/indexer.yaml` | Lightweight planning, stage writing, source updates and article revisions |
 | `actions/` | Action contracts resolved by the Context host adapter |
 | `resources/` | Procedures, dialogue, diagnostics, manuals, schemas, and dynamic-view definitions |
 | `schemas/` | Structured Agent payload contracts |
@@ -105,64 +105,31 @@ The Provider is considered valid only when all of the following are true:
     quality verdict. Suspected unfilled placeholders are review hints, not
     another CLI gate. Do not create a separate content-audit report or require
     an Agent to rewrite valid content solely to clear a heuristic signal.
-17. The Indexer graph advances from partition to author work only through
-    CLI-validated workset-set Facts. Exact SubjectKey resolution happens before
-    authoring; post-author composers receive only a bounded PrimaryResultView,
-    and reconciliation is unreachable until the independent composer set is
-    either explicitly not required or fully accepted with a current envelope.
-18. Main Indexer dispatch first recovers a local content-addressed run ledger.
-    Context exposes one Host-managed Authorized Workset View for the exact run;
-    the Agent does not manage evidence-specific readers, cursors, or receipts.
-    Partition, Author and Composer Routes expose one compact semantic schema and
-    one `context action complete-current` submission command; the Agent never
-    constructs internal Result envelopes or workspace payload scripts.
-    A validated Result and the accepted transition share one durable journal;
-    interrupted running work returns to pending, while a complete
-    accepted cache hit, including an empty Result, is not dispatched again.
-    Ordinal/fixed-count partition output advances to the next authorized strategy.
-    Once those strategies are exhausted, the graph starts a release-bound CLI
-    catalog-fallback request and mechanically accepts one parent unit; a persisted
-    exhausted-convergence predecessor is mandatory and no Agent or user Gate is used.
-19. Post-author composers use a separate local ledger. Accepted composer Results
-    and receipts survive process recovery independently; a current envelope is
-    published atomically only after the complete set is accepted. If only the
-    envelope pointer is absent, composition is replayed without rerunning a composer.
-20. Result reconciliation is a CLI-owned completion boundary. It recomputes
-    required-domain owners, consumes only accepted author-store Results, enumerates
-    every current question-target pair, and turns omitted pairs into material gaps.
-    Missing owners, missing accepted cache, unsupported targets, or blocking
-    material gaps cannot reach reconciliation readiness or a complete report.
-21. Material gaps remain part of the current reconciliation report and do not
-    create a second checkpoint ledger, authoring product, or Review surface.
-22. Newly captured Markdown or other authorized material re-enters the ordinary
-    main Indexer path. The same Result reconciliation either closes the question
-    from current source or keeps it unresolved. There is no answer-only operation,
-    planned landing, post-layout actualization, or second content Review.
-23. Final close is allowed only when no required gap remains, writes only the
-    approved knowledge structure, and then clears completed runtime lifecycle
-    state. Optional unresolved gaps do not become published knowledge metadata.
-24. Requirement confirmation always uses the CLI-recomputed canonical comparator.
-    Ordinary changes may use only their explicit session authority; contraction
-    and incomparable obligation replacement enter a non-delegable human Gate.
-25. SubjectKey schema authority is resolved from the CLI base contract or the one
-    owning extension Provider. Identity-breaking changes over approved Nodes need
-    a Provider major and one exact human re-identification authorization; invalid
-    mappings fail before the Gate. Ambiguous and invalid target resolution are
-    typed blocking/failure Outcomes and cannot enter author work.
-26. Initial Provider selection is part of the same current Route as the main
-    Indexer lifecycle. Its Agent Action receives exact requirements and the
-    CLI-bundled catalog and returns only non-CLI visible Skill identities plus
-    semantic Indexer entries through `context action complete-current`. The CLI
-    owns routing, fallback/conflict checks, static validation, resolution,
-    staging, final validation, and atomic registry apply. External Bundles use
-    one existing Host resolver continuation; non-allowlisted programs use the
-    existing execution Gate; successful Host results are recoverable without
-    exposing low-level payload commands.
-27. Once every Partition shard is current, Context exposes one semantic-outline
-    Review. Once Author/Composer output compiles, it exposes the ordinary final
-    Candidate Review. Ordinary mode presents both; explicitly managed mode lets
-    the Agent resolve both without user display. Destructive or ambiguous layout
-    transitions remain non-delegable in every mode.
+17. The Indexer graph routes lightweight planning, report confirmation and
+    stage-directory writing. The CLI releases ready batches; the Agent chooses
+    reading order and supported worker scheduling within them.
+18. The formal work-start report follows planning and precedes bulk writing.
+    It requires user confirmation, including in managed mode. Explicit article
+    targets can skip a separate planning submission, not the report.
+19. Skill availability and usage configuration are temporary guidance. Multiple
+    Skills may serve one module. No Provider hash, version, primary-owner or
+    per-member disposition protocol is required for production.
+20. Accepted drafts, task receipts, plans and transactions remain in `.tmp`.
+    Intact temporary state supports retries and current-process recovery.
+    Clearing it or cloning starts fresh work from formal knowledge and sources.
+21. The Agent submits stage-relative Markdown and reference files, including
+    completed subsets. Local failures return repair information without rejecting
+    independently accepted tasks.
+22. Source authorization, safe file reading, real references and concurrent-write
+    protection remain enforced. Skill choice does not grant source authority.
+23. Missing required material remains unfinished work. Explicit exclusions use
+    the existing requirement mechanism; optional gaps are not published metadata.
+24. Stable article and fragment identities support repairs. References contain
+    actual source paths and line ranges; the CLI computes regional digests.
+25. Formal article revision and source updates retain their current routes.
+    Review reads current accepted work, never retired Provider compile files.
+26. Only formal knowledge, necessary sources and long-term requirements persist
+    outside the temporary area. Historical workflow migration is not supported.
 
 ## Managed host-loop receipts
 

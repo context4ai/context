@@ -50,14 +50,13 @@ export async function readPartitionStream(root: string): Promise<PartitionStream
   return { ...parsed, partition_ledger: ledger };
 }
 
-/** Ignore the mutable create/enrich target view, but include every material and
- * instruction binding that can change the actual page. */
+/** Bind the writing group and all material/instruction changes. */
 export function partitionAuthorBinding(spec: Pick<MainRunSpec, "request" | "validation">): string {
   const workset = spec.request.workset;
   if (workset.stage !== "author") throw new TypeError("Expected an Author plan");
   return indexerProtocolDigest({
     requirement: workset.requirement_set_digest, indexer: workset.indexer_id,
-    subject: spec.validation.expected_subject_key,
+    logical_unit_ref: workset.logical_unit_ref,
     group: workset.partition_plan_binding_digest,
     dependency: workset.group_dependency_view_digest,
     source: workset.source_binding_digest,

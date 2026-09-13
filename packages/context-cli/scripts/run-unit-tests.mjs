@@ -9,7 +9,6 @@ const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const testsRoot = join(packageRoot, "src", "__tests__");
 const isolatedTests = new Set([
   "projectCompileProseV066Evidence.test.ts",
-  "projectIndexerProviderDispatcherV070.test.ts",
 ]);
 const chunkSize = 32;
 

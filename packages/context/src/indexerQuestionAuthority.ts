@@ -11,7 +11,6 @@ import {
   indexerRestrictedSelectorSchema,
   validateIndexerRestrictedSelector,
 } from "./indexerRestrictedSelector.js";
-import { canonicalIndexerNodeRef, indexerSubjectKeySchema } from "./indexerSubjectIdentity.js";
 
 const questionAuthoritySchema = z.object({
   kind: z.enum(["cli-base-contract", "verified-contract-overlay"]),
@@ -143,8 +142,6 @@ const questionTargetInventoryItemSchema = z.object({
   owner_cell_ref: indexerCanonicalRefSchema,
   source_ref: indexerCanonicalRefSchema,
   module_ref: indexerCanonicalRefSchema.nullable(),
-  subject_key: indexerSubjectKeySchema,
-  node_ref: indexerCanonicalRefSchema,
   canonical_fact_slice_digest: indexerDigestSchema,
 }).strict();
 
@@ -164,15 +161,16 @@ export type IndexerQuestionTargetInventory = z.infer<
   typeof indexerQuestionTargetInventorySchema
 >;
 
-export function indexerQuestionSubjectTargetRef(input: {
-  target_domain_ref: string;
-  owner_cell_ref: string;
-  subject_key: unknown;
-}): string {
+export function indexerQuestionSubjectTargetRef(input: Pick<
+  IndexerQuestionTargetInventoryItem,
+  "target_domain_ref" | "owner_cell_ref" | "source_ref" | "module_ref" | "canonical_fact_slice_digest"
+>): string {
   return `question-target:${indexerProtocolDigest({
     target_domain_ref: input.target_domain_ref,
     owner_cell_ref: input.owner_cell_ref,
-    subject_key: input.subject_key,
+    source_ref: input.source_ref,
+    module_ref: input.module_ref,
+    canonical_fact_slice_digest: input.canonical_fact_slice_digest,
   })}`;
 }
 
@@ -194,13 +192,12 @@ export function buildIndexerQuestionTargetInventory(input: {
   source_inventory_digests: readonly string[];
   items: readonly Omit<
     IndexerQuestionTargetInventoryItem,
-    "target_ref" | "node_ref"
+    "target_ref"
   >[];
 }): IndexerQuestionTargetInventory {
   const items = input.items.map((item) => ({
     ...item,
     target_ref: indexerQuestionSubjectTargetRef(item),
-    node_ref: canonicalIndexerNodeRef(item.subject_key),
   })).sort((left, right) =>
     compareIndexerCanonicalText(left.target_ref, right.target_ref)
   );
@@ -235,8 +232,8 @@ export function validateIndexerQuestionTargetInventory(
     profile_contract_digests: inventory.profile_contract_digests,
     source_inventory_digests: inventory.source_inventory_digests,
     items: inventory.items.map((item) => Object.fromEntries(
-      Object.entries(item).filter(([key]) => key !== "target_ref" && key !== "node_ref"),
-    ) as Omit<IndexerQuestionTargetInventoryItem, "target_ref" | "node_ref">),
+      Object.entries(item).filter(([key]) => key !== "target_ref"),
+    ) as Omit<IndexerQuestionTargetInventoryItem, "target_ref">),
   });
   if (rebuilt.inventory_digest !== inventory.inventory_digest) {
     throw new TypeError("QuestionTargetInventory is not canonical or contains forged target refs");

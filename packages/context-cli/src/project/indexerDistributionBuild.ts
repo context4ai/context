@@ -42,8 +42,6 @@ import { validateBundledIndexerMarkdownRoutingFixtures } from
   "./indexerDistributionMarkdownAuthoringValidation.js";
 import { validateBundledIndexerMarkdownEditorialFixtures } from
   "./indexerDistributionMarkdownEditorialValidation.js";
-import { validateBundledIndexerMarkdownMigrationFixtures } from
-  "./indexerDistributionMarkdownMigrationValidation.js";
 import { validateBundledIndexerMetricGuidance } from
   "./indexerDistributionMetricGuidanceValidation.js";
 import { inspectCanonicalQuestionPayloadsInBundle } from
@@ -251,11 +249,6 @@ export async function materializeBundledIndexerDistribution(input: {
         operatorContract: operators,
       });
       await validateBundledIndexerMarkdownEditorialFixtures({
-        source,
-        expectedProfiles: expected.profiles,
-        manifest,
-      });
-      await validateBundledIndexerMarkdownMigrationFixtures({
         source,
         expectedProfiles: expected.profiles,
         manifest,

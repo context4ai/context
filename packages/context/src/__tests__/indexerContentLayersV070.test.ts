@@ -26,66 +26,33 @@ function fact(ref: string, value: string): IndexerArtifactFact {
   };
 }
 
-describe("Indexer Fact/content layer protocol", () => {
-  test("projects canonical Facts through deterministic blocks without counting them as prose", () => {
+describe("Article content rendering", () => {
+  test("renders parser tables on demand without making facts an article payload", () => {
     const facts = [fact("fact:example-b", "Second"), fact("fact:example-a", "First")];
     expect(projectIndexerFactValue(facts)).toEqual(["First", "Second"]);
-    expect(renderIndexerDeterministicFacts({ renderer: "bullet-list", facts })).toBe(
-      "- First\n- Second",
-    );
+    expect(renderIndexerDeterministicFacts({ renderer: "bullet-list", facts })).toBe("- First\n- Second");
+  });
 
-    const blocks = materializeIndexerStructuredContent({
-      facts,
-      blocks: [{
-        block_id: "example-catalog",
-        layer: "deterministic-block",
-        renderer: "bullet-list",
-        fact_refs: ["fact:example-b", "fact:example-a"],
-      }, {
-        block_id: "usage-boundary",
-        layer: "semantic-prose",
-        markdown: "Use the examples only through the public component contract.",
-        evidence_refs: ["evidence:example-a"],
-      }],
-    });
-    expect(blocks.map((block) => block.layer)).toEqual([
-      "deterministic-block",
-      "semantic-prose",
-    ]);
-    expect(blocks[0]?.fact_refs).toEqual(["fact:example-a", "fact:example-b"]);
-    expect(blocks[0]?.evidence_refs).toEqual([
-      "evidence:example-a",
-      "evidence:example-b",
-    ]);
-    expect(blocks[1]?.fact_refs).toEqual([]);
+  test("materializes prose and its actual region references", () => {
+    const references = [{ source_ref: "file:guide",
+      locator: { path: "guide.md", start_line: 1, end_line: 3 },
+      content_digest: `sha256:${"a".repeat(64)}` }];
+    const blocks = materializeIndexerStructuredContent({ blocks: [{
+      block_id: "usage", layer: "semantic-prose", markdown: "Use the public entry.", references,
+    }] });
+    expect(blocks[0]).toMatchObject({ layer: "semantic-prose", markdown: "Use the public entry.", references });
+    expect(blocks[0]).not.toHaveProperty("fact_refs");
+    expect(blocks[0]).not.toHaveProperty("evidence_refs");
     expect(blocks.map(validateIndexerRenderedContentBlock)).toEqual(blocks);
   });
 
-  test("rejects layer spoofing and digest drift", () => {
-    expect(() => buildIndexerRenderedContentBlock({
-      layer: "deterministic-block",
-      markdown: "Invented catalog",
-      evidence_refs: ["evidence:sample"],
-    })).toThrow("does not match");
-    expect(() => buildIndexerRenderedContentBlock({
-      layer: "semantic-prose",
-      markdown: "Narrative",
-      fact_refs: ["fact:sample"],
-      evidence_refs: ["evidence:sample"],
-    })).toThrow("does not match");
-
+  test("rejects rendered content digest drift", () => {
     const block = buildIndexerRenderedContentBlock({
-      layer: "semantic-prose",
-      markdown: "Source-backed explanation.",
-      evidence_refs: ["evidence:sample"],
+      layer: "semantic-prose", markdown: "Source-backed explanation.", references: [],
     });
-    expect(() => validateIndexerRenderedContentBlock({
-      ...block,
-      markdown: "Changed explanation.",
-    })).toThrow("digest");
+    expect(() => validateIndexerRenderedContentBlock({ ...block, markdown: "Changed." })).toThrow("digest");
   });
 });
-
 
 test("supporting defaults retain their evidence and cannot read unrelated subjects", () => {
   const props: IndexerArtifactFact = { ...fact("fact:props", ""), subject_key: SUBJECT, value: {
@@ -97,14 +64,14 @@ test("supporting defaults retain their evidence and cannot read unrelated subjec
     name: "View", kind: "component", file: "view.tsx", visibility: "exported", propsType: "Props",
     members: [{ name: "enabled", kind: "prop", typeAnnotation: "boolean", defaultValue: "true" }],
   } };
-  const block = { block_id: "api", layer: "deterministic-block" as const, renderer: "public-contract-table" as const, fact_refs: [props.fact_ref] };
-  const rendered = materializeIndexerStructuredContent({ blocks: [block], facts: [props, component] })[0]!;
-  expect(rendered.markdown).toContain("| true |");
-  expect(rendered.markdown).not.toContain("| View | enabled |");
-  expect(rendered.fact_refs).toEqual(["fact:component", "fact:props"]);
-  expect(rendered.evidence_refs).toEqual(["evidence:component", "evidence:props"]);
+  const rendered = renderIndexerDeterministicFacts({
+    renderer: "public-contract-table", facts: [props], supporting_facts: [component],
+  });
+  expect(rendered).toContain("| true |");
+  expect(rendered).not.toContain("| View | enabled |");
   const unrelated = { ...component, subject_key: { ...SUBJECT, local_key: "other" } };
-  const isolated = materializeIndexerStructuredContent({ blocks: [block], facts: [props, unrelated] })[0]!;
-  expect(isolated.markdown).toContain("| false |");
-  expect(isolated.fact_refs).toEqual(["fact:props"]);
+  const isolated = renderIndexerDeterministicFacts({
+    renderer: "public-contract-table", facts: [props], supporting_facts: [unrelated],
+  });
+  expect(isolated).toContain("| false |");
 });

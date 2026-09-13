@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { indexerArtifactRef } from "./indexerArtifact.js";
 import {
   validateIndexerArtifactBundle,
   type IndexerArtifactBundle,
@@ -111,19 +112,25 @@ function logicalUnitRegistrations(input: {
   if (bundleByUnit.size !== input.bundles.length) {
     throw new TypeError("physical Artifact audit received duplicate logical-unit Bundles");
   }
+  const usedBundles = new Set<string>();
   const registrations = input.layoutSet.proposals.flatMap((proposal) => {
-    const bundle = bundleByUnit.get(proposal.node.node_ref);
+    if (!proposal.artifacts.length) return [];
+    const first = proposal.artifacts[0]!;
+    const bundle = input.bundles.find(candidate => candidate.artifacts.some(entry =>
+      indexerArtifactRef(candidate.logical_unit_ref, entry) === first.artifact_ref));
     if (bundle === undefined) {
       if (proposal.artifacts.length === 0) return [];
-      throw new TypeError(`layout Node ${proposal.node.node_ref} lacks an Artifact Bundle`);
+      throw new TypeError(`Article ${first.artifact_ref} lacks an Artifact Bundle`);
     }
+    usedBundles.add(bundle.logical_unit_ref);
     const entries = bundleEntryById(bundle);
     if ((proposal.delivery_artifact_ids === undefined && entries.size !== proposal.artifacts.length) || entries.size !== bundle.artifacts.length) {
       throw new TypeError(`Artifact Bundle ${bundle.bundle_digest} does not close its layout Artifact set`);
     }
     return proposal.artifacts.map((artifact): IndexerPhysicalArtifactRegistration => {
       const entry = entries.get(artifact.artifact_id);
-      if (entry === undefined || entry.artifact_kind !== artifact.artifact_kind) {
+      if (entry === undefined || entry.artifact_kind !== artifact.artifact_kind ||
+          indexerArtifactRef(bundle.logical_unit_ref, entry) !== artifact.artifact_ref) {
         throw new TypeError(`layout Artifact ${artifact.artifact_id} is absent or changed in its Bundle`);
       }
       return {
@@ -131,7 +138,6 @@ function logicalUnitRegistrations(input: {
         owner: {
           kind: "logical-unit",
           logical_unit_ref: bundle.logical_unit_ref,
-          node_ref: proposal.node.node_ref,
           artifact_ref: artifact.artifact_ref,
           artifact_id: artifact.artifact_id,
           artifact_kind: artifact.artifact_kind,
@@ -147,15 +153,7 @@ function logicalUnitRegistrations(input: {
       };
     });
   });
-  const artifactBearingUnits = input.layoutSet.proposals.filter((proposal) =>
-    proposal.artifacts.length > 0
-  );
-  if (
-    bundleByUnit.size !== artifactBearingUnits.length ||
-    [...bundleByUnit.keys()].some((nodeRef) =>
-      !artifactBearingUnits.some((proposal) => proposal.node.node_ref === nodeRef)
-    )
-  ) {
+  if (usedBundles.size !== input.bundles.length) {
     throw new TypeError("physical Artifact audit received an unrelated Artifact Bundle");
   }
   return registrations;

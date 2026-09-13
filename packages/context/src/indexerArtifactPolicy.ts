@@ -262,7 +262,6 @@ const artifactBundleBaseEntrySchema = z.object({
   artifact_kind: indexerIdSchema,
   purpose: z.enum(["required", "discretionary"]),
   reader_question_refs: z.array(indexerCanonicalRefSchema),
-  evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
 }).strict();
 
 const artifactBundleSplitEntrySchema = z.object({
@@ -270,7 +269,6 @@ const artifactBundleSplitEntrySchema = z.object({
   artifact_kind: indexerIdSchema,
   purpose: z.literal("semantic-split"),
   reader_question_refs: z.array(indexerCanonicalRefSchema),
-  evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
   split_of: indexerIdSchema,
   boundary: z.object({
     axis: indexerIdSchema,
@@ -307,7 +305,6 @@ function canonicalBundleEntry(entry: IndexerArtifactBundleEntry): IndexerArtifac
       entry.reader_question_refs,
       `${entry.artifact_id} reader questions`,
     ),
-    evidence_refs: uniqueSorted(entry.evidence_refs, `${entry.artifact_id} evidence refs`),
   });
 }
 
@@ -408,10 +405,8 @@ export function validateIndexerArtifactBundlePolicy(input: {
   actual_artifacts: readonly {
     artifact_id: string;
     artifact_kind: string;
-    evidence_refs: readonly string[];
   }[];
   allowed_question_refs: readonly string[];
-  known_evidence_refs: readonly string[];
 }): IndexerArtifactBundle {
   const bundle = validateIndexerArtifactBundle(input.bundle);
   const eligibility = validateIndexerArtifactPolicyEligibilityReport(input.eligibility);
@@ -427,7 +422,6 @@ export function validateIndexerArtifactBundlePolicy(input: {
     throw new TypeError("actual Artifact identities must be unique");
   }
   const allowedQuestions = new Set(input.allowed_question_refs);
-  const knownEvidence = new Set(input.known_evidence_refs);
   for (const entry of bundle.artifacts) {
     const actual = actualById.get(entry.artifact_id);
     if (actual?.artifact_kind !== entry.artifact_kind) {
@@ -435,15 +429,6 @@ export function validateIndexerArtifactBundlePolicy(input: {
     }
     if (entry.reader_question_refs.some((ref) => !allowedQuestions.has(ref))) {
       throw new TypeError(`Artifact Bundle entry ${entry.artifact_id} uses an unknown reader question`);
-    }
-    if (entry.evidence_refs.some((ref) => !knownEvidence.has(ref))) {
-      throw new TypeError(`Artifact Bundle entry ${entry.artifact_id} uses unknown evidence`);
-    }
-    if (
-      canonicalIndexerJson(uniqueSorted(actual.evidence_refs, "actual Artifact evidence")) !==
-      canonicalIndexerJson(entry.evidence_refs)
-    ) {
-      throw new TypeError(`Artifact Bundle entry ${entry.artifact_id} evidence is incomplete`);
     }
     const required = variant.required_artifact_kinds.includes(entry.artifact_kind);
     const discretionary = variant.discretionary_artifact_kinds.includes(entry.artifact_kind);

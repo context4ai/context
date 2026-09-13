@@ -28,7 +28,7 @@ export function projectAuthorWritingBrief(value: Record<string, unknown>): Recor
       "| Section key | Heading | Input |", "| --- | --- | --- |");
     for (const section of contract.sections) {
       const heading = template.section_bodies[section.section_key]?.match(/^#+\s+(.+)$/mu)?.[1] ?? section.section_key;
-      briefs.push(`| ${section.section_key} | ${heading.replaceAll("|", "\\|")} | ${section.deterministic_block_ids.length ? "CLI renders authorized facts; do not hand-copy the contract table." : section.variable_ids.map(id => `\`${id}\``).join(", ")} |`);
+      briefs.push(`| ${section.section_key} | ${heading.replaceAll("|", "\\|")} | ${section.deterministic_block_ids.length ? "Use the selected formatter with source-derived values; do not repeat the table." : section.variable_ids.map(id => `\`${id}\``).join(", ")} |`);
     }
     briefs.push("");
   }
@@ -43,7 +43,7 @@ export function projectAuthorWritingBrief(value: Record<string, unknown>): Recor
   for (const key of ["page_template", "article_templates", "page_guidance", "article_guidance"]) delete result[key];
   result.writing_brief = [
     "# Selected writing guidance", "",
-    "Follow the accepted plan and the relevant blueprint below. Keep useful evidence-backed text; optional headings are guidance, not completion gates. Bind semantic values to authorized evidence in their own article. Do not invent facts to fill a slot. Shared examples illustrate writing, not evidence for this task.", "",
+    "Follow the accepted plan and the relevant blueprint below. Keep useful evidence-backed text; optional headings are guidance, not completion gates. Bind semantic values to the actual source regions used in their own article. Do not invent facts to fill a slot. Shared examples illustrate writing, not evidence for this task.", "",
     ...briefs,
   ].join("\n");
   return result;

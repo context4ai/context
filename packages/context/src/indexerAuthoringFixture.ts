@@ -41,7 +41,6 @@ export const indexerAuthoringFixtureSchema = z.object({
   canonical_facts: z.record(canonicalJsonSchema),
   artifact_policy_variant: indexerIdSchema,
   artifacts: indexerArtifactBundleSchema.shape.artifacts,
-  evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
 }).strict();
 
 export type IndexerAuthoringFixture = z.infer<typeof indexerAuthoringFixtureSchema>;
@@ -50,15 +49,6 @@ export interface ValidatedIndexerAuthoringFixture {
   fixture: IndexerAuthoringFixture;
   eligibility: IndexerArtifactPolicyEligibility;
   bundle: IndexerArtifactBundle;
-}
-
-function exactSortedUnique(values: readonly string[], field: string): string[] {
-  const sorted = [...values].sort();
-  if (new Set(sorted).size !== sorted.length ||
-    sorted.some((value, index) => value !== values[index])) {
-    throw new TypeError(`${field} must be unique and canonically sorted`);
-  }
-  return sorted;
 }
 
 export function validateIndexerAuthoringFixture(input: {
@@ -98,17 +88,6 @@ export function validateIndexerAuthoringFixture(input: {
   )) {
     throw new TypeError("authoring fixture chooses an ineligible Artifact policy variant");
   }
-  const evidenceRefs = exactSortedUnique(fixture.evidence_refs, "authoring fixture evidence refs");
-  if (evidenceRefs.some((evidenceRef) => !evidenceRef.startsWith("evidence:anonymous-"))) {
-    throw new TypeError("authoring fixture evidence must use the anonymous evidence namespace");
-  }
-  const usedEvidence = [...new Set(fixture.artifacts.flatMap((artifact) =>
-    artifact.evidence_refs
-  ))].sort();
-  if (usedEvidence.length !== evidenceRefs.length ||
-    usedEvidence.some((value, index) => value !== evidenceRefs[index])) {
-    throw new TypeError("authoring fixture evidence inventory must exactly match its Artifacts");
-  }
   const bundle = buildIndexerArtifactBundle({
     logical_unit_ref: fixture.logical_unit_ref,
     artifact_policy_variant: fixture.artifact_policy_variant,
@@ -121,10 +100,8 @@ export function validateIndexerAuthoringFixture(input: {
     actual_artifacts: bundle.artifacts.map((artifact) => ({
       artifact_id: artifact.artifact_id,
       artifact_kind: artifact.artifact_kind,
-      evidence_refs: artifact.evidence_refs,
     })),
     allowed_question_refs: profile.reader_question_contracts.map((question) => question.ref),
-    known_evidence_refs: evidenceRefs,
   });
   return { fixture, eligibility, bundle };
 }

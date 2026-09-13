@@ -186,15 +186,10 @@ describe("LayerCompositionInputView", () => {
                 block_id: "summary",
                 layer: "semantic-prose",
                 markdown: "Derived summary.",
-                evidence_refs: ["evidence:sample"],
+                references: [],
               }],
             }],
           },
-          evidence_refs: [{
-            ref: "evidence:sample",
-            kind: "code",
-            source_digest: `sha256:${"e".repeat(64)}`,
-          }],
         }],
       },
     };

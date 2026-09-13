@@ -24,7 +24,6 @@ import {
   type IndexerInventoryMember,
 } from "./indexerInventoryDisposition.js";
 import type { IndexerMainPartitionWorkset } from "./indexerMainWorkset.js";
-import { canonicalIndexerNodeRef } from "./indexerSubjectIdentity.js";
 
 const catalogBlockSchema = z.object({
   renderer: z.literal("context.indexer.deterministic-catalog/v1"),
@@ -125,7 +124,6 @@ export function validateIndexerCatalogFallbackRecord(
     record.partition_plan.partition_axis !== INDEXER_CATALOG_FALLBACK_STRATEGY_ID ||
     record.partition_plan.groups.length !== 1 ||
     group?.group_key !== "catalog-root" ||
-    group.subject_intent !== "primary" ||
     group.question_target_bindings.some((binding) =>
       binding.role !== "primary-carrier"
     ) ||
@@ -174,7 +172,12 @@ export function buildIndexerCatalogFallback(input: {
   });
   const inventory = fallbackInventory(input.canonical_inventory_members);
   const memberIds = inventory.map((member) => member.member_id);
-  const logicalUnitRef = canonicalIndexerNodeRef(input.workset.partition_subject_key);
+  const logicalUnitRef = indexerProtocolDigest({
+    indexer_id: input.workset.indexer_id,
+    source_ref: input.workset.source_ref,
+    module_ref: input.workset.module_ref,
+    group_key: "catalog-root",
+  });
   const targets = [...(
     input.required_question_target_refs ?? input.workset.allowed_question_target_refs
   )].sort(compareIndexerCanonicalText);
@@ -192,11 +195,9 @@ export function buildIndexerCatalogFallback(input: {
       indexer_id: input.workset.indexer_id,
       indexer_fingerprint: input.workset.primary_execution_fingerprint,
       requirement_digest: input.workset.requirement_set_digest,
-      subject_key_schema_digest: input.workset.subject_key_schema_digest,
       source_scope_digest: input.workset.source_scope_digest,
       source_refs: [...input.authorized_source_refs].sort(compareIndexerCanonicalText),
       module_ref: input.workset.module_ref,
-      partition_subject_key: input.workset.partition_subject_key,
       parent_scope_ref: input.workset.module_ref ?? input.workset.source_ref,
       inventory_digest: input.workset.partition_inventory_digest,
       question_target_inventory_digest: input.workset.question_target_inventory_digest,
@@ -208,8 +209,6 @@ export function buildIndexerCatalogFallback(input: {
     reader_question_refs: [...input.workset.reader_question_refs],
     groups: [{
       group_key: "catalog-root",
-      subject_key: input.workset.partition_subject_key,
-      subject_intent: "primary",
       logical_unit_ref: logicalUnitRef,
       label: "Catalog",
       reader_question_refs: [...input.workset.reader_question_refs],

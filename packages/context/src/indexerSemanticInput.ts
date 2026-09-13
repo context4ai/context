@@ -1,3 +1,4 @@
+import { articleSourceLocatorSchema } from "./articleStructure.js";
 import { indexerIdSchema } from "./indexerProtocolCommon.js";
 import { knowledgeMapUpdateSchema } from "./knowledgeMap.js";
 import { indexerArticleKeySchema, indexerArticlePlanSchema } from "./indexerArticlePlan.js";
@@ -54,15 +55,6 @@ export const indexerProviderProgramAuthorizationSemanticInputSchema = z.object({
   decision: z.enum(["approved", "rejected"]),
 }).strict();
 
-const subjectChoiceSchema = z.union([
-  z.string().min(1),
-  z.object({
-    namespace: z.string().min(1),
-    kind: z.string().min(1),
-    local_key: z.string().min(1),
-  }).strict(),
-]);
-
 const partitionGroupSchema = z.object({
   key: z.string().min(1),
   title: z.string().min(1),
@@ -73,8 +65,6 @@ const partitionGroupSchema = z.object({
   priority: z.number().int().nonnegative().optional(),
   delivery_boundary: z.boolean().optional(),
   ready_for_author: z.boolean().optional(),
-  subject: subjectChoiceSchema,
-  subject_intent: z.enum(["primary", "enrich-or-independent"]),
   members: z.array(z.string().min(1)).min(1),
   questions: z.array(z.string().min(1)).default([]),
   question_targets: z.array(z.object({
@@ -154,8 +144,7 @@ const authorSectionSchema = z.object({
   heading: z.string().min(1),
   visuals: z.array(authorVisualSchema).optional(),
   markdown: z.string().min(1),
-  source_items: z.array(z.string().min(1)).default([]),
-  facts: z.array(z.string().min(1)).default([]),
+  references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3).default([]),
   answers: z.array(z.string().min(1)).default([]),
 }).strict();
 
@@ -163,8 +152,7 @@ const authorTemplateVariablesSchema = z.record(z.union([
   z.string(),
   z.object({
     value: z.string(),
-    source_items: z.array(z.string().min(1)).default([]),
-    facts: z.array(z.string().min(1)).default([]),
+    references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3).default([]),
   }).strict(),
 ]));
 
@@ -201,16 +189,7 @@ const authorInputBaseSchema = z.object({
   }).strict()).min(1).optional(),
   artifact_intent: z.string().min(1).optional(),
   template_variables: authorTemplateVariablesSchema.optional(),
-  example_candidates: z.array(z.object({
-    scenario_key: indexerIdSchema,
-    source_item: z.string().min(1),
-  }).strict()).optional(),
   policy: z.string().min(1).optional(),
-  target_resolutions: z.array(z.object({
-    target: z.string().min(1),
-    disposition: z.enum(["reuse-existing", "create-independent", "unresolved"]),
-    reason_code: z.string().min(1).optional(),
-  }).strict()).default([]),
   title: z.string().min(1).optional(),
   summary: z.string().min(1).optional(),
   sections: z.array(authorSectionSchema).default([]),
@@ -304,7 +283,7 @@ const postAuthorSectionSchema = z.object({
   heading: z.string().min(1),
   visuals: z.array(authorVisualSchema).optional(),
   markdown: z.string().min(1),
-  source_refs: z.array(z.string().min(1)).min(1),
+  references: z.array(z.object({ source_ref: z.string().min(1), locator: articleSourceLocatorSchema }).strict()).max(3),
 }).strict();
 
 const postAuthorInputBaseSchema = z.object({
@@ -386,8 +365,16 @@ export const indexerLayoutConfirmationInputSchema = z.discriminatedUnion("decisi
   }),
 ]);
 
+const revisionSectionReferencesSchema = z.array(z.object({
+  source_ref: z.string().min(1), locator: articleSourceLocatorSchema,
+}).strict()).max(3);
+
 export const approvedRevisionSemanticInputSchema = z.union([
-  z.object({ stage: z.literal("approved-revision"), markdown: z.string().min(1) }).strict(),
+  z.object({ stage: z.literal("approved-revision"), markdown: z.string().min(1),
+    sections: z.array(z.object({ section_id: z.string().min(1),
+      references: revisionSectionReferencesSchema,
+    }).strict()).optional(),
+  }).strict(),
   z.object({
     stage: z.literal("approved-revision"),
     sections: z.array(z.object({
@@ -395,8 +382,10 @@ export const approvedRevisionSemanticInputSchema = z.union([
       content: z.array(z.union([
         z.object({ markdown: z.string() }).strict(),
         z.object({ program: z.string().min(1) }).strict(),
-      ])).min(1),
-    }).strict()).min(1),
+      ])).min(1).optional(),
+      references: revisionSectionReferencesSchema.optional(),
+    }).strict().refine(section => section.content !== undefined || section.references !== undefined,
+      "A section edit requires content or references")).min(1),
   }).strict(),
 ]);
 

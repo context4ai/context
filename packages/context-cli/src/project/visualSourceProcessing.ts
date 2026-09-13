@@ -1,6 +1,6 @@
 import YAML from "yaml";
-import { indexerProtocolDigest } from "@c4a/context";
-import { compactApprovedKnowledgeMarkdown, ensureApprovedKnowledgePresentation } from "./approvedKnowledgeMetadata.js";
+import { readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
+import { parseKnowledgeFrontmatter } from "./packageKnowledgeProjection.js";
 import { readFile } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
 import { createHash } from "node:crypto";
@@ -77,19 +77,18 @@ export function readVisualReceipts(markdown: string): Array<{ receipt: VisualRec
 
 export async function approvedVisualResults(root: string) {
   const results: VisualResource["previous"] = [];
-  let approved: Array<{ path: string; approved_content_digest: string }> = [];
+  let approved: Awaited<ReturnType<typeof readApprovedKnowledgeMetadataIndex>>;
   try {
-    const structure = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
-    if (Array.isArray(structure?.approved_knowledge)) approved = structure.approved_knowledge;
+    approved = await readApprovedKnowledgeMetadataIndex(root);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT" || error instanceof YAML.YAMLError) return results;
     throw error;
   }
   for (const file of await walkApprovedMarkdown(join(root, "knowledge"))) {
     if (isKnowledgeAssetPath(file.relPath)) continue;
+    if (!approved.byPath.has(file.relPath)) continue;
     const content = await readFile(file.absPath, "utf8");
-    const version = indexerProtocolDigest(compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(content)));
-    if (!approved.some(page => page.path === file.relPath && page.approved_content_digest === version)) continue;
+    if (parseKnowledgeFrontmatter(content).deprecated === true) continue;
     results.push(...readVisualReceipts(content).map(result => ({ ...result, page: `knowledge/${file.relPath}` })));
   }
   return results;

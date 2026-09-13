@@ -141,14 +141,10 @@ describe("0.6.2 knowledge resource projection", () => {
         YAML.stringify({
           title: "Example",
           type: "Guide",
-          node_ref: "action/example",
-          view_ref: "sop:action/example",
-          node_type: "action",
           description: "Example resource projection.",
           tags: ["docs"],
           timestamp: "2026-08-13T00:00:00.000Z",
           resource: "lark:20260813/example",
-          sources: ["lark:20260813/example"],
         }).trimEnd(),
         "---",
         "",
@@ -156,6 +152,13 @@ describe("0.6.2 knowledge resource projection", () => {
         "",
       ].join("\n");
       await writeFile(approvedPath, approved, "utf8");
+      await writeFile(join(projectRoot, "knowledge/structure.yaml"), YAML.stringify({
+        schema_version: "context.approved-structure.v1",
+        articles: [{ article_id: "example", path: "guides/example.md", collection: "sop", visibility: "public",
+          sections: [{ id: "image", references: [{ source_ref: "lark:20260813/example",
+            locator: { path: "example.md", start_line: 1, end_line: 1 },
+            content_digest: "sha256:" + "a".repeat(64) }] }] }],
+      }));
       expect(unprojectedSourceAssetLinks(approved)).toHaveLength(1);
       expect((await verifyProjectWorkspace(projectRoot)).issues).toContainEqual(expect.objectContaining({
         code: "approved-resource-source-path-unprojected",

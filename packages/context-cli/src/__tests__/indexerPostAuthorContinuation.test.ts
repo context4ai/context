@@ -25,7 +25,7 @@ function spec(bundle: string, primary = "primary", selection = "selection", vali
   });
   const plan = planIndexerPostAuthorComposition({ effective_composer_set: effective,
     author_workset_digest: digest("author"), primary_result_digest: digest(primary),
-    primary_facts: [], primary_artifacts: [], validator_contract_digest: digest(validator),
+    primary_artifacts: [], validator_contract_digest: digest(validator),
     current_profile_binding_digest: digest("profile"), allowed_target_refs: [] });
   return normalizePostAuthorRunSpec({ requirement_set_digest: digest("requirements"),
     plan, effective_composer_set: effective, validator_contract_digest: digest(validator),

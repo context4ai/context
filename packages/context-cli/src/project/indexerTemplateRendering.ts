@@ -1,4 +1,3 @@
-import { bundledIndexerProfileContract } from "./indexerBaseContracts.js";
 import { expandArticleBlueprint } from "./indexerArticleBlueprint.js";
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
@@ -340,7 +339,7 @@ export async function materializeIndexerTemplate(input: {
     : source;
   const parsed = splitFrontmatter(contractSource);
   const binding = manifest.provider.templates!.find(item => item.id === input.templateId && item.profile === input.profile)!;
-  const shared = expandArticleBlueprint(parsed.metadata, { ...binding, accepted_evidence_kinds: [...new Set(bundledIndexerProfileContract().profiles.find(profile => profile.id === input.profile)?.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds) ?? ["code", "contract", "configuration", "documentation"])] });
+  const shared = expandArticleBlueprint(parsed.metadata, binding);
   const contract = shared?.contract ?? indexerTemplateContractSchema.parse(parsed.metadata);
   if (contract.template_id !== input.templateId || contract.profile !== input.profile) {
     throw new TypeError("Indexer template frontmatter does not match its manifest identity");
@@ -555,21 +554,14 @@ export function renderIndexerTemplateArtifact(input: {
     applicabilityConditionRefs: input.applicabilityConditionRefs,
   });
   const questionBindings = exactQuestionBindings(contract, input.questionBindings);
-  const evidenceKinds = new Map(result.evidence_bindings.map((evidence) => [evidence.evidence_ref, evidence.kind]));
   const variableContracts = new Map(contract.variables.map((variable) => [variable.id, variable]));
   const blocks = new Map(contract.deterministic_blocks.map((block) => [block.id, block]));
   for (const [id, binding] of Object.entries(artifact.variables)) {
     const variableContract = variableContracts.get(id);
     if (variableContract === undefined) throw new TypeError(`Artifact supplies undeclared template variable ${id}`);
-    if (
-      new Set(binding.evidence_refs).size !== binding.evidence_refs.length ||
-      binding.evidence_refs.some((ref) => !evidenceKinds.has(ref))
-    ) {
-      throw new TypeError(`template variable ${id} has invalid evidence bindings`);
-    }
     validateVariableValue(variableContract, binding.value, input.diagnostics);
   }
-  validateIndexerTemplateVariableLayers({ result, artifact, contract });
+  validateIndexerTemplateVariableLayers({ artifact, contract });
   const sections: IndexerRenderedArtifact["sections"] = [];
   const gaps: IndexerRenderedArtifact["material_question_gaps"] = [];
   for (const section of contract.sections) {
@@ -584,18 +576,10 @@ export function renderIndexerTemplateArtifact(input: {
     const missingRequired = bindings.some(({ contract: variable, binding }) =>
       variable.required && (binding === undefined || !variableAvailable(binding.value))
     );
-    const evidenceRefs = [...new Set(bindings.flatMap(({ binding }) => binding?.evidence_refs ?? []))].sort();
-    const acceptedKinds = new Set(section.accepted_evidence_kinds);
-    const validEvidenceRefs = evidenceRefs.filter((ref) => acceptedKinds.has(evidenceKinds.get(ref)!));
-    const missingEvidence = validEvidenceRefs.length < section.minimum_evidence_items ||
-      bindings.some(({ contract: variable, binding }) =>
-        variable.evidence_required &&
-        !(binding?.evidence_refs.some((ref) => acceptedKinds.has(evidenceKinds.get(ref)!)) ?? false)
-      );
     const hasData = bindings.some(({ binding }) =>
       binding !== undefined && variableAvailable(binding.value)
     );
-    if (missingRequired || missingEvidence || !hasData) {
+    if (missingRequired || !hasData) {
       if (section.presence === "optional") continue;
       const question = questionBindings.get(section.section_key)!;
       const proposal = result.material_question_proposals.find((candidate) =>
@@ -625,39 +609,32 @@ export function renderIndexerTemplateArtifact(input: {
       const disposition = result.question_target_dispositions.find((candidate) =>
         candidate.question_target_key === question.question_target_key
       );
-      const acceptedEvidenceDigests = new Set(
-        validEvidenceRefs.map((ref) => result.evidence_bindings.find(
-          (evidence) => evidence.evidence_ref === ref,
-        )!.binding_digest),
-      );
-      if (
-        disposition?.state !== "answered" ||
-        !acceptedEvidenceDigests.has(disposition.evidence_binding_digest)
-      ) {
-        throw new TypeError(`rendered required Section ${section.section_key} is not evidence-answered`);
+      if (disposition?.state !== "answered") {
+        throw new TypeError(`Rendered section ${section.section_key} has no question disposition`);
       }
     }
     const layered = renderIndexerTemplateSectionLayers({
       body: input.template.section_bodies[section.section_key]!,
       section,
-      result,
       artifact,
       contract,
-      acceptedEvidenceRefs: new Set(validEvidenceRefs),
     });
-    const markdown = layered.markdown;
     const projection = projectionMap.get(section.section_key)!;
+    for (const fragment of layered) {
+    const markdown = fragment.markdown;
     sections.push({
       ...projection,
+      section_key: fragment.section_key,
       markdown,
-      content_blocks: layered.contentBlocks,
-      evidence_refs: layered.evidenceRefs,
+      content_blocks: fragment.contentBlocks,
+      references: fragment.references,
       content_digest: indexerProtocolDigest({
         markdown,
-        content_blocks: layered.contentBlocks,
-        evidence_refs: layered.evidenceRefs,
+        content_blocks: fragment.contentBlocks,
+        references: fragment.references,
       }),
     });
+    }
   }
   const renderedBytes = sections.reduce(
     (total, section) => total + Buffer.byteLength(section.markdown, "utf8"),

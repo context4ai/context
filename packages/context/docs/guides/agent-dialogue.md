@@ -15,7 +15,7 @@ For a gate, `workflow.current.resources.required` includes the exact dialogue
 resource for that decision together with its operating procedure and current
 workspace view. Read those selected resources before asking the question. The
 gate-specific source-boundary, read-permission, classification, extraction,
-structure, Review, package, and evidence-maintenance guidance is intentionally
+structure, Review, package, and revision guidance is intentionally
 not duplicated in this SDK manual.
 
 This keeps a new Agent from loading every possible conversation script before

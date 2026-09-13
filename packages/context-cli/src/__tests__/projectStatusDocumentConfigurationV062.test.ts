@@ -57,11 +57,11 @@ describe("0.6.2 document source and capture status routing", () => {
       expect(status.workflow.current?.resources.required.map((resource) => resource.id)).toEqual(
         expect.arrayContaining([
           "procedure.source-boundary",
-          "procedure.work-start-report",
-          "template.work-start-report",
           "context.source-current",
         ]),
       );
+      expect(status.workflow.current?.resources.required.map((resource) => resource.id))
+        .not.toContain("procedure.work-start-report");
       expect(status.workflow.current?.resources.required.map((resource) => resource.id)).not.toContain(
         "schema.register-source-batch.input",
       );
@@ -82,7 +82,7 @@ describe("0.6.2 document source and capture status routing", () => {
     }
   });
 
-  test("routes approved knowledge to close gate before package output", async () => {
+  test("existing approved knowledge does not invent reader requirements for newly selected sources", async () => {
     const root = await makeProject();
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -106,15 +106,16 @@ describe("0.6.2 document source and capture status routing", () => {
 
       expect(status.verifyErrors).toBe(0);
       expect(status.evidenceStatus).toBe("pass");
-      expect(status.state).toBe("route.indexer.lifecycle-required");
-      expect(status.close.state).toBe("missing");
-      expect(status.next).toContain("registry-and-Provider indexing lifecycle");
+      expect(status.state).toBe("route.production.requirements-required");
+      expect(status.close.state).toBe("stale");
+      expect(status.workflow.current?.configuration?.file).toBe("src/indexers.yaml");
+      expect(status.workflow.current?.commands).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
 
-  test("routes a captured Lark source into Indexer requirements configuration", async () => {
+  test("routes a captured Lark source into reader requirements configuration", async () => {
     const root = await makeProject();
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -140,17 +141,18 @@ describe("0.6.2 document source and capture status routing", () => {
 
       const status = await collectProjectStatus(initialized.projectRoot);
 
-      expect(status.state).toBe("route.indexer.lifecycle-required");
-      expect(status.routing.current_state).toBe("route.indexer.lifecycle-required");
+      expect(status.state).toBe("route.production.requirements-required");
+      expect(status.routing.current_state).toBe("route.production.requirements-required");
       expect(status.routing.human_gate).toMatchObject({
         required: false,
         kind: "none",
       });
-      expect(status.routing.reason).toBe("route.indexer.lifecycle-required");
+      expect(status.routing.reason).toBe("route.production.requirements-required");
       expect(status.routing.configuration).toMatchObject({
         file: "src/indexers.yaml",
-        action: expect.stringContaining("indexers: []"),
       });
+      expect(status.workflow.current?.node).toBe("configure-production-requirements");
+      expect(status.workflow.current?.commands).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

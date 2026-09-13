@@ -314,7 +314,6 @@ report shown above. A direct maintenance call outside that Route may omit it.
         projectRoot,
         namespace: sourceNamespace.name,
         payload,
-        requireWorkStartReport: typeof program.opts().workflowRevision === "string",
       });
       writeFormatted(result, format);
     });

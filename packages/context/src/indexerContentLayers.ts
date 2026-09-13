@@ -1,6 +1,7 @@
 import { publicContractSupport, reconcilePublicContractFacts } from "./indexerPublicContractFacts.js";
 import { projectIndexerPublicContractTable } from "./indexerPublicContractTable.js";
 import { z } from "zod";
+import { articleSourceReferenceSchema, type ArticleSourceReference } from "./articleStructure.js";
 import {
   canonicalIndexerJson,
   compareIndexerCanonicalText,
@@ -39,30 +40,17 @@ export const indexerDeterministicBlockRendererSchema = z.enum([
   "json-code-block",
 ]);
 
-const deterministicArtifactBlockSchema = z.object({
-  block_id: indexerIdSchema,
-  layer: z.literal("deterministic-block"),
-  renderer: indexerDeterministicBlockRendererSchema,
-  fact_refs: z.array(indexerCanonicalRefSchema).min(1),
-}).strict();
-
-const semanticProseArtifactBlockSchema = z.object({
+export const indexerArtifactContentBlockSchema = z.object({
   block_id: indexerIdSchema,
   layer: z.literal("semantic-prose"),
   markdown: z.string().min(1),
-  evidence_refs: z.array(indexerCanonicalRefSchema).min(1),
+  references: z.array(articleSourceReferenceSchema).max(3),
 }).strict();
-
-export const indexerArtifactContentBlockSchema = z.discriminatedUnion("layer", [
-  deterministicArtifactBlockSchema,
-  semanticProseArtifactBlockSchema,
-]);
 
 const renderedContentBlockPayloadSchema = z.object({
   layer: z.enum(["deterministic-block", "semantic-prose"]),
   markdown: z.string().min(1),
-  fact_refs: z.array(indexerCanonicalRefSchema),
-  evidence_refs: z.array(indexerCanonicalRefSchema),
+  references: z.array(articleSourceReferenceSchema).max(3),
 }).strict();
 
 export const indexerRenderedContentBlockSchema = renderedContentBlockPayloadSchema.extend({
@@ -79,16 +67,6 @@ export type IndexerDeterministicBlockRenderer = z.infer<
 export type IndexerRenderedContentBlock = z.infer<
   typeof indexerRenderedContentBlockSchema
 >;
-
-function assertCanonicalRefs(values: readonly string[], label: string): void {
-  const expected = [...new Set(values)].sort(compareIndexerCanonicalText);
-  if (
-    expected.length !== values.length ||
-    expected.some((value, index) => value !== values[index])
-  ) {
-    throw new TypeError(`${label} must be unique and canonically sorted`);
-  }
-}
 
 export function projectIndexerFactValue(
   facts: readonly IndexerArtifactFact[],
@@ -183,42 +161,18 @@ export function indexerRenderedContentBlockDigest(
 export function buildIndexerRenderedContentBlock(input: {
   layer: "deterministic-block" | "semantic-prose";
   markdown: string;
-  fact_refs?: readonly string[];
-  evidence_refs?: readonly string[];
+  references: readonly ArticleSourceReference[];
 }): IndexerRenderedContentBlock {
-  const payload = renderedContentBlockPayloadSchema.parse({
-    layer: input.layer,
-    markdown: input.markdown,
-    fact_refs: [...new Set(input.fact_refs ?? [])].sort(compareIndexerCanonicalText),
-    evidence_refs: [...new Set(input.evidence_refs ?? [])].sort(compareIndexerCanonicalText),
-  });
-  if (
-    (payload.layer === "deterministic-block" && payload.fact_refs.length === 0) ||
-    (payload.layer === "semantic-prose" && payload.fact_refs.length !== 0)
-  ) {
-    throw new TypeError("rendered content block does not match its Fact/prose layer");
-  }
+  const payload = renderedContentBlockPayloadSchema.parse(input);
   return indexerRenderedContentBlockSchema.parse({
-    ...payload,
-    content_digest: indexerRenderedContentBlockDigest(payload),
+    ...payload, content_digest: indexerRenderedContentBlockDigest(payload),
   });
 }
 
-export function validateIndexerRenderedContentBlock(
-  value: unknown,
-): IndexerRenderedContentBlock {
+export function validateIndexerRenderedContentBlock(value: unknown): IndexerRenderedContentBlock {
   const block = indexerRenderedContentBlockSchema.parse(value);
-  assertCanonicalRefs(block.fact_refs, "rendered content block fact_refs");
-  assertCanonicalRefs(block.evidence_refs, "rendered content block evidence_refs");
-  if (
-    (block.layer === "deterministic-block" && block.fact_refs.length === 0) ||
-    (block.layer === "semantic-prose" && block.fact_refs.length !== 0)
-  ) {
-    throw new TypeError("rendered content block does not match its Fact/prose layer");
-  }
-  const { content_digest: _digest, ...payload } = block;
-  void _digest;
-  if (indexerRenderedContentBlockDigest(payload) !== block.content_digest) {
+  const { content_digest, ...payload } = block;
+  if (indexerRenderedContentBlockDigest(payload) !== content_digest) {
     throw new TypeError("rendered content block digest is invalid");
   }
   return block;
@@ -226,44 +180,10 @@ export function validateIndexerRenderedContentBlock(
 
 export function materializeIndexerStructuredContent(input: {
   blocks: readonly IndexerArtifactContentBlock[];
-  facts: readonly IndexerArtifactFact[];
   render_cache?: Map<string, IndexerRenderedContentBlock[]> | undefined;
 }): IndexerRenderedContentBlock[] {
-  const key = input.render_cache === undefined ? undefined : indexerProtocolDigest({ blocks: input.blocks, facts: input.facts });
-  const cached = key === undefined ? undefined : input.render_cache?.get(key);
-  if (cached !== undefined) return structuredClone(cached);
-  const facts = new Map(input.facts.map((fact) => [fact.fact_ref, fact]));
-  const rendered = input.blocks.map((block) => {
-    if (block.layer === "semantic-prose") {
-      return buildIndexerRenderedContentBlock({
-        layer: block.layer,
-        markdown: block.markdown,
-        evidence_refs: block.evidence_refs,
-      });
-    }
-    const referenced = block.fact_refs.map((ref) => {
-      const fact = facts.get(ref);
-      if (fact === undefined) {
-        throw new TypeError(`deterministic block references unknown Fact ${ref}`);
-      }
-      return fact;
-    });
-    const support = block.renderer === "public-contract-table" ? publicContractSupport(referenced, input.facts) : [];
-    const consumed = [...referenced, ...support];
-    return buildIndexerRenderedContentBlock({
-      layer: block.layer,
-      markdown: renderIndexerDeterministicFacts({
-        renderer: block.renderer,
-        facts: referenced,
-        supporting_facts: support,
-      }),
-      fact_refs: consumed.map((fact) => fact.fact_ref),
-      evidence_refs: consumed.flatMap((fact) => fact.evidence_refs),
-    });
-  });
-  if (key !== undefined && input.render_cache !== undefined) {
-    if (input.render_cache.size >= 256) input.render_cache.delete(input.render_cache.keys().next().value!);
-    input.render_cache.set(key, structuredClone(rendered));
-  }
-  return rendered;
+  // No full fact array is hashed, cloned or rebound to a prose section.
+  return input.blocks.map(block => buildIndexerRenderedContentBlock({
+    layer: block.layer, markdown: block.markdown, references: block.references,
+  }));
 }

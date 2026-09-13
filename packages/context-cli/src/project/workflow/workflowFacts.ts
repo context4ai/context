@@ -37,16 +37,6 @@ function blockingVerificationClear(
     onlySourceDriftErrors(observation.verifyIssues);
 }
 
-function evidenceMaintenanceClear(
-  observation: ContextWorkflowObservation,
-): boolean {
-  if (observation.capturedDocumentSources < observation.documentSources.length) {
-    return true;
-  }
-  if (verifyErrorsAreCloseRepairable(observation.verifyIssues)) return true;
-  return observation.evidenceWarnings !== "orphaned" &&
-    observation.evidenceWarnings !== "stale";
-}
 
 function indexerRegistryCoversSources(
   observation: ContextWorkflowObservation,
@@ -119,7 +109,7 @@ export function createContextWorkflowFacts(
   const reviewGateClear = observation.draftCandidates === 0 || partialDelivery;
   const hasApprovedKnowledge = observation.approvedPages > 0;
   const rollback = observation.indexerCandidateCompile.rollback_pending === true;
-  const indexerLifecycleCurrent = (!observation.unfinishedIndexerTasks || partialDelivery || deliveryReady || outputOnlyMaintenance) && observation.taskPreparation !== "resume-requested" && !observation.indexerCandidateCompile.managed_source_pending && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
+  const indexerLifecycleCurrent = (!observation.unfinishedIndexerTasks || partialDelivery || deliveryReady || outputOnlyMaintenance) && observation.taskPreparation !== "resume-requested" && !observation.indexerCandidateCompile.revision_pending && (observation.sourceCount === 0 || (
     observation.indexerRegistry.state === "current" &&
     indexerRegistryCoversSources(observation) &&
     (
@@ -127,7 +117,6 @@ export function createContextWorkflowFacts(
       (observation.close.state === "ready" && !observation.indexerCandidateCompile.delivery_pending)
     )
   ));
-  const evidenceClear = evidenceMaintenanceClear(observation);
   const packagesDeclared = !hasApprovedKnowledge || observation.packages.length > 0;
   const packagesCurrent = rollback ? observation.packageFreshness.length === observation.packages.length &&
     observation.packageFreshness.every((item) => item.state === "ready") : !hasApprovedKnowledge || (
@@ -152,16 +141,13 @@ export function createContextWorkflowFacts(
     verification: {
       blocking_clear: blockingVerificationClear(observation),
     },
-    evidence: {
-      maintenance_clear: evidenceClear,
-    },
     indexer: {
-      lifecycle_current: indexerLifecycleCurrent,
+      lifecycle_current: outputOnlyMaintenance || (observation.localRevisionActive ? !observation.indexerCandidateCompile.revision_pending
+        : observation.productionState === undefined ? indexerLifecycleCurrent
+        : observation.productionDelivery === true || observation.productionState === "ended" && observation.rejectedCandidates === 0),
       registry_state: observation.indexerRegistry.state,
     },
     gates: {
-      evidence_maintenance_resolved: evidenceClear ||
-        hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.evidenceMaintenance),
       source_read_resolved: captureComplete ||
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.sourceRead),
       knowledge_review_resolved: reviewGateClear,

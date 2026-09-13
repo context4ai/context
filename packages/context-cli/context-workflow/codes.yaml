@@ -1,5 +1,15 @@
 schema: agent-graph.code-catalog.v1
 codes:
+  - { code: route.production.investigation-required, kind: route-reason, summary: Continue the remaining authorized investigation and append its article tasks. }
+  - { code: route.production.repair-required, kind: route-reason, summary: Add revision tasks for rejected planned articles before closing production. }
+  - { code: route.production.requirements-required, kind: route-reason, summary: Record confirmed reader purposes and authorized production sources. }
+  - { code: route.production.requirements-migration, kind: route-reason, summary: Preserve long-term requirements while removing legacy Provider configuration. }
+  - { code: route.production.planning-prepare, kind: route-reason, summary: Prepare lightweight navigation for confirmed requirements. }
+  - { code: route.production.planning-required, kind: route-reason, summary: Investigate source skeletons and submit article goals and batches. }
+  - { code: route.production.report-required, kind: route-reason, summary: Present the planned work-start report and wait for user feedback. }
+  - { code: route.production.prepare-required, kind: route-reason, summary: Prepare the next eligible production directories. }
+  - { code: route.production.writing-required, kind: route-reason, summary: Complete the issued production tasks using stage-local files. }
+  - { code: route.production.scope-incomplete, kind: route-reason, summary: Resolve remaining investigation and material gaps without discarding accepted articles. }
   - { code: route.version.content-changed, kind: route-reason, summary: Record an increasing workspace version and changelog for formal content changes. }
   - { code: route.workspace.recovery, kind: route-reason, summary: Inspect a stuck task independently of normal workflow evaluation., document: resources/procedures/task-recovery.md }
   - { code: route.indexer.maintenance, kind: route-reason, summary: Advance registered knowledge maintenance at a safe boundary., document: resources/procedures/knowledge-maintenance.md }
@@ -14,8 +24,6 @@ codes:
   - { code: route.workspace.project-entry-invalid, kind: route-reason, summary: Repair the Context project entry before continuing., document: resources/procedures/project-configuration.md }
   - { code: route.workspace.state-invalid, kind: route-reason, summary: Inspect and repair the invalid workspace facts., document: resources/diagnostics/workspace-state.md }
   - { code: route.verify.failed, kind: route-reason, summary: Resolve blocking verification findings before other lifecycle writes., document: resources/procedures/verify-and-repair.md }
-  - { code: route.evidence.decision-required, kind: route-reason, summary: A source-evidence change needs an explicit maintenance decision., document: resources/procedures/evidence-maintenance.md }
-  - { code: route.evidence.maintenance-required, kind: route-reason, summary: Apply the selected evidence-maintenance action., document: resources/procedures/evidence-maintenance.md }
   - { code: route.source.boundary-required, kind: route-reason, summary: No knowledge source boundary has been registered., document: resources/procedures/source-boundary.md }
   - { code: route.source.repository-not-ready, kind: route-reason, summary: A registered repository checkout or local source link must be restored., document: resources/procedures/repository-source-recovery.md }
   - { code: route.capture.configuration-required, kind: route-reason, summary: Registered document sources are missing capture declarations., document: resources/procedures/project-configuration.md }
@@ -73,11 +81,7 @@ codes:
   - { code: route.indexer.catalog-fallback, kind: route-reason, summary: Mechanically accept one deterministic catalog parent after semantic strategies are exhausted. }
   - { code: route.indexer.main-run-acceptance, kind: route-reason, summary: "Atomically accept one fully validated main Result, receipts, and ledger transition." }
   - { code: route.indexer.main-run-failure, kind: route-reason, summary: Persist one exact main run failure and its dependency digests. }
-  - { code: route.indexer.subject-catalog, kind: route-reason, summary: Merge approved Nodes and all validated primary partition group SubjectKeys. }
-  - { code: route.indexer.target-resolution, kind: route-reason, summary: Resolve enrich-or-independent groups by exact SubjectKey before authoring. }
   - { code: route.indexer.projected-artifact-fan-out, kind: route-reason, summary: Recompute projected Artifact ownership and Bundle eligibility before Candidate materialization. }
-  - { code: route.indexer.subject-key-validation, kind: route-reason, summary: Recompute SubjectKey schema authority and approved-Node identity compatibility. }
-  - { code: route.indexer.subject-reidentification, kind: route-reason, summary: Require a non-delegable confirmation for one exact collision-free breaking SubjectKey mapping. }
   - { code: route.indexer.author-worksets, kind: route-reason, summary: Build one immutable author workset for each validated partition group. }
   - { code: route.indexer.effective-composers, kind: route-reason, summary: "Resolve the exact selected, declared, and profile-applicable composer set." }
   - { code: route.indexer.post-author-worksets, kind: route-reason, summary: Materialize bounded composer worksets or publish an explicit not-required state. }
@@ -89,7 +93,6 @@ codes:
   - { code: route.indexer.post-author-composition, kind: route-reason, summary: Compose the current result envelope after every selected composer is accepted. }
   - { code: route.indexer.result-reconciliation, kind: route-reason, summary: Recompute per-domain completion and emit exact capability or material gaps before reporting success. }
   - { code: route.indexer.candidate-compile, kind: route-reason, summary: Compile Candidate Artifacts from the exact accepted author IndexerResult set and authorized layout. }
-  - { code: route.indexer.incremental-impact, kind: route-reason, summary: "Report exact logical-unit, Artifact, and Section impact from complete current Merkle dependency views." }
   - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after current mechanical validation passes. }
   - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure after required material gaps are resolved. }
   - { code: route.indexer.source-update, kind: route-reason, summary: Inspect fixed source changes against current approved pages. }

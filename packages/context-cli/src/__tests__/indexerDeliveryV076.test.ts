@@ -1,16 +1,5 @@
 import { expect, test } from "bun:test";
-import { deliveryPageContentDigest, selectDeliveryPages, type DeliveryPage } from "../project/indexerDelivery.js";
-import { artifactResult } from "../../../context/src/__tests__/indexerArtifactResultV070.fixture.js";
-
-test("a peer Fact update does not redeliver an unchanged page, but its own source update does", () => {
-  const result = artifactResult();
-  const artifact = result.artifacts[0]!;
-  const original = deliveryPageContentDigest(artifact, result);
-  result.facts.push({ ...result.facts[0]!, fact_ref: "fact:unrelated", value: "unrelated change" });
-  expect(deliveryPageContentDigest(artifact, result)).toBe(original);
-  result.evidence_bindings[0]!.content_digest = `sha256:${"f".repeat(64)}`;
-  expect(deliveryPageContentDigest(artifact, result)).not.toBe(original);
-});
+import { selectDeliveryPages, type DeliveryPage } from "../project/articleDeliverySelection.js";
 
 const pages = (count: number): DeliveryPage[] => Array.from({ length: count }, (_, index) => ({
   ref: `page:${index}`, artifact_id: `p${index}`, result_digest: "same-result",

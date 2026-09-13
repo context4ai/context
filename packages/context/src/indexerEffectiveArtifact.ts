@@ -1,6 +1,5 @@
 import { z } from "zod";
-import type { IndexerArtifact } from "./indexerArtifact.js";
-import type { IndexerArtifactResult } from "./indexerArtifactResult.js";
+import { indexerArtifactReferences, type IndexerArtifact } from "./indexerArtifact.js";
 import {
   buildIndexerArtifactBundle,
   type IndexerArtifactBundle,
@@ -10,7 +9,6 @@ import {
   validateIndexerMaterializedLayerFragment,
 } from "./indexerLayerComposition.js";
 import {
-  compareIndexerCanonicalText,
   indexerComposerRefSchema,
   indexerDigestSchema,
   indexerProtocolDigest,
@@ -57,31 +55,6 @@ export interface IndexerEffectiveArtifactSet {
   composition_fingerprint: string | null;
 }
 
-function artifactFactRefs(artifact: IndexerArtifact): string[] {
-  return artifact.representation === "sections"
-    ? artifact.sections.flatMap((section) => section.blocks.flatMap((block) =>
-        block.layer === "deterministic-block" ? block.fact_refs : []
-      ))
-    : Object.values(artifact.variables).flatMap((variable) => variable.fact_refs);
-}
-
-function artifactEvidenceRefs(
-  artifact: IndexerArtifact,
-  facts: ReadonlyMap<string, IndexerArtifactResult["facts"][number]>,
-): string[] {
-  const refs = artifact.representation === "sections"
-    ? artifact.sections.flatMap((section) => section.blocks.flatMap((block) =>
-        block.layer === "semantic-prose"
-          ? block.evidence_refs
-          : block.fact_refs.flatMap((factRef) => facts.get(factRef)?.evidence_refs ?? [])
-      ))
-    : Object.values(artifact.variables).flatMap((variable) => [
-        ...variable.evidence_refs,
-        ...variable.fact_refs.flatMap((factRef) => facts.get(factRef)?.evidence_refs ?? []),
-      ]);
-  return [...new Set(refs)].sort(compareIndexerCanonicalText);
-}
-
 function validateComposedEnvelopeFingerprint(
   envelope: IndexerComposedResultEnvelope,
 ): void {
@@ -119,11 +92,7 @@ export function materializeIndexerEffectiveArtifactSet(input: {
   ) {
     throw new TypeError("post-author envelope is bound to another accepted ArtifactResult");
   }
-  const evidenceByRef = new Map(result.evidence_bindings.map((binding) => [
-    binding.evidence_ref,
-    binding,
-  ]));
-  const factByRef = new Map(result.facts.map((fact) => [fact.fact_ref, fact]));
+  const primaryReferences = new Set(result.artifacts.flatMap(indexerArtifactReferences).map(ref => JSON.stringify(ref)));
   const proposals = envelope.accepted_post_author_fragments.flatMap((fragment) => {
     const materialized = validateIndexerMaterializedLayerFragment(fragment);
     if (
@@ -140,27 +109,8 @@ export function materializeIndexerEffectiveArtifactSet(input: {
       ) {
         throw new TypeError("derived Artifact proposal targets another composer or Node");
       }
-      const factRefs = artifactFactRefs(proposal.artifact);
-      if (factRefs.some((ref) => !factByRef.has(ref))) {
-        throw new TypeError("derived Artifact proposal references an unknown primary Fact");
-      }
-      const actualEvidenceRefs = artifactEvidenceRefs(proposal.artifact, factByRef);
-      const declaredEvidenceRefs = proposal.evidence_refs.map((item) => item.ref);
-      if (
-        actualEvidenceRefs.length !== declaredEvidenceRefs.length ||
-        actualEvidenceRefs.some((ref, index) => declaredEvidenceRefs[index] !== ref)
-      ) {
-        throw new TypeError("derived Artifact proposal evidence does not close its Artifact");
-      }
-      for (const evidence of proposal.evidence_refs) {
-        const binding = evidenceByRef.get(evidence.ref);
-        if (
-          binding === undefined ||
-          binding.kind !== evidence.kind ||
-          binding.content_digest !== evidence.source_digest
-        ) {
-          throw new TypeError("derived Artifact proposal uses unknown or stale primary evidence");
-        }
+      if (indexerArtifactReferences(proposal.artifact).some(ref => !primaryReferences.has(JSON.stringify(ref)))) {
+        throw new TypeError("Derived article uses a source region outside the accepted primary articles");
       }
       const projections = proposal.artifact.representation === "sections"
         ? proposal.artifact.sections
@@ -202,7 +152,6 @@ export function materializeIndexerEffectiveArtifactSet(input: {
             artifact_kind: proposal.artifact.artifact_kind,
             purpose: "discretionary" as const,
             reader_question_refs: [],
-            evidence_refs: proposal.evidence_refs.map((item) => item.ref),
           })),
         ],
       });

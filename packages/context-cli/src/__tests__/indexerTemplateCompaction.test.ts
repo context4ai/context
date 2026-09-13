@@ -99,17 +99,17 @@ test("writing brief preserves procedure-only and distinct same-ID guidance in mi
 });
 
 
-test("shared programs retain profile-approved decision and operational evidence", () => {
-  for (const [profileId, article, expected] of [
-    ["decision-record", "c06", ["decision-record"]],
-    ["background-runtime", "s07", ["runbook", "test-result", "runtime-observation"]],
-    ["background-runtime", "d04", ["runbook", "test-result", "runtime-observation"]],
+test("shared programs keep profile and reading goal without a second evidence-kind matrix", () => {
+  for (const [profileId, article] of [
+    ["decision-record", "c06"],
+    ["background-runtime", "s07"],
+    ["background-runtime", "d04"],
   ] as const) {
     const profile = bundledIndexerProfileContract().profiles.find(profile => profile.id === profileId)!;
-    const allowed = [...new Set(profile.reader_question_contracts.flatMap(question => question.evidence_contract.accepted_kinds))];
     const expanded = expandArticleBlueprint({ program: { article, policies: ["standard"], sections: { explanation: "Source-backed explanation" } } },
-      { id: `${profileId}-${article}-page`, profile: profileId, reader_goal: profile.layout_mappings[0]!.reader_goal, accepted_evidence_kinds: allowed })!;
-    expect(expanded.contract.sections[0]!.accepted_evidence_kinds).toEqual(allowed);
-    for (const kind of expected) expect(expanded.contract.sections[0]!.accepted_evidence_kinds).toContain(kind);
+      { id: `${profileId}-${article}-page`, profile: profileId, reader_goal: profile.layout_mappings[0]!.reader_goal })!;
+    expect(expanded.contract.profile).toBe(profileId);
+    expect(expanded.contract.reader_goal).toBe(profile.layout_mappings[0]!.reader_goal);
+    expect(expanded.contract.sections[0]).not.toHaveProperty("accepted_evidence_kinds");
   }
 });

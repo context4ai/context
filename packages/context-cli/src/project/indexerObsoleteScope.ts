@@ -48,8 +48,7 @@ export function summarizeIndexerObsoleteScope(runSpecs: readonly unknown[], opti
     const workset = record(record(spec.request).workset);
     const source = workset.source_ref;
     paths.forEach((path) => files.add(`${String(source)}:${path}`));
-    const subject = record(validation.expected_subject_key);
-    affected.push({ title: options.titles?.get(String(workset.group_key)) ?? String(subject.local_key ?? "Untitled target"), paths,
+    affected.push({ title: options.titles?.get(String(workset.group_key)) ?? String(workset.group_key ?? "Untitled target"), paths,
       member_ids: [...new Set(owned.filter((member) => member.deprecated).map((member) => member.member_id))].sort(),
       mixed_current_content: owned.some((member) => !member.deprecated) });
   }

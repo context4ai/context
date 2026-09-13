@@ -215,7 +215,6 @@ function assertAcceptedRecord(input: {
     result_digest: input.record.result_digest,
     receipt_digest: input.record.receipt_digest,
     run_envelope_digest: input.record.run_envelope_digest,
-    artifact_dependency_set_digest: input.record.artifact_dependency_set_digest,
   });
   validateIndexerMainAcceptedRecord(input.record);
   if (

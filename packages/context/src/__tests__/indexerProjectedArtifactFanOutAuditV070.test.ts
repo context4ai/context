@@ -38,11 +38,9 @@ function partitionPlan(strategyId = "semantic-subject"): CompletePartitionPlan {
       indexer_id: "sample-indexer",
       indexer_fingerprint: digest("2"),
       requirement_digest: digest("3"),
-      subject_key_schema_digest: digest("4"),
       source_scope_digest: digest("5"),
       source_refs: ["repo:sample@revision"],
       module_ref: "module:sample",
-      partition_subject_key: subject("partition-root"),
       parent_scope_ref: "module:sample",
       inventory_digest: digest("6"),
       question_target_inventory_digest: digest("7"),
@@ -65,8 +63,8 @@ function partitionPlan(strategyId = "semantic-subject"): CompletePartitionPlan {
     reader_question_refs: ["question:overview"],
     groups: [{
       group_key: "catalog:root",
-      subject_key: key,
-      subject_intent: "primary",
+
+
       logical_unit_ref: canonicalIndexerNodeRef(key),
       label: "Catalog",
       reader_question_refs: ["question:overview"],
@@ -112,8 +110,8 @@ function inventoryPartitionPlan(size: number): CompletePartitionPlan {
     },
     groups: identities.map((item) => ({
       group_key: item.groupKey,
-      subject_key: item.subject,
-      subject_intent: "primary" as const,
+
+
       logical_unit_ref: item.logicalUnitRef,
       label: item.subject.local_key,
       reader_question_refs: ["question:overview"],
@@ -146,7 +144,7 @@ function bundle(input?: {
       artifact_kind: "content",
       purpose: "required",
       reader_question_refs: ["question:overview"],
-      evidence_refs: ["evidence:source"],
+
     }],
   });
 }
@@ -202,7 +200,7 @@ function validProjection(input: {
       ).eligibility_digest,
       artifact_policy_variant: input.bundle.artifact_policy_variant,
     },
-    evidence_justification_refs: entry.evidence_refs,
+
   };
 }
 
@@ -247,7 +245,7 @@ function auditInventoryPageGrowth(size: number) {
       artifact_kind: "content",
       purpose: "required",
       reader_question_refs: ["question:overview"],
-      evidence_refs: ["evidence:source"],
+
     }],
   }));
   const projected = buildIndexerProjectedArtifactPlan({
@@ -332,7 +330,7 @@ describe("projected Artifact fan-out audit", () => {
       artifact_kind: "content",
       purpose: "required",
       reader_question_refs: ["question:overview"],
-      evidence_refs: ["evidence:source"],
+
     };
     const splits: IndexerArtifactBundleEntry[] = Array.from({ length: 349 }, (_, index) => {
       const key = String(index).padStart(4, "0");
@@ -341,7 +339,7 @@ describe("projected Artifact fan-out audit", () => {
         artifact_kind: "content",
         purpose: "semantic-split" as const,
         reader_question_refs: ["question:overview"],
-        evidence_refs: ["evidence:source"],
+
         split_of: "overview",
         boundary: {
           axis: "source-namespace",
@@ -406,14 +404,13 @@ describe("projected Artifact fan-out audit", () => {
     expect(blocked.diagnostic_sample).toHaveLength(100);
   });
 
-  test("reports each missing ownership, Bundle, and evidence condition", () => {
+  test("reports missing ownership and Bundle without retired evidence conditions", () => {
     const audit = auditWithInvalidCount(1);
     expect(audit.diagnostic_sample).toContainEqual(expect.objectContaining({
       artifact_id: "unassigned-000",
       missing_requirements: [
         "logical-unit-owner",
         "bundle-variant",
-        "evidence-justification",
       ],
     }));
   });
@@ -447,7 +444,7 @@ describe("projected Artifact fan-out audit", () => {
         artifact_kind: "content",
         purpose: "required",
         reader_question_refs: ["question:overview"],
-        evidence_refs: ["evidence:source"],
+
       }],
     });
     const projected = buildIndexerProjectedArtifactPlan({

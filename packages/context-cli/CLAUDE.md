@@ -26,14 +26,14 @@
 
 ### 工作流与协议原则
 
-- **CLI 负责流程，Agent 负责语义**：CLI 决定 stage / route / allowed actions / next_action / view 预算 / repair 路径；Agent 只读 evidence、做语义归类、生成 source-bound payload。能由 schema / mount matrix / raw/source_ref 指针 / coverage / contiguity / citation eligibility 判定的规则必须由 CLI 强制，不要在 skill 里重写一遍。
+- **CLI 负责流程，Agent 负责语义**：CLI 承担当前工作流、来源授权、安全写入和恢复；Agent 阅读材料、选择实际引用、规划和写作。生产侧事实账本、主体分类与挂载矩阵不再作为新实现的强制义务；不能以机械可判定为由继续增加内容门禁。
 - **硬约束优先于提示词**：同一条规则不要在 skill checklist 和 CLI validate 里写两遍。能用 CLI hard gate / typed diagnostic 表达的全部下沉；skill 只保留入口说明、evidence boundary 和 next_action 跟随契约。
 - **正文内容不由 CLI 评分或拦截**：措辞、JSX、模板语法示例、注释、标题、占位词、句式和篇幅不构成内容质量硬门禁。未填写的占位可在现有审核中提醒，但不硬阻塞、不要求信号消除回执。内容判断归 Agent／用户，CLI 只检查结构、真实引用和安全写入；模板程序解析与正文判断分开。
 - **能自愈就自愈，该阻塞才阻塞**：不改变语义、可机械验证、可审计的修复直接自动应用并记录到 `auto_repaired[]`；需要语义判断、用户确认、可能改变知识内容时才返回 blocking question / review。
 - **错误输出就是恢复入口**：任何拒绝必须带 typed `reason_code` + 最小诊断 + canonical `next_action.command` + `input_schema`。Agent 不从历史 prompt 反推下一步，stdout 里看到的就是修复路径。不允许 “出错了请重新读 skill” 这种 dead-end。
-- **协议幻觉用 guard，证据要求不松动**：协议层（command/flag/schema/view 预算/分页/source-ref 形态）的幻觉用 CLI 硬 guard 兜底；source evidence、coverage、contiguity、citation eligibility、mount matrix 这些内容质量硬约束**不**为流程顺滑而松动。view-count 不能替代 raw/source_ref 指针。
+- **保持必要的安全边界**：验证实际引用的来源权限、区域定位、输入版本和写入冲突；不把字段存在或指纹一致当作语义正确的证明。退场的 facts／证据 ID／主体矩阵不能以另一组字段或隐藏规则重新引入。规划覆盖义务独立审查，不因事实账本退场而静默删除。
 - **弱模型友好 ≠ prompt 膨胀**：弱指令遵循模型踩的机械错误（context_only 误用、summary 噪音、advisory 当 blocking、source_ref 拼写错误）应转化为 CLI envelope、typed diagnostic、safe default 和 patch-ready payload；不要继续往 skill 里塞 checklist / 陷阱表。
-- **串行写入，并行读取**：align stage / compile stage / review apply / close / build 等写路径保持串行锁；NodeContext、source-refs、coverage、status 等只读 view 仅当 CLI 明确标注 `prefetch_commands[]` 时才能并行预取。多 Node workset 也按 CLI 顺序逐 Node 闭环，不允许 shell 循环并发 stage/apply/close/build。
+- **串行写入，并行读取**：提交结果、review apply、close、build 等写路径保持串行锁；只读材料按当前 Route 的授权范围读取。并行 Agent 不直接并发提交共享状态，由协调者统一提交，不能用 shell 循环并发写入。
 
 ### 反例 → 正例 对照
 
@@ -51,7 +51,7 @@
 
 ## 核心边界
 
-- CLI 做机械事务：workspace 定位、文件 I/O、source registry/snapshot、Node/Section 渲染、package index、verify、approved structure projection、build inventory。
+- CLI 做机械事务：workspace 定位、文件 I/O、source registry/snapshot、文章与片段定位、package index、verify、approved structure projection、build inventory。
 - Agent 做综合判断：align 分类、compile draft、语义支持/冲突/弱证据判断、用户问题翻译。
 - CLI 不调用 LLM；Agent 不手写 `knowledge/` markdown。
 - `sources/` / `knowledge/` / `dist/` / `.tmp/context-runtime/` 只能由当前 CLI 命令维护，不能用通用 workspace write 绕过协议。候选和暂存结构属于 `.tmp/context-runtime/lifecycle/`；成功 close 后必须由 CLI 清理。
@@ -80,12 +80,10 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 ### Knowledge / OKF Profile
 
-- 新 context 项目的 approved Markdown 遵循完整 **Context production profile**：YAML frontmatter 顶层放 OKF 字段以及来源、节点、代码和审核元数据。kb package `dist/<name>/<okf-root>/...` 使用消费态投影：页面只保留面向阅读和检索的内容字段；节点身份、来源、Section 证据注释和其他生命周期字段不进入发布页。`context-build-inventory.json` 记录 `dist_path → approved_path`、节点身份和包级结构，维护者回到 `knowledge/` 后再使用完整 `sources` / `source_ref` 归因，不得改写 `knowledge/`。`<okf-root>` 直接是 `wikis`、`guides`、`rules` 或 `feats`，不再附加 package namespace。
-- prose/structure knowledge 必须写稳定 `node_type`(如 `entity` / `domain` / `action`);路径和 tags 可以辅助浏览或查询,但不能替代 frontmatter `node_type`。
-- 代码锚定字段放顶层 `sources`、`visibility`、`code_symbols`;不要再写 `context.sources`、`context.visibility`、`context.code_symbols` 或 `updated`。
-- Section source-ref 注释使用 `<!-- context:section ... -->`;不要在新 context 项目输出 `c4a:section`。
-- 不写 frontmatter `source_refs`;page-level provenance 由 Section 的 `source_ref` 注释派生。
-- accepted Section `source_ref` 文法为 `src-N#symbol:<file>:<symbol-id>:<kind>@<digest>` 和 `src-N#span:<heading-hint> L<start>-<end>@<span-hash>`。代码 ref 的 `file` 用于在当前 symbol index 内消除同名同摘要歧义;整个 `source_ref` 对 Agent 仍是不透明 token。`#span:` 必须保留行号范围,用于 human review、diff 和 re-pin;它走 file/lark snapshot source span resolver,不是 code symbol index,也不是 block/raw evidence identity。
+- Approved Markdown 头部维护 `title`、`type`、`description`、`timestamp`，按需保留真实 `resource` 和阅读标签。正文保留稳定片段 ID；文章身份、路径、知识分类、可见性和片段来源区域仅在 `knowledge/structure.yaml` 的 `articles` 中维护。导出由结构引用生成读者溯源，不能要求 Agent 再维护一份来源列表。构建清单记录发布路径到批准文章的映射，不得改写 `knowledge/`。
+- PART1 重构不再要求 prose/structure knowledge 提取独立主体、填写 node_type 或主体 tags；文章知识分类仍保留，不以主体分类推导。
+- Markdown 不写 `article_id`、`sources`、`source_refs`、`visibility` 或 `code_symbols`；片段标记为 `<!-- context:section id="..." -->` 和对应结束标记，不附证据属性。
+- 实际引用由 `source_ref`、区域 `locator` 与工具计算的 `content_digest` 表达；每个输出片段最多 3 个位置，不是章节或文章的总上限。不维护独立事实／证据 ID 或逐绑定指纹。
 - 当前 Indexer approved Markdown 不保存 `candidate_fingerprint`、Indexer digest 或 `code_origin`；
   current/stale 由本机 runtime 与批准页面的实际正文、来源共同判定。
 - 不写 `schema` 字段。协议版本由工具/文档和 verify 约束,不是 approved MD 的 frontmatter 字段。
@@ -122,17 +120,14 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 `node_modules/@c4a/context/docs/guides/agent-dialogue.md` 只介绍稳定原则和发现方式。
 修改门禁语义时必须更新 Graph 资源引用、可达性测试和必要的 SDK 概览。
 
-### Indexer Author 覆盖进度
+### 当前生产覆盖进度
 
-- Author 按 current Partition group 逐项收敛：读取 Route 返回的 instructions、
-  Authorized Workset View 和输入 schema，再通过唯一
-  `context action complete-current` 提交语义结果。不要 shell 循环或并发写入；
-  失败、coverage warning、schema error 和 unsupported material 都在当前 group
-  内收敛。
-- 当前 group 的 member/question disposition 是完成信号。“写出第一节正文”
-  不代表 group 已关闭。
-- 不要求把所有来源片段写进正文。重复、导航、placeholder、同一事实延续、
-  无读者价值的材料可以排除，但排除必须来自内容判断，不是为了提速。
+- 按 Route 发放的阶段和批次目录工作，读取当前任务说明及文件提交 schema；
+  协调者通过 `context action complete-current` 提交已完成子集，不并发写共享状态。
+- 完成以当前任务接收和阶段范围结算为准，不要求 Partition 逐成员账本、
+  Provider 主生产者绑定或技能版本／摘要核对。首篇完成不代表其余任务完成。
+- 重复或无读者价值的材料可以由 Agent 判断排除；明确排除保存到长期需求，
+  候选、计划和接收记录仅在 `.tmp`。清理临时区后全新生产，不兼容旧过程。
 
 ### 命名边界（必须遵守）
 
@@ -197,7 +192,7 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 - 路径用反引号 + `→`：`- align state → \`<absolute-path>\``。`.cache/align/align.md` 这类 user-reviewable 输出必须在 `**Outputs**` 块显式列出。
 - 段落用空字符串行分隔（`formatFeedback` 保留 `""`，drop `false`/`null`/`undefined`）。
-- Node tree 按 type 分组（`domain` / `entity` / `action`），用 `title` 不用 `slug`。
+- 文章导航使用阅读标题与知识分类，不恢复主体类型分组。
 - **零值策略**：头部行字段总是显示（保持总览结构稳定）；子块（Special outcomes / Needs decision / Semantic outcomes）仅在 > 0 时整块显示；**例外**：给 agent “审查没意外触发”的字段（如 compile draft 的 update/supersede/deprecate 计数）总是显示。
 - headline ≤ 3 个核心数字 + 最终状态（`${applied} applied · ${skipped} skipped · verify ok`）。
 
@@ -258,11 +253,11 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 **Schema / error / 稳定性**：
 
 - 任何 enum 值都要在 schema 输出中有示例或合法值列表；任何 `invalid-*` 错误在顶层 envelope/diagnostics 暴露 `valid_*[]` / `available_*[]`，Agent 不靠猜字段重试。cutover 期同步 `agent_hints[]` 时内容必须与 envelope 一致。
-- Prompt/cache-stable 输出：固定协议 / schema / mount matrix / Term/Entity 判别规则 / 已有 knowledge lookup 结果放输出前段；每次任务才变化的候选 / Node / 用户问题放后段。CLI JSON 字段顺序稳定；默认输出不带当前时间、随机 id、存储路径、host 绝对路径。确需时间时只回显 workspace 事实中的语义时间字段；确需路径时必须是 explicit human/debug surface。
+- Prompt/cache-stable 输出：必要且不变的指令与 schema 放前段，当前任务的材料和问题放后段；不重复携带已退场的主体矩阵或事实账本。CLI JSON 字段顺序稳定，不为刷新输出制造时间戳或随机 ID；授权材料位置与命令所需路径按现有 Route 交付。
 - Knowledge 本身就是 lookup registry。不新增动态 registry 文件；Agent 通过
-  当前 status、align/compile views、approved `knowledge/structure.yaml`、OKF
+  当前 status、任务材料、approved `knowledge/structure.yaml`、OKF
   indexes、build inventory 和生成包里的 `knowledge-query` skill 获取
-  term/service/system/action/domain 语义对象。lookup 输出可带匹配类型和排序,
+  相关知识文章及其来源区域。lookup 输出可带知识分类和排序,
   不带存储路径或临时时间戳。
 
 ## Workspace / Source / Cache
@@ -285,9 +280,9 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 ## 模块职责
 
-- `project/run.ts` 只执行 capture 和明确声明的非知识 `customPhase`；知识生产由 `project/indexer*.ts` 当前生命周期负责。
+- `project/run.ts` 只执行 capture 和明确声明的非知识 `customPhase`；知识生产由当前 Graph 与 `project/production*.ts` 的阶段协议负责。
 - `project/indexerParser*.ts` 负责 parser 计划、受控执行和结果导入；不得直接写 approved Markdown。
-- `project/indexerCandidateCompileActions.ts` 将已验证 Result 投影为唯一 current Candidate；不得新增旁路 Candidate writer。
+- `project/productionSubmission.ts` 按固定文件接收任务，将候选和任务回执同事务写入临时区；正式修订走当前维护入口，不绕过审核直接写正式文章。
 - `project/review*.ts` 负责 current Candidate HTML、用户决策和原子 apply；`project/close.ts` 负责 approved `knowledge/structure.yaml` projection 与 final verify gate。
 - 800 行限制是**事后体检**（详见根 `CLAUDE.md` §代码规模规则）：实现过程禁止主动探测当前行数，正常完成功能；**每个阶段结束后**才统一检查实际超 800 的文件并走分拆流程。拆分时默认目标 ≤600 行，内聚顶住才接受 600-800。
 
@@ -376,7 +371,7 @@ Use the packaged Context shell and follow `workflow.current`.
 - `allowed-tools` 按最小权限列；纯 CLI 代理命令通常只需 `Bash(context:*)`。
 - `context` 生产 command 只说明如何消费 `context entry` 和 `workflow.current`。不要在 command 中复制分支流程，也不要重新引入 init / align / compile / drop / query 等公开 slash command。
 - command md 不写 `${CLAUDE_PLUGIN_ROOT}/skills/...`，只指向打包后的 Context shell。
-- command md 只负责流程入口；schema、mount matrix、source_ref 规则通过当前 Graph resource 或 CLI View 发现。
+- command md 只负责流程入口；schema 和来源区域规则通过当前 Graph resource 或 CLI View 发现，不再要求主体挂载矩阵。
 
 ### Aspect README 结构
 

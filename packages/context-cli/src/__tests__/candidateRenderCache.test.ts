@@ -11,7 +11,7 @@ test("render memo survives commands but ignores damaged content and a different 
     const cache = await loadCandidateRenderCache(root);
     const markdown = "# Public API\n";
     const key = indexerProtocolDigest({ source: "current" });
-    const sections = [buildIndexerRenderedContentBlock({ layer: "semantic-prose", evidence_refs: ["source:public"], markdown })];
+    const sections = [buildIndexerRenderedContentBlock({ layer: "semantic-prose", references: [], markdown })];
     cache.entries.set(key, sections);
     await saveCandidateRenderCache(root, cache);
     expect((await loadCandidateRenderCache(root)).entries.get(key)).toEqual(sections);

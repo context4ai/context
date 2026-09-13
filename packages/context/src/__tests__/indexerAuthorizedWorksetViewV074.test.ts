@@ -53,12 +53,6 @@ const SUBJECT: IndexerSubjectKey = {
   kind: "component",
   local_key: "button",
 };
-const PARTITION_SUBJECT: IndexerSubjectKey = {
-  protocol: "context.subject-key/v1",
-  namespace: "sample-package",
-  kind: "component-library",
-  local_key: "root",
-};
 const STRATEGY = {
   kind: "project-indexer" as const,
   indexer_id: "component-library",
@@ -95,7 +89,6 @@ const common = {
   primary_execution_fingerprint:
     PRIMARY_EXECUTION_PROJECTION.primary_execution_fingerprint,
   profile_contract_digest: digest("5"),
-  subject_key_schema_digest: digest("7"),
   source_scope_digest: digest("8"),
   source_binding_digest: digest("9"),
   primary_resource_binding_digest:
@@ -202,7 +195,6 @@ function partitionWorkset(): IndexerMainPartitionWorkset {
   const workset = buildIndexerMainWorkset({
     ...common,
     stage: "partition",
-    partition_subject_key: PARTITION_SUBJECT,
     strategy_set_digest: indexerPartitionStrategySetDigest([{
       strategy_ref: STRATEGY,
       strategy_digest: STRATEGY_DIGEST,
