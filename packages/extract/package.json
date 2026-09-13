@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract",
   "description": "Language-plugin framework and repository runner for Context code evidence",
-  "version": "0.7.10-alpha.1",
+  "version": "0.7.10-alpha.2",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -27,7 +27,7 @@
     "c4a-extract-code": "./dist/bin/c4a-extract-code.js"
   },
   "scripts": {
-    "build": "rm -rf dist && bun run ../build.ts src/index.ts src/bin/c4a-extract-code.ts --shebang=node --shebang-entry=src/bin/c4a-extract-code.ts && cp ../../LICENSE dist/LICENSE",
+    "build": "rm -rf dist && bun run ../build.ts src/index.ts src/bin/c4a-extract-code.ts --shebang=node --shebang-entry=src/bin/c4a-extract-code.ts && bun run ../writeLibraryDistPackage.ts . && cp ../../LICENSE dist/LICENSE",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "lint": "eslint src"

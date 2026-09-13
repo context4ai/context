@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-contract",
   "description": "OpenAPI and GraphQL contract catalog adapter for Context",
-  "version": "0.7.10-alpha.1",
+  "version": "0.7.10-alpha.2",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -31,6 +31,7 @@
   "dependencies": {
     "@c4a/core": "workspace:*",
     "graphql": "^16.14.2",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "zod": "^3.23.8"
   }
 }
