@@ -148,7 +148,22 @@ kbPackage({
   name: "component-kb",
   template: "src/package-templates/kb",
   select: { collections: ["codeindex", "architecture"] },
-  site: { title: "Component knowledge", lang: "en-US", base: "/" },
+  site: {
+    title: "Component knowledge",
+    lang: "en-US",
+    base: "/",
+    home: {
+      title: "Component knowledge",
+      slogan: "Build with the public contract in view",
+      description: "Browse components, usage guidance and implementation boundaries.",
+      resources: [{
+        title: "Project workspace",
+        description: "Open the repository that maintains this knowledge.",
+        href: "https://example.com/project",
+        featured: true,
+      }],
+    },
+  },
 });
 
 llmsPackage({
@@ -164,7 +179,11 @@ may be rebuilt; it is not an authoring source.
 `kbPackage.site` optionally adds a VitePress website at `dist/<base>-site/` in
 the same build, beside the KB directory. `<base>` removes one trailing `-kb`
 from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,
-`lang` and a deployment `base` path. Knowledge map is projected from
+`lang`, a deployment `base` path, and an optional `home` presentation. `home`
+accepts `title`, `slogan`, `description`, hero `actions`, and `resources` shown
+below the generated site map. Each resource needs an `href`, a copyable
+`command`, or both. Omit unknown resources; the builder never invents service
+or repository links. Knowledge map is projected from
 `src/knowledge-map.yaml` independently of KB directories; see
 [Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 

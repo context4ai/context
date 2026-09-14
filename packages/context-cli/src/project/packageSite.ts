@@ -3,7 +3,7 @@ import { packageSiteOutputDir } from "./packageOutputPaths.js";
 import { readWorkspaceChangelog } from "./workspaceChangelog.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles } from "./packageLlms.js";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile, rm, symlink, cp, access } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm, symlink, cp, access, stat } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, posix } from "node:path";
 import { loadSourcesRegistry, projectKnowledgeMap, knowledgeMapTargetKey, type PackageDefinition, type KnowledgeMap, type ProjectedKnowledgeMapEntry } from "@c4a/context";
@@ -15,8 +15,9 @@ import { markdownReaderLinks } from "./markdownLinks.js";
 import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSources.js";
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
+import { packageSiteBranding } from "./packageSiteBranding.js";
 
-export const PACKAGE_SITE_VERSION = "vitepress-site-v22-llms-new-tab";
+export const PACKAGE_SITE_VERSION = "vitepress-site-v41-home-safe-spacing";
 const require = createRequire(import.meta.url);
 export interface SitePage {
   artifact_ref?: string;
@@ -181,6 +182,7 @@ export async function writePackageSite(input: {
       themeConfig: { ...siteThemeLabels("zh"), contextUpdated: historyDate,
         contextUiLabels: { zh: siteThemeLabels("zh"), en: siteThemeLabels("en") },
         contextSections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
+        contextHome: { resources: options.home?.resources ?? [], branding: packageSiteBranding },
         sidebar: sections[0]?.items ?? [],
         nav: [...sections.map(section => ({ text: section.title, link: section.href })), { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
       } };
@@ -211,9 +213,21 @@ export async function writePackageSite(input: {
       menu(lines, section.entries, 0);
       await writeFile(join(temporary, section.href.slice(1).replace(/\.html$/u, ".md")), lines.join("\n") + "\n");
     }
-    const home: string[] = [`# ${mdLabel(options.title ?? pkg.name)}`, "", mdLabel(options.description ?? ""), ""];
-    for (const section of sections) home.push(`- [${mdLabel(section.title)}](${section.href})`);
-    await writeFile(join(temporary, "index.md"), home.join("\n") + "\n");
+    const chinese = (options.lang ?? "en-US").startsWith("zh");
+    const firstSection = sections[0]?.href ?? "/llms/index.html";
+    const featuredResources = (options.home?.resources ?? []).filter(resource => resource.featured && resource.href);
+    const hero = {
+      name: options.home?.title ?? options.title ?? pkg.name,
+      text: options.home?.slogan ?? (chinese ? "从知识地图开始探索" : "Explore from the knowledge map"),
+      tagline: options.home?.description ?? options.description ?? "",
+      actions: options.home?.actions ?? [
+        { theme: "brand", text: chinese ? "浏览知识" : "Browse knowledge", link: firstSection },
+        ...featuredResources.map(resource => ({ theme: "alt" as const, text: resource.title, link: resource.href! })),
+        { theme: "alt", text: "LLM Docs", link: "/llms/index.html" },
+      ],
+    };
+    await writeFile(join(temporary, "index.md"),
+      `---\nlayout: home\ntitle: ${JSON.stringify(options.home?.title ?? options.title ?? pkg.name)}\nhero: ${JSON.stringify(hero)}\n---\n`);
     await writeFile(join(temporary, "changelog.md"), `---\ntitle: Changelog\ncontextHistory: ${JSON.stringify(Buffer.from(JSON.stringify(history)).toString("base64"))}\n---\n\n# Changelog\n`);
     const llms = buildLlmsDocuments({ title: options.title ?? pkg.name, base, assetsPrefix: "resources/",
       articles: await Promise.all(llmsArticles(pkg, selected).map(async article => ({ ...article,
@@ -236,6 +250,17 @@ export async function writePackageSite(input: {
       await cp(join(root, path), destination);
     }
     await compileSite(temporary, output);
+    // Some deployment stores reject zero-byte objects. Preserve URLs and only
+    // fill formats where a comment is valid; never invent JSON or binary data.
+    for (const file of await walkPackageFiles(output)) {
+      const extension = posix.extname(file.relPath).toLowerCase();
+      const placeholder = [".css", ".js", ".mjs", ".cjs"].includes(extension)
+        ? "/* Intentionally empty. */\n"
+        : [".html", ".htm"].includes(extension) ? "<!-- Intentionally empty. -->\n" : null;
+      if (placeholder !== null && (await stat(file.absPath)).size === 0) {
+        await writeFile(file.absPath, placeholder);
+      }
+    }
     await writeFile(join(output, "context-site-map.json"), JSON.stringify({ protocol: "context.site-output/v1",
       knowledge_map_revision: structure?.revision ?? null, base, llms: { index: "llms.txt", full: "llms-full.txt", home: "llms/index.html", articles: llms.articleCount }, pages: [...byPath.values()], entries: mapping.entries,
       sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })), warnings: mapping.warnings }, null, 2) + "\n");
