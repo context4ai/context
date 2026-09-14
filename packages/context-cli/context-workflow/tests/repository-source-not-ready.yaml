@@ -1,5 +1,5 @@
 schema: agent-graph.test.v1
-name: registered repository sources are prepared before capture or extraction
+name: missing unrelated repository checkouts do not block document capture
 graph: workspace
 entry: context
 state:
@@ -22,7 +22,8 @@ state:
       knowledge_review_resolved: true
       review_gate_clear: true
     sources: { registered: true, repositories_ready: false }
+    capture: { declarations_complete: true, complete: false }
 expect:
-  statusCode: waiting-user
-  primaryNode: ensure-repository-sources
-  primaryReasonCode: route.source.repository-not-ready
+  statusCode: actionable
+  primaryNode: capture-next
+  primaryReasonCode: route.capture.pending-target

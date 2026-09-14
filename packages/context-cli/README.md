@@ -82,7 +82,7 @@ selects instead of carrying the entire lifecycle in its prompt.
 |---|---|---|
 | Goal and sources | Confirm what knowledge is needed and which materials are in scope | Source identity, permission boundary, pinned repository or document inputs |
 | Capture and extraction | The Agent reads documents or inspects a confirmed code boundary | Complete bodies, resources, symbols, relations, fingerprints, and freshness |
-| Structure and compile | Review the proposed knowledge organization and content | Source-bound Nodes and Sections, coverage, continuity, and stable identities |
+| Planning and writing | Review the proposed knowledge organization and content | Articles and source-linked sections, coverage, continuity, and stable identities |
 | Review and close | Approve, reject, or adjust the candidate set | Atomic review application, durable decisions, and closed structure projection |
 | Verify and build | Choose an output and receive a reusable package | Validation, package templates, asset policy, and build inventory |
 
@@ -230,7 +230,7 @@ for maintainers, automation, and diagnostics:
   and do not create a retry ledger or override Gate;
 - required material gaps block the ordinary lifecycle until new captured input
   reruns the affected workset. The ordinary `context close` writes approved
-  structure and clears completed runtime lifecycle state;
+  structure; task cleanup follows successful delivery, not close alone;
 - `context clean-cache --dry-run` previews cleanup of Context-owned stale
   plugin caches.
 

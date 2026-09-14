@@ -28,7 +28,9 @@ export function renderApprovedIndexerMarkdown(input: {
     const content = compactApprovedKnowledgeMarkdown(ensureApprovedKnowledgePresentation(input.record.body));
     return content.replace(/^---\r?\n([\s\S]*?)\r?\n---/u, (_match, header: string) => {
       const metadata = YAML.parse(header) as Record<string, unknown>;
-      return ["---", YAML.stringify({ ...metadata, type: metadata.type ?? okfTypeForCollection(input.record.collection),
+      const reclassified = input.record.approved_revision?.previous_path !== undefined &&
+        input.record.approved_revision.previous_path.split("/")[0] !== input.record.collection;
+      return ["---", YAML.stringify({ ...metadata, type: reclassified ? okfTypeForCollection(input.record.collection) : metadata.type ?? okfTypeForCollection(input.record.collection),
         timestamp: input.timestamp }).trimEnd(), "---"].join("\n");
     });
   }

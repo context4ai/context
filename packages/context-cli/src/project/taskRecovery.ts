@@ -7,6 +7,7 @@ import { productionAgentDirectory } from "./productionSubmissionFiles.js";
 import { withProjectWriteLock } from "./writeLock.js";
 import { recoverDurableMultiFileTransactions, safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { contextWorkflowProviderPath } from "./workflow/workflowProvider.js";
+import { inspectWriterLock } from "./writeLockRecovery.js";
 
 export const RECOVERY_COMMAND = "context task recover --format json";
 export const TRANSACTIONS_PATH = ".tmp/context-runtime/transactions";
@@ -59,15 +60,13 @@ export async function inspectTaskRecovery(root: string) {
   }
   const stage = await probe("production-stage", () => readProductionStage(root));
   const journals = await probe("transactions", () => recoveryJournals(root));
-  const lock = await probe("writer-lock", async () => {
-    const text = await recoveryText(root, ".tmp/context-runtime/locks/project-write.lock/owner.json");
-    return text === undefined ? null : JSON.parse(text) as unknown;
-  });
+  const lock = await probe("writer-lock", () => inspectWriterLock(root));
   return { action: "recovery-inspected", resources: recoveryResources(), findings,
     tasks: stage?.tasks.map(task => ({ task: task.id, path: task.path, state: task.status })) ?? [],
     ...(stage ? { stage: stage.id, directory: productionAgentDirectory(stage.id) } : {}),
     transactions: journals, writer_lock: lock,
     actions: [
+      ...(lock?.process_state === "not-running" ? [{ operation: "writer-lock", command: `${RECOVERY_COMMAND} --operation writer-lock` }] : []),
       ...(journals?.length ? [{ operation: "transactions", command: `${RECOVERY_COMMAND} --operation transactions` }] : []),
       ...(stage ? [{ operation: "continue", command: "context status --format json" }] : []),
     ],

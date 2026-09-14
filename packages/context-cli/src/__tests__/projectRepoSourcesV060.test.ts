@@ -295,7 +295,7 @@ describe("0.6.0 repository source behavior", () => {
       expect(existsSync(link)).toBe(false);
 
       const status = await runCliInDir(project, ["status"]);
-      expect(status).toContain("state: route.source.repository-not-ready");
+      expect(status).not.toContain("state: route.source.repository-not-ready");
       expect(status).toContain("diagnostic 20260712/sample-lib: materialized path is missing: sources/repo/20260712/sample-lib");
       expect(status).toContain("agent hint 20260712/sample-lib: Run context source ensure 20260712/sample-lib to materialize the local source link.");
       expect(existsSync(link)).toBe(false);

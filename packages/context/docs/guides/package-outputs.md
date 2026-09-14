@@ -40,13 +40,51 @@ prefixes only, not filesystem output paths.
 kbPackage({
   name: "project-kb",
   template: "src/package-templates/kb",
-  site: { title: "Project knowledge", lang: "en-US", base: "/" },
+  site: {
+    title: "Project knowledge",
+    lang: "en-US",
+    base: "/",
+    home: {
+      title: "Project knowledge",
+      slogan: "Find the context behind the work",
+      description: "Browse the approved knowledge map and supporting resources.",
+      resources: [{
+        title: "Project workspace",
+        description: "Open the repository that maintains this knowledge.",
+        href: "https://example.com/project",
+        featured: true,
+      }],
+    },
+  },
 });
 ```
 
 `site` is opt-in; omission keeps the existing KB-only output. Optional fields
 are `title` (defaults to the package name), `description`, `lang` (defaults to
 `en-US`), and `base` (defaults to `/`; use `/docs/` when hosted under that path).
+`home` optionally customizes the landing-page `title`, `slogan`, `description`
+and action buttons. Its `resources` list adds only configured repository,
+service or support cards; each item requires a safe `href`, a copyable
+`command`, or both. Set `featured: true` on a linked resource to also place it
+between the Browse knowledge and LLM Docs hero actions. Do not add placeholders
+for unknown destinations.
+
+Configure resources from confirmed project settings, repository remotes or
+successful publication receipts. If a service has not been created or its URL is
+unknown, omit the resource object; empty strings are not placeholders. Missing
+optional resources do not block building the site or authorize creating services.
+After an authorized deployment succeeds, add its returned destination to the
+existing resource list, avoiding duplicates. Rebuild when this changes the
+configuration; updating the hosted site still requires publication authorization.
+
+The homepage uses the first-level knowledge map as a complete site map. Each
+section card previews a bounded number of page links and retains a link to the
+full section, so large knowledge bases remain scannable without hiding top-level
+coverage. LLM Docs and Changelog remain dedicated generated resources. On wide
+screens the homepage content aligns with article content while preserving the
+sidebar rail; on narrow screens it uses the available width. Motion is limited
+to short card entrance and hover feedback and is disabled when the reader asks
+the operating system to reduce motion.
 The website uses a full-width VitePress theme with system fonts, compact navigation,
 a wide reading area and a smaller article outline. It starts in
 light mode regardless of the operating system; an explicit reader choice is

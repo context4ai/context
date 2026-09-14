@@ -10,7 +10,9 @@ Repository checkout contents and materialized module links are local runtime
 inputs. Git stores their recovery recipe in `sources/repo/index.yaml`; it does
 not store the checkout, local aliases, or `sources/repo/<date>/<module>` links.
 
-Run the route's inspection action first. It groups logical modules by registered
+Recover only repositories required by the current task, not all registered
+checkouts before an unrelated document or Note update. Run
+`context source recovery-plan <registered-name> --format json` first. It groups logical modules by registered
 remote and pinned commit, so one physical checkout can restore every module in
 that group. Do not create one clone per module. Groups already marked `ready`
 need no decision; when every group is ready, the plan has no recovery action.
@@ -39,5 +41,5 @@ materializes module links.
 
 Repository sources are ready only when every selected module resolves to the
 registered remote and pinned commit, every registered subpath exists, no local
-path was overwritten, Context materialization succeeds, and the current route
-no longer reports `route.source.repository-not-ready`.
+path was overwritten, Context materialization succeeds, and the selected recovery
+plan reports them ready.

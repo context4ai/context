@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { indexerProtocolDigest, indexerKnowledgeCollectionSchema } from "@c4a/context";
+import { indexerProtocolDigest, indexerKnowledgeCollectionSchema, TOP_LEVEL_NAMESPACES } from "@c4a/context";
 import { isSafeKnowledgeTargetPath, knowledgeTargetPathKey } from "./candidateLedger.js";
 
 const name = z.string().trim().min(1);
@@ -11,7 +11,7 @@ export const productionCapabilitiesSchema = z.object({
 }).strict();
 
 export const productionIndexerUsageSchema = z.object({
-  scopes: z.array(name).min(1),
+  scopes: z.array(name).min(1).describe("Authorized source refs from stage.scopes, e.g. note:20260913/decision.md; not knowledge collection names"),
   skills: z.array(name).min(1),
   purpose: name,
 }).strict();
@@ -84,7 +84,8 @@ export function validateProductionStage(value: unknown): ProductionStage {
     throw new TypeError("An unavailable source requires an explicit gap and pending investigation");
   }
   for (const usage of stage.indexer_usage) {
-    if (usage.scopes.some(scope => !scopes.has(scope))) throw new TypeError("Indexer usage cannot extend the authorized stage scope");
+    const invalid = usage.scopes.filter(scope => !scopes.has(scope));
+    if (invalid.length) throw new TypeError(`indexer_usage.scopes contains unauthorized source refs: ${invalid.join(", ")}. Use stage.scopes source refs (${[...scopes.keys()].join(", ")}), not collection names. This is not an Indexer registration error.`);
   }
   const visited = new Set<string>();
   const visiting = new Set<string>();
@@ -101,7 +102,9 @@ export function validateProductionStage(value: unknown): ProductionStage {
     visited.add(task.id);
   }
   for (const task of stage.tasks) {
-    indexerKnowledgeCollectionSchema.parse(task.path.split("/")[0]);
+    if (!indexerKnowledgeCollectionSchema.safeParse(task.path.split("/")[0]).success) {
+      throw new TypeError(`Article path "${task.path}" must be relative to knowledge/, e.g. business/example.md (without the knowledge/ prefix). Valid collections: ${TOP_LEVEL_NAMESPACES.join(", ")}. Correct the article path, not indexer_usage.scopes.`);
+    }
     if (!isSafeKnowledgeTargetPath(task.path.split("/")[0]!, task.path)) throw new TypeError(`Unsafe article target for ${task.id}`);
     if (task.input !== productionTaskInput(task)) throw new TypeError(`Task input does not match its actual materials: ${task.id}`);
     if (new Set(task.sources.map(source => source.scope)).size !== task.sources.length ||

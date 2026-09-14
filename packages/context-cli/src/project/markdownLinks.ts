@@ -160,6 +160,34 @@ export function replaceMarkdownInlineLinkTargets(
   replacement: (link: MarkdownInlineLink) => string | undefined,
 ): string {
   const links = markdownInlineLinks(content);
+  // Reference-style destinations live in definitions, not at the [label][id]
+  // occurrence. Rewrite each definition once without changing reader labels.
+  if (content.includes("]:")) {
+    const tree = unified().use(remarkParse).parse(content) as MdastNode;
+    const visit = (node: MdastNode): void => {
+      if (node.type === "definition" && node.url !== undefined) {
+        const start = node.position?.start?.offset;
+        const end = node.position?.end?.offset;
+        if (start !== undefined && end !== undefined) {
+          const raw = content.slice(start, end);
+          const prefix = /^\[[^\n]+\]:\s*/u.exec(raw);
+          if (prefix) {
+            const offset = prefix[0].length;
+            const angle = raw[offset] === "<";
+            const match = angle ? /^<([^>]*)>/u.exec(raw.slice(offset)) : /^((?:\\.|[^\s])+)/u.exec(raw.slice(offset));
+            if (match) {
+              const targetStart = start + offset + (angle ? 1 : 0);
+              links.push({ image: false, label: node.identifier ?? "", target: match[1]!, start, end,
+                targetStart, targetEnd: targetStart + match[1]!.length });
+            }
+          }
+        }
+      }
+      for (const child of node.children ?? []) visit(child);
+    };
+    visit(tree);
+    links.sort((a, b) => a.targetStart - b.targetStart);
+  }
   let cursor = 0;
   let output = "";
   for (const link of links) {

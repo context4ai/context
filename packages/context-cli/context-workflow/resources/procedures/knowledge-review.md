@@ -51,6 +51,13 @@ were read.
 After apply, re-evaluate. Do not infer that close or package output is current.
 Do not persist a duplicate review-report ledger in the workspace.
 
+For restructuring, compare replacement content with the affected approved pages:
+useful conditions, steps and explanations must have a destination before removal.
+Review omission rejects a candidate; it does not retire an approved article.
+Use the explicit retirement preview after replacement delivery, and repair its
+reported incoming references. Navigation removal alone does not remove content
+from search or packages. A renamed menu does not require a new article identity.
+
 The Review UI names the internal `rejected` decision **Omit** because it is a
 durable content decision, not a request to rewrite the page. When a page needs
 changes, leave that page pending and use `context revise` so the owning
@@ -103,8 +110,11 @@ and the Route returns to their Review/repair after the selected output builds.
 ## Check usefulness as well as factual accuracy
 
 Use the current requirements and agreed scope to check whether a reader can
-complete the promised task with these pages. Source citations and a valid API
-table alone do not establish that. Compare representative pages with their
+complete the promised task with these pages. For navigation, check a specific
+file/symbol or source section and an actionable next hop; for explanations or
+procedures, check the necessary conditions, steps and examples. Source citations,
+task acceptance and navigation bindings alone do not establish either outcome.
+Compare representative pages with their
 actual definitions: keep defaults and members attached to the correct callable
 or type; inspect inherited members and static entry points when needed for the
 reader's task. Do not infer that an unexpanded type has no options or callbacks.
@@ -116,3 +126,9 @@ not an automatic rejection rule. If the source is insufficient, identify what
 is unavailable and its effect on the reader instead of inventing content or
 forcing another identical regeneration. Keep correct pages eligible for the
 partial approval and delivery path above.
+
+Compare the batch with the agreed whole scope and remaining investigation, not
+only its own titles. When revising or merging, preserve useful existing detail
+instead of replacing it with generic lookup advice. Repair affected pages or
+use the current planning route for missing topics. These are Agent judgments,
+not minimum article counts, a new coverage ledger or an extra CLI approval gate.

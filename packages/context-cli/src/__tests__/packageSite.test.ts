@@ -7,7 +7,11 @@ import { kbPackage, updateKnowledgeMap } from "@c4a/context";
 import { createSiteNavigation, siteMarkdown, siteSections, writePackageSite } from "../project/packageSite.js";
 import { withStagedPackageOutput } from "../project/packageBuildStage.js";
 
-const pkg = kbPackage({ name: "sample", template: "src/templates", site: { title: "Knowledge", base: "/docs/" } });
+const pkg = kbPackage({ name: "sample", template: "src/templates", site: { title: "Knowledge", base: "/docs/", home: {
+  title: "Sample knowledge", slogan: "Answers for the work ahead", description: "A connected knowledge map.",
+  resources: [{ title: "Project workspace", description: "Review the source workspace.",
+    href: "https://example.com/workspace", action: "Open workspace", command: "context status", featured: true }],
+} } });
 const selected = [{ relPath: "codeindex/app/start.md", absPath: "/unused", content: '---\ntitle: Start\nartifact_ref: article:start\n---\n# Start\n<!-- context:section id="entry" -->\n## Entry\n' },
   { relPath: "codeindex/app/next.md", absPath: "/unused", content: '---\ntitle: Next\nartifact_ref: article:next\n---\n# Next\n' }].map(file => ({ ...file,
     article: { article_id: file.relPath.includes("start") ? "article:start" : "article:next", path: file.relPath,
@@ -100,11 +104,29 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(history).toContain("New module material");
     expect(history).not.toContain("<script>unsafe()</script>");
     const home = await readFile(join(root, packageSiteOutputDir(pkg), "index.html"), "utf8");
+    const resourcesStart = home.indexOf('class="context-home-resource-grid"');
+    const resourcesEnd = home.indexOf('class="context-home-powered"', resourcesStart);
+    const homeResources = home.slice(resourcesStart, resourcesEnd);
     const article = await readFile(join(root, packageSiteOutputDir(pkg), mapping.pages[0]!.site_path), "utf8");
     expect(article).not.toContain("context-history-button");
     expect(article).toMatch(/LLM Docs[\s\S]*?Changelog[\s\S]*?VPNavBarAppearance/u);
     expect(article).toContain('changelog.html');
     expect(home).toContain("Business");
+    expect(home).toContain("Sample knowledge");
+    expect(home).toContain("Answers for the work ahead");
+    expect(home).toContain("context-home-map");
+    expect(home).toContain("Project workspace");
+    expect(home).toContain("context status");
+    expect(home).toContain("context4ai/context");
+    expect(home).toContain("LLM Docs");
+    expect(home).toContain("Changelog");
+    expect(resourcesStart).toBeGreaterThan(-1);
+    expect(resourcesEnd).toBeGreaterThan(resourcesStart);
+    expect(homeResources.indexOf("Project workspace")).toBeLessThan(homeResources.indexOf("LLM Docs"));
+    expect(homeResources.indexOf("LLM Docs")).toBeLessThan(homeResources.indexOf("Changelog"));
+    expect(homeResources).toContain("context-home-resource-heading");
+    expect(homeResources).toContain("context-home-install-action");
+    expect(home.indexOf("Browse knowledge")).toBeLessThan(home.indexOf("Project workspace"));
     expect(home).toContain('"light"');
     expect(home).toContain("context-theme:");
     expect(article).toContain('id="section-entry"');

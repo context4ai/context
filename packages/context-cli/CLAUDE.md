@@ -1,6 +1,6 @@
 # @c4a/context-cli
 
-`@c4a/context-cli` 同时提供本地 `context` CLI 和 `context` plugin。本文件是包级开发准则;通用 Bun / TypeScript / 测试 / 构建规则看仓库根 `AGENTS.md`,版本特定阈值 / 字段 / Phase 拆分见 `design/<version>/README.md`。
+`@c4a/context-cli` 同时提供本地 `context` CLI 和 `context` plugin。本文件是包级开发准则；通用规则见仓库根 `CLAUDE.md`，开发与发布步骤见 `DEVELOPMENT.md`。
 
 ## 设计原则（一切决策的最高优先级）
 
@@ -13,7 +13,7 @@
 
 - **不拟合数据**：不要把 fixture / 单条 case / 当前实测样本的形态当成 API 协议。决策依据是“长期类型 / 类别上的合理性”，不是“这次跑出来什么字段就把字段固化”。
 - **长期合理**：选择能在未来 6-12 个月内仍然成立的设计，哪怕实现成本更高。今天省的 1 小时往往换 3 个版本之后的 1 周返工。
-- **只维护当前协议**：beta.x 阶段没有需要保护的外部契约消费者。该改 schema、改字段名、改 view 形态就改，**禁止**为不支持的形态保留别名、fallback 或双入口。
+- **只维护当前协议**：移除明确退场的字段和流程；已发布接口的变更须评估消费者和迁移路径，不假定没有外部使用者。
 - **一步到位**：发现问题就找根因改根因；不要“先打补丁、回头再说”。补丁会变成下一次审查的债务，且 99% 不会“回头”。
 - **不要苟且于低成本方案**：低成本方案 ≠ 正确方案。“加一行 if 绕过这个 case”、“在 helper 外面再包一层兜底”、“先 grep 切一下” 都是典型反例。**真正的低成本是不重复修同一个问题**。
 - **面向 Agent DX 友好**：默认输出 / 错误信息 / hint / 命令命名 / 参数语义，第一受众是 LLM agent，第二才是人类开发者。判断标准：**一个全新 agent 拿到这个输出，能不能在零外部上下文下做出正确的下一步动作**？做不到就回去改设计。
@@ -52,9 +52,9 @@
 ## 核心边界
 
 - CLI 做机械事务：workspace 定位、文件 I/O、source registry/snapshot、文章与片段定位、package index、verify、approved structure projection、build inventory。
-- Agent 做综合判断：align 分类、compile draft、语义支持/冲突/弱证据判断、用户问题翻译。
+- Agent 做综合判断：来源选择、规划、写作、语义支持与冲突判断、用户问题翻译。
 - CLI 不调用 LLM；Agent 不手写 `knowledge/` markdown。
-- `sources/` / `knowledge/` / `dist/` / `.tmp/context-runtime/` 只能由当前 CLI 命令维护，不能用通用 workspace write 绕过协议。候选和暂存结构属于 `.tmp/context-runtime/lifecycle/`；成功 close 后必须由 CLI 清理。
+- `sources/` / `knowledge/` / `dist/` / `.tmp/context-runtime/` 只能由当前 CLI 命令维护，不能用通用 workspace write 绕过协议。任务文件在成功交付后按工作区准备指引清理，不在 close 后立即清空。
 
 ## 工作流入口
 
@@ -70,7 +70,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 
 - 生产工作流入口是 `/c4a:context`；独立只读查询与来源归因入口是显式触发的 `/c4a:context-inspect-search`，不消费生产 Route 的写动作。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
 - `/c4a:context` 是对话式入口，不是同名 CLI primitive。它先运行只读 `context entry --format json`，只执行返回的 `next_action.command`；工作区就绪后把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。**不要新增或调用 `context continue`**。
-- 用户在当前会话明确授权全托管后，默认先调用 `context run --managed --until blocked-or-complete --format json`，不要由 Agent 手工重复 status/action。它不是第二个路由入口：只能执行唯一、immediate、非 read 命令，每步后必须重新求值；遇到语义读取、配置、权限缺口或多命令时返回当前 `workflow.current`。诊断描述状态，是否可自动修复由同一 Graph 的 Route 决定，不在执行循环里按 error 级别重复阻断已选定的机械修复。
+- 用户在当前会话明确授权全托管后，优先执行 Route 返回的连续命令，保留其中的阅读回执等参数，不自行拼裸循环。连续执行仅推进唯一、immediate、非 read 命令，每步重新求值；遇到语义读取、配置、权限缺口或多命令时返回当前 Route。
 - 普通模式与全托管模式复用同一 Gate，并完整保留普通模式的 Inspection 与 Resolution 能力。只在 Graph Gate 的 `delegated` 策略中声明全托管可跳过的冗余 inspection、可替换的对话 Resource，以及需要时由 authority 选择的专用 Resolution Action；不要在 Facts、TypeScript 或入口提示词中把 Authority 伪装成已完成业务事实。普通模式在工作区创建后和来源采集完成后通过 Route-selected dialogue 说明模式差异。
 - Agent 不得只复述 Route 的机械命令。`availability=immediate` 时读取 required 资源后执行；`gate` 未解析时读取已提供的预览并向用户解释决定；`configuration` 存在时只修改指定项目文件。动作返回 workspace Route 后直接继续，只有配置修改或缺少 Route 才重新 status；phase-local `next_action` 不得替代 workspace Route。普通模式也允许 `run --until blocked-or-complete` 执行机械步骤，但不隐式取得 managed 权限。Review 明确批准后沿同一 Graph 自动收尾，遇到未授权的 Gate 或 Agent 内容任务仍停下。
 - `missing-source` 不是自动探索信号。不要根据 cwd、父目录、monorepo 结构、package 名、`git remote` 自行决定 source;用户明确给出 source 名称/路径/ref 后,才运行 `context source add repo ...`。
@@ -131,7 +131,7 @@ Human-gate 话术的权威来源是当前 Provider Graph 选中的
 
 ### 命名边界（必须遵守）
 
-- **Slash command**：只发布 `/c4a:context`。源 `../../plugins/context/skills/context/SKILL.md`，产物 `dist/plugins/claude/commands/context.md`。
+- **生产 Slash command**：`/c4a:context`。另有显式查询 `context-inspect-search` 与定制技能 `context-indexer-create`，不作为第二个生产入口。
 - **CLI primitive**：`context <subcommand> ...`（如 `context status`,
   `context run ...`, `context close`）。Slash command / skill 内部调用。
 - **Cursor command entry**：全局命令名 `c4a-context`，由 `build:plugin` 从根级 Context Skill 生成到 `dist/plugins/cursor/commands/`。
@@ -264,15 +264,13 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 ### Workspace 规则
 
-- `ctxDir` 是 Context data root：embedded layout 为 `<repo>/.context`，root layout 为 repo root。
-- 文档、日志、skill 中的 `raw/...` / `knowledge/...` / `output/...` 相对路径以 `ctxDir` 为根，不写死 `.context/...`。
-- 需要扫描整个代码仓的命令（如 `capture --code`）用 `ctx.workspaceRoot` 或 `workspaceRootFromCtxDir(ctx.ctxDir)`，不用 `process.cwd()`。
+- 项目工作区包含 `src/index.ts`、`sources/`、`knowledge/`、`dist/` 与 `.tmp/context-runtime/`；相对路径以该工作区为根。
+- 源码读取范围来自登记的 source/module 配置，不从调用进程的 cwd 推断来源。
 - `context status` 是 local-only，只在 workspace root 运行，不从子目录定位 workspace。
 
 ### Source Ref 行号
 
-- `source_ref` / raw block / internal align binding 的 `mentions[].line` 都用去掉 capture frontmatter 和自动分隔空行后的正文行号。
-- 读 internal align binding 不能只按 `mentions[].line` 索引 raw，必须用 `quote` 校验或 fallback;行号口径不一致时以 quote 校验为准。
+- 引用以当前来源材料的文件路径与区域 locator 定位，由工具计算 `content_digest`；不恢复旧 align binding 或 `mentions[].line` 协议。
 
 ### Cache Maintenance
 
@@ -307,9 +305,8 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 构建不变量：
 
-- `dist/plugins/claude/` 只通过 `commands/context.md` 发布单一入口。
-- `dist/plugins/cursor/` 只通过 `commands/c4a-context.md` 发布用户入口。
-- `dist/plugins/codex/skills/` 只包含 `context`，由 plugin namespace 暴露为 `c4a:context`；Claude/Cursor plugin root 也不内嵌 Provider。
+- Claude/Cursor commands 发布生产与显式查询入口，并提供 Indexer 创建 Skill。
+- `dist/plugins/codex/skills/` 包含 `context`、`context-inspect-search` 和 `context-indexer-create`；宿主 plugin root 不内嵌 lifecycle Provider。
 - `dist/plugins/skills/` 直接投影根级全部 Skills；安装器把其中 lifecycle Provider 原子复制到 `~/.agents/skills` 和 `~/.claude/skills`，而不是复制进 Host plugin root。
 - `dist/plugins/{claude,codex,cursor}/` 各带 generated guard（`CLAUDE.md` 或 `AGENTS.md` + `.generated`）；看到 guard 不要编辑 build 产物。`dist/plugins/skills/` 顶层 README 统一说明。
 - 生命周期规则、长诊断、Schema 发现说明和语义规则统一住在
@@ -332,7 +329,7 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 Context Skill 是薄入口，不再用 L1/L2/L3 层级承载生命周期正文。它只保留：
 
 1. 能力用途与适用边界；
-2. `context status --format json` 启动方式；
+2. `context entry --format json` 启动方式；
 3. `workflow.current`、required/recommended resources 的消费循环；
 4. revision、authority、gate、configuration 和重新求值规则；
 5. 少量不允许绕过 Context CLI 的安全边界。
@@ -383,7 +380,7 @@ Use the packaged Context shell and follow `workflow.current`.
 
 ## 测试与构建
 
-- `bun test` 在 Claude Code shell 下 spawn 子进程时 stdout/stderr 偶发为空。验证 subprocess 行为时：优先把逻辑拆成 pure function 做 in-process 测试；必须 spawn 时加针对空 stdout/stderr 的 sandbox-skip 分支，并用 in-process 测试保底；测试注释说明为什么不能只依赖 subprocess。
-- `bun run build` 走 `packages/build.ts`，context-cli build 还会跑 `scripts/build-plugin.ts` 从 `plugin/` 生成到 `dist/plugins/`；不要生成或维护独立 plugin 仓库。
+- 子进程测试出现空输出时保存退出码和日志排查，不用空输出自动跳过断言；真实 Node 发行物测试按仓库验证范围执行。
+- `bun run build` 走 `packages/build.ts`，context-cli build 还会跑 `scripts/build-plugin.ts` 从根级 `plugins/context/` 生成到 `dist/plugins/`。
 - 依赖 `@c4a/extract` 的包自动复制 `tree-sitter*.wasm` 到 `dist/wasm/`，不手工维护 dist wasm。
 - `postinstall.mjs` 是 hint-only：plugin install 后 `context` 不在 PATH 时只打印安装提示，不自动全局安装。

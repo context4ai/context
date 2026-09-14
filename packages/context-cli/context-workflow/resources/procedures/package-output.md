@@ -58,6 +58,24 @@ changed. A request to generate a documentation website follows this same route,
 including after initial delivery. Inspect existing declarations before editing;
 do not register the request itself as source material or re-index unchanged knowledge.
 
+For a new website or a requested homepage redesign, configure `site.home` from
+the confirmed audience and scope: a concise title, slogan and description, plus
+only useful hero actions. The generated homepage already supplies the complete
+top-level site map, LLM Docs and Changelog. Add `home.resources` for verified
+repositories, services, support channels or copyable install commands. Omit
+unknown destinations instead of inventing links or showing empty cards; they
+can be added later without re-indexing knowledge.
+
+When configuring the homepage, reuse confirmed project declarations, repository
+remotes, deployment configuration and successful publication receipts. Known
+resource types do not prove that a destination exists. Omit unavailable resources
+entirely rather than passing empty strings; note missing optional destinations in
+the existing work summary without blocking knowledge production or requesting
+new services. After an authorized publication or service setup succeeds, use its
+returned URL and package identity to update the corresponding resource. Preserve
+existing entries, avoid duplicates, and rebuild only when configuration changes.
+Republish the changed site only within the existing publication authorization.
+
 Validate reading targets before build. Website navigation uses the approved reading
 structure; repair missing bindings through the current structure adjustment action.
 Build cost is rendering and local search generation, not another Indexer run.

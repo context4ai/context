@@ -46,7 +46,8 @@ export async function approvedRevisionCandidateApplied(root: string, candidate: 
   if (!article || article.path !== candidate.path || article.collection !== candidate.collection ||
       article.visibility !== candidate.visibility || canonicalIndexerJson(article.sections) !== canonicalIndexerJson(sections)) return false;
   if (!closed && applied === candidate.body) return true;
-  const expected = revisionComparableMarkdown(candidate.body);
+  const { renderApprovedIndexerMarkdown } = await import("./reviewApplyIndexer.js");
+  const expected = revisionComparableMarkdown(renderApprovedIndexerMarkdown({ record: candidate, timestamp: candidate.updated }));
   const approved = revisionComparableMarkdown(applied);
   if (expected === approved) return true;
   const pair = await canonicalizeApprovedKnowledgeAssetPair({ projectRoot: root,

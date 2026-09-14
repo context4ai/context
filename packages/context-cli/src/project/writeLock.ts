@@ -116,6 +116,7 @@ export async function withProjectWriteLock<T>(
         owner: lockOwnerDetail(owner),
         next_action: {
           kind: processState === "running" ? "wait-for-active-context-command" : "inspect-project-write-lock",
+          ...(processState === "not-running" ? { command: "context task recover --format json" } : {}),
           message: processState === "running"
             ? "Keep polling the existing Context command until it returns an exit code and receipt; do not start another write command."
             : "No active owner could be confirmed. Inspect the runtime lock and the previous Context process before retrying; do not delete a lock owned by a running process.",

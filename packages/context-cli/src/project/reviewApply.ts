@@ -91,7 +91,7 @@ async function prepareApprovedPage(input: {
     input.approvedPageIndex,
   );
   const previousPath = input.record.approved_revision?.previous_path;
-  if (previousPath !== undefined && !isSafeKnowledgeTargetPath(input.record.collection, previousPath)) throw new TypeError("Unsafe original page path in a move");
+  if (previousPath !== undefined && (!isSafeKnowledgeTargetPath(previousPath.split("/")[0]!, previousPath) || previousPath.includes("\\"))) throw new TypeError("Unsafe original page path in a move");
   if (existingView !== undefined && existingView.relPath !== relPath && existingView.relPath !== (previousPath === undefined ? undefined : `knowledge/${previousPath}`)) {
     throw new ContextError(ExitCode.WorkspaceStateError, `approved page already exists for view_ref at a different path: ${input.record.article_id}`, {
       category: ErrorCategory.WorkspaceStateInvalid,

@@ -10,11 +10,11 @@ Write `.tmp/work-start-report.md` in the user's language after lightweight
 investigation and planning. Adapt this outline; omit empty sections and template
 instructions. Headings are not a questionnaire or mandatory schema.
 
-## Readers and first useful delivery
+## Readers, whole goal and current delivery
 
-Explain who will use the knowledge, what they need to do and what the first
-reviewed delivery enables. Reuse confirmed purpose, scope, priorities, language
-and delivery choices. Describe execution/settings implications only when useful.
+Explain who will use the knowledge, the whole requested outcome and what this
+reviewed delivery enables. Distinguish a first useful batch from the final scope.
+Reuse confirmed purpose, priorities, language and delivery choices.
 
 ## What the materials support
 
@@ -33,6 +33,9 @@ Use this table only when several groups need comparison:
 Keep material counts separate from article counts. Do not produce a per-file
 accounting table. One article may use several sources and Indexers. Batches are
 execution groupings, not fixed article templates or mandatory route transitions.
+State the useful depth for each topic: a specific investigation entry, an
+explanation or an executable procedure. Name still-unplanned capability families
+and document tasks rather than hiding them behind completion of this table.
 
 ## Reading organization and delivery
 
@@ -43,8 +46,10 @@ duplicating bodies. Retain existing KB, website and LLMS delivery choices.
 
 For website delivery, add a compact sketch showing the site title, top-level
 groups, a representative left menu, article chapters and on-page outline.
-Briefly explain mobile menus when relevant. A sketch is not a built website or
-permission to create empty pages. Do not infer business semantics from code paths.
+For a new homepage or requested redesign, also propose a short title, slogan,
+description and the verified optional resource cards. Briefly explain mobile
+menus when relevant. A sketch is not a built website or permission to create
+empty pages. Do not infer business semantics from code paths or invent links.
 
 ## Relevant indexing guidance
 

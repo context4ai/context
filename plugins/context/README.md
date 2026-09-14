@@ -11,7 +11,7 @@ projection and the committed `plugins/context/repo-install/` tree. Do not edit g
 under `plugins/context/repo-install/` or `packages/context-cli/dist/plugins/`.
 
 `plugins/context/repo-install/{claude,codex,cursor}/` contains host-specific plugin roots with
-the two public entries; `plugins/context/repo-install/skills/` is the portable Skill
+production, explicit query and Indexer creation entries; `plugins/context/repo-install/skills/` is the portable Skill
 projection. In the same install, `context plugin install` projects Providers
 to the Codex/Cursor shared `~/.agents/skills` directory and Claude's
 `~/.claude/skills`, so Provider names do not inherit a plugin namespace.
