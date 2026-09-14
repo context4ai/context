@@ -203,10 +203,8 @@ version instead of approximating the package layout.
 
 ## Release Automation
 
-Context's final release publishes thirteen public packages from prepared
-`dist/` directories. `preview.1` publishes the seven base coordinates through
-`@c4a/extract-rush` plus `@c4a/context-cli`; the six parser coordinates enter
-the release plan at `preview.2`:
+Context publishes the following public packages from prepared `dist/`
+directories; `release:publish-plan` is the authority for the selected release:
 
 - `@c4a/core`
 - `@c4a/context`
@@ -244,10 +242,8 @@ drift from the artifacts it published.
 
 `release:publish-plan` is the machine authority for the milestone package set
 and dist-tags. Preview and RC releases use only `preview` and `rc`. A final
-release publishes directly under `latest`. The workflow still performs the
-exact registry install harness after publication to validate every planned
-package, the shipped capability/catalog manifests, the Agent Graph Host ABI,
-and all parsers present at that milestone.
+release publishes directly under `latest`. Registry installation smoke is an
+explicit local check, not a publishing or post-release CI gate.
 
 `release:parser-coordinates` renders all ten parser packages, fifteen parser
 capabilities, exact named exports, Evidence ABI and expected npm Trusted
@@ -285,16 +281,16 @@ npm pack packages/context-cli/dist --dry-run
 Publishing is driven by a GitHub Release whose tag is exactly `v<version>`.
 Use that exact tag as the Release title; do not prefix the title with the
 product name. The release workflow checks the tag, normalizes the title to the
-tag, runs `bun run verify:full`, builds and audits the milestone package set,
-then publishes it in dependency order with npm provenance and the planned
-non-`latest` tag. It runs exact registry smoke before any final promotion and
-preserves non-sensitive plan/install/promotion receipts as workflow artifacts.
+tag, runs default verification in four shards, builds and audits the package
+set, then publishes it in dependency order with npm provenance and the planned
+dist-tag. Successful publication starts independent post-release full
+verification in four shards and preserves verification logs as workflow artifacts.
 Each npm package must
 trust the `context4ai/context` repository and the
 `.github/workflows/publish.yml` workflow through npm Trusted Publishing. The
 workflow is safe to rerun after a partial registry publication: it skips an
 exact package version that already exists and continues with the remaining
-packages without moving `latest` early.
+packages.
 
 Do not publish source package directories directly and do not create a GitHub
 Release before its commit passes CI.
@@ -309,15 +305,15 @@ bun run --filter @c4a/context-cli lint
 bun run --filter @c4a/context-cli test
 ```
 
-Run the repository gates before handing off a completed change:
+Choose the verification scope for the change; these are alternatives, not a sequence:
 
 ```bash
 ./start.sh verify
 ./start.sh verify:full
 ```
 
-`verify` runs typecheck, lint, and unit/integration tests. `verify:full` also
-runs the Context CLI end-to-end suite.
+`verify` runs typecheck, lint, and the default test collection. `verify:full` also
+runs full-only CLI tests and Node artifact checks. Build required artifacts first.
 
 ## Cleanup And Restore
 

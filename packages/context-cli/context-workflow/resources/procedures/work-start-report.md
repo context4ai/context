@@ -27,8 +27,10 @@ first, then use documents and selectively read business definitions to correct
 reader topics. Directory names are orientation, not verified business semantics.
 Documents need not fit a code-shaped menu.
 
-Code investigation returns bounded feature names, counts where complete, entry
-paths and checked/remaining ranges, not full symbols or call graphs. Document
+Code investigation identifies the authorized capability families, checked entry
+paths and remaining ranges, not full symbols or call graphs. Broad scope calls for
+horizontal discovery, not deep reading of every implementation before writing.
+Document
 overviews include titles, bounded introductory text, the full H2/H3 hierarchy and
 full-text access. Read more when the overview cannot settle a semantic choice.
 Do not run additional parsers merely to populate counts or tables.
@@ -48,11 +50,14 @@ the current Route's approval boundary.
 
 ## Explain the proposed work
 
-Write in the user's language. Open with the reader's task and first useful
-delivery, not protocol IDs. Explain purpose, source/version boundaries, proposed
-topics, reuse or revision of existing articles, cross-source articles, suggested
-batches, dependencies and first delivery. Separate material counts from planned
-article counts; unknown totals are not zero or confirmed final counts.
+Write in the user's language. Open with the reader's task and whole requested
+outcome, then distinguish the current delivery and remaining work. Explain source
+versions, topics, reuse or revision of existing articles and useful dependencies,
+not protocol IDs. State which topics provide checked problem-level entry points
+and which explain behavior or operations. Package names alone are not that depth.
+Keep material, planned article and investigated-scope counts separate; unknown
+totals are not zero. Describe remaining capability families or document tasks in
+the existing plan/report, without a per-file ledger or another confirmation step.
 
 Explain relevant conflicts, gaps, exclusions and decisions requiring feedback.
 Access permission alone does not approve a semantic exclusion. Distinguish user
@@ -96,6 +101,8 @@ pause. Actual scale belongs in the report whose pre-writing feedback is mandator
 Use current CLI task and stage progress; distinguish accepted candidates, approved
 articles and delivered outputs. The current batch is not the whole goal. Do not
 treat input rechecks as loss of formal articles or candidates as delivered pages.
+Task completion concerns the declared plan; navigation coverage concerns existing
+articles. Neither proves that all authorized source topics have been explained.
 
 Reports, plans, skills, candidates, confirmation and transaction process stay in
 `.tmp`. Only formal results and necessary long-term source/requirement decisions

@@ -7,6 +7,9 @@ and file navigation is a starting point, not a semantic grouping or a complete
 feature inventory. Inspect relevant manifests, public entry files, registrations,
 maintained documentation or a few representative declarations to understand
 which kinds of reader topics the module can support.
+For broad work, identify the main capability families across the authorized
+range before treating investigation as finished. A representative implementation
+can establish how to investigate a family, not that every family is covered.
 
 Technology-specific investigation may be direct Agent reading or a bounded
 helper from an available skill. A helper should expose feature names, counts
@@ -51,6 +54,9 @@ supply better business names and rationale; code paths are structural hints,
 not immutable topic names. Preserve stable article identity when the reader
 task is unchanged. Different platforms or deprecated entrypoints may need
 separate treatment even when names match.
+Before consolidating existing articles, read their relevant content. Preserve
+checked interfaces, relationships and examples; a shorter map must not replace
+them with instructions to rediscover the same knowledge.
 
 Submit article targets, reader questions, sources and batches with the current
 plan schema. Keep pending scope explicit when only part is investigated.
@@ -79,7 +85,11 @@ Explain what the module is responsible for, when and how to enter it through
 stable interfaces, what it hands off, and the relevant state and failure
 boundaries. A directory summary or symbol list is not an explanation.
 An integration guide focuses on consumption; a maintenance guide may need
-internal transformations and recovery. Follow the actual reader purpose.
+internal transformations and recovery. For an entry-first task, provide a checked
+file or symbol, why it is relevant and a concrete next hop; a package name or
+generic instruction to search pages/handlers is not a problem-level entry.
+For an explanation, read the conditions, callers and implementation needed to
+answer it instead of substituting that investigation route for the answer.
 
 Read the source that establishes the claim. An outbound client is not an
 inbound service; host and remote declarations do not prove loading behavior.

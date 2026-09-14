@@ -9,7 +9,10 @@ contracts, conditions, examples, compatibility limits, images and uncertainty.
 An inventory of headings, a generic summary or a link back to the source does
 not replace an article that answers the reader. Preserve exact commands,
 identifiers, numbers and destinations where they matter; do not reproduce
-secrets or incidental conversion metadata.
+secrets or incidental conversion metadata. For an entry-first request, identify
+the relevant source section and concrete next step; for an operational guide,
+retain what lets the reader execute it. Do not replace available instructions
+with a generic suggestion to consult the original document.
 
 Use [editorial guidance](editorial-policy.md) for a concrete presentation
 problem. It is advice for the Agent and user, not a signal-clearing protocol or
@@ -47,7 +50,9 @@ the same article; no primary/extension ownership is required.
 
 Correct misleading knowledge through a revision. Correct an inaccurate source
 through its authorized import flow, not by editing evidence from this skill.
-Keep useful prior contributions and real gaps visible during updates.
+When merging or shortening existing articles, retain still-valid steps, examples
+and constraints in the article or a linked topic, not just their source links.
+Keep real gaps visible; material not yet obtained is not a permanent exclusion.
 
 ## Visual material
 

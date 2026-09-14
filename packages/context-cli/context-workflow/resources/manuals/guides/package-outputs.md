@@ -58,6 +58,7 @@ kbPackage({
         title: "Project workspace",
         description: "Open the repository that maintains this knowledge.",
         href: "https://example.com/project",
+        featured: true,
       }],
     },
   },
@@ -70,7 +71,17 @@ are `title` (defaults to the package name), `description`, `lang` (defaults to
 `home` optionally customizes the landing-page `title`, `slogan`, `description`
 and action buttons. Its `resources` list adds only configured repository,
 service or support cards; each item requires a safe `href`, a copyable
-`command`, or both. Do not add placeholders for unknown destinations.
+`command`, or both. Set `featured: true` on a linked resource to also place it
+between the Browse knowledge and LLM Docs hero actions. Do not add placeholders
+for unknown destinations.
+
+Configure resources from confirmed project settings, repository remotes or
+successful publication receipts. If a service has not been created or its URL is
+unknown, omit the resource object; empty strings are not placeholders. Missing
+optional resources do not block building the site or authorize creating services.
+After an authorized deployment succeeds, add its returned destination to the
+existing resource list, avoiding duplicates. Rebuild when this changes the
+configuration; updating the hosted site still requires publication authorization.
 
 The homepage uses the first-level knowledge map as a complete site map. Each
 section card previews a bounded number of page links and retains a link to the

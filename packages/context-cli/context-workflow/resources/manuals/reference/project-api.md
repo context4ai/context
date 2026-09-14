@@ -166,6 +166,7 @@ kbPackage({
         title: "Project workspace",
         description: "Open the repository that maintains this knowledge.",
         href: "https://example.com/project",
+        featured: true,
       }],
     },
   },

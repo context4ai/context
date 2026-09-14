@@ -201,7 +201,7 @@ test("explicit rollback restores selected delivered bytes, discards drafts and k
   expect(await readKnowledgeUpdate(root)).toBeDefined();
 }, 60_000);
 
-test("explicit page move preserves its identity and updates incoming navigation through Review apply", async () => {
+test.each(["architecture", "standards"])("explicit page move to %s preserves identity and updates incoming navigation through Review apply", async (collection) => {
   const { beginDocumentRevision } = await import("../project/documentRevision.js");
   const { access } = await import("node:fs/promises");
   const root = await initialRevisionKnowledge(roots);
@@ -213,7 +213,7 @@ test("explicit page move preserves its identity and updates incoming navigation 
   const link = posix.relative(posix.dirname(peerPath), view.path);
   await writeFile(join(root, "knowledge", peerPath), `${originalPeer}\n[Related page](${link}#details)\n`);
   await closeProjectWorkspace(root); await buildProjectPackages(root);
-  const nextPath = `${view.path.split("/")[0]}/reorganized/overview.md`;
+  const nextPath = `${collection}/reorganized/overview.md`;
   await beginDocumentRevision({ projectRoot: root, selector: view.path, instruction: "Move this page into the reorganized section, keeping its content.", move_to: nextPath });
   const request = (await readApprovedRevision(root))!;
   expect(request.target.previous_path).toBe(view.path);
@@ -228,6 +228,9 @@ test("explicit page move preserves its identity and updates incoming navigation 
   expect(await readApprovedRevision(root)).toBeUndefined();
   const after = YAML.parse(await readFile(join(root, "knowledge/structure.yaml"), "utf8"));
   expect(after.articles.find((entry: { article_id: string }) => entry.article_id === view.article_id).path).toBe(nextPath);
+  expect(after.articles.find((entry: { article_id: string }) => entry.article_id === view.article_id).collection).toBe(collection);
+  const { okfTypeForCollection } = await import("../project/okfTypes.js");
+  expect(await readFile(join(root, "knowledge", nextPath), "utf8")).toContain(`type: ${okfTypeForCollection(collection)}`);
 }, 60_000);
 
 test("same-task input adjustment keeps the approved body and queued pages and rejects old completion", async () => {

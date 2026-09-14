@@ -15,6 +15,12 @@ its progress is changing. Never start a competing writer or delete a writer lock
 
 ## Choose the smallest applicable action
 
+- Orphan writer lock: preview `task recover --operation writer-lock`. Before
+  applying its current digest, pause new workspace commands and confirm no child
+  writer or other host/container still uses the workspace. Apply archives only
+  the unchanged lock whose owner is no longer running; it does not complete any
+  capture. Run recovery inspection again for interrupted transactions, then
+  refresh the Route. Unknown or active ownership must not be bypassed.
 - Wrong current payload: use the reported schema/evidence to correct it and refresh
   the Route when available. A current candidate can use its ordinary revise action.
 - Interrupted transaction: preview `task recover --operation transactions`, inspect

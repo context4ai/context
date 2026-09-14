@@ -64,6 +64,8 @@ describe("production investigation and authoring resources", () => {
         expect(resource).toBeDefined();
         expect(provider.files.has(resource!.contentPath)).toBe(true);
         expect((await readFile(resource!.contentPath, "utf8")).trim().length).toBeGreaterThan(0);
+        const source = resolve(ROOT, "packages/context-cli/context-workflow", relative(provider.root, resource!.contentPath));
+        expect(await readFile(resource!.contentPath, "utf8")).toBe(await readFile(source, "utf8"));
       }
     }
     const writing = nodes.find(node => node.id === "work-production-stage")!;

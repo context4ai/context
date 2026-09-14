@@ -134,23 +134,17 @@ describe("Context workflow resources", () => {
   test("projects revision-bound Context commands and materializes selected views", async () => {
     const observation = {
       ...emptyObservation(),
-      sourceCount: 1,
-      repoSources: [{ id: "module-a", name: "module-a" }],
+      sourceCount: 0,
+      repoSources: [],
     };
     const snapshot = await evaluateContextWorkflow({ observation, authorities: [] });
-    expect(snapshot.route?.node).toBe("ensure-repository-sources");
-    expect(snapshot.route?.gate?.authority).toBe("context.repository-restore");
+    expect(snapshot.route?.node).toBe("choose-source-boundary");
+    expect(snapshot.route?.gate?.authority).toBe("context.source-boundary");
     expect(snapshot.route?.commands.some((command) =>
-      command.command.includes("source recovery-plan --format json") &&
-      command.availability === "immediate"
-    )).toBe(true);
-    expect(snapshot.route?.commands.some((command) =>
-      command.command.includes("source restore --input .tmp/agent-payloads/repository-source-recovery.json --format json") &&
+      command.command.includes("source add batch --input") &&
       command.availability === "after-human-confirmation"
     )).toBe(true);
-    expect(snapshot.route?.gate?.resolution_action?.input_schema?.id).toBe(
-      "schema.restore-repository-sources.input",
-    );
+    expect(snapshot.route?.gate?.resolution_action?.input_schema).toBeDefined();
     expect(snapshot.route?.commands[0]?.command).toContain(
       `--workflow-revision '${snapshot.evaluation.revision}'`,
     );

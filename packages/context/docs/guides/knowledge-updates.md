@@ -18,6 +18,25 @@ actual behavior, a confirmed decision, and a proposal that is not implemented.
 
 ## Keep planning local to the change
 
+Before starting production, compare the proposed content with the workspace's
+reader purpose. For clearly unrelated anecdotes or personal rankings, briefly
+recommend leaving them out of the formal manual or saving them separately because
+they can dilute useful retrieval. Attribution alone does not make content relevant.
+This is advice, not a CLI gate: honor the user's informed choice without repeated
+objections, while preserving subjective attribution and normal Review.
+
+Registered repositories are not prerequisites for every new request. Restore only
+sources needed to investigate or write the current task, including unchanged code
+when its implementation needs checking. Notes, document-only work, wording edits
+and navigation changes do not require unrelated checkouts. Retained article
+references alone do not require restoring every referenced repository. Missing
+material remains a gap; it must not be treated as investigated or permanently
+excluded. Independent available material can proceed through planning and delivery.
+For required code, use `context source recovery-plan <registered-name> --format json`.
+Reuse a valid local checkout or obtain clone authorization for the returned pinned
+version, then submit the decision using the returned recovery command and schema.
+Do not restore all registered sources merely because a checkout is missing.
+
 For one or two documents or a clearly bounded module, retain the useful planning
 decision: add or revise which articles, and place them where readers expect them.
 Do not expand this into a whole-workspace taxonomy, full navigation redesign or
@@ -31,6 +50,14 @@ targets are already decided before approval, the preparation route supports a
 known-task input to combine preparation and task creation. It still prepares
 navigation and retains report confirmation; it is not a bypass for new source
 authorization. Planning depth is an Agent judgment, not an additional CLI gate.
+
+For broad work, distinguish the whole requested outcome, the current batch and
+remaining capability families or document tasks. Entry-first knowledge should
+locate a checked file/symbol or source section and a concrete next step; a module
+name alone is not problem coverage. When merging or revising, preserve useful
+existing detail rather than replacing it with lookup advice. Review checks the
+promised reader task; task completion and navigation binding only describe the
+declared articles, not semantic coverage of all source material.
 
 ## First-task intake budget
 
@@ -422,11 +449,61 @@ knowledge structure and packages.
 
 To move an approved page, use `context revise "<old path>" --move-to "<new path>"
 --instruction "<requested move and content changes>" --format json`. The new
-path stays in the same collection. The revision retains the page identity,
+path may use another supported knowledge collection. The revision retains the page identity,
 rebases outgoing links and updates incoming Markdown links at approval. A new
 subject name alone only needs a title/content revision; do not create duplicate
-pages. Retirement is a content decision: explain the inapplicable material and
-supported replacement before changing its page and referring navigation.
+pages. Changing a website group alone does not require moving or reclassifying an article.
+
+### Restructure existing knowledge
+
+Read the affected approved articles and current sources before deciding what to
+keep, deepen, split, merge, retain as history or retire. Reuse the current plan
+and remaining scope; a new article plan does not prove old content was preserved.
+Work by reader task, not source or menu count.
+
+For a split or merge, first approve destination content, then revise the original
+and incoming links. Preserve useful details until their destination is available.
+Same-page fragments use ordinary revision edits; cross-page work uses new/revision
+tasks and explicit retirement. Finish each coherent batch's content and navigation
+before delivery; inspect both new content and the old articles' disposition.
+
+Preview approved-page retirement with `context task retire --input <file> --format json`:
+
+```yaml
+reason: These reader tasks are now covered by the approved guide.
+targets:
+  - path: architecture/old-guide.md
+    replacement: sop/current-guide.md
+```
+
+`replacement` is optional and must already be approved, outside the retirement set.
+Use several targets for a batch. Read affected files and blockers, then execute
+the returned digest-bound apply command within the user's authorization; do not
+ask for another confirmation when that retirement is already authorized.
+`context task retire --schema --format yaml` describes the input.
+
+Retirement removes selected Markdown and structure entries together, updates
+page-level incoming Markdown links to explicit replacements, and rebinds page
+navigation or removes retired navigation targets while retaining groups.
+Repair fragment links explicitly first: the CLI cannot infer where a split moved
+a paragraph. Without a replacement, repair incoming links before applying.
+Finish active drafts/revisions first; unfinished production targeting a selected
+page must be finished or amended rather than discarded.
+
+Follow status and the normal close/version/build flow before delivery. Sources
+and shared assets are not deleted. The response provides a temporary restore
+input for the existing rollback preview, including exact previous article,
+structure and modified navigation/link bytes. Retain that input or a Git baseline
+if restoration is needed after temporary cleanup. Retry an interrupted apply
+with the same input and digest; never delete runtime files to recover. Later
+conflicting edits require inspection instead of blind rollback.
+
+Historical pages with continuing reader value should normally retain their
+applicable version. Source read failure, shorter new text or a changed menu is
+not sufficient reason to retire an article.
+Retirement does not narrow the registered production scope. If the user also
+excludes the underlying topic from future work, record that through the existing
+requirements/exclusion flow rather than assuming file removal changes the goal.
 
 ### Adjust inputs while a local update is unfinished
 

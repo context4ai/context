@@ -93,26 +93,6 @@ nodes:
       recommended:
         - resources/procedures/source-capture-detailed.md
 
-  - id: ensure-repository-sources
-    kind: gate
-    reasonCode: route.source.repository-not-ready
-    inspectionAction: actions/inspect-repository-recovery.yaml
-    resolutionAction: actions/restore-repository-sources.yaml
-    gate:
-      id: repository-source-recovery
-      prompt: Choose how to restore each missing registered repository checkout.
-      authority: context.repository-restore
-      delegatable: false
-    satisfiedBy:
-      - path: sources.repositories_ready
-        equals: true
-    resources:
-      required:
-        - resources/procedures/repository-source-recovery.md
-        - resources/dialogue/human-gates.md
-        - resources/dialogue/repository-source-recovery.md
-        - resources/views/source-current.yaml
-
   - id: configure-document-capture
     kind: action
     reasonCode: route.capture.configuration-required
@@ -353,8 +333,7 @@ edges:
   - { from: repair-project-entry, to: repair-workspace-state }
   - { from: repair-workspace-state, to: repair-verification }
   - { from: repair-verification, to: choose-source-boundary }
-  - { from: choose-source-boundary, to: ensure-repository-sources, kind: gatedBy }
-  - { from: ensure-repository-sources, to: configure-document-capture }
+  - { from: choose-source-boundary, to: configure-document-capture, kind: gatedBy }
   - { from: configure-document-capture, to: authorize-document-capture }
   - { from: authorize-document-capture, to: capture-next, kind: gatedBy }
   - { from: capture-next, to: reopen-cleared-task }

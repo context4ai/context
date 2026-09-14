@@ -33,6 +33,13 @@ test("confirmed project sources reach requirement setup without Provider configu
   const outer = await mkdtemp(join(parent, "requirements-")); roots.push(outer);
   const { projectRoot } = await initContextProject({ cwd: outer, projectDir: "workspace", dev: true });
   const note = await importManagedDocument(projectRoot, { type: "note", name: "20260913/selected.md", markdown: "# Selected\nA saved decision." });
+  // A durable registration does not require restoring an unrelated checkout.
+  await mkdir(join(projectRoot, "sources/repo"), { recursive: true });
+  await writeFile(join(projectRoot, "sources/repo/index.yaml"), YAML.stringify({ sources: [{
+    name: "20260913", modules: [{ name: "unrelated", git: {
+      remote: "https://git.example.com/unrelated.git", ref: "a".repeat(40),
+    } }],
+  }] }));
   await importManagedDocument(projectRoot, { type: "note", name: "20260913/unselected.md", markdown: "# Unselected\nNot authorized for production." });
   await writeFile(join(projectRoot, "src/index.ts"), `import { defineProject, source } from "@c4a/context";
 export default defineProject({ sources: [source("20260913/selected.md", { type: "note" })], phases: [], packages: [] });\n`);
@@ -52,6 +59,7 @@ export default defineProject({ sources: [source("20260913/selected.md", { type: 
   command(projectRoot, ["action", "prepare-current", "--revision", configured.workflow.current!.revision]);
   const stage = (await readProductionStage(projectRoot))!;
   expect(stage.scopes.map(item => item.scope)).toEqual([note.source_ref]);
+  expect(stage.gaps).toEqual([]);
   expect(stage.indexer_usage).toEqual([]);
   expect((await collectProjectStatus(projectRoot)).workflow.current?.node).toBe("plan-production-stage");
 });
@@ -142,7 +150,7 @@ test("writing amendments append once, preserve issued work and explicitly replac
   await mkdir(join(agent, "submissions"), { recursive: true });
   const article = { path: "decision/service.md", question: "Explain the service boundary", sources: [note.source_ref], batch: "service" };
   const plan = { stage: stage.id, capabilities: { multi_agent: false, skills: [] }, articles: [article] };
-  await writeFile(join(agent, "submissions/plan.yaml"), YAML.stringify(plan));
+  await writeFile(join(agent, "submissions/plan.yaml"), YAML.stringify({ ...plan, pending_scopes: [note.source_ref] }));
   await submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/plan.yaml" });
   const planned = (await readProductionStage(projectRoot))!;
   await writeFile(join(agent, "submissions/report.yaml"), YAML.stringify({ stage: stage.id, decision: "approved" }));
@@ -154,6 +162,7 @@ test("writing amendments append once, preserve issued work and explicitly replac
   expect(command(projectRoot, args).stage_state).toBe("active");
   const appended = (await readProductionStage(projectRoot))!;
   expect(appended.tasks).toHaveLength(2);
+  expect(appended.pending_scopes).toEqual([note.source_ref]);
   expect(appended.tasks[0]).toEqual(issued);
   expect(appended.tasks[1]!.status).toBe("pending");
   expect(command(projectRoot, args).stage_state).toBe("active");
@@ -162,9 +171,10 @@ test("writing amendments append once, preserve issued work and explicitly replac
   await writeFile(amendmentPath, YAML.stringify(replacement));
   await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/amendment.yaml" })).rejects.toThrow("dependent plans together");
   expect((await readProductionStage(projectRoot))!.tasks).toEqual(appended.tasks);
-  await writeFile(amendmentPath, YAML.stringify({ ...replacement, replaces: appended.tasks.map(task => task.id) }));
+  await writeFile(amendmentPath, YAML.stringify({ ...replacement, pending_scopes: [], replaces: appended.tasks.map(task => task.id) }));
   expect(command(projectRoot, args).stage_state).toBe("active");
   expect((await readProductionStage(projectRoot))!.tasks.map(task => task.status)).toEqual(["replaced", "replaced", "issued"]);
+  expect((await readProductionStage(projectRoot))!.pending_scopes).toEqual([]);
 });
 
 test("rejected prose follows the actual route through section repair, repeated Review and close", async () => {

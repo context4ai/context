@@ -11,7 +11,7 @@ Code/Markdown/Note/Sessions Indexer Provider Skills、各宿主 manifest 模板�
 仓库的 `plugins/context/repo-install/`。不要直接编辑 `plugins/context/repo-install/` 或
 `packages/context-cli/dist/plugins/` 下的生成文件。
 
-`plugins/context/repo-install/{claude,codex,cursor}/` 分别是只包含 Context 主入口的宿主插件根；
+`plugins/context/repo-install/{claude,codex,cursor}/` 包含生产、显式查询及 Indexer 创建入口；
 `plugins/context/repo-install/skills/` 是可移植 Skill 投影。`context plugin install` 在同一次安装中
 把 Provider 投影到 Codex/Cursor 共用的 `~/.agents/skills` 与 Claude 的
 `~/.claude/skills`，因此 Provider 不获得插件命名空间。

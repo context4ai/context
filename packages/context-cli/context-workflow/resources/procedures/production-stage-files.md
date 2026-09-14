@@ -10,6 +10,16 @@ The stage entry links CLI-owned requirements, planned skill guidance and task
 directories. Read relevant source text before writing; a skeleton is navigation,
 not semantic evidence. Skill names guide work, not article ownership or versions.
 
+Restore repository checkouts only when needed for the current investigation or
+article. Independent notes/documents can proceed while unavailable code remains
+an explicit gap. For a required repository, read the
+[recovery procedure](repository-source-recovery.md) and inspect only its registered
+name, not every repository. Never claim missing material was checked.
+
+Plan article paths are relative to `knowledge/`, for example `business/example.md`.
+`indexer_usage.scopes` contains stage source refs, not collection names. Declare
+selected skills through the plan; no separate Indexer registration is required.
+
 Choose relevant code directories while planning or writing. A task brief may
 name useful reading scope; module labels do not imply directory permissions.
 No module mapping file, version receipt or article-level scope fields are needed.
@@ -22,6 +32,17 @@ existing topics, not every navigation page. Expand investigation when the materi
 requires it, not to fill a planning template. One batch is sufficient unless real
 dependencies or useful parallel work call for more. Source count is not a page
 count or a CLI threshold.
+For a broad request, identify its major capability families and document tasks;
+lightweight planning limits initial depth, not the authorized range. Use existing
+questions and briefs to distinguish checked entry points from explanations and
+keep unplanned work visible. A first batch is not the whole requested outcome.
+
+For restructuring, assess existing articles as well as proposed additions.
+Preserve useful text until approved destinations carry it; then repair links and
+navigation. Splitting/merging uses ordinary article tasks and fragment edits.
+After their delivery, explicitly obsolete approved pages can use the retirement
+preview described in the knowledge-updates guide. Removing a plan task or menu
+entry does not retire its approved article.
 
 During an approved stage, use the existing plan-amendment path for in-scope
 additions and preserve completed work. Do not restart planning solely because

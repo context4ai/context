@@ -108,8 +108,8 @@ context/
 ```
 
 这些目录具有不同的持久性契约。`sources/` 和 `knowledge/` 是项目状态，`dist/` 是
-可重复构建产物，lifecycle 和 debug 目录是被忽略的运行状态。成功 close 会清理
-已经完成的 lifecycle 暂存区。不要通过手工编辑或删除 CLI-owned 状态修复流程，
+可重复构建产物，lifecycle 和 debug 目录是被忽略的运行状态。任务暂存区在成功交付后
+按工作区准备指引清理，不在 close 后立即清空。不要通过手工编辑或删除 CLI-owned 状态修复流程，
 应执行当前 Route 返回的恢复动作。
 
 ## 证据和安全边界
@@ -172,7 +172,7 @@ context/
   Author 或 Composer workset 后重新编译，建议性的 profile metric 只作为 warning，不建立重试账本或
   override Gate；
 - 必需 material gap 会阻塞普通生命周期，直到新增 capture 重新运行受影响 workset；普通
-  `context close` 写入 approved structure 并清理已完成的运行时生命周期状态；
+  `context close` 写入 approved structure；任务清理在成功交付后进行；
 - `context clean-cache --dry-run` 预览 Context-owned 过期插件缓存清理。
 
 绑定 revision 的命令应从 `workflow.current` 原样复制；文档示例只用于理解入口，

@@ -18,6 +18,16 @@ const single = productionCapabilitiesSchema.parse({});
 const multiple = productionCapabilitiesSchema.parse({ multi_agent: true });
 
 describe("stage-owned production scheduling", () => {
+  test("distinguishes article paths from source scopes without requiring a skill registry", () => {
+    expect(() => stage([task("bad", { path: "knowledge/business/example.md" })])).toThrow("without the knowledge/ prefix");
+    expect(() => validateProductionStage({ ...stage([task("valid")]), indexer_usage: [
+      { scopes: ["business"], skills: ["context-note-indexer"], purpose: "Explain the note" },
+    ] })).toThrow("indexer_usage.scopes contains unauthorized source refs: business");
+    expect(validateProductionStage({ ...stage([task("valid")]), indexer_usage: [
+      { scopes: ["document:a"], skills: ["context-note-indexer"], purpose: "Explain the note" },
+    ] }).indexer_usage).toHaveLength(1);
+  });
+
   test("does not dispatch writing before report feedback, even with multiple workers", () => {
     const value = { ...stage([task("a")]), report_approved: false };
     expect(dispatchProductionStage(value, multiple)).toEqual({ mode: "single-agent", batches: [], state: "waiting-user" });
@@ -78,6 +88,20 @@ describe("stage-owned production scheduling", () => {
     expect(updated.tasks.map(item => item.status)).toEqual(["replaced", "replaced", "accepted", "pending"]);
     expect(value.tasks[0]!.status).toBe("pending");
     expect(() => reviseProductionPlan({ stage: value, replaces: ["saved"], tasks: [task("new")] })).toThrow("explicit revision");
+  });
+
+  test("keeps a partially covered source pending after its first article and permits more topics", () => {
+    const saved = task("overview", { status: "accepted" });
+    const value = { ...stage([saved]), pending_scopes: ["document:a"] };
+    expect(dispatchProductionStage(value, single).state).toBe("active");
+    const amended = reviseProductionPlan({ stage: value, tasks: [task("usage"), task("failures")] });
+    expect(amended.pending_scopes).toEqual(["document:a"]);
+    expect(amended.tasks[0]).toEqual(saved);
+    expect(dispatchProductionStage(amended, single).batches).toEqual([{ id: "usage", tasks: ["usage"] }]);
+    const finished = reviseProductionPlan({ stage: amended, tasks: [], pending_scopes: [] });
+    expect(dispatchProductionStage(finished, single).state).toBe("active");
+    for (const item of finished.tasks) item.status = "accepted";
+    expect(dispatchProductionStage(finished, single).state).toBe("ended");
   });
 
   test("unknown source versions remain explicit gaps and cannot authorize tasks", () => {

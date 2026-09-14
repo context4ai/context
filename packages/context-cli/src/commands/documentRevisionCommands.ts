@@ -18,21 +18,48 @@ function requireProjectRoot(): string {
 
 export function registerDocumentRevisionCommand(program: Command): void {
   const task = program.command("task").description("Explicit current-task recovery");
+  task.command("retire").description("Preview or apply explicit approved-article retirement and reference cleanup")
+    .option("--input <file>", "YAML/JSON reason and targets with optional approved replacement; - for stdin")
+    .option("--schema", "show the retirement input schema")
+    .option("--apply", "apply the reviewed retirement within existing user authorization")
+    .option("--plan-digest <digest>", "exact current retirement preview")
+    .option("--format <format>", "output format: json", "json")
+    .action(async (options: { input?: string; schema?: boolean; apply?: boolean; planDigest?: string; format: string }) => {
+      const { retireArticles, articleRetirementSchema } = await import("../project/articleRetirement.js");
+      if (options.schema) {
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
+        writeSchemaOutput(zodToJsonSchema(articleRetirementSchema), schemaOutputFormat(options.format));
+        return;
+      }
+      if (options.format !== "json" || !options.input) throw new ContextError(ExitCode.UserError, "Use --input <file> --format json, or --schema.", { category: ErrorCategory.UserInputInvalid });
+      assertActionInputWorkspace(process.cwd(), options.input);
+      const value = await readYamlOrJsonInput({ path: options.input, label: "article retirement",
+        missingNext: "Provide reason and targets with exact approved paths and optional replacement paths.",
+        readFailureNext: "Use an input file in this workspace.", parseFailureNext: "Provide valid YAML or JSON." });
+      const result = await retireArticles({ projectRoot: requireProjectRoot(), value,
+        ...(options.apply ? { apply: true } : {}), ...(options.planDigest ? { plan_digest: options.planDigest } : {}) });
+      if (result.action === "preview" && result.blockers.length === 0) result.next_action.command =
+        `context task retire --input '${options.input.replace(/'/gu, "'\\''")}' --apply --plan-digest '${result.revision}' --format json`;
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    });
   task.command("recover").description("Inspect or preview scoped recovery independently of the normal workflow Route")
-    .option("--operation <operation>", "inspect or transactions; use ordinary file submission/revise for article repair", "inspect")
+    .option("--operation <operation>", "inspect, writer-lock or transactions; use ordinary file submission/revise for article repair", "inspect")
     .option("--apply", "apply the reviewed recovery scope within existing user authorization")
     .option("--plan-digest <digest>", "exact current recovery preview")
     .option("--format <format>", "output format: json", "json")
     .action(async (options: { operation: string; apply?: boolean; planDigest?: string; format: string }) => {
       if (options.format !== "json") throw new TypeError("--format must be json");
-      if (!["inspect", "transactions"].includes(options.operation)) throw new TypeError("Use inspect or transactions. Repair current task files or use context revise for an accepted article; old workset/plan recovery is not supported.");
+      if (!["inspect", "writer-lock", "transactions"].includes(options.operation)) throw new TypeError("Use inspect, writer-lock or transactions. Repair current task files or use context revise for an accepted article; old workset/plan recovery is not supported.");
       if (options.operation === "inspect" && options.apply) throw new TypeError("Inspection is read-only; select a recovery operation to apply.");
       const projectRoot = requireProjectRoot();
       const { inspectTaskRecovery, recoverTaskTransactions } = await import("../project/taskRecovery.js");
+      const { recoverWriterLock } = await import("../project/writeLockRecovery.js");
       const base = { projectRoot, ...(options.apply ? { apply: true } : {}),
         ...(options.planDigest ? { plan_digest: options.planDigest } : {}) };
       try {
         const result = options.operation === "inspect" ? await inspectTaskRecovery(projectRoot)
+          : options.operation === "writer-lock" ? await recoverWriterLock(base)
           : await recoverTaskTransactions(base);
         process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       } catch (error) {
@@ -151,7 +178,7 @@ export function registerDocumentRevisionCommand(program: Command): void {
     .requiredOption("--instruction <feedback>", "reader-facing correction request")
     .option("--regenerate", "regenerate program blocks for an approved page, even at the same source version")
     .option("--timing <timing>", "after-batch or priority for approved pages; current Candidates are repaired in place", "after-batch")
-    .option("--move-to <path>", "explicit new approved path in the same collection; preserves page identity")
+    .option("--move-to <path>", "explicit new approved path in any supported collection; preserves page identity")
     .option("--format <format>", "output format: json", "json")
     .action(async (target: string, options: Record<string, unknown>) => {
       if (options.format !== "json") {

@@ -19,6 +19,7 @@ import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import { runDurableMultiFileTransaction } from "./durableMultiFileTransaction.js";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 import { captureProcessedScopes, commitProcessedScopes } from "./processedScopeStorage.js";
+import { okfTypeForCollection } from "./okfTypes.js";
 
 export { APPROVED_REVISION_PATH } from "./maintenanceStorage.js";
 const digest = z.string().regex(/^sha256:[a-f0-9]{64}$/u);
@@ -69,7 +70,7 @@ export function parseApprovedRevision(value: unknown): ApprovedRevision | undefi
       value.protocol !== "context.approved-revision/v1") return undefined;
   const parsed = requestSchema.parse(value);
   if (!isSafeKnowledgeTargetPath(parsed.target.collection, parsed.target.path) ||
-      parsed.revision !== requestDigest(parsed) || (parsed.target.previous_path !== undefined && !isSafeKnowledgeTargetPath(parsed.target.collection, parsed.target.previous_path))) throw new TypeError("Approved revision target or digest is invalid");
+      parsed.revision !== requestDigest(parsed) || (parsed.target.previous_path !== undefined && (!indexerKnowledgeCollectionSchema.safeParse(parsed.target.previous_path.split("/")[0]).success || !isSafeKnowledgeTargetPath(parsed.target.previous_path.split("/")[0]!, parsed.target.previous_path)))) throw new TypeError("Approved revision target or digest is invalid");
   const { candidate: raw, batch_candidates: batch, ...rest } = parsed;
   const request = { ...rest, ...(batch === undefined ? {} : { batch_candidates: batch.map((item, index) => parseCandidateRecord(item, index + 1)) }) };
   if (raw === undefined) return request;
@@ -251,13 +252,16 @@ export async function prepareApprovedRevision(input: {
       source_refs: [...new Set(view.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
     }
     if (input.move_to !== undefined) {
-      if (input.create || !isSafeKnowledgeTargetPath(target.collection, input.move_to) || input.move_to === target.path) {
-        throw new TypeError("Move requires a different safe path in the same knowledge collection.");
+      const destinationCollection = indexerKnowledgeCollectionSchema.safeParse(input.move_to.split("/")[0]);
+      if (input.create || !destinationCollection.success || !isSafeKnowledgeTargetPath(destinationCollection.data, input.move_to) || input.move_to.includes("\\") || input.move_to === target.path) {
+        throw new TypeError("Move requires a different safe path in a supported knowledge collection.");
       }
       const { moveKnowledgeLinkTargets } = await import("./approvedPageMove.js");
       const movedMarkdown = moveKnowledgeLinkTargets(target.markdown, input.move_to, target.path, new Map([[target.path, input.move_to]]))
-        .replace(/^resource:.*$/mu, `resource: knowledge:${input.move_to.replace(/\.md$/u, "")}`);
-      target = { ...target, previous_path: target.path, path: input.move_to, markdown: movedMarkdown };
+        .replace(/^resource:.*$/mu, `resource: knowledge:${input.move_to.replace(/\.md$/u, "")}`)
+        .replace(/^---\r?\n([\s\S]*?)\r?\n---/u, (header, fields: string) => target.collection === destinationCollection.data ? header
+          : `---\n${YAML.stringify({ ...YAML.parse(fields), type: okfTypeForCollection(destinationCollection.data) }).trimEnd()}\n---`);
+      target = { ...target, collection: destinationCollection.data, previous_path: target.path, path: input.move_to, markdown: movedMarkdown };
       await assertApprovedRevisionBase(input.projectRoot, { target } as ApprovedRevision);
     }
     if (input.supporting_sources) {

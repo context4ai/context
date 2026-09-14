@@ -14,15 +14,18 @@ Document business definitions may correct a mechanical code-topic name; explain
 the proposed change in the plan instead of forcing the document into a path
 mirror. This does not authorize renaming formal files outside the current task.
 
-A coherent document can directly suggest one target. A long document may need
-several articles; several documents may jointly answer one question. Neither
-file count nor heading count determines article count. Choose batches based
-on reader tasks, dependencies and useful shared reading, not source or skill
-identity. Do not create per-member dispositions or a separate semantic graph.
+A coherent document can directly suggest one target. Split distinct reader tasks
+or lifecycles; combine sources when they answer the same task. A shared broad
+label such as development or operations does not make all its procedures one
+summary. Neither file nor heading count determines article count. Choose batches
+by dependencies and useful shared reading, not source or skill identity. Do not
+create per-member dispositions or a separate semantic graph.
 
 Submit article targets, questions, authorized sources and batches through the
 current planning schema. Keep remaining investigation in pending_scopes when
-only part is ready. An unread source is unfinished, not implicitly excluded.
+only part is ready. Referencing one section does not settle a source's other
+useful tasks; describe those in the existing plan. An unread source is unfinished,
+not implicitly excluded.
 Missing essential evidence remains a scoped gap. Long-term exclusions need
 the applicable user authorization.
 
