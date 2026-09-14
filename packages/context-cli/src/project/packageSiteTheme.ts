@@ -48,7 +48,7 @@ export const siteMarkdownConfig = String.raw`
       if (!silent) { const token = state.push('context_anchor', '', 0); token.content = match[1]; }
       state.line = line + 1;
       return true;
-    });
+    }, { alt: ['paragraph'] });
     md.renderer.rules.context_anchor = (tokens, index) => '<a id="' + md.utils.escapeHtml(tokens[index].content) + '"></a>\n';
   }
 `;
