@@ -52,6 +52,11 @@ export async function writeProductionProjection(root: string, path: string, cont
 }
 
 export async function readProductionStage(root: string, id?: string): Promise<ProductionStage | undefined> {
+  return (await readProductionStageSnapshot(root, id))?.stage;
+}
+
+/** Bind a write baseline to the exact bytes which produced its validated state. */
+export async function readProductionStageSnapshot(root: string, id?: string): Promise<{ stage: ProductionStage; content: string } | undefined> {
   const feedback = { operation: "stage-read", file: CURRENT_PATH,
     recovery: "Inspect the reported temporary file and restore this run's intact local state before querying again. Do not reconstruct process state from Git or automatically delete accepted drafts; if local state is lost, start a new production run." };
   return withProductionFeedback(feedback, async () => {
@@ -69,7 +74,7 @@ export async function readProductionStage(root: string, id?: string): Promise<Pr
   if (content === undefined) return undefined;
   const stage = validateProductionStage(JSON.parse(content));
   if (stage.id !== id) throw new TypeError("Production stage directory and manifest identity disagree");
-  return stage;
+  return { stage, content };
   });
 }
 
@@ -163,46 +168,58 @@ export async function materializeProductionStage(input: {
       await write(join(directory, "guidance", path), content);
     }
     const submittedTasks = [];
-    let candidates: Awaited<ReturnType<typeof readCandidateRecords>> | undefined;
-    let approved: ReturnType<typeof productionApprovedTargetsIndex> | undefined;
+    let candidates: ReturnType<typeof readCandidateRecords> | undefined;
+    let approved: Promise<ReturnType<typeof productionApprovedTargetsIndex>> | undefined;
+    const tasksById = new Map(stage.tasks.map(task => [task.id, task]));
     for (const batch of dispatch.batches) {
       const batchPath = join(directory, "batches", batch.id);
       await write(join(batchPath, "batch.md"), `# Batch ${batch.id}\n\nTasks: ${batch.tasks.join(", ")}\n\nRead each task's scope and dependencies. Workers write drafts only; the coordinator submits.\n`);
-      for (const id of batch.tasks) {
-        const task = stage.tasks.find(task => task.id === id)!;
-        const taskRoot = join(batchPath, "tasks", id);
-        if (task.base !== null) {
-          const basePath = join(taskRoot, "base.md");
-          const referencesPath = join(taskRoot, "base-references.yaml");
-          let missing = false;
-          try {
-            await access(await safeProjectTarget(input.projectRoot, basePath));
-            await access(await safeProjectTarget(input.projectRoot, referencesPath));
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-            missing = true;
+      // Only independent CLI-owned task projections overlap. Keep a bounded
+      // number of filesystem operations and publish issued state after all
+      // projections complete, under the same project write lock.
+      for (let offset = 0; offset < batch.tasks.length; offset += 8) {
+        const projections = await Promise.allSettled(batch.tasks.slice(offset, offset + 8).map(async id => {
+          const task = tasksById.get(id)!;
+          const taskRoot = join(batchPath, "tasks", id);
+          if (task.base !== null) {
+            const basePath = join(taskRoot, "base.md");
+            const referencesPath = join(taskRoot, "base-references.yaml");
+            let missing = false;
+            try {
+              await access(await safeProjectTarget(input.projectRoot, basePath));
+              await access(await safeProjectTarget(input.projectRoot, referencesPath));
+            } catch (error) {
+              if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+              missing = true;
+            }
+            if (missing) {
+              candidates ??= readCandidateRecords(input.projectRoot);
+              const target = await readProductionArticleTarget({ projectRoot: input.projectRoot, task, candidates: await candidates,
+                readApproved: () => approved ??= readApprovedKnowledgeMetadataIndex(input.projectRoot).then(productionApprovedTargetsIndex) });
+              if (!target.base) throw new TypeError(`Revision base is unavailable for ${task.path}; refresh this task before writing`);
+              await write(basePath, target.base.markdown);
+              await write(referencesPath, YAML.stringify({ sections: target.base.sections }));
+            }
           }
-          if (missing) {
-            candidates ??= await readCandidateRecords(input.projectRoot);
-            const target = await readProductionArticleTarget({ projectRoot: input.projectRoot, task, candidates,
-              readApproved: async () => approved ??= productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot)) });
-            if (!target.base) throw new TypeError(`Revision base is unavailable for ${task.path}; refresh this task before writing`);
-            await write(basePath, target.base.markdown);
-            await write(referencesPath, YAML.stringify({ sections: target.base.sections }));
-          }
+          await write(join(taskRoot, "task.md"), [`# ${task.question}`, "", `Target: ${task.path}`,
+            `Article: ${task.article_id}`, `Dependencies: ${task.after.join(", ") || "none"}`, "",
+            task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
+            ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
+              `Existing sections and references: ${join(taskRoot, "base-references.yaml")}`, ""] : []),
+            `Shared requirements: ${join(directory, "shared/requirements.md")}`,
+            `Relevant planned skills: ${join(directory, "indexer-usage.yaml")}`, ""].join("\n"));
+          await write(join(taskRoot, "sources.md"), ["# Authorized sources", "",
+            ...task.sources.map(source => `- ${source.scope}: ${scopePaths.get(source.scope)!}`), "",
+            "Navigation is not semantic evidence. Read the relevant full text before writing and cite actual source regions.", ""].join("\n"));
+          const output = `batches/${batch.id}/${id}`;
+          return { task: id, input: task.input, content: `${output}/article.md`, references: `${output}/references.yaml` };
+        }));
+        // Drain all workers before releasing the lock on failure; partial
+        // unissued projections are safe to reuse during normal preparation.
+        for (const projection of projections) {
+          if (projection.status === "rejected") throw projection.reason;
+          submittedTasks.push(projection.value);
         }
-        await write(join(taskRoot, "task.md"), [`# ${task.question}`, "", `Target: ${task.path}`,
-          `Article: ${task.article_id}`, `Dependencies: ${task.after.join(", ") || "none"}`, "",
-          task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
-          ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
-            `Existing sections and references: ${join(taskRoot, "base-references.yaml")}`, ""] : []),
-          `Shared requirements: ${join(directory, "shared/requirements.md")}`,
-          `Relevant planned skills: ${join(directory, "indexer-usage.yaml")}`, ""].join("\n"));
-        await write(join(taskRoot, "sources.md"), ["# Authorized sources", "",
-          ...task.sources.map(source => `- ${source.scope}: ${scopePaths.get(source.scope)!}`), "",
-          "Navigation is not semantic evidence. Read the relevant full text before writing and cite actual source regions.", ""].join("\n"));
-        const output = `batches/${batch.id}/${id}`;
-        submittedTasks.push({ task: id, input: task.input, content: `${output}/article.md`, references: `${output}/references.yaml` });
       }
     }
     // The CLI supplies a template on its own side; it never overwrites an Agent

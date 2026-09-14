@@ -6,7 +6,7 @@ import { collectProjectStatus } from "../project/status.js";
 import { verifyProjectWorkspace } from "../project/verify.js";
 import { readApprovedMarkdownFiles, readApprovedStructureValue } from "../project/approvedFileRead.js";
 import { withCommandReadCache } from "../project/commandReadCache.js";
-import { resumeWorkspaceTask } from "../project/taskResumption.js";
+import { readTaskPreparation, resumeWorkspaceTask } from "../project/taskResumption.js";
 import { productionPlanningRequest } from "../project/productionPlanning.js";
 import { prepareCurrentProductionStage } from "../project/productionStagePreparation.js";
 
@@ -34,6 +34,21 @@ test("cleared task progress does not audit article bodies; explicit verification
     expect((await verifyProjectWorkspace(root)).ok).toBe(false);
     expect(bodies).toContain(article);
   } finally { spy.mockRestore(); }
+});
+
+test("discarding scratch after delivery does not restart production or change approved files", async () => {
+  const root = await initialRevisionKnowledge(roots);
+  const paths = ["knowledge/structure.yaml", "knowledge/architecture/overview.md", ".context-builds.json"];
+  const before = await Promise.all(paths.map(path => fs.readFile(join(root, path), "utf8")));
+  await fs.rm(join(root, ".tmp"), { recursive: true, force: true });
+  expect(await readTaskPreparation(root)).toBe("cleared");
+  const status = await collectProjectStatus(root);
+  expect(status.workflow.current?.node).toBe("reopen-cleared-task");
+  expect(status.evidenceStatus).toBe("not-checked");
+  expect(await Promise.all(paths.map(path => fs.readFile(join(root, path), "utf8")))).toEqual(before);
+  await resumeWorkspaceTask(root);
+  expect(await readTaskPreparation(root)).toBe("resume-requested");
+  expect((await collectProjectStatus(root)).workflow.current?.node).toBe("prepare-production-planning");
 });
 
 test("command reads share bytes but detect additions, replacement, deletion and isolate mutable structure", async () => {

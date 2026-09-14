@@ -21,8 +21,11 @@ interface MdastNode {
 /** Reader link occurrences, including reference-style links. Unlike destination
  * rewrites, a presentation projection replaces the whole link with its label. */
 export function markdownReaderLinks(content: string): Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> {
-  const links: Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> = markdownInlineLinks(content);
+  // Both supported link forms require a bracket. This is only a lexical
+  // absence check; anything potentially containing a link still uses Markdown.
+  if (!content.includes("[")) return [];
   const tree = unified().use(remarkParse).parse(content) as MdastNode;
+  const links: Array<Pick<MarkdownInlineLink, "image" | "label" | "target" | "start" | "end">> = inlineLinksFromTree(content, tree);
   const definitions = new Map<string, string>();
   const walk = (node: MdastNode, visit: (node: MdastNode) => void): void => {
     visit(node);
@@ -116,7 +119,12 @@ function destinationRange(raw: string): { start: number; end: number } | undefin
 }
 
 export function markdownInlineLinks(content: string): MarkdownInlineLink[] {
+  if (!content.includes("[")) return [];
   const tree = unified().use(remarkParse).parse(content) as MdastNode;
+  return inlineLinksFromTree(content, tree);
+}
+
+function inlineLinksFromTree(content: string, tree: MdastNode): MarkdownInlineLink[] {
   const links: MarkdownInlineLink[] = [];
   const visit = (node: MdastNode): void => {
     if (node.type === "link" || node.type === "image") {

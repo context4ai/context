@@ -12,14 +12,20 @@ import { TASK_PREPARATION_PATH, taskPreparationRecord } from "./taskResumption.j
  * candidate cleanup. Keep the current manifest until all working files are
  * gone, then atomically switch to the existing explicit-new-task gate. */
 export async function clearCompletedProduction(root: string, stage: ProductionStage): Promise<void> {
+  const pointerPath = join(PRODUCTION_STAGES_ROOT, "current.json");
+  const pointer = await readFile(await safeProjectTarget(root, pointerPath), "utf8");
+  const current: unknown = JSON.parse(pointer);
+  if (!current || typeof current !== "object" || !("stage" in current) || current.stage !== stage.id) {
+    throw new TypeError("Production stage changed before cleanup; inspect the current stage without clearing its files or task state.");
+  }
   const directory = productionStageDirectory(stage.id);
   const remove = async (path: string) => rm(await safeProjectTarget(root, path), { recursive: true, force: true });
   await remove(productionAgentDirectory(stage.id));
   const entries = await readdir(await safeProjectTarget(root, directory));
   for (const entry of entries) if (entry !== "manifest.json") await remove(join(directory, entry));
   const targets: IndexerProjectFileTarget[] = [];
-  for (const path of [join(directory, "manifest.json"), join(PRODUCTION_STAGES_ROOT, "current.json")]) {
-    const content = await readFile(await safeProjectTarget(root, path), "utf8");
+  for (const path of [join(directory, "manifest.json"), pointerPath]) {
+    const content = path === pointerPath ? pointer : await readFile(await safeProjectTarget(root, path), "utf8");
     targets.push({ path, operation: "delete", base_digest: durableContentDigest(content), target_digest: null });
   }
   let previous: string | undefined;

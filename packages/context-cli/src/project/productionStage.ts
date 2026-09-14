@@ -125,11 +125,13 @@ export function dispatchProductionStage(stage: ProductionStage, capabilities: Pr
   if (!stage.report_approved) return { mode: "single-agent", batches: [], state: "waiting-user" };
   if (stage.delivery) return { mode: "single-agent", batches: [], state: "waiting-user" };
   const tasks = new Map(stage.tasks.map(task => [task.id, task]));
+  const scopeBaselines = new Map(stage.scopes.map(scope => [scope.scope, scope.baseline]));
+  const unavailableScopes = new Set(stage.gaps.map(gap => gap.scope));
   const available = stage.tasks.filter(task =>
     (task.status === "pending" || task.status === "issued") &&
-    !task.sources.some(source => stage.gaps.some(gap => gap.scope === source.scope)) &&
+    !task.sources.some(source => unavailableScopes.has(source.scope)) &&
     task.after.every(id => tasks.get(id)?.status === "accepted") &&
-    task.sources.every(source => stage.scopes.some(scope => scope.scope === source.scope && scope.baseline === source.baseline)));
+    task.sources.every(source => scopeBaselines.get(source.scope) === source.baseline));
   // Keep issued work ahead of unissued work on downgrade. The coordinator must
   // finish/handoff old workers; their input handles and directories stay valid.
   available.sort((a, b) => Number(b.status === "issued") - Number(a.status === "issued"));

@@ -3,6 +3,33 @@ import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { kbPackage } from "@c4a/context";
 import { withStagedPackageOutput } from "../project/packageBuildStage.js";
+import { packageOutputFingerprint, packageOutputSnapshot } from "../project/packageBuildReceipt.js";
+
+test("completed output snapshot and fresh fingerprint agree, including edits and removals", async () => {
+  const temp = join(import.meta.dir, "../../../../.tmp");
+  await mkdir(temp, { recursive: true });
+  const root = await mkdtemp(join(temp, "package-fingerprint-test-"));
+  const pkg = kbPackage({ name: "sample", template: "src/templates/kb", site: {} });
+  try {
+    const observed = async () => packageOutputFingerprint(root, pkg, await packageOutputSnapshot(root, pkg, new Map()));
+    expect(await observed()).toEqual(await packageOutputFingerprint(root, pkg));
+    await mkdir(join(root, pkg.outDir), { recursive: true });
+    await mkdir(join(root, "dist/sample-site"), { recursive: true });
+    const path = join(root, pkg.outDir, "page.md");
+    await writeFile(path, "# Original");
+    await writeFile(join(root, "dist/sample-site/index.html"), "<h1>Site</h1>");
+    const initial = await observed();
+    expect(initial).toEqual(await packageOutputFingerprint(root, pkg));
+    expect(initial.files).toBe(2);
+    await writeFile(path, "# Modified");
+    const changed = await observed();
+    expect(changed).toEqual(await packageOutputFingerprint(root, pkg));
+    expect(changed.fingerprint).not.toBe(initial.fingerprint);
+    await rm(path);
+    expect(await observed()).toEqual(await packageOutputFingerprint(root, pkg));
+    expect((await observed()).files).toBe(1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("package publication preserves unchanged files, removes obsolete outputs, and retains preview on render failure", async () => {
   const temp = join(import.meta.dir, "../../../../.tmp");

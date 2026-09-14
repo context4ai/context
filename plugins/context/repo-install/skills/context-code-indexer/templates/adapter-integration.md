@@ -11,7 +11,7 @@ compatibility layers, gateways, and translators whose stable responsibility is
 to connect two boundaries. An ordinary internal helper that converts one object
 is not automatically an adapter module.
 
-Use the exact profile and Artifact policy variant supplied by the workset. For
+Follow the current task.md, sources.md and submission schema. For
 an inbound operation surface, combine this template with the selected gateway
 or protocol evidence without creating a second operation registry.
 

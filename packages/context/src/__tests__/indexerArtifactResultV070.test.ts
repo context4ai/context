@@ -12,6 +12,24 @@ function section(result = artifactResult()) {
 }
 
 describe("Article result contract", () => {
+  test("request-material requires an active question gap, not merely an existing proposal", () => {
+    const result = artifactResult();
+    result.inventory_dispositions = buildIndexerInventoryDispositionSet({
+      author_workset_digest: result.author_workset_digest,
+      group_projection_digest: result.group_projection_digest,
+      logical_unit_ref: result.logical_unit.logical_unit_ref,
+      dispositions: [{ member_id: MEMBER_REF, member_kind: "component",
+        inventory_disposition: "request-material", material_question_proposal_ref: "proposal:public-contract-gap" }],
+    });
+    rehash(result);
+    expect(() => validate(result)).not.toThrow();
+    result.question_target_dispositions = [{ question_target_key: QUESTION_TARGET, state: "answered" }];
+    rehash(result);
+    expect(() => validate(result)).toThrow("blocking material gap");
+    result.question_target_dispositions = [];
+    rehash(result);
+    expect(() => validate(result)).toThrow("blocking material gap");
+  });
   test("accepts reader content and direct region references without a fact ledger", () => {
     const result = artifactResult();
     expect(validate(result)).toEqual(result);

@@ -4,6 +4,18 @@ export const siteMarkdownConfig = String.raw`
   attrs: { disable: true },
   config(md) {
     md.block.ruler.disable('snippet');
+    const linkOpen = md.renderer.rules.link_open;
+    md.renderer.rules.link_open = (tokens, index, options, env, self) => {
+      // Let VitePress normalize the base and .md URL before adding a target;
+      // its renderer deliberately skips normalization for targeted links.
+      const rendered = linkOpen ? linkOpen(tokens, index, options, env, self) : self.renderToken(tokens, index, options);
+      if (/(?:^|\/)llms\/index\.md$/.test(env.relativePath || '')) {
+        tokens[index].attrSet('target', '_blank');
+        tokens[index].attrJoin('rel', 'noopener noreferrer');
+        return self.renderToken(tokens, index, options);
+      }
+      return rendered;
+    };
     md.inline.ruler.before('text', 'context_break', (state, silent) => {
       const match = /^<br\s*\/?\s*>/i.exec(state.src.slice(state.pos));
       if (!match) return false;
@@ -23,6 +35,12 @@ export const siteMarkdownConfig = String.raw`
     md.renderer.rules.context_details = (tokens, index) => tokens[index].content + '\n';
     const text = md.renderer.rules.text;
     md.renderer.rules.text = (...args) => (text ? text(...args) : md.utils.escapeHtml(args[0][args[1]].content)).replace(/\{/g, '&#123;');
+    // Inline/indented code bypasses the text renderer. Preserve its literal
+    // spelling for readers without allowing Vue to interpret interpolation.
+    for (const name of ['code_inline', 'code_block']) {
+      const render = md.renderer.rules[name];
+      if (render) md.renderer.rules[name] = (...args) => render(...args).replace(/\{/g, '&#123;');
+    }
     md.block.ruler.before('paragraph', 'context_anchor', (state, line, end, silent) => {
       const raw = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
       const match = /^<a id="(section-[a-zA-Z0-9_%.-]+)"><\/a>$/.exec(raw);
@@ -49,6 +67,19 @@ export default {
       const sections = computed(() => data.theme.value.contextSections || []);
       const selected = ref('');
       const mounted = ref(false);
+      const language = ref('zh');
+      const chinese = computed(() => language.value === 'zh');
+      const languageKey = 'context-language:' + data.site.value.base;
+      onMounted(() => {
+        let saved;
+        try { saved = localStorage.getItem(languageKey); } catch {}
+        language.value = saved === 'en' || saved === 'zh' ? saved :
+          navigator.language.toLowerCase().startsWith('en') ? 'en' : 'zh';
+      });
+      const changeLanguage = value => {
+        language.value = value;
+        try { localStorage.setItem(languageKey, value); } catch {}
+      };
       const history = computed(() => data.frontmatter.value.contextHistory
         ? JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(data.frontmatter.value.contextHistory), char => char.charCodeAt(0)))) : null);
       onMounted(() => { mounted.value = true; });
@@ -76,33 +107,39 @@ export default {
       const inLlms = computed(() => route.path.startsWith(data.site.value.base + 'llms/'));
       const inHistory = computed(() => route.path === data.site.value.base + 'changelog.html');
       provide(dataSymbol, { ...data, theme: computed(() => ({ ...data.theme.value,
+        ...data.theme.value.contextUiLabels?.[language.value],
         sidebar: inLlms.value || inHistory.value ? [] : active.value?.items || [],
         nav: [...sections.value.map(section => ({ text: section.title, link: section.href,
           activeMatch: !inLlms.value && !inHistory.value && section.key === selected.value ? '^' : '(?!)' })),
-          { text: 'LLM Docs', link: '/llms/index.html', activeMatch: inLlms.value ? '^' : '(?!)' },
-          { text: 'Changelog', link: '/changelog.html', activeMatch: inHistory.value ? '^' : '(?!)' }],
+          { text: chinese.value ? '更多' : 'More', items: [
+            { text: 'LLM Docs', link: '/llms/index.html' },
+            { text: 'Changelog', link: '/changelog.html' }],
+            activeMatch: inLlms.value || inHistory.value ? '^' : '(?!)' }],
       })) });
       const slots = {
+        'nav-bar-content-after': () => h('div', { class: 'context-language', role: 'group', 'aria-label': '界面语言 / Interface language' },
+          ['zh', 'en'].map(value => h('button', { type: 'button', 'aria-pressed': language.value === value,
+            onClick: () => changeLanguage(value) }, value === 'zh' ? '中文' : 'EN'))),
         'doc-after': () => history.value ? h('section', { class: 'context-history-cards' },
           history.value.length ? history.value.map((entry, index) =>
             h('details', { class: 'context-history-card', open: index < 3, key: entry.version }, [
               h('summary', [h('strong', entry.version), h('span', { class: 'context-history-title' }, entry.title),
                 h('span', { class: 'context-history-attribution' }, [
-                  (entry.actor ? entry.actor.name + ' ' : '') + (data.lang.value.startsWith('zh') ? '更新于 ' : 'updated on '),
+                  (entry.actor ? entry.actor.name + ' ' : '') + (chinese.value ? '更新于 ' : 'updated on '),
                   h('time', { datetime: entry.date }, entry.date.slice(0, 10)),
                 ])]),
               h('div', { class: 'context-history-body' }, [
                 h('ul', entry.changes.map(change => h('li', change))),
                 h('div', { class: 'context-history-meta' }, [
-                  h('strong', data.lang.value.startsWith('zh') ? '触发来源' : 'Triggered by'),
+                  h('strong', chinese.value ? '触发来源' : 'Triggered by'),
                   h('ul', entry.triggers.map(trigger => h('li', trigger.kind + ': ' + trigger.description))),
                 ]),
               ]),
-            ])) : [h('p', data.lang.value.startsWith('zh') ? '暂无版本记录。' : 'No versions recorded yet.')]) : null,
+            ])) : [h('p', chinese.value ? '暂无版本记录。' : 'No versions recorded yet.')]) : null,
         'sidebar-nav-before': () => h('div', { class: 'context-mobile-directory' }, [
           h('div', { class: 'context-mobile-directory-heading' }, [
-            h('span', data.lang.value.startsWith('zh') ? '文章目录' : 'Articles'),
-            h('button', { type: 'button', 'aria-label': data.lang.value.startsWith('zh') ? '关闭目录' : 'Close navigation',
+            h('span', chinese.value ? '文章目录' : 'Articles'),
+            h('button', { type: 'button', 'aria-label': chinese.value ? '关闭目录' : 'Close navigation',
               onClick: () => document.querySelector('.VPBackdrop')?.click() }, '×'),
           ]),
           h('div', { class: 'context-mobile-sections' }, sections.value.map(section => h('a', {
@@ -115,7 +152,7 @@ export default {
           return h('div', { class: 'context-provenance' }, [
             sources.length ? h('section', { class: 'context-sources' }, [
               h('div', { class: 'context-sources-header' }, [
-                h('div', { class: 'context-sources-title' }, data.lang.value.startsWith('zh') ? '来源与溯源' : 'Sources'),
+                h('div', { class: 'context-sources-title' }, chinese.value ? '来源与溯源' : 'Sources'),
               ]),
               h('ul', sources.map(source => h('li', source.href
                 ? h('a', { href: source.href, target: '_blank', rel: 'noopener noreferrer' }, source.label)
@@ -123,7 +160,7 @@ export default {
             ]) : null,
             (data.frontmatter.value.contextUpdated || data.theme.value.contextUpdated)
               ? h('div', { class: 'context-article-updated' }, [
-                  data.lang.value.startsWith('zh') ? '最后更新：' : 'Last updated: ',
+                  chinese.value ? '最后更新：' : 'Last updated: ',
                   h('a', { href: data.site.value.base + 'changelog.html' },
                     h('time', { datetime: data.frontmatter.value.contextUpdated || data.theme.value.contextUpdated }, updatedLabel.value)),
                 ]) : null,
@@ -227,7 +264,10 @@ export const siteThemeCss = `
 .VPNavBarTitle .title { font-size: 15px; font-weight: 650; border: 0 !important; }
 .VPNavBar .content { flex: 1; min-width: 0; padding-left: 0 !important; }
 .VPNavBar .content-body { background: var(--vp-c-bg) !important; gap: 8px; }
-.VPNavBarMenu { order: -1; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.VPNavBarMenu { order: -1; flex: 1; min-width: 0; }
+.context-language { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; }
+.context-language button { padding: 4px; color: var(--vp-c-text-2); }
+.context-language button[aria-pressed='true'] { color: var(--vp-c-brand-1); font-weight: 600; }
 .VPNavBarMenuLink { font-size: 13px !important; font-weight: 550 !important; padding: 0 16px !important; }
 .VPNavBarMenuLink.active { box-shadow: inset 0 -2px var(--vp-c-brand-1); }
 .VPNavBarSearch { flex-grow: 0 !important; padding: 0 12px !important; }
@@ -340,5 +380,11 @@ export function siteThemeLabels(lang: string) {
       modal: { noResultsText: "没有找到相关内容", resetButtonTitle: "清空搜索", displayDetails: "显示详细内容",
         footer: { selectText: "选择", navigateText: "切换", closeText: "关闭" } },
     } } },
-  } : { outline: [2, 3], search: { provider: "local" } };
+  } : {
+    outline: { level: [2, 3], label: "On this page" },
+    docFooter: { prev: "Previous page", next: "Next page" },
+    sidebarMenuLabel: "Menu", returnToTopLabel: "Return to top",
+    darkModeSwitchLabel: "Appearance", lightModeSwitchTitle: "Switch to light theme", darkModeSwitchTitle: "Switch to dark theme",
+    search: { provider: "local" },
+  };
 }

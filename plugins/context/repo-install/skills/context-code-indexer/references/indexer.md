@@ -61,6 +61,20 @@ returned action; accepted content needs a revision task.
 
 ## Writing follows actual behavior
 
+For a large module, divide work by reader question or capability family, not
+by an exhaustive symbol list. Put useful directory and entrypoint hints in the
+task brief. Investigate one bounded slice first and keep remaining scope in the
+existing plan; do not wait for a module-wide catalog before writing. Reuse shared
+findings in temporary files across related tasks, checking source evidence for
+new claims. If a task proves too broad, amend unfinished tasks rather than
+expanding every dependency recursively. A complete component manual still needs
+coverage of its agreed components, spread across manageable tasks.
+
+Use explicit file selections for optional deep analysis. Package export tracing
+can still follow other files to establish public identity, so selected output
+does not guarantee a cheap scan. Prefer direct reading when that traversal is
+unnecessary; stop or narrow a helper that exceeds the useful time/output budget.
+
 Explain what the module is responsible for, when and how to enter it through
 stable interfaces, what it hands off, and the relevant state and failure
 boundaries. A directory summary or symbol list is not an explanation.

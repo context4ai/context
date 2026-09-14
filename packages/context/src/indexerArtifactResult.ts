@@ -260,7 +260,8 @@ export function validateIndexerArtifactResult(input: {
     capability_group_memberships: result.capability_group_evidence.capability_groups.map(group => ({
       capability_group_ref: group.capability_group_ref, member_ids: group.member_evidence.map(member => member.member_id),
     })),
-    material_gap_proposal_refs: result.material_question_proposals.map(proposal => proposal.proposal_ref),
+    material_gap_proposal_refs: result.question_target_dispositions.flatMap(disposition =>
+      disposition.state === "material-gap" ? [disposition.material_question_proposal_ref] : []),
   });
   const targets = new Map(input.allowed_question_targets.map(target => [target.question_target_key, target.question_ref]));
   assertUnique(result.question_target_dispositions.map(item => item.question_target_key), "question targets");

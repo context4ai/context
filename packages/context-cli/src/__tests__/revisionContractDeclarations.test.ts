@@ -3,6 +3,15 @@ import * as contract from "@c4a/extract-contract";
 import { projectIndexerPublicContractTable } from "@c4a/context";
 import { loadRevisionContractDependencies, revisionContractDeclarations } from "../project/revisionContractDeclarations.js";
 
+test("nested contract dependencies are already root-relative and are not joined twice", async () => {
+  const reads: string[] = [];
+  const texts = await loadRevisionContractDependencies(contract,
+    { "contracts/api.json": '{"$ref":"./types.json#/User"}' },
+    ["contracts/api.json", "contracts/types.json"], async path => { reads.push(path); return '{"User":{"type":"string"}}'; });
+  expect(reads).toEqual(["contracts/types.json"]);
+  expect(Object.keys(texts)).toEqual(["contracts/api.json", "contracts/types.json"]);
+});
+
 test("GraphQL regeneration retains schema fields and operation owners", () => {
   const declarations = revisionContractDeclarations(contract, {
     "schema.graphql": "type User { id: ID!, name: String } type Query { user(id: ID!): User }",

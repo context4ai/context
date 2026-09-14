@@ -11,7 +11,7 @@ surface as `api-service`. A module that only calls a remote API is a protocol
 consumer, not automatically an API service. Gateways that translate to another
 protocol normally also selects `adapter-integration`.
 
-Use the exact profile and Artifact policy variant supplied by the workset. If
+Follow the current task.md, sources.md and submission schema. If
 the reader goal is primarily the transformation between inbound and outbound
 boundaries, use the selected adapter-integration profile and retain one
 canonical operation registry.

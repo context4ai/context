@@ -79,13 +79,19 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(history.match(/<details class="context-history-card"/gu)).toHaveLength(5);
     expect(history.match(/<details class="context-history-card" open/gu)).toHaveLength(3);
     expect(history).toContain("Example User");
-    expect(history).toMatch(/<summary>[\s\S]*?Example User updated on <time[\s\S]*?<\/summary>/u);
+    expect(history).toMatch(/<summary>[\s\S]*?class="context-history-attribution">Example User [^<]+<time[\s\S]*?<\/summary>/u);
     expect(history).not.toContain("User: Example User");
     expect(history).toContain("context-empty-sidebar");
     const llmsHome = await readFile(join(root, packageSiteOutputDir(pkg), "llms/index.html"), "utf8");
     expect(llmsHome).toContain("context-empty-sidebar");
     const llmsMain = llmsHome.match(/<main\b[^>]*>([\s\S]*?)<\/main>/u)![1]!;
     expect(llmsMain).not.toContain("changelog.html");
+    const llmsLinks = [...llmsMain.matchAll(/<a\b[^>]*href="[^"]+"[^>]*>/gu)].map(match => match[0]);
+    expect(llmsLinks.length).toBeGreaterThan(0);
+    for (const link of llmsLinks.filter(link => !link.includes('class="header-anchor"'))) {
+      expect(link).toContain('target="_blank"');
+      expect(link).toMatch(/rel="[^"]*noopener[^"]*"/u);
+    }
     expect([...llmsMain.matchAll(/href="([^"]*llms-full[^"]*)"/gu)].map(match => match[1])).toEqual(["/docs/llms-full.txt"]);
     expect([...llmsMain.matchAll(/href="([^"]*llms\.txt[^"]*)"/gu)].map(match => match[1])).toEqual(["/docs/llms.txt"]);
     expect(llmsMain).toContain("Getting started");

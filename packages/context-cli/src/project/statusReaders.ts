@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readCommandDirectory } from "./commandReadCache.js";
 import { join } from "node:path";
 import type {
   FileSourceRegistryEntry,
@@ -35,7 +35,7 @@ export async function countFiles(root: string, predicate: (relPath: string) => b
   if (!existsSync(root)) return 0;
   let count = 0;
   const visit = async (dir: string, prefix = ""): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const entries = await readCommandDirectory(dir);
     for (const entry of entries) {
       const rel = prefix.length === 0 ? entry.name : `${prefix}/${entry.name}`;
       const abs = join(dir, entry.name);

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -161,41 +161,31 @@ export async function buildApprovedArticleIndex(
   const articlesByPath = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
   const byRelPath = new Map<string, ApprovedPageReference>();
   const assetReferencesByRelPath = new Map<string, readonly string[]>();
-  for (const collection of KNOWLEDGE_COLLECTIONS) {
-    const collectionRoot = join(projectRoot, "knowledge", collection);
-    if (!existsSync(collectionRoot)) continue;
-    const visit = (dir: string, relDir: string): void => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const absPath = join(dir, entry.name);
-        const rel = relDir.length === 0 ? entry.name : `${relDir}/${entry.name}`;
-        if (entry.isDirectory()) {
-          visit(absPath, rel);
-          continue;
-        }
-        if (!entry.isFile() || !isApprovedKnowledgeMarkdownPath(rel)) continue;
-        const content = readFileSync(absPath, "utf8");
-        const relPath = join("knowledge", collection, rel);
-        assetReferencesByRelPath.set(relPath, knowledgeAssetReferences({
-          pageRelPath: relPath,
-          content,
-        }));
-        const block = frontmatterBlock(content);
-        if (block === null) continue;
-        const parsed = YAML.parse(block.yaml) as unknown;
-        if (!isRecord(parsed)) continue;
-        const frontmatter = hydrateApprovedFrontmatter({
-          frontmatter: parsed,
-          relPath: join(collection, rel),
-          metadata,
-        });
-        const article = articlesByPath.get(`${collection}/${rel}`);
-        if (article === undefined) continue;
-        const page = { collection, articleId: article.article_id, path: absPath, relPath, frontmatter };
-        byRelPath.set(relPath, page);
-        byArticleId.set(article.article_id, page);
-      }
-    };
-    visit(collectionRoot, "");
+  for (const file of await readApprovedMarkdownFiles(projectRoot)) {
+    const collection = file.relPath.split("/")[0] as KnowledgeCollection;
+    if (!KNOWLEDGE_COLLECTIONS.includes(collection)) continue;
+    const rel = file.relPath.slice(collection.length + 1);
+    if (!isApprovedKnowledgeMarkdownPath(rel)) continue;
+    const { absPath, content } = file;
+    const relPath = join("knowledge", collection, rel);
+    assetReferencesByRelPath.set(relPath, knowledgeAssetReferences({
+      pageRelPath: relPath,
+      content,
+    }));
+    const block = frontmatterBlock(content);
+    if (block === null) continue;
+    const parsed = YAML.parse(block.yaml) as unknown;
+    if (!isRecord(parsed)) continue;
+    const frontmatter = hydrateApprovedFrontmatter({
+      frontmatter: parsed,
+      relPath: join(collection, rel),
+      metadata,
+    });
+    const article = articlesByPath.get(`${collection}/${rel}`);
+    if (article === undefined) continue;
+    const page = { collection, articleId: article.article_id, path: absPath, relPath, frontmatter };
+    byRelPath.set(relPath, page);
+    byArticleId.set(article.article_id, page);
   }
   return { byArticleId, byRelPath, assetReferencesByRelPath };
 }

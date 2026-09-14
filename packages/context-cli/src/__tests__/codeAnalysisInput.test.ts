@@ -45,8 +45,9 @@ test("Go analysis passes only selected entries and does not require a parent man
     async extractSymbols(entries: unknown[]) { return entries; }
   }
   expect(await prepareCodeAnalysisInput({ capability: "parser.go", root, sourceModule: "example",
-    scopedPaths: ["selected.go"], trackedPaths: ["selected.go", "unrelated.go"],
-    texts: { "selected.go": "package example", "unrelated.go": "package example" },
+    scopedPaths: ["./selected.go"], trackedPaths: ["./selected.go", "unrelated.go"],
+    texts: { "./selected.go": "package example", "unrelated.go": "package example" },
+    readSource: async () => { throw new Error("In-memory source must not fall back to disk"); },
     loadedModule: { GoPlugin: Reader } })).toEqual([{ path: "selected.go" }]);
   expect(manifest).toMatchObject({ type: "go.mod", content: { raw: "module example\n" } });
 });

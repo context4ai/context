@@ -10,7 +10,7 @@ Use for `background-runtime`: queue or stream consumers, scheduled jobs,
 pipelines, functions, controllers, watchers, and long-running agents activated
 by a trigger instead of an interactive request.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 

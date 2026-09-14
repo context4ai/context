@@ -27,7 +27,7 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     await writeFile(entryPath, entry);
     await produceFixtureArticles(root, [{ path: "architecture/entry.md", question: "How is the entry point used?",
       sources: [DOCUMENT_REVISION_SOURCE_REF],
-      markdown: '---\ntitle: Guide\ndescription: Using the public entry point.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point.\n<!-- /context:section -->\n',
+      markdown: '---\ntitle: Guide\ndescription: Using the public entry point.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point. Example: `<C renderXXX={{xxx: <view />}} />`.\n<!-- /context:section -->\n',
       references: { sections: [{ id: "entry", references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF,
         locator: { path: "src/index.ts", start_line: 1, end_line: 1 } }] }] },
     }]);
@@ -47,6 +47,7 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     expect(recorded.next_action).toBeUndefined();
     const built = await buildProjectPackages(root);
     expect((await inspectWorkspaceVersion(root)).current).toBe(true);
+    expect((await inspectWorkspaceVersion(root)).reusable_version).toBeNull();
     expect((await readWorkspaceChangelog(root)).map(item => item.version)).toEqual(["0.1.0"]);
     const first = built.packages[0]!;
     const llms = built.packages[1]!;
@@ -58,10 +59,14 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     const sitePath = join(root, first.siteOutDir!, "index.html");
     expect(await readFile(sitePath, "utf8")).toContain("Sample knowledge");
     expect(await readFile(sitePath, "utf8")).toContain("LLM Docs");
+    expect(await readFile(sitePath, "utf8")).toContain("VPNavBarMenuGroup");
+    expect(await readFile(sitePath, "utf8")).toContain("更多");
+    expect(await readFile(sitePath, "utf8")).toContain("context-language");
     expect(await readFile(join(root, first.siteOutDir!, "changelog.html"), "utf8")).toContain("Initial delivery");
     expect(await readFile(join(root, first.siteOutDir!, "llms/index.html"), "utf8")).toContain("LLM Docs");
     expect(await readFile(join(root, first.siteOutDir!, "llms.txt"), "utf8")).toContain("Guide");
     expect(await readFile(join(root, first.siteOutDir!, "llms-full.txt"), "utf8")).toContain("Use the public entry point.");
+    expect(await readFile(join(root, first.siteOutDir!, "llms-full.txt"), "utf8")).toContain("renderXXX={{xxx: <view />}}");
     const before = (await stat(sitePath)).mtimeMs;
     const reused = await buildProjectPackages(root);
     expect(reused.packages[0]!.state).toBe("unchanged");

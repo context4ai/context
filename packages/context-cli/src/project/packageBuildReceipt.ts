@@ -2,7 +2,8 @@ import type { PackageArticleLinkWarning } from "./packageArticleLinks.js";
 import type { PackageMarkdownLinkWarning } from "./packageMarkdownAnchors.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { readCommandDirectory } from "./commandReadCache.js";
 import { join, relative } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
 import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
@@ -58,7 +59,7 @@ export async function walkPackageFiles(root: string): Promise<Array<{ relPath: s
   if (!existsSync(root)) return [];
   const files: Array<{ relPath: string; absPath: string }> = [];
   const visit = async (dir: string): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const entries = await readCommandDirectory(dir);
     for (const entry of entries) {
       if (IGNORED_PACKAGE_FS_ENTRIES.has(entry.name)) continue;
       const absPath = join(dir, entry.name);
@@ -116,11 +117,13 @@ export async function packageOutputSnapshot(
   }));
 }
 
-export async function packageOutputFingerprint(projectRoot: string, pkg: PackageDefinition): Promise<{
+export async function packageOutputFingerprint(projectRoot: string, pkg: PackageDefinition, observed?: readonly PackageOutputFile[]): Promise<{
   fingerprint: string;
   files: number;
 }> {
-  const snapshot = await packageOutputSnapshot(projectRoot, pkg, new Map());
+  // A caller that just inspected the completed output can reuse those exact
+  // hashes. Do not retain a snapshot across writes or separate commands.
+  const snapshot = observed ?? await packageOutputSnapshot(projectRoot, pkg, new Map());
   return {
     fingerprint: createHash("sha256").update(JSON.stringify({
       outDirExists: existsSync(join(projectRoot, pkg.outDir)),

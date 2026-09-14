@@ -69,6 +69,25 @@ test("fenced marker examples are ordinary content and CRLF outside edited fragme
   expect(approvedContextSectionsInMarkdown(result.files.content!.text).map(item => item.id)).toEqual(["a", "b"]);
 });
 
+test("reports every oversized fragment together before reading sources", async () => {
+  const planned = { id: "check", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
+    sources: [{ scope: "note:source.md", baseline: `sha256:${"a".repeat(64)}` }],
+    base: `sha256:${"b".repeat(64)}`, batch: "one", after: [], status: "issued" as const };
+  const task = { ...planned, input: productionTaskInput(planned) };
+  const file = (path: string, text: string) => ({ path, text, bytes: Buffer.byteLength(text), digest: durableContentDigest(text) });
+  const refs = (count: number) => Array.from({ length: count }, (_, index) => ({ source_ref: "note:source.md",
+    locator: { path: "source.md", start_line: index + 1, end_line: index + 1 } }));
+  let reads = 0;
+  await expect(prepareProductionArticle({ projectRoot: ".tmp/unused-production-references", task,
+    approvedBaseDigest: null, sourceReader: async () => { reads++; return "Source text"; },
+    files: { task: task.id, input: task.input, content: file("content.md", base.markdown),
+      references: file("references.yaml", YAML.stringify({ sections: [
+        { id: "a", references: [...refs(4), ...refs(4)] }, { id: "b", references: refs(5) },
+      ] })) },
+  })).rejects.toThrow("a: 4 distinct source regions (maximum 3); b: 5 distinct source regions (maximum 3)");
+  expect(reads).toBe(0);
+});
+
 test("a body-only edit cannot silently accept changed retained evidence", async () => {
   const planned = { id: "revision", article_id: "article:existing", path: "architecture/existing.md", question: "Clarify",
     sources: [{ scope: "note:source.md", baseline: `sha256:${"a".repeat(64)}` }],

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readCommandDirectory } from "./commandReadCache.js";
 import { join, relative } from "node:path";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
 
@@ -15,7 +15,7 @@ export async function walkMarkdown(root: string): Promise<Array<{ relPath: strin
   if (!existsSync(root)) return [];
   const files: Array<{ relPath: string; absPath: string }> = [];
   const visit = async (dir: string): Promise<void> => {
-    const entries = await readdir(dir, { withFileTypes: true });
+    const entries = await readCommandDirectory(dir);
     for (const entry of entries) {
       const absPath = join(dir, entry.name);
       if (entry.isDirectory()) {

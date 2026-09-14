@@ -23,6 +23,36 @@ export const productionReferencesSchema = z.object({
 
 export type ProductionSourceReader = (source: string, path: string, captured?: boolean) => Promise<string>;
 
+/** Warm this submission's existing reader, not a persistent evidence cache.
+ * Only declared, authorized references are read; normal compilation remains
+ * the authority for all errors and acceptance. Fragment edits need their base
+ * to resolve references and deliberately stay on the ordinary path. */
+export async function prefetchProductionArticleSources(
+  inputs: readonly { task: ProductionTask; files: FixedProductionTask }[],
+  read: ProductionSourceReader,
+): Promise<void> {
+  const locations = new Map<string, { source: string; path: string }>();
+  for (const { task, files } of inputs) {
+    if (files.edits || !files.content || !files.references) continue;
+    try {
+      const declared = productionReferencesSchema.parse(YAML.parse(files.references.text));
+      const allowed = new Set(task.sources.map(source => source.scope));
+      for (const section of declared.sections) for (const ref of section.references) {
+        if (!allowed.has(ref.source_ref)) continue;
+        const location = { source: ref.source_ref, path: ref.locator.path };
+        locations.set(JSON.stringify(location), location);
+      }
+    } catch { /* Invalid declarations are diagnosed by normal compilation. */ }
+  }
+  const selected = [...locations.values()];
+  for (let offset = 0; offset < selected.length; offset += 8) {
+    // Drain every read, including failures, before the submission can return.
+    // The same reader retains its result/error for the subsequent compilation.
+    await Promise.allSettled(selected.slice(offset, offset + 8).map(location =>
+      read(location.source, location.path, true)));
+  }
+}
+
 function articleError(task: ProductionTask, file: string, message: string, section?: string): ContextError {
   return new ContextError(ExitCode.UserError, message, {
     category: ErrorCategory.UserInputInvalid, reason_code: "invalid-production-article",
@@ -86,6 +116,16 @@ export async function prepareProductionArticle(input: {
   if (byId.size !== declared.sections.length || byId.size !== fragments.length || fragments.some(fragment => !byId.has(fragment.id))) {
     throw articleError(task, files.references.path, "Reference sections must match the article's fragment identities exactly, without duplicates.");
   }
+  // Report all oversized fragments together before reading source bodies.
+  // Duplicate declarations of the same region still count only once.
+  const oversized = declared.sections.flatMap(section => {
+    const count = new Set(section.references.map(ref => indexerProtocolDigest({
+      source_ref: ref.source_ref, locator: ref.locator,
+    }))).size;
+    return count > 3 ? [`${section.id}: ${count} distinct source regions (maximum 3)`] : [];
+  });
+  if (oversized.length) throw articleError(task, files.references.path,
+    `Split the claims or choose sufficient references for these fragments: ${oversized.join("; ")}.`);
   const read = input.sourceReader ?? await registeredArticleSourceReader(input.projectRoot);
   const allowed = new Set(task.sources.map(source => source.scope));
   const sections = [];

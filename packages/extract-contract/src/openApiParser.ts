@@ -169,7 +169,9 @@ function refTarget(importer: string, raw: string): { targetPath: string; pointer
   const [rawPath = "", fragment] = raw.split("#", 2);
   const pointer = fragment === undefined ? "" : `#${fragment}`;
   if (rawPath === "") return { targetPath: importer, pointer, external: false };
-  if (!portablePath(rawPath)) return null;
+  // References are importer-relative, unlike catalog keys. Resolve dot
+  // segments before checking that the result stays inside the source root.
+  if (rawPath.includes("\\") || rawPath.split("/").some(part => part === "")) return null;
   const targetPath = posix.normalize(posix.join(posix.dirname(importer), rawPath));
   return portablePath(targetPath) ? { targetPath, pointer, external: true } : null;
 }

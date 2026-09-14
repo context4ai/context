@@ -16,6 +16,22 @@ and continues through Review and delivery. Expression-only changes need no
 source capture or Parser. Preserve prior confirmed contributions; distinguish
 actual behavior, a confirmed decision, and a proposal that is not implemented.
 
+## Keep planning local to the change
+
+For one or two documents or a clearly bounded module, retain the useful planning
+decision: add or revise which articles, and place them where readers expect them.
+Do not expand this into a whole-workspace taxonomy, full navigation redesign or
+multi-wave plan. Read related existing topics first and expand only as needed.
+One module can contain several topics; scope and ambiguity, not source count,
+determine how much investigation is useful.
+
+Reuse an approved stage's plan for in-scope additions through its existing amendment
+route. Keep completed work and unrelated pending investigation intact. If article
+targets are already decided before approval, the preparation route supports a
+known-task input to combine preparation and task creation. It still prepares
+navigation and retains report confirmation; it is not a bypass for new source
+authorization. Planning depth is an Agent judgment, not an additional CLI gate.
+
 ## First-task intake budget
 
 Before registration and capture, the Agent uses the user's task instructions and
@@ -56,7 +72,14 @@ progress under `.tmp/` never causes a version increase.
 Version recording runs at completed-scope delivery after Review, Close and package
 configuration/template approval, before the final build. The record response
 returns the next workspace Route, so no extra status call is needed. Build retries
-reuse the recorded version when formal content is unchanged. Intermediate batches
+reuse the recorded version when formal content is unchanged. If build preparation
+or rendering fails and formal corrections are needed, `version inspect` returns
+`reusable_version` for the current entry only while it has no successful build or
+publication receipt. Submit that same version with the complete iteration's title,
+changes and triggers, including the repair; this replaces the pending changelog
+entry rather than appending another version. Do not submit only the repair and
+lose the original delivery description. Once built or published, the version is
+sealed and further formal changes require an increase. Intermediate batches
 do not each receive a version.
 
 The workspace AGENTS.md and version-writing instructions require each entry's
@@ -85,7 +108,10 @@ actor:
 ```
 
 `actor` is optional; omit it to use local Git `user.name` when configured. Use a
-Lark display name only when explicitly known from the conversation. Trigger kinds
+Lark display name only when explicitly known from the conversation. Amending an
+unbuilt entry preserves its actor unless a replacement is explicitly supplied.
+If neither the conversation nor Git identifies the user, omit the actor and
+mention the missing identity in the delivery summary; never guess it. Trigger kinds
 are `initial`, `note`, `sessions`, `mr`, `module`, `document`, `navigation`,
 `repair`, `dist`, and `other`. Agent-written fields describe the actual diff and
 conversation; they must not expose credentials, raw transcripts or private IDs.

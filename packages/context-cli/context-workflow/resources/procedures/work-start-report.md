@@ -38,9 +38,13 @@ confirmed/provisional topics, unchecked ranges and delivery implications. If
 document acquisition is blocked, ask whether a limited first scope is acceptable;
 do not silently omit supplied documents or claim full coverage from partial scans.
 
-Small, clearly scoped revisions, notes and conversation summaries can use a short
-handling proposal. Do not invent an independent planning phase to fill a report;
-do not use this exception to bypass feedback on a bulk build.
+Small, clearly scoped document tasks, single-module work, revisions, notes and
+conversation summaries can use a short handling proposal: which related articles
+to add or revise, their reading position and the intended result. A module with
+several reader topics may need more planning within that module, not a redesign
+of the whole knowledge base. Do not invent an independent investigation, batch
+hierarchy or dependency analysis to fill a report. This changes report depth, not
+the current Route's approval boundary.
 
 ## Explain the proposed work
 
@@ -60,12 +64,14 @@ per-module ownership tables. One module may use several Indexers and one article
 may combine their materials. Optional specialist absence does not exclude sources.
 
 Reuse selected KB, website and LLMS delivery channels. For website delivery,
-include a compact proposed menu and layout: top-level groups, a representative
+for a new site or requested navigation redesign, include a compact proposed menu and layout: top-level groups, a representative
 left menu, article chapters and on-page outline. Explain mobile behavior briefly
 when relevant. This is a sketch, not a built site; do not create empty articles,
 temporary websites or promise deployment. Link the existing requirement or
 workspace configuration rather than creating a permanent report identity.
 Estimate timing or savings only when supported by measurements and conditions.
+For a small addition to an existing site, describe only the affected reading
+position; reuse its layout and delivery choices instead of proposing them again.
 
 ## Mandatory feedback
 

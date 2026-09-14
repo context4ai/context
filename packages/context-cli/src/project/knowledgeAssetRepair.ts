@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { parseDocumentSourceLocator } from "@c4a/extract";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
@@ -12,7 +12,7 @@ import {
   type PreparedKnowledgeAsset,
   unprojectedSourceAssetLinks,
 } from "./knowledgeAssets.js";
-import { isKnowledgeAssetPath, walkApprovedMarkdown } from "./verifyProjectFiles.js";
+import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { readApprovedKnowledgeMetadataIndex } from "./approvedKnowledgeMetadata.js";
 import { validateArticleStructureEntries } from "@c4a/context";
 import {
@@ -163,9 +163,8 @@ export async function repairApprovedKnowledgeAssetProjections(
   projectRoot: string,
 ): Promise<KnowledgeAssetRepairResult> {
   const affected: Array<{ relPath: string; absPath: string; content: string }> = [];
-  for (const file of await walkApprovedMarkdown(join(projectRoot, "knowledge"))) {
-    if (isKnowledgeAssetPath(file.relPath)) continue;
-    const content = await readFile(file.absPath, "utf8");
+  for (const file of await readApprovedMarkdownFiles(projectRoot)) {
+    const content = file.content;
     if (unprojectedSourceAssetLinks(content).length > 0) affected.push({ ...file, content });
   }
   if (affected.length === 0) {

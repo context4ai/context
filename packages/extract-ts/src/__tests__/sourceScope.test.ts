@@ -23,6 +23,18 @@ function scopedFs(files: Record<string, string>) {
 }
 
 describe("manifest-free TypeScript/JavaScript source scopes", () => {
+  test("reuses source reads within extraction but observes changes on the next call", async () => {
+    const files = { "widget.ts": "export const Before = 1;" };
+    const { fs, reads } = scopedFs(files);
+    const plugin = new TypeScriptPlugin();
+    await plugin.extractSymbolsInScope([], ["widget.ts"], fs);
+    expect(reads.filter(path => path === "widget.ts")).toHaveLength(1);
+    files["widget.ts"] = "export const After = 2;";
+    const next = await plugin.extractSymbolsInScope([], ["widget.ts"], fs);
+    expect(reads.filter(path => path === "widget.ts")).toHaveLength(2);
+    expect(next.symbols.some(symbol => symbol.name === "After")).toBe(true);
+    expect(next.symbols.some(symbol => symbol.name === "Before")).toBe(false);
+  });
   test.each(["\n", "\r\n"])("keeps physical source extent separate from non-empty LOC (%j)", async (newline) => {
     const source = ["export const start = 1;", "", "", "export const tail = 2;", ""].join(newline);
     const files = { "index.ts": source };

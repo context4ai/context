@@ -16,7 +16,7 @@ import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSources.js";
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 
-export const PACKAGE_SITE_VERSION = "vitepress-site-v20-llms-utf8";
+export const PACKAGE_SITE_VERSION = "vitepress-site-v22-llms-new-tab";
 const require = createRequire(import.meta.url);
 export interface SitePage {
   artifact_ref?: string;
@@ -178,10 +178,11 @@ export async function writePackageSite(input: {
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: options.lang ?? "en-US", base,
       appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: `context-theme:${pkg.name}:${base}` },
       ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: { build: { chunkSizeWarningLimit: 2000 } },
-      themeConfig: { ...siteThemeLabels(options.lang ?? "en-US"), contextUpdated: historyDate,
+      themeConfig: { ...siteThemeLabels("zh"), contextUpdated: historyDate,
+        contextUiLabels: { zh: siteThemeLabels("zh"), en: siteThemeLabels("en") },
         contextSections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
         sidebar: sections[0]?.items ?? [],
-        nav: [...sections.map(section => ({ text: section.title, link: section.href })), { text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }],
+        nav: [...sections.map(section => ({ text: section.title, link: section.href })), { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
       } };
     await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
     await mkdir(join(temporary, "pages"), { recursive: true });

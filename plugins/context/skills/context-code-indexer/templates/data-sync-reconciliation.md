@@ -52,16 +52,14 @@ Examples include application-to-client-to-endpoint, endpoint-to-service-to-
 repository, producer-to-event-to-consumer, command-to-remote-operation, and
 plugin-host-to-provider.
 
-## Partition and ownership rule
+## Article scope and source reuse
 
-A flow normally cites sources already owned by module units. Give the flow one
-stable article identity and keep module inventory ownership unchanged; its author
-workset may reference the exact cross-source evidence views but must not claim
-the same inventory members as a second primary owner.
+A flow may reuse sources cited by module articles. Give the flow one stable
+article identity and use the current task's authorized sources. No primary
+owner or inventory membership is required; avoid duplicating existing prose.
 
-The aggregate candidate may cite evidence from every participating source. It
-must cover all Route-reported structural probes selected by the flow profile;
-one page may cover several probes when it carries each exact evidence locator.
+The article may cite every authorized participating source. Cover the reader
+question and relevant handoffs defined in the task brief.
 Explain operations and handoffs in reader prose, links or diagrams, citing the
 actual source regions for each fragment (at most three locations per fragment).
 Do not emit graph edges, classify nodes or create a relationship ledger.

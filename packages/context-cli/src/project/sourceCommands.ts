@@ -34,6 +34,7 @@ import { readYamlOrJsonInput } from "./payloadInput.js";
 import { registerSourceBatch } from "./sourceBatchRegistration.js";
 import { removeProjectSource } from "./sourceRemoval.js";
 import { findContextProjectRoot } from "./workspace.js";
+import { configureRegisteredSources, type ConfigurationSource } from "./sourceProjectConfiguration.js";
 
 type DataFormat = "json" | "yaml" | "table";
 
@@ -275,6 +276,7 @@ export function registerProjectSourceCommands(program: Command): void {
   sourceAdd.command("batch [date]")
     .description("Register multiple repo, file, or Lark modules under one YYYYMMDD batch")
     .requiredOption("--input <file>", "YAML/JSON payload path, or - for stdin")
+    .option("--configure", "Also declare these sources and default capture phases in a simple src/index.ts; does not capture")
     .option("--format <format>", "output format: json | yaml | table", "table")
     .addHelpText("after", `
 Payload example:
@@ -315,11 +317,18 @@ report shown above. A direct maintenance call outside that Route may omit it.
         namespace: sourceNamespace.name,
         payload,
       });
+      if (options.configure) {
+        const entries = result.registered as Array<{ type: ConfigurationSource["type"]; module: string }>;
+        result.configuration = await configureRegisteredSources(projectRoot, entries.map(item => ({
+          type: item.type, name: `${sourceNamespace.name}/${item.module}`,
+        })));
+      }
       writeFormatted(result, format);
     });
 
   sourceAdd.command("repo [date]")
     .description("Add or update a repo module under a valid YYYYMMDD batch in sources/repo/index.yaml")
+    .option("--configure", "Also select this source in a simple src/index.ts; does not capture")
     .requiredOption("--module <name>", "concrete repo/package module name")
     .option("--remote <url>", "repo remote URL; inferred from local origin when omitted")
     .option("--ref <sha>", "pinned commit/ref; inferred from local HEAD when omitted")
@@ -348,11 +357,13 @@ report shown above. A direct maintenance call outside that Route may omit it.
         ...(remote !== undefined ? { remote } : {}),
         ...(ref !== undefined ? { ref } : {}),
       });
-      writeFormatted(result, format);
+      writeFormatted(options.configure ? { ...result, configuration: await configureRegisteredSources(projectRoot,
+        [{ type: "repo", name: `${sourceNamespace.name}/${module}` }]) } : result, format);
     });
 
   sourceAdd.command("file [date]")
     .description("Register a file module under a YYYYMMDD batch in sources/file/index.yaml without reading contents")
+    .option("--configure", "Also declare this source and default capture in a simple src/index.ts; does not capture")
     .option("--module <name>", "document module name; derived from --local when omitted")
     .option("--local <path>", "local Markdown directory or file path used as a refresh hint")
     .option("--include <glob>", "Markdown include glob relative to --local; repeatable", collectRepeated, undefined)
@@ -382,11 +393,13 @@ report shown above. A direct maintenance call outside that Route may omit it.
         local,
         ...(include !== undefined ? { include } : {}),
       });
-      writeFormatted(result, format);
+      writeFormatted(options.configure ? { ...result, configuration: await configureRegisteredSources(projectRoot,
+        [{ type: "file", name: sourceName }]) } : result, format);
     });
 
   sourceAdd.command("lark [date]")
     .description("Register a Lark document module under a YYYYMMDD batch without fetching contents")
+    .option("--configure", "Also declare this source and default capture in a simple src/index.ts; does not capture")
     .option("--module <name>", "document module name; derived from the URL or token when omitted")
     .option("--url <url>", "Lark/Feishu document or wiki URL")
     .option("--doc-token <token>", "Lark document identity token")
@@ -420,7 +433,8 @@ report shown above. A direct maintenance call outside that Route may omit it.
         ...(wikiToken !== undefined ? { wikiToken } : {}),
         ...(title !== undefined ? { title } : {}),
       });
-      writeFormatted(result, format);
+      writeFormatted(options.configure ? { ...result, configuration: await configureRegisteredSources(projectRoot,
+        [{ type: "lark", name: sourceName }]) } : result, format);
     });
 
   source.command("ensure [name]")

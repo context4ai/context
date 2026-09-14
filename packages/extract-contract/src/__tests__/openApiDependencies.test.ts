@@ -19,3 +19,10 @@ test("OpenAPI dependency discovery rejects remote, escaping and rebased referenc
   expect(() => openApiSourceDependencies("api.json", "{ broken")).toThrow();
   expect(openApiSourceDependencies("schema.graphql", "type Query { name: String }")).toEqual([]);
 });
+
+test("relative dot segments resolve inside the captured root, never outside it", () => {
+  expect(openApiSourceDependencies("contracts/api.json", JSON.stringify({
+    allOf: [{ $ref: "./types.json#/User" }, { $ref: "../shared.json#/Item" }],
+  }))).toEqual(["contracts/types.json", "shared.json"]);
+  expect(() => openApiSourceDependencies("contracts/api.json", '{"$ref":"../../outside.json"}')).toThrow("scope");
+});
