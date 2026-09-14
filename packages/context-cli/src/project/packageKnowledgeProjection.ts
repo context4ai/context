@@ -203,7 +203,7 @@ export function projectPackageKnowledgeMarkdown(content: string): string {
     .replace(CONTEXT_METADATA_BLOCK_RE, "")
     .replace(CONTEXT_SECTION_OPEN_RE, opening => {
       const key = /\bid="([a-zA-Z0-9_-]+)"/u.exec(opening)?.[1];
-      return key === undefined ? "" : `<a id="section-${encodeURIComponent(key)}"></a>\n\n`;
+      return key === undefined ? "" : `\n\n<a id="section-${encodeURIComponent(key)}"></a>\n\n`;
     })
     .replace(CONTEXT_SECTION_CLOSE_RE, "\n")
     .replace(LARK_RESOURCE_LOCATOR_COMMENT_RE, "")

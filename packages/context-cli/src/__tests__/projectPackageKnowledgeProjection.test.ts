@@ -13,6 +13,20 @@ function frontmatter(content: string): Record<string, unknown> {
 }
 
 describe("package knowledge consumer projection", () => {
+  test("separates section anchors from adjacent prose for every source kind", () => {
+    for (const source of ["note", "sessions", "repo", "lark"]) {
+      const projected = projectPackageKnowledgeMarkdown([
+        "---", "title: Guide", "---", "", "# Guide", "",
+        `<!-- context:section id="first" source_ref="${source}:sample" -->`,
+        "## First", "", "First paragraph.", "<!-- /context:section -->", "",
+        '<!-- context:section id="second" -->', "## Second", "", "Second paragraph.",
+        "<!-- /context:section -->",
+      ].join("\n"));
+      expect(projected).toMatch(/First paragraph\.\n\n+<a id="section-second"><\/a>\n\n## Second/u);
+      expect(projected).not.toContain("context:section");
+      expect(projectPackageKnowledgeMarkdown(projected)).toBe(projected);
+    }
+  });
   test("preserves an opening title behind a projected section anchor", () => {
     const projected = projectPackageKnowledgeMarkdown([
       "---", "title: Guide", "---", "",

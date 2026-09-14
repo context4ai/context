@@ -60,7 +60,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     for (const page of mapping.pages) {
       const path = join(root, pkg.outDir, page.package_path);
       await mkdir(join(path, ".."), { recursive: true });
-      await writeFile(path, `---\nhead: [[script, {}, "unsafe-script"]]\n---\n# ${page.title}\n\n<a id="section-entry"></a>\n\n## Entry\n\n{{ window.alert('unsafe') }}\n\n<script>unsafe()</script>\n\n| A | B |\n|---|---|\n| { x?: number; y?: number; } | 2 |\n\n\`\`\`mermaid\nflowchart LR\nA-->B\n\`\`\`\n\n![Figure](../../../others/assets/example.svg)\n`);
+      await writeFile(path, `---\nhead: [[script, {}, "unsafe-script"]]\n---\n# ${page.title}\n\nParagraph before anchor.\n<a id="section-entry"></a>\n\n## Entry\n\n{{ window.alert('unsafe') }}\n\n<script>unsafe()</script>\n\n| A | B |\n|---|---|\n| { x?: number; y?: number; } | 2 |\n\n\`\`\`mermaid\nflowchart LR\nA-->B\n\`\`\`\n\n![Figure](../../../others/assets/example.svg)\n`);
     }
     await mkdir(join(root, pkg.outDir, "others/assets"), { recursive: true });
     await writeFile(join(root, pkg.outDir, "others/assets/example.svg"), '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>');
@@ -129,7 +129,9 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(home.indexOf("Browse knowledge")).toBeLessThan(home.indexOf("Project workspace"));
     expect(home).toContain('"light"');
     expect(home).toContain("context-theme:");
-    expect(article).toContain('id="section-entry"');
+    expect(article).toContain('<a id="section-entry"></a>');
+    expect(article).not.toContain('&lt;a id=');
+    expect(article).toContain('<p>Paragraph before anchor.</p>');
     expect(article).toContain("<table");
     expect(article).toContain("x?: number;");
     expect(article).not.toContain("<script>unsafe()");

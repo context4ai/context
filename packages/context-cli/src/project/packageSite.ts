@@ -17,7 +17,7 @@ import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSour
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 
-export const PACKAGE_SITE_VERSION = "vitepress-site-v41-home-safe-spacing";
+export const PACKAGE_SITE_VERSION = "vitepress-site-v42-section-anchor-blocks";
 const require = createRequire(import.meta.url);
 export interface SitePage {
   artifact_ref?: string;
