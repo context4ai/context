@@ -1,4 +1,5 @@
 import { readKnowledgeMap } from "./knowledgeMap.js";
+import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { assertProductionDeliveryReady, finishProductionDelivery } from "./productionDelivery.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -123,7 +124,6 @@ interface PackageBuildManifest {
   linkWarnings: PackageBuildLinkWarning[];
 }
 
-const KNOWLEDGE_ROOT = "knowledge";
 const PACKAGE_FINGERPRINT_ROOT = join(".tmp", "context-runtime", "packages");
 const PACKAGE_BUILDER_PROTOCOL_VERSION = "v23-sibling-site-output";
 
@@ -156,14 +156,14 @@ function packageFingerprintPath(projectRoot: string, pkg: PackageDefinition): st
 export async function listApprovedKnowledge(projectRoot: string): Promise<ApprovedKnowledgeFile[]> {
   const metadata = await readApprovedKnowledgeMetadataIndex(projectRoot);
   const articles = new Map(validateArticleStructureEntries(metadata.structure?.articles ?? []).map(article => [article.path, article]));
-  const files = await walkPackageFiles(join(projectRoot, KNOWLEDGE_ROOT));
+  const files = await readApprovedMarkdownFiles(projectRoot);
   const knowledge = await Promise.all(files
     .filter((file) => isApprovedKnowledgeMarkdownPath(file.relPath) && !file.relPath.startsWith("assets/"))
     .map(async (file) => ({
       ...file,
       article: articles.get(file.relPath),
       content: hydrateApprovedKnowledgeMarkdown({
-        content: await readFile(file.absPath, "utf8"),
+        content: file.content,
         relPath: file.relPath,
         metadata,
       }),
@@ -506,7 +506,6 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     const selected = selectPackageKnowledge(approved, pkg);
     const templateFiles = await listTemplateFiles(projectRoot, pkg.template.path);
     validatePackageTemplateContract(pkg, templateFiles);
-    const bundle = await packageKnowledgeBundle(projectRoot, pkg, selected);
     const knowledgeTimestamp = approvedKnowledgeTimestamp(selected);
     const structure = packageScopedKnowledgeStructure({
       selected,
@@ -541,6 +540,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         continue;
       }
     }
+    const bundle = await packageKnowledgeBundle(projectRoot, pkg, selected);
     const knowledgeGroups = knowledgeOutputGroups(pkg, selected);
     const previousOutput = await packageOutputSnapshot(
       projectRoot,
@@ -614,8 +614,8 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         ...await inspectPackageMarkdownDirectory(join(projectRoot, stagedPkg.outDir))];
       return { ...writtenKnowledge, linkWarnings };
     });
-    const output = await packageOutputFingerprint(projectRoot, pkg);
     const currentOutput = await packageOutputSnapshot(projectRoot, pkg, knowledgeGroups);
+    const output = await packageOutputFingerprint(projectRoot, pkg, currentOutput);
     const changes = packageBuildChanges(previousOutput, currentOutput);
     const changedFiles = changes.added.length + changes.updated.length + changes.removed.length;
     await writePackageFingerprint({

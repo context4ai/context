@@ -17,6 +17,7 @@ export function normalizedVirtualPath(path: string): string {
 
 function sourceFileSystem(root: string, tracked: readonly string[], texts: Record<string, string>, readSource?: (path: string) => Promise<string>) {
   const files = new Set(tracked.map(normalizedVirtualPath));
+  const contents = new Map(Object.entries(texts).map(([path, text]) => [normalizedVirtualPath(path), text]));
   const directories = new Map<string, Set<string>>([[".", new Set()]]);
   for (const file of files) {
     const parts = file.split("/");
@@ -42,7 +43,7 @@ function sourceFileSystem(root: string, tracked: readonly string[], texts: Recor
   return {
     readFile: async (path: string) => {
       const normalized = assertTrackedFile(path);
-      return Object.hasOwn(texts, normalized) ? texts[normalized]!
+      return contents.has(normalized) ? contents.get(normalized)!
         : readSource ? readSource(normalized) : readFile(safeCodeSourcePath(root, normalized), "utf8");
     },
     async readdir(path: string) {
@@ -98,7 +99,7 @@ export async function prepareCodeAnalysisInput(input: {
       // Public identity belongs to the registered package, not the reading
       // batch. Trace its real entries but only analyze selected declarations.
       detected.entries,
-      input.scopedPaths,
+      input.scopedPaths.map(normalizedVirtualPath),
       fs,
     );
   }
@@ -119,8 +120,8 @@ export async function prepareCodeAnalysisInput(input: {
       content: { raw: manifestContent },
     };
     const detected = await plugin.detectEntries(manifest, fs);
-    const allowed = new Set(input.scopedPaths);
-    return plugin.extractSymbols(detected.entries.filter((entry) => allowed.has(entry.path)), fs);
+    const allowed = new Set(input.scopedPaths.map(normalizedVirtualPath));
+    return plugin.extractSymbols(detected.entries.filter((entry) => allowed.has(normalizedVirtualPath(entry.path))), fs);
   }
   if (input.capability === "parser.rush") {
     const indexRushWorkspace = input.loadedModule.indexRushWorkspace;

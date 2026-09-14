@@ -12,7 +12,7 @@ imports and component contracts. A web application that happens to contain
 shared components remains a `web-application` unless the component surface is
 published as an independent consumer boundary.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 
@@ -30,10 +30,10 @@ Treat stories and examples as usage evidence, not as authority for unsupported
 props or behavior. When generated declarations disagree with source, identify
 the authoritative source and record the gap.
 
-When the Authorized Workset View supplies a public declaration together with
+When the task's authorized sources supply a public declaration together with
 structured props, events, defaults, variants, maintained examples, or source
-roles, the corresponding reader section must consume those facts or record an
-explicit supported omission/material-gap disposition. Do not replace available
+roles, use the relevant facts in the reader section and explain essential
+missing material. Do not replace available
 contract facts with a generic statement about the component directory. A component group
 without a reader-authorizing public declaration remains catalog-only and does
 not produce an empty component page. Library and system subjects may instead be

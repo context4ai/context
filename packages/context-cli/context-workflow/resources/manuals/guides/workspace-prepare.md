@@ -42,6 +42,23 @@ reports, unique material, unknown files and modified checkouts unless their
 specific loss is authorized. Do not delete locks, transaction records or active
 tool directories. Empty task directories can remain.
 
+Prefer cleanup after successful delivery, not immediately after close: version
+recording, build and retries may still need the current task. Completed production
+drafts and Review state are removed by delivery cleanup. Do not invoke
+`task resume` merely to make a completed workspace advance; it starts a new task
+and requires an actual new user request.
+
+Keep repository checkouts referenced by registered sources, including fixed
+commits: removing them can force a costly clone before the next update. Keep
+pending telemetry and source-region baselines; losing the latter reduces the
+ability to distinguish relocated text from changed text. Debug and historical
+views may be archived or removed after diagnosis when no operation is active,
+but unknown Agent files are not automatically disposable.
+
+After all scratch state is lost, an existing build receipt defaults the workspace
+to waiting for an explicit new task. This does not restore lost drafts or prove
+sources and outputs are current. Use the recovery checks below before resuming.
+
 ## Restore usable sources
 
 For repositories, run `context source recovery-plan --format json` and read

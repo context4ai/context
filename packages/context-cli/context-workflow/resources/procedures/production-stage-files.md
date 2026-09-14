@@ -15,6 +15,20 @@ name useful reading scope; module labels do not imply directory permissions.
 No module mapping file, version receipt or article-level scope fields are needed.
 Read related code as needed within the user's authorized sources.
 
+Keep planning proportional to this request. For a short document task or one
+bounded module, decide whether to add or revise related articles and their reading
+position; do not redesign unrelated modules or the whole site. Start with relevant
+existing topics, not every navigation page. Expand investigation when the material
+requires it, not to fill a planning template. One batch is sufficient unless real
+dependencies or useful parallel work call for more. Source count is not a page
+count or a CLI threshold.
+
+During an approved stage, use the existing plan-amendment path for in-scope
+additions and preserve completed work. Do not restart planning solely because
+another article is ready to write. Keep remaining investigation explicit; a small
+current task does not mean other authorized work is finished. New source or purpose
+authorization still follows the current Route.
+
 Write results under the returned Agent directory. All submission paths are
 relative to that stage directory, even when the manifest is in `submissions/`.
 Copy the CLI's submission template, keep completed tasks only, and keep each

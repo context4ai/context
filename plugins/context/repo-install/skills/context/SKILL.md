@@ -91,7 +91,7 @@ present an unresolved draft as the report that authorizes production. The report
 or checklist is task guidance, not a source unless the user explicitly asks to
 ingest it. Before the complete report has been presented, do not write a
 source-registration payload, start capture or extraction, configure Indexers,
-or enter Partition/Author work. A
+or begin knowledge writing. A
 managed-mode choice does not waive this first reading opportunity. After feedback,
 use the exact current Route and include its work-start report reference in the
 source batch payload. Existing workspace updates follow their current update Route
@@ -117,9 +117,16 @@ Once the activation condition is met, run:
 context entry [project-dir] --language <language> --format json
 ```
 
-Use the requested language, otherwise `zh-CN` for Chinese or `en` for English.
-Pass `project-dir`, `--name`, `--dev` and `--debug` only when requested. Add
-`--managed` only with explicit fully managed authorization in this conversation.
+Use the requested output language, otherwise `zh-CN` for Chinese or `en` for
+English; explain actions in the conversation language from the first reply.
+Preserve the user's requested project directory, name and initialization flags
+in the first entry command. Normalize conversational `-dev` to `--dev` (not a
+CLI alias). `--dev` selects the local SDK instead of a registry version;
+`--debug` enables diagnostics independently. Neither implies the other.
+Pass these flags only when requested; add `--managed` only with explicit fully
+managed authorization. For a Chinese request for local SDK, debug and managed
+initialization, use `context entry context/ --dev --debug --language zh-CN
+--managed --format json` as one command, then preserve its returned init flags.
 
 Follow the returned `next_action.command`:
 
@@ -278,9 +285,8 @@ none was returned. A phase-local `next_action` is not a workspace Route.
 If `next_preparation` fails after committed outcomes, execute its recovery
 without resubmitting accepted work. Stage completion is not workspace completion:
 Changed delivery content must finish Review, close and build through their Routes.
-An empty Composer result is a decision not to add derived content, not an API
-regeneration or proof that existing pages meet a later revision request. Do not
-infer maintenance targets from Composer task names or count.
+An empty result does not prove that existing pages meet a later revision request.
+Register the actual maintenance targets rather than inferring them from task names.
 
 When the Graph reports complete, compare the user's original and subsequent
 requests with actual delivered results and registered maintenance targets.
@@ -290,7 +296,7 @@ conversational requests. Continue already authorized outstanding work through th
 normal Context revision/update entry and its fresh Route, respecting existing
 Gates. Do not ask for another "continue" solely because production finished.
 Report a blocker only when a required input, permission or actual entry failure
-prevents progress; do not invent a missing Review/build after an empty Composer.
+prevents progress; do not invent missing work solely because a result is empty.
 
 For an authorized end-to-end task, continue while the current Route is actionable
 within that authority. Report batch progress during execution, without ending
@@ -308,74 +314,32 @@ and when the user declined it. Use the commit guide if the user chooses it.
 ## When selecting or customizing Indexers
 
 Read `context.indexer.provider-guide` at the path supplied by the Route and the
-selected Action's instructions. They own the selection schema, layer rules,
-customization ladder, program authorization and upgrade recovery.
-
-Use the supplied requirements and CLI-bundled catalog. Discover relevant
-external Providers only among Host-visible `context-…-indexer…` Skills and read
-their exposed manifest. Host switches and installation channels determine
-availability; the catalog does not override a disabled Skill or a chosen
-business replacement. Do not scan caches, run a discovery preflight, or create
-a second enabled-Skill registry.
-
-Copy bundled Provider identities from the catalog, even if the same version
-is Host-visible. Read only selected Provider guidance. Keep one primary for an
-existing page; supporting note/session material belongs in its evidence/read
-scope, with compatible extension guidance when needed. Source type alone does
-not require a new page. Submit the selection through the Route's
-`complete-current` contract; the CLI validates, resolves and applies it. Follow
-returned Host-resolution and program Gates without calling low-level commands
-as a parallel workflow. Provider finalization consumes its existing input and
-must not resolve or install the Provider again.
+selected Action's instructions. Select relevant available Skills for the actual
+materials and reader task, respecting disabled Skills and explicit business
+replacements. Record usage through the current planning schema; do not reconstruct
+a separate Provider selection, primary-owner or finalization workflow. Read only
+selected guidance; do not scan plugin caches or create another Skill registry.
+Supporting notes or sessions can enrich an existing article; a different source
+type alone does not require another page.
 
 ## Progress reporting format
 
-For production progress updates, use two bold lines in this order. Describe
-the actual stage when counters are unavailable; include counts only when supplied:
+For production updates, use two bold lines: overall progress, then the current
+action. Use the conversation language. For example, when supported by the receipt:
 
-**[总体进展：已交付 33/125 页]**
-**[当前进展：已规划 3/8 项]**
+**[总体进展：已交付 10 页；本轮写作已接收 3/5 项]**
+**[当前进展：正在审核本轮文章]**
 
-Use CLI `progress.scopes` (or `indexerProgress.scopes` in status) as the
-single source for progress in conversation and reports. It separates:
-- `overall`: delivered pages and cumulative planning for the current Indexer run;
-- `wave`: writing tasks, observed pages and composition for the current wave;
-- `slice`: tasks in the currently active Route slice.
+Use counts and their meanings from the current CLI result. Distinguish accepted
+drafts from delivered pages, and the just-submitted subset from remaining work.
+Do not require older overall/wave/slice fields or reconstruct missing totals.
+Tasks and pages are not interchangeable; revisions do not automatically add pages.
+Before counts exist or after cleanup, describe the actual stage without invented
+ratios or reporting previously delivered pages as zero.
 
-Planning completed counts currently valid accepted tasks, not lifetime effort.
-When overall.planning.needs_recheck is nonzero, report “规划当前有效 X/Y 项；Z 项因任务绑定变化待复核”.
-Do not describe a lower valid count as lost pages or silently restarting from zero.
-The CLI reason identifies binding changes, not proof that source code changed;
-do not invent a more specific cause.
-
-Keep these scopes separate. A wave or pause target never replaces the overall
-scope. Preserve overall planning across Author, Composer and Review transitions.
-Use each counter's `unit`: task means 项/任务, page means 页. A writing task is
-not automatically one page. A null total means 总数待确定, not zero or the
-number of currently prepared tasks. Revisions can overlap delivered pages;
-do not add wave tasks to delivered pages to invent a page total.
-
-Use two bold progress lines. The first combines `overall` and a clearly labelled
-`wave` supplement; the second describes the current action, using `slice` counts
-when available. Internal wave/slice names need not appear in user-facing text. For example, with matching CLI values:
-**[总体进展：已交付 33 页，总页数待确定；规划完成 50/122 项；本轮写作完成 30/30 项]**
-**[当前进展：补充内容检查 0/8 项]**
-
-A completion receipt's `submitted_slice` describes the slice just submitted;
-`progress.scopes.slice` can already describe the next Route. Use the former when
-reporting submission success and the latter when announcing the next slice.
-Never combine their numerators and denominators. A null slice means no active
-Agent task slice, not that the workflow is complete. During Review/build, state
-the returned Route action briefly rather than inventing a slice ratio.
-Before counters exist or after task cleanup, describe the known stage and current
-action instead of repeatedly saying counters are unavailable. For example:
-**[总体进展：正在准备知识工作区]**
-**[当前进展：已读取启动清单，正在整理仓库与文档范围]**
-During review or packaging, name that action rather than a nonexistent slice.
-Do not turn the last wave into the overall scope or report delivery as zero.
-Continue authorized work after an update; only the agreed delivery stop or an
-actual unresolved blocker permits stopping. This format governs progress, not
-answers, review findings or necessary questions.
+Continue authorized work after a progress update. End only at the agreed scope,
+a user pause or an actual unresolved blocker. This format applies to production
+progress, not answers, review findings or necessary questions.
 
 ## Report the actual outcome
 

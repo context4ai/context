@@ -42,6 +42,25 @@ export const extractSymbols = async (
     analysisPaths?: readonly string[];
   },
 ): Promise<ExtractionResult> => {
+  // Export tracing, declaration analysis and contract enrichment share one
+  // immutable source snapshot per extraction, without cross-call stale state.
+  const sourceFs = fs;
+  const texts = new Map<string, Promise<string>>();
+  fs = {
+    exists: path => sourceFs.exists(path),
+    readdir: path => sourceFs.readdir(path),
+    readFile(path) {
+      let pending = texts.get(path);
+      if (!pending) {
+        pending = sourceFs.readFile(path);
+        texts.set(path, pending);
+      }
+      return pending;
+    },
+    async readJson<T>(path: string): Promise<T> {
+      return JSON.parse(await this.readFile(path)) as T;
+    },
+  };
   const resolver = await loadTsConfigPathResolver(fs);
   const exportedSymbols = [];
   const internalSymbols = [];

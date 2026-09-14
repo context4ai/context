@@ -136,7 +136,8 @@ async function collectProjectStatusSnapshotInternal(
   // just to tell the caller to start a new task. Explicit Verify and every
   // delivery command continue to inspect their actual inputs.
   const authoring = production && !production.delivery &&
-    dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended";
+    (dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended" ||
+      (draftStatus.count > 0 && draftStatus.diagnostics.length === 0));
   const deferDeliveryChecks = !maintenance && !localRevision && !localUpdate && !localRollback &&
     ((taskPreparation === "cleared" && !production) || !!authoring);
   const collectionsWithPages = new Set<string>();

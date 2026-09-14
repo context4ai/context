@@ -38,24 +38,18 @@ those mechanical operations or invent state to declare a step complete.
 ## Authoring boundary
 
 `src/index.ts` owns source capture and package output. `src/indexers.yaml` owns
-knowledge requirements and Provider selection. Keep these responsibilities
+long-term reader requirements and authorized sources. Keep these responsibilities
 separate.
 
-Code, Markdown, Note, Sessions and compatible business Providers receive controlled worksets and return typed
-results. They do not write Candidate, Review, `knowledge/`, or `dist/` files.
-Context validates and persists their result before the next action consumes it.
-Initial Provider selection follows the same rule: use the requirements and
-CLI-bundled catalog in the current Action input, return only non-CLI visible
-Skill identities and semantic Indexer entries, and let the CLI perform routing,
-resolution, staging, validation, and atomic registry apply. External resolver
-results and non-allowlisted program decisions resume through subsequent
-`complete-current` Routes; do not invoke the low-level Provider commands.
-For Partition and Author steps, one Route may contain several independent
-`tasks`. Read the shared instructions once, read each task's Authorized Workset
-View, and return one `results[]` item for every task key in that batch. Submit
-the whole batch with the Route's single `context action complete-current`
-command. Use a workspace `.tmp/` JSON or YAML input file for a large payload,
-then submit with `--input <file>`; avoid long JSON through an interactive PTY.
+Code, Markdown, Note, Sessions and custom Indexer Skills guide source investigation
+and writing. Record relevant Skill use in the temporary plan's `indexer_usage`,
+not `src/indexers.yaml`; there is no Provider resolution or registry-apply step.
+Read shared instructions once, then the relevant task materials. Write Markdown
+and reference files in the returned Agent directory and submit the short manifest
+with the current `context action complete-current` command. Completed subsets
+may be submitted without repeating accepted tasks. The CLI validates and persists
+Candidates and owns Review, `knowledge/` and `dist/` writes. Do not fill retired
+workset `results[]` protocols or put full article bodies in command arguments.
 A shortened completion may point to `result_file` and `next_route.file`; read
 them before deciding what was accepted. If preparing the next Route fails,
 keep accepted results and use the supplied refresh action. Retry only tasks

@@ -22,6 +22,7 @@ test("formal changes require increasing versions and typed history; temporary pr
     await mkdir(join(root, "dist")); await writeFile(join(root, "dist/output"), "build");
     expect((await inspectWorkspaceVersion(root)).current).toBe(true);
     await expect(recordWorkspaceVersion(root, input)).rejects.toThrow("diff changed");
+    await writeFile(join(root, ".context-builds.json"), JSON.stringify({version: "0.1.0", packages: []}));
     await writeFile(join(root, "guide.md"), "Corrected content");
     const changed = await inspectWorkspaceVersion(root);
     expect(changed.updated).toEqual(["guide.md"]);
@@ -59,4 +60,37 @@ test("an independent workspace ignored by its parent Git still versions formal c
     await writeFile(join(root, "knowledge/answer.md"), "Corrected answer");
     expect((await inspectWorkspaceVersion(root)).updated).toEqual(["knowledge/answer.md"]);
   } finally { await rm(outer, { recursive: true, force: true }); }
+});
+
+test("unbuilt delivery repairs amend one entry; successful build or publish seals it", async () => {
+  const parent = resolve(".tmp/workspace-version-tests");
+  await mkdir(parent, { recursive: true });
+  for (const receipt of [".context-builds.json", ".context-published.json"]) {
+    const root = await mkdtemp(join(parent, "pending-"));
+    try {
+      await writeFile(join(root, "package.json"), JSON.stringify({version: "0.0.0"}));
+      await writeFile(join(root, "guide.md"), "Initial content");
+      const fields = {version: "0.1.0", title: "Initial delivery", changes: ["Added guide"],
+        triggers: [{kind: "initial", description: "User request"}], actor: {kind: "user" as const, name: "Reader"}};
+      await recordWorkspaceVersion(root, {...fields, expected_digest: (await inspectWorkspaceVersion(root)).expected_digest});
+      for (const content of ["Navigation fixed", "Literal code fixed"]) {
+        await writeFile(join(root, "guide.md"), content);
+        const status = await inspectWorkspaceVersion(root);
+        expect(status.reusable_version).toBe("0.1.0");
+        await recordWorkspaceVersion(root, {...fields, actor: undefined, changes: ["Added guide", content], expected_digest: status.expected_digest});
+        expect((await readWorkspaceChangelog(root))[0]?.actor).toEqual(fields.actor);
+        expect((await readWorkspaceChangelog(root)).map(entry => entry.version)).toEqual(["0.1.0"]);
+        expect((await inspectWorkspaceVersion(root)).current).toBe(true);
+      }
+      await writeFile(join(root, "guide.md"), "Next update");
+      const beforeSeal = await inspectWorkspaceVersion(root);
+      await writeFile(join(root, receipt), JSON.stringify({version: "0.1.0", packages: []}));
+      await expect(recordWorkspaceVersion(root, {...fields, expected_digest: beforeSeal.expected_digest})).rejects.toThrow("diff changed");
+      const sealed = await inspectWorkspaceVersion(root);
+      expect(sealed.reusable_version).toBeNull();
+      await expect(recordWorkspaceVersion(root, {...fields, expected_digest: sealed.expected_digest})).rejects.toThrow("greater");
+      await recordWorkspaceVersion(root, {...fields, version: "0.1.1", expected_digest: sealed.expected_digest});
+      expect((await readWorkspaceChangelog(root)).map(entry => entry.version)).toEqual(["0.1.1", "0.1.0"]);
+    } finally { await rm(root, {recursive: true, force: true}); }
+  }
 });

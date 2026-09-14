@@ -43,18 +43,21 @@ export async function withStagedPackageOutput<T>(
           directory = dirname(directory);
         }
       }
-      for (const file of next) {
-        const output = join(target, file.relPath);
-        const bytes = await readFile(file.absPath);
-        const old = await readFile(output).catch((error: unknown) => {
-          if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-          throw error;
-        });
-        if (old?.equals(bytes)) continue;
-        await mkdir(dirname(output), { recursive: true });
-        // Stage and destination share the project filesystem. Renaming each
-        // completed file prevents readers observing a partially written file.
-        await rename(file.absPath, output);
+      for (let offset = 0; offset < next.length; offset += 8) {
+        const results = await Promise.allSettled(next.slice(offset, offset + 8).map(async file => {
+          const output = join(target, file.relPath);
+          const bytes = await readFile(file.absPath);
+          const old = await readFile(output).catch((error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+            throw error;
+          });
+          if (old?.equals(bytes)) return;
+          await mkdir(dirname(output), { recursive: true });
+          // Stage and destination share the project filesystem. Renaming each
+          // completed file prevents readers observing a partially written file.
+          await rename(file.absPath, output);
+        }));
+        for (const result of results) if (result.status === "rejected") throw result.reason;
       }
     }
     return value;

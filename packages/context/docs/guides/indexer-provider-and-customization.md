@@ -28,7 +28,6 @@ production assignments. For example, replace the source and goals with the
 user's actual scope:
 
 ```yaml
-protocol: context.indexer.registry/v1
 requirements:
   - id: integration-guide
     purpose: Help application developers understand and integrate the system.
@@ -41,7 +40,6 @@ requirements:
     evidence_source_scope:
       targets:
         - source_ref: repo:sample
-indexers: []
 ```
 
 Use registered source identities, not guessed paths or URLs. Keep any confirmed

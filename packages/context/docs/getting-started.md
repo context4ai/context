@@ -17,7 +17,7 @@ Use the dependency-install command returned by initialization if it differs.
 Initialization creates the project configuration, source directories, package
 templates and workspace rules. Read the generated `AGENTS.md`. It does not create
 an empty `src/indexers.yaml`: the later configuration Route supplies its schema
-and asks for the confirmed requirements with `indexers: []`.
+and asks for confirmed `requirements` only, without `protocol` or `indexers` keys.
 
 Run workspace commands inside this initialized directory. Route paths and
 `.tmp/` belong to this workspace, not the surrounding repository.
@@ -27,8 +27,8 @@ Run workspace commands inside this initialized directory. Route paths and
 This example uses a code module and a local documentation directory:
 
 ```bash
-context source add repo 20260901 --module component-lib --local ../component-lib
-context source add file 20260901 --module product-docs --local ../docs
+context source add repo 20260901 --module component-lib --local ../component-lib --configure
+context source add file 20260901 --module product-docs --local ../docs --configure
 ```
 
 Replace the date and paths with the actual inputs. Both commands register a
@@ -40,17 +40,21 @@ Do not exclude content merely because a filename looks old.
 For an authorized Lark document, registration instead looks like:
 
 ```bash
-context source add lark 20260901 --module handbook --doc-token "<actual-token>"
+context source add lark 20260901 --module handbook --doc-token "<actual-token>" --configure
 ```
 
-Use `captureLark()` for that registered document. Notes and conversation summaries
+`--configure` adds explicit source and default capture declarations to a simple
+project entry without fetching content. Existing custom settings are preserved;
+a `manual` configuration result asks for a focused edit, not a registration retry.
+Omit the flag when you only want registration. Notes and conversation summaries
 use `context source import`, without a source registry or capture phase. Read
 [note preparation](guides/note.md) or [sessions preparation](guides/sessions.md)
 for the actual input. Saving them alone does not start knowledge production.
 
 ## 3. Declare capture and output
 
-For the code and local-document example, `src/index.ts` contains:
+The generated source/capture declarations can be combined with the selected output
+configuration. For the code and local-document example, `src/index.ts` contains:
 
 ```ts
 import { captureFile, defineProject, kbPackage, source } from "@c4a/context";
@@ -76,27 +80,26 @@ see [Package Outputs](guides/package-outputs.md) for alternatives. Repo sources
 need no capture phase. For saved text, declare an explicit typed `source()` or
 `allSources()` selection as described in [Project API](reference/project-api.md).
 
-## 4. Follow requirements and Provider selection
+## 4. Plan the requested knowledge
 
 The Agent researches representative material, reuses the user's stated goals,
 and asks about missing information that would change the scope or useful output.
 Fully managed mode does not authorize guessing those answers. For substantial
 new work, the selected workflow provides an opening report under `.tmp/`, with
-scope, Provider choices and the first pages to expect. The Agent invites the user
-to read it before continuing unless that pause was explicitly waived; this is
-conversation coordination, not a new approval record.
+scope, relevant Skills and the first pages to expect. The report requires user
+confirmation before writing, including in managed mode.
 
-The configuration Route supplies the initial registry schema and guide. Declare
-requirements with no selected Indexers, re-read the Route, then submit Provider
-selection through its completion command. The shipped Code, Markdown, Note and
-Sessions Providers share the same lifecycle. A compatible business Provider may
-replace a default; installation alone does not enable it.
+The configuration Route supplies the requirements schema and guide. Record the
+reader purpose and authorized sources in `src/indexers.yaml`. The Agent chooses
+relevant installed Code, Markdown, Note, Sessions or custom Indexer Skills during
+planning; their use is recorded in the temporary plan, not a persistent Provider
+registry. There is no separate Provider selection gate.
 
-Partition organizes the selected material into reader topics. Its task batches
-are planning work, not finished-page deliveries. After the outline is reviewed,
-Author writes complete pages, selected Composers contribute where applicable,
-and the CLI compiles Candidates. Do not create a second knowledge pipeline in
-`src/index.ts`.
+Plan reader topics, reusing related existing articles. Keep small document or
+single-module tasks local; do not redesign the whole workspace. Once the report
+is approved, write Markdown and references in the returned task directories and
+submit their manifest. The CLI creates Candidates. Do not create a second
+knowledge pipeline in `src/index.ts`.
 
 ## 5. Review and deliver pages
 
@@ -109,9 +112,8 @@ Review shows readable titles, paths, summaries and content. Approval applies the
 pages to `knowledge/`; rejection or revision follows the current Route back to
 writing. `close` rebuilds `knowledge/structure.yaml` and verifies the approved
 knowledge without rewriting its prose. Build produces `dist/<package-name>/`.
-The first readable delivery normally contains 1–3 pages, followed by batches of
-30–50 pages or a smaller remaining tail. Each delivery completes review, close
-and build before continuing. These page counts do not count Partition tasks.
+Delivery scope follows the agreed task and current Route, not fixed page-count
+waves. Each delivery completes review, close and build before continuing.
 
 ## 6. Continue or update
 
@@ -133,8 +135,8 @@ explains their inputs, same-task adjustment and explicit rollback.
 
 - Fix a missing or stale source through the source commands returned by the Route.
 - Fix capture and output configuration in `src/index.ts`.
-- Fix requirements or Provider selection through the current configuration or
-  proposal Route; use its supplied schema rather than guessing payload fields.
+- Fix requirements through the current configuration Route; use its supplied
+  schema rather than adding Skill selections to the requirements file.
 - Correct page content through revision and Review. Change Provider guidance when
   the same writing problem affects future pages.
 - Keep temporary input files under this workspace's `.tmp/`. Never use `dist/`

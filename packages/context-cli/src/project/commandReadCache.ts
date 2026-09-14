@@ -1,6 +1,6 @@
 import { recordContextDebugPerformance, currentDebugProjectRoot } from "./debugTrace.js";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 interface CachedRead {
@@ -10,6 +10,14 @@ interface CachedRead {
 
 const commandReads = new AsyncLocalStorage<Map<string, CachedRead>>();
 const MAX_READS = 64;
+
+/** Cache one directory listing, never the entire subtree. Every traversal
+ * checks each child directory so nested additions/removals remain visible. */
+export async function readCommandDirectory(path: string) {
+  const entries = await reuseCommandFileRead({ key: "directory-entries", paths: [path],
+    read: () => readdir(path, { withFileTypes: true }) });
+  return [...entries];
+}
 
 /** Memory only, owned by one command. Never retain a previous command's view of
  * mutable workspace files, and never cache failures or missing files. */

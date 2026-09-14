@@ -47,7 +47,9 @@ export function packageMarkdownAnchors(markdown: string): Set<string> {
 /** Inspect final package coordinates, never fetch external links or broaden
  * the package selection. Covers inline and reference-style navigation. */
 export function inspectPackageMarkdownLinks(pages: ReadonlyMap<string, string>): PackageMarkdownLinkWarning[] {
-  const anchors = new Map([...pages].map(([path, markdown]) => [path, packageMarkdownAnchors(markdown)]));
+  // Page existence needs only the inventory. Parse headings only when an actual
+  // fragment link targets the page, and at most once per inspection.
+  const anchors = new Map<string, Set<string>>();
   const warnings: PackageMarkdownLinkWarning[] = [];
   for (const [path, markdown] of pages) {
     for (const link of markdownReaderLinks(markdown)) {
@@ -61,9 +63,15 @@ export function inspectPackageMarkdownLinks(pages: ReadonlyMap<string, string>):
         fragment = hash < 0 ? "" : decodeURIComponent(link.target.slice(hash + 1));
       } catch { continue; }
       if (!/\.md$/iu.test(destination)) continue;
-      const target = anchors.get(destination);
-      if (!target) warnings.push({ code: "package-link-page-missing", path, target: link.target });
-      else if (fragment && !target.has(fragment)) warnings.push({ code: "package-link-anchor-unresolved", path, target: link.target });
+      if (!pages.has(destination)) warnings.push({ code: "package-link-page-missing", path, target: link.target });
+      else if (fragment) {
+        let target = anchors.get(destination);
+        if (!target) {
+          target = packageMarkdownAnchors(pages.get(destination)!);
+          anchors.set(destination, target);
+        }
+        if (!target.has(fragment)) warnings.push({ code: "package-link-anchor-unresolved", path, target: link.target });
+      }
     }
   }
   return warnings;

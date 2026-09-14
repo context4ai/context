@@ -25,6 +25,9 @@ for (const retainedMarker of [false, true]) test(`new production uses long-term 
       await mkdir(join(root, ".tmp/context-runtime"), { recursive: true });
       await writeFile(join(root, TASK_PREPARATION_PATH), JSON.stringify(taskPreparationRecord("cleared")));
       expect((await collectProjectStatus(root)).workflow.current?.node).toBe("reopen-cleared-task");
+    } else {
+      expect(await readTaskPreparation(root)).toBeUndefined();
+      expect((await collectProjectStatus(root)).workflow.current?.node).toBe("prepare-production-planning");
     }
     expect((await resumeWorkspaceTask(root)).action).toBe("task-resume-requested");
     expect(await readTaskPreparation(root)).toBe("resume-requested");
@@ -37,6 +40,11 @@ for (const retainedMarker of [false, true]) test(`new production uses long-term 
     expect(stage.indexer_usage).toEqual([]);
     expect(await readCandidateRecords(root)).toEqual([]);
     expect((await resumeWorkspaceTask(root)).action).toBe("task-already-present");
+    expect(await readProductionStage(root)).toEqual(stage);
+    // A prior delivery must not hide a still-present new production stage.
+    await writeFile(join(root, ".context-builds.json"), JSON.stringify({ version: "0.1.0", packages: [] }));
+    await rm(join(root, TASK_PREPARATION_PATH));
+    expect(await readTaskPreparation(root)).toBeUndefined();
     expect(await readProductionStage(root)).toEqual(stage);
     expect(await readFile(join(root, source), "utf8")).toBe(before);
   } finally {

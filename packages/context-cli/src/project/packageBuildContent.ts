@@ -261,26 +261,34 @@ export async function writeSelectedPackageKnowledge(input: {
   const approvedByOutput = new Map([...outputByApproved].map(([approved, output]) => [output, approved]));
   const byPath = new Map(input.files.map(file => [file.relPath, file]));
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
-  for (const projected of projectedPages) {
-    assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
-    const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
-    const rewritten = replaceMarkdownInlineLinkTargets(projected.content, (link) => {
-      for (const [inputPath, outputPath] of delivered.targetByOriginal) {
-        if (link.target === packageMarkdownTarget(projected.pageOutputPath, inputPath)) {
-          return /^https:\/\//u.test(outputPath)
-            ? outputPath
-            : packageMarkdownTarget(projected.pageOutputPath, outputPath);
+  for (let offset = 0; offset < projectedPages.length; offset += 8) {
+    const results = await Promise.allSettled(projectedPages.slice(offset, offset + 8).map(async projected => {
+      assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
+      const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
+      const rewritten = replaceMarkdownInlineLinkTargets(projected.content, (link) => {
+        for (const [inputPath, outputPath] of delivered.targetByOriginal) {
+          if (link.target === packageMarkdownTarget(projected.pageOutputPath, inputPath)) {
+            return /^https:\/\//u.test(outputPath)
+              ? outputPath
+              : packageMarkdownTarget(projected.pageOutputPath, outputPath);
+          }
         }
-      }
-      return undefined;
-    });
-    await mkdir(dirname(outputPath), { recursive: true });
-    const links = projectPackageArticleLinks({ markdown: rewritten, approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
-    linkWarnings.push(...links.warnings);
-    const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
-      key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
-    const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);
-    await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry), "utf8");
+        return undefined;
+      });
+      await mkdir(dirname(outputPath), { recursive: true });
+      const links = projectPackageArticleLinks({ markdown: rewritten, approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
+      const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
+        key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
+      const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);
+      await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry), "utf8");
+      return links.warnings;
+    }));
+    // Finish all temporary writes before propagating a failure. The caller may
+    // then safely discard the stage, without late writes recreating it.
+    for (const result of results) {
+      if (result.status === "rejected") throw result.reason;
+      linkWarnings.push(...result.value);
+    }
   }
   const deliveredAssets = new Map(delivered.assets.map((asset) => [asset.packageRelPath, asset]));
   for (const asset of deliveredAssets.values()) {

@@ -11,7 +11,7 @@ executables, generators, and command-driven plugin hosts. A build script used
 only internally does not need a CLI knowledge unit unless it is a supported
 operator or contributor surface.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 

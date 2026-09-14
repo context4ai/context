@@ -9,9 +9,30 @@ mediaType: text/markdown
 At completed-scope delivery, follow the version-recording Route. The coordinator
 writes the semantic changelog from formal diffs and the conversation, including
 the triggering source and an explicitly known user (Git name is the default).
+Pass `actor` explicitly when the conversation identifies the triggering user,
+including a known Lark display name. If Git has no name and the conversation
+does not identify the user, leave it absent and mention that in the delivery
+summary; do not infer identity from paths, logins or source authors. Amending
+an unbuilt entry preserves its actor unless an explicit replacement is supplied.
 Record after Close and package/template approval, before the final build, so the
 selected outputs are built with the new version once. Build records hashes without
 increasing versions. Never count temporary progress or a build retry as a change.
+
+For formal repairs before a successful build, use `version inspect`'s
+`reusable_version` when present. Submit the same version and a complete updated
+changelog covering the original work plus repairs, not a repair-only replacement.
+The CLI updates the pending entry in place. A successful build or publication
+seals that version; subsequent changes require an increase. Do not delete build
+or publication receipts to reopen history.
+
+Successful delivery clears completed task drafts. Do not empty `.tmp` or call
+`task resume` as a finalization step. Retain registered repository checkouts,
+source-region baselines and queued logs for reuse; optional historical-cache
+cleanup follows the workspace preparation guide after delivery, not after close.
+
+Website rendering must preserve literal code and template examples. Do not revise
+valid source-grounded JSX or template syntax merely to avoid Vue interpolation;
+report a rendering defect if the website compiler cannot display it literally.
 
 Before an authorized external publication, run `context version publish-check
 --format json`. If `needs_version` is true, inspect with `context version inspect

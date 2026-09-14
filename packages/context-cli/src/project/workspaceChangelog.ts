@@ -85,9 +85,18 @@ export async function inspectWorkspaceVersion(root: string, publishing = false) 
   const removed = Object.keys(previous).filter(path => !(path in files));
   const dist = publishing ? await (await import("./workspacePublishVersion.js")).inspectWorkspacePublish(root) : undefined;
   const changed = added.length + updated.length + removed.length > 0 || dist?.needs_version === true;
-  return { version, previous_version: baseline?.version ?? null, changed,
+  // Existing successful build/publish receipts seal a version. A failed build
+  // writes neither, so its correction may amend the not-yet-delivered entry.
+  const receipts = await Promise.all([".context-builds.json", ".context-published.json"].map(path => optionalWorkspaceText(root, path)));
+  const sealed = receipts.some(raw => {
+    if (raw === undefined) return false;
+    try { const receipt = JSON.parse(raw); return typeof receipt?.version !== "string" || receipt.version === version; }
+    catch { return true; } // Do not infer an unpublished version from damaged receipts.
+  });
+  const reusable_version = baseline?.version === version && entries[0]?.version === version && !sealed ? version : null;
+  return { version, previous_version: baseline?.version ?? null, changed, reusable_version,
     current: !changed && baseline?.version === version && entries[0]?.version === version,
-    expected_digest: hash({ files, version, baseline, entries, dist }), added, updated, removed, files };
+    expected_digest: hash({ files, version, baseline, entries, dist, receipts }), added, updated, removed, files };
 }
 export function renderChangelog(entries: readonly ChangelogEntry[]) {
   const escape = (value: string) => value.replace(/[\\<>\[\]`*_{}]/gu, "\\$&").replace(/[\r\n]/gu, " ");
@@ -107,13 +116,15 @@ export async function recordWorkspaceVersion(root: string, value: unknown) {
     if (!status.changed) throw new TypeError("No formal content changed; build or temporary progress does not require a new version.");
     const previous = status.previous_version ?? status.version;
     const a = previous.split(".").map(Number), b = input.version.split(".").map(Number);
-    if (!(b[0]! > a[0]! || b[0] === a[0] && (b[1]! > a[1]! || b[1] === a[1] && b[2]! > a[2]!))) throw new TypeError("The new SemVer must be greater than the previous workspace version.");
-    let actor = input.actor;
+    const amend = status.reusable_version === input.version;
+    if (!amend && !(b[0]! > a[0]! || b[0] === a[0] && (b[1]! > a[1]! || b[1] === a[1] && b[2]! > a[2]!))) throw new TypeError("The new SemVer must be greater than the previous workspace version; only an unbuilt, unpublished current entry may be amended.");
+    const previousEntries = await readWorkspaceChangelog(root);
+    let actor = input.actor ?? (amend ? previousEntries[0]?.actor : undefined);
     if (!actor) { try { const name = (await exec("git", ["config", "user.name"], { cwd: root })).stdout.trim(); if (name) actor = { name, kind: "git" }; } catch { /* Identity is optional. */ } }
     const { expected_digest: _, ...fields } = input;
     void _;
     const entry = changelogEntrySchema.parse({ ...fields, date: new Date().toISOString(), ...(actor ? { actor } : {}) });
-    const entries = [entry, ...await readWorkspaceChangelog(root)];
+    const entries = [entry, ...(amend ? previousEntries.slice(1) : previousEntries)];
     const manifest = JSON.parse(await readFile(join(root, "package.json"), "utf8")); manifest.version = entry.version;
     const writes = { "package.json": JSON.stringify(manifest, null, 2) + "\n", "changelog.yaml": stringify({ entries }),
       "CHANGELOG.md": renderChangelog(entries), ".context-version.json": JSON.stringify({ version: entry.version, files: status.files }) + "\n" };

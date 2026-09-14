@@ -15,7 +15,7 @@ only browser code. It does
 not automatically cover every package containing UI components; a reusable
 component package is usually `sdk-library`.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 

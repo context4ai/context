@@ -107,7 +107,8 @@ describe("OpenAPI and GraphQL contract catalog", () => {
   test("rejects missing, escaping, remote, nested-base, and missing-pointer refs without partial facts", () => {
     const cases: ReadonlyArray<{ ref: string; code: string; extra?: Readonly<Record<string, string>> }> = [
       { ref: "missing.yaml#/Pet", code: "openapi-ref-missing" },
-      { ref: "../secret.yaml#/Pet", code: "openapi-ref-out-of-scope" },
+      { ref: "../secret.yaml#/Pet", code: "openapi-ref-missing" },
+      { ref: "../../secret.yaml#/Pet", code: "openapi-ref-out-of-scope" },
       { ref: "https://example.test/schema.yaml#/Pet", code: "openapi-ref-out-of-scope" },
       { ref: "parts.yaml#/missing", code: "openapi-ref-pointer-missing", extra: { "api/parts.yaml": "Pet: { type: string }" } },
     ];

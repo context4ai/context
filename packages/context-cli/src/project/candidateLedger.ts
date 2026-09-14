@@ -6,6 +6,7 @@ import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
+import { reuseCommandFileRead } from "./commandReadCache.js";
 
 export { CANDIDATE_LEDGER_FILE } from "./lifecyclePaths.js";
 
@@ -299,10 +300,14 @@ export function parseCandidateLine(line: string, lineNumber: number): CandidateR
 export async function readCandidateRecords(projectRoot: string): Promise<CandidateRecord[]> {
   const filePath = join(projectRoot, CANDIDATE_LEDGER_FILE);
   if (!existsSync(filePath)) return [];
-  const raw = await readFile(filePath, "utf8");
-  return raw.split(/\r?\n/u).flatMap((line, index) =>
-    line.trim().length === 0 ? [] : [parseCandidateLine(line, index + 1)]
-  );
+  const records = await reuseCommandFileRead({ key: "candidate-records", paths: [filePath], read: async () => {
+    const raw = await readFile(filePath, "utf8");
+    return raw.split(/\r?\n/u).flatMap((line, index) =>
+      line.trim().length === 0 ? [] : [parseCandidateLine(line, index + 1)]
+    );
+  } });
+  // Review consumers may edit their own working copy before committing it.
+  return structuredClone(records);
 }
 
 export function candidateRecordsContent(rows: readonly CandidateRecord[]): string | undefined {

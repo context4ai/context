@@ -11,7 +11,7 @@ registration, ownership, dependency, build, or release topology of multiple
 child modules. Do not treat the physical repository as one application merely
 because it has one Git remote.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 

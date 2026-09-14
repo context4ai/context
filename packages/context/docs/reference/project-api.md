@@ -4,8 +4,8 @@ The project has two durable declarations with separate responsibilities:
 
 - `src/index.ts`: source references, document capture, custom non-knowledge
   orchestration, and package outputs.
-- `src/indexers.yaml`: knowledge requirements, Provider selection, target/read
-  scopes, profiles, and Provider customization.
+- `src/indexers.yaml`: long-term reader requirements, authorized target/supporting
+  sources and confirmed exclusions. Skill choices belong to the temporary plan.
 
 Do not describe the same knowledge transformation in both files.
 
@@ -53,6 +53,19 @@ and [knowledge updates](../guides/knowledge-updates.md).
 
 ## Capture phases
 
+For ordinary acquisition, add `--configure` to `context source add repo`, `file`,
+`lark` or `batch`. The command registers the selected inputs and generates explicit
+source references and default document capture phases in `src/index.ts`. It does
+not fetch content, select other registrations or change package outputs.
+
+Generation supports a literal `defineProject` with literal source/phase arrays
+and recognizable SDK calls. Existing capture settings are preserved, repeated
+registration is idempotent, and custom/dynamic entries remain untouched with a
+`configuration.status: manual` hint. Registration is still saved; edit only the
+needed declarations through the normal configuration path. For special processors
+or resource options, configure them before following the capture Route. Omitting
+`--configure` keeps registration-only behavior.
+
 ```ts
 captureFile({ source: docs });
 captureFile({ source: docs, processor: mdxJsonDocs() });
@@ -67,24 +80,27 @@ creating a second capture or knowledge pipeline.
 
 ### Batch capture from the source registry
 
-When all registered Lark documents are intended for this project and share capture
-settings, read the registry once instead of copying its module names into
-`src/index.ts`. For the standard `src/index.ts` entry:
+For documents with shared capture settings, prefer registry-driven configuration
+over repeating source declarations and capture calls, even for two documents.
+Select the task's intended registrations first. The example below assumes all
+registered Lark documents are in scope, with the standard `src/index.ts` entry:
 
 ```ts
 import { fileURLToPath } from "node:url";
 import {
-  allSources, captureLark, defineProject, loadSourcesRegistry, source,
+  captureLark, defineProject, loadSourcesRegistry, source,
 } from "@c4a/context";
 
 const workspaceRoot = fileURLToPath(new URL("../", import.meta.url));
 const registry = await loadSourcesRegistry({ rootDir: workspaceRoot });
+// For a subset, filter registry.larks by the authorized namespace/names here.
 const documents = registry.larks.map(entry =>
   source(entry.name, { type: "lark" }),
 );
 
 export default defineProject({
-  sources: [...allSources("repo"), ...documents],
+  sources: documents,
+  // Shared settings, independent source identities and capture phases.
   phases: documents.map(document => captureLark({ source: document })),
   packages: [],
 });
@@ -109,6 +125,10 @@ Registry loading only reads local registrations; it does not fetch documents.
 - The map declares one phase per document. It does not fetch URLs, change capture
   permissions, or request parallel execution. Run the declared phases through the
   existing CLI flow so each document retains independent refresh and retry behavior.
+  This reduces configuration repetition, not the number of capture operations.
+- Capture boundaries do not dictate article boundaries. During planning and
+  writing, combine related captured documents around reader tasks when useful;
+  do not create one article or a complete production cycle per source by default.
 
 ## `customPhase`
 
@@ -148,18 +168,18 @@ from the package name, if present. Omit it for KB-only output. It accepts `title
 `src/knowledge-map.yaml` independently of KB directories; see
 [Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 
-## Indexer registry
+## Knowledge requirements and Indexer Skills
 
-When this file is absent, the configuration Route supplies the initial schema:
-write confirmed `requirements` with `indexers: []`, then re-evaluate. The Provider
-selection Action supplies its own completion schema; that payload is not the
-configuration file. Subsequent changes use typed proposals and applicable gates. Each selected Indexer binds requirements and scopes to one
-primary Provider, with optional declared layers or composers. Provider code
-must return the current Indexer result protocol; it must not write Candidate,
-knowledge, or Review files directly.
+When `src/indexers.yaml` is absent, the configuration Route supplies its schema.
+Write `requirements` only; do not add `protocol`, `indexers`, Provider selections
+or profiles. Re-evaluate after changing confirmed requirements.
 
-Detailed Provider protocol and customization guidance is selected by the
-current workflow Route when it is needed.
+Installed Indexer Skills guide investigation and writing. Relevant Skill choices
+and optional configuration use `indexer_usage` in the temporary production plan,
+not this durable file. There is no separate Provider selection or resolution gate.
+The Agent writes task drafts and reference files under the returned temporary
+directory; the CLI accepts them and owns Candidate, Review and formal output.
+See [Indexer guidance](../guides/indexer-provider-and-customization.md).
 
 ## Persistent versus runtime state
 

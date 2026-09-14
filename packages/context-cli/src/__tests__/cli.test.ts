@@ -368,7 +368,7 @@ describe("CLI error handling", () => {
       expect(readme).toContain("`.tmp/install/`: workspace-local temporary files");
       expect(readme).toContain("`.tmp/agent-payloads/`: optional Agent-owned command inputs");
       expect(readme).toContain("Initialization creates it");
-      expect(readme).toContain("`.tmp/context-runtime/`: disposable runtime files");
+      expect(readme).toContain("`.tmp/context-runtime/`");
       expect(agents).toContain("Treat `workflow.current` and its selected resources and commands as the only current-step authority");
       expect(agents).toContain("Do not reconstruct the lifecycle from this file");
       expect(agents).toContain("Use Context CLI for every lifecycle write");

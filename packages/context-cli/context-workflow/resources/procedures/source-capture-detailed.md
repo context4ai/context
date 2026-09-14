@@ -121,6 +121,14 @@ manager or version.
 
 ### Route by source boundary
 
+For explicitly selected sources needing ordinary capture settings, use
+`source add ... --configure` (also supported by `source add batch`) to register
+and generate explicit `src/index.ts` declarations in one call. This does not
+capture, select unrelated registrations, or change output settings. Inspect the
+returned configuration result: custom/dynamic entries return `manual` and remain
+unchanged; preserve them and make a focused edit. If special processors/resources
+are needed, configure those before capture. Do not retry generation in a loop.
+
 Before choosing a local Markdown capture route, honor the surrounding task context. Driver documents such as run instructions, handbooks, READMEs, plans, feedback issues, corpus/index/manifests, and batch lists are not Context sources unless the user explicitly asks to ingest them. Capture only ingest targets that are already explicit in the user request; if they are missing, ask one clarification instead of capturing the driver document.
 
 - One or more local `.md` / `.mdx` files or a local documentation folder to ingest →
@@ -147,15 +155,21 @@ Before choosing a local Markdown capture route, honor the surrounding task conte
 - A Lark/Feishu URL, doc token, or wiki token → register one Lark source:
   `context source add lark [YYYYMMDD] --module <module> --url <url>` or the
   matching token flag. Register every requested document under the same date;
-  do not ask for `YYYYMMDD-2`. Declare
+  do not ask for `YYYYMMDD-2`. For multiple documents, use the shared configuration
+  pattern below rather than repeating declarations. For a single document, declare
   `captureLark({ source: source("<date>", "<module>", { type: "lark" }) })`,
-  then run `context run capture:lark:<date>/<module> --format json`.
+  then follow the current Route to execute capture.
 - For a registered document batch with shared capture settings, use
   [Batch capture from the source registry](../manuals/reference/project-api.md#batch-capture-from-the-source-registry)
   to load the registry and generate typed references and phases. Do not transcribe
   the full YAML module list into `src/index.ts`. Select only the intended entries;
   use the entire registry only when all its documents are in scope. Preserve
   existing phases/packages and keep processor or resource exceptions per document.
+  Prefer this pattern even for two documents with the same settings. It reduces
+  configuration repetition, not capture operations or permission boundaries.
+  Independent source identities do not require independent articles: plan and
+  write across related captured documents by reader task, not one production
+  cycle per input document.
 - Mixed local document and Lark document batches are separate sources unless
   the current CLI explicitly offers a combined source contract. Mapping registered
   entries into declarative SDK phases is supported; writing an Agent-side loop

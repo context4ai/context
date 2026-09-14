@@ -214,6 +214,8 @@ describe("0.6.0 project init and source ensure", () => {
         cwd: project,
         projectDir: ".",
         dev: true,
+        debug: true,
+        language: "zh-CN",
       })).rejects.toMatchObject({
         detail: {
           reason_code: "init-target-nonempty",
@@ -222,7 +224,7 @@ describe("0.6.0 project init and source ensure", () => {
           entries_preview: ["existing.txt"],
           next_action: {
             kind: "confirm_nonempty_init",
-            command: "context init . --dev --allow-nonempty",
+            command: "context init . --language zh-CN --dev --debug --allow-nonempty",
             reason_code: "init-target-nonempty-confirmation-required",
           },
         },
@@ -234,12 +236,17 @@ describe("0.6.0 project init and source ensure", () => {
         cwd: project,
         projectDir: ".",
         dev: true,
+        debug: true,
+        language: "zh-CN",
         allowNonempty: true,
       });
       expect(result.projectRoot).toBe(project);
       expect(readFileSync(existingPath, "utf8")).toBe("preserve\n");
       expect(existsSync(join(project, "package.json"))).toBe(true);
       expect(existsSync(join(project, "src", "index.ts"))).toBe(true);
+      const pkg = JSON.parse(readFileSync(join(project, "package.json"), "utf8"));
+      expect(pkg.context).toMatchObject({ language: "zh-CN", debug: true });
+      expect(pkg.dependencies["@c4a/context"]).toStartWith("file:");
     } finally {
       rmSync(project, { recursive: true, force: true });
     }

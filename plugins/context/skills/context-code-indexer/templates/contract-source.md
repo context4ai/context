@@ -11,7 +11,7 @@ IDL, OpenAPI document, schema registry, message contract, or equivalent
 machine-readable interface definition. It defines contracts consumed by other
 modules but does not need to execute or dispatch them itself.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 Generated projections must point back to this authority and remain supporting
 evidence rather than a second contract authority.
 

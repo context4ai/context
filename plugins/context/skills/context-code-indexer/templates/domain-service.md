@@ -11,7 +11,7 @@ reusable service contract and its first-level orchestration. Do not classify a
 directory as a service merely because it contains classes or functions named
 `Service`.
 
-Use the exact profile and Artifact policy variant supplied by the workset.
+Follow the current task.md, sources.md and submission schema.
 
 ## Evidence pass
 
