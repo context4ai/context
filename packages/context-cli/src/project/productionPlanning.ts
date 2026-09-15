@@ -40,7 +40,7 @@ export const productionPlanInputSchema = z.object({
     batch: text, after: z.array(text).default([]), brief: text.optional() }).strict()),
   indexer_usage: z.array(productionIndexerUsageSchema).default([]),
   replaces: z.array(text).default([]),
-  pending_scopes: z.array(text).optional(),
+  pending_scopes: z.array(text).describe("Exact authorized source refs from the current stage scopes; no prose or module descriptions. Omit on amendments to preserve remaining investigation.").optional(),
 }).strict();
 
 /** Read-only bootstrap identity. A missing temporary stage starts new work;
@@ -156,9 +156,9 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (new Set(pendingScopes).size !== pendingScopes.length || pendingScopes.some(scope => !stage.scopes.some(source => source.scope === scope))) {
       throw new TypeError("Pending investigation must name unique authorized stage scopes");
     }
-    if (stage.gaps.some(gap => !pendingScopes.includes(gap.scope))) throw new TypeError("Keep unresolved material gaps in pending_scopes; declaring investigation complete does not resolve unavailable material");
+    if (stage.gaps.some(gap => !pendingScopes.includes(gap.scope))) throw refreshRequired(stage.id, "Keep unresolved material gaps in pending_scopes; restore the source if unavailable, then prepare the current stage to refresh its material snapshot");
     if (plan.articles.some(article => article.sources.some(scope => stage.gaps.some(gap => gap.scope === scope)))) {
-      throw new TypeError("An article requires unavailable material. Resolve that source gap before issuing it; independent source plans may proceed");
+      throw refreshRequired(stage.id, "An article requires unavailable material in the captured stage. Restore the source if needed, then prepare the current stage; independent source plans may proceed");
     }
     for (const source of stage.scopes) if (!stage.gaps.some(gap => gap.scope === source.scope) &&
       await productionSourceBaseline(input.projectRoot, source.scope) !== source.baseline) {

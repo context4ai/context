@@ -4,6 +4,17 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.12 - Unreleased
+
+- Allow partial delivery to enter Review before checking the approved link graph;
+  keep link validation mandatory before close and build.
+- Preserve unfinished production while an independent article revision is
+  reviewed, built, retried or completed without changes.
+- Refuse lifecycle cleanup while production still has unfinished work, even
+  when a separate revision has completed its own Review.
+- Preserve Mermaid diagrams' natural maximum width and use compact navigation
+  through tablet widths to prevent horizontal page overflow.
+
 ## 0.7.9 - 2026-09-11
 
 - Unify website navigation and LLMS ordering around the editable knowledge map,

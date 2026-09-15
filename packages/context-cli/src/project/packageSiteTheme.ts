@@ -508,6 +508,14 @@ export const siteThemeCss = `
   .context-home-section, .context-home-powered { width: min(calc(100% - 36px), 680px); margin-left: auto; margin-right: auto; }
   .context-home-resource-grid { grid-template-columns: 1fr; }
 }
+@media (max-width: 959px) {
+  .VPNavBarMenu { display: none !important; }
+  .VPNavBarHamburger { display: flex !important; }
+  .VPNavScreen { display: block !important; }
+  .VPNavBarSearch { flex: 0 0 48px !important; width: 48px; padding: 0 4px !important; }
+  .VPNavBarSearch #local-search, .VPNavBarSearch .DocSearch-Button { width: 40px; }
+  .VPNavBarSearch .DocSearch-Button-Placeholder, .VPNavBarSearch .DocSearch-Button-Keys { display: none !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   .context-home-map-card, .context-home-resource-card { animation: none; }
   .context-home-map-card:hover, .context-home-resource-card:hover { transform: none; }
@@ -523,7 +531,7 @@ export const siteThemeCss = `
 .context-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .context-sources a:hover { color: var(--vp-c-brand-1); border-color: currentColor; }
 .context-diagram { overflow: auto; padding: 20px; background: var(--vp-c-bg); }
-.context-diagram svg { max-width: none !important; }
+.context-diagram svg { height: auto; }
 .context-diagram .node rect, .context-diagram .node polygon, .context-diagram .node circle,
 .context-diagram .flowchart-link { stroke-width: 1px !important; }
 .context-rendered:not(.context-show-source) pre, .context-rendered:not(.context-show-source) > .copy,

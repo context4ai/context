@@ -122,10 +122,20 @@ export function registerDocumentRevisionCommand(program: Command): void {
       process.stdout.write(`${JSON.stringify(await cancelKnowledgeMaintenance(requireProjectRoot(), id, options.discardRevision))}\n`);
     });
   task.command("adjust").description("Adjust current source/module inputs or reader organization while preserving unrelated work")
-    .requiredOption("--input <file>", "YAML/JSON source scopes with instruction, or knowledge_map; - for stdin")
+    .option("--input <file>", "YAML/JSON source scopes with instruction, or knowledge_map; - for stdin")
+    .option("--schema", "show source adjustment or knowledge map input schema")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { input: string; format: string }) => {
-      if (options.format !== "json") throw new TypeError("--format must be json");
+    .action(async (options: { input?: string; schema?: boolean; format: string }) => {
+      if (options.schema) {
+        const { taskSourceAdjustmentSchema } = await import("../project/taskSourceAdjustment.js");
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
+        writeSchemaOutput(zodToJsonSchema(taskSourceAdjustmentSchema), schemaOutputFormat(options.format));
+        return;
+      }
+      if (options.format !== "json" || !options.input) throw new ContextError(ExitCode.UserError,
+        "Use --input <file> --format json, or --schema.", { category: ErrorCategory.UserInputInvalid,
+          next_action: { command: "context task adjust --schema --format json" } });
       assertActionInputWorkspace(process.cwd(), options.input);
       const value = await readYamlOrJsonInput({ path: options.input, label: "task adjust",
         missingNext: "Provide selected source/module scopes and the adjustment instruction.",

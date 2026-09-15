@@ -11,7 +11,7 @@ import { withProductionFeedback } from "./productionFeedback.js";
 
 /** Select only reviewed formal articles from this stage. This is not Review
  * approval or a delivery authorization, and creates no second process ledger. */
-export async function productionDeliverableArticles(root: string) {
+export async function productionDeliverableArticles(root: string, phase: "review" | "delivery" = "delivery") {
   return withProductionFeedback({ operation: "delivery-scope" }, async () => {
   const stage = await readProductionStage(root);
   if (!stage) return [];
@@ -32,6 +32,9 @@ export async function productionDeliverableArticles(root: string) {
         ["pending", "issued", "blocked"].includes(other.status))) continue;
     selected.set(article.article_id, { path: article.path, article_id: article.article_id });
   }
+  // Starting Review must not require its own candidates to be approved already.
+  // Link completeness remains mandatory after Review, before close/build.
+  if (phase === "review") return [...selected.values()];
   for (const article of selected.values()) {
     const markdown = await readFile(await safeProjectTarget(root, join("knowledge", article.path)), "utf8");
     for (const link of markdownReaderLinks(markdown)) {

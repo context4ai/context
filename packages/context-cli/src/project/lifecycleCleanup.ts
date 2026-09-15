@@ -1,6 +1,7 @@
 import { readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { readProductionStage } from "./productionStageStore.js";
+import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
 import { assertRequiredArticlesReviewed } from "./indexerRequiredArticleReview.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { readProjectCloseStatus } from "./close.js";
@@ -28,6 +29,11 @@ export async function clearCompletedLifecycle(projectRoot: string): Promise<void
   const production = await readProductionStage(projectRoot);
   if (production) {
     if (production.delivery) throw new TypeError("Partial delivery must retain the production stage and its unfinished tasks; finish the build or explicitly resume writing.");
+    // Review of an interrupting revision does not authorize deleting production.
+    // Enforce this at the deletion boundary, regardless of the caller's owner.
+    if (dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state !== "ended") {
+      throw new TypeError("Production still has unfinished work; keep its files and follow context status --format json.");
+    }
     const candidates = await readCandidateRecords(projectRoot);
     await assertRequiredArticlesReviewed(projectRoot, candidates);
     if (candidates.some(candidate => candidate.status === "draft") || (await readProjectCloseStatus(projectRoot)).state !== "ready") {

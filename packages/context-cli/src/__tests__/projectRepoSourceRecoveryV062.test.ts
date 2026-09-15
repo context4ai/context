@@ -9,6 +9,9 @@ import {
 } from "../project/repoSourceRecovery.js";
 import { writeRepoRegistry } from "../project/repoSourceRegistry.js";
 
+import { saveProductionStage, readProductionStage } from "../project/productionStageStore.js";
+import { validateProductionStage } from "../project/productionStage.js";
+
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -67,6 +70,22 @@ async function fixture(): Promise<{
 }
 
 describe("repository source recovery", () => {
+  test("restored stage sources return preparation without rewriting the existing stage", async () => {
+    const input = await fixture();
+    const stage = validateProductionStage({ id: "recovery-stage", purpose: "Explain the module",
+      scopes: [{ scope: "repo:20260813/alpha", baseline: null }],
+      pending_scopes: ["repo:20260813/alpha"], tasks: [], planning_complete: false,
+      gaps: [{ scope: "repo:20260813/alpha", reason: "Missing checkout" }] });
+    await saveProductionStage(input.project, stage);
+    const result = await restoreRepositorySources({ projectRoot: input.project, payload: {
+      schema: "context.repository-source-recovery.v1",
+      repositories: [{ source: "20260813/alpha", mode: "local", path: input.checkout }],
+    } });
+    expect(result.restored[0]!.ready).toBe(true);
+    expect(result.next_action.command).toBe("context action prepare-current --revision recovery-stage --format json");
+    expect(await readProductionStage(input.project)).toEqual(stage);
+  });
+
   test("groups transport aliases by repository path and pinned commit", async () => {
     const input = await fixture();
     await writeRepoRegistry(input.project, {

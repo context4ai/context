@@ -285,6 +285,11 @@ test("an initially unavailable source does not block independent writing and is 
   expect((await productionWorkflowRoute({ projectRoot, authorities: [] }))!.node).toBe("resolve-production-gap");
   await expect(closeProjectWorkspace(projectRoot)).rejects.toMatchObject({ detail: { reason_code: "production-not-complete" } });
   await rename(heldInitialSource, initiallyMissing);
+  await writeFile(join(agent, "submissions/restored-plan.yaml"), YAML.stringify({ ...plan,
+    articles: [{ path: "decision/later.md", question: "Explain restored material", sources: [sources[1]!.source_ref], batch: "later" }] }));
+  await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/restored-plan.yaml" }))
+    .rejects.toMatchObject({ detail: { reason_code: "production-planning-refresh-required",
+      next_action: { command: `context action prepare-current --revision ${stage.id} --format json` } } });
   await prepareCurrentProductionStage({ projectRoot, revision: stage.id });
   const initialRestored = (await readProductionStage(projectRoot))!;
   expect(initialRestored.gaps).toEqual([]);
