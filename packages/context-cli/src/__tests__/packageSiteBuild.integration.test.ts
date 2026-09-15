@@ -11,7 +11,6 @@ import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { buildProjectPackages, collectPackageFreshness } from "../project/packageBuilder.js";
 import { loadContextProjectModule } from "../project/workspace.js";
-import { inspectWorkspacePublish, markWorkspacePublished } from "../project/workspacePublishVersion.js";
 import { inspectWorkspaceVersion, readWorkspaceChangelog } from "../project/workspaceChangelog.js";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -47,7 +46,7 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     expect(recorded.next_action).toBeUndefined();
     const built = await buildProjectPackages(root);
     expect((await inspectWorkspaceVersion(root)).current).toBe(true);
-    expect((await inspectWorkspaceVersion(root)).reusable_version).toBeNull();
+    expect((await inspectWorkspaceVersion(root)).reusable_version).toBe("0.1.0");
     expect((await readWorkspaceChangelog(root)).map(item => item.version)).toEqual(["0.1.0"]);
     const first = built.packages[0]!;
     const llms = built.packages[1]!;
@@ -73,17 +72,14 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     expect((await inspectWorkspaceVersion(root)).current).toBe(true);
     expect(reused.agent_hints.some(hint => hint.reason_code === "website-deployment-ready")).toBe(true);
     expect((await stat(sitePath)).mtimeMs).toBe(before);
-    const publish = await inspectWorkspacePublish(root);
-    expect(publish.needs_version).toBe(false);
-    await expect(markWorkspacePublished(root, "wrong-hash", "test-publication")).rejects.toThrow("baseline changed");
-    await markWorkspacePublished(root, publish.hash, "test-publication");
-    expect((await inspectWorkspacePublish(root)).unchanged).toBe(true);
+    for (const receipt of [".context-version.json", ".context-builds.json", ".context-published.json"]) {
+      await expect(stat(join(root, receipt))).rejects.toMatchObject({ code: "ENOENT" });
+    }
     const loaded = await loadContextProjectModule(root);
     expect((await collectPackageFreshness(root, loaded.project.packages))[0]!.state).toBe("ready");
     await expect(stat(join(root, first.outDir, "site"))).rejects.toMatchObject({ code: "ENOENT" });
     const originalSite = await readFile(sitePath, "utf8");
     await writeFile(sitePath, originalSite + "<!-- external edit -->");
-    await expect(inspectWorkspacePublish(root)).rejects.toThrow("Build output changed");
     expect((await collectPackageFreshness(root, loaded.project.packages))[0]!.state).not.toBe("ready");
     await writeFile(sitePath, originalSite);
     const map = (await readKnowledgeMap(root))!;
@@ -91,7 +87,6 @@ test("normal build publishes the website, reuses an unchanged build and removes 
       upsert: map.entries.map(item => ({ ...item, title: "Updated navigation" })) });
     const changed = await buildProjectPackages(root);
     expect(changed.packages[0]!.state).not.toBe("unchanged");
-    expect((await inspectWorkspacePublish(root)).needs_version).toBe(true);
     expect(await readFile(join(root, first.siteOutDir!, "llms.txt"), "utf8")).toContain("Updated navigation");
     expect(await readFile(join(root, llms.outDir, "llms.txt"), "utf8")).toContain("Updated navigation");
     const kbIndex = await readFile(join(root, first.outDir, "wikis/index.md"), "utf8");

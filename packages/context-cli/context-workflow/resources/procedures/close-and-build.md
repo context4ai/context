@@ -13,17 +13,15 @@ Pass `actor` explicitly when the conversation identifies the triggering user,
 including a known Lark display name. If Git has no name and the conversation
 does not identify the user, leave it absent and mention that in the delivery
 summary; do not infer identity from paths, logins or source authors. Amending
-an unbuilt entry preserves its actor unless an explicit replacement is supplied.
+an unpublished entry preserves its actor unless an explicit replacement is supplied.
 Record after Close and package/template approval, before the final build, so the
 selected outputs are built with the new version once. Build records hashes without
 increasing versions. Never count temporary progress or a build retry as a change.
 
-For formal repairs before a successful build, use `version inspect`'s
-`reusable_version` when present. Submit the same version and a complete updated
-changelog covering the original work plus repairs, not a repair-only replacement.
-The CLI updates the pending entry in place. A successful build or publication
-seals that version; subsequent changes require an increase. Do not delete build
-or publication receipts to reopen history.
+For formal repairs, inspect the current diff and check the publication target
+before reusing an untagged version. An unpublished preview can amend its current
+entry with the complete iteration's changes. Published content requires an
+increasing version. A successful local build does not seal a version.
 
 Successful delivery clears completed task drafts. Do not empty `.tmp` or call
 `task resume` as a finalization step. Retain registered repository checkouts,
@@ -34,14 +32,11 @@ Website rendering must preserve literal code and template examples. Do not revis
 valid source-grounded JSX or template syntax merely to avoid Vue interpolation;
 report a rendering defect if the website compiler cannot display it literally.
 
-Before an authorized external publication, run `context version publish-check
---format json`. If `needs_version` is true, inspect with `context version inspect
---publish --format json`, record a patch changelog using a `dist` trigger, and
-rebuild. Do not increment again if the workspace version already changed.
-If `unchanged` is true, there is no new delivery. Only after a successful external
-publication, use `context version published --hash <checked-hash> --receipt
-<successful-publication-reference> --format json`. Failure does not advance that
-baseline. These commands do not upload, publish or grant publishing authority.
+Before an authorized external publication, use the installed distribution skill
+or tool to read that target's current remote version and confirm the complete
+build directory. Reconcile its version with package.json and changelog.yaml.
+Building a preview does not publish or seal a version. Record the successful
+remote receipt per target; commit/tag only when separately authorized.
 
 Close deterministically reconciles approved Markdown and current relationship
 inputs into `knowledge/structure.yaml`. It compacts repeated machine fields out

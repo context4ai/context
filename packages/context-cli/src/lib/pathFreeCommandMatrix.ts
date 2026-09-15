@@ -4,8 +4,6 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "version", view: "production-semantic", handles: ["version"], notes: "Knowledge workspace version namespace." },
   { command: "version inspect", view: "production-semantic", handles: ["version", "expected_digest"], notes: "Inspects formal changes before recording a version." },
   { command: "version record", view: "production-semantic", handles: ["version", "expected_digest"], notes: "Atomically records an increasing version and agent-written changelog." },
-  { command: "version publish-check", view: "production-semantic", handles: ["version", "hash"], notes: "Checks built artifacts against the successful publication baseline without uploading." },
-  { command: "version published", view: "production-semantic", handles: ["version", "hash", "receipt"], notes: "Records an explicitly supplied successful external publication receipt." },
   { command: "entry", view: "production-semantic", handles: ["project_status", "workspace_root", "next_command"], notes: "Resolves the single agent entry into initialization, workspace relocation, or current Agent Graph workflow evaluation." },
   { command: "init", view: "production-semantic", handles: ["project_dir", "project_name"], notes: "Creates a project-local Context workspace." },
   { command: "plugin", view: "production-semantic", handles: ["plugin_status", "agent_adapter"], notes: "Global Context agent plugin namespace." },

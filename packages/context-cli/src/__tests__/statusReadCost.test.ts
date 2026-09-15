@@ -38,7 +38,7 @@ test("cleared task progress does not audit article bodies; explicit verification
 
 test("discarding scratch after delivery does not restart production or change approved files", async () => {
   const root = await initialRevisionKnowledge(roots);
-  const paths = ["knowledge/structure.yaml", "knowledge/architecture/overview.md", ".context-builds.json"];
+  const paths = ["knowledge/structure.yaml", "knowledge/architecture/overview.md", "changelog.yaml", "package.json"];
   const before = await Promise.all(paths.map(path => fs.readFile(join(root, path), "utf8")));
   await fs.rm(join(root, ".tmp"), { recursive: true, force: true });
   expect(await readTaskPreparation(root)).toBe("cleared");

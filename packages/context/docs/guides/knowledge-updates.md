@@ -101,12 +101,11 @@ configuration/template approval, before the final build. The record response
 returns the next workspace Route, so no extra status call is needed. Build retries
 reuse the recorded version when formal content is unchanged. If build preparation
 or rendering fails and formal corrections are needed, `version inspect` returns
-`reusable_version` for the current entry only while it has no successful build or
-publication receipt. Submit that same version with the complete iteration's title,
-changes and triggers, including the repair; this replaces the pending changelog
-entry rather than appending another version. Do not submit only the repair and
-lose the original delivery description. Once built or published, the version is
-sealed and further formal changes require an increase. Intermediate batches
+`reusable_version` for an untagged current entry. Before amending, read the
+publication target's remote version using the distribution skill. An unpublished
+preview may reuse its version with the complete iteration's title, changes and
+triggers; preserve the original delivery description. Published content requires
+an increasing version. A local build alone does not seal a version. Intermediate batches
 do not each receive a version.
 
 The workspace AGENTS.md and version-writing instructions require each entry's
@@ -143,19 +142,23 @@ are `initial`, `note`, `sessions`, `mr`, `module`, `document`, `navigation`,
 `repair`, `dist`, and `other`. Agent-written fields describe the actual diff and
 conversation; they must not expose credentials, raw transcripts or private IDs.
 
-The CLI writes `changelog.yaml`, generated `CHANGELOG.md`, `package.json` and the
-`.context-version.json` content baseline together. Keep these formal files with
-the workspace; do not hand-edit generated baselines. Git-managed and unignored
-new files are compared (without Git, non-runtime workspace files are compared).
-Version metadata itself, `dist`, `.tmp` and dependencies do not cause changes.
+The CLI updates `package.json`, `changelog.yaml` and generated `CHANGELOG.md` together.
+`context version inspect --base <commit-or-tag> --format json` compares the actual
+workspace files with Git, including untracked files. Without an explicit base it
+uses the current version's `v<version>` tag when available, otherwise HEAD; HEAD
+is not proof of publication. Review article bodies, assets, structure, navigation
+and templates, not structure alone. Without Git, inspection reports local files.
+A disposable `.tmp` checkpoint suppresses repeated recording in an uncommitted
+iteration. Losing it does not lose knowledge or prove a new publication.
 
-Successful builds record version and per-package hashes in `.context-builds.json`.
-They do not increase versions. Before publishing, `context version publish-check
---format json` compares against `.context-published.json`. A same-version changed
-output requires a patch using `version inspect --publish` and a `dist` trigger,
-then a rebuild. Record `version published --hash <checked-hash> --receipt
-<successful-publication-reference> --format json` only after external success.
-No command commits, tags or uploads automatically.
+There are no root-level Context version/build/publication receipts to maintain.
+Build freshness uses the existing local package cache. The CLI does not seal a
+version merely because a preview was built. Before reusing a version, check the
+actual publication target and Git tags; a published version requires an increase.
+Publication belongs to the installed distribution tool. Record remote receipts
+in its configuration or the existing work summary, separately for each target.
+A successful authorized commit/tag identifies the delivered source; never create
+one automatically, and never treat Git success as platform publication success.
 
 Website history is available at `changelog.html`: cards are newest first, the
 latest three expanded and older cards collapsed. The History button beside the

@@ -6,7 +6,7 @@ import { withProjectWriteLock } from "./writeLock.js";
 import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
 import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
-import { workspaceVersionFingerprint, writePackageVersion, recordWorkspaceBuild } from "./workspaceBuildVersion.js";
+import { workspaceVersionFingerprint, writePackageVersion } from "./workspaceBuildVersion.js";
 import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
 import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
 import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
@@ -439,7 +439,6 @@ export async function buildProjectPackages(projectRoot: string, options: { deliv
     const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery;
     if (partial) await assertProductionDeliveryReady(projectRoot);
     const result = await buildProjectPackagesInternal(projectRoot, options);
-    await recordWorkspaceBuild(projectRoot);
     if (partial) await finishProductionDelivery(projectRoot);
     return result;
   });

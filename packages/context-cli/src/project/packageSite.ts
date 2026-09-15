@@ -17,7 +17,11 @@ import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSour
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 
-export const PACKAGE_SITE_VERSION = "vitepress-site-v42-section-anchor-blocks";
+// Include shipped presentation assets: theme-only upgrades must invalidate an
+// existing site's receipt even when its knowledge and configuration are unchanged.
+export const PACKAGE_SITE_VERSION = `vitepress-site-v42-section-anchor-blocks:${createHash("sha256")
+  .update(JSON.stringify([siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
+  .digest("hex")}`;
 const require = createRequire(import.meta.url);
 export interface SitePage {
   artifact_ref?: string;

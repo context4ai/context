@@ -188,9 +188,9 @@ test("next preparation never inherits a prior caller's multi-agent authority", a
   const multi = (await prepareNextProductionStage({ projectRoot: f.root, stage: current, multiAgent: true }))!;
   expect(multi.mode).toBe("multi-agent");
   expect(multi.batches).toHaveLength(2);
-  // A fresh workflow observation never sends a new host straight into the old
-  // multi-batch directory. Its default preparation rewrites only CLI navigation.
-  expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("prepare-production-stage");
+  // Observation preserves already-issued work without granting a new caller
+  // parallel execution authority. Explicit preparation can still choose single.
+  expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("work-production-stage");
   await prepareNextProductionStage({ projectRoot: f.root, stage: current });
   expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("work-production-stage");
 });
@@ -277,4 +277,21 @@ test("clearing temporary state leaves no production process to restore", async (
   await rm(join(f.root, ".tmp"), { recursive: true, force: true });
   expect(await readProductionStage(f.root)).toBeUndefined();
   expect(await readFile(join(f.root, "knowledge/architecture/approved.md"), "utf8")).toBe("# Existing formal article\n");
+});
+
+
+test("multi-agent observation preserves issued batches and detects unissued additions", async () => {
+  const f = await fixture();
+  await materializeProductionStage({ projectRoot: f.root, ...f,
+    capabilities: productionCapabilitiesSchema.parse({ multi_agent: true }) });
+  const before = (await readProductionStage(f.root))!;
+  for (let i = 0; i < 2; i++) {
+    expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("work-production-stage");
+  }
+  expect(await readProductionStage(f.root)).toEqual(before);
+  const task = { ...before.tasks[1]!, id: "third", article_id: "article:third", path: "architecture/third.md", batch: "third", status: "pending" as const };
+  await saveProductionStage(f.root, { ...before, tasks: [...before.tasks, { ...task, input: productionTaskInput(task) }] });
+  expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("prepare-production-stage");
+  await prepareNextProductionStage({ projectRoot: f.root, stage: (await readProductionStage(f.root))!, multiAgent: true });
+  expect((await productionWorkflowRoute({ projectRoot: f.root, authorities: [] }))!.node).toBe("work-production-stage");
 });
