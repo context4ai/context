@@ -138,12 +138,27 @@ test("partial delivery selection requires formal approval and complete local rea
   const pending = await readCandidateRecords(f.root);
   await writeFile(path, original + "\n[Related behavior](two.md)\n");
   await expect(productionDeliverableArticles(f.root)).rejects.toThrow("linked approved article");
+  expect(await requestProductionDelivery(f.root)).toBe(true);
+  expect((await readProductionStage(f.root))!.delivery).toEqual(["one", "two"]);
+  await expect(productionDeliverableArticles(f.root)).rejects.toThrow("linked approved article");
+  await resumeProductionWriting(f.root);
   await writeFile(path, original + "\n[Missing guide](missing.md)\n");
   await expect(productionDeliverableArticles(f.root)).rejects.toThrow("linked approved article");
   await writeFile(path, original);
   expect(await productionDeliverableArticles(f.root)).toEqual(selected);
   expect(await readProductionStage(f.root)).toEqual(stage);
   expect(await readCandidateRecords(f.root)).toEqual(pending);
+  await writeFile(path, original + "\n[Related behavior](two.md)\n");
+  await saveProductionStage(f.root, { ...stage!, pending_scopes: [stage!.scopes[0]!.scope] });
+  expect(await requestProductionDelivery(f.root)).toBe(true);
+  const remainingIds = pending.map(candidate => candidate.candidate_id).sort();
+  await applyReviewDecisions({ projectRoot: f.root, payload: {
+    scope: { kind: "all", count: remainingIds.length, visible_candidate_ids: remainingIds,
+      ids_sha256: candidateIdsHash(remainingIds), candidates_sha256: candidateSetHash(pending) },
+    decisions: pending.map(candidate => ({ candidate_id: candidate.candidate_id, status: "approved" })),
+  } });
+  expect(await productionDeliverableArticles(f.root)).toHaveLength(2);
+  expect((await readProductionStage(f.root))!.pending_scopes).toEqual([stage!.scopes[0]!.scope]);
 });
 
 test("partial delivery pauses writes, retains failed builds and resumes unchanged unfinished tasks", async () => {

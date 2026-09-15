@@ -20,6 +20,8 @@ const schema = z.object({ scopes: z.array(z.object({ source_ref: z.string().min(
   instruction: z.string().trim().min(1), refresh: z.boolean().optional(),
 }).strict();
 
+export const taskSourceAdjustmentSchema = z.union([schema, z.object({ knowledge_map: knowledgeMapUpdateSchema }).strict()]);
+
 /** Adjust current source work without restoring retired Provider ledgers.
  * Accepted candidates and unrelated source tasks stay in the same temporary run. */
 export async function adjustCurrentTaskSources(projectRoot: string, value: unknown) {

@@ -67,6 +67,9 @@ workflow bundle: `repository-source-recovery.md` beside this guide and
 `../../schemas/repository-source-recovery.schema.json`. Reuse a matching local
 checkout or, when authorized, clone into a bounded location using
 `context source restore --input <workspace-input-file> --format json`.
+Follow its `next_action` before resuming a plan: an active production stage may
+need preparation to refresh previously unavailable material. Use the stage and
+paths returned by preparation, not a payload's previous stage identity.
 Group modules sharing a remote and fixed commit; do not clone per module.
 Check registered commit and module paths. Never reset a supplied dirty checkout.
 Authentication or checkout problems can be diagnosed with Host Git tools;

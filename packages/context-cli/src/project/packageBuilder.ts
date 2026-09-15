@@ -653,10 +653,11 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     const production = await readProductionStage(projectRoot);
     if (!production && (!maintenanceActive || (await readRevisionDelivery(projectRoot))?.partial) && !await readTaskRollback(projectRoot)) await completeRevisionDelivery(projectRoot);
     const { finishApprovedRevision } = await import("./approvedRevision.js");
-    await finishApprovedRevision(projectRoot);
     const { readApprovedRevision } = await import("./approvedRevision.js");
+    const revisionInterruptedProduction = !!production && !!await readApprovedRevision(projectRoot);
+    await finishApprovedRevision(projectRoot);
     const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
-    if (!production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
+    if (!revisionInterruptedProduction && !production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
         !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(projectRoot);

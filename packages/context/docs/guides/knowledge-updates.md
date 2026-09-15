@@ -406,6 +406,13 @@ and the same Review/build route.
 
 ## Adjust or roll back current work
 
+Read `context task adjust --schema --format yaml` for the source-adjustment
+and knowledge-map input variants; no workspace or input file is required.
+After restoring an unavailable source, follow the recovery result's
+`next_action` to refresh the captured planning materials. Preparation can return
+a new stage: use its paths and identity when resubmitting your plan. Restoring
+the checkout alone does not replace an existing stage's captured material.
+
 For an explicit same-task change to native Indexer source inputs, use
 `context task adjust --input <file|-> --format json` with `scopes` containing the
 selected `source_ref` and optional `module_refs`, plus an `instruction` explaining

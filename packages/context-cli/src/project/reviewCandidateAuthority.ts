@@ -10,10 +10,14 @@ export type ReviewCandidateAuthority = ReadonlyMap<string, CandidateRecord>;
 /** Only current accepted work can authorize Review; retired compile files cannot. */
 export async function loadReviewCandidateAuthority(projectRoot: string): Promise<ReviewCandidateAuthority> {
   return withProductionFeedback({ operation: "review" }, async () => {
-    const production = await readProductionReviewCandidates(projectRoot);
-    if (production) return new Map(production.candidates.map(candidate => [candidate.candidate_id, candidate]));
     const revision = await readApprovedRevision(projectRoot);
-    if (!revision) throw new TypeError("No current production or article revision is available for Review");
+    // An independent revision suspends retained production, just as it does
+    // for Author dispatch. Its candidates must be reviewed by that revision.
+    if (!revision) {
+      const production = await readProductionReviewCandidates(projectRoot);
+      if (production) return new Map(production.candidates.map(candidate => [candidate.candidate_id, candidate]));
+      throw new TypeError("No current production or article revision is available for Review");
+    }
     if (!revision.review_ready && !revision.candidate) throw new TypeError("Complete the current article revision before Review");
     const observed = await observeApprovedRevisionBatch(projectRoot, revision);
     if (observed.state !== "current") throw new TypeError("Revision batch is not current for Review");

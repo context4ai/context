@@ -16,7 +16,7 @@ export async function requestProductionDelivery(root: string): Promise<boolean> 
     if (!stage.report_approved) throw new TypeError("Approve the work-start report before requesting production delivery.");
     if (stage.delivery) return true;
     const candidates = await readCandidateRecords(root);
-    const formal = await productionDeliverableArticles(root);
+    const formal = await productionDeliverableArticles(root, "review");
     const selected = stage.tasks.filter(task => task.status === "accepted" &&
       (candidates.some(candidate => candidate.candidate_id === task.accepted?.receipt) ||
        formal.some(article => article.article_id === task.article_id && article.path === task.path)));

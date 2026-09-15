@@ -2,7 +2,7 @@ import { readProductionRequirements, productionRequirementsSchema, type Producti
 import { prepareRevisionMarkdown, type RevisionContentInput } from "./approvedRevisionEdits.js";
 import { prepareRevisionReferences } from "./approvedRevisionReferences.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
-import { readFile, realpath } from "node:fs/promises";
+import { readFile, realpath, rm } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
 import { z } from "zod";
 import YAML from "yaml";
@@ -432,6 +432,13 @@ async function advanceApprovedRevision(projectRoot: string, request: ApprovedRev
   await commitProcessedScopes(projectRoot, request.processed_scopes ?? []);
   const { finishMaintenanceRevision } = await import("./knowledgeMaintenance.js");
   if (await finishMaintenanceRevision(projectRoot)) return;
+  const { readProductionStage } = await import("./productionStageStore.js");
+  if (await readProductionStage(projectRoot)) {
+    // A direct revision can interrupt production without a maintenance queue.
+    // Retire only its own delivered pointer; production resumes unchanged.
+    await rm(join(projectRoot, await revisionStoragePath(projectRoot)), { force: true });
+    return;
+  }
   const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
   await clearCompletedLifecycle(projectRoot);
 }

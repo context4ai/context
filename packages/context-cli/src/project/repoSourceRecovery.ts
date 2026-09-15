@@ -149,6 +149,8 @@ export async function repositoryRecoveryPlan(input: {
     throw new ContextError(ExitCode.WorkspaceStateError, `repo source is not registered: ${input.source}`, {
       category: ErrorCategory.SourceNotFound,
       sourceId: input.source,
+      registered_names: registry.repos.map(source => source.name),
+      next_action: { command: "context source recovery-plan --format json" },
     });
   }
   const grouped = new Map<string, RepoSourceRecord[]>();
@@ -437,10 +439,16 @@ export async function restoreRepositorySources(input: {
       });
     }
     if (registryChanged) await writeRepoRegistry(input.projectRoot, registry);
+    const { readProductionStage } = await import("./productionStageStore.js");
+    const stage = await readProductionStage(input.projectRoot);
+    const restoredScopes = new Set(restored.filter(result => result.ready).flatMap(result => result.sources.map(name => `repo:${name}`)));
+    const { readMaintenance } = await import("./maintenanceStorage.js");
+    const refresh = stage && !stage.delivery && stage.scopes.some(source => restoredScopes.has(source.scope)) &&
+      !(await readMaintenance(input.projectRoot)).active;
     return {
       schema: "context.repository-source-recovery-result.v1",
       restored,
-      next_action: { command: "context status --format json" },
+      next_action: { command: refresh ? `context action prepare-current --revision ${stage.id} --format json` : "context status --format json" },
     };
   });
 }
