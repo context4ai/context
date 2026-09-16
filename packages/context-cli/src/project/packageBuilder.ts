@@ -1,3 +1,4 @@
+import { readPackageSiteUrl } from "./packageSiteAddress.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
 import { readProductionStage } from "./productionStageStore.js";
@@ -570,6 +571,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       files: selected,
       ...(assetProcessor === undefined ? {} : { assetProcessor }),
     });
+    const siteUrl = await readPackageSiteUrl(projectRoot, pkg);
     const writtenKnowledge = await withStagedPackageOutput(projectRoot, pkg, async (stagedPkg) => {
       const rendered = await writeRenderedPackageTemplate({
         projectRoot,
@@ -611,7 +613,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
           articles, ...(reading ? { map: reading } : {}) }), { preserveIndex: true });
       }
       await writePackageVersion(projectRoot, join(projectRoot, stagedPkg.outDir));
-      await writePackageSite({ projectRoot, pkg: stagedPkg, selected, ...(reading ? { structure: reading } : {}) });
+      await writePackageSite({ projectRoot, pkg: stagedPkg, selected, ...(siteUrl ? { siteUrl } : {}), ...(reading ? { structure: reading } : {}) });
       const linkWarnings: PackageBuildLinkWarning[] = [...writtenKnowledge.linkWarnings,
         ...await inspectPackageMarkdownDirectory(join(projectRoot, stagedPkg.outDir))];
       return { ...writtenKnowledge, linkWarnings };

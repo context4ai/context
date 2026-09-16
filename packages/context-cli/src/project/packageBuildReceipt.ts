@@ -110,9 +110,22 @@ export async function packageOutputSnapshot(
     const classification = current.kind === "file" && previous !== undefined
       ? { path: file.relPath, kind: previous.kind, ...(previous.group === undefined ? {} : { group: previous.group }) }
       : current;
+    let content: Buffer | string = await readFile(file.absPath);
+    // Deployment metadata can be recorded after a build. Keep page mappings
+    // covered by the receipt while excluding the optional delivery address.
+    if (file.absPath === join(projectRoot, pkg.outDir, "context-site-map.json") ||
+        file.absPath === join(projectRoot, packageSiteOutputDir(pkg), "context-site-map.json")) {
+      try {
+        const map = JSON.parse(content.toString());
+        if (map.protocol === "context.site-output/v1" && Array.isArray(map.pages)) {
+          delete map.site_url;
+          content = JSON.stringify(map);
+        }
+      } catch { /* Malformed maps remain covered by their exact bytes. */ }
+    }
     return {
       ...classification,
-      sha256: createHash("sha256").update(await readFile(file.absPath)).digest("hex"),
+      sha256: createHash("sha256").update(content).digest("hex"),
     };
   }));
 }

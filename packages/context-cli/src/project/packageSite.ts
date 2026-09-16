@@ -20,7 +20,7 @@ import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from 
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v43-page-extensions:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v44-site-address:${createHash("sha256")
   .update(JSON.stringify([siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -148,7 +148,7 @@ async function compileSite(root: string, outDir: string) {
 }
 
 export async function writePackageSite(input: {
-  projectRoot: string; pkg: PackageDefinition; selected: readonly ApprovedKnowledgeFile[]; structure?: KnowledgeMap;
+  projectRoot: string; pkg: PackageDefinition; selected: readonly ApprovedKnowledgeFile[]; structure?: KnowledgeMap; siteUrl?: string;
 }) {
   if (input.pkg.kind !== "package.kb" || !input.pkg.site) return;
   const { pkg, projectRoot, selected, structure } = input;
@@ -282,9 +282,11 @@ export async function writePackageSite(input: {
         await writeFile(file.absPath, placeholder);
       }
     }
-    await writeFile(join(output, "context-site-map.json"), JSON.stringify({ protocol: "context.site-output/v1",
+    const siteMapContent = JSON.stringify({ ...(input.siteUrl ? { site_url: input.siteUrl } : {}), protocol: "context.site-output/v1",
       knowledge_map_revision: structure?.revision ?? null, base, llms: { index: "llms.txt", full: "llms-full.txt", home: "llms/index.html", articles: llms.articleCount }, pages: [...byPath.values()], entries: mapping.entries,
-      sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })), warnings: mapping.warnings }, null, 2) + "\n");
+      sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })), warnings: mapping.warnings }, null, 2) + "\n";
+    await writeFile(join(output, "context-site-map.json"), siteMapContent);
+    await writeFile(join(projectRoot, pkg.outDir, "context-site-map.json"), siteMapContent);
     return mapping;
   } finally { await rm(temporary, { recursive: true, force: true }); }
 }

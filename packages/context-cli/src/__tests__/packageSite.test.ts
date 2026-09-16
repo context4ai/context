@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { normalizeSiteUrl, readPackageSiteUrl } from "../project/packageSiteAddress.js";
 import { packageSiteOutputDir } from "../project/packageOutputPaths.js";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -78,7 +79,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
       changes: ["Added coverage <script>unsafe()</script>"], triggers: [{ kind: "module", description: "New module material" }],
       actor: { name: "Example User", kind: "git" },
     })) }));
-    await writePackageSite({ projectRoot: root, pkg, selected: sourced, structure });
+    await writePackageSite({ projectRoot: root, pkg, selected: sourced, structure, siteUrl: "https://example.com/docs/" });
     const history = await readFile(join(root, packageSiteOutputDir(pkg), "changelog.html"), "utf8");
     expect(history.match(/<details class="context-history-card"/gu)).toHaveLength(5);
     expect(history.match(/<details class="context-history-card" open/gu)).toHaveLength(3);
@@ -141,6 +142,10 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(article).toContain("https://github.com/example/components/blob/abc123/packages/ui/src/entry.ts#L1-L1");
     expect(await readFile(join(root, packageSiteOutputDir(pkg), "resources/others/assets/example.svg"), "utf8")).toContain("<svg");
     const map = JSON.parse(await readFile(join(root, packageSiteOutputDir(pkg), "context-site-map.json"), "utf8"));
+    expect(map.site_url).toBe("https://example.com/docs/");
+    expect(JSON.parse(await readFile(join(root, pkg.outDir, "context-site-map.json"), "utf8"))).toEqual(map);
+    expect(await readPackageSiteUrl(root, pkg)).toBe(map.site_url);
+    expect(new URL(map.pages[0].site_path, map.site_url).pathname).toBe(`/docs/${map.pages[0].site_path}`);
     expect(map.pages).toHaveLength(4);
     expect(map.sections[0].title).toBe("Business");
     expect(map.sections.some((section: { title: string }) => section.title === "Skills")).toBe(false);
@@ -159,3 +164,15 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(await readFile(join(root, packageSiteOutputDir(pkg), "index.html"), "utf8")).toBe(home);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 120000);
+
+
+test("deployment roots retain subpaths and reject non-site URLs without network access", async () => {
+  expect(normalizeSiteUrl("https://example.com/docs")).toBe("https://example.com/docs/");
+  expect(normalizeSiteUrl("https://example.com/")).toBe("https://example.com/");
+  for (const invalid of ["javascript:alert(1)", "https://user:pass@example.com", "https://example.com/?token=secret", "https://example.com/#entry"]) {
+    expect(() => normalizeSiteUrl(invalid)).toThrow();
+  }
+  const root = await mkdtemp(join(tmpdir(), "context-site-address-"));
+  try { expect(await readPackageSiteUrl(root, pkg)).toBeUndefined(); }
+  finally { await rm(root, { recursive: true, force: true }); }
+});

@@ -133,3 +133,20 @@ Update the description, routing table, and package-boundary guidance to match
 the actual package. If the generic behavior is intentionally sufficient,
 explicitly accept the unchanged default during Context package-template review.
 --}}
+
+## Website links in the final summary
+
+After answering from the pages actually read, optionally append one or more
+related document links in the final summary. Read `context-site-map.json` from
+the selected package (or its sibling website output in a workspace). Match the
+read page to `pages[].package_path` or `approved_path`; use its `title` and resolve
+`site_path` relative to `site_url`. The URL already includes the deployment base
+path: do not prepend `base` again. Only cite matched articles, deduplicate links,
+and do not invent section anchors.
+
+This is a local formatting step, not retrieval or validation. Do not probe URLs,
+make HTTP/HEAD requests, open a browser, inspect a deployment platform, or check
+remote versions to add links. Never build, publish or update metadata for this
+purpose. If the map, URL or matching page is absent or malformed, keep the local
+citation and continue silently. A configured URL does not prove that the site
+contains the current local revision; do not claim online verification.

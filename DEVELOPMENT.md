@@ -292,8 +292,23 @@ workflow is safe to rerun after a partial registry publication: it skips an
 exact package version that already exists and continues with the remaining
 packages.
 
-Do not publish source package directories directly and do not create a GitHub
-Release before its commit passes CI.
+Do not publish source package directories directly. By default, wait for CI
+before creating a Release. For an explicitly approved fast release, add
+`<!-- context-release:skip-checks=true -->` to the initial Release body. This
+skips both pre-release and post-release verification; dependency installation,
+version/registry checks, build, package preparation and publication still run.
+The workflow summary records the selected mode. Do not add the marker by default.
+
+Once this workflow is on the default branch, an existing Release can also be
+published or resumed with explicit inputs:
+
+```bash
+gh workflow run publish.yml --ref 'v<version>' -f release_tag='v<version>' -F skip_checks=true
+```
+
+Omit `skip_checks` for normal verification. Select the same version tag as the
+workflow ref; the tag must point to the intended release source. Per-tag
+concurrency prevents simultaneous publications. Neither entry point merges a PR.
 
 ## Verification
 

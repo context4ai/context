@@ -7,7 +7,7 @@ import {
 
 export type PackageEntry = { name: string; dir: string };
 
-export type ReleaseChannel = "alpha" | "preview" | "rc" | "latest";
+export type ReleaseChannel = "alpha" | "beta" | "preview" | "rc" | "latest";
 export type ReleasePublishTag = ReleaseChannel;
 
 export interface ReleasePublishPlan {
@@ -103,14 +103,15 @@ const PREVIEW_2_INTRODUCED_PARSER_PACKAGES = new Set([
 ]);
 
 export function releaseChannel(version: string): ReleaseChannel {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|preview|rc)\.(\d+))?$/u.exec(version);
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta|preview|rc)\.(\d+))?$/u.exec(version);
   if (match === null) {
     throw new TypeError(
-      `Unsupported release version ${version}; only final, alpha.N, preview.N, and rc.N are publishable`,
+      `Unsupported release version ${version}; only final, alpha.N, beta.N, preview.N, and rc.N are publishable`,
     );
   }
   const prerelease = match[4];
   if (prerelease === "alpha") return "alpha";
+  if (prerelease === "beta") return "beta";
   if (prerelease === "preview") return "preview";
   if (prerelease === "rc") return "rc";
   return "latest";
