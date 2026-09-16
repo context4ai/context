@@ -65,3 +65,18 @@ test("unchanged independent revision resumes production without cleanup or dupli
   expect(await readCandidateRecords(root)).toEqual([]);
   await submitMaintenanceProductionArticle(root, before!.tasks.find(task => task.status === "issued")!.path);
 }, 60_000);
+
+
+test("repeated builds preserve unfinished production and return package results", async () => {
+  const { root } = await maintenanceProductionWorkspace(roots);
+  await buildFixturePackages(root);
+  await resumeProductionWriting(root);
+  const before = await readProductionStage(root);
+  expect(before).toBeDefined();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const result = await buildFixturePackages(root);
+    expect(result.packages.length).toBeGreaterThan(0);
+    expect(await readProductionStage(root)).toEqual(before);
+  }
+  await expect(clearCompletedLifecycle(root)).rejects.toThrow("Production still has unfinished work");
+}, 60_000);

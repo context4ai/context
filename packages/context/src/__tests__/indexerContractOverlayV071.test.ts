@@ -336,3 +336,23 @@ describe("Indexer overlay validation receipts", () => {
     })).toThrow(/receipt digest/);
   });
 });
+
+
+test("overlay compatibility ignores historical whole-contract digests but checks versions and references", () => {
+  const { operatorContract, base, contractOverlay } = validationFixture();
+  const changed = structuredClone(base);
+  changed.profiles.push({ ...structuredClone(base.profiles[0]!), id: "unrelated-profile" });
+  changed.contract_digest = indexerProfileContractDigest({ ...changed, contract_digest: undefined } as unknown as Omit<IndexerProfileContract, "contract_digest">);
+  const historical = structuredClone(contractOverlay);
+  historical.operator_contract_digest = DIGEST_C;
+  historical.overlay_digest = indexerContractOverlayDigest({ ...historical, overlay_digest: undefined } as unknown as Omit<IndexerContractOverlay, "overlay_digest">);
+  const validate = () => validateIndexerContractOverlay({ overlay: historical, baseContract: changed, operatorContract });
+  expect(validate().report.base_contract_digest).toBe(changed.contract_digest);
+  historical.extends.version = "99.0.0";
+  historical.overlay_digest = indexerContractOverlayDigest({ ...historical, overlay_digest: undefined } as unknown as Omit<IndexerContractOverlay, "overlay_digest">);
+  expect(validate).toThrow(/base contract version/);
+  historical.extends.version = base.version;
+  historical.extends.profile = "missing-profile";
+  historical.overlay_digest = indexerContractOverlayDigest({ ...historical, overlay_digest: undefined } as unknown as Omit<IndexerContractOverlay, "overlay_digest">);
+  expect(validate).toThrow();
+});

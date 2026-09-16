@@ -9,7 +9,9 @@ in the user's conversation language.
 When planning or revising article placement, titles or reading order, read
 [reader organization guidance](../../resources/procedures/knowledge-updates.md#reader-tasks-names-and-reading-order).
 Apply it to the affected topics within the user's scope; it adds no production
-stage or permission gate.
+stage. Reuse existing category intent; propose top-level changes in the current
+report/plan for explicit review before applying them, unless the concrete
+structure is already approved. Ordinary placements need no additional gate.
 
 For investigation, use the supplied directory and its submission schema. Start
 with code skeletons and document outlines; selectively read original material
