@@ -77,6 +77,8 @@ export type CaptureLarkPhaseDefinition = {
   writes: readonly PhaseResourceReference[];
   source: LarkSourceDefinition | LarkSourceReference;
   resources: {
+    images?: "reference-only" | "bundle";
+    gifs?: "reference-only" | "bundle";
     videos: "reference-only" | "bundle";
     maxBytesPerResource: number;
     maxTotalBytes: number;
@@ -200,6 +202,8 @@ export const captureFile = (definition: {
 export const captureLark = (definition: {
   source: LarkSourceDefinition | LarkSourceReference;
   resources?: {
+    images?: "reference-only" | "bundle";
+    gifs?: "reference-only" | "bundle";
     videos?: "reference-only" | "bundle";
     maxBytesPerResource?: number;
     maxTotalBytes?: number;
@@ -207,6 +211,12 @@ export const captureLark = (definition: {
 }): CaptureLarkPhaseDefinition => {
   const sourceDefinition = bindSourceType(definition.source, "lark", "captureLark source") as LarkSourceDefinition | TypedSourceReference<"lark">;
   const sourceId = getSourceName(sourceDefinition);
+  for (const key of ["images", "gifs"] as const) {
+    const value = definition.resources?.[key];
+    if (value !== undefined && value !== "bundle" && value !== "reference-only") {
+      throw new TypeError(`captureLark resources.${key} must be bundle or reference-only`);
+    }
+  }
   const maxBytesPerResource = definition.resources?.maxBytesPerResource ?? 20 * 1024 * 1024;
   const maxTotalBytes = definition.resources?.maxTotalBytes ?? 200 * 1024 * 1024;
   if (!Number.isSafeInteger(maxBytesPerResource) || maxBytesPerResource < 1) {
@@ -225,6 +235,8 @@ export const captureLark = (definition: {
     writes: [sourceSnapshotResource(sourceDefinition, "lark")],
     source: sourceDefinition,
     resources: {
+      ...(definition.resources?.images === undefined ? {} : { images: definition.resources.images }),
+      ...(definition.resources?.gifs === undefined ? {} : { gifs: definition.resources.gifs }),
       videos: definition.resources?.videos ?? "reference-only",
       maxBytesPerResource,
       maxTotalBytes,

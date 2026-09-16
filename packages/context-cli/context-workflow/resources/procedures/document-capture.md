@@ -62,3 +62,10 @@ are available while another capture remains pending. Keep unresolved sources in
 `pending_scopes`; do not cite their unavailable snapshots. The Route returns to
 pending capture after the active production/review work, before delivery completes.
 This does not mark failed captures as complete or waive source-read authorization.
+
+For image-heavy tasks, reuse the image choice in the work-start report. When
+source descriptors already show more than 30 distinct images across the task,
+resolve that question before bulk media acquisition. If counts emerge only from
+capture, stop further image processing to confirm the choice during planning.
+Use explicit image/GIF reference-only policies for exclusions; never substitute
+temporary signed media URLs as permanent public image links.

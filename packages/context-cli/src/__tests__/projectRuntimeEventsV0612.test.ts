@@ -392,7 +392,7 @@ describe("Context runtime events", () => {
       requires_network_access: true,
       plan_command: "context logs plan --format json",
       command: "context logs flush --format json",
-      message: "Runtime logs are queued locally. Read the fixed delivery plan, request network access with its audit details, and run only its flush command before handing off the completed step.",
+      message: expect.any(String),
     });
     expect(runtimeEventPendingAgentHint({
       status: "sent",

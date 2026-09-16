@@ -1,3 +1,4 @@
+import { createReviewFeedbackCodec } from "./reviewFeedbackCode.js";
 import { createReviewCodeCodec } from "./reviewCode.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
@@ -217,6 +218,15 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
   }
   if (raw.trim().startsWith("CR")) {
     try {
+      if (raw.trim().startsWith("CR2.")) {
+        const feedback = createReviewFeedbackCodec().decode(raw);
+        const collection = feedback.scope === "all" ? undefined : assertCollection(feedback.scope);
+        return { decisions: [], encoded_statuses: feedback.statuses.map(s => s === "revised" ? "pending" : s),
+          feedback_repairs: feedback.repairs, baseline_hash: feedback.baselineHash,
+          ...(collection === undefined ? {} : { collection }),
+          scope: { kind: collection === undefined ? "all" : "collection", ...(collection === undefined ? {} : { collection }),
+            count: feedback.statuses.length, ids_sha256: feedback.idsHash, candidates_sha256: feedback.contentHash } };
+      }
       const decoded = createReviewCodeCodec().decode(raw);
       const collection = decoded.scope === "all" ? undefined : assertCollection(decoded.scope);
       return { decisions: [], encoded_statuses: decoded.statuses, ...(collection === undefined ? {} : { collection }),
@@ -225,7 +235,7 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
     } catch (error) {
       throw new ContextError(ExitCode.UserError, error instanceof Error ? error.message : String(error), {
         category: ErrorCategory.UserInputInvalid,
-        next: "Copy all review code segments unchanged from the current HTML report into one input file, one per line; apply only after all segments are present.",
+        next: "Copy the complete review code and all following revision instruction lines unchanged from the current report into one input file. Older segmented codes require every segment.",
       });
     }
   }
@@ -244,6 +254,7 @@ function formatApplyResult(result: ApplyReviewDecisionsResult & { continuation?:
       `rejected: ${result.rejected}`,
       `materialized: ${result.materialized}`,
       `removed: ${result.removed}`,
+      ...(result.repairs ?? []).map(r => `repair ${r.path}: ${r.command}`),
       `unchanged: ${result.unchanged}`,
       `candidate file: ${result.candidateFileUpdated ? "updated" : "unchanged"}`,
       ...result.pages.map((page) => `page: ${page}`),
@@ -537,6 +548,7 @@ export async function runReviewApproveAllCommand(input: {
       `materialized: ${result.materialized}`,
       `unchanged: ${result.unchanged}`,
       `removed: ${result.removed}`,
+      ...(result.repairs ?? []).map(r => `repair ${r.path}: ${r.command}`),
       ...(continuation === undefined ? [] : [`workflow: ${continuation.state}`, continuation.stop.message]),
     ],
   }));

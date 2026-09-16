@@ -68,7 +68,9 @@ export function registerRuntimeEventLogCommands(program: Command): void {
           ExitCode.ExternalToolError,
           requiresNetworkAccess
             ? "runtime event delivery could not reach the configured sink"
-            : "runtime event delivery was rejected by the configured sink",
+            : reason === "invalid_batch"
+              ? "local telemetry bridge rejected the batch before network delivery; update the sink CLI for protocol compatibility"
+              : "runtime event delivery was rejected by the configured sink",
           {
             category: ErrorCategory.ExternalToolFailed,
             reason_code: requiresNetworkAccess

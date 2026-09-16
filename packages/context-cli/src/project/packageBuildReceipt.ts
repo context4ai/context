@@ -211,6 +211,9 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     lines.push(`  warning: ${warning.path} references ${warning.target}, which ${explanation}.`);
   }
   const optimization = pkg.resources.delivery.optimization;
+  for (const warning of optimization?.warnings ?? []) {
+    lines.push(`  image replaced with placeholder: ${warning.path}: ${warning.reason}`);
+  }
   if (optimization?.state === "applied") {
     lines.push(
       `  asset optimization: ${optimization.processor}/${optimization.mode}, saved ${optimization.savedBytes} byte(s), largest ${optimization.largestOutputBytes}/${optimization.maxImageBytes} byte(s), total ${optimization.outputBytes}/${optimization.maxTotalImageBytes} byte(s)`,

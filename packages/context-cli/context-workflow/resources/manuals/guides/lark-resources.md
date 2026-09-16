@@ -130,3 +130,41 @@ fixed. Accepted failures remain visible as warnings and unavailable-resource
 notices; they are never represented as downloaded evidence. Review shows
 available previews, references, and warnings so the human or managed policy can
 assess the page with its non-text evidence.
+
+## Image choices for a production task
+
+The work-start report asks once when a task contains more than 30 distinct images
+and has no explicit image policy. The choices are intelligent conversion and
+inclusion (recommended), include all as images with compression, or include none
+with placeholders. Count the whole task, not each capture or writing batch.
+Review reports show the resulting image handling and any fallbacks.
+
+To skip image acquisition while preserving visible source placeholders:
+
+```ts
+captureLark({ source: handbook, resources: { images: "reference-only" } });
+```
+
+To retain static images but exclude GIF files:
+
+```ts
+captureLark({ source: handbook, resources: { gifs: "reference-only" } });
+```
+
+Both fields also accept `bundle`; omitted fields retain normal capture behavior.
+Known GIF metadata avoids downloading; when a source only supplies an opaque
+media token, identification may require downloading the file. Such a GIF is then
+excluded from the snapshot assets and knowledge, rather than decoded or retained.
+Existing evidence is not deleted by changing a policy. Already approved image
+references must be revised through the normal Review flow to change their content.
+
+Inclusion does not mean lossless original-byte delivery. The package optimizer
+preserves animations without decoding every frame or silently flattening them.
+Codec failures and images that cannot fit delivery budgets become visible output
+placeholders with a build warning; approved source bytes remain unchanged.
+Do not rewrite approved prose to repair a codec error or disable pixel safety
+limits. The reading meaning of an image is handled in writing and Review.
+
+Source document links can be retained for viewing under the reader's permissions.
+Temporary signed media links are not durable image hosting. Do not embed access
+tokens in generated pages or claim that excluded images have been interpreted.

@@ -1,3 +1,4 @@
+import { LarkResourceBudgetError, omitLarkImage } from "./larkImagePolicy.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { extname, join } from "node:path";
@@ -51,6 +52,8 @@ export interface LarkResourceMaterializationReport {
 }
 
 export interface LarkResourceMaterializationPolicy {
+  images?: "reference-only" | "bundle";
+  gifs?: "reference-only" | "bundle";
   videos: "reference-only" | "bundle";
   maxBytesPerResource: number;
   maxTotalBytes: number;
@@ -575,7 +578,7 @@ function materializationReport(items: readonly LarkResourceMaterializationItem[]
     item.required &&
     !isNonBlockingDocumentResourceFailureReasonCode(item.reason_code)
   );
-  const hasOptionalFailure = items.some((item) => item.status === "failed") || items.some(
+  const hasOptionalFailure = items.some((item) => item.status === "failed" || item.reason_code === "image-budget-exceeded") || items.some(
     (item) => item.status === "reference-only" && item.kind === "poll" && item.reason?.includes("absent") === true,
   );
   return {
@@ -611,10 +614,10 @@ function unavailableReplacement(resource: LarkExternalResource, reasonCode: stri
 
 function assertBudget(asset: LarkMaterializedAsset, policy: LarkResourceMaterializationPolicy, total: number): void {
   if (asset.bytes.byteLength > policy.maxBytesPerResource) {
-    throw new Error(`resource is ${asset.bytes.byteLength} bytes, above maxBytesPerResource=${policy.maxBytesPerResource}`);
+    throw new LarkResourceBudgetError(`resource is ${asset.bytes.byteLength} bytes, above maxBytesPerResource=${policy.maxBytesPerResource}`);
   }
   if (total + asset.bytes.byteLength > policy.maxTotalBytes) {
-    throw new Error(`materialized resources exceed maxTotalBytes=${policy.maxTotalBytes}`);
+    throw new LarkResourceBudgetError(`materialized resources exceed maxTotalBytes=${policy.maxTotalBytes}`);
   }
 }
 
@@ -631,6 +634,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
     if (seen.has(key)) return;
     seen.add(key);
     const required = REQUIRED_KINDS.has(resource.kind);
+    if (omitLarkImage(resource, input.policy, items, replacements)) return;
     try {
       if (resource.kind === "diagram" && resource.inline_content === true) {
         replacements.set(resource.locator, "");
@@ -721,6 +725,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
         type: "media",
         ...(input.mediaFiles?.[token] === undefined ? {} : { localPath: input.mediaFiles[token] }),
       });
+      if (omitLarkImage(resource, input.policy, items, replacements, downloaded.mediaType)) return;
       const digest = resourceDigest(resource);
       const extension = extensionFor(downloaded.mediaType, downloaded.path);
       const asset: LarkMaterializedAsset = {
@@ -741,6 +746,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
       replacements.set(resource.locator, replacement);
       items.push({ kind: resource.kind, locator: resource.locator, status: "materialized", required, asset_paths: [asset.path] });
     } catch (error) {
+      if (error instanceof LarkResourceBudgetError && omitLarkImage(resource, input.policy, items, replacements, undefined, error.message)) return;
       const reasonCode = resourceFailureReasonCode(resource, error);
       if (isNonBlockingDocumentResourceFailureReasonCode(reasonCode)) {
         replacements.set(resource.locator, unavailableReplacement(resource, reasonCode!));

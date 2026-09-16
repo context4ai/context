@@ -20,6 +20,7 @@ const DEFAULT_OPTIMIZATION_PROFILES: readonly PackageAssetOptimizationDefinition
 
 export type PackageAssetOptimizationState =
   | "not-needed"
+  | "partial"
   | "applied"
   | "configured-no-benefit";
 
@@ -32,6 +33,8 @@ export interface PackageAssetOptimizationSummary {
   maxImageBytes: number;
   maxTotalImageBytes: number;
   largestOutputBytes: number;
+  omittedImages?: string[];
+  warnings?: Array<{ path: string; reason: string }>;
   processor?: "sharp";
   mode?: "lossless-webp" | "webp";
 }
@@ -50,6 +53,7 @@ export interface PackageImageProcessor {
 }
 
 type SharpPipeline = {
+  metadata(): Promise<{ pages?: number }>;
   rotate(): SharpPipeline;
   resize(options: {
     width: number;
@@ -65,7 +69,7 @@ type SharpPipeline = {
   toBuffer(): Promise<Uint8Array>;
 };
 
-type SharpFactory = (bytes: Uint8Array, options: { failOn: "error"; animated: true }) => SharpPipeline;
+type SharpFactory = (bytes: Uint8Array, options: { failOn: "error"; animated: false }) => SharpPipeline;
 
 function isPng(bytes: Uint8Array): boolean {
   return bytes.byteLength >= 8 &&
@@ -166,7 +170,11 @@ async function loadSharpProcessor(): Promise<PackageImageProcessor> {
   }
   return {
     async optimize(bytes, definition) {
-      let pipeline = sharp(bytes, { failOn: "error", animated: true }).rotate();
+      const image = sharp(bytes, { failOn: "error", animated: false });
+      const metadata = await image.metadata();
+      // Preserve animation semantics without decoding all frames.
+      if ((metadata.pages ?? 1) > 1) return bytes;
+      let pipeline = image.rotate();
       if (definition.maxDimension !== undefined) {
         pipeline = pipeline.resize({
           width: definition.maxDimension,
@@ -205,6 +213,7 @@ async function adaptiveVariants(input: {
   let smallest = input.asset.bytes.byteLength;
   for (const definition of input.definitions) {
     const output = await input.processor.optimize(input.asset.bytes, definition);
+    if (output === input.asset.bytes) break;
     if (!isWebp(output)) {
       throw new ContextError(ExitCode.WorkspaceStateError, "package asset optimizer returned invalid WebP bytes", {
         category: ErrorCategory.WorkspaceStateInvalid,
@@ -218,23 +227,6 @@ async function adaptiveVariants(input: {
     smallest = output.byteLength;
   }
   return variants;
-}
-
-function budgetError(input: {
-  outputBytes: number;
-  maxImageBytes: number;
-  maxTotalImageBytes: number;
-  oversized: readonly PackageAssetFile[];
-}): ContextError {
-  return new ContextError(ExitCode.WorkspaceStateError, "bundled images cannot meet the package size budget", {
-    category: ErrorCategory.WorkspaceStateInvalid,
-    reason_code: "package.assets.image-budget-exceeded",
-    output_bytes: input.outputBytes,
-    max_image_bytes: input.maxImageBytes,
-    max_total_image_bytes: input.maxTotalImageBytes,
-    oversized_paths: input.oversized.map((asset) => asset.packageRelPath),
-    next: "Reduce or replace the reported source images, then rerun context build.",
-  });
 }
 
 export async function optimizePackageAssetFiles(input: {
@@ -271,25 +263,38 @@ export async function optimizePackageAssetFiles(input: {
   const processor = input.processor ?? await loadSharpProcessor();
   const definitions = input.definition === undefined ? DEFAULT_OPTIMIZATION_PROFILES : [input.definition];
   const variantsByPath = new Map<string, ImageVariant[]>();
+  const omittedImages = new Set<string>();
+  const warnings: Array<{ path: string; reason: string }> = [];
   for (const asset of candidates) {
-    variantsByPath.set(asset.packageRelPath, await adaptiveVariants({ asset, processor, definitions }));
+    try {
+      variantsByPath.set(asset.packageRelPath, await adaptiveVariants({ asset, processor, definitions }));
+    } catch (error) {
+      // Output-only fallback: approved evidence stays untouched.
+      if (error instanceof ContextError) throw error;
+      warnings.push({ path: asset.packageRelPath, reason: error instanceof Error ? error.message : String(error) });
+      omittedImages.add(asset.packageRelPath);
+      variantsByPath.set(asset.packageRelPath, [{ bytes: asset.bytes }]);
+    }
   }
 
   const selectedIndex = new Map<string, number>();
   for (const asset of candidates) {
     const variants = variantsByPath.get(asset.packageRelPath)!;
+    if (omittedImages.has(asset.packageRelPath)) continue;
     let index = input.definition !== undefined && variants.length > 1 ? 1 : 0;
     if (asset.bytes.byteLength > maxImageBytes) {
       const fitting = variants.findIndex((variant) => variant.bytes.byteLength <= maxImageBytes);
       if (fitting < 0) {
-        throw budgetError({ outputBytes: originalBytes, maxImageBytes, maxTotalImageBytes, oversized: [asset] });
+        omittedImages.add(asset.packageRelPath);
+        warnings.push({ path: asset.packageRelPath, reason: "Image exceeds the per-image delivery budget after optimization" });
       }
-      index = fitting;
+      index = Math.max(0, fitting);
     }
     selectedIndex.set(asset.packageRelPath, index);
   }
 
   const selectedBytes = (asset: PackageAssetFile): Uint8Array => {
+    if (omittedImages.has(asset.packageRelPath)) return new Uint8Array();
     const variants = variantsByPath.get(asset.packageRelPath)!;
     return variants[selectedIndex.get(asset.packageRelPath) ?? 0]!.bytes;
   };
@@ -297,6 +302,7 @@ export async function optimizePackageAssetFiles(input: {
   while (outputBytes > maxTotalImageBytes) {
     let best: { asset: PackageAssetFile; nextIndex: number; saving: number } | undefined;
     for (const asset of candidates) {
+      if (omittedImages.has(asset.packageRelPath)) continue;
       const variants = variantsByPath.get(asset.packageRelPath)!;
       const currentIndex = selectedIndex.get(asset.packageRelPath) ?? 0;
       const nextIndex = currentIndex + 1;
@@ -306,7 +312,13 @@ export async function optimizePackageAssetFiles(input: {
       if (best === undefined || saving > best.saving) best = { asset, nextIndex, saving };
     }
     if (best === undefined) {
-      throw budgetError({ outputBytes, maxImageBytes, maxTotalImageBytes, oversized: [] });
+      const largest = candidates.filter(asset => !omittedImages.has(asset.packageRelPath))
+        .sort((a, b) => selectedBytes(b).byteLength - selectedBytes(a).byteLength || a.packageRelPath.localeCompare(b.packageRelPath))[0];
+      if (largest === undefined) break;
+      outputBytes -= selectedBytes(largest).byteLength;
+      omittedImages.add(largest.packageRelPath);
+      warnings.push({ path: largest.packageRelPath, reason: "Image exceeds the total delivery budget after optimization" });
+      continue;
     }
     selectedIndex.set(best.asset.packageRelPath, best.nextIndex);
     outputBytes -= best.saving;
@@ -315,6 +327,7 @@ export async function optimizePackageAssetFiles(input: {
   const optimizedByInputPath = new Map<string, PackageAssetFile>();
   const optimizedTargetByOriginal = new Map<string, string>();
   for (const asset of candidates) {
+    if (omittedImages.has(asset.packageRelPath)) continue;
     const output = selectedBytes(asset);
     if (output.byteLength >= asset.bytes.byteLength) continue;
     const packageRelPath = contentAddressedWebpPath(asset, output);
@@ -322,16 +335,16 @@ export async function optimizePackageAssetFiles(input: {
     optimizedTargetByOriginal.set(asset.packageRelPath, packageRelPath);
   }
 
-  const assets = input.assets.map((asset) => optimizedByInputPath.get(asset.packageRelPath) ?? asset);
-  outputBytes = candidates.reduce((sum, asset) =>
+  const assets = input.assets.filter(asset => !omittedImages.has(asset.packageRelPath)).map((asset) => optimizedByInputPath.get(asset.packageRelPath) ?? asset);
+  outputBytes = candidates.filter(asset => !omittedImages.has(asset.packageRelPath)).reduce((sum, asset) =>
     sum + (optimizedByInputPath.get(asset.packageRelPath)?.bytes.byteLength ?? asset.bytes.byteLength), 0);
-  const largestOutputBytes = Math.max(0, ...candidates.map((asset) =>
+  const largestOutputBytes = Math.max(0, ...candidates.filter(asset => !omittedImages.has(asset.packageRelPath)).map((asset) =>
     optimizedByInputPath.get(asset.packageRelPath)?.bytes.byteLength ?? asset.bytes.byteLength));
   return {
     assets,
     optimizedTargetByOriginal,
     summary: {
-      state: optimizedByInputPath.size > 0 ? "applied" : "configured-no-benefit",
+      state: omittedImages.size > 0 ? "partial" : optimizedByInputPath.size > 0 ? "applied" : "configured-no-benefit",
       candidateFiles: candidates.length,
       originalBytes,
       outputBytes,
@@ -339,6 +352,8 @@ export async function optimizePackageAssetFiles(input: {
       maxImageBytes,
       maxTotalImageBytes,
       largestOutputBytes,
+      ...(warnings.length === 0 ? {} : { warnings }),
+      ...(omittedImages.size === 0 ? {} : { omittedImages: [...omittedImages] }),
       processor: "sharp",
       mode: input.definition?.mode ?? "webp",
     },

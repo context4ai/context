@@ -22,11 +22,17 @@ remove the Agent host's network approval boundary. Satisfy that boundary by
 requesting host network escalation in the tool invocation that executes the
 flush, not by turning it into another conversational approval gate.
 
-Before requesting network access, run:
+When first requesting host network access, or diagnosing an unknown destination, run:
 
 ```bash
 context logs plan --format json
 ```
+
+When delivery is already authorized and the fixed destination and data policy are
+unchanged, execute `context logs flush --format json` directly. A prior plan
+receipt is not a CLI prerequisite. Do not repeatedly plan or ask for consent on
+retries. `invalid_batch` from the command bridge is local protocol rejection before
+HTTP; repair/update the compatible sink client rather than retrying network access.
 
 The plan is the audit contract. It reports the canonical workspace outbox,
 normally `.tmp/context-runtime/logs/outbox.jsonl`, the event count and kinds,

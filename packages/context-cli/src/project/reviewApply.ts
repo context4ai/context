@@ -1,3 +1,4 @@
+import { reviewSiteBaselineHash } from "./reviewSiteModel.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -316,6 +317,27 @@ export async function applyReviewDecisions(input: {
     const rows = await readCandidateRecords(input.projectRoot);
     const nextRows = [...rows];
     const decisions = expandReviewPayload(input.payload, rows);
+    const scoped = rows.filter(r => r.status === "draft" && (input.payload.scope?.kind === "all" || r.collection === input.payload.collection))
+      .sort((a, b) => a.candidate_id < b.candidate_id ? -1 : 1);
+    if (input.payload.baseline_hash && input.payload.baseline_hash !== await reviewSiteBaselineHash(input.projectRoot,
+      scoped.map(r => r.approved_revision?.previous_path ?? r.path))) {
+      throw new ContextError(ExitCode.WorkspaceStateError, "Review navigation or approved baseline changed; generate a fresh report", {
+        category: ErrorCategory.WorkspaceStateInvalid, code: "review-baseline-stale", next: "context review html --all --format json" });
+    }
+    const repairIds = new Set<number>();
+    const repairs = (input.payload.feedback_repairs ?? []).map(repair => {
+      const row = scoped[repair.index];
+      if (!Number.isInteger(repair.index) || !row || repairIds.has(repair.index) || !repair.instruction.trim() ||
+        input.payload.encoded_statuses?.[repair.index] !== "pending") throw new Error("Invalid review revision request");
+      repairIds.add(repair.index);
+      const quote = (value: string) => "'" + value.replace(/'/gu, "'\\''") + "'";
+      return { candidate_id: row.candidate_id, path: row.path, fingerprint: row.fingerprint, instruction: repair.instruction,
+        command: `context revise ${quote(row.candidate_id)} --instruction ${quote(repair.instruction)} --format json` };
+    });
+    const feedbackPath = repairs.length ? `.tmp/context-runtime/review-feedback/${indexerProtocolDigest(input.payload).replace("sha256:", "")}.json` : undefined;
+    const feedbackTarget = feedbackPath === undefined ? undefined : reviewFileTarget({ path: feedbackPath,
+      baseContent: await readProjectFileMaybe(input.projectRoot, feedbackPath),
+      targetContent: JSON.stringify({ created_at: now, repairs }, null, 2) + "\n" });
     const approvesAnyCandidate = decisions.some((decision) =>
       decision.status === "approved"
     );
@@ -442,6 +464,7 @@ export async function applyReviewDecisions(input: {
       }
     }
     const targets = [
+      feedbackTarget,
       await prepareApprovedKnowledgeSnapshotTarget({ projectRoot: input.projectRoot, pages: pagesToWrite, candidates: rows }),
       ...navigationTargets,
       ...pagesToWrite.flatMap((page) => page.previous === undefined ? [] : [reviewFileTarget({
@@ -484,6 +507,7 @@ export async function applyReviewDecisions(input: {
     }
     return {
       applied: decisions.length,
+      ...(feedbackPath ? { repairs, feedback_path: feedbackPath } : {}),
       approved,
       rejected,
       unchanged,

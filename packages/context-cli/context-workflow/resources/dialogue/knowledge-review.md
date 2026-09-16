@@ -10,17 +10,18 @@ Explain that Review is the boundary between draft candidates and approved
 Markdown. In ordinary mode:
 
 1. open the complete current Review report;
-2. let the user approve or reject candidates;
+2. let the user approve, reject, or request revisions to candidates;
 3. ask them to copy the review code back into the conversation; and
 4. apply only that exact review code through the returned command.
 
 The user does not need to create a payload file; the Agent may write the pasted
 review code to ignored scratch storage for the CLI command. Preserve it exactly;
-do not decode, regenerate, summarize, or edit it. Each segment is at most 980
-characters. If there are multiple segments, collect all of them and write one
-segment per line in the same input file before applying once. Never apply a
-partial set. If CLI reports missing, mixed, damaged, or stale segments, follow
-its diagnostic; ask for missing segments or a fresh review code as appropriate.
+do not decode, regenerate, summarize, or edit it. The code carries decisions and
+revision instructions together. If it exceeds 1,000 characters, use a direct
+reply (mention the Bot when relevant) instead of a length-limited form. Older
+segmented codes still require every segment in the same input file. If the CLI
+reports damaged or stale feedback, follow its diagnostic and request a fresh
+report/code; never repair a code by hand.
 Never derive a payload
 from HTML, candidate ids, snapshots, or a default decision.
 
@@ -50,3 +51,10 @@ the index's current scope template. Approve only pages actually reviewed; leave
 undecided and repair pages pending. Do not open HTML or persist a parallel review
 ledger. A partial review code in ordinary mode likewise leaves pending pages
 unchanged; all segments of that code are still required.
+
+After applying feedback, follow each returned repair command with the user's
+exact instruction. Repairs remain pending; neither copying nor applying the
+code approves them. Pending instructions are retained by the CLI and exposed in
+the current review resource after a session restart. Re-read and review the
+resulting candidate before approval. Do not silently replace a revision request
+with rejection or bulk approval.
