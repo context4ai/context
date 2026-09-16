@@ -200,6 +200,48 @@ coverage by mechanically placing every new page under an unrelated catch-all.
 Build reports missing bindings for the Agent to resolve; it does not classify
 content. Moving a menu entry does not change the article URL.
 
+### Preserve established navigation intent
+
+Before placing new knowledge, read the workspace's AGENTS.md, current
+`src/knowledge-map.yaml`, existing overview pages and relevant category/article
+bodies. Reuse any settled directory intent in the current plan. Establish what
+each affected category helps readers do and why adjacent categories are separate;
+do not infer this from labels alone. Read only affected branches and enough
+neighboring content to distinguish them, not the entire library on every update.
+If intent remains ambiguous, state the proposed interpretation in the plan.
+
+Prefer, in order: revise an existing article; add a page to a matching category;
+add a coherent child category; propose a top-level change only when existing
+categories cannot serve a distinct, lasting reader need. Do not create a top-level
+category merely because a source, repository, product, team or batch is new.
+For example, a new assistant's usage guide, frontend integration and runtime
+architecture can belong in existing usage, frontend and backend categories, with
+cross-links for the shared product. Keep them together only when the site's
+established organizing principle supports that choice.
+
+In the work-start report or current plan, briefly state the affected articles'
+intended placements and reused category intent. For proposed top-level additions,
+renames, removals or changes of purpose, show the before/after tree, why reuse is
+insufficient, affected existing pages and reading order. Present that change for
+human review before applying it. This uses the existing report feedback where
+available; do not add a new CLI state, schema field or routine per-article gate.
+Explicit user approval of that concrete structure is sufficient; do not ask again.
+General permission to write knowledge or organize batches is not approval to
+change the site's top-level organization. If the need emerges after report
+approval, update the same plan and ask about that structural change only; continue
+independent work within the approved organization.
+
+Before delivery, compare the resulting map with the approved plan: article
+placement matches its main reader task, titles match the bodies, sibling ordering
+is deliberate, and directories are neither empty nor accidental duplicates.
+Honor the workspace's chosen directory depth and homogeneous sibling convention;
+where it requires directory-only or article-only siblings, do not mix them.
+Use an "Other" group last only for genuinely useful residual content, not to
+avoid classification. Apply supported map adjustments through the current CLI
+flow, retaining article identities and URLs. Record lasting category intent
+briefly in the workspace AGENTS.md or existing organization guide; do not create
+a separate taxonomy ledger or put planning instructions in reader articles.
+
 ### Reader tasks, names and reading order
 
 Read the affected articles' bodies before changing their categories or titles.
@@ -257,8 +299,8 @@ change does not require a prose rewrite or file migration; changing its label do
 not silently rename the approved article. Needed title or content revisions use
 the existing revision and Review flow. Splits and merges use ordinary article
 tasks, link repair and any explicit retirement after replacement content is
-delivered. These are Agent editorial decisions, not new CLI checks or approval
-gates.
+delivered. These are Agent editorial decisions, not new CLI checks or routine per-article
+approval gates. Top-level changes follow the focused review described above.
 
 ## Edit one section or review part of a batch
 

@@ -78,6 +78,17 @@ Estimate timing or savings only when supported by measurements and conditions.
 For a small addition to an existing site, describe only the affected reading
 position; reuse its layout and delivery choices instead of proposing them again.
 
+## Review navigation changes in context
+
+Read the knowledge-updates guidance on preserving established navigation intent.
+For an existing site, explain the category intent being reused and the affected
+article placements. A new source or product is not a reason for a new top-level
+menu. If a top-level addition, rename, removal or purpose change is warranted,
+include its before/after tree, reuse alternatives and impact in this report.
+Obtain explicit feedback before applying that structural change, reusing a
+concrete structure already approved by the user. If it emerges later, update this
+same plan and review only the changed decision; do not restart approved batches.
+
 ## Mandatory feedback
 
 Write the scratch report using the host file tool, show its clickable path,

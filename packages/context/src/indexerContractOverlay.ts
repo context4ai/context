@@ -307,17 +307,14 @@ export function validateIndexerContractOverlay(input: {
   if (indexerContractOverlayDigest(overlayPayload) !== overlay.overlay_digest) {
     throw new TypeError("contract overlay digest does not match its canonical payload");
   }
-  if (
-    overlay.extends.version !== base.version ||
-    overlay.extends.contract_digest !== base.contract_digest
-  ) {
-    throw new TypeError("contract overlay is bound to another base contract");
+  // Historical digests describe the author's baseline, not compatibility.
+  // Parser releases and unrelated profiles may change those digests. Validate
+  // the declared contract versions and the actual merged constraints instead.
+  if (overlay.extends.version !== base.version) {
+    throw new TypeError("contract overlay requires another base contract version");
   }
-  if (
-    overlay.operator_contract_version !== operators.version ||
-    overlay.operator_contract_digest !== operators.contract_digest
-  ) {
-    throw new TypeError("contract overlay is bound to another operator contract");
+  if (overlay.operator_contract_version !== operators.version) {
+    throw new TypeError("contract overlay requires another operator contract version");
   }
   const baseProfile = profileById(base, overlay.extends.profile);
   const effectiveProfile = mergeOverlayProfile(baseProfile, overlay);

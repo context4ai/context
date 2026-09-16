@@ -44,7 +44,13 @@ modules, public capabilities, product operations or another evidenced structure.
 Distinguish navigation groups from sourced articles; reuse articles rather than
 duplicating bodies. Retain existing KB, website and LLMS delivery choices.
 
-For website delivery, add a compact sketch showing the site title, top-level
+For an existing site, summarize the existing categories' intent and affected
+article placements. For a proposed top-level change, show the before/after tree,
+why existing categories cannot accommodate it and the affected pages/order.
+Mark it as a decision for review; omit this comparison when top-level structure
+is unchanged. Reuse explicit prior approval of the concrete structure.
+
+For a new website or an approved navigation redesign, add a compact sketch showing the site title, top-level
 groups, a representative left menu, article chapters and on-page outline.
 For a new homepage or requested redesign, also propose a short title, slogan,
 description and the verified optional resource cards. Briefly explain mobile

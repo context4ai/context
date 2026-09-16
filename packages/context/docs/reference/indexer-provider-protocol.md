@@ -351,8 +351,10 @@ visible-Skill claim nor the Route report authorizes Bundle materialization.
 ## Contract overlay validation
 
 `validate-indexer-contract-overlays` recomputes the complete data-only overlay
-against the exact CLI base and operator contracts. Invalid DSL, executable
-fields, identity redefinition, threshold weakening, digest drift or a partial
+against the current CLI base and operator contracts. Contract versions must match;
+historical base/operator digests are provenance, not compatibility pins. Parser
+release changes and unrelated profile changes do not require rebinding. Invalid DSL, executable
+fields, identity redefinition, threshold weakening, invalid payload integrity or a partial
 Provider identity fails validation. The selected Provider Bundle integrity is
 an exact input, not a self-reported trust assertion.
 

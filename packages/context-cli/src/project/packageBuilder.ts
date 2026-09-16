@@ -1,6 +1,7 @@
 import { readPackageSiteUrl } from "./packageSiteAddress.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
+import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { assertProductionDeliveryReady, finishProductionDelivery } from "./productionDelivery.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -661,7 +662,8 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     const revisionInterruptedProduction = !!production && !!await readApprovedRevision(projectRoot);
     await finishApprovedRevision(projectRoot);
     const { readKnowledgeUpdate } = await import("./knowledgeUpdate.js");
-    if (!revisionInterruptedProduction && !production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
+    const productionEnded = !production || dispatchProductionStage(production, productionCapabilitiesSchema.parse({})).state === "ended";
+    if (productionEnded && !revisionInterruptedProduction && !production?.delivery && !maintenanceActive && !await readTaskRollback(projectRoot) && !await readApprovedRevision(projectRoot) &&
         !await readKnowledgeUpdate(projectRoot) && (await readProjectCloseStatus(projectRoot)).state === "ready") {
       const { clearCompletedLifecycle } = await import("./lifecycleCleanup.js");
       await clearCompletedLifecycle(projectRoot);

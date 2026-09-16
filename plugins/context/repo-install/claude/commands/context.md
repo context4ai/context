@@ -49,6 +49,17 @@ Within an active Context workflow, requests include, but are not limited to:
 | Commit workspace results | Save selected workspace files in local Git, without pushing or including unrelated changes. |
 | Restore a historical workspace version | Select a saved commit, restore only the agreed workspace scope and make its sources usable again. |
 
+## Preserve existing reading organization
+
+For additions as well as navigation edits, first read the workspace AGENTS.md,
+current map and relevant overview/category articles. Reuse their category intent;
+a new source or product does not by itself justify a top-level menu. Follow the
+knowledge-updates guidance returned by `context entry` or the current Route,
+especially "Preserve established navigation intent". Include proposed top-level
+changes in the work-start report or current plan for explicit human review before
+applying them; reuse a concrete structure the user has already approved. Ordinary
+placements within the approved organization do not require another review gate.
+
 ## Read the task before registering sources
 
 For a knowledge-map-only request, use the existing workspace directly. Read

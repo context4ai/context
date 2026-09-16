@@ -47,6 +47,7 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "indexer catalog", view: "production-semantic", handles: ["skill_name", "skill_entry"], notes: "Lists bundled skill entry metadata without versions or integrity checks; does not declare Agent capabilities." },
   { command: "indexer report-benchmark", view: "production-semantic", handles: ["benchmark_manifest", "current_authority", "observation", "oracle_evaluation", "override", "benchmark_report"], notes: "Loads the read-only oracle only after execution from outside the Agent workspace and emits the recomputable ten-field forward-test report." },
   { command: "package", view: "production-semantic", handles: ["package_name", "package_status"], notes: "Package output configuration namespace." },
+  { command: "package site-url", view: "production-semantic", handles: ["package_name", "site_url"], notes: "Records a deployed website address in generated package site maps without a network check." },
   { command: "package template", view: "production-semantic", handles: ["package_name", "template_status"], notes: "Package template review namespace." },
   { command: "package template accept", view: "production-semantic", handles: ["package_name", "template_status"], notes: "Explicitly accepts an unchanged generated starter template." },
   { command: "run", view: "production-semantic", handles: ["phase_id", "view", "source_ref", "node_ref", "view_ref", "input_payload"], notes: "Inspects, validates, stages, or executes declared project phases." },
