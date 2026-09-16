@@ -3,6 +3,9 @@ export const siteMarkdownConfig = String.raw`
   html: false,
   attrs: { disable: true },
   config(md) {
+    md.core.ruler.before('block', 'context_trusted_site', state => {
+      state.md.options.html = /^(?:_site|custom)\//.test(state.env.relativePath || '');
+    });
     md.block.ruler.disable('snippet');
     const linkOpen = md.renderer.rules.link_open;
     md.renderer.rules.link_open = (tokens, index, options, env, self) => {
@@ -34,7 +37,10 @@ export const siteMarkdownConfig = String.raw`
     });
     md.renderer.rules.context_details = (tokens, index) => tokens[index].content + '\n';
     const text = md.renderer.rules.text;
-    md.renderer.rules.text = (...args) => (text ? text(...args) : md.utils.escapeHtml(args[0][args[1]].content)).replace(/\{/g, '&#123;');
+    md.renderer.rules.text = (...args) => {
+      const rendered = text ? text(...args) : md.utils.escapeHtml(args[0][args[1]].content);
+      return /^(?:_site|custom)\//.test(args[3]?.relativePath || '') ? rendered : rendered.replace(/\{/g, '&#123;');
+    };
     // Inline/indented code bypasses the text renderer. Preserve its literal
     // spelling for readers without allowing Vue to interpret interpolation.
     for (const name of ['code_inline', 'code_block']) {
@@ -58,6 +64,7 @@ import DefaultTheme from 'vitepress/theme-without-fonts';
 import { useData, useRoute, dataSymbol } from 'vitepress';
 import { onMounted, nextTick, watch, computed, ref, provide, h } from 'vue';
 import './style.css';
+import extensions from './extensions.js';
 export default {
   extends: DefaultTheme,
   Layout: {
@@ -191,12 +198,16 @@ export default {
             activeMatch: inLlms.value || inHistory.value ? '^' : '(?!)' }],
       })) });
       const slots = {
+        'home-hero-before': () => extensions.banner ? extensions.banner() : null,
+        'layout-bottom': () => extensions.floating ? h('div', { class: 'context-business-floating' }, extensions.floating()) : null,
         'nav-bar-content-after': () => h('button', { class: 'context-language', type: 'button',
           'aria-label': chinese.value ? 'Switch interface language to English' : '将界面语言切换为中文',
           title: chinese.value ? 'Switch to English' : '切换为中文',
           onClick: () => changeLanguage(chinese.value ? 'en' : 'zh') }, chinese.value ? 'EN' : '中文'),
-        'home-features-before': () => [siteMap(), resources()],
-        'home-features-after': poweredBy,
+        'home-features-before': () => [
+          extensions.knowledge === undefined ? siteMap() : extensions.knowledge && extensions.knowledge(),
+          extensions.resources === undefined ? resources() : extensions.resources && extensions.resources()],
+        'home-features-after': () => extensions.footer === undefined ? poweredBy() : extensions.footer && extensions.footer(),
         'doc-after': () => history.value ? h('section', { class: 'context-history-cards' },
           history.value.length ? history.value.map((entry, index) =>
             h('details', { class: 'context-history-card', open: index < 3, key: entry.version }, [
@@ -306,6 +317,7 @@ export default {
 `;
 
 export const siteThemeCss = `
+.context-business-floating { position: fixed; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, env(safe-area-inset-bottom)); z-index: 30; max-width: calc(100vw - 40px); }
 .context-history-cards { display: grid; gap: 16px; margin: 24px 0; }
 .context-history-card { border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg-soft); }
 .context-history-card summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; padding: 20px; cursor: pointer; }
@@ -508,10 +520,11 @@ export const siteThemeCss = `
   .context-home-section, .context-home-powered { width: min(calc(100% - 36px), 680px); margin-left: auto; margin-right: auto; }
   .context-home-resource-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 959px) {
+@media (max-width: 1279px) {
   .VPNavBarMenu { display: none !important; }
   .VPNavBarHamburger { display: flex !important; }
   .VPNavScreen { display: block !important; }
+  .VPNavScreen { bottom: auto !important; max-height: calc(100dvh - var(--vp-nav-height)); overflow-y: auto; }
   .VPNavBarSearch { flex: 0 0 48px !important; width: 48px; padding: 0 4px !important; }
   .VPNavBarSearch #local-search, .VPNavBarSearch .DocSearch-Button { width: 40px; }
   .VPNavBarSearch .DocSearch-Button-Placeholder, .VPNavBarSearch .DocSearch-Button-Keys { display: none !important; }

@@ -54,6 +54,15 @@ describe("0.6.2 knowledge resource projection", () => {
       });
 
       expect(projected.assets).toHaveLength(1);
+      const pageRelative = await projectKnowledgeAssets({ projectRoot, pageRelPath,
+        content: `![Same](../../${sourceRoot}/${sourcePath})`, sourceMaterializedAt: sourceRoot,
+        documentPath: "index.md", manifest });
+      expect(pageRelative.assets).toEqual(projected.assets);
+      expect(pageRelative.content).toContain("../assets/image/");
+      const outside = await projectKnowledgeAssets({ projectRoot, pageRelPath,
+        content: "![Other](../../sources/lark/other/assets/materialized/image/example.png)",
+        sourceMaterializedAt: sourceRoot, documentPath: "index.md", manifest });
+      expect(outside.assets).toEqual([]);
       expect(projected.assets[0]?.relPath).toMatch(/^knowledge\/assets\/image\/[a-f0-9]{64}\.png$/u);
       expect(projected.content).toContain("![One \\[nested\\]](../assets/image/");
       expect(knowledgeAssetReferences({ pageRelPath, content: projected.content })).toEqual([

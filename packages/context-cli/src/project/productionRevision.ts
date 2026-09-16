@@ -39,13 +39,15 @@ export async function beginProductionRevision(input: {
       input_schema: { type: "object", properties: { selector: { type: "string" }, instruction: { type: "string" } }, required: ["selector", "instruction"] },
     });
     if (paths.size !== 1) throw invalid("Select one exact article path; this title identifies multiple current articles.");
-    if (!stage.report_approved || stage.delivery || input.move_to) throw invalid("Finish the current report or delivery before revising; article moves use the structure-aware revision after this production run.");
+    if (!stage.report_approved || input.move_to) throw invalid("Finish the current report before revising; article moves use the structure-aware revision after this production run.");
     await assertProductionPlanRequirementsCurrent(input.projectRoot, stage);
     const path = [...paths][0]!;
     const owner = [...stage.tasks].reverse().find(task => task.path === path && !["excluded", "replaced"].includes(task.status));
     if (!owner) throw invalid("The selected article has no current production task. Read the current workflow before revising.");
     const unfinished = !["accepted", "excluded", "replaced"].includes(owner.status);
-    let updated = stage;
+    const { delivery: _delivery, ...writingStage } = stage;
+    void _delivery;
+    let updated = writingStage;
     if (!unfinished || owner.question !== input.instruction || owner.status === "blocked") {
       const approved = productionApprovedTargetsIndex(await readApprovedKnowledgeMetadataIndex(input.projectRoot));
       const prior = candidates.find(candidate => candidate.path === path);
@@ -67,9 +69,10 @@ export async function beginProductionRevision(input: {
         base: productionArticleTargetDigest({ markdown, sections, visibility: prior?.visibility ?? formal!.visibility }) };
       const complete = { ...task, input: productionTaskInput(task) };
       await readProductionArticleTarget({ projectRoot: input.projectRoot, task: complete, candidates, readApproved: async () => approved });
-      updated = reviseProductionPlan({ stage, tasks: [complete], replaces: unfinished ? [owner.id] : [] });
+      updated = reviseProductionPlan({ stage: writingStage, tasks: [complete], replaces: unfinished ? [owner.id] : [] });
       await saveProductionStage(input.projectRoot, updated);
     }
+    else if (stage.delivery) await saveProductionStage(input.projectRoot, updated);
     try {
       const next = await prepareNextProductionStage({ projectRoot: input.projectRoot, stage: updated, multiAgent: false });
       return { status: "production-revision-prepared" as const, path, stage: stage.id,

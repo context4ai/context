@@ -22,6 +22,7 @@ preload the whole manual set.
 
 | Current need | Read |
 |---|---|
+| Customize website pages, homepage slots or a floating chat widget | [Page Content Customization](./guides/page-customization.md) |
 | Understand the whole knowledge-project shape | [Getting Started](./getting-started.md) |
 | Know what the Agent may decide or change | [Agent Guide](./guides/agent-guide.md) and [Agent Dialogue](./guides/agent-dialogue.md) |
 | Configure sources, capture, Indexers, or packages | [Project API](./reference/project-api.md) |

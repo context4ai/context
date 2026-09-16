@@ -107,6 +107,7 @@ knowledge/architecture/product-guides/component-input-fields.md
 - [项目 API](./docs/reference/project-api.md)
 - [Indexer Provider 协议](./docs/reference/indexer-provider-protocol.md)
 - [知识包输出](./docs/guides/package-outputs.md)
+- [页面内容定制](./docs/guides/page-customization.md)：首页插槽、自定义页面与浮动聊天组件。
 - [知识包模板](./docs/reference/package-templates.md)
 
 - [更新已有知识](./docs/guides/knowledge-updates.md)

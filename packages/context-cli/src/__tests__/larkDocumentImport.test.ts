@@ -9,6 +9,23 @@ const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 const response = JSON.stringify({ data: { document: { title: "Guide", content: "<title>Guide</title><p>Current procedure.</p>" }, revision_id: 7 } });
 
+test.each(["markdown", "xml"])("saved %s images use supplied media and ignore code examples", async format => {
+  const root = await mkdtemp(join(tmpdir(), "context-markdown-images-")); roots.push(root);
+  const image = join(root, "image.png");
+  const bytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64");
+  await writeFile(image, bytes);
+  const markdown = "![Screenshot](https://feishu.cn/file/imageExample)\n\n```md\n![Sample](https://feishu.cn/file/notAnImage)\n```";
+  const payload = { document: { content: format === "markdown" ? markdown : `<p>![Screenshot](https://feishu.cn/file/imageExample)</p>` } };
+  const result = await fetchFeishuDocSnapshot({ url: "https://example.larkoffice.com/docx/guide",
+    prefetched: { responsePages: [JSON.stringify({ data: payload })], identity: "user", mediaFiles: { imageExample: image } } },
+    async () => { throw new Error("supplied bytes must avoid downloads"); });
+  expect(result.resourceMaterialization.discovered.image).toBe(1);
+  expect(result.resourceMaterialization.materialized.image).toBe(1);
+  expect(result.markdown).toContain("materialized/image/");
+  expect(result.markdown).not.toContain("https://feishu.cn/file/imageExample");
+  expect(result.assets.some(asset => asset.bytes !== undefined && Buffer.from(asset.bytes).equals(bytes))).toBe(true);
+});
+
 test("saved host document responses are normalized without another tool call", async () => {
   const result = await fetchFeishuDocSnapshot({ url: "https://example.larkoffice.com/docx/guide",
     prefetched: { responsePages: [response], identity: "user" } }, async () => {

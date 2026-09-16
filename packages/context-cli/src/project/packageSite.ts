@@ -16,10 +16,11 @@ import type { ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSources.js";
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
+import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v42-section-anchor-blocks:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v43-page-extensions:${createHash("sha256")
   .update(JSON.stringify([siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -55,6 +56,18 @@ export function createSiteNavigation(pkg: PackageDefinition, selected: readonly 
       package_path: packageKnowledgeOutputPath(pkg, file.relPath), site_path: path,
       title: typeof meta.title === "string" ? meta.title : posix.basename(file.relPath, ".md") };
   });
+  for (const [key, href] of siteExtensionTargets(pkg.kind === "package.kb" ? pkg.site : undefined)) {
+    if (identities.has(key)) invalidSiteExtension(`Website page ${key} conflicts with an approved article identity`);
+    targets.set(key, href);
+  }
+  for (const entry of structure?.entries ?? []) {
+    if (entry.target?.artifact_ref.startsWith("site:") && !targets.has(entry.target.artifact_ref)) {
+      invalidSiteExtension(`Unknown site page ${entry.target.artifact_ref}; declare it in site.extensions.pages`);
+    }
+    if (entry.target?.artifact_ref.startsWith("site:") && entry.target.section_key) {
+      invalidSiteExtension(`Website page ${entry.target.artifact_ref} does not support knowledge section_key targets`);
+    }
+  }
   const projection = structure ? projectKnowledgeMap(structure, targets) : { entries: [], warnings: [] };
   const linked = new Set<string>();
   const visit = (entries: ProjectedKnowledgeMapEntry[]) => entries.forEach(entry => {
@@ -180,9 +193,12 @@ export async function writePackageSite(input: {
     }
     await writeFile(join(configRoot, "theme/index.js"), siteThemeScript);
     await writeFile(join(configRoot, "theme/style.css"), siteThemeCss);
+    await writeSiteExtensions(projectRoot, temporary, options.extensions);
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: options.lang ?? "en-US", base,
       appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: `context-theme:${pkg.name}:${base}` },
-      ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: { build: { chunkSizeWarningLimit: 2000 } },
+      srcExclude: ["_site/**/*.md"],
+      ignoreDeadLinks: true, cleanUrls: false, router: { prefetchLinks: false }, vite: {
+        resolve: { dedupe: ["vue", "vitepress"] }, build: { chunkSizeWarningLimit: 2000 } },
       themeConfig: { ...siteThemeLabels("zh"), contextUpdated: historyDate,
         contextUiLabels: { zh: siteThemeLabels("zh"), en: siteThemeLabels("en") },
         contextSections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
@@ -230,8 +246,9 @@ export async function writePackageSite(input: {
         { theme: "alt", text: "LLM Docs", link: "/llms/index.html" },
       ],
     };
+    const homeHero = options.extensions?.slots?.banner === undefined ? `hero: ${JSON.stringify(hero)}\n` : "";
     await writeFile(join(temporary, "index.md"),
-      `---\nlayout: home\ntitle: ${JSON.stringify(options.home?.title ?? options.title ?? pkg.name)}\nhero: ${JSON.stringify(hero)}\n---\n`);
+      `---\nlayout: home\ntitle: ${JSON.stringify(options.home?.title ?? options.title ?? pkg.name)}\n${homeHero}---\n`);
     await writeFile(join(temporary, "changelog.md"), `---\ntitle: Changelog\ncontextHistory: ${JSON.stringify(Buffer.from(JSON.stringify(history)).toString("base64"))}\n---\n\n# Changelog\n`);
     const llms = buildLlmsDocuments({ title: options.title ?? pkg.name, base, assetsPrefix: "resources/",
       articles: await Promise.all(llmsArticles(pkg, selected).map(async article => ({ ...article,

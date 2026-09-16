@@ -11,8 +11,8 @@ import { closeProjectWorkspace, readProjectCloseStatus } from "../project/close.
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
 import { readProductionStage } from "../project/productionStageStore.js";
 import { collectProjectStatus } from "../project/status.js";
-import { readApprovedRevision } from "../project/approvedRevision.js";
-import { readMaintenance } from "../project/maintenanceStorage.js";
+import { readApprovedRevision, requestDigest } from "../project/approvedRevision.js";
+import { readMaintenance, revisionStoragePath } from "../project/maintenanceStorage.js";
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 import { beginDocumentRevision } from "../project/documentRevision.js";
 import { requestProductionDelivery, resumeProductionWriting } from "../project/productionDelivery.js";
@@ -222,4 +222,55 @@ test("a rebuild blocked by missing outputs returns the existing package Gate ins
   expect(status.workflow.current?.availability).toBe("requires-user");
   expect(await readProductionStage(root)).toEqual(ledger);
   await cancelKnowledgeMaintenance(root, "repack-without-output");
+}, 60_000);
+
+
+test.each([false, true])("Close advances pending targets before building and retains final delivery (unchanged last page: %s)", async (unchanged) => {
+  const { root, views } = await deliveryWorkspace();
+  await buildProjectPackages(root);
+  const production = await readProductionStage(root);
+  await registerKnowledgeMaintenance(root, { id: "multi-batch", operation: "revise", timing: "priority",
+    targets: views.map(view => ({ path: view.path, instruction: "Clarify the public entry point." })) });
+  await advance(root);
+  // Represent an existing batch boundary without generating fifty unrelated pages.
+  const first = (await readApprovedRevision(root))!;
+  const pending = first.pending_targets;
+  first.pending_targets = [];
+  first.revision = requestDigest(first);
+  await writeFile(join(root, await revisionStoragePath(root)), JSON.stringify(first));
+  let route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
+  await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
+    value: { stage: "approved-revision", markdown: first.target.markdown.replace("public entry point", "documented public entry point") } });
+  const boundary = (await readApprovedRevision(root))!;
+  boundary.pending_targets = pending;
+  boundary.revision = requestDigest(boundary);
+  await writeFile(join(root, await revisionStoragePath(root)), JSON.stringify(boundary));
+  await expect(closeProjectWorkspace(root)).rejects.toThrow();
+  expect((await readApprovedRevision(root))!.target.path).toBe(first.target.path);
+  await approveCandidates(root, await readCandidateRecords(root));
+  await closeProjectWorkspace(root);
+  const second = (await readApprovedRevision(root))!;
+  expect(second.target.path).toBe(views[1]!.path);
+  expect((await readMaintenance(root)).active?.phase).toBe("running");
+  expect(await readProductionStage(root)).toEqual(production);
+  route = (await collectProjectStatus(root, { managed: true })).workflow.current!;
+  expect(route.reason_code).toBe("route.indexer.approved-revision");
+  await completeCurrentIndexerAction({ cwd: root, revision: route.revision, managed: true,
+    value: { stage: "approved-revision", markdown: unchanged ? second.target.markdown : second.target.markdown.replace("public entry point", "documented public entry point") } });
+  await approveCandidates(root, await readCandidateRecords(root));
+  await closeProjectWorkspace(root);
+  expect(await readApprovedRevision(root)).toBeDefined();
+  expect((await readMaintenance(root)).active).toBeDefined();
+  await buildProjectPackages(root);
+  expect((await readMaintenance(root)).active).toBeUndefined();
+  expect(await readProductionStage(root)).toEqual(production);
+}, 90_000);
+
+test("maintenance CLI exposes its input schema without a workspace mutation", async () => {
+  const { root } = await deliveryWorkspace();
+  const before = await readMaintenance(root);
+  const schema = JSON.parse(await runCliInDir(root, ["task", "maintain", "--schema", "--format", "json"]));
+  expect(schema.properties.operation.enum).toEqual(["revise", "regenerate", "rebuild"]);
+  expect(schema.required).toContain("id");
+  expect(await readMaintenance(root)).toEqual(before);
 }, 60_000);

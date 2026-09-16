@@ -216,7 +216,7 @@ export async function repairApprovedKnowledgeAssetProjections(
         reason_code: "knowledge/resource-projection-repair-unresolved",
         path: file.relPath,
         targets: unresolved.map((item) => item.target),
-        next: "Restore the registered source snapshot, then rerun context close --format json.",
+        next: "Check each image target against the referenced source manifest. Use its source-document-relative assets/... path, or a knowledge-page-relative path into that registered snapshot. Revise incorrect links through context revise; restore/re-capture only when the registered asset bytes are actually missing, then retry close.",
       });
     }
     if (projectedContent !== content) {

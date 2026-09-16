@@ -10,6 +10,12 @@ The stage entry links CLI-owned requirements, planned skill guidance and task
 directories. Read relevant source text before writing; a skeleton is navigation,
 not semantic evidence. Skill names guide work, not article ownership or versions.
 
+Use the [reader organization guidance](knowledge-updates.md#reader-tasks-names-and-reading-order)
+for article names, placement and manually arranged navigation. Check the draft's
+main reader task against its planned title and group; adjust through the existing
+plan, revision or knowledge-map flow when needed. A navigation change alone does
+not call for rewriting valid prose.
+
 Restore repository checkouts only when needed for the current investigation or
 article. Independent notes/documents can proceed while unavailable code remains
 an explicit gap. For a required repository, read the

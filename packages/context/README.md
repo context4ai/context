@@ -116,6 +116,7 @@ a source alone does not start indexing.
 - [Project API](./docs/reference/project-api.md)
 - [Indexer Provider Protocol](./docs/reference/indexer-provider-protocol.md)
 - [Package Outputs](./docs/guides/package-outputs.md)
+- [Page content customization](./docs/guides/page-customization.md) — homepage slots, custom pages and floating chat widgets.
 - [Package Templates](./docs/reference/package-templates.md)
 
 - [Update existing knowledge](./docs/guides/knowledge-updates.md)

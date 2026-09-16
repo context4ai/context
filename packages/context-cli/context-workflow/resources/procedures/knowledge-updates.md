@@ -200,6 +200,66 @@ coverage by mechanically placing every new page under an unrelated catch-all.
 Build reports missing bindings for the Agent to resolve; it does not classify
 content. Moving a menu entry does not change the article URL.
 
+### Reader tasks, names and reading order
+
+Read the affected articles' bodies before changing their categories or titles.
+Titles and outlines help locate material; they do not settle its main reader task.
+During initial planning, keep names and placement provisional until the relevant
+material supports them. Classify by the question the page primarily answers and
+its intended reader, rather than its collection, source path or isolated words:
+
+| Main reader task | Organizing emphasis |
+| --- | --- |
+| Understand a business process | Participants, rules, decisions and lifecycle |
+| Understand an implementation | Components, data changes, calls and failure handling |
+| Integrate or use a capability | Prerequisites, setup, contracts and usage |
+| Diagnose or recover from a problem | Symptoms, checks, causes, actions and verification |
+
+These distinctions guide placement, not a required set of top-level directories.
+A page explaining retry scheduling and persistence belongs with its implementation;
+a page explaining how to recover a stalled worker serves troubleshooting. The word
+"retry" alone decides neither. Choose a primary home for a mixed page and link
+related tasks without duplicating the same overview across categories.
+
+Give each directory a concrete shared subject or reader task. At every parent,
+keep its children either all directories or all articles. Place an overview in
+the appropriate article group when the parent contains directories. Avoid empty
+category scaffolding and chains of single-article directories that add no useful
+choice. A residual "Other" group, when warranted, comes last; it must not absorb
+articles whose purpose fits an existing group. Do not invent a fixed depth,
+number of categories or page quota to make the tree look uniform.
+
+Keep directory and article titles concise and specific to their actual subject.
+Name the object and useful task, rather than enumerating every section heading.
+For example, prefer "Client authentication" to "Client tokens, configuration,
+requests, refresh and errors" when those sections all explain authentication.
+Retain a platform or product name only when it distinguishes otherwise ambiguous
+topics. Keep an existing accurate title when it already works; a necessary
+technical name need not be shortened just to meet a word count.
+
+The Agent manually arranges siblings for reading: a useful overview, prerequisites,
+the main tasks or process sequence, then later maintenance and reference material
+where applicable. Use a numbered list or ordered outline to review that proposal,
+then assign explicit, distinct `order` values among siblings in the knowledge-map
+adjustment, for example 10, 20 and 30. The list is an editing plan; persisted
+`order` values determine navigation. Reordering YAML/JSON entries or changing the
+plan's list order alone does not change the site. Paths, internal keys, alphabetical
+order and source-file order are not substitutes for a reader sequence. Keep order
+numbers out of titles. This navigation order is separate from the order in which
+workers write their drafts.
+
+For a long or compound page, inspect its content before suggesting a split or
+merge. Keep one coherent task together, and separate independently useful tasks
+only when their supported content warrants it. A long title or many headings
+alone is insufficient. Preserve useful detail and links, and retain article IDs,
+paths and unaffected sections when the reader task is unchanged. A navigation-only
+change does not require a prose rewrite or file migration; changing its label does
+not silently rename the approved article. Needed title or content revisions use
+the existing revision and Review flow. Splits and merges use ordinary article
+tasks, link repair and any explicit retirement after replacement content is
+delivered. These are Agent editorial decisions, not new CLI checks or approval
+gates.
+
 ## Edit one section or review part of a batch
 
 The current approved-revision Route accepts either full `markdown` or explicit

@@ -229,6 +229,35 @@ describe("Context workflow Provider", () => {
         managed_execution: "automatic",
       }],
     });
+    for (const productionState of ["active", "waiting-user"] as const) {
+      const independent = { ...captureObservation, productionState };
+      const independentFacts = createContextWorkflowFacts(independent, authorities);
+      expect(independentFacts.capture.complete).toBe(false);
+      expect(independentFacts.capture.route_satisfied).toBe(true);
+      const route = await evaluateContextWorkflow({ observation: independent, authorities });
+      expect(route.route?.node).toBe("run-indexer-lifecycle");
+    }
+    for (const productionState of ["blocked", "ended"] as const) {
+      const route = await evaluateContextWorkflow({
+        observation: { ...captureObservation, productionState }, authorities,
+      });
+      expect(route.route?.node).toBe("capture-next");
+    }
+    const review = await evaluateContextWorkflow({ observation: {
+      ...captureObservation, productionState: "ended", productionDelivery: true,
+      draftCandidates: 1, draftCollections: ["architecture"],
+    }, authorities: [] });
+    // Capture authorization remains independent from production authorization.
+    expect(review.route?.node).toBe("authorize-document-capture");
+    const managedReview = await evaluateContextWorkflow({ observation: {
+      ...captureObservation, productionState: "ended", productionDelivery: true,
+      draftCandidates: 1, draftCollections: ["architecture"],
+    }, authorities });
+    expect(managedReview.route?.node).toBe("review-current-batch");
+    const delivery = await evaluateContextWorkflow({ observation: {
+      ...captureObservation, productionState: "active", productionDelivery: true,
+    }, authorities });
+    expect(delivery.route?.node).toBe("capture-next");
     const ordinarySnapshot = await evaluateContextWorkflow({
       observation: captureObservation,
       authorities: [],

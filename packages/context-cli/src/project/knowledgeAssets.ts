@@ -75,6 +75,8 @@ function selectedAssets(input: {
   content: string;
   documentPath: string;
   manifest: DocumentSnapshotManifest;
+  pageRelPath: string;
+  sourceMaterializedAt: string;
 }): { assets: DocumentSnapshotAssetEntry[]; directTargets: Map<string, string> } {
   const byPath = new Map((input.manifest.assets ?? []).map((asset) => [asset.path, asset]));
   const locators = new Set([...input.content.matchAll(RESOURCE_LOCATOR_RE)].map((match) => match[1] ?? ""));
@@ -82,7 +84,10 @@ function selectedAssets(input: {
   const selected = new Map<string, DocumentSnapshotAssetEntry>();
   for (const link of markdownInlineLinks(input.content)) {
     const target = link.target;
-    const path = sourceAssetPath(input.documentPath, target);
+    const pageTarget = posixPath(join(dirname(input.pageRelPath), decodedTarget(target)));
+    const sourceRoot = posixPath(input.sourceMaterializedAt).replace(/\/$/u, "") + "/";
+    const path = sourceAssetPath(input.documentPath, target) ??
+      (pageTarget.startsWith(sourceRoot) ? pageTarget.slice(sourceRoot.length) : undefined);
     if (path === undefined) continue;
     const asset = byPath.get(path);
     if (asset === undefined) {
@@ -115,6 +120,8 @@ export async function projectKnowledgeAssets(input: {
     content: input.content,
     documentPath: input.documentPath,
     manifest: input.manifest,
+    pageRelPath: input.pageRelPath,
+    sourceMaterializedAt: input.sourceMaterializedAt,
   });
   const assets: PreparedKnowledgeAsset[] = [];
   const knowledgePathBySourcePath = new Map<string, string>();

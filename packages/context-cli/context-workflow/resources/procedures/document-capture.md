@@ -41,7 +41,7 @@ successful module as completion of the whole batch.
 The CLI owns normalization, snapshot identity, hashes, manifests, and
 idempotency. For Lark sources it also owns embedded-resource download,
 structured export, completeness reporting, and link projection. Required
-resource failures block the next phase; reference-only resources remain
+resource failures block work that depends on that material; reference-only resources remain
 explicit in the report. Never hand-write or repair captured snapshots or their
 asset links. If a selected local
 boundary is a documentation site rather than plain Markdown, use the
@@ -56,3 +56,9 @@ response. Once selected, the same identity is used for the document body and
 all embedded resources. If `docs +fetch` lacks the required `--doc-format`
 capability, follow the returned `lark-cli update` recovery and rerun the same
 Route command; do not replace the capture with a hand-written export.
+
+An active production stage can continue planning and writing articles whose sources
+are available while another capture remains pending. Keep unresolved sources in
+`pending_scopes`; do not cite their unavailable snapshots. The Route returns to
+pending capture after the active production/review work, before delivery completes.
+This does not mark failed captures as complete or waive source-read authorization.

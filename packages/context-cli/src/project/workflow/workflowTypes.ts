@@ -64,6 +64,7 @@ export interface ContextWorkflowFacts extends Record<string, JsonValue> {
   capture: {
     declarations_complete: boolean;
     complete: boolean;
+    route_satisfied: boolean;
   };
   review: {
     gate_clear: boolean;

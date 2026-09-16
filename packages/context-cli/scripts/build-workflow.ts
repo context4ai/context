@@ -55,6 +55,7 @@ const sdkManuals = [
   "reference/package-templates.md",
   "reference/template-variables.md",
   "guides/package-outputs.md",
+  "guides/page-customization.md",
   "guides/lark-resources.md",
   "guides/knowledge-updates.md",
   "guides/workspace-prepare.md",

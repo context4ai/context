@@ -4,6 +4,7 @@ import { z } from "zod";
 import YAML from "yaml";
 import { indexerProtocolDigest, validateArticleStructureEntries, updateKnowledgeMap,
   type IndexerProjectFileTarget } from "@c4a/context";
+import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -26,6 +27,12 @@ export const articleRetirementSchema = z.object({
 }).strict();
 
 const next = "context status --format json";
+function rebuildInput(revision: string): string {
+  return JSON.stringify({ id: `retirement-${revision.slice(7)}`, operation: "rebuild", timing: "priority", targets: [] });
+}
+function rebuildCommand(revision: string): string {
+  return `context task maintain --input '.tmp/context-runtime/retirements/${revision.slice(7)}/rebuild.json' --format json`;
+}
 function invalid(reason: string, message: string, details: Record<string, unknown> = {}): never {
   throw new ContextError(ExitCode.UserError, message, { category: ErrorCategory.UserInputInvalid,
     reason_code: reason, ...details, next_action: { command: next,
@@ -59,7 +66,12 @@ export async function retireArticles(input: { projectRoot: string; value: unknow
           const current = await text(input.projectRoot, file.path);
           if ((current === undefined ? null : durableContentDigest(current)) !== file.digest) invalid("article-retirement-result-changed", "Retirement was applied but a resulting file has since changed; inspect the current workspace.", { path: file.path });
         }
-        return { action: "already-applied" as const, revision: input.plan_digest, next_action: { command: next } };
+        const rebuild = `.tmp/context-runtime/retirements/${input.plan_digest.slice(7)}/rebuild.json`;
+        // Receipts from earlier installations may predate the prepared rebuild input.
+        if (await text(input.projectRoot, rebuild) === undefined) {
+          await atomicWriteFile(await safeProjectTarget(input.projectRoot, rebuild), rebuildInput(input.plan_digest));
+        }
+        return { action: "already-applied" as const, revision: input.plan_digest, next_action: { command: rebuildCommand(input.plan_digest) } };
       }
     }
     const maintenance = await readMaintenance(input.projectRoot);
@@ -187,12 +199,14 @@ export async function retireArticles(input: { projectRoot: string; value: unknow
     const recovery = `${directory}/restore.json`;
     const receipt = `${directory}/receipt.json`;
     change(recovery, await text(input.projectRoot, recovery), JSON.stringify({ summary: `Restore retired articles: ${value.reason}`, discard_unfinished: true, files: [...restore] }));
+    const rebuild = `${directory}/rebuild.json`;
+    change(rebuild, await text(input.projectRoot, rebuild), rebuildInput(revision));
     change(receipt, await text(input.projectRoot, receipt), JSON.stringify({ request: indexerProtocolDigest(value),
       files: targets.map(target => ({ path: target.path, digest: target.target_digest })) }));
     await runDurableMultiFileTransaction({ projectRoot: input.projectRoot, kind: "retire-articles", proposal_digest: revision,
       targets: targets.sort((a, b) => a.path.localeCompare(b.path)),
       ...(input.inject_failure ? { inject_failure: input.inject_failure } : {}) });
     return { action: "applied" as const, revision, retired: [...selected], recovery,
-      next_action: { command: next, message: "Retired pages and references were updated together. Follow the current close/version/build Route before delivering outputs. The restore input is temporary; retain it or a Git baseline if later restoration is needed." } };
+      next_action: { command: rebuildCommand(revision), message: "Retired pages and references were updated together. Register the prepared approved-output rebuild, then follow its Route. This preserves unfinished production and refreshes Close and package outputs. The restore input is temporary; retain it or a Git baseline if later restoration is needed." } };
   });
 }
