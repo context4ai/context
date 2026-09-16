@@ -23,7 +23,7 @@ authorization.
 Without explicit session-managed authority:
 
 - open the report returned by the route;
-- let the user publish or durably omit candidates;
+- let the user approve, reject, or request revisions to candidates;
 - apply the exact copied review code through the returned review apply command; and
 - retain the exact report reference and reviewed scope in this conversation for
   the final completion summary.
@@ -58,10 +58,24 @@ Use the explicit retirement preview after replacement delivery, and repair its
 reported incoming references. Navigation removal alone does not remove content
 from search or packages. A renamed menu does not require a new article identity.
 
-The Review UI names the internal `rejected` decision **Omit** because it is a
-durable content decision, not a request to rewrite the page. When a page needs
-changes, leave that page pending and use `context revise` so the owning
-Author or Composer produces a new Candidate through the same lifecycle.
+The report opens on a change overview, with the existing navigation and an
+expected workspace file tree. The CLI collects approved titles, navigation and
+candidate bodies; it renders their changes mechanically. Do not write a second
+summary in place of candidate content or rewrite the HTML. New workspaces show
+all candidate pages as New. Existing unchanged pages show titles only; changed
+blocks and previous text remain available for comparison. Navigation without a
+Git baseline is labelled as current context, not an invented historical diff.
+
+Approve accepts a candidate. Reject durably omits it; it does not request a
+rewrite or retire an approved article. Entering revision instructions requests
+repair and locks the other choices for that page until cancelled. Bulk approval
+requires confirmation and affects only undecided pages. When the report contains
+new top-level categories, the dialog lists them and requires explicit
+acknowledgment plus an eight-second wait before confirmation is enabled.
+New descendant pages under an existing category do not trigger this extra step. The copied code binds
+the candidate scope, exact content, displayed baseline and revision instructions;
+the CLI validates these together before writing any decision. Follow returned
+repair commands, then obtain review of the repaired candidates.
 
 Use the affected page's `Repair` command in the review material, replacing only
 the correction instruction. Current candidates are repaired within this batch;
@@ -132,3 +146,10 @@ only its own titles. When revising or merging, preserve useful existing detail
 instead of replacing it with generic lookup advice. Repair affected pages or
 use the current planning route for missing topics. These are Agent judgments,
 not minimum article counts, a new coverage ledger or an extra CLI approval gate.
+
+For image-heavy work, show the selected task image policy and actual retained,
+converted and placeholder counts from the candidates and capture reports. Explain
+any fallback affecting reader understanding. Reuse the planning choice; do not
+turn image handling into another per-article approval. Missing image content must
+not be presented as read or fully covered. Build-only media fallbacks are reported
+in the build receipt and do not rewrite approved evidence.

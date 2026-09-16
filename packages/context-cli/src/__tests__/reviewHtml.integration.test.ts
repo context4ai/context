@@ -1,132 +1,132 @@
 import { execFileSync } from "node:child_process";
+import { updateKnowledgeMap } from "@c4a/context";
 import { expect, test } from "bun:test";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createContext, runInContext } from "node:vm";
 import { prepareRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { readCandidateRecords, writeCandidateRecords } from "../project/candidateLedger.js";
-import { writeReviewHtml } from "../project/reviewHtml.js";
+import { writeReviewHtml, collectAllReviewCandidates } from "../project/reviewHtml.js";
 import { readReviewPayloadFile } from "../project/review.js";
 import { applyReviewDecisions } from "../project/reviewApply.js";
+import { readPendingReviewFeedback } from "../project/reviewFeedback.js";
 
-// Execute the generated browser script with a minimal DOM and clipboard surface.
-function openReport(html: string, languages: string[] = ["en-US"]) {
+function openReport(html: string, language = "en-US") {
   const elements = new Map<string, ReturnType<typeof element>>();
   function element() {
     const classes = new Set<string>();
-    return {
-      innerHTML: "", textContent: "", value: "", checked: true, disabled: false, hidden: false,
-      classList: {
-        toggle: (name: string, enabled: boolean) => enabled ? classes.add(name) : classes.delete(name),
-        add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name),
-        contains: (name: string) => classes.has(name),
-      },
-      setAttribute() {}, addEventListener() {}, focus() {}, select() {},
+    return { innerHTML: "", textContent: "", value: "", disabled: false, checked: false, hidden: false, open: false,
+      classList: { toggle: (n: string, on?: boolean) => (on ?? !classes.has(n)) ? classes.add(n) : classes.delete(n), contains: (n: string) => classes.has(n) },
+      querySelectorAll: () => [], querySelector: () => null, focus() {},
+      showModal() { this.open = true; }, close() { this.open = false; },
     };
   }
-  function get(id: string) {
-    if (!elements.has(id)) elements.set(id, element());
-    return elements.get(id)!;
-  }
-  let copied = "";
-  const runtime = createContext({
-    document: { getElementById: get, querySelectorAll: () => [],
-      documentElement: { dataset: { theme: "light" } }, addEventListener() {} },
-    window: { confirm: () => true },
-    navigator: { languages, language: languages[0], clipboard: { writeText: async (text: string) => { copied = text; } } },
+  const get = (id: string) => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id)!; };
+  let copied = "", now = 0, timerId = 0;
+  const timers = new Map<number, () => void>();
+  const runtime = createContext({ TextEncoder, TextDecoder, Date: { now: () => now },
+    setInterval: (fn: () => void) => { timers.set(++timerId, fn); return timerId; },
+    clearInterval: (id: number) => timers.delete(id),
+    document: { getElementById: get, querySelectorAll: () => [], body: get("body"), addEventListener() {} },
+    window: { scrollTo() {} }, navigator: { language, clipboard: { writeText: async (s: string) => { copied = s; } } },
   });
-  const script = html.match(/<script>([\s\S]*?)<\/script>/u)?.[1];
-  expect(script).toBeDefined();
-  runInContext(script!, runtime);
-  return { runtime, get, copied: () => copied };
+  runInContext(html.match(/<script>([\s\S]*?)<\/script>/u)![1]!, runtime);
+  return { runtime, get, copied: () => copied, advance(ms: number) { now += ms; for (const fn of [...timers.values()]) fn(); } };
 }
 
-test("HTML review preserves complete sections, sources and an applicable copied decision payload", async () => {
+test("site review transfers mixed decisions and revisions atomically and recovers pending feedback", async () => {
   const root = await prepareRevisionKnowledge([]);
   try {
-    const candidates = await readCandidateRecords(root);
-    expect(candidates).toHaveLength(2);
-    for (const all of [false, true]) {
-      const report = await writeReviewHtml({ projectRoot: root,
-        ...(all ? { all: true } : { collection: candidates[0]!.collection }) });
-      if (process.env.REVIEW_BUILT_CLI) {
-        execFileSync("node", [process.env.REVIEW_BUILT_CLI, "review", "html",
-          ...(all ? ["--all"] : [candidates[0]!.collection]), "--format", "json"], {
-          cwd: root, env: { ...process.env, CONTEXT_RUNTIME_EVENTS_DISABLED: "1" }, timeout: 30000,
-        });
-      }
-      const reportHtml = await readFile(report.path, "utf8");
-      if (process.env.REVIEW_HTML_PREVIEW) await writeFile(process.env.REVIEW_HTML_PREVIEW, reportHtml);
-      for (const languages of [["zh-CN"], ["zh-TW", "en-US"], ["en-US", "zh-CN"], ["fr-FR"]]) {
-        const localized = openReport(reportHtml, languages);
-        const chinese = languages[0]!.startsWith("zh");
-        expect(localized.get("language").textContent).toBe(chinese ? "English" : "中文");
-        expect(localized.get("payload-copy").textContent).toBe(chinese ? "复制" : "Copy");
-        expect(localized.get("count-state").textContent).not.toContain("{count}");
-        if (chinese) expect(localized.get("count-state").textContent).toContain("待审核");
-        runInContext('setAllDecision("approved"); setDecision(candidates[0].candidate_id, "rejected");', localized.runtime);
-        await runInContext("copyPayload()", localized.runtime);
-        const codeBefore = localized.copied();
-        const beforeBody = localized.get("detail").innerHTML.match(/<article[\s\S]*?<\/article>/u)?.[0];
-        runInContext("toggleLanguage()", localized.runtime);
-        expect(localized.get("language").textContent).toBe(chinese ? "中文" : "English");
-        expect(localized.get("payload-copy").textContent).toBe(chinese ? "Copy" : "复制");
-        expect(localized.get("detail").innerHTML.match(/<article[\s\S]*?<\/article>/u)?.[0]).toBe(beforeBody);
-        await runInContext("copyPayload()", localized.runtime);
-        expect(localized.copied()).toBe(codeBefore);
-      }
-      const browser = openReport(reportHtml);
-      expect(browser.get("payload-copy").disabled).toBe(true);
+    const rows = await readCandidateRecords(root);
+    const report = await writeReviewHtml({ projectRoot: root, all: true });
+    if (process.env.REVIEW_BUILT_CLI) execFileSync("node", [process.env.REVIEW_BUILT_CLI, "review", "html", "--all", "--format", "json"], { cwd: root, timeout: 30000, env: { ...process.env, CONTEXT_RUNTIME_EVENTS_DISABLED: "1" } });
+    const html = await readFile(report.path, "utf8");
+    if (process.env.REVIEW_HTML_PREVIEW) await writeFile(process.env.REVIEW_HTML_PREVIEW, html);
+    for (const lang of ["zh-CN", "en-US"]) {
+      const browser = openReport(html, lang);
+      expect(browser.get("body").classList.contains("home")).toBe(true);
+      expect(browser.get("top").innerHTML).not.toContain(' active');
+      expect(browser.get("counts").textContent).toBe("2 New / 0 Modify / 0 Confirm");
+      expect(browser.get("article").innerHTML).toContain("knowledge/");
       await runInContext("copyPayload()", browser.runtime);
       expect(browser.copied()).toBe("");
-      browser.get("search").value = "not-a-matching-page";
-      runInContext("render()", browser.runtime);
-      expect(browser.get("list").innerHTML).toContain("No candidates match");
-      browser.get("search").value = "";
-      runInContext("render(); navigatePage(1);", browser.runtime);
-      expect(browser.get("detail").innerHTML).toContain(candidates[1]!.review.title);
-      runInContext("navigatePage(-1);", browser.runtime);
-      expect(browser.get("detail").innerHTML).toContain(candidates[0]!.review.title);
-      for (const row of candidates) {
-        runInContext(`selected = ${JSON.stringify(row.candidate_id)}; render();`, browser.runtime);
-        const displayed = browser.get("detail").innerHTML;
-        for (const section of row.indexer_candidate.sections) {
-          const escaped = section.markdown.replace(/&/gu, "&amp;").replace(/</gu, "&lt;")
-            .replace(/>/gu, "&gt;").replace(/"/gu, "&quot;");
-          expect(displayed).toContain(escaped);
-        }
-        expect(displayed).toContain(row.source_refs[0]!);
-      }
-      runInContext('setAllDecision("approved"); setDecision(candidates[0].candidate_id, "rejected");', browser.runtime);
-      expect(browser.get("payload-copy").disabled).toBe(false);
+      expect(browser.get("copy-dialog").open).toBe(true);
+      runInContext("showPage(candidates[0].id);", browser.runtime);
+      expect(browser.get("footer").hidden).toBe(false);
+      expect(browser.get("article").innerHTML).toContain(rows[0]!.source_refs[0]!);
+      runInContext("$('revision-note').oninput({target:{value:'请补上前提\\nKeep API examples'}}); setAllDecision('approved');", browser.runtime);
+      expect(browser.get("counts").textContent).toBe("0 New / 0 Modify / 2 Confirm");
+      expect(browser.get("approve-btn").disabled).toBe(true);
       await runInContext("copyPayload()", browser.runtime);
-      const payloadPath = join(root, ".tmp/review-payload.jsonl");
-      await writeFile(payloadPath, browser.copied());
-      const payload = await readReviewPayloadFile(payloadPath);
-      expect(browser.copied().length).toBeLessThanOrEqual(980);
-      expect(browser.get("code-navigation").hidden).toBe(true);
-      runInContext('const originalEncode = reviewCode.encode; reviewCode.encode = () => ["part-one", "part-two"]; updatePayloadBox();', browser.runtime);
-      expect(browser.get("code-navigation").hidden).toBe(false);
-      runInContext('reviewCode.encode = originalEncode; updatePayloadBox();', browser.runtime);
-      expect(browser.get("code-navigation").hidden).toBe(true);
-      const ordered = [...candidates].sort((a, b) => a.candidate_id < b.candidate_id ? -1 : 1);
-      expect(payload.encoded_statuses).toEqual(ordered.map((row) => row.candidate_id === candidates[0]!.candidate_id ? "rejected" : "approved"));
-      expect(payload.decisions).toEqual([]);
-      if (all) {
-        for (const changed of [candidates.slice(1), candidates.map((row, i) => i === 0
-          ? { ...row, candidate_id: `indexer/${"f".repeat(64)}`, fingerprint: `sha256:${"f".repeat(64)}`, indexer_candidate: { ...row.indexer_candidate, file_digest: `sha256:${"f".repeat(64)}` } } : row)]) {
-          await writeCandidateRecords(root, changed);
-          await expect(applyReviewDecisions({ projectRoot: root, payload })).rejects.toThrow(/stale/);
-          expect(await readCandidateRecords(root)).toEqual(changed);
-        }
-        await writeCandidateRecords(root, candidates);
-        await applyReviewDecisions({ projectRoot: root, payload });
+      const path = join(root, ".tmp/feedback.txt");
+      await writeFile(path, browser.copied());
+      const payload = await readReviewPayloadFile(path);
+      expect(payload.feedback_repairs).toHaveLength(1);
+      expect(payload.feedback_repairs![0]!.instruction).toBe("请补上前提\nKeep API examples");
+      if (lang === "en-US") {
+        await writeCandidateRecords(root, rows.slice(1));
+        await expect(applyReviewDecisions({ projectRoot: root, payload })).rejects.toThrow(/stale/);
+        await writeCandidateRecords(root, rows);
+        const result = await applyReviewDecisions({ projectRoot: root, payload });
+        expect(result.repairs).toHaveLength(1);
+        expect(result.repairs![0]!.command).toContain("context revise");
+        const remaining = await collectAllReviewCandidates(root);
+        expect(remaining).toHaveLength(1);
+        expect(await readPendingReviewFeedback(root, remaining)).toHaveLength(1);
+        const reopened = await writeReviewHtml({ projectRoot: root, all: true });
+        const recoveredBrowser = openReport(await readFile(reopened.path, "utf8"));
+        expect(recoveredBrowser.get("counts").textContent).toBe("0 New / 0 Modify / 1 Confirm");
+      } else {
+        runInContext("setDecision(candidates[0].candidate_id,'revised')", browser.runtime);
+        expect(browser.get("revision-note").value).toBe("");
+        expect(browser.get("approve-btn").disabled).toBe(false);
       }
     }
-    expect((await readCandidateRecords(root)).map((row) => row.status)).toEqual(["rejected"]);
-    expect(await readFile(join(root, "knowledge", candidates[1]!.path), "utf8"))
-      .toContain(candidates[1]!.review.title);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}, 45_000);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 45000);
+
+
+test("bulk approval requires acknowledgment and eight seconds only for genuinely new roots", async () => {
+  const root = await prepareRevisionKnowledge([]);
+  try {
+    const rows = await readCandidateRecords(root);
+    const map = updateKnowledgeMap(undefined, { expected_revision: null, remove: [], upsert: [
+      { key: "overview", parent: null, title: "Overview", order: 10 },
+      { key: "guides", parent: null, title: "Guides", order: 20 },
+      ...rows.map((r, i) => ({ key: `page-${i}`, parent: i ? "guides" : "overview", title: r.review.title, order: 10, target: { artifact_ref: r.article_id } })),
+    ] });
+    await writeFile(join(root, "src/knowledge-map.yaml"), JSON.stringify(map));
+    const report = await writeReviewHtml({ projectRoot: root, all: true });
+    const html = await readFile(report.path, "utf8");
+    if (process.env.REVIEW_HTML_PREVIEW) await writeFile(process.env.REVIEW_HTML_PREVIEW, html);
+    const browser = openReport(html, "zh-CN");
+    runInContext("openBulkConfirmation()", browser.runtime);
+    expect(browser.get("bulk-roots").hidden).toBe(false);
+    expect(browser.get("bulk-confirm").disabled).toBe(true);
+    expect(browser.get("bulk-confirm").textContent).toContain("8s");
+    browser.get("bulk-ack").checked = true;
+    runInContext("updateBulkConfirmation(); $('bulk-confirm').onclick()", browser.runtime);
+    expect(browser.get("counts").textContent).toContain("0 Confirm");
+    browser.advance(7999);
+    expect(browser.get("bulk-confirm").disabled).toBe(true);
+    expect(browser.get("bulk-confirm").textContent).toContain("1s");
+    browser.advance(1);
+    expect(browser.get("bulk-confirm").disabled).toBe(false);
+    browser.get("bulk-ack").checked = false;
+    runInContext("updateBulkConfirmation()", browser.runtime);
+    expect(browser.get("bulk-confirm").disabled).toBe(true);
+    runInContext("$('bulk-cancel').onclick(); openBulkConfirmation()", browser.runtime);
+    expect(browser.get("bulk-ack").checked).toBe(false);
+    expect(browser.get("bulk-confirm").textContent).toContain("8s");
+    browser.advance(8000);
+    expect(browser.get("bulk-confirm").disabled).toBe(true);
+    browser.get("bulk-ack").checked = true;
+    runInContext("$('bulk-confirm').onclick()", browser.runtime);
+    expect(browser.get("bulk-dialog").open).toBe(false);
+    expect(browser.get("counts").textContent).toContain("2 Confirm");
+    const existing = openReport(html.replace(";const SCOPE=", ';DATA.nodes.forEach(n=>n.change="unchanged");const SCOPE='));
+    runInContext("openBulkConfirmation()", existing.runtime);
+    expect(existing.get("bulk-roots").hidden).toBe(true);
+    expect(existing.get("bulk-confirm").disabled).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 45000);

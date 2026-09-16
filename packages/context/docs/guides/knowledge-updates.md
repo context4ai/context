@@ -319,6 +319,12 @@ input without that flag to continue. A preview is not approval and does not make
 a stale revision valid.
 
 Review can approve checked pages while leaving repair pages pending. The HTML
+report shows the current site navigation, candidate changes and expected file
+paths. Unchanged approved pages retain their titles with omitted bodies. Enter
+revision instructions directly in the report; the copied code and following
+instruction lines must be returned together without edits. The CLI binds them to
+the reviewed content and baseline and returns repair commands while leaving
+those pages pending. Changed candidates require a fresh review. The HTML
 review code includes pending positions; managed Review provides the same current
 scope as a JSON template. Send decisions only for pages actually reviewed. Omit
 means a durable exclusion, not repair. Partial approval alone does not build.

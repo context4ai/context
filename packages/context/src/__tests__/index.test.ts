@@ -21,6 +21,16 @@ import {
 } from "../index.js";
 
 describe("@c4a/context SDK bootstrap", () => {
+  test("captureLark preserves and validates explicit image policies", () => {
+    const phase = captureLark({ source: source("handbook"), resources: {
+      images: "reference-only", gifs: "reference-only",
+    } });
+    expect(phase.resources).toMatchObject({ images: "reference-only", gifs: "reference-only" });
+    expect(() => captureLark({ source: source("handbook"), resources: {
+      images: "invalid" as "bundle",
+    } })).toThrow();
+  });
+
   test("defineProject keeps current declarations", () => {
     const project = defineProject({
       sources: allSources("repo"),

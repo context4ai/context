@@ -1,3 +1,4 @@
+import { readPendingReviewFeedback } from "./reviewFeedback.js";
 import { inspectProductionRequirements } from "./productionRequirements.js";
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -113,6 +114,7 @@ export async function materializeCurrentReviewBatchSet(input: {
   path: string;
   batch_count: number;
 }> {
+  const feedback = await readPendingReviewFeedback(input.projectRoot, input.candidates);
   const batches = buildCurrentReviewBatchDocuments(input.candidates);
   const setDigest = digestText(batches.map((batch) =>
     `${batch.task_key}:${batch.digest}`
@@ -141,6 +143,7 @@ export async function materializeCurrentReviewBatchSet(input: {
   }
   const content = [
     "# Current knowledge Review",
+    ...(feedback.length ? ["", "## Pending user revision instructions", ...feedback.map(item => JSON.stringify(item)), "Apply these through their repair commands, then review the new candidates. Do not approve unchanged drafts to bypass feedback."] : []),
     "",
     "## Reader purposes",
     "",

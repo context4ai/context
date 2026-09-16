@@ -70,7 +70,7 @@ describe("package asset image budgets", () => {
     expect(below.summary.state).toBe("not-needed");
   });
 
-  test("compresses multiple images to the total budget and blocks impossible output", async () => {
+  test("compresses multiple images and replaces impossible output with reported placeholders", async () => {
     const images = [imageAsset("one", 30), imageAsset("two", 30)];
     const result = await optimizePackageAssetFiles({
       projectRoot: "/workspace",
@@ -86,15 +86,17 @@ describe("package asset image budgets", () => {
       largestOutputBytes: 15,
     });
 
-    await expect(optimizePackageAssetFiles({
+    const limited = await optimizePackageAssetFiles({
       projectRoot: "/workspace",
       assets: images,
       maxImageBytes: 100,
       maxTotalImageBytes: 40,
       processor: { optimize: async (bytes) => webpBytes(bytes.byteLength) },
-    })).rejects.toMatchObject({
-      detail: { reason_code: "package.assets.image-budget-exceeded" },
     });
+    expect(limited.summary.state).toBe("partial");
+    expect(limited.summary.omittedImages).toHaveLength(1);
+    expect(limited.summary.outputBytes).toBeLessThanOrEqual(40);
+    expect(limited.assets).toHaveLength(1);
   });
 
   test("uses a configured processor, content-addresses smaller output, and keeps other files", async () => {
@@ -192,9 +194,31 @@ describe("package asset image budgets", () => {
         join(projectRoot, "dist", "example-kb", "others", "assets", "image", `${digest}.webp`),
       ))).toEqual(Buffer.from(optimizedBytes));
       expect(written.assetDelivery.optimization?.savedBytes).toBe(40);
+      const fallback = await writeSelectedPackageKnowledge({
+        projectRoot, pkg, files: [{ relPath: "guides/example.md", absPath: pagePath, content }],
+        assetProcessor: { optimize: async () => { throw new Error("Input image exceeds pixel limit"); } },
+      });
+      const placeholder = await readFile(join(projectRoot, "dist", "example-kb", "guides", "example.md"), "utf8");
+      expect(placeholder).not.toContain("![");
+      expect(placeholder).toContain("Image omitted");
+      expect(fallback.resources).toBe(0);
+      expect(fallback.assetDelivery.optimization?.warnings).toHaveLength(1);
+      expect(await readFile(pagePath, "utf8")).toBe(content);
+
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }
+  });
+
+  test("preserves animation frames and does not flatten GIFs during optimization", async () => {
+    const { default: sharp } = await import("sharp");
+    const gif = await sharp(Buffer.from([255, 0, 0, 0, 255, 0]),
+      { raw: { width: 1, height: 2, channels: 3, pageHeight: 1 } }).gif({ loop: 0, delay: [100, 100] }).toBuffer();
+    expect((await sharp(gif, { animated: true }).metadata()).pages).toBe(2);
+    const processor = await resolvePackageImageProcessor("/workspace", { delivery: "bundle",
+      optimize: { processor: "sharp", mode: "webp" } });
+    const result = await processor!.optimize(gif, { processor: "sharp", mode: "webp", maxDimension: 16 });
+    expect(result).toBe(gif);
   });
 
   test("resolves the CLI-owned processor without a workspace dependency", async () => {

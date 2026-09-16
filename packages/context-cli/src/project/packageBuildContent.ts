@@ -34,7 +34,7 @@ import {
   type PackageAssetDeliveryResult,
   type PackageAssetDeliverySummary,
 } from "./packageAssetDelivery.js";
-import { replaceMarkdownInlineLinkTargets } from "./markdownLinks.js";
+import { markdownReaderLinks, replaceMarkdownInlineLinkTargets } from "./markdownLinks.js";
 import {
   assertSafeRenderedPath,
   packageKind,
@@ -265,7 +265,14 @@ export async function writeSelectedPackageKnowledge(input: {
     const results = await Promise.allSettled(projectedPages.slice(offset, offset + 8).map(async projected => {
       assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
       const outputPath = join(input.projectRoot, input.pkg.outDir, projected.pageOutputPath);
-      const rewritten = replaceMarkdownInlineLinkTargets(projected.content, (link) => {
+      let mediaContent = projected.content;
+      const omitted = new Set((delivered.omittedImages ?? []).map(path => packageMarkdownTarget(projected.pageOutputPath, path)));
+      for (const link of markdownReaderLinks(mediaContent).reverse()) {
+        if (!omitted.has(link.target)) continue;
+        const label = link.label.replace(/[<>\[\]_*`]/gu, "");
+        mediaContent = mediaContent.slice(0, link.start) + `[Image omitted: ${label || "image"}; see article sources]` + mediaContent.slice(link.end);
+      }
+      const rewritten = replaceMarkdownInlineLinkTargets(mediaContent, (link) => {
         for (const [inputPath, outputPath] of delivered.targetByOriginal) {
           if (link.target === packageMarkdownTarget(projected.pageOutputPath, inputPath)) {
             return /^https:\/\//u.test(outputPath)

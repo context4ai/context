@@ -31,6 +31,8 @@ export interface ReviewDecision {
 }
 
 export interface ReviewPayload {
+  feedback_repairs?: Array<{ index: number; instruction: string }>;
+  baseline_hash?: string;
   encoded_statuses?: Array<ReviewStatus | "pending">;
   decisions: ReviewDecision[];
   note?: string;
@@ -70,6 +72,8 @@ export interface ReviewCandidateView {
 }
 
 export interface ApplyReviewDecisionsResult {
+  repairs?: Array<{ candidate_id: string; path: string; instruction: string; command: string }>;
+  feedback_path?: string;
   applied: number;
   approved: number;
   rejected: number;

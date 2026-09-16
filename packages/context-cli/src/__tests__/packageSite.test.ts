@@ -25,6 +25,25 @@ const structure = updateKnowledgeMap(undefined, { expected_revision: null, upser
   { key: "future", parent: null, title: "Pending", target: { artifact_ref: "article:future" } },
 ] });
 
+test("mixed navigation keeps sibling depth and stable directory-first order recursively", () => {
+  const leaf = (key: string) => ({ key, title: key, href: `/${key}.html`, children: [] });
+  const nested = { key: "nested", title: "nested", children: [leaf("nested-page")] };
+  const input = [{ key: "root", title: "Root", children: [leaf("first"),
+    { key: "folder", title: "Folder", href: "/overview.html", children: [leaf("child"), nested] },
+    leaf("second"), { key: "another", title: "Another", children: [leaf("last")] }] }];
+  const snapshot = JSON.stringify(input);
+  const section = siteSections(input)[0]!;
+  expect(section.entries.map(entry => entry.key)).toEqual(["folder", "another", "first", "second"]);
+  expect(section.entries[0]!.children.map(entry => entry.key)).toEqual(["nested", "child"]);
+  expect(section.items).toMatchObject([
+    { text: "Folder", link: "/overview.html", collapsed: true },
+    { text: "Another", collapsed: true },
+    { text: "first", link: "/first.html", items: [] },
+    { text: "second", link: "/second.html", items: [] },
+  ]);
+  expect(JSON.stringify(input)).toBe(snapshot);
+});
+
 test("navigation uses stable identities, multiple placements and a complete unmatched fallback", () => {
   const result = createSiteNavigation(pkg, selected, structure);
   expect(result.pages).toHaveLength(2);
@@ -79,7 +98,11 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
       changes: ["Added coverage <script>unsafe()</script>"], triggers: [{ kind: "module", description: "New module material" }],
       actor: { name: "Example User", kind: "git" },
     })) }));
-    await writePackageSite({ projectRoot: root, pkg, selected: sourced, structure, siteUrl: "https://example.com/docs/" });
+    const mixedStructure = updateKnowledgeMap(structure, { expected_revision: structure.revision, upsert: [
+      { key: "folder", parent: "business", title: "Folder" },
+      { key: "nested-next", parent: "folder", title: "Nested next", target: { artifact_ref: "article:start" } },
+    ] });
+    await writePackageSite({ projectRoot: root, pkg, selected: sourced, structure: mixedStructure, siteUrl: "https://example.com/docs/" });
     const history = await readFile(join(root, packageSiteOutputDir(pkg), "changelog.html"), "utf8");
     expect(history.match(/<details class="context-history-card"/gu)).toHaveLength(5);
     expect(history.match(/<details class="context-history-card" open/gu)).toHaveLength(3);
@@ -109,6 +132,11 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     const resourcesEnd = home.indexOf('class="context-home-powered"', resourcesStart);
     const homeResources = home.slice(resourcesStart, resourcesEnd);
     const article = await readFile(join(root, packageSiteOutputDir(pkg), mapping.pages[0]!.site_path), "utf8");
+    const sidebarHtml = article.match(/<aside\b[^>]*class="VPSidebar[\s\S]*?<\/aside>/u)![0];
+    const sidebarItems = [...sidebarHtml.matchAll(/<(?:div|section) class="VPSidebarItem level-(\d)[\s\S]*?class="text"[^>]*>([^<]*)</gu)];
+    expect(sidebarItems.map(match => [match[1], match[2]])).toEqual([
+      ["0", "Folder"], ["1", "Nested next"], ["0", "Entry"], ["0", "Getting started"],
+    ]);
     expect(article).not.toContain("context-history-button");
     expect(article).toMatch(/LLM Docs[\s\S]*?Changelog[\s\S]*?VPNavBarAppearance/u);
     expect(article).toContain('changelog.html');

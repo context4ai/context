@@ -367,21 +367,23 @@ export const siteThemeCss = `
 .VPNavBarSearch .DocSearch-Button-Container { display: flex; flex: 1; min-width: 0; align-items: center; }
 .VPNavBarSearch .DocSearch-Button-Keys { margin-left: auto; }
 .VPSidebar { border-top: 1px solid var(--vp-c-divider); border-right: 1px solid var(--vp-c-divider); scrollbar-width: thin; }
-.VPSidebar .group + .group { border: 0; padding-top: 8px; }
+.VPSidebar .group, .VPSidebar .group + .group { border: 0; padding-top: 0; }
 .VPSidebarItem .link { min-width: 0; overflow: hidden; }
 .VPSidebarItem .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px !important; line-height: 20px !important; font-weight: 450 !important; }
-.VPSidebarItem.level-0 { padding-bottom: 8px !important; }
+.VPSidebarItem.level-0 { padding-bottom: 0 !important; }
 .VPSidebarItem .indicator { display: none; }
-.VPSidebarItem .text { padding: 3px 0 !important; }
-.VPSidebarItem .item { min-height: 32px; padding: 3px 16px; border-radius: 0; }
+.VPSidebarItem .text { padding: 0 !important; }
+.VPSidebarItem .item { height: 38px; min-height: 38px; align-items: center; padding: 0 16px 0 26px; border-radius: 0; }
+.VPSidebarItem.is-link:not(.is-active) > .item > .link > p.text { color: var(--vp-c-text-2); }
+.VPSidebarItem.is-link:not(.is-active) > .item > .link:hover > p.text { color: var(--vp-c-brand-1); }
 .VPSidebarItem.is-active > .item { background: var(--vp-c-brand-soft); box-shadow: none; }
 .VPSidebarItem.is-active > .item .text { color: var(--vp-c-brand-1) !important; font-weight: 550 !important; }
 .VPSidebarItem .items { margin-left: 0; padding-left: 0 !important; border-left: 0 !important; }
-.VPSidebarItem.level-1 > .item { padding-left: 30px; }
-.VPSidebarItem.level-2 > .item { padding-left: 44px; }
-.VPSidebarItem.level-3 > .item { padding-left: 58px; }
-.VPSidebarItem.level-4 > .item { padding-left: 72px; }
-.VPSidebarItem.level-5 > .item { padding-left: 86px; }
+.VPSidebarItem.level-1 > .item { padding-left: 40px; }
+.VPSidebarItem.level-2 > .item { padding-left: 54px; }
+.VPSidebarItem.level-3 > .item { padding-left: 68px; }
+.VPSidebarItem.level-4 > .item { padding-left: 82px; }
+.VPSidebarItem.level-5 > .item { padding-left: 96px; }
 .VPSidebar .group { width: 100% !important; }
 .VPSidebarItem .item:hover { background: var(--vp-c-default-soft); }
 .VPDoc .container, .VPDoc > .container > .content, .VPDoc .content-container { max-width: none !important; min-width: 0 !important; }

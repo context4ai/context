@@ -35,6 +35,7 @@ export interface PackageAssetDeliverySummary {
 export interface PackageAssetDeliveryResult {
   assets: PackageAssetFile[];
   targetByOriginal: ReadonlyMap<string, string>;
+  omittedImages?: readonly string[];
   summary: PackageAssetDeliverySummary;
 }
 
@@ -245,6 +246,7 @@ export async function deliverPackageAssetFiles(input: {
   return {
     assets: optimization.assets,
     targetByOriginal: optimization.optimizedTargetByOriginal,
+    ...(optimization.summary.omittedImages === undefined ? {} : { omittedImages: optimization.summary.omittedImages }),
     summary: {
       state: "bundled",
       sourceFiles: input.assets.length,

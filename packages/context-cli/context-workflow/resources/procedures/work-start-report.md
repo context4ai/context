@@ -78,6 +78,42 @@ Estimate timing or savings only when supported by measurements and conditions.
 For a small addition to an existing site, describe only the affected reading
 position; reuse its layout and delivery choices instead of proposing them again.
 
+## Confirm image handling for large tasks
+
+Before bulk image interpretation or article writing, count distinct image resources
+across the current authorized task (all its sources, not each document or batch).
+Use source descriptors and capture reports; do not download images just to count
+or recount unchanged snapshots. If the count exceeds 30 and the user has not
+already selected a policy for this task, include one image-handling question in
+this planning confirmation, in the user's language:
+
+- **Process all (default): intelligent conversion and inclusion.** Read images as
+  needed; retain useful images or convert suitable content into text, tables or
+  diagrams. Conversion is an Agent writing decision supported by actual reading.
+- **Include all:** retain the image presentation; automatic compression and safe
+  processing still apply. An image that cannot be processed within limits becomes
+  a visible placeholder, not an unlimited original-byte delivery promise.
+- **Include none (placeholders):** skip image bytes and interpretation; preserve
+  placeholders and source document links. Do not claim image-content coverage.
+
+Default means the recommended option, not consent after silence. Wait for this
+choice together with the existing plan confirmation; never add per-image or
+per-batch approval. Reuse an explicit choice and any GIF exclusions throughout
+retries. Persist the choice in the existing plan/requirements. If discovery only
+reveals the threshold after initial capture, ask before further image work and
+writing; do not restart completed capture solely to show this question.
+
+Report the known count and unknown resources separately. If the scale was unknown
+and later crosses 30, ask once at that point. At content Review summarize retained,
+converted and placeholder outcomes with reasons, including automatic fallbacks;
+do not ask the same policy question again. A later material policy change belongs
+in the existing plan and normal Review, not a separate approval protocol.
+
+Use `captureLark.resources.images: reference-only` for excluded images and
+`resources.gifs: reference-only` for an explicit GIF exclusion. Both inclusion
+choices use normal capture and package optimization; the Agent controls semantic
+conversion. See the Lark resource guide for configuration and limitations.
+
 ## Review navigation changes in context
 
 Read the knowledge-updates guidance on preserving established navigation intent.
@@ -119,3 +155,39 @@ Reports, plans, skills, candidates, confirmation and transaction process stay in
 `.tmp`. Only formal results and necessary long-term source/requirement decisions
 belong in non-temporary storage. On a new machine, start new production from those
 formal inputs, without requiring the previous report or production session.
+
+## Inputs for the content Review report
+
+Keep approved article titles, paths, reading order and intended placements in the
+normal article plan and knowledge map. Complete their existing structure workflow
+before presenting content Review. The CLI collects those inputs and the actual
+candidate bodies to render the report; do not ask an Agent to fabricate a site
+snapshot, infer approved content from titles, or maintain a second report model.
+For a new workspace, plan the initial categories through the same workflow; the
+report will label its candidate pages New. If it shows unplaced articles, finish
+those placements rather than presenting the fallback as an approved new category.
+Content Review displays changes; it does not replace specific authorization for
+a top-level navigation change already required by this procedure.
+
+## Configured coverage and the current request
+
+`src/indexers.yaml` describes the workspace's standing coverage configuration.
+Source registration or presence in that configuration does not, by itself, mean
+that the source needs investigation again for this request. For a bounded document
+addition or revision, identify its reader task and actual evidence dependencies;
+reuse existing approved articles and applicable completed work. Do not broaden a
+document task to unrelated code repositories merely because they are configured.
+
+In planning and completion reports distinguish:
+- work requested and completed in this task;
+- specific content gaps established by reading, with their affected reader tasks;
+- source/environment failures, and whether this task depends on those sources.
+
+A `pending_scopes` count is workflow state, not a count of missing topics,
+repositories to rewrite, or articles to produce. A Git spawn/baseline-read error
+means source availability could not be checked; it does not prove that existing
+knowledge is absent or obsolete. If unrelated configured sources remain blocked,
+say so as a workflow limitation rather than announcing new investigation work.
+Do not delete configured sources, invent exclusions, clear stage files, or mark
+unread material investigated to make the current task appear complete. Follow the
+returned resolution action when the workflow still needs a decision.

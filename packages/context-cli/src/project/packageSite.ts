@@ -113,14 +113,23 @@ export function siteMarkdown(content: string, from: string, pages: ReadonlyMap<s
 
 function sidebar(entries: ProjectedKnowledgeMapEntry[]): unknown[] {
   return entries.map(entry => ({ text: entry.title, ...(entry.href ? { link: entry.href } : {}),
-    ...(entry.children.length ? { collapsed: true, items: sidebar(entry.children) } : {}) }));
+    // Explicit empty items keep VitePress from wrapping sibling leaves in an
+    // anonymous group, which would introduce an extra indentation level.
+    items: sidebar(entry.children), ...(entry.children.length ? { collapsed: true } : {}) }));
 }
 
 export function siteSections(entries: ProjectedKnowledgeMapEntry[]) {
+  const directoriesFirst = (siblings: ProjectedKnowledgeMapEntry[]): ProjectedKnowledgeMapEntry[] => {
+    const ordered = [...siblings.filter(entry => entry.children.length > 0),
+      ...siblings.filter(entry => entry.children.length === 0)];
+    return ordered.map(entry => ({ ...entry, children: directoriesFirst(entry.children) }));
+  };
   const pageLinks = (entry: ProjectedKnowledgeMapEntry): string[] => [
     ...(entry.href ? [entry.href.split("#")[0]!] : []), ...entry.children.flatMap(pageLinks),
   ];
-  return entries.map(entry => ({ key: entry.key, title: entry.title,
+  // Keep top navigation order; partition each section recursively without
+  // changing the authored map or the order within directories and articles.
+  return entries.map(entry => ({ ...entry, children: directoriesFirst(entry.children) })).map(entry => ({ key: entry.key, title: entry.title,
     href: `/sections/${createHash("sha256").update(entry.key).digest("hex").slice(0, 20)}.html`,
     pages: [...new Set(pageLinks(entry))],
     items: sidebar(entry.href ? [entry] : entry.children),

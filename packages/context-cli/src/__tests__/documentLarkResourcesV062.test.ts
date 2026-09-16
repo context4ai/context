@@ -366,6 +366,36 @@ describe("0.6.2 Lark resource materialization", () => {
     expect(projected).not.toContain("> Image:");
   });
 
+  test("excludes selected images and known GIFs without downloading", async () => {
+    const images = [resource("image", "lark:image:one", { token: "one" }, "Example.png"),
+      resource("image", "lark:image:two", { token: "two" }, "Example.GIF")];
+    const noDownload: LarkResourceCommandRunner = async () => { throw new Error("unexpected download"); };
+    const all = await materializeLarkResources({ resources: images, runner: noDownload,
+      policy: { ...policy, images: "reference-only" } });
+    expect(all.report.status).toBe("complete");
+    expect(all.report.reference_only.image).toBe(2);
+    expect(all.assets).toEqual([]);
+    expect(all.replacements.size).toBe(2);
+    const gif = await materializeLarkResources({ resources: [images[1]!], runner: noDownload,
+      policy: { ...policy, gifs: "reference-only" } });
+    expect(gif.report.items[0]).toMatchObject({ status: "reference-only", reason_code: "image-excluded-by-policy" });
+  });
+
+  test("identifies an opaque GIF after download without retaining it", async () => {
+    const gifRunner: LarkResourceCommandRunner = async (args, options) => {
+      await writeFile(resolve(options?.cwd ?? process.cwd(), `${argument(args, "--output")}.gif`),
+        Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64"));
+      return { stdout: "{}", stderr: "", exitCode: 0 };
+    };
+    const result = await materializeLarkResources({
+      resources: [resource("image", "lark:image:opaque", { token: "opaque" })], runner: gifRunner,
+      policy: { ...policy, gifs: "reference-only" },
+    });
+    expect(result.assets).toEqual([]);
+    expect(result.report.reference_only.image).toBe(1);
+    expect(result.report.status).toBe("complete");
+  });
+
   test("keeps videos reference-only by default and bundles them only by policy", async () => {
     const video = resource("video", "lark:video:video-token", { token: "video-token" }, "Example video");
     const referenced = await materializeLarkResources({ resources: [video], runner, policy });
@@ -381,7 +411,7 @@ describe("0.6.2 Lark resource materialization", () => {
     expect(bundled.assets[0]?.mediaType).toBe("video/mp4");
   });
 
-  test("fails closed for missing required resources and resource budgets", async () => {
+  test("fails closed for missing required resources but reports oversized images as placeholders", async () => {
     const unresolved = resource("image", "lark:image:unresolved", {});
     const missing = await materializeLarkResources({ resources: [unresolved], runner, policy });
     expect(missing.report.status).toBe("error");
@@ -392,7 +422,9 @@ describe("0.6.2 Lark resource materialization", () => {
       runner,
       policy: { ...policy, maxBytesPerResource: 1 },
     });
-    expect(oversized.report.status).toBe("error");
+    expect(oversized.report.status).toBe("warning");
+    expect(oversized.assets).toEqual([]);
+    expect(oversized.report.items[0]?.reason_code).toBe("image-budget-exceeded");
     expect(oversized.report.items[0]?.reason).toContain("maxBytesPerResource=1");
   });
 });

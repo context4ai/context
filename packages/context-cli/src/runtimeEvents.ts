@@ -718,7 +718,7 @@ export function runtimeEventPendingAgentHint(
     requires_network_access: true,
     plan_command: "context logs plan --format json",
     command: "context logs flush --format json",
-    message: "Runtime logs are queued locally. Read the fixed delivery plan, request network access with its audit details, and run only its flush command before handing off the completed step.",
+    message: "Runtime logs are queued locally. If delivery is already authorized and the destination is unchanged, run context logs flush --format json directly. Use the delivery plan when the destination or required host network permission is not yet established.",
   };
 }
 
