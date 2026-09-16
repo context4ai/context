@@ -31,6 +31,10 @@ change that silently enables websites for existing packages.
 
 ### Static documentation website
 
+For business pages, homepage slots and a bottom-right chat/bot widget, read
+[Page Content Customization](./page-customization.md). Presentation sources live
+under `src/site/`; keep generated knowledge separate.
+
 To include the default browser-readable site, enable `site` on the same
 package. The normal `context build` produces both the Agent KB and a standalone
 `dist/<base>-site/` directory containing `index.html`, article HTML,

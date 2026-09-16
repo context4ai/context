@@ -6,7 +6,8 @@ import { withProjectWriteLock } from "./writeLock.js";
 import { assertDistinctPackageOutputs, packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { buildLlmsDocuments, writeLlmsDocuments, llmsArticles, PACKAGE_LLMS_VERSION } from "./packageLlms.js";
 import { writePackageSite, PACKAGE_SITE_VERSION } from "./packageSite.js";
-import { workspaceVersionFingerprint, writePackageVersion, recordWorkspaceBuild } from "./workspaceBuildVersion.js";
+import { readSiteExtensions } from "./packageSiteExtensions.js";
+import { workspaceVersionFingerprint, writePackageVersion } from "./workspaceBuildVersion.js";
 import { PACKAGE_READER_MARKDOWN_VERSION } from "./packageRenderCache.js";
 import { withPackageKnowledgeAdvisories } from "./packageKnowledgeAdvisories.js";
 import { writePackageKnowledgeMap } from "./packageKnowledgeMap.js";
@@ -240,6 +241,8 @@ async function packageInputFingerprint(input: {
     : null;
   const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   return stableHash({
+    siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
+      ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,
     siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.article, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,
@@ -439,7 +442,6 @@ export async function buildProjectPackages(projectRoot: string, options: { deliv
     const partial = options.delivery !== false && !!(await readProductionStage(projectRoot))?.delivery;
     if (partial) await assertProductionDeliveryReady(projectRoot);
     const result = await buildProjectPackagesInternal(projectRoot, options);
-    await recordWorkspaceBuild(projectRoot);
     if (partial) await finishProductionDelivery(projectRoot);
     return result;
   });

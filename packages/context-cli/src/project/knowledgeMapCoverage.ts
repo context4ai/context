@@ -39,7 +39,7 @@ export function assertKnowledgeMapCoverage(structure: KnowledgeMap | undefined, 
   const coverage = knowledgeMapCoverage(structure, required);
   const known = new Map((options.known ?? required).map(article => [article.artifact_ref, article]));
   const invalid = (structure?.entries ?? []).flatMap(entry => {
-    if (!entry.target) return [];
+    if (!entry.target || entry.target.artifact_ref.startsWith("site:")) return [];
     const article = known.get(entry.target.artifact_ref);
     if (!article) return options.known ? [{ entry: entry.key, target: entry.target, reason: "unknown-article" }] : [];
     return entry.target.section_key && !article.section_keys.includes(entry.target.section_key)

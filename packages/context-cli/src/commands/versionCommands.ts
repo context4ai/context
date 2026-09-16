@@ -9,28 +9,14 @@ import { workflowStatusCommand } from "../project/workflow/workflowExecutionCont
 
 export function registerVersionCommands(program: Command) {
   const command = program.command("version").description("Inspect formal changes and record a knowledge workspace SemVer and changelog");
-  command.command("inspect").option("--publish", "include same-version dist changes before publishing").option("--format <format>", "json", "json").action(async (options: { publish?: boolean }) => {
+  command.command("inspect").option("--base <ref>", "Git commit or tag to compare; defaults to the current version tag or HEAD").option("--format <format>", "json", "json").action(async (options: { base?: string }) => {
     const root = findContextProjectRoot(process.cwd())?.projectRoot;
     if (!root) throw new TypeError("Run inside a Context workspace");
-    const { files: _, ...status } = await inspectWorkspaceVersion(root, options.publish === true);
-    void _;
+    const { files: _, content_digest: _digest, ...status } = await inspectWorkspaceVersion(root, options.base);
+    void _; void _digest;
     process.stdout.write(JSON.stringify({ ...status, next_action: { command: "context version record --input <file> --format json" },
-      input_example: { expected_digest: status.expected_digest, version: "0.1.0", title: "Summary", changes: ["Reader-visible changes"], triggers: [{ kind: "initial", description: "User requested initial knowledge production" }] } }, null, 2) + "\n");
+      input_example: { expected_digest: status.expected_digest, ...(options.base ? { base_ref: options.base } : {}), version: "0.1.0", title: "Summary", changes: ["Reader-visible changes"], triggers: [{ kind: "initial", description: "User requested initial knowledge production" }] } }, null, 2) + "\n");
   });
-  command.command("publish-check").option("--format <format>", "json", "json").action(async () => {
-    const root = findContextProjectRoot(process.cwd())?.projectRoot;
-    if (!root) throw new TypeError("Run inside a Context workspace");
-    const { inspectWorkspacePublish } = await import("../project/workspacePublishVersion.js");
-    process.stdout.write(JSON.stringify(await inspectWorkspacePublish(root), null, 2) + "\n");
-  });
-  command.command("published").requiredOption("--hash <hash>", "publish-check hash of uploaded artifacts")
-    .requiredOption("--receipt <receipt>", "successful external publication receipt")
-    .option("--format <format>", "json", "json").action(async (options: { hash: string; receipt: string }) => {
-      const root = findContextProjectRoot(process.cwd())?.projectRoot;
-      if (!root) throw new TypeError("Run inside a Context workspace");
-      const { markWorkspacePublished } = await import("../project/workspacePublishVersion.js");
-      process.stdout.write(JSON.stringify(await markWorkspacePublished(root, options.hash, options.receipt)) + "\n");
-    });
   command.command("record").requiredOption("--input <file>", "YAML/JSON file or -").option("--format <format>", "json", "json")
     .action(async (options: { input: string }) => {
       const root = findContextProjectRoot(process.cwd())?.projectRoot;

@@ -87,10 +87,20 @@ export function registerDocumentRevisionCommand(program: Command): void {
       process.stdout.write(`${JSON.stringify(await resumeWorkspaceTask(requireProjectRoot()))}\n`);
     });
   task.command("maintain").description("Register a scoped page revision, regeneration, or approved-output rebuild")
-    .requiredOption("--input <file>", "YAML/JSON id, operation, timing and targets; - for stdin")
+    .option("--input <file>", "YAML/JSON id, operation, timing and targets; - for stdin")
+    .option("--schema", "show the maintenance input schema")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { input: string; format: string }) => {
-      if (options.format !== "json") throw new TypeError("--format must be json");
+    .action(async (options: { input?: string; schema?: boolean; format: string }) => {
+      if (options.schema) {
+        const { maintenanceInputSchema } = await import("../project/maintenanceStorage.js");
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
+        writeSchemaOutput(zodToJsonSchema(maintenanceInputSchema, { effectStrategy: "input" }), schemaOutputFormat(options.format));
+        return;
+      }
+      if (options.format !== "json" || !options.input) throw new ContextError(ExitCode.UserError,
+        "Use --input <file> --format json, or --schema.", { category: ErrorCategory.UserInputInvalid,
+          next_action: { command: "context task maintain --schema --format json" } });
       assertActionInputWorkspace(process.cwd(), options.input);
       const value = await readYamlOrJsonInput({ path: options.input, label: "maintenance",
         missingNext: "Provide id, operation (revise/regenerate/rebuild), timing and page targets with instructions.",

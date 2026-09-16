@@ -13,6 +13,7 @@ import { rememberArticleRegion } from "./articleRegionBaselines.js";
 import { applyProductionArticleEdits, productionReferenceInputSchema, type ProductionArticleBase } from "./productionArticleEdits.js";
 import type { ProductionTask } from "./productionStage.js";
 import type { FixedProductionTask } from "./productionSubmissionFiles.js";
+import { okfTypeForKnowledgePath } from "./okfTypes.js";
 
 export const productionReferencesSchema = z.object({
   sections: z.array(z.object({
@@ -95,13 +96,17 @@ export async function prepareProductionArticle(input: {
   }
   const markdown = files.content.text;
   const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(markdown);
-  let metadata: { title: string; description: string };
+  let metadata: { title: string; description: string; type?: string | undefined };
   try {
     metadata = z.object({ title: z.string().trim().min(1), description: z.string().trim().min(1),
       type: z.string().optional(), timestamp: z.string().optional(), tags: z.array(z.string()).optional(),
       resource: z.string().optional(), deprecated: z.boolean().optional() }).strict().parse(header ? YAML.parse(header[1]!) : null);
   } catch (error) {
     throw articleError(task, files.content.path, `Use reader-facing article frontmatter with title and description; no source, Indexer or process fields. ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const expectedType = okfTypeForKnowledgePath(task.path);
+  if (metadata.type !== undefined && metadata.type !== expectedType) {
+    throw articleError(task, files.content.path, `Article type must be ${expectedType} for ${collection}; correct the frontmatter type or omit it to use the collection default.`);
   }
   let fragments: ReturnType<typeof approvedContextSectionsInMarkdown>;
   try { fragments = approvedContextSectionsInMarkdown(markdown); }

@@ -4,6 +4,11 @@ import { assertKnowledgeMapCoverage } from "../project/knowledgeMapCoverage.js";
 const article = { artifact_ref: "article:a", section_keys: ["entry"] };
 const make = (target?: { artifact_ref: string; section_key?: string }) => updateKnowledgeMap(undefined, { expected_revision: null,
   upsert: [{ key: "category", parent: null, title: "Guide" }, ...(target ? [{ key: "page", parent: "category", title: "Start", target }] : [])] });
+test("website pages are not approved knowledge and cannot substitute for article coverage", () => {
+  const map = make({ artifact_ref: "site:help" });
+  expect(assertKnowledgeMapCoverage(map, [], { known: [] }).total).toBe(0);
+  expect(() => assertKnowledgeMapCoverage(map, [article], { known: [article] })).toThrow("incomplete");
+});
 test("categories alone cannot approve articles and diagnostics contain recovery input", () => {
   try { assertKnowledgeMapCoverage(make(), [article]); throw new Error("expected rejection"); }
   catch (error) { expect(error).toMatchObject({ detail: { reason_code: "knowledge-map-incomplete", coverage: { total: 1, bound: 0 }, next_action: { command: "context task adjust --input - --format json" } } }); }

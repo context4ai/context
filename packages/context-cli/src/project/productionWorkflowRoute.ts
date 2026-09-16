@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { evaluateGraph, resolveRoute } from "@c4a/agent-graph";
 import { readProductionStage, productionStageDirectory, readProductionCapabilities, productionPlanMarkdown, writeProductionProjection } from "./productionStageStore.js";
 import { productionAgentDirectory } from "./productionSubmissionFiles.js";
-import { dispatchProductionStage, productionCapabilitiesSchema } from "./productionStage.js";
+import { dispatchProductionStage } from "./productionStage.js";
 import { productionReportRevision } from "./productionReport.js";
 import { loadContextWorkflowProvider, projectWorkflowResourceLocation, projectWorkflowRouteAction } from "./workflow/workflowProvider.js";
 import type { ContextResolvedWorkflowRoute, ContextWorkflowAuthority, ContextWorkflowResource } from "./workflow/workflowTypes.js";
@@ -21,15 +21,15 @@ export async function productionWorkflowRoute(input: {
   if (!await productionRequirementsAreCurrent(input.projectRoot, stage)) return productionPlanningRoute(input, stage);
   if (stage.delivery) return undefined;
   if (!stage.report_approved && !await productionPlanningIsPrepared(input.projectRoot, stage)) return productionPlanningRoute(input, stage);
-  const dispatch = dispatchProductionStage(stage, productionCapabilitiesSchema.parse({}));
+  const previousCapabilities = await readProductionCapabilities(input.projectRoot, stage.id);
+  const dispatch = dispatchProductionStage(stage, previousCapabilities);
   const rejected = dispatch.state === "ended"
     ? (await readCandidateRecords(input.projectRoot)).filter(candidate => candidate.status === "rejected") : [];
-  const previousCapabilities = await readProductionCapabilities(input.projectRoot, stage.id);
   const directory = productionStageDirectory(stage.id);
   const selected = new Set(dispatch.batches.flatMap(batch => batch.tasks));
   const context = { workspace: input.projectRoot, authorities: [...input.authorities], facts: { production: {
     report_approved: stage.report_approved,
-    prepared: !dispatch.batches.length || (!previousCapabilities.multi_agent && existsSync(join(input.projectRoot, directory, "stage.md")) &&
+    prepared: !dispatch.batches.length || (existsSync(join(input.projectRoot, directory, "stage.md")) &&
       stage.tasks.filter(task => selected.has(task.id)).every(task => task.status === "issued")),
     writing_complete: dispatch.batches.length === 0,
     complete: dispatch.state === "ended",
@@ -80,7 +80,7 @@ export async function productionWorkflowRoute(input: {
   return { protocol: "context.workflow.route.v1", id: resolved.routeId, node: resolved.node,
     revision, reason_code: resolved.reasonCode, availability: resolved.availability,
     summary: report ? `Present the report and wait. After approval, write {stage: ${stage.id}, decision: approved} to ${path}.`
-      : writing ? "Read the single issued batch. Enable --multi-agent only if this caller supports coordinating independent directories."
+      : writing ? "Read the issued task directories. Coordinate them sequentially unless this caller supports independent Agents; only the coordinator submits shared state."
       : repair ? "Add revision tasks for rejected articles using the Review feedback; accepted production responsibilities remain unchanged."
       : investigate ? `Continue investigating ${stage.pending_scopes.filter(scope => !stage.gaps.some(gap => gap.scope === scope)).join(", ")}. Submit additional article tasks and the remaining pending_scopes; do not repeat accepted work.`
       : resolved.node === "resolve-production-gap" ? `Remaining investigation: ${stage.pending_scopes.join(", ") || "none"}. ${stage.gaps.map(gap => `${gap.scope}: ${gap.reason}`).join("; ")}` : "Prepare the current stage's eligible task directories.",

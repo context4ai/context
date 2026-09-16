@@ -26,6 +26,7 @@
 | 选择代码提取方式 | [Code Extractor Selection](./reference/code-extractors.md) |
 | 选择 Agent 知识包或 LLM 文档 | [Package Outputs](./guides/package-outputs.md) |
 | 自定义包文件和索引 | [Package Templates](./reference/package-templates.md) 和 [Template Variables](./reference/template-variables.md) |
+| 定制网站页面、首页区域和右下角聊天浮层 | [页面内容定制](./guides/page-customization.md) |
 | 保留飞书图片和内嵌资源 | [Lark Resource Materialization](./guides/lark-resources.md) |
 
 默认提供 Code、Markdown、Note、Sessions 四类 Indexer。安装和技能开关由 Host 管理；

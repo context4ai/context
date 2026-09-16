@@ -13,7 +13,7 @@ state:
       knowledge_review_resolved: true
       package_output_resolved: true
     sources: { registered: true, repositories_ready: true }
-    capture: { declarations_complete: true, batch_digest: null, complete: true }
+    capture: { declarations_complete: true, batch_digest: null, complete: true, route_satisfied: true }
     review: { gate_clear: true, batch_resolved: true }
     close: { current: true }
     packages: { declared: true, templates_reviewed: true, current: false }

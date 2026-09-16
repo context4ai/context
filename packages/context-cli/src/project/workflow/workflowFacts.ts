@@ -29,6 +29,11 @@ function workspaceStateValid(observation: ContextWorkflowObservation): boolean {
 function blockingVerificationClear(
   observation: ContextWorkflowObservation,
 ): boolean {
+  // Review must be reachable to replace invalid approved content. Once drafts
+  // are resolved, verification blocks close/build again if errors remain.
+  const errors = observation.verifyIssues.filter(issue => issue.severity === "error");
+  if (observation.draftCandidates > 0 && errors.length > 0 && errors.length === observation.verifyErrors &&
+    errors.every(issue => issue.path?.startsWith("knowledge/"))) return true;
   if (observation.capturedDocumentSources < observation.documentSources.length) {
     return true;
   }
@@ -101,6 +106,12 @@ export function createContextWorkflowFacts(
   const captureComplete =
     observation.capturedDocumentSources === observation.documentSources.length &&
     observation.pendingCaptureCommands.length === 0;
+  // Active production validates each article's material and retains unresolved
+  // gaps. Let that work proceed; resume capture before completing delivery.
+  const productionCanProceed = observation.productionState !== undefined && (
+    ((observation.productionState === "active" || observation.productionState === "waiting-user") &&
+      observation.productionDelivery !== true) || observation.draftCandidates > 0
+  );
   const partialDelivery = observation.indexerCandidateCompile.partial_delivery === true && observation.indexerCandidateCompile.state === "current" && !observation.indexerCandidateCompile.revision_pending;
   // A compiled delivery wave can reach Review while later Authors remain queued.
   // Retained delivery history alone does not make an unfinished lifecycle current.
@@ -164,6 +175,7 @@ export function createContextWorkflowFacts(
         observation.documentSources.length === 0 ||
         observation.missingCaptureSources.length === 0,
       complete: captureComplete,
+      route_satisfied: captureComplete || productionCanProceed,
     },
     review: {
       gate_clear: reviewGateClear,

@@ -1,5 +1,7 @@
+import { readKnowledgeStructure } from "./packageBuildInventory.js";
+import { readWorkspaceChangelog } from "./workspaceChangelog.js";
 import { safeProjectTarget } from "./durableMultiFileTransaction.js";
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -17,12 +19,9 @@ export async function readTaskPreparation(root: string): Promise<PreparationStat
   try { text = await readFile(join(root, TASK_PREPARATION_PATH), "utf8"); }
   catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    // Losing scratch files is not authorization to start another production.
-    // Reuse the durable delivery receipt; do not create a second task ledger.
-    let delivered = false;
-    try { delivered = (await stat(join(root, ".context-builds.json"))).isFile(); }
-    catch (missing) { if ((missing as NodeJS.ErrnoException).code !== "ENOENT") throw missing; }
-    if (delivered && !await readProductionStage(root)) return "cleared";
+    // Formal knowledge/history survives a clone or discarded local caches.
+    const existing = (await readKnowledgeStructure(root)).articles || (await readWorkspaceChangelog(root)).length;
+    if (existing && !await readProductionStage(root)) return "cleared";
     return undefined;
   }
   const record = JSON.parse(text);

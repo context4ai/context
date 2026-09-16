@@ -101,12 +101,11 @@ configuration/template approval, before the final build. The record response
 returns the next workspace Route, so no extra status call is needed. Build retries
 reuse the recorded version when formal content is unchanged. If build preparation
 or rendering fails and formal corrections are needed, `version inspect` returns
-`reusable_version` for the current entry only while it has no successful build or
-publication receipt. Submit that same version with the complete iteration's title,
-changes and triggers, including the repair; this replaces the pending changelog
-entry rather than appending another version. Do not submit only the repair and
-lose the original delivery description. Once built or published, the version is
-sealed and further formal changes require an increase. Intermediate batches
+`reusable_version` for an untagged current entry. Before amending, read the
+publication target's remote version using the distribution skill. An unpublished
+preview may reuse its version with the complete iteration's title, changes and
+triggers; preserve the original delivery description. Published content requires
+an increasing version. A local build alone does not seal a version. Intermediate batches
 do not each receive a version.
 
 The workspace AGENTS.md and version-writing instructions require each entry's
@@ -143,19 +142,23 @@ are `initial`, `note`, `sessions`, `mr`, `module`, `document`, `navigation`,
 `repair`, `dist`, and `other`. Agent-written fields describe the actual diff and
 conversation; they must not expose credentials, raw transcripts or private IDs.
 
-The CLI writes `changelog.yaml`, generated `CHANGELOG.md`, `package.json` and the
-`.context-version.json` content baseline together. Keep these formal files with
-the workspace; do not hand-edit generated baselines. Git-managed and unignored
-new files are compared (without Git, non-runtime workspace files are compared).
-Version metadata itself, `dist`, `.tmp` and dependencies do not cause changes.
+The CLI updates `package.json`, `changelog.yaml` and generated `CHANGELOG.md` together.
+`context version inspect --base <commit-or-tag> --format json` compares the actual
+workspace files with Git, including untracked files. Without an explicit base it
+uses the current version's `v<version>` tag when available, otherwise HEAD; HEAD
+is not proof of publication. Review article bodies, assets, structure, navigation
+and templates, not structure alone. Without Git, inspection reports local files.
+A disposable `.tmp` checkpoint suppresses repeated recording in an uncommitted
+iteration. Losing it does not lose knowledge or prove a new publication.
 
-Successful builds record version and per-package hashes in `.context-builds.json`.
-They do not increase versions. Before publishing, `context version publish-check
---format json` compares against `.context-published.json`. A same-version changed
-output requires a patch using `version inspect --publish` and a `dist` trigger,
-then a rebuild. Record `version published --hash <checked-hash> --receipt
-<successful-publication-reference> --format json` only after external success.
-No command commits, tags or uploads automatically.
+There are no root-level Context version/build/publication receipts to maintain.
+Build freshness uses the existing local package cache. The CLI does not seal a
+version merely because a preview was built. Before reusing a version, check the
+actual publication target and Git tags; a published version requires an increase.
+Publication belongs to the installed distribution tool. Record remote receipts
+in its configuration or the existing work summary, separately for each target.
+A successful authorized commit/tag identifies the delivered source; never create
+one automatically, and never treat Git success as platform publication success.
 
 Website history is available at `changelog.html`: cards are newest first, the
 latest three expanded and older cards collapsed. The History button beside the
@@ -190,6 +193,66 @@ modifying a title alone is not a reason to change article identity. Never satisf
 coverage by mechanically placing every new page under an unrelated catch-all.
 Build reports missing bindings for the Agent to resolve; it does not classify
 content. Moving a menu entry does not change the article URL.
+
+### Reader tasks, names and reading order
+
+Read the affected articles' bodies before changing their categories or titles.
+Titles and outlines help locate material; they do not settle its main reader task.
+During initial planning, keep names and placement provisional until the relevant
+material supports them. Classify by the question the page primarily answers and
+its intended reader, rather than its collection, source path or isolated words:
+
+| Main reader task | Organizing emphasis |
+| --- | --- |
+| Understand a business process | Participants, rules, decisions and lifecycle |
+| Understand an implementation | Components, data changes, calls and failure handling |
+| Integrate or use a capability | Prerequisites, setup, contracts and usage |
+| Diagnose or recover from a problem | Symptoms, checks, causes, actions and verification |
+
+These distinctions guide placement, not a required set of top-level directories.
+A page explaining retry scheduling and persistence belongs with its implementation;
+a page explaining how to recover a stalled worker serves troubleshooting. The word
+"retry" alone decides neither. Choose a primary home for a mixed page and link
+related tasks without duplicating the same overview across categories.
+
+Give each directory a concrete shared subject or reader task. At every parent,
+keep its children either all directories or all articles. Place an overview in
+the appropriate article group when the parent contains directories. Avoid empty
+category scaffolding and chains of single-article directories that add no useful
+choice. A residual "Other" group, when warranted, comes last; it must not absorb
+articles whose purpose fits an existing group. Do not invent a fixed depth,
+number of categories or page quota to make the tree look uniform.
+
+Keep directory and article titles concise and specific to their actual subject.
+Name the object and useful task, rather than enumerating every section heading.
+For example, prefer "Client authentication" to "Client tokens, configuration,
+requests, refresh and errors" when those sections all explain authentication.
+Retain a platform or product name only when it distinguishes otherwise ambiguous
+topics. Keep an existing accurate title when it already works; a necessary
+technical name need not be shortened just to meet a word count.
+
+The Agent manually arranges siblings for reading: a useful overview, prerequisites,
+the main tasks or process sequence, then later maintenance and reference material
+where applicable. Use a numbered list or ordered outline to review that proposal,
+then assign explicit, distinct `order` values among siblings in the knowledge-map
+adjustment, for example 10, 20 and 30. The list is an editing plan; persisted
+`order` values determine navigation. Reordering YAML/JSON entries or changing the
+plan's list order alone does not change the site. Paths, internal keys, alphabetical
+order and source-file order are not substitutes for a reader sequence. Keep order
+numbers out of titles. This navigation order is separate from the order in which
+workers write their drafts.
+
+For a long or compound page, inspect its content before suggesting a split or
+merge. Keep one coherent task together, and separate independently useful tasks
+only when their supported content warrants it. A long title or many headings
+alone is insufficient. Preserve useful detail and links, and retain article IDs,
+paths and unaffected sections when the reader task is unchanged. A navigation-only
+change does not require a prose rewrite or file migration; changing its label does
+not silently rename the approved article. Needed title or content revisions use
+the existing revision and Review flow. Splits and merges use ordinary article
+tasks, link repair and any explicit retirement after replacement content is
+delivered. These are Agent editorial decisions, not new CLI checks or approval
+gates.
 
 ## Edit one section or review part of a batch
 

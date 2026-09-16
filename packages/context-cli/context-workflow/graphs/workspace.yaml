@@ -135,7 +135,7 @@ nodes:
     reasonCode: route.capture.pending-target
     action: actions/capture-next.yaml
     satisfiedBy:
-      - path: capture.complete
+      - path: capture.route_satisfied
         equals: true
     resources:
       required:
@@ -224,6 +224,7 @@ nodes:
         - resources/views/package-current.yaml
       recommended:
         - resources/manuals/guides/package-outputs.md
+        - resources/manuals/guides/page-customization.md
         - resources/manuals/reference/package-templates.md
         - resources/manuals/reference/template-variables.md
 
@@ -241,6 +242,7 @@ nodes:
         - resources/views/package-current.yaml
       recommended:
         - resources/manuals/guides/package-outputs.md
+        - resources/manuals/guides/page-customization.md
         - resources/manuals/reference/project-api.md
         - resources/manuals/reference/package-templates.md
         - resources/manuals/reference/template-variables.md

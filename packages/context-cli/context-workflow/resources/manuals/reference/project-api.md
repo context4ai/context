@@ -193,6 +193,12 @@ or repository links. Knowledge map is projected from
 `src/knowledge-map.yaml` independently of KB directories; see
 [Package Outputs](../guides/package-outputs.md#optional-static-documentation-website).
 
+`site.extensions` optionally names a trusted `src/site` root, homepage and floating
+`slots`, and custom Markdown `pages`. Place custom pages in the same knowledge map
+with `target.artifact_ref: "site:<page-key>"`. See
+[Page content customization](../guides/page-customization.md) for the configuration
+and the boundary between presentation code and approved knowledge.
+
 ## Knowledge requirements and Indexer Skills
 
 When `src/indexers.yaml` is absent, the configuration Route supplies its schema.

@@ -10,6 +10,7 @@ import { productionAgentDirectory } from "../project/productionSubmissionFiles.j
 import { completeProductionSubmission } from "../project/productionSubmission.js";
 import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { closeProjectWorkspace } from "../project/close.js";
+import { requestProductionDelivery } from "../project/productionDelivery.js";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -34,10 +35,13 @@ test("a selected candidate reopens writing directly and preserves its peer and a
   const original = (await readProductionStage(root))!;
   const selected = before.find(candidate => candidate.path === "architecture/overview.md")!;
   const request = { projectRoot: root, selector: selected.candidate_id, instruction: "Clarify the exported value." };
+  await requestProductionDelivery(root);
+  expect((await readProductionStage(root))!.delivery).toBeDefined();
   expect(await beginDocumentRevision(request)).toMatchObject({ status: "production-revision-prepared", path: selected.path });
   const pending = (await readProductionStage(root))!;
   expect(pending.id).toBe(original.id);
   expect(pending.report_approved).toBe(true);
+  expect(pending.delivery).toBeUndefined();
   expect(pending.tasks).toHaveLength(original.tasks.length + 1);
   expect(pending.tasks.filter(task => task.status === "issued")).toHaveLength(1);
   expect(await readCandidateRecords(root)).toEqual(before);

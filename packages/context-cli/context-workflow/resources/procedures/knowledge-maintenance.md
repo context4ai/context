@@ -7,9 +7,9 @@ mediaType: text/markdown
 # Maintain knowledge while production continues
 
 Use `context task maintain --input <file|-> --format json` to register multiple
-approved pages or an approved-output rebuild. The machine-readable input is
-[maintenance input](../../schemas/knowledge-maintenance-input.schema.json). This accepts a request; it does
-not discard the current task or immediately rewrite a page.
+approved pages or an approved-output rebuild. Read the input schema with
+`context task maintain --schema --format json`. Registration saves a request;
+it does not discard the current task or immediately rewrite a page.
 
 ```yaml
 id: clarify-existing-guides
@@ -66,3 +66,5 @@ route. If status says `target-still-in-production`, the original task still owns
 an unfinished page of that subject: let that writer settle before revising its
 latest approved text. After completion, read the
 new Route to resume production. Never resubmit an accepted old batch.
+
+After Review and Close, a revision with remaining targets continues authoring without an intermediate package build. Build the configured outputs after the final revision batch; Close alone does not mark the maintenance request delivered.

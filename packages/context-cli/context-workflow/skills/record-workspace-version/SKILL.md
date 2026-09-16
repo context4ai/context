@@ -30,6 +30,12 @@ document, navigation, repair, dist, other. Describe what actually triggered the
 iteration, not merely the CLI command. Never include raw private transcripts,
 credentials, local absolute paths or private account IDs in public history.
 
+Before amending the current version, check the target platform and Git tags.
+A local build is not publication. Use an increasing version for published content.
+Git comparison supports `version inspect --base <commit-or-tag>`; include the
+same `base_ref` in the record input when selected. Missing `.tmp` checkpoints do
+not require recreating historical receipts.
+
 Increment minor for added modules/material that expands knowledge coverage;
 increment patch for repairs, existing-module updates, navigation or persistent
 work-status changes. Major increases require an explicit user instruction.

@@ -16,6 +16,7 @@ import {
   type LarkResourceMaterializationReport,
 } from "./larkResourceMaterialization.js";
 import { createLarkCaptureReport } from "./larkCaptureReport.js";
+import { larkMarkdownImageResources, replaceLarkMarkdownImages } from "./larkMarkdownImages.js";
 
 /**
  * Name of the binary we spawn. Matches the `bin` field of the official npm
@@ -672,12 +673,16 @@ export async function fetchFeishuDocSnapshot(
         raw_content_hash: projection.rawContentHash,
       },
     });
+  }
+  const resources = [...new Map([...(projection?.resources ?? []), ...larkMarkdownImageResources(body)]
+    .map(resource => [resource.locator, resource])).values()];
+  if (resources.length) {
     const policy: LarkResourceMaterializationPolicy = {
       ...DEFAULT_RESOURCE_POLICY,
       ...input.resourcePolicy,
     };
     const materialized = await materializeLarkResources({
-      resources: projection.resources,
+      resources,
       runner,
       ...(input.prefetched?.mediaFiles === undefined ? {} : { mediaFiles: input.prefetched.mediaFiles }),
       policy,
@@ -699,7 +704,8 @@ export async function fetchFeishuDocSnapshot(
         });
       },
     });
-    body = applyLarkResourceReplacements(body, projection.resources, materialized.replacements);
+    body = applyLarkResourceReplacements(body, resources, materialized.replacements);
+    body = replaceLarkMarkdownImages(body, materialized.replacements);
     assets.push(...materialized.assets.map((asset) => ({
       path: asset.path,
       bytes: asset.bytes,
@@ -712,7 +718,7 @@ export async function fetchFeishuDocSnapshot(
   assets.push(captureReportAsset({
     fidelity,
     resourceMaterialization,
-    resources: projection?.resources ?? [],
+    resources,
   }));
 
   // Prepend title as H1 if the readable projection doesn't already lead with one —

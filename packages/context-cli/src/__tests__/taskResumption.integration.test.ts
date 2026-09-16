@@ -42,7 +42,7 @@ for (const retainedMarker of [false, true]) test(`new production uses long-term 
     expect((await resumeWorkspaceTask(root)).action).toBe("task-already-present");
     expect(await readProductionStage(root)).toEqual(stage);
     // A prior delivery must not hide a still-present new production stage.
-    await writeFile(join(root, ".context-builds.json"), JSON.stringify({ version: "0.1.0", packages: [] }));
+    await writeFile(join(root, "changelog.yaml"), YAML.stringify({ entries: [{ version: "0.1.0", date: "2026-01-01T00:00:00.000Z", title: "Delivery", changes: ["Guide"], triggers: [{kind: "initial", description: "Request"}] }] }));
     await rm(join(root, TASK_PREPARATION_PATH));
     expect(await readTaskPreparation(root)).toBeUndefined();
     expect(await readProductionStage(root)).toEqual(stage);

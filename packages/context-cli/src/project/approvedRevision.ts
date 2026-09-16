@@ -45,6 +45,7 @@ const requestSchema = z.object({
   candidate: z.unknown().optional(),
   batch_candidates: z.array(z.unknown()).optional(),
   review_ready: z.boolean().optional(),
+  build_pending: z.boolean().optional(),
   program_blocks: z.array(z.object({ token: z.string(), source_ref: z.string(), fact_ref: z.string(), markdown: z.string(), declaration_status: z.string().optional() }).strict()).optional(),
   refresh_sources: z.array(z.string().min(1)).min(1).optional(),
   merge_context: z.object({ approved_markdown: z.string().nullable(), draft_markdown: z.string() }).strict().optional(),
@@ -204,6 +205,7 @@ export async function prepareApprovedRevision(input: {
   replace_current?: boolean;
   persist?: boolean;
   batch_candidates?: CandidateRecord[];
+  build_pending?: boolean;
   requirements?: ProductionRequirements["requirements"];
   processed_scopes?: ProcessedScope[];
 }) {
@@ -285,7 +287,9 @@ export async function prepareApprovedRevision(input: {
       ? await prepareRevisionProgramBlocks(input.projectRoot, target.source_refs, regenerationScopes,
         target.sections.flatMap(section => section.references)) : undefined;
     if (input.regenerate && !programBlocks?.length) throw new TypeError("No applicable program blocks in the selected page sources. Inspect its Provider/materials; do not submit the old table as regenerated. Cancel or adjust this maintenance request before continuing.");
+    const buildPending = input.build_pending || (input.replace_current && (await readApprovedRevision(input.projectRoot))?.build_pending);
     const payload = { target, instruction: input.instruction.trim(), requirements,
+      ...(buildPending ? { build_pending: true } : {}),
       ...(input.regenerate ? { regenerate: true } : {}),
       ...(programBlocks === undefined ? {} : { program_blocks: programBlocks }),
       ...(input.batch_candidates === undefined ? {} : { batch_candidates: input.batch_candidates }),
@@ -372,7 +376,7 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
         request.target.previous_path === undefined && !replacingCandidate) {
       const { prepareRevisionBatchContinuation } = await import("./approvedRevisionBatch.js");
       const next = await prepareRevisionBatchContinuation(input.projectRoot, request, request.batch_candidates ?? []);
-      if (next || request.batch_candidates?.length) {
+      if (next || request.batch_candidates?.length || request.build_pending) {
         await atomicWriteFile(join(input.projectRoot, await revisionStoragePath(input.projectRoot)), `${JSON.stringify(next ?? { ...request, review_ready: true })}\n`);
       } else {
         await advanceApprovedRevision(input.projectRoot, request);
@@ -400,11 +404,12 @@ export async function completeApprovedRevision(input: RevisionSubmission): Promi
   });
 }
 
-/** Called only after all configured package outputs have built successfully. */
-export async function finishApprovedRevision(projectRoot: string): Promise<void> {
+/** Close may advance pending targets; only a successful build finishes the final batch. */
+export async function finishApprovedRevision(projectRoot: string, options: { pendingOnly?: boolean } = {}): Promise<void> {
   await withProjectWriteLock(projectRoot, "finish-approved-revision", async () => {
     const request = await readApprovedRevision(projectRoot);
-    if (!request || (!request.candidate && !request.batch_candidates?.length)) return;
+    if (!request || (!request.candidate && !request.batch_candidates?.length && !(request.build_pending && request.review_ready))) return;
+    if (options.pendingOnly && !request.pending_targets?.length) return;
     if ((await readCandidateRecords(projectRoot)).some(item => item.status === "draft")) return;
     if (request.refresh_sources) throw new TypeError("Finish the pending source adjustment before advancing this update queue.");
     const { approvedRevisionCandidateApplied } = await import("./approvedRevisionBatch.js");
@@ -413,14 +418,15 @@ export async function finishApprovedRevision(projectRoot: string): Promise<void>
         throw new TypeError("Every page in the revision batch must be applied and closed before final cleanup");
       }
     }
-    await advanceApprovedRevision(projectRoot, request);
+    await advanceApprovedRevision(projectRoot, request, options.pendingOnly);
   });
 }
 
-async function advanceApprovedRevision(projectRoot: string, request: ApprovedRevision): Promise<void> {
+async function advanceApprovedRevision(projectRoot: string, request: ApprovedRevision, buildPending = false): Promise<void> {
   const [next, ...remaining] = request.pending_targets ?? [];
   if (next) {
     await prepareApprovedRevision({ projectRoot, replace_current: true, selector: next.path, instruction: next.instruction,
+      ...(buildPending ? { build_pending: true } : {}),
       ...(next.regenerate ? { regenerate: true } : {}),
       ...(next.target === undefined ? {} : { target: next.target }),
       pending_targets: remaining, ...(next.create === undefined ? {} : { create: next.create }),

@@ -37,6 +37,18 @@ export const packageSiteSchema = z.object({
   lang: z.string().min(1).default("en-US"),
   base: z.string().regex(/^\/(?:[a-zA-Z0-9_-]+\/)*$/, "Use / or a slash-delimited deployment path, such as /docs/").default("/"),
   home: packageSiteHomeSchema.optional(),
+  /** Trusted presentation code, relative to the workspace; never captured knowledge. */
+  extensions: z.object({
+    root: z.string().regex(/^src\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/).default("src/site"),
+    slots: z.object({
+      banner: z.union([z.string().min(1), z.literal(false)]).optional(),
+      knowledge: z.union([z.string().min(1), z.literal(false)]).optional(),
+      resources: z.union([z.string().min(1), z.literal(false)]).optional(),
+      footer: z.union([z.string().min(1), z.literal(false)]).optional(),
+      floating: z.union([z.string().min(1), z.literal(false)]).optional(),
+    }).strict().optional(),
+    pages: z.record(z.string().regex(/^[a-zA-Z0-9_-]+$/), z.string().min(1)).optional(),
+  }).strict().optional(),
 }).strict();
 export type PackageSiteDefinition = z.input<typeof packageSiteSchema>;
 

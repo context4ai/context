@@ -1,4 +1,4 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { indexerProtocolDigest, validateArticleStructureEntries } from "@c4a/context";
 import { maintenanceInputSchema, readMaintenance, saveMaintenance, MAINTENANCE_ROOT } from "./maintenanceStorage.js";
@@ -7,15 +7,18 @@ import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { readCandidateRecords, CANDIDATE_LEDGER_FILE } from "./candidateLedger.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { requestProductionDelivery } from "./productionDelivery.js";
-import { safeProjectTarget } from "./durableMultiFileTransaction.js";
 import { prepareApprovedRevision, readApprovedRevision } from "./approvedRevision.js";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
 
 async function deliveryDigest(root: string) {
-  try { return indexerProtocolDigest(await readFile(await safeProjectTarget(root, ".context-builds.json"), "utf8")); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return indexerProtocolDigest(null); throw error; }
+  const directory = join(root, ".tmp/context-runtime/packages");
+  try {
+    const files = (await readdir(directory)).filter(name => name.endsWith(".json")).sort();
+    if (!files.length) return indexerProtocolDigest(null);
+    return indexerProtocolDigest(await Promise.all(files.map(name => readFile(join(directory, name), "utf8"))));
+  } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return indexerProtocolDigest(null); throw error; }
 }
 
 export async function registerKnowledgeMaintenance(root: string, value: unknown, options: { renewCompleted?: boolean } = {}) {

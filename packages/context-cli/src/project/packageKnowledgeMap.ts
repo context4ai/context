@@ -32,6 +32,8 @@ export async function writePackageKnowledgeMap(input: {
   assertKnowledgeMapCoverage(input.structure, knowledgeMapArticleTargets(input.selected));
   if (input.structure === undefined || input.pkg.kind !== "package.kb") return [];
   const projected = projectKnowledgeMap(input.structure, packageKnowledgeMapTargets(input.pkg, input.selected));
+  // Website-only pages are intentionally unavailable in the knowledge package.
+  projected.warnings = projected.warnings.filter(warning => !warning.target.startsWith("site:"));
   const root = join(input.projectRoot, input.pkg.outDir);
   const mapPath = join(root, "context-knowledge-map.json");
   // A custom template must not silently overwrite the identity projection.

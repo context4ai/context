@@ -206,6 +206,8 @@ export async function closeProjectWorkspace(projectRoot: string): Promise<Projec
     await Promise.all(compactFiles.map((file) => writeFile(file.absPath, file.content, "utf8")));
     const { readTaskRollback } = await import("./taskRollback.js");
     if (!production && !await readTaskRollback(projectRoot)) await closeRevisionDelivery(projectRoot);
+    const { finishApprovedRevision } = await import("./approvedRevision.js");
+    await finishApprovedRevision(projectRoot, { pendingOnly: true });
     return {
       action: "closed",
       projectRoot,

@@ -76,6 +76,16 @@ async function fixture(initialize = false) {
   return { root, stage, directory, manifest, input: { projectRoot: root, stage: stage.id, path } };
 }
 
+test("wrong explicit article type is rejected before entering Review", async () => {
+  const f = await fixture();
+  const file = join(f.directory, "one/article.md");
+  await writeFile(file, (await readFile(file, "utf8")).replace("title: one", "type: Wiki\ntitle: one"));
+  const result = await completeProductionSubmission(f.input);
+  expect(result.failed).toHaveLength(1);
+  expect(result.failed[0]!.reason).toContain("type must be Guide");
+  expect(result.accepted).toHaveLength(1);
+});
+
 test.each([
   ["architecture/Entry.md", "architecture/entry.md"],
   ["architecture/café.md", "architecture/CAFE\u0301.md"],
