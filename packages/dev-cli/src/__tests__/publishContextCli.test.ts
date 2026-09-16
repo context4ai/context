@@ -206,7 +206,8 @@ describe("publish package list", () => {
     expect(releaseChannel("0.7.0-preview.1")).toBe("preview");
     expect(releaseChannel("0.7.0-rc.1")).toBe("rc");
     expect(releaseChannel("0.7.0")).toBe("latest");
-    expect(() => releaseChannel("0.7.0-beta.1")).toThrow(/only final, alpha\.N, preview\.N, and rc\.N/u);
+    expect(releaseChannel("0.7.14-beta.1")).toBe("beta");
+    expect(releasePublishPlan("0.7.14-beta.1").publish_tag).toBe("beta");
     expect(releaseChannel("0.7.10-alpha.1")).toBe("alpha");
     expect(releasePublishPlan("0.7.10-alpha.1").publish_tag).toBe("alpha");
     expect(parserReleaseMetadata("0.7.10-alpha.1").coordinates.every(

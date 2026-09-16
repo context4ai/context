@@ -4,33 +4,73 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag to publish
+        required: true
+        type: string
+      skip_checks:
+        description: Skip pre/post-release verification (build and publication checks still run)
+        default: false
+        type: boolean
+
+concurrency:
+  group: npm-publish-${{ inputs.release_tag || github.event.release.tag_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
   id-token: write
 
 jobs:
+  release-inputs:
+    name: Resolve release parameters
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      id: ${{ steps.release.outputs.id }}
+      skip_checks: ${{ steps.release.outputs.skip_checks }}
+    steps:
+      - id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+          SKIP_CHECKS: ${{ inputs.skip_checks || contains(github.event.release.body, '<!-- context-release:skip-checks=true -->') }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|preview|rc)\.[0-9]+)?$ ]]
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)"
+          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "id=${release_id}" >> "$GITHUB_OUTPUT"
+          echo "skip_checks=${SKIP_CHECKS}" >> "$GITHUB_OUTPUT"
+          echo "Release ${RELEASE_TAG}; skip_checks=${SKIP_CHECKS}" >> "$GITHUB_STEP_SUMMARY"
+
   verify:
+    needs: release-inputs
+    if: needs.release-inputs.outputs.skip_checks != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/verify-full.yml
     with:
-      ref: ${{ github.event.release.tag_name }}
+      ref: ${{ needs.release-inputs.outputs.tag }}
       full: false
 
   post-release-full:
     name: Post-release full verification
-    needs: publish
+    needs: [release-inputs, publish]
+    if: needs.release-inputs.outputs.skip_checks != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/verify-full.yml
     with:
-      ref: ${{ github.event.release.tag_name }}
+      ref: ${{ needs.release-inputs.outputs.tag }}
 
   publish:
-    needs: verify
+    needs: [release-inputs, verify]
     name: Publish packages
-    if: startsWith(github.event.release.tag_name, 'v')
+    if: always() && needs.release-inputs.result == 'success' && (needs.verify.result == 'success' || (needs.verify.result == 'skipped' && needs.release-inputs.outputs.skip_checks == 'true'))
     runs-on: ubuntu-latest
     environment: npm
 
@@ -38,7 +78,7 @@ jobs:
       - name: Check out release
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ needs.release-inputs.outputs.tag }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -56,9 +96,11 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ needs.release-inputs.outputs.tag }}
         run: |
           package_version="$(node --input-type=module -e "import pkg from './package.json' with { type: 'json' }; process.stdout.write(pkg.version)")"
-          test "${GITHUB_REF_NAME}" = "v${package_version}"
+          test "${RELEASE_TAG}" = "v${package_version}"
 
       - name: Capture pre-publish registry state
         run: |
@@ -69,15 +111,15 @@ jobs:
       - name: Preserve pre-publish registry state
         uses: actions/upload-artifact@v4
         with:
-          name: npm-release-preflight-${{ github.event.release.tag_name }}
+          name: npm-release-preflight-${{ needs.release-inputs.outputs.tag }}
           path: .tmp/release-registry-snapshot.json
           if-no-files-found: error
 
       - name: Normalize release title
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ github.event.release.id }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_ID: ${{ needs.release-inputs.outputs.id }}
+          RELEASE_TAG: ${{ needs.release-inputs.outputs.tag }}
         run: |
           gh api \
             --method PATCH \
@@ -128,7 +170,7 @@ jobs:
       - name: Preserve release receipts
         uses: actions/upload-artifact@v4
         with:
-          name: npm-release-receipts-${{ github.event.release.tag_name }}
+          name: npm-release-receipts-${{ needs.release-inputs.outputs.tag }}
           path: |
             .tmp/release-publish-plan.json
             .tmp/release-registry-snapshot.json
@@ -137,7 +179,7 @@ jobs:
       - name: Update release package list
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ github.event.release.id }}
+          RELEASE_ID: ${{ needs.release-inputs.outputs.id }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" --jq .body > .tmp/release-body.md
           bun run scripts/release-metadata.ts \

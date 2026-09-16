@@ -1,3 +1,4 @@
+import { recordPackageSiteUrl } from "../project/packageSiteAddress.js";
 import { approvedKnowledgeMapTargets } from "../project/knowledgeMapCoverage.js";
 import { applyKnowledgeMapUpdate, readKnowledgeMap } from "../project/knowledgeMap.js";
 import { expect, test } from "bun:test";
@@ -78,6 +79,15 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     const loaded = await loadContextProjectModule(root);
     expect((await collectPackageFreshness(root, loaded.project.packages))[0]!.state).toBe("ready");
     await expect(stat(join(root, first.outDir, "site"))).rejects.toMatchObject({ code: "ENOENT" });
+    const delivery = JSON.parse((await promisify(execFile)("node", [join(import.meta.dir, "../../dist/cli.js"),
+      "package", "site-url", "site-test", "https://example.com/docs"], { cwd: root })).stdout);
+    expect(delivery.site_url).toBe("https://example.com/docs/");
+    expect(delivery.network_checked).toBe(false);
+    expect((await collectPackageFreshness(root, loaded.project.packages))[0]!.state).toBe("ready");
+    const readMap = async (dir: string) => JSON.parse(await readFile(join(root, dir, "context-site-map.json"), "utf8"));
+    expect((await readMap(first.outDir)).site_url).toBe("https://example.com/docs/");
+    expect(await readMap(first.outDir)).toEqual(await readMap(first.siteOutDir!));
+    await expect(recordPackageSiteUrl(root, "missing", "https://example.com")).rejects.toThrow("declared knowledge package");
     const originalSite = await readFile(sitePath, "utf8");
     await writeFile(sitePath, originalSite + "<!-- external edit -->");
     expect((await collectPackageFreshness(root, loaded.project.packages))[0]!.state).not.toBe("ready");
@@ -87,6 +97,8 @@ test("normal build publishes the website, reuses an unchanged build and removes 
       upsert: map.entries.map(item => ({ ...item, title: "Updated navigation" })) });
     const changed = await buildProjectPackages(root);
     expect(changed.packages[0]!.state).not.toBe("unchanged");
+    expect((await readMap(first.outDir)).site_url).toBe("https://example.com/docs/");
+    expect(await readMap(first.outDir)).toEqual(await readMap(first.siteOutDir!));
     expect(await readFile(join(root, first.siteOutDir!, "llms.txt"), "utf8")).toContain("Updated navigation");
     expect(await readFile(join(root, llms.outDir, "llms.txt"), "utf8")).toContain("Updated navigation");
     const kbIndex = await readFile(join(root, first.outDir, "wikis/index.md"), "utf8");

@@ -1,3 +1,4 @@
+import { recordPackageSiteUrl } from "./project/packageSiteAddress.js";
 import type { Command } from "commander";
 import { ErrorCategory, formatFeedback } from "./lib/cliFeedback.js";
 import { ContextError } from "./lib/errors.js";
@@ -9,6 +10,14 @@ export function registerPackageCommands(program: Command): void {
   const packageCommand = program
     .command("package")
     .description("Inspect or resolve package output configuration");
+
+  packageCommand.command("site-url <package-name> <url>")
+    .description("Record a deployed site root in existing site maps without network checks")
+    .action(async (packageName: string, url: string) => {
+      const root = findContextProjectRoot(process.cwd())?.projectRoot;
+      if (!root) throw new TypeError("Run inside a Context workspace");
+      process.stdout.write(JSON.stringify(await recordPackageSiteUrl(root, packageName, url), null, 2) + "\n");
+    });
 
   const packageTemplate = packageCommand
     .command("template")

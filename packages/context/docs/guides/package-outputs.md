@@ -480,3 +480,24 @@ Only approved selected content is exported. A map or article change invalidates
 both website and LLMS outputs; failure preserves the previous staged package.
 Standalone `llmsPackage()` uses the same map organization and supplies the full
 text and raw article files alongside its template-rendered `llms.txt` index.
+
+## Links to a deployed website
+
+After a website has been built and deployed, record its complete public root:
+
+```bash
+context package site-url <package-name> https://example.com/docs/
+```
+
+This command adds optional `site_url` to the existing `context.site-output/v1`
+map, in both the website and knowledge package. It normalizes a trailing slash,
+rejects credentials/query/fragment, and never contacts the URL. The address
+includes the deployment subpath; resolve `pages[].site_path` against it without
+adding `base` again. Rebuilds preserve the address from the previous website
+map and distribute the refreshed mapping with the package. Deleting dist also
+deletes this optional delivery metadata: record it again from the deployment
+result instead of guessing a hostname. No new workspace configuration is needed.
+
+The address is an access hint, not proof of publication or content freshness.
+Query Skills use it only to append related links in the final summary, with no
+network probes or version checks. Packages without the map work as before.
