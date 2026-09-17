@@ -93,8 +93,14 @@ The website uses a full-width VitePress theme with system fonts, compact navigat
 a wide reading area and a smaller article outline. It starts in
 light mode regardless of the operating system; an explicit reader choice is
 remembered in browser storage. Search runs locally, without a search service.
-Mermaid renders in the browser with a restrained theme; invalid diagrams retain
-their source instead of blocking publication. Code samples and raw HTML are
+Mermaid renders in the browser using the website theme, with fit, original-size,
+zoom, full-screen and source controls. Controls appear on hover or keyboard focus
+(and remain visible on touch devices). Layout and source/copy actions are on the
+left, sizing actions on the right. Source view replaces the diagram. Flowcharts default to ELK and can switch to Dagre without changing the article. Offline Review reports use the same
+viewer and include its resources only when a candidate contains Mermaid.
+Article provenance initially shows ten sources; Show more reveals the full list.
+Invalid diagrams and diagrams with embedded image/HTML resources retain their
+source with a rendering notice instead of blocking publication. Code samples and raw HTML are
 displayed as content, not executed as Vue components or scripts.
 
 The accepted `src/knowledge-map.yaml` controls sidebar organization. Entries
@@ -501,3 +507,31 @@ result instead of guessing a hostname. No new workspace configuration is needed.
 The address is an access hint, not proof of publication or content freshness.
 Query Skills use it only to append related links in the final summary, with no
 network probes or version checks. Packages without the map work as before.
+
+### Shared color theme
+
+Website builds create `src/site/theme.json` with the current default light and
+ dark palettes if the file is missing. Edit this optional JSON file to customize
+all websites and offline Review reports in the workspace. It is configuration,
+not a generated HTML file: builds never overwrite existing values. Deleting it
+restores built-in defaults; Review does not need the file or an existing website
+build. The next website build recreates it.
+
+Each `light`/`dark` object supports `brand`, `accent`, `background`, `surface`,
+`text`, `mutedText`, and `border`. Values are hexadecimal CSS colors (`#RGB`,
+`#RRGGBB`, or `#RRGGBBAA`). Partial objects inherit missing default colors. Invalid
+JSON or colors produce a configuration error identifying the optional file.
+
+A package may override these colors through `kbPackage({ site: { theme: {
+light: { brand: "#6750a4" }, dark: { brand: "#d0bcff" }
+} } })`. Precedence is built-in defaults, workspace file, then `site.theme`.
+A Review with one website package uses that package's overrides. With multiple
+website packages it uses the shared workspace theme, without selecting an
+arbitrary package. New/Modify/approve/reject status colors remain independent.
+
+The compiler projects tokens into VitePress and standalone Review CSS. Mermaid
+reads the same resolved colors. Changes to the theme invalidate website build
+receipts. Arbitrary extension CSS is not copied into Review; custom components
+can consume `--context-brand`, `--context-accent`, `--context-background`,
+`--context-surface`, `--context-text`, `--context-muted-text`, and
+`--context-border` rather than hard-coding colors.

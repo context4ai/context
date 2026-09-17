@@ -34,6 +34,10 @@ for (const provider of providers) {
   const diagramPath = "references/diagrams.md";
   const diagramSource = join(root, "plugins/context/skills/context-code-indexer", diagramPath);
   if (provider !== "context-code-indexer") await writeFile(join(skill, diagramPath), await readFile(diagramSource, "utf8"));
+  for (const example of ["diagram-topology-examples.md", "diagram-behavior-examples.md"]) {
+    if (provider !== "context-code-indexer") await writeFile(join(skill, "references", example),
+      await readFile(join(root, "plugins/context/skills/context-code-indexer/references", example), "utf8"));
+  }
   const instructionProfiles = [...new Set((manifest.provider.instructions ?? []).flatMap((item: {profiles: string[]}) => item.profiles))];
   const diagramInstruction = { path: diagramPath, profiles: instructionProfiles };
   const diagramIndex = manifest.provider.instructions.findIndex((item: {path: string}) => item.path === diagramPath);

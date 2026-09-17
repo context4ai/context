@@ -1,3 +1,4 @@
+import { resolveSiteTheme, siteThemeVariables } from "./siteTheme.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -21,7 +22,7 @@ export interface ReviewSiteNode { key: string; parent: string | null; title: str
   change: ReviewChange; oldTitle?: string; removed?: boolean }
 export interface ReviewSitePage { id: string; title: string; path: string; previousPath?: string; candidate_id?: string;
   change: ReviewChange; html: string; sources: string[]; revisionInstruction?: string }
-export interface ReviewSiteModel { title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
+export interface ReviewSiteModel { themeCss?: string; title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
   navigationBaseline: "git-head" | "current" | "empty" }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const body = (s: string) => s.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/u, "").replace(/<!--[^]*?-->/gu, "").trim();
@@ -108,7 +109,9 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
   const pkg = pkgText ? JSON.parse(pkgText) as { name?: string } : {};
   const project = await optional(join(root, "src/index.ts")) === undefined ? undefined : await loadContextProjectModule(root);
   const siteTitle = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site?.title ? [p.site.title] : [])[0];
-  return { title: siteTitle ?? pkg.name ?? "Knowledge review", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline };
+  const sitePackages = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site ? [p.site] : []) ?? [];
+  const themeCss = siteThemeVariables(await resolveSiteTheme(root, sitePackages.length === 1 ? sitePackages[0]?.theme : undefined));
+  return { themeCss, title: siteTitle ?? pkg.name ?? "Knowledge review", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline };
 }
 export const reviewHtmlJson = (value: unknown) => JSON.stringify(value).replace(/</gu, "\\u003c").replace(/\u2028/gu, "\\u2028").replace(/\u2029/gu, "\\u2029");
 export { escapeReviewHtml };

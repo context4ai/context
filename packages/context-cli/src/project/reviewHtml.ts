@@ -1,4 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
 import { readCandidateRecords } from "./candidateLedger.js";
@@ -33,16 +34,16 @@ export async function collectAllReviewCandidates(projectRoot: string): Promise<R
   })));
 }
 
-function renderReviewHtml(candidates: readonly ReviewCandidateView[], reviewScope: KnowledgeCollection | "all", model: ReviewSiteModel): string {
+function renderReviewHtml(candidates: readonly ReviewCandidateView[], reviewScope: KnowledgeCollection | "all", model: ReviewSiteModel, diagramScript: string): string {
   const scope = { label: reviewScope, ids_sha256: candidateIdsHash(candidates.map(c => c.record.candidate_id).sort()),
     candidates_sha256: candidateSetHash(candidates.map(c => c.record)) };
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeReviewHtml(model.title)} · Review</title><style>${REVIEW_SITE_STYLES}</style></head><body>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeReviewHtml(model.title)} · Review</title><style>${REVIEW_SITE_STYLES}${model.themeCss ?? ""}</style></head><body>
 <header><button id="home">${escapeReviewHtml(model.title)}</button><nav id="top"></nav><div class="tools"><div class="counter" tabindex="0"><span id="counts"></span><div class="counter-pop" id="counter-pop"></div></div><button class="btn" id="all-approved"></button><button class="btn" id="all-rejected"></button><button class="btn primary" id="payload-open"></button><div class="guide" id="copy-guide"><span id="guide-countdown">10s</span><p id="guide-text"></p><button class="btn" id="guide-close"></button></div></div><button class="btn" id="theme" aria-label="Theme">◐</button><button class="btn" id="language"></button></header>
 <div class="layout"><aside id="tree"></aside><main><article id="article"></article></main></div>
 <footer id="footer" hidden><input id="revision-note" aria-label="Revision instructions"><button class="btn" id="revise-btn"></button><button class="btn" id="reject-btn"></button><button class="btn primary" id="approve-btn"></button></footer>
 <dialog id="bulk-dialog"><h2 id="bulk-title"></h2><p id="bulk-message"></p><div id="bulk-roots" hidden><strong id="bulk-roots-title"></strong><ul id="bulk-roots-list"></ul><label class="bulk-ack"><input type="checkbox" id="bulk-ack"><span id="bulk-ack-label"></span></label></div><div class="dialog-actions"><button class="btn" id="bulk-cancel"></button><button class="btn primary" id="bulk-confirm"></button></div></dialog>
 <dialog id="copy-dialog"><h2 id="copy-title"></h2><p id="copy-summary"></p><p id="copy-instructions"></p><textarea id="payload" readonly aria-label="Review code"></textarea><p id="copy-warning"></p><button class="btn" id="payload-close"></button></dialog>
-<script>const DATA=${reviewHtmlJson(model)};const SCOPE=${reviewHtmlJson(scope)};const feedbackCodec=(${createReviewFeedbackCodec.toString()})();${REVIEW_SITE_CLIENT}</script></body></html>`;
+${diagramScript ? `<script>${diagramScript}</script>` : ""}<script>const DATA=${reviewHtmlJson(model)};const SCOPE=${reviewHtmlJson(scope)};const feedbackCodec=(${createReviewFeedbackCodec.toString()})();${REVIEW_SITE_CLIENT}</script></body></html>`;
 }
 
 function resolveOutputPath(projectRoot: string, outPath: string | undefined, reviewScope: KnowledgeCollection | "all"): string {
@@ -70,7 +71,18 @@ export async function writeReviewHtml(input: {
     : await collectReviewCandidates(input.projectRoot, reviewScope);
   const outPath = resolveOutputPath(input.projectRoot, input.out, reviewScope);
   await mkdir(dirname(outPath), { recursive: true });
-  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, await collectReviewSiteModel(input.projectRoot, candidates)), "utf8");
+  const model = await collectReviewSiteModel(input.projectRoot, candidates);
+  let diagramScript = "";
+  if (model.pages.some(page => page.html.includes('class="language-mermaid"'))) {
+    const here = dirname(fileURLToPath(import.meta.url));
+    try { diagramScript = await readFile(join(here, "browser/diagrams.js"), "utf8"); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      // Source development uses the same prebuilt browser asset as the Node CLI.
+      diagramScript = await readFile(resolve(here, "../../dist/browser/diagrams.js"), "utf8");
+    }
+  }
+  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, model, diagramScript), "utf8");
   return {
     path: outPath,
     candidates: candidates.length,

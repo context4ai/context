@@ -25,3 +25,12 @@ test("page title appears once, with a fallback only when the body has no page he
   expect(untitled).toStartWith("<h1>Guide</h1>");
   expect(untitled).toContain("<h2>Details</h2>");
 });
+
+test("Mermaid is discoverable without making its source executable or changing other code", () => {
+  const source = 'flowchart LR\nA["<script>alert(1)</script>"] --> B';
+  const rendered = renderReviewMarkdown('```mermaid\n'+source+'\n```\n\n```typescript\nconst mermaid = 1;\n```');
+  expect(rendered.match(/class="language-mermaid"/gu)).toHaveLength(1);
+  expect(rendered).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(rendered).not.toContain('<script>');
+  expect(rendered).toContain('<pre><code>const mermaid = 1;');
+});
