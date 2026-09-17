@@ -1,10 +1,10 @@
 # Workflow, sequence and lifecycle examples
 
-Read only the case selected by [the scenario guide](diagrams.md). These examples are synthetic upstream teaching material, not evidence for a user's system. Mermaid preserves explicit nodes and relationships; adjacent tables and verbatim cards retain details that do not belong inside a node. Original color, routing and compiler observations describe Archify, not a promise of identical Mermaid geometry. No example establishes behavior absent from an authorized source. Attribution and MIT permission are in [the guide](diagrams.md#attribution).
+Read only the case selected by [the scenario guide](diagrams.md). These examples are synthetic upstream teaching material, not evidence for a user's system. Mermaid preserves explicit nodes and relationships; adjacent tables and verbatim cards retain details that do not belong inside a node. Color, routing and compiler observations are illustrative; Mermaid may produce different geometry. No example establishes behavior absent from an authorized source.
 
 ## Agent Tool Call Workflow
 
-Source: agent-tool-call.workflow.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/agent-tool-call.workflow.json`).
+Example: agent-tool-call.workflow.json.
 
 ```mermaid
 flowchart TD
@@ -108,7 +108,7 @@ Group **Tool work**: tools, upstream columns 4–5.
 
 ## Release Delivery Workflow
 
-Source: release-delivery.workflow.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/release-delivery.workflow.json`).
+Example: release-delivery.workflow.json.
 
 ```mermaid
 flowchart TD
@@ -214,7 +214,7 @@ Group **Recovery path**: exceptions, upstream columns 3–5.
 
 ## Incident Response Runbook
 
-Source: incident-response.workflow.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/incident-response.workflow.json`).
+Example: incident-response.workflow.json.
 
 ```mermaid
 flowchart TD
@@ -322,7 +322,7 @@ Group **If impact persists**: exceptions, upstream columns 3–5.
 
 ## Cache Miss Request Sequence
 
-Source: cache-miss-request.sequence.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/cache-miss-request.sequence.json`).
+Example: cache-miss-request.sequence.json.
 
 ```mermaid
 sequenceDiagram
@@ -410,7 +410,7 @@ The message order is the original example, not a claim that all optional outcome
 
 ## Async Job Roundtrip
 
-Source: async-job-roundtrip.sequence.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/async-job-roundtrip.sequence.json`).
+Example: async-job-roundtrip.sequence.json.
 
 ```mermaid
 sequenceDiagram
@@ -502,7 +502,7 @@ The message order is the original example, not a claim that all optional outcome
 
 ## Agent Run Lifecycle
 
-Source: agent-run.lifecycle.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/agent-run.lifecycle.json`).
+Example: agent-run.lifecycle.json.
 
 ```mermaid
 stateDiagram-v2
@@ -570,7 +570,7 @@ The upstream main-phase rail orders Queued → Planning → Executing → Review
 
 ## Deployment Release Lifecycle
 
-Source: deployment-release.lifecycle.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/deployment-release.lifecycle.json`).
+Example: deployment-release.lifecycle.json.
 
 ```mermaid
 stateDiagram-v2

@@ -1,10 +1,10 @@
 # Architecture and dataflow examples
 
-Read only the case selected by [the scenario guide](diagrams.md). These examples are synthetic upstream teaching material, not evidence for a user's system. Mermaid preserves explicit nodes and relationships; adjacent tables and verbatim cards retain details that do not belong inside a node. Original color, routing and compiler observations describe Archify, not a promise of identical Mermaid geometry. No example establishes behavior absent from an authorized source. Attribution and MIT permission are in [the guide](diagrams.md#attribution).
+Read only the case selected by [the scenario guide](diagrams.md). These examples are synthetic upstream teaching material, not evidence for a user's system. Mermaid preserves explicit nodes and relationships; adjacent tables and verbatim cards retain details that do not belong inside a node. Color, routing and compiler observations are illustrative; Mermaid may produce different geometry. No example establishes behavior absent from an authorized source.
 
 ## Sample Web App
 
-Source: web-app.architecture.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/web-app.architecture.json`).
+Example: web-app.architecture.json.
 
 ```mermaid
 flowchart LR
@@ -90,7 +90,7 @@ Boundary **sg-api :443/:8000** (security-group): lb, api.
 
 ## Production Deployment Ownership
 
-Source: production-deployment.architecture.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/production-deployment.architecture.json`).
+Example: production-deployment.architecture.json.
 
 ```mermaid
 flowchart LR
@@ -196,7 +196,7 @@ Boundary **DR private subnet** (security-group): replica.
 
 ## Product Analytics Data Flow
 
-Source: product-analytics.dataflow.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/product-analytics.dataflow.json`).
+Example: product-analytics.dataflow.json.
 
 ```mermaid
 flowchart LR
@@ -288,7 +288,7 @@ flowchart LR
 
 ## Order Event-stream Topology
 
-Source: event-stream.dataflow.json (`tt-a1i/archify`, `blob/72c750b/archify/examples/event-stream.dataflow.json`).
+Example: event-stream.dataflow.json.
 
 ```mermaid
 flowchart LR
