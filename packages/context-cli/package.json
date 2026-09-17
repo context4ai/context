@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.15",
+  "version": "0.7.16",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -35,7 +35,7 @@
     "README.zh-CN.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun run ../build.ts src/cli.ts src/parserEntryWorker.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && cp ../../LICENSE dist/LICENSE",
+    "build": "rm -rf dist && bun run ../build.ts src/cli.ts src/parserEntryWorker.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && bun run scripts/build-diagrams.ts && cp ../../LICENSE dist/LICENSE",
     "build:indexers": "bun run scripts/build-indexers.ts",
     "generate:article-templates": "bun run scripts/generate-article-templates.ts",
     "build:workflow": "bun run scripts/build-workflow.ts",
@@ -46,7 +46,9 @@
     "test:full": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full --max-concurrency=1 --timeout=1200000",
     "test:full-only": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full-only --max-concurrency=1 --timeout=1200000",
     "lint": "eslint src --cache --cache-location .tmp/eslint-cache",
-    "clean-cache": "bun run src/cli.ts clean-cache"
+    "clean-cache": "bun run src/cli.ts clean-cache",
+    "build:diagrams": "bun run scripts/build-diagrams.ts",
+    "test:diagrams": "bun run build:diagrams && bun run scripts/smoke-diagrams-browser.ts"
   },
   "dependencies": {
     "@c4a/agent-graph": "0.3.0",
@@ -61,6 +63,7 @@
     "@c4a/extract-style": "workspace:*",
     "@c4a/extract-thrift": "workspace:*",
     "@c4a/extract-ts": "workspace:*",
+    "@mermaid-js/layout-elk": "0.2.0",
     "commander": "^11.0.0",
     "fast-xml-parser": "^5.10.1",
     "handlebars": "^4.7.8",
@@ -83,6 +86,8 @@
   },
   "devDependencies": {
     "@c4a/core": "workspace:*",
+    "esbuild": "0.27.3",
+    "playwright": "1.58.2",
     "zod-to-json-schema": "^3.25.1"
   }
 }

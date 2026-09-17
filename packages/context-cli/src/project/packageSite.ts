@@ -1,3 +1,4 @@
+import { resolveSiteTheme, siteThemeVariables } from "./siteTheme.js";
 import { createHash } from "node:crypto";
 import { packageSiteOutputDir } from "./packageOutputPaths.js";
 import { readWorkspaceChangelog } from "./workspaceChangelog.js";
@@ -21,7 +22,7 @@ import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
 export const PACKAGE_SITE_VERSION = `vitepress-site-v44-site-address:${createHash("sha256")
-  .update(JSON.stringify([siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
+  .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
 export interface SitePage {
@@ -197,11 +198,13 @@ export async function writePackageSite(input: {
     const vitepressRoot = dirname(require.resolve("vitepress/package.json"));
     const vueRequire = createRequire(join(vitepressRoot, "package.json"));
     for (const [name, path] of [["vitepress", vitepressRoot], ["vue", dirname(vueRequire.resolve("vue/package.json"))],
+      ["@mermaid-js/layout-elk", dirname(require.resolve("@mermaid-js/layout-elk/package.json"))],
       ["mermaid", dirname(require.resolve("mermaid/package.json"))]]) {
+      await mkdir(dirname(join(temporary, "node_modules", name!)), { recursive: true });
       await symlink(path!, join(temporary, "node_modules", name!), "dir");
     }
     await writeFile(join(configRoot, "theme/index.js"), siteThemeScript);
-    await writeFile(join(configRoot, "theme/style.css"), siteThemeCss);
+    await writeFile(join(configRoot, "theme/style.css"), siteThemeCss + siteThemeVariables(await resolveSiteTheme(projectRoot, options.theme, true)));
     await writeSiteExtensions(projectRoot, temporary, options.extensions);
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: options.lang ?? "en-US", base,
       appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: `context-theme:${pkg.name}:${base}` },

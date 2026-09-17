@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 interface MarkdownNode {
   type: string;
   value?: string;
+  lang?: string;
   depth?: number;
   url?: string;
   title?: string;
@@ -54,7 +55,9 @@ export function renderReviewMarkdown(markdown: string, pageTitle?: string): stri
       case "emphasis": return `<em>${children()}</em>`;
       case "delete": return `<del>${children()}</del>`;
       case "inlineCode": return `<code>${value}</code>`;
-      case "code": return `<pre><code>${value}</code></pre>`;
+      case "code": return node.lang === "mermaid"
+        ? `<div class="language-mermaid"><pre><code>${value}</code></pre></div>`
+        : `<pre><code>${value}</code></pre>`;
       case "blockquote": return `<blockquote>${children()}</blockquote>`;
       case "list": return node.ordered ? `<ol start="${node.start ?? 1}">${children()}</ol>` : `<ul>${children()}</ul>`;
       case "listItem": return `<li>${node.checked == null ? "" : node.checked ? "☑ " : "☐ "}${children()}</li>`;

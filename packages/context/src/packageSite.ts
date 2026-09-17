@@ -1,3 +1,4 @@
+import { siteThemeSchema } from "./siteTheme.js";
 import { z } from "zod";
 
 const siteHrefSchema = z.string().trim().min(1).refine(value =>
@@ -32,6 +33,7 @@ const packageSiteHomeSchema = z.object({
 
 /** Static website in a sibling dist/<name-without-trailing-kb>-site directory. */
 export const packageSiteSchema = z.object({
+  theme: siteThemeSchema.optional(),
   title: z.string().trim().min(1).optional(),
   description: z.string().optional(),
   lang: z.string().min(1).default("en-US"),

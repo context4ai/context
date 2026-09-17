@@ -1,3 +1,4 @@
+import { resolveSiteTheme } from "./siteTheme.js";
 import { readPackageSiteUrl } from "./packageSiteAddress.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
@@ -242,9 +243,11 @@ async function packageInputFingerprint(input: {
       })
     : null;
   const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
+  const siteTheme = input.pkg.kind === "package.kb" && input.pkg.site ? await resolveSiteTheme(input.projectRoot, input.pkg.site.theme, true) : null;
   return stableHash({
     siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
       ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,
+    siteTheme,
     siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.article, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,

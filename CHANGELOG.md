@@ -4,6 +4,18 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.16 - 2026-09-17
+
+- Share configurable light/dark color tokens across websites, Review and diagrams;
+  scaffold an optional workspace theme file and fall back when it is absent.
+
+- Expand diagram authoring guidance with eleven complete bilingual scenario
+  recipes, source-preserving Mermaid examples and semantic repair guidance.
+- Share themed Mermaid rendering between websites and offline Review reports,
+  with fit, zoom, full screen, source fallback and default ELK flowchart layout.
+- Keep diagram source in Markdown and include browser assets only in reports
+  that contain diagrams.
+
 ## 0.7.12 - Unreleased
 
 - Allow partial delivery to enter Review before checking the approved link graph;

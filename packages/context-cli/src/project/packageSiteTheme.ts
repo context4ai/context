@@ -1,3 +1,5 @@
+import { DIAGRAM_VIEWER_SCRIPT } from "./diagramViewer.js";
+import { DIAGRAM_STYLES } from "./diagramStyles.js";
 /** Compiler-owned presentation only. Knowledge Markdown never becomes Vue code. */
 export const siteMarkdownConfig = String.raw`
   html: false,
@@ -62,7 +64,7 @@ export const siteMarkdownConfig = String.raw`
 export const siteThemeScript = String.raw`
 import DefaultTheme from 'vitepress/theme-without-fonts';
 import { useData, useRoute, dataSymbol } from 'vitepress';
-import { onMounted, nextTick, watch, computed, ref, provide, h } from 'vue';
+import { onMounted, onUnmounted, nextTick, watch, computed, ref, provide, h } from 'vue';
 import './style.css';
 import extensions from './extensions.js';
 export default {
@@ -74,6 +76,7 @@ export default {
       const sections = computed(() => data.theme.value.contextSections || []);
       const home = computed(() => data.theme.value.contextHome || {});
       const selected = ref('');
+      const allSources = ref(false);
       const mounted = ref(false);
       const language = ref('zh');
       const copiedCommand = ref('');
@@ -176,6 +179,7 @@ export default {
           part('hour') + ':' + part('minute') + ':' + part('second') + ' ' + part('timeZoneName');
       });
       watch(() => route.path, () => {
+        allSources.value = false;
         const base = data.site.value.base;
         const path = route.path.startsWith(base) ? '/' + route.path.slice(base.length) : route.path;
         const direct = sections.value.find(section => section.href === path);
@@ -242,9 +246,11 @@ export default {
               h('div', { class: 'context-sources-header' }, [
                 h('div', { class: 'context-sources-title' }, chinese.value ? '来源与溯源' : 'Sources'),
               ]),
-              h('ul', sources.map(source => h('li', source.href
+              h('ul', (allSources.value ? sources : sources.slice(0, 10)).map(source => h('li', source.href
                 ? h('a', { href: source.href, target: '_blank', rel: 'noopener noreferrer' }, source.label)
                 : source.label))),
+              sources.length > 10 && !allSources.value ? h('button', { type: 'button', class: 'context-sources-more',
+                onClick: () => { allSources.value = true; } }, chinese.value ? '查看更多' : 'Show more') : null,
             ]) : null,
             (data.frontmatter.value.contextUpdated || data.theme.value.contextUpdated)
               ? h('div', { class: 'context-article-updated' }, [
@@ -264,53 +270,17 @@ export default {
   setup() {
     const route = useRoute();
     const { isDark } = useData();
-    let generation = 0;
-    let queue = Promise.resolve();
+    const viewer = ${DIAGRAM_VIEWER_SCRIPT}(async () => {
+      const [{ default: mermaid }, { default: elk }] = await Promise.all([import('mermaid'), import('@mermaid-js/layout-elk')]);
+      mermaid.registerLayoutLoaders(elk);
+      return mermaid;
+    });
     const render = async () => {
-      const current = ++generation;
       await nextTick();
-      const nodes = [...document.querySelectorAll('.vp-doc div.language-mermaid')];
-      if (!nodes.length) return;
-      queue = queue.catch(() => {}).then(async () => {
-        if (current !== generation) return;
-        const { default: mermaid } = await import('mermaid');
-        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base',
-          themeVariables: { darkMode: isDark.value, fontFamily: 'system-ui, sans-serif',
-            primaryColor: isDark.value ? '#202127' : '#ffffff',
-            primaryTextColor: isDark.value ? '#dfdfe5' : '#161e2e',
-            primaryBorderColor: isDark.value ? '#92929a' : '#73737b',
-            lineColor: isDark.value ? '#92929a' : '#73737b',
-            secondaryColor: isDark.value ? '#292a30' : '#f6f6f7',
-            tertiaryColor: isDark.value ? '#292a30' : '#f6f6f7' } });
-        for (const [index, node] of nodes.entries()) {
-          if (current !== generation || !node.isConnected) return;
-          const code = node.querySelector('pre code');
-          if (!code) continue;
-          const source = code.textContent || '';
-          let output = node.querySelector('.context-diagram');
-          if (!output) { output = document.createElement('div'); output.className = 'context-diagram'; node.append(output); }
-          const renderId = 'context-diagram-' + current + '-' + index;
-          try {
-            if (!await mermaid.parse(source, { suppressErrors: true })) throw new Error('Invalid diagram');
-            const { svg } = await mermaid.render(renderId, source);
-            if (current !== generation || !node.isConnected) return;
-            output.innerHTML = svg;
-            node.classList.add('context-rendered');
-            if (!node.querySelector('.context-diagram-toggle')) {
-              const toggle = document.createElement('button');
-              toggle.className = 'context-diagram-toggle'; toggle.textContent = 'Diagram / source';
-              toggle.onclick = () => node.classList.toggle('context-show-source');
-              node.append(toggle);
-            }
-          } catch {
-            document.getElementById('d' + renderId)?.remove();
-            output.remove(); node.classList.remove('context-rendered');
-          }
-        }
-      });
-      await queue;
+      await viewer.render(document, { dark: isDark.value, language: document.documentElement.lang || 'en' });
     };
     onMounted(render);
+    onUnmounted(() => viewer.destroy());
     watch([() => route.path, isDark], render);
   }
 };
@@ -538,6 +508,7 @@ export const siteThemeCss = `
 .context-sources { margin-top: 0; margin-bottom: 24px; padding: 16px 20px; border: 1px solid var(--vp-c-divider); border-radius: 8px; background: var(--vp-sidebar-bg-color); color: var(--vp-c-text-2); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .context-sources-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 8px; }
 .context-sources-title { font-weight: 550; }
+.context-sources-more { color: var(--vp-c-brand-1); font-size: 13px; padding: 4px 0; cursor: pointer; }
 .context-provenance { margin-bottom: 24px; }
 .context-provenance .context-sources { margin-bottom: 10px; }
 .context-article-updated { margin-top: 0; text-align: right; color: var(--vp-c-text-2); font-size: 12px; line-height: 1.7; }
@@ -545,13 +516,7 @@ export const siteThemeCss = `
 .context-sources li + li { margin-top: 6px; }
 .context-sources a { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .context-sources a:hover { color: var(--vp-c-brand-1); border-color: currentColor; }
-.context-diagram { overflow: auto; padding: 20px; background: var(--vp-c-bg); }
-.context-diagram svg { height: auto; }
-.context-diagram .node rect, .context-diagram .node polygon, .context-diagram .node circle,
-.context-diagram .flowchart-link { stroke-width: 1px !important; }
-.context-rendered:not(.context-show-source) pre, .context-rendered:not(.context-show-source) > .copy,
-.context-rendered:not(.context-show-source) > .lang { display: none; }
-.context-diagram-toggle { display: block; padding: 8px 14px; color: var(--vp-c-text-2); font-size: 12px; }
+${DIAGRAM_STYLES}
 `;
 
 export function siteThemeLabels(lang: string) {

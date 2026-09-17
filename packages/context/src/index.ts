@@ -1,3 +1,4 @@
+export { siteThemeSchema, DEFAULT_SITE_THEME, type SiteTheme, type SiteThemeColors } from "./siteTheme.js";
 import { normalizePackageSite, type PackageSiteDefinition } from "./packageSite.js";
 export { packageSiteSchema, type PackageSiteDefinition } from "./packageSite.js";
 import type {
