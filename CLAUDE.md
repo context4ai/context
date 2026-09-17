@@ -72,7 +72,7 @@ bun run --filter @c4a/dev-cli start
   The full CI job has a separate 180-minute budget and preserves its test log.
   Default and post-release full CI each use four independent runner shards;
   `CONTEXT_TEST_SHARD=1/4` selects one CLI shard, with serial batches within it.
-  Sorted discovery distributes new files automatically. All shards must pass;
+  Historical per-file timings drive deterministic longest-first balancing within each selected scope; unmeasured files use the measured median. Refresh `packages/context-cli/scripts/test-durations.json` from successful CI logs when timing drifts. All shards must pass;
   failures do not cancel sibling shards. Each runner builds its own artifacts,
   avoiding shared filesystem, environment and port state. Other package checks
   remain unchanged on each runner. Local commands stay serial unless explicitly
