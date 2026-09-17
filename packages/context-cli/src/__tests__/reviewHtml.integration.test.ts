@@ -99,6 +99,10 @@ test("bulk approval requires acknowledgment and eight seconds only for genuinely
     const report = await writeReviewHtml({ projectRoot: root, all: true });
     const html = await readFile(report.path, "utf8");
     if (process.env.REVIEW_HTML_PREVIEW) await writeFile(process.env.REVIEW_HTML_PREVIEW, html);
+    const removedBrowser = openReport(html.replace(";const SCOPE=", ';DATA.nodes.push({key:"retired",parent:"overview",title:"Retired section",removed:true,change:"modify",order:20});const SCOPE='));
+    expect(removedBrowser.get("article").innerHTML).toContain("Retired section");
+    expect(runInContext('nodeChange(DATA.nodes.find(n=>n.key==="retired"))', removedBrowser.runtime)).toBe("removed");
+    expect(runInContext('nodeChange(DATA.nodes.find(n=>n.key==="overview"))', removedBrowser.runtime)).toBe("modify");
     const browser = openReport(html, "zh-CN");
     runInContext("openBulkConfirmation()", browser.runtime);
     expect(browser.get("bulk-roots").hidden).toBe(false);

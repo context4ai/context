@@ -36,6 +36,8 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     await acceptStarterPackageTemplates({ projectRoot: root });
     await applyKnowledgeMapUpdate(root, { expected_revision: (await readKnowledgeMap(root))?.revision ?? null, remove: [],
       upsert: (await approvedKnowledgeMapTargets(root)).map(article => ({ key: article.artifact_ref, parent: null, title: "Guide", order: 0, target: { artifact_ref: article.artifact_ref } })) });
+    await collectPackageFreshness(root, (await loadContextProjectModule(root)).project.packages);
+    await expect(stat(join(root, "src/site/theme.json"))).rejects.toMatchObject({ code: "ENOENT" });
     const version = await inspectWorkspaceVersion(root);
     const payload = join(root, ".tmp/version.json");
     await writeFile(payload, JSON.stringify({ expected_digest: version.expected_digest, version: "0.1.0",
@@ -46,6 +48,7 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     expect(recorded.workflow).toBeDefined();
     expect(recorded.next_action).toBeUndefined();
     const built = await buildProjectPackages(root);
+    expect(JSON.parse(await readFile(join(root, "src/site/theme.json"), "utf8")).light.brand).toBeDefined();
     expect((await inspectWorkspaceVersion(root)).current).toBe(true);
     expect((await inspectWorkspaceVersion(root)).reusable_version).toBe("0.1.0");
     expect((await readWorkspaceChangelog(root)).map(item => item.version)).toEqual(["0.1.0"]);

@@ -243,7 +243,7 @@ async function packageInputFingerprint(input: {
       })
     : null;
   const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
-  const siteTheme = input.pkg.kind === "package.kb" && input.pkg.site ? await resolveSiteTheme(input.projectRoot, input.pkg.site.theme, true) : null;
+  const siteTheme = input.pkg.kind === "package.kb" && input.pkg.site ? await resolveSiteTheme(input.projectRoot, input.pkg.site.theme) : null;
   return stableHash({
     siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
       ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,

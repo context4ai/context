@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { prepareRevisionKnowledge } from "./initialRevisionKnowledge.fixture.js";
 import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
 import { collectAllReviewCandidates } from "../project/reviewHtml.js";
-import { collectReviewSiteModel, reviewSiteBaselineHash } from "../project/reviewSiteModel.js";
+import { collectReviewSiteModel, reviewSiteBaselineHash, reviewBodyDiff } from "../project/reviewSiteModel.js";
 
 test("new and established workspaces derive real changes and bind only displayed body content", async () => {
   const root = await prepareRevisionKnowledge([]);
@@ -32,3 +32,14 @@ test("new and established workspaces derive real changes and bind only displayed
     expect(await reviewSiteBaselineHash(root, paths)).not.toBe(baseline);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 45000);
+
+
+test("body review retains removed and replaced evidence separately from unchanged content", () => {
+  const html = reviewBodyDiff("## Keep\n\nSame text.\n\n## Old\n\nOld fact.", "## Keep\n\nSame text.\n\n## New\n\nNew fact.");
+  expect(html).toContain('class="review-unchanged-heading"');
+  expect(html).not.toContain("Same text.");
+  const removed = html.slice(html.indexOf('<section class="changed removed">'));
+  expect(removed).toContain("Old fact.");
+  expect(removed).not.toContain("New fact.");
+  expect(html).toContain("New fact.");
+});
