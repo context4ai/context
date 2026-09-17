@@ -17,6 +17,17 @@ export async function readProductionReviewCandidates(projectRoot: string) {
   if (!stage.delivery && dispatchProductionStage(stage, productionCapabilitiesSchema.parse({})).state !== "ended") {
     throw new TypeError("Complete the current production stage before reviewing its candidates");
   }
+  const result = await readAcceptedProductionCandidates(projectRoot);
+  return result && { ...result, candidates: result.candidates.map(candidate => ({ ...candidate, status: "draft" as const })) };
+  });
+}
+
+/** Validate current production receipts without requiring writing to finish.
+ * Navigation may bind accepted drafts before content Review. */
+export async function readAcceptedProductionCandidates(projectRoot: string) {
+  const stage = await readProductionStage(projectRoot);
+  if (!stage) return undefined;
+  await assertProductionPlanRequirementsCurrent(projectRoot, stage);
   const candidates = await readCandidateRecords(projectRoot);
   for (const candidate of candidates) {
     const task = stage.tasks.find(task => task.status === "accepted" && task.accepted?.receipt === candidate.candidate_id);
@@ -30,6 +41,5 @@ export async function readProductionReviewCandidates(projectRoot: string) {
       throw new TypeError(`Accepted candidate content changed before Review: ${candidate.candidate_id}`);
     }
   }
-  return { revision: stage.id, candidates: candidates.map(candidate => ({ ...candidate, status: "draft" as const })) };
-  });
+  return { revision: stage.id, candidates };
 }

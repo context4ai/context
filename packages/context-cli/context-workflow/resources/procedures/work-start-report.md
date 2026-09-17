@@ -191,3 +191,12 @@ say so as a workflow limitation rather than announcing new investigation work.
 Do not delete configured sources, invent exclusions, clear stage files, or mark
 unread material investigated to make the current task appear complete. Follow the
 returned resolution action when the workflow still needs a decision.
+
+For a bounded addition inside an existing production stage, completed articles can
+enter Review with `context run --deliver --format json`. This retains pending
+configured scopes and unfinished tasks; it does not authorize approval or publish.
+Use this existing delivery path when remaining source failures are unrelated to
+the requested articles. If the selected articles need the missing repository, use
+`context source recovery-plan` and `context source restore` with an explicit local
+checkout or clone decision. Do not ask users to investigate unrelated repositories
+just to deliver saved notes, and do not clear gaps to imitate task completion.

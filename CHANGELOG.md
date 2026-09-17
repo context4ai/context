@@ -4,6 +4,13 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.17 - 2026-09-17
+
+- Allow accepted draft articles to be placed in the knowledge map before Review,
+  while preserving candidate integrity and navigation validation.
+- Explain partial delivery in production Routes and work-start guidance so
+  unrelated source recovery tasks do not block completed article review.
+
 ## 0.7.16 - 2026-09-17
 
 - Share configurable light/dark color tokens across websites, Review and diagrams;
