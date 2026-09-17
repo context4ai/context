@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { balancedTestShards } from "./test-shards.mjs";
 import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -70,7 +71,9 @@ if (!match || !Number.isSafeInteger(Number(match[2])) || Number(match[1]) > Numb
 }
 const shardIndex = Number(match[1]) - 1;
 const shardCount = Number(match[2]);
-const tests = selected.filter((_, index) => index % shardCount === shardIndex);
+const { durations } = JSON.parse(await readFile(new URL("./test-durations.json", import.meta.url), "utf8"));
+const assignments = balancedTestShards(selected, shardCount, durations);
+const tests = shardCount === 1 ? selected : assignments[shardIndex].files;
 if (selected.length === 0) throw new Error(`no Context CLI unit tests found under ${testsRoot}`);
 if (args.includes("--list")) {
   process.stdout.write(`${tests.join("\n")}\n`);
