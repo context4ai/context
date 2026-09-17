@@ -1,3 +1,4 @@
+import { isDefaultSiteTheme, SITE_THEME_FILE } from "./siteTheme.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { workspaceVersionComparison } from "./workspaceVersionComparison.js";
 import { createHash } from "node:crypto";
@@ -70,6 +71,7 @@ export async function workspaceContentSnapshot(root: string) {
     let bytes: Buffer;
     try { if (!(await lstat(join(root, path))).isFile()) continue; bytes = await readFile(join(root, path)); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
+    if (path === SITE_THEME_FILE && isDefaultSiteTheme(bytes.toString("utf8"))) continue;
     if (path === "package.json") { const value = JSON.parse(bytes.toString()); delete value.version; bytes = Buffer.from(JSON.stringify(value)); }
     files[path] = createHash("sha256").update(bytes).digest("hex");
   }

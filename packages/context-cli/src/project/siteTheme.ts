@@ -27,6 +27,16 @@ export async function resolveSiteTheme(root: string, overrides?: SiteTheme, scaf
   return { light: { ...DEFAULT_SITE_THEME.light, ...file.light, ...inline.light }, dark: { ...DEFAULT_SITE_THEME.dark, ...file.dark, ...inline.dark } };
 }
 
+/** Scaffolding the built-in defaults is not a knowledge content change. */
+export function isDefaultSiteTheme(content: string): boolean {
+  try {
+    const theme = siteThemeSchema.parse(JSON.parse(content));
+    return (["light", "dark"] as const).every(mode =>
+      Object.entries(theme[mode] ?? {}).every(([key, value]) =>
+        DEFAULT_SITE_THEME[mode][key as keyof SiteThemeColors] === value));
+  } catch { return false; }
+}
+
 export function siteThemeVariables(theme: { light: SiteThemeColors; dark: SiteThemeColors }) {
   const rules = (c: SiteThemeColors) => Object.entries(c).map(([key,value]) => `--context-${key.replace(/[A-Z]/gu, x => '-'+x.toLowerCase())}:${value};`).join("") + `
 --vp-c-brand-1:var(--context-brand);--vp-c-brand-2:var(--context-accent);--vp-c-brand-3:var(--context-brand);

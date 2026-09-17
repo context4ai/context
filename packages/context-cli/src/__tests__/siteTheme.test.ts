@@ -1,3 +1,4 @@
+import { workspaceContentSnapshot } from "../project/workspaceChangelog.js";
 import { test, expect } from "bun:test";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -37,4 +38,21 @@ test("both presentation adapters share resolved light and dark tokens", async ()
   expect(css).toContain("--vp-c-brand-1:var(--context-brand)");
   expect(css).toContain("--blue:var(--context-brand)");
   expect(css).not.toContain("--red:");
+});
+
+
+test("default theme scaffolding keeps the content snapshot stable while custom and invalid themes remain changes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "context-theme-snapshot-"));
+  try {
+    const initial = await workspaceContentSnapshot(root);
+    await resolveSiteTheme(root, undefined, true);
+    expect(await workspaceContentSnapshot(root)).toEqual(initial);
+    const file = join(root, SITE_THEME_FILE);
+    await writeFile(file, JSON.stringify({ light: { brand: "#123456" } }));
+    expect(await workspaceContentSnapshot(root)).not.toEqual(initial);
+    await writeFile(file, "broken");
+    expect(await workspaceContentSnapshot(root)).not.toEqual(initial);
+    await rm(file);
+    expect(await workspaceContentSnapshot(root)).toEqual(initial);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

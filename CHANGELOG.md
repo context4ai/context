@@ -6,6 +6,9 @@ All notable changes to Context are documented here.
 
 ## 0.7.17 - 2026-09-17
 
+- Keep version checkpoints current when the first website build creates the
+  default theme; retain detection of custom theme edits and keep freshness reads side-effect free.
+
 - Allow accepted draft articles to be placed in the knowledge map before Review,
   while preserving candidate integrity and navigation validation.
 - Explain partial delivery in production Routes and work-start guidance so
