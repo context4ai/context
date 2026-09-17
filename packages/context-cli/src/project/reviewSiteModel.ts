@@ -57,15 +57,15 @@ export function reviewBodyDiff(previous: string, next: string): string {
     const exact = remaining.indexOf(block);
     if (exact >= 0) {
       remaining.splice(exact, 1);
-      if (/^<h[1-6]>/u.test(block)) { omitted = false; return block; }
+      if (/^<h[1-6]>/u.test(block)) { omitted = false; return block.replace(/^(<h[1-6])>/u, '$1 class="review-unchanged-heading">'); }
       if (omitted) return "";
       omitted = true;
-      return '<div class="unchanged" data-label="unchanged">Unchanged content omitted.</div>';
+      return '<div class="review-omitted" data-label="unchanged">Unchanged content omitted.</div>';
     }
     omitted = false;
     return `<section class="changed"><span class="badge modify">Modify</span>${block}</section>`;
   });
-  if (remaining.length) result.push(`<section class="changed"><span class="badge modify">Modify</span><details open><summary data-label="removed">Previous or removed content</summary>${remaining.join("\n")}</details></section>`);
+  if (remaining.length) result.push(`<section class="changed removed"><span class="badge removed">Remove</span><details open><summary data-label="removed">Previous or removed content</summary>${remaining.join("\n")}</details></section>`);
   return result.join("\n");
 }
 export async function collectReviewSiteModel(root: string, candidates: readonly ReviewCandidateView[]): Promise<ReviewSiteModel> {

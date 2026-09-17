@@ -6,6 +6,11 @@ All notable changes to Context are documented here.
 
 ## 0.7.17 - 2026-09-17
 
+- Share reader typography between websites and Review, fix navigation style leakage,
+  and use theme-aware green additions, amber changes and red removals in both modes.
+- Apply review status colors to code and diagrams; keep modification badges aligned
+  with content and show removed navigation and previous content explicitly.
+
 - Keep version checkpoints current when the first website build creates the
   default theme; retain detection of custom theme edits and keep freshness reads side-effect free.
 
