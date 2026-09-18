@@ -1,3 +1,4 @@
+import { runDocumentCaptureWithAvailability } from "./documentCaptureAvailability.js";
 import {
   type ContextPhaseContext,
   type PhaseDefinition,
@@ -366,16 +367,16 @@ export async function runProjectPhaseCommand(input: {
         projectRoot: found.projectRoot,
       }));
     } else if (phase.kind === "phase.capture.file") {
-      result = await runCaptureFilePhase({
+      result = await runDocumentCaptureWithAvailability(found.projectRoot, phase, () => runCaptureFilePhase({
         projectRoot: found.projectRoot,
         phase,
-      });
+      }));
     } else if (phase.kind === "phase.capture.lark") {
-      result = await runCaptureLarkPhase({
+      result = await runDocumentCaptureWithAvailability(found.projectRoot, phase, () => runCaptureLarkPhase({
         projectRoot: found.projectRoot,
         phase,
         ...(input.larkRunner !== undefined ? { larkRunner: input.larkRunner } : {}),
-      });
+      }));
     }
 
     result = bindWorkflowExecutionContext(result, {
@@ -397,7 +398,7 @@ export async function runProjectPhaseCommand(input: {
       dryRun: false,
       reads: plan.phase.reads,
       writes: plan.phase.writes,
-      status: "success",
+      status: result !== null && typeof result === "object" && "kind" in result && result.kind === "document.capture.warning" ? "warning" : "success",
       startedAt,
       durationMs,
       ...(summary ? { summary } : {}),

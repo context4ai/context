@@ -50,6 +50,7 @@ export interface DocumentSourceStatus {
   url?: string;
   materializedAt: string;
   manifest: string;
+  acquisitionWarning?: { code: string; state: string; message: string; retry_command: string };
   snapshotReady: boolean;
   snapshotHash?: string;
   normalizerVersion?: string;

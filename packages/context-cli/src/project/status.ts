@@ -1,3 +1,4 @@
+import { attachDocumentAcquisitionWarnings } from "./documentCaptureAvailability.js";
 import { productionRequirementsAreCurrent } from "./productionPlanning.js";
 import { readTaskPreparation } from "./taskResumption.js";
 import { readApprovedRevision } from "./approvedRevision.js";
@@ -120,6 +121,7 @@ async function collectProjectStatusSnapshotInternal(
   const { sources, sourceStatuses, documentSources } = sourceStatus;
   const phaseStatus = await loadStatusPhases(projectRoot);
   const { phases, packages } = phaseStatus;
+  await attachDocumentAcquisitionWarnings(projectRoot, phases, documentSources);
   const readyRepoSources = sourceStatuses.filter((source) => source.ready).length;
   const capturedDocumentSources = documentSources.filter((source) => source.snapshotReady).length;
   const readySources = readyRepoSources + capturedDocumentSources;
@@ -155,9 +157,18 @@ async function collectProjectStatusSnapshotInternal(
   const verifyStatus = !deferDeliveryChecks && draftStatus.diagnostics.length === 0
     ? await readVerifyStatus(projectRoot)
     : { issues: [], diagnostics: [] };
+  // A page revision owns only its declared evidence, not every registered
+  // document. Preserve global inventory counts while routing its capture gates
+  // and submission revision through the same bounded source set.
+  const revisionDocuments = localRevision
+    ? documentSources.filter(source => localRevision.target.source_refs.some(ref =>
+      [source.name, source.id].filter(Boolean).some(name =>
+        ref === `${source.type}:${name}` || ref === `docs:${name}` ||
+        ref.startsWith(`${source.type}:${name}#`) || ref.startsWith(`${source.type}:${name}/`))))
+    : documentSources;
   const pendingCapture = pendingDocumentCaptureCommands({
     phases,
-    documentSources,
+    documentSources: revisionDocuments,
   });
   const packageFreshnessStatus = phaseStatus.projectEntryValid && !deferDeliveryChecks
     ? await readPackageFreshnessStatus(projectRoot, packages)
@@ -226,8 +237,8 @@ async function collectProjectStatusSnapshotInternal(
     sourceCount: sources.length + documentSources.length,
     repoSources: sources.map((source) => ({ id: source.id ?? source.name, name: source.name })),
     readyRepoSources,
-    documentSources,
-    capturedDocumentSources,
+    documentSources: revisionDocuments,
+    capturedDocumentSources: revisionDocuments.filter(source => source.snapshotReady).length,
     phases,
     packages,
     packageFreshness,
@@ -324,6 +335,7 @@ async function collectProjectStatusSnapshotInternal(
     verifyWarnings,
     projectionRefreshIssues,
     diagnostics: [
+      ...documentSources.flatMap(source => source.acquisitionWarning ? [source.acquisitionWarning.message] : []),
       ...(deferDeliveryChecks ? ["Delivery checks were not run for this progress query. Use context verify for a current workspace audit; delivery actions check their inputs."] : []),
       ...phaseStatus.diagnostics,
       ...sourceStatus.diagnostics,

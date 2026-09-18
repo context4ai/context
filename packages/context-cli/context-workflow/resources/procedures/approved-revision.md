@@ -17,6 +17,26 @@ to ask about the affected claim, not to reconstruct the whole knowledge base.
 Record new factual contributions as managed sources before expanding source
 ownership; an editing instruction alone is not a permanent factual source.
 
+If a source diagnostic blocks the action, inspect that exact source before
+calling it uncaptured. An invalid retained capture report is not evidence that
+the source was never collected. Do not use rollback, task preparation, or source
+removal to repair a revision-token or submission-schema error. Refresh the
+current action and use its revision and required `stage: approved-revision`.
+If the fresh action still conflicts, preserve the request and report the tool
+blocker instead of repeatedly clearing or re-registering maintenance.
+
+For new independent evidence added during a revision, keep its own managed source.
+A `requirement_ref` alone does not authorize it: the selected requirement in
+`src/indexers.yaml` must connect the new source to an existing task source through
+its target or evidence scopes. When `revision-source-scope-unconfirmed` is returned,
+use its `missing` and `configuration` fields to correct only the user-authorized
+association. Then retry the same `task adjust` without refresh and, once material
+is available, with `refresh: true`; reread the resulting revision. Do not invent
+module references, replace an older note, delete sources or clear the task to
+satisfy this boundary. Already imported material does not need to be imported again.
+A managed-source `base_digest` protects file replacement from conflicts; it is not
+source-scope authorization and is not interchangeable with a snapshot hash.
+
 Return the full revised Markdown in the supplied output schema, preserving the
 page's stable fragment markers and metadata. Do not silently
 turn paraphrased text into a verbatim quotation. Do not directly write knowledge

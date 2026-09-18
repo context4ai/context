@@ -1,3 +1,4 @@
+import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import type { CaptureLarkPhaseDefinition, LarkSourceRegistryEntry } from "@c4a/context";
@@ -376,7 +377,12 @@ async function runCaptureLarkPhaseUnlocked(input: {
       ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
     }, input.larkRunner);
   } catch (error) {
-    throw normalizeLarkError(error, resolved.sourceName);
+    const failure = normalizeLarkError(error, resolved.sourceName);
+    if (failure.detail?.reason_code === "external.authorization-required" ||
+        failure.detail?.reason_code === "external.tool-failed" && error instanceof LarkCliError && error.exitCode !== 0) {
+      throw new ContextError(failure.code, failure.message, { ...failure.detail, reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE, acquisition_cause: failure.detail?.reason_code });
+    }
+    throw failure;
   }
 
   let normalized = normalizeMarkdownDocument(fetched.markdown);

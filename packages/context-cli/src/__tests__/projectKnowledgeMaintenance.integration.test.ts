@@ -1,6 +1,7 @@
+import { runLarkCapturePhase } from "./projectCaptureLarkV062.fixtures.js";
 import { withContextRuntimeEventDelivery, type ContextRuntimeEventBatch } from "../runtimeEvents.js";
 import { afterEach, expect, test } from "bun:test";
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
@@ -273,4 +274,58 @@ test("maintenance CLI exposes its input schema without a workspace mutation", as
   expect(schema.properties.operation.enum).toEqual(["revise", "regenerate", "rebuild"]);
   expect(schema.required).toContain("id");
   expect(await readMaintenance(root)).toEqual(before);
+}, 60_000);
+
+
+test("approved maintenance ignores unrelated uncaptured documents without removing them", async () => {
+  const { root, views } = await deliveryWorkspace();
+  await registerKnowledgeMaintenance(root, { id: "bounded-revision", operation: "revise",
+    targets: [{ path: `knowledge/${views[0]!.path}`, instruction: "Clarify the public entry point." }] });
+  await buildProjectPackages(root);
+  await advance(root);
+  await mkdir(join(root, "sources/lark"), { recursive: true });
+  const registry = YAML.stringify({ sources: [{ name: "unrelated", url: "https://example.test/wiki/unrelated" }] });
+  await writeFile(join(root, "sources/lark/index.yaml"), registry);
+  const entry = join(root, "src/index.ts");
+  let source = await readFile(entry, "utf8");
+  source = 'import { captureLark as extraCapture, source as extraSource } from "@c4a/context";\n' + source;
+  source = source.replace("phases: [", 'phases: [extraCapture({ source: extraSource("unrelated", { type: "lark" }) }),');
+  await writeFile(entry, source);
+  const request = (await readApprovedRevision(root))!;
+  const status = await collectProjectStatus(root, { managed: false });
+  expect(status.sourceSummary.document.total).toBeGreaterThan(0);
+  expect(status.workflow.current?.reason_code).toBe("route.indexer.approved-revision");
+  await expect(completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision,
+    value: { markdown: request.target.markdown } })).rejects.toMatchObject({
+      detail: { reason_code: "unsupported-current-action", expected_stage: "approved-revision" },
+    });
+  const revisionPath = join(root, await revisionStoragePath(root));
+  const originalRevision = await readFile(revisionPath, "utf8");
+  const dependent = { ...request, target: { ...request.target,
+    source_refs: [...request.target.source_refs, "lark:unrelated"] } };
+  dependent.revision = requestDigest(dependent);
+  await writeFile(revisionPath, JSON.stringify(dependent));
+  expect((await collectProjectStatus(root)).workflow.current?.reason_code).toBe("route.capture.permission-required");
+  await writeFile(revisionPath, originalRevision);
+  await completeCurrentIndexerAction({ cwd: root, revision: status.workflow.current!.revision, managed: false,
+    value: { stage: "approved-revision", markdown: request.target.markdown.replace("public entry point", "documented public entry point") } });
+  expect(await readCandidateRecords(root)).toHaveLength(1);
+  expect(await readFile(join(root, "sources/lark/index.yaml"), "utf8")).toBe(registry);
+  expect((await collectProjectStatus(root, { managed: false })).workflow.current?.node).toBe("review-current-batch");
+  await approveCandidates(root, await readCandidateRecords(root));
+  await closeProjectWorkspace(root);
+  await buildProjectPackages(root);
+  expect((await readMaintenance(root)).active).toBeUndefined();
+  expect(await readFile(join(root, "sources/lark/index.yaml"), "utf8")).toBe(registry);
+  expect((await collectProjectStatus(root)).workflow.current?.reason_code).toBe("route.capture.permission-required");
+  await runLarkCapturePhase({ cwd: root, phaseId: "capture:lark:unrelated", format: "json",
+    larkRunner: async args => args.includes("--help")
+      ? { stdout: "--api-version --doc-format", stderr: "", exitCode: 0 }
+      : { stdout: "", stderr: "permission denied", exitCode: 1 } });
+  const deferred = await collectProjectStatus(root);
+  expect(deferred.documentSources.find(item => item.name === "unrelated")?.snapshotReady).toBe(false);
+  expect(deferred.pendingCapturePhases).toEqual([]);
+  await buildProjectPackages(root);
+  expect((await collectProjectStatus(root)).approvedPages).toBeGreaterThan(0);
+  expect(await readFile(join(root, "sources/lark/index.yaml"), "utf8")).toBe(registry);
 }, 60_000);

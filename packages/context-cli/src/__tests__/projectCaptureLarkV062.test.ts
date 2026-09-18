@@ -318,7 +318,7 @@ describe("0.6.2 Lark capture phase", () => {
     }
   });
 
-  test("capture:lark failure writes only a failed run log", async () => {
+  test("capture:lark unavailable source records a warning without creating evidence", async () => {
     const root = makeTmp();
     try {
       const projectRoot = await createLarkProject(root);
@@ -333,30 +333,14 @@ describe("0.6.2 Lark capture phase", () => {
         };
       };
 
-      try {
-        await runPhase({
-          cwd: projectRoot,
-          phaseId: "capture:lark:handbook",
-          format: "json",
-          larkRunner: runner,
-        });
-        throw new Error("expected capture failure");
-      } catch (error) {
-        expect(error).toBeInstanceOf(ContextError);
-        const contextError = error as ContextError;
-        expect(contextError.detail?.category).toBe("external-tool-failed");
-        expect(contextError.detail?.next).toBe("Run lark-cli auth login with an account that can read the document, then rerun capture");
-        expect(contextError.message).not.toMatch(/secret-token|secret-session|secret-api-token/u);
-        expect(JSON.stringify(contextError.detail)).not.toMatch(/secret-token|secret-session|secret-api-token/u);
-        const logPath = contextError.detail?.log;
-        expect(typeof logPath).toBe("string");
-        const log = JSON.parse(readFileSync(join(projectRoot, logPath as string), "utf8")) as Record<string, unknown>;
-        expect(log).toMatchObject({
-          phase_id: "capture:lark:handbook",
-          status: "failed",
-        });
-        expect(JSON.stringify(log)).not.toMatch(/secret-token|secret-session|secret-api-token/u);
-      }
+      const result = JSON.parse(await runPhase({
+        cwd: projectRoot, phaseId: "capture:lark:handbook", format: "json", larkRunner: runner,
+      }));
+      expect(result.result).toMatchObject({ captured: false, warning: { state: "deferred-no-evidence" } });
+      expect(JSON.stringify(result)).not.toMatch(/secret-token|secret-session|secret-api-token/u);
+      const log = JSON.parse(readFileSync(join(projectRoot, result.log), "utf8"));
+      expect(log).toMatchObject({ phase_id: "capture:lark:handbook", status: "warning" });
+      expect(JSON.stringify(log)).not.toMatch(/secret-token|secret-session|secret-api-token/u);
 
       expect(existsSync(join(projectRoot, "sources", "lark", "handbook", "manifest.json"))).toBe(false);
       expect(existsSync(join(projectRoot, ".tmp", "context-runtime", "lifecycle", "candidates.jsonl"))).toBe(false);

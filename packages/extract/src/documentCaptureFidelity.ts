@@ -260,7 +260,12 @@ export function parseDocumentResourceMaterialization(
     ["reference_only", referenceOnly, expected("reference-only")],
     ["failed", failed, expected("failed")],
   ] as const) {
-    if (JSON.stringify(actual) !== JSON.stringify(wanted)) throw new TypeError(`${field}.${name} does not match items`);
+    // Count maps are unordered; keep exact keys and values significant.
+    if (Object.keys(actual).length !== Object.keys(wanted).length ||
+      Object.entries(wanted).some(([key, count]) =>
+        !Object.prototype.hasOwnProperty.call(actual, key) || actual[key] !== count)) {
+      throw new TypeError(`${field}.${name} does not match items`);
+    }
   }
   return { status: value.status, discovered, materialized, reference_only: referenceOnly, failed, items };
 }

@@ -1,3 +1,4 @@
+import { DOCUMENT_ACQUISITION_UNAVAILABLE } from "./documentCaptureContract.js";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
@@ -387,6 +388,8 @@ async function readDocumentFiles(input: {
       throw runtimeError(`file source ${input.sourceName} document read failed: ${file.snapshotPath}: ${message}`, {
         sourceName: input.sourceName,
         local: input.local,
+      ...(error instanceof Error && "code" in error && ["ENOENT", "EACCES", "EPERM", "ENOTDIR"].includes(String(error.code))
+        ? { reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE } : {}),
         path: file.snapshotPath,
         next: `fix file permissions or update sources/file/index.yaml include for ${input.sourceName}, then rerun context run capture:file:${input.sourceName}`,
       });
@@ -460,6 +463,8 @@ async function prepareFileCaptureInput(input: {
     throw runtimeError(`file source local path is unreadable: ${input.entry.local}: ${message}`, {
       sourceName: input.sourceName,
       local: input.entry.local,
+      ...(error instanceof Error && "code" in error && ["ENOENT", "EACCES", "EPERM", "ENOTDIR"].includes(String(error.code))
+        ? { reason_code: DOCUMENT_ACQUISITION_UNAVAILABLE } : {}),
       next: `fix the local path or rerun ${documentSourceAddCommand("file", input.sourceName)}`,
     });
   }

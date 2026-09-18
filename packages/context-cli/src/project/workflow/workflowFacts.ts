@@ -106,6 +106,9 @@ export function createContextWorkflowFacts(
   const captureComplete =
     observation.capturedDocumentSources === observation.documentSources.length &&
     observation.pendingCaptureCommands.length === 0;
+  const captureSettled = observation.documentSources.every(source =>
+    source.snapshotReady || source.acquisitionWarning !== undefined) &&
+    observation.pendingCaptureCommands.length === 0;
   // Active production validates each article's material and retains unresolved
   // gaps. Let that work proceed; resume capture before completing delivery.
   const productionCanProceed = observation.productionState !== undefined && (
@@ -159,7 +162,7 @@ export function createContextWorkflowFacts(
       registry_state: observation.indexerRegistry.state,
     },
     gates: {
-      source_read_resolved: captureComplete ||
+      source_read_resolved: captureSettled ||
         hasAuthority(authorities, CONTEXT_WORKFLOW_AUTHORITIES.sourceRead),
       knowledge_review_resolved: reviewGateClear,
       package_output_resolved: packagesDeclared ||
@@ -175,7 +178,7 @@ export function createContextWorkflowFacts(
         observation.documentSources.length === 0 ||
         observation.missingCaptureSources.length === 0,
       complete: captureComplete,
-      route_satisfied: captureComplete || productionCanProceed,
+      route_satisfied: captureSettled || productionCanProceed,
     },
     review: {
       gate_clear: reviewGateClear,

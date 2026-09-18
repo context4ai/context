@@ -48,6 +48,8 @@ export async function completeCurrentIndexerAction(input: {
   if (!["source-update", "approved-revision", "structure-review"].includes(String(stage))) {
     throw new ContextError(ExitCode.UserError, "Use the current production file submission or the active revision action.", {
       category: ErrorCategory.UserInputInvalid, reason_code: "unsupported-current-action",
+      ...(await readApprovedRevision(found.projectRoot) ? { expected_stage: "approved-revision",
+        hint: "Submit the active revision with stage: approved-revision and its current revision token. Do not clear the task or remove sources to repair a payload." } : {}),
       next_action: { command: "context status --format json" },
     });
   }

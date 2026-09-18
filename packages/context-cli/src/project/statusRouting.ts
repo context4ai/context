@@ -6,7 +6,7 @@ export function pendingDocumentCaptureCommands(input: {
   documentSources: readonly DocumentSourceStatus[];
 }): { phaseIds: string[]; commands: string[]; missingSources: DocumentSourceStatus[] } {
   const pendingSources = input.documentSources.filter((source) =>
-    !source.snapshotReady
+    !source.snapshotReady && !source.acquisitionWarning
   );
   const phaseIds: string[] = [];
   const missingSources: DocumentSourceStatus[] = [];
