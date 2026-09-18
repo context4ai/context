@@ -1,177 +1,148 @@
 ---
 name: context-inspect-search
-description: Use only when the user explicitly invokes context-inspect-search to query a Context workspace's approved knowledge and trace answers to its registered documents or source code. Do not auto-start for ordinary coding, planning, debugging, or an active Context production workflow.
+description: Use only when the user explicitly invokes context-inspect-search to query available Context knowledge packages or approved workspace knowledge and trace answers to their identified sources. A local workspace is optional. Do not auto-start for ordinary coding, planning, debugging, or an active Context production workflow.
 disable-model-invocation: true
 ---
 
 # Context Inspect Search
 
-Answer questions from a selected knowledge workspace, then investigate its
-sources when the answer needs verification. This is an independent query entry,
-not an Indexer or a production Route. Use the conversation language.
+## Entry and boundaries
 
-## Invocation and scope
+Use on explicit invocation and related follow-up questions; use the conversation
+language. The invocation authorizes read-only investigation of the selected
+knowledge packages, available workspace and identified sources within that scope,
+including isolated source retrieval and bounded non-destructive checks. The Skill
+can run from a global installation with host-provided packages and no workspace.
+Resolve scope from the request, conversation and configuration before asking.
+Continue through non-blocking issues; ask only for missing access, genuinely
+unresolved scope or effects outside existing authorization.
 
-Start only on the user's explicit command or named Skill invocation. Continue
-related follow-up questions without repeated invocation; stop applying this
-Skill when the user changes task. An existing workspace, error message, or
-knowledge-related phrase is not an activation signal.
+Start from the supplied package locations or workspace configuration. If a
+workspace exists, read its `AGENTS.md` and relevant configuration;
+`context entry [project-dir] --format json` may help locate instructions.
+Neither a workspace nor a working Context CLI is required for package retrieval;
+do not call entry in an arbitrary directory just to satisfy a prerequisite.
+Do not execute returned production actions, initialize a replacement workspace,
+or install tools without existing authorization. Querying must not alter source
+registrations, snapshots, tasks, approvals or user checkouts.
 
-Locate the user-selected workspace. With the CLI available, use
-`context entry [project-dir] --format json` to identify it and its installed
-instructions. This is inspection: do not execute a returned production command
-just because it is actionable. If the CLI is unavailable or state inspection
-fails, readable files can still support a bounded answer; report what could not
-be checked. Do not initialize a replacement workspace or install tools silently.
-If several workspaces could match, resolve which one the user means.
+## Search available material concurrently
 
-Keep all paths relative to that workspace. Read its `AGENTS.md` and relevant
-configuration before investigating. The presence of a `.tmp` directory alone
-does not establish a workspace. Querying must not clear caches, reset tasks,
-change checkouts, accept Review, or start Author or close. The one permitted
-query preparation build is described below.
+Check relevant knowledge packages, the workspace and reusable source checkouts
+in parallel. Search each as soon as it is readable; tool checks and authorized
+upgrades must not block independent reading. If a missing configured workspace
+is needed for further attribution, recover it into an isolated directory while
+package retrieval continues. Without a configured workspace, investigate the
+available packages directly; do not request or create one merely to start.
 
-## Choose the query material
+A knowledge package may be workspace build output (usually `dist/`), a global
+installation, or an equivalent host-provided directory. Locate it from available
+configuration or installation metadata rather than assuming a fixed path.
+Select packages relevant to the question. Follow their bundled query Skill when
+present; otherwise search readable indexes and pages. Missing Skills or build
+inventories do not block retrieval or justify rebuilding. If a needed package is
+missing, use the host's configured, authorized package retrieval mechanism while
+other reading continues. Only check or prepare tools needed for the next actual
+operation; installation failure does not block independent local retrieval.
 
-**Prefer an existing usable dist.** Locate the package output from the workspace
-configuration and inspect its index and `context-build-inventory.json`. Choose
-the package matching the question; do not silently combine unrelated packages.
-A usable package has readable delivered pages, not just an existing directory.
-Read its bundled query Skill (usually `skills/knowledge-query/SKILL.md`, but
-business templates may use another name) and use its navigation and search
-instructions within that package. If it has no query Skill, use its readable
-indexes and pages; a missing Skill alone is not a reason to rebuild. Do not
-execute unrelated scripts merely because they are bundled.
+For gaps or latest-content questions, also search approved knowledge when a workspace is available:
+use `knowledge/structure.yaml` and relevant `knowledge/` paths, trying business
+terms, symbols and synonyms, then read matching sections in context. Delivered
+content may lag approved knowledge; they are not independent corroboration.
+Candidates and temporary reports are not approved pages. A search miss does not
+prove a capability is absent. Do not build merely to answer a query; a separately
+authorized build must follow its own workflow without advancing unrelated work.
 
-Do not build first when usable output exists. It represents its last successful
-build and selected scope, not necessarily the latest approved workspace content.
-A search miss does not make the package unusable or justify a rebuild. For a
-latest-content question or an apparent gap, inspect the corresponding approved
-knowledge and distinguish it from the delivered version.
+When package or approved knowledge leaves a gap, directly trace relevant sources
+without asking whether to deepen the query. Use available document, code-search
+or extraction tools within the authorized scope, recording source identity and
+version. Prepare sources while continuing other reading.
+One failed source blocks only dependent claims. Answer when evidence is
+sufficient, without completing unnecessary preparation.
 
-**If no usable output exists, try one build when allowed.** Inspect the current
-Route/status and configured package. Only use the normal CLI build action when
-its prerequisites are already satisfied and it will not advance an unrelated
-active delivery or revision. Do not create package configuration, approve a
-template, run close, recover production state or finish pending work just to
-make this query possible. When a safe build is available, run its current
-command once in the identified workspace, wait for the same invocation's exit
-and receipt, then inspect its actual output and query Skill. Do not launch a
-second writer or treat partial output as a completed package. There is no
-unverified promise that this takes less than 20 seconds.
+## Trace and retrieve only relevant sources
 
-**Otherwise query approved knowledge directly.** If the CLI is unavailable,
-state cannot be checked, build is not allowed, or the attempt fails, briefly
-explain the limitation and continue from readable approved knowledge. Do not
-loop through build repairs. Use `knowledge/structure.yaml` to locate pages,
-collections and source associations; search selected `knowledge/` paths with
-Host file tools, trying domain terms, symbol names and synonyms. Read relevant
-sections in context. A search miss proves neither absence of knowledge nor
-absence of the underlying capability. Candidates and `.tmp` reports may explain
-pending work but are not approved knowledge. If approval cannot be established,
-state that limitation rather than treating arbitrary Markdown as approved.
+Without a workspace, use explicit source references in the package, its metadata
+or user configuration to identify relevant documents or repository paths and
+commits. Read or retrieve those sources directly within scope; the workspace
+registry is not a mandatory intermediate step. If the source identity or version
+cannot be established, retain package-grounded findings and qualify attribution;
+do not invent a repository or equate current source with the package's baseline.
 
-## Trace delivered answers to workspace sources
+When a workspace and `context-build-inventory.json` are available, map a delivered page's
+`dist_path` through `approved_knowledge.files` to its `approved_path`, relative
+to the workspace's `knowledge/` root. Follow the approved page's associations in
+`knowledge/structure.yaml` and `sources/*/index.yaml`. Without a reliable mapping,
+continue package retrieval and follow explicit source references where available.
+Do not guess originals from similar filenames or claim attribution without
+checking the referenced material.
 
-For a dist hit, find its `dist_path` in the matching package inventory's
-`approved_knowledge.files` and follow that record's `approved_path` into the
-workspace. `approved_path` is relative to the workspace's `knowledge/` root,
-not the dist directory or workspace root; do not guess the mapping from similar filenames. Read that page and its source
-associations in `knowledge/structure.yaml`, then follow the registered sources.
-If the inventory or mapping is missing, still answer from readable package
-content where possible, but do not claim verified original-source attribution.
+Use the repository and recorded commit identified by the package or workspace
+as the source baseline.
+Reuse existing checkouts only after checking remote, commit, module coverage
+and local changes; do not reset them or change their sparse configuration.
+Missing code goes into a reusable query-owned path such as
+`.tmp/context-inspect/<host>/<repository-path>/<commit>/`, separate from user
+checkouts and production-managed sources. Use safe, credential-free path
+components and the full commit. Verify identity before reuse; never overwrite
+a mismatched directory. Deduplicate recovery and use one writer per checkout;
+that writer may append sparse paths without resetting existing files.
 
-The chain is: delivered page → build inventory mapping → approved knowledge and
-structure → registered raw material at its recorded version. The current
-approved page can have changed since build; describe differences rather than
-silently replacing one version with another. Dist and knowledge are two forms
-of the same content, not independent corroborating evidence. The bundled query
-Skill owns package-local retrieval; this explicitly invoked inspection Skill
-owns the subsequent, separately scoped workspace/source investigation. Cite
-which layer supports each claim.
+Default to lightweight retrieval and sparse checkout:
 
-## Prepare only the sources needed for attribution
+- Use shallow history (`--depth=1`) and deferred contents (`--filter=blob:none`)
+  where supported, with a complete partial-clone setup and named promisor remote.
+  Configure the sparse scope before checkout and verify the resulting commit.
+- Start from known module paths. If unclear, inspect
+  `git ls-tree -r --name-only <commit>` for candidates, then read code to confirm
+  their relevance. Expand along imports, calls and service routes as needed;
+  deepen history only when needed. A sparse search miss is not a whole-repository miss.
+- Read ready modules while other recovery proceeds. Allow sufficient command
+  time (for example 300 seconds or more), but investigate confirmed stalls
+  without waiting for timeout; silence alone is not a stall. If unsupported or
+  unsuccessful, try caches, commit-specific file retrieval or bounded shallow
+  retrieval; use a full clone only when necessary. Do not retry blindly or
+  silently substitute the default branch for an unavailable recorded commit.
 
-Follow the relevant page's source references and `sources/*/index.yaml` records.
-Check the selected raw body, attachments or repository module and its recorded
-version before claiming deep attribution. This readiness check concerns the
-selected materials, not completion of the active production workflow.
+Query retrieval never runs `context source restore`, `task prepare` or production
+capture/recovery actions. Production recovery gates do not block this independent
+inspection. Preserve unavailable-evidence gaps rather than changing production
+state to get past them.
 
-For repositories, `context source recovery-plan --format json` provides a
-read-only recovery plan. Reuse an accessible checkout only after checking its
-remote, pinned commit and module path. Inspect local changes as well: a matching
-HEAD does not prove a dirty file is the recorded source. Do not silently use the
-latest branch or reset a user's checkout.
+Compare relevant baseline files with current code when accessible, including
+relevant local changes. Use actual diffs to assess impact; current code is not a
+substitute for the baseline. Mention a missing comparison only when it limits
+the answer. For documents, notes and sessions, read saved bodies and necessary
+attachments; fetch missing accessible material within scope. A summary is not a
+full transcript, an unread link is not evidence, and current remote content does
+not prove a historical snapshot.
 
-If material is missing, report what cannot be verified and offer the smallest
-necessary recovery. With the user's recovery authorization, follow the installed
-`repository-source-recovery.md` procedure and schema in the workflow bundle
-identified by entry, using the CLI's `source restore` contract. Recover only the
-selected source groups; never run `task prepare` or the whole workspace-reset
-procedure to enable a query. If a writer is active or recovery cannot safely
-coexist, keep the answer bounded and defer the write. Do not invent recovery
-payload fields when the installed schema is unavailable.
+## Answer with evidence and hand off updates
 
-For documents, notes and sessions, read their saved source bodies or summaries
-and necessary attachments. A summary is not a full conversation transcript.
-An external link is not evidence of its unread target. Fetch missing external
-material only within the user's authorized scope; current remote content is not
-proof of an older snapshot. If historical raw material is unavailable, identify
-the gap rather than reconstructing it from generated knowledge.
+Lead with the conclusion and a concise evidence chain. Distinguish implementation,
+declared contracts, test assertions, runtime observations and inferences. Perform
+bounded non-destructive validation only when useful; inspect its effects first
+and do not run unrelated scripts, builds or tests.
 
-## Explain and verify
+Link material actually read: source files at the inspected commit, knowledge
+website articles and original documents. If no reliable clickable link exists,
+give checkable local paths, symbols and short supporting excerpts with the
+limitation. Do not dump internal reasoning, runtime identifiers or routine
+version comparisons. Explain only differences affecting the answer; hashes may
+appear in source URLs without requiring a separate version audit in the prose.
 
-Trace from the approved claim to the relevant source location. Expand to
-adjacent definitions or tests only as necessary and within the selected source
-scope. Distinguish declared API, implementation behavior, test assertions and
-observed runtime behavior; reading code does not prove a runtime experiment.
-Apart from the bounded package build above, do not run repository builds, tests
-or arbitrary scripts merely to answer a query. If runtime validation is needed, explain the proposed check
-and obtain the user's authorization for that scope.
+For website links, use `context-site-map.json` from the selected package or
+sibling website output. Match `pages[].package_path` or `approved_path`, and
+resolve `site_path` against `site_url` without prepending `base` again. Cite only
+matched pages, deduplicate links and do not invent anchors. If mapping is absent
+or invalid, retain local citations. Do not build, publish or probe remote sites
+just to format citations; a local map is not proof of the current online content.
 
-Lead with the answer, then cite concrete page paths and source locations,
-including the version when it affects the conclusion. Separate confirmed facts,
-inferences and unavailable evidence. If source versions differ, describe the
-difference before deciding that a knowledge page is wrong. Do not dump runtime
-ids, long raw excerpts or a mandatory audit report into every answer.
-
-
-## Website links in the final summary
-
-After answering from the pages actually read, optionally append one or more
-related document links in the final summary. Read `context-site-map.json` from
-the selected package (or its sibling website output in a workspace). Match the
-read page to `pages[].package_path` or `approved_path`; use its `title` and resolve
-`site_path` relative to `site_url`. The URL already includes the deployment base
-path: do not prepend `base` again. Only cite matched articles, deduplicate links,
-and do not invent section anchors.
-
-This is a local formatting step, not retrieval or validation. Do not probe URLs,
-make HTTP/HEAD requests, open a browser, inspect a deployment platform, or check
-remote versions to add links. Never build, publish or update metadata for this
-purpose. If the map, URL or matching page is absent or malformed, keep the local
-citation and continue silently. A configured URL does not prove that the site
-contains the current local revision; do not claim online verification.
-
-## Suggest improvements and hand off
-
-When evidence supports a correction or worthwhile addition, briefly describe:
-
-- the affected page or missing topic and the reader's actual problem;
-- the supporting source location/version and what it establishes;
-- whether to revise an existing page, adjust discoverability, add a topic, or
-  obtain missing material first;
-- the bounded pages/sources involved and any uncertainty.
-
-Check the existing scope and neighboring pages before recommending new content.
-Do not create a page solely because a search missed it, and do not propose
-unsupported claims as a knowledge update. With insufficient raw evidence, give
-an actionable material request instead of forcing an update.
-
-A suggestion is not authorization to write. Only when the user accepts the
-update, hand the question, evidence, proposed change and scope to the installed
-`context` production Skill in the same workspace. Read its fresh Route; it owns
-candidate repair, approved-page revision and scheduling around active work.
-Do not clear state, reuse an earlier revision, directly edit knowledge, or build
-a second update workflow. If the production Skill/CLI is unavailable, provide
-the handoff information and state that no update has started.
+Suggest a knowledge update only with supporting evidence: identify the affected
+page or gap, proposed change and bounded source scope. Check neighboring content
+before proposing a new page. Only after user acceptance, hand the evidence and
+scope to the installed `context` production Skill in the selected workspace and
+its fresh Route. If no target workspace is known, resolve it at that handoff,
+not as a prerequisite to answering. Do not edit approved knowledge, clear state
+or reuse an earlier revision. If that entry
+is unavailable, provide the handoff and state that no update has started.

@@ -18,10 +18,24 @@ an LLM itself.
 
 ```bash
 npm install -g @c4a/context-cli@latest
-context plugin install
+context plugin install # global installation
+# Alternatively, install only in a repository:
+context plugin install --local /path/to/repo
 ```
 
-Restart or refresh the Agent host after installation. One install creates the
+`--local <path>` requires an explicit path without global configuration changes. Omit `--agent` to detect Claude Code, Cursor and Codex executables on PATH (including `cursor-agent`), plus Cursor/Codex in standard macOS Applications directories. Only detected hosts are installed under the repository's `.claude`, `.cursor`, or `.agents`. If none are detected, only `.agents/skills` is installed with a user hint. Stale configuration directories are not detection evidence; discovery does not verify runtime loading. Omitting `--local` keeps global installation.
+
+Automatic mode accepts a repository root; paths ending in `.claude`, `.cursor`, or `.agents` use their parent as the root. Explicit `--agent` still uses the exact supplied host directory below; `--agent all` is not accepted with `--local`.
+
+| Command | Local layout |
+| --- | --- |
+| `context plugin install --local /path/to/repo/.claude --agent claude` | Public entries in `commands/`, other skills in `skills/`; internal skills receive `user-invocable: false`, without duplicate entry skills |
+| `context plugin install --local /path/to/repo/.cursor --agent cursor` | Bundled `c4a-*` commands plus other skills; hiding Providers from the command menu is not guaranteed |
+| `context plugin install --local /path/to/repo/.agents --agent codex` | All entries remain skills; bundled `agents/openai.yaml` policies are preserved; no unsupported `commands/` directory |
+
+Local entries have no plugin namespace; the host must discover the destination. Use `--dry-run` to preview. Refresh only replaces unmodified managed content; unrelated files remain and conflicting/customized entries are rejected. Choose a fresh host directory when switching from a standalone installation to command entries, to avoid duplicates. `plugin status` still inspects global hosts only. Invocation metadata is not a CLI permission or security boundary.
+
+Restart or refresh the Agent host after installation. Global installation creates the
 host-namespaced Context entry and projects `context-code-indexer` and
 `context-markdown-indexer`, `context-note-indexer` and
 `context-sessions-indexer` as unnamespaced lifecycle Provider Skills for

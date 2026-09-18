@@ -135,10 +135,14 @@ export function writeRunSuccess(input: {
   }
 
   const body = runSuccessBaseBody(input);
+  const warning = input.result !== null && typeof input.result === "object" &&
+    "kind" in input.result && input.result.kind === "document.capture.warning" && "warning" in input.result
+    ? input.result.warning as { message: string; retry_command: string } : undefined;
+  if (warning) body.push(warning.message, `retry: ${warning.retry_command}`);
   appendRunResultBody(body, input.result);
   process.stdout.write(formatFeedback({
-    symbol: "✓",
-    action: "ran",
+    symbol: warning ? "⚠" : "✓",
+    action: warning ? "deferred" : "ran",
     subject: input.plan.phase.id,
     headline: input.plan.phase.kind,
     body,

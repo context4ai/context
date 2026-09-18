@@ -15,6 +15,21 @@ import { CONTEXT_WORKFLOW_AUTHORITIES } from "../project/workflow/workflowTypes.
 import { emptyObservation } from "./projectWorkflowProviderV0610.fixtures.js";
 
 describe("Context workflow Provider", () => {
+  test("document deferral settles routing without claiming capture or repository readiness", () => {
+    const facts = createContextWorkflowFacts({ ...emptyObservation(),
+      documentSources: [{ type: "file", name: "manual", materializedAt: "sources/file/manual",
+        manifest: "sources/file/manual/manifest.json", snapshotReady: false, diagnostics: [],
+        agent_hints: [], workspaceDiagnostics: [], acquisitionWarning: {
+          code: "document.acquisition-unavailable", state: "deferred-no-evidence",
+          message: "Unavailable", retry_command: "context run capture:file:manual",
+        } }],
+      capturedDocumentSources: 0,
+    }, []);
+    expect(facts.capture.complete).toBe(false);
+    expect(facts.capture.route_satisfied).toBe(true);
+    expect(facts.gates.source_read_resolved).toBe(true);
+  });
+
   test("current production stages reach review without inheriting Provider readiness", async () => {
     const pending = createContextWorkflowFacts({ ...emptyObservation(), productionState: "active" }, []);
     expect(pending.indexer.lifecycle_current).toBe(false);

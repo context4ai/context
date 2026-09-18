@@ -29,9 +29,10 @@ Context workflow and Indexer Provider lifecycle.
 ## Query and attribute workspace knowledge
 
 Explicitly invoke `/c4a:context-inspect-search` (Cursor: `/c4a-context-inspect-search`)
-or the `context-inspect-search` Skill. It first uses a usable dist package and its query Skill. Without output, it
-tries one build only when the current workflow safely permits it; otherwise it
-queries approved `knowledge`. It traces package pages through the build inventory
-to approved originals and registered sources, without resetting production. Accepted suggestions hand off to `context`.
+or the `context-inspect-search` Skill. It can start from a readable local, global or host-provided knowledge package and its query Skill without a local workspace. Without output, it
+queries approved `knowledge` directly; a package build requires prior authorization for that workspace write.
+Read-only investigation and bounded non-destructive checks need no further approval. For code attribution, it
+retrieves the registered revision and checks relevant differences against current code without asking the user to select a version.
+It traces package pages through the build inventory to approved originals and registered sources, without resetting production. Accepted suggestions hand off to `context`.
 Codex disables implicit invocation through Skill policy; Claude commands disable
 model invocation. Other hosts must honor the explicit-only instructions.

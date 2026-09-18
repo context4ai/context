@@ -2,7 +2,30 @@
 
 All notable changes to Context are documented here.
 
-## Unreleased
+## 0.7.20 - 2026-09-18
+
+- Query installed or host-provided knowledge packages without requiring a local
+  workspace or CLI; prepare relevant sources concurrently with reading.
+- Retrieve recorded source revisions in reusable isolated sparse checkouts,
+  without entering production recovery or changing registered source state.
+- Consolidate inspection guidance and require concise, source-backed answers.
+- Support repository-local skill installation with host detection, explicit
+  host targets and conflict protection, without changing global configuration.
+- Include the document capture, revision recovery and Review fixes documented
+  in 0.7.18 and 0.7.19 in this community release.
+
+## 0.7.19 - 2026-09-17
+
+- Explain missing requirement/source associations when adding independent evidence to an active revision, with safe recovery instructions and unchanged authorization checks.
+- Render removed Review content with red text and the Remove badge, without the colored section background or left border.
+
+## 0.7.18 - 2026-09-17
+
+- Accept equivalent Lark resource count maps regardless of JSON key order; preserve validation of incorrect counts and resource records.
+- Scope approved-page revision capture gates to the revision evidence; preserve global source inventory and normal production capture gates.
+- Explain missing revision stages and discourage task cleanup or source deletion as error recovery.
+- Document acquisition failures now retain valid registered snapshots or report deferred evidence gaps without blocking unrelated delivery; repository restoration and validation remain strict.
+- Include the updated context-inspect-search workflow for isolated source recovery, recorded-revision comparison, and bounded read-only investigation.
 
 ## 0.7.17 - 2026-09-17
 
@@ -31,7 +54,7 @@ All notable changes to Context are documented here.
 - Keep diagram source in Markdown and include browser assets only in reports
   that contain diagrams.
 
-## 0.7.12 - Unreleased
+## 0.7.12
 
 - Allow partial delivery to enter Review before checking the approved link graph;
   keep link validation mandatory before close and build.

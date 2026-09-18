@@ -10,7 +10,7 @@ export interface PhaseRunLogInput {
   dryRun: boolean;
   reads: readonly string[];
   writes: readonly string[];
-  status: "success" | "failed";
+  status: "success" | "warning" | "failed";
   startedAt: string;
   durationMs: number;
   summary?: Record<string, unknown>;

@@ -15,6 +15,11 @@ Wait for an active writer to finish and obtain its receipt before changing state
 If status is broken, inspect its diagnostic and files with Host tools rather
 than treating failure as proof that the workspace is empty.
 
+Registered source inventory is not an active task. Preparation does not repair
+invalid snapshots or change source scope; do not repeat preparation to bypass a
+capture diagnostic. Excluding a source from one task is not authorization to
+delete its registration or retained evidence.
+
 ## End the old task
 
 Run `context task prepare --format json`. It previews the exact Context-owned

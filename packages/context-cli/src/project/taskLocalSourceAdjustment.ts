@@ -1,3 +1,6 @@
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
 import { readProductionRequirements } from "./productionRequirements.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { revisionStoragePath } from "./maintenanceStorage.js";
@@ -33,7 +36,30 @@ export async function adjustLocalRevisionSources(root: string, input: {
     const requirement = registry.requirements.find((item) => item.id === scope.requirement_ref);
     const targets = requirement && [...requirement.target_scope.targets, ...requirement.evidence_source_scope?.targets ?? []];
     if (!targets?.some((target) => target.source_ref === scope.source_ref) || !targets.some((target) => bound.includes(target.source_ref))) {
-      throw new TypeError("A new same-task source requires its explicit requirement_ref and a confirmed scope connecting it to this task; no independent task is inferred.");
+      const missing = scope.requirement_ref === undefined ? "requirement-ref"
+        : requirement === undefined ? "registered-requirement"
+        : !targets?.some(target => target.source_ref === scope.source_ref) ? "new-source-association"
+        : "current-task-association";
+      throw new ContextError(ExitCode.UserError,
+        "The new source is not connected to this revision by a confirmed requirement. Preserve it as independent evidence; do not replace an existing source to pass this check.", {
+          category: ErrorCategory.UserInputInvalid,
+          reason_code: "revision-source-scope-unconfirmed",
+          source_ref: scope.source_ref,
+          requirement_ref: scope.requirement_ref ?? null,
+          missing,
+          current_source_refs: [...new Set(bound)],
+          configuration: {
+            file: "src/indexers.yaml",
+            requirement_ids: registry.requirements.map(item => item.id),
+            selected_requirement_source_refs: targets?.map(target => target.source_ref) ?? [],
+            action: "Select the requirement for the user's confirmed same-task update. It must associate the new source and an existing task source through target_scope.targets or evidence_source_scope.targets. Add independently recorded supporting evidence to evidence_source_scope only when covered by the user's authorization; preserve existing scope and exclusions. Do not guess module_refs or invent an unrelated requirement.",
+          },
+          next_action: {
+            command: "context status --format json",
+            instruction: "After correcting the authorized requirement association, reread the current Route. Retry the same task adjust payload without refresh, then with refresh: true once the selected material is available. Use the resulting fresh revision for submission. Already imported evidence does not need rewriting or recapture.",
+          },
+          retained: { source_files: true, approved_pages: true, current_revision: true },
+        });
     }
   }
   if (input.refresh && (!current.refresh_sources || indexerProtocolDigest([...current.refresh_sources].sort()) !== indexerProtocolDigest([...selected].sort()))) {

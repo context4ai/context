@@ -190,6 +190,23 @@ Do not discover files with `find` / `ls` when the user already supplied paths.
 If the include set is large, summarize it and ask for confirmation before
 registration; do not read file bodies before capture permission is clear.
 
+### Unavailable document acquisition
+
+A `document.capture.warning` is not a successful capture. Report whether the CLI
+retained a validated registered snapshot or deferred a source with no evidence.
+Use retained material with its recorded version; do not claim that upstream is
+current. A deferred source remains registered and must not be cited as evidence.
+Continue unrelated work using the returned workspace Route. Do not remove sources,
+clear tasks, invent content, or repeatedly retry authentication to unblock it.
+
+The warning includes a retry command. Run it when access is restored or the user
+requests another attempt. Changing the source or capture configuration invalidates
+the old deferral. Warning receipts are local runtime state; another checkout may
+attempt acquisition again. Persisted snapshots remain the portable evidence.
+Snapshot corruption, invalid input, write conflicts and repository restore errors
+are not downgraded. Code work still requires its authorized registered repository
+version. Note/session material already saved in the workspace is read locally.
+
 ### Output Handling
 
 Preserve commands, reason codes, ids, and diagnostics exactly; summarize
