@@ -1,7 +1,5 @@
-import { access, stat } from "node:fs/promises";
-import { constants } from "node:fs";
-import { homedir } from "node:os";
-import { basename, delimiter, dirname, join, resolve } from "node:path";
+import { lstat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -10,47 +8,33 @@ import type { PluginAgent } from "./pluginInstallTargets.js";
 
 const HOST_DIRS = { claude: ".claude", cursor: ".cursor", codex: ".agents" } as const;
 
-export async function detectLocalAgent(agent: PluginAgent): Promise<boolean> {
-  const commands = agent === "cursor" ? ["cursor", "cursor-agent"] : [agent];
-  for (const directory of (process.env.PATH ?? "").split(delimiter).filter(Boolean)) {
-    for (const command of commands) {
-      for (const suffix of process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""]) {
-        const file = join(directory, command + suffix);
-        try {
-          if (!(await stat(file)).isFile()) continue;
-          await access(file, constants.X_OK);
-          return true;
-        } catch { /* Missing or inaccessible executable is not an installed target. */ }
-      }
+export async function detectLocalAgent(agent: PluginAgent, repo: string): Promise<boolean> {
+  const path = join(repo, HOST_DIRS[agent]);
+  try {
+    const entry = await lstat(path);
+    if (!entry.isDirectory() || entry.isSymbolicLink()) {
+      throw new ContextError(ExitCode.UserError, `Local host directory is not a regular directory: ${path}`);
     }
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw error;
   }
-  // Desktop installs may not have a launcher on PATH. Do not infer installation
-  // from stale user configuration directories.
-  if (process.platform === "darwin") {
-    const app = { claude: "Claude.app", cursor: "Cursor.app", codex: "Codex.app" }[agent];
-    // Claude Desktop is not evidence of Claude Code support.
-    if (agent !== "claude") {
-      for (const directory of ["/Applications", join(homedir(), "Applications")]) {
-        try { if ((await stat(join(directory, app))).isDirectory()) return true; } catch { /* Not installed. */ }
-      }
-    }
-  }
-  return false;
 }
 
 export async function installAutoLocalSkills(
   root: string, path: string, dryRun: boolean,
-  detect: (agent: PluginAgent) => Promise<boolean> = detectLocalAgent,
+  detect: (agent: PluginAgent, repo: string) => Promise<boolean> = detectLocalAgent,
+  selectedAgent?: PluginAgent | "all",
 ): Promise<string> {
   if (!path.trim()) throw new ContextError(ExitCode.UserError, "--local requires a non-empty repository path", {
     category: ErrorCategory.UserInputInvalid,
-    next: "Run context plugin install --local /path/to/repository.",
+    next: "Run context plugin install --local /path/to/repository --agent auto-detect.",
   });
-  const requested = resolve(path);
-  const repo = Object.values(HOST_DIRS).some(name => name === basename(requested)) ? dirname(requested) : requested;
+  const repo = resolve(path);
   const agents: PluginAgent[] = [];
   for (const agent of ["claude", "cursor", "codex"] as const) {
-    if (await detect(agent)) agents.push(agent);
+    if (selectedAgent ? selectedAgent === "all" || agent === selectedAgent : await detect(agent, repo)) agents.push(agent);
   }
   const targets: Array<{ agent?: PluginAgent; path: string }> = agents.length
     ? agents.map(agent => ({ agent, path: join(repo, HOST_DIRS[agent]) }))
@@ -59,13 +43,13 @@ export async function installAutoLocalSkills(
   const previews: string[] = [];
   for (const target of targets) previews.push(await installLocalSkills(root, target.path, true, target.agent));
   const header = formatFeedback({
-    symbol: agents.length ? "✓" : "⚠", action: "detected", subject: "local agent targets",
-    headline: agents.length ? agents.join(", ") : "No supported agent detected",
+    symbol: agents.length ? "✓" : "⚠", action: selectedAgent ? "selected" : "detected", subject: "local agent targets",
+    headline: agents.length ? agents.join(", ") : "No supported host directory found",
     body: [
       `repository: ${repo}`,
       ...targets.map(target => `${target.agent ?? "standalone"}: ${target.path}`),
-      ...(!agents.length ? ["Installing only .agents/skills. Configure a supported host to read this directory, or rerun with an explicit --agent and its target path."] : []),
-      "Host discovery does not verify runtime skill loading; refresh the host after installation.",
+      ...(!agents.length ? ["Installing only .agents/skills. Configure a supported host to read this directory, or select an explicit --agent with the same repository root."] : []),
+      "Repository directory discovery does not verify runtime skill loading; refresh the host after installation.",
     ],
   });
   if (dryRun) return header + previews.join("");

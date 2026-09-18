@@ -2,6 +2,10 @@
 
 All notable changes to Context are documented here.
 
+## Unreleased
+
+- Require an explicit agent for local plugin installation. Host targets use repository subdirectories; `all` installs every host, `auto-detect` detects repository host directories (not machine executables or applications) with a standalone fallback, and `standalone` writes directly to the supplied directory. Global installation is unchanged.
+
 ## 0.7.20 - 2026-09-18
 
 - Query installed or host-provided knowledge packages without requiring a local
