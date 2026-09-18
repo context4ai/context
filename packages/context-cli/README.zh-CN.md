@@ -16,18 +16,18 @@
 npm install -g @c4a/context-cli@latest
 context plugin install # 全局安装
 # 或者，只安装到仓库：
-context plugin install --local /path/to/repo
+context plugin install --local /path/to/repo --agent auto-detect
 ```
 
-`--local <路径>` 必须显式指定路径，不注册全局插件、不修改用户级配置。省略 `--agent` 时探测 PATH 中的 Claude Code、Cursor、Codex（Cursor 也检查 `cursor-agent`；macOS 另检查标准 Applications 目录中的 Cursor/Codex），安装检测到的宿主到仓库下的 `.claude`、`.cursor`、`.agents`。均未检测到时，仅安装 `.agents/skills` 并输出提示。不根据遗留配置目录判断已安装；探测不代表已验证宿主加载技能。
+`--local` 必须显式搭配 `--agent`：`claude`、`cursor`、`codex`、`all`、`auto-detect` 或 `standalone`。路径为仓库根；指定宿主直接写入对应 `.claude`、`.cursor`、`.agents` 子目录，不检测是否安装宿主。`all` 全装；只有 `auto-detect` 检测目标仓库已有的 `.claude`、`.cursor`、`.agents` 目录，不检测 PATH 或桌面应用；均不存在时兜底 `.agents/skills`。`standalone` 则直接写入 `<path>/skills`，不生成 commands 或宿主子目录。均支持 `--dry-run`，不改全局配置。
 
-自动模式传仓库根路径；若末尾为 `.claude`、`.cursor` 或 `.agents`，以其父目录为根，不嵌套宿主目录。显式指定单一 `--agent` 时仍以传入路径为精确目标，见下表（不接受 `--agent all`）。不传 `--local` 保持全局安装。
+从 0.7.20 迁移：裸 `--local` 补充 `--agent auto-detect`；指定宿主时传仓库根，不再传宿主目录。全局安装不变。自动探测不代表宿主已加载，安装后需刷新宿主。
 
 | 命令 | 局部目录与行为 |
 | --- | --- |
-| `context plugin install --local /path/to/repo/.claude --agent claude` | `commands/` 放公开入口；`skills/` 放其他技能，内部技能设置 `user-invocable: false`，不重复安装入口 Skill |
-| `context plugin install --local /path/to/repo/.cursor --agent cursor` | `commands/` 使用随包的 `c4a-*` 命令；`skills/` 放其他技能，不保证隐藏 Provider 的菜单入口 |
-| `context plugin install --local /path/to/repo/.agents --agent codex` | 全部入口保留为 skills，保留随包的 `agents/openai.yaml` 调用策略，不生成无效的 `commands/` |
+| `context plugin install --local /path/to/repo --agent claude` | `commands/` 放公开入口；`skills/` 放其他技能，内部技能设置 `user-invocable: false`，不重复安装入口 Skill |
+| `context plugin install --local /path/to/repo --agent cursor` | `commands/` 使用随包的 `c4a-*` 命令；`skills/` 放其他技能，不保证隐藏 Provider 的菜单入口 |
+| `context plugin install --local /path/to/repo --agent codex` | 全部入口保留为 skills，保留随包的 `agents/openai.yaml` 调用策略，不生成无效的 `commands/` |
 
 宿主必须支持发现目标位置。局部入口没有插件命名空间。`--dry-run` 只预览；重复安装仅刷新本命令管理且未被修改的内容，保留无关文件；同名自定义内容或本地修改会报冲突。已有通用 skills 目录切换为 command 宿主时，请选择新目录，避免重复入口。`plugin status` 仍只检查全局宿主状态。调用元数据控制宿主入口展示/自动调用，不是 CLI 权限或安全隔离。
 

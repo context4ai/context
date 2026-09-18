@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Command } from "commander";
@@ -28,9 +28,9 @@ beforeEach(async () => {
 });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
-test("automatic mode installs detected hosts and normalizes host directory paths", async () => {
+test("automatic mode installs detected hosts under the repository root", async () => {
   const repo = join(dir, "automatic");
-  const output = await installAutoLocalSkills(source, join(repo, ".agents"), false, async agent => agent !== "codex");
+  const output = await installAutoLocalSkills(source, repo, false, async agent => agent !== "codex");
   expect(output).toContain("claude, cursor");
   expect(existsSync(join(repo, ".claude/commands/context.md"))).toBe(true);
   expect(existsSync(join(repo, ".cursor/commands/c4a-context.md"))).toBe(true);
@@ -40,7 +40,7 @@ test("automatic mode installs detected hosts and normalizes host directory paths
 test("no host falls back only to .agents with a user hint; dry-run never writes", async () => {
   const repo = join(dir, "fallback");
   const output = await installAutoLocalSkills(source, repo, true, async () => false);
-  expect(output).toContain("No supported agent detected");
+  expect(output).toContain("No supported host directory found");
   expect(existsSync(repo)).toBe(false);
   await installAutoLocalSkills(source, repo, false, async () => false);
   expect(existsSync(join(repo, ".agents/skills/context/SKILL.md"))).toBe(true);
@@ -102,10 +102,10 @@ test("rejects empty target and symlink destinations", async () => {
   await expect(installLocalSkills(source, target, false)).rejects.toThrow("conflict");
 });
 
-test("local CLI requires a path and rejects ambiguous all-host destination", async () => {
+test("local CLI requires a path and an explicit agent", async () => {
   const make = () => { const cmd = new Command().exitOverride().configureOutput({ writeErr: () => {} }); registerPluginCommands(cmd); return cmd; };
   await expect(make().parseAsync(["plugin", "install", "--local"], { from: "user" })).rejects.toThrow();
-  await expect(make().parseAsync(["plugin", "install", "--local", target, "--agent", "all"], { from: "user" })).rejects.toThrow("requires one");
+  await expect(make().parseAsync(["plugin", "install", "--local", target], { from: "user" })).rejects.toThrow("explicit --agent");
 });
 
 test("Claude installs command entries and hides internal skills without duplicate entry skills", async () => {
@@ -149,4 +149,60 @@ test("host projection rejects existing duplicate skill entries instead of silent
   await installLocalSkills(source, target, false);
   await expect(installLocalSkills(source, target, false, "claude")).rejects.toThrow("duplicate");
   expect(existsSync(join(target, "commands"))).toBe(false);
+});
+
+for (const agent of ["claude", "cursor", "codex"] as const) {
+  test(`explicit ${agent} installs only its repository subdirectory without detection`, async () => {
+    const repo = join(dir, "explicit");
+    const detect = async (): Promise<boolean> => { throw new Error("Must not detect explicit target"); };
+    await installAutoLocalSkills(source, repo, true, detect, agent);
+    expect(existsSync(repo)).toBe(false);
+    await installAutoLocalSkills(source, repo, false, detect, agent);
+    const hosts = { claude: ".claude", cursor: ".cursor", codex: ".agents" };
+    for (const host of ["claude", "cursor", "codex"] as const) {
+      expect(existsSync(join(repo, hosts[host]))).toBe(host === agent);
+    }
+    expect(existsSync(join(repo, "commands"))).toBe(false);
+    expect(existsSync(join(repo, "skills"))).toBe(false);
+  });
+}
+
+test("all installs every host without detection", async () => {
+  const repo = join(dir, "all");
+  await installAutoLocalSkills(source, repo, false, async () => { throw new Error("no detection"); }, "all");
+  for (const host of [".claude", ".cursor", ".agents"]) expect(existsSync(join(repo, host, "skills"))).toBe(true);
+});
+
+test("local-only agents are rejected for global installation", async () => {
+  for (const agent of ["standalone", "auto-detect"]) {
+    const cmd = new Command().exitOverride(); registerPluginCommands(cmd);
+    await expect(cmd.parseAsync(["plugin", "install", "--agent", agent], { from: "user" })).rejects.toThrow("--agent must be");
+  }
+});
+
+for (const hostDirs of [[], [".cursor"], [".claude", ".cursor"], [".agents"], [".claude", ".cursor", ".agents"]]) {
+  test(`directory detection uses only repository entries: ${hostDirs.join(",") || "empty"}`, async () => {
+    const repo = join(dir, "directory-detection");
+    await mkdir(repo);
+    for (const host of hostDirs) await mkdir(join(repo, host));
+    await installAutoLocalSkills(source, repo, true);
+    expect((await readdir(repo)).sort()).toEqual([...hostDirs].sort());
+    await installAutoLocalSkills(source, repo, false);
+    const expected = hostDirs.length ? hostDirs : [".agents"];
+    expect((await readdir(repo)).sort()).toEqual([...expected].sort());
+    for (const host of expected) expect(existsSync(join(repo, host, "skills/context-code-indexer/SKILL.md"))).toBe(true);
+  });
+}
+
+test("directory detection rejects files and symlinks before writing", async () => {
+  const repo = join(dir, "invalid-directory");
+  await mkdir(repo);
+  await writeFile(join(repo, ".cursor"), "not a directory");
+  await expect(installAutoLocalSkills(source, repo, false)).rejects.toThrow("regular directory");
+  expect(existsSync(join(repo, ".agents"))).toBe(false);
+  await rm(join(repo, ".cursor"));
+  await mkdir(join(dir, "external"));
+  await symlink(join(process.cwd(), dir, "external"), join(repo, ".cursor"));
+  await expect(installAutoLocalSkills(source, repo, false)).rejects.toThrow("regular directory");
+  expect(existsSync(join(repo, ".agents"))).toBe(false);
 });

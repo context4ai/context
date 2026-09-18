@@ -20,18 +20,18 @@ an LLM itself.
 npm install -g @c4a/context-cli@latest
 context plugin install # global installation
 # Alternatively, install only in a repository:
-context plugin install --local /path/to/repo
+context plugin install --local /path/to/repo --agent auto-detect
 ```
 
-`--local <path>` requires an explicit path without global configuration changes. Omit `--agent` to detect Claude Code, Cursor and Codex executables on PATH (including `cursor-agent`), plus Cursor/Codex in standard macOS Applications directories. Only detected hosts are installed under the repository's `.claude`, `.cursor`, or `.agents`. If none are detected, only `.agents/skills` is installed with a user hint. Stale configuration directories are not detection evidence; discovery does not verify runtime loading. Omitting `--local` keeps global installation.
+`--local` requires explicit `--agent`: `claude`, `cursor`, `codex`, `all`, `auto-detect`, or `standalone`. The path is a repository root: explicit hosts install into `.claude`, `.cursor`, or `.agents` without detection. `all` installs all three. Only `auto-detect` checks existing `.claude`, `.cursor`, and `.agents` directories in the target repository, never PATH or installed desktop applications; it falls back to `.agents/skills` when none exist. `standalone` instead writes all skills directly to `<path>/skills`, with no commands or host subdirectory. All modes support `--dry-run` and preserve global configuration.
 
-Automatic mode accepts a repository root; paths ending in `.claude`, `.cursor`, or `.agents` use their parent as the root. Explicit `--agent` still uses the exact supplied host directory below; `--agent all` is not accepted with `--local`.
+Migration from 0.7.20: add `--agent auto-detect` to bare `--local`; for explicit hosts pass the repository root, not its host directory. Global installation is unchanged. Host detection does not verify runtime loading.
 
 | Command | Local layout |
 | --- | --- |
-| `context plugin install --local /path/to/repo/.claude --agent claude` | Public entries in `commands/`, other skills in `skills/`; internal skills receive `user-invocable: false`, without duplicate entry skills |
-| `context plugin install --local /path/to/repo/.cursor --agent cursor` | Bundled `c4a-*` commands plus other skills; hiding Providers from the command menu is not guaranteed |
-| `context plugin install --local /path/to/repo/.agents --agent codex` | All entries remain skills; bundled `agents/openai.yaml` policies are preserved; no unsupported `commands/` directory |
+| `context plugin install --local /path/to/repo --agent claude` | Public entries in `commands/`, other skills in `skills/`; internal skills receive `user-invocable: false`, without duplicate entry skills |
+| `context plugin install --local /path/to/repo --agent cursor` | Bundled `c4a-*` commands plus other skills; hiding Providers from the command menu is not guaranteed |
+| `context plugin install --local /path/to/repo --agent codex` | All entries remain skills; bundled `agents/openai.yaml` policies are preserved; no unsupported `commands/` directory |
 
 Local entries have no plugin namespace; the host must discover the destination. Use `--dry-run` to preview. Refresh only replaces unmodified managed content; unrelated files remain and conflicting/customized entries are rejected. Choose a fresh host directory when switching from a standalone installation to command entries, to avoid duplicates. `plugin status` still inspects global hosts only. Invocation metadata is not a CLI permission or security boundary.
 
