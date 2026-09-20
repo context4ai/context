@@ -1,5 +1,5 @@
 ---
-description: "Use only when the user explicitly invokes context-inspect-search to query available Context knowledge packages or approved workspace knowledge and trace answers to their identified sources. A local workspace is optional. Do not auto-start for ordinary coding, planning, debugging, or an active Context production workflow."
+description: "Query available Context knowledge packages or approved workspace knowledge and trace answers to their identified sources when the user asks a knowledge question or the host configuration routes the request here. A local workspace is optional. Do not auto-start for ordinary coding, planning, debugging, or an active Context production workflow."
 argument-hint: "[project-dir or user intent]"
 disable-model-invocation: true
 ---

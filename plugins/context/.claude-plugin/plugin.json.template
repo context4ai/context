@@ -14,6 +14,7 @@
     "c4a"
   ],
   "skills": [
-    "./skills/context-indexer-create"
+    "./skills/context-indexer-create",
+    "./skills/context-inspect-search"
   ]
 }

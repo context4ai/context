@@ -135,10 +135,10 @@ describe("0.7.0 root plugin source", () => {
     expect(frontmatter(contextEntry)["user-invocable"]).toBeUndefined();
   });
 
-  test("ships the explicit inspection entry with host invocation policies", async () => {
+  test("ships the host-routable inspection skill with explicit command adapters", async () => {
     const name = "context-inspect-search";
     const canonical = await readFile(join(SOURCE_ROOT, "skills", name, "SKILL.md"), "utf8");
-    expect(frontmatter(canonical)["disable-model-invocation"]).toBe(true);
+    expect(frontmatter(canonical)["disable-model-invocation"]).toBeUndefined();
     expect(frontmatter(canonical).metadata).toBeUndefined();
     for (const root of [join(PACKAGE_ROOT, "dist/plugins"), REPO_INSTALL_ROOT]) {
       const claude = await readFile(join(root, "claude/commands", `${name}.md`), "utf8");
@@ -146,7 +146,9 @@ describe("0.7.0 root plugin source", () => {
       expect(bodyAfterFrontmatter(claude)).toBe(bodyAfterFrontmatter(canonical));
       expect(await readFile(join(root, "codex/skills", name, "SKILL.md"), "utf8")).toBe(canonical);
       const policy = parse(await readFile(join(root, "codex/skills", name, "agents/openai.yaml"), "utf8"));
-      expect(policy.policy.allow_implicit_invocation).toBe(false);
+      expect(policy.policy.allow_implicit_invocation).toBe(true);
+      expect(await readFile(join(root, "claude/skills", name, "SKILL.md"), "utf8")).toBe(canonical);
+      expect(await readFile(join(root, "cursor/skills", name, "SKILL.md"), "utf8")).toBe(canonical);
       const cursor = await readFile(join(root, "cursor/commands", `c4a-${name}.md`), "utf8");
       expect(bodyAfterFrontmatter(cursor)).toBe(bodyAfterFrontmatter(canonical));
       expect(await readFile(join(root, "skills", name, "agents/openai.yaml"), "utf8"))
