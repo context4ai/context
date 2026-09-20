@@ -4,7 +4,24 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
-- Require an explicit agent for local plugin installation. Host targets use repository subdirectories; `all` installs every host, `auto-detect` detects repository host directories (not machine executables or applications) with a standalone fallback, and `standalone` writes directly to the supplied directory. Global installation is unchanged.
+## 0.7.23 - 2026-09-20
+
+- Add stable Agent policy switches for production entry, source access, Review,
+  package choices, Git delivery, publication and recovery. Preserve Route
+  authority while allowing Bot overrides above managed and ordinary defaults.
+- Reduce repeated confirmation for bounded work-start reports, previously
+  approved deletion or restoration scopes and explicit Review recovery, while
+  keeping top-level navigation and large-image decisions visible.
+- Keep Lark capture on the available CLI by default and support an isolated
+  fallback executable through `CONTEXT_LARK_CLI_BIN`, without replacing the
+  host's global `lark-cli`.
+- Clarify generated workspace version and delivery guidance so version recording
+  does not imply a commit or publication, and already published content still
+  requires a version increment.
+- Require an explicit agent for local plugin installation. Host targets use
+  repository subdirectories; `all` installs every host, `auto-detect` detects
+  repository host directories with a standalone fallback, and `standalone`
+  writes directly to the supplied directory. Global installation is unchanged.
 
 ## 0.7.20 - 2026-09-18
 

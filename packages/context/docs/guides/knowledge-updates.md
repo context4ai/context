@@ -217,7 +217,7 @@ In the work-start report or current plan, briefly state the affected articles'
 intended placements and reused category intent. For proposed top-level additions,
 renames, removals or changes of purpose, show the before/after tree, why reuse is
 insufficient, affected existing pages and reading order. Present that change for
-human review before applying it. This uses the existing report feedback where
+human review under `context.gate.top_level_directory` before applying it. This uses the existing report feedback where
 available; do not add a new CLI state, schema field or routine per-article gate.
 Explicit user approval of that concrete structure is sufficient; do not ask again.
 General permission to write knowledge or organize batches is not approval to
@@ -586,6 +586,10 @@ tasks and explicit retirement. Finish each coherent batch's content and navigati
 before delivery; inspect both new content and the old articles' disposition.
 
 Preview approved-page retirement with `context task retire --input <file> --format json`:
+
+This standalone retirement does not enter the article HTML Review. Apply
+`context.gate.deletion_scope` to its target list; an already approved deletion
+needs no second confirmation after the preview.
 
 ```yaml
 reason: These reader tasks are now covered by the approved guide.

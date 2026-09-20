@@ -6,6 +6,12 @@ mediaType: text/markdown
 
 # Source boundary
 
+Agent policy: `context.gate.source_boundary` for source selection,
+`context.gate.source_read` for reading registered external documents, and
+`context.gate.repository_clone` for a missing repository. These labels do not
+replace the current Route's gate ID or authorization command.
+Source removal uses `context.gate.deletion_scope`.
+
 A source boundary is a user decision about which repositories, modules, or
 documents may become approved knowledge. It affects extraction scope,
 provenance, output paths, and freshness checks.
@@ -66,7 +72,9 @@ mutation instead of running registry writes in parallel.
 To retire a registered source, first run `context source remove <source-id>
 --format json`. This is a read-only preview that lists every project, candidate,
 or approved-knowledge reference. Only after those references are intentionally
-resolved may the route use `--yes`; the CLI never silently deletes referenced
+resolved may the route use `--yes`. A user-approved deletion of this exact source
+needs no second confirmation; clarify only a newly affected source outside that
+scope. Source removal does not enter the article HTML Review. The CLI never silently deletes referenced
 knowledge or another source's materialized files. Execute the exact
 digest-bound command returned by the preview. For a shared document batch, the
 manifest entry is the ownership boundary: removal deletes only that entry and
@@ -75,7 +83,9 @@ so removal is registry-only; the shared date directory is never inferred as
 module-owned.
 
 Repository readiness checks are mechanical and may run after the boundary is
-registered. Clone, fetch, checkout, install, build, test, and other external
-repository operations need separate authority. File and remote-document
-registration records metadata only; reading their bodies requires source-read
-permission for the exact pending modules.
+registered. In ordinary mode ask before cloning a missing repository; in fully
+managed mode use the selected source scope without a repeat question. Other
+repository operations stay within existing authorization and must not modify
+source code or perform destructive recovery without a separate grant. File and
+remote-document registration records metadata only; reading their bodies uses
+source-read permission for the exact pending modules.

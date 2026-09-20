@@ -6,7 +6,7 @@ codes:
   - { code: route.production.requirements-migration, kind: route-reason, summary: Preserve long-term requirements while removing legacy Provider configuration. }
   - { code: route.production.planning-prepare, kind: route-reason, summary: Prepare lightweight navigation for confirmed requirements. }
   - { code: route.production.planning-required, kind: route-reason, summary: Investigate source skeletons and submit article goals and batches. }
-  - { code: route.production.report-required, kind: route-reason, summary: Present the planned work-start report and wait for user feedback. }
+  - { code: route.production.report-required, kind: route-reason, summary: Present the planned work-start report and apply context.gate.work_start_scope. }
   - { code: route.production.prepare-required, kind: route-reason, summary: Prepare the next eligible production directories. }
   - { code: route.production.writing-required, kind: route-reason, summary: Complete the issued production tasks using stage-local files. }
   - { code: route.production.scope-incomplete, kind: route-reason, summary: Resolve remaining investigation and material gaps without discarding accepted articles. }

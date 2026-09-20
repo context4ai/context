@@ -19,8 +19,9 @@ selectively to decide article topics and writing batches, then more deeply for
 the actual claims being written. Skill guidance is optional assistance with
 discovery and writing, not a version-bound production credential.
 
-Submit the lightweight plan, present the work-start report and wait for explicit
-user feedback before writing. Use the report resources selected by the Route;
+Submit the lightweight plan, present the work-start report and apply
+`context.gate.work_start_scope` before writing. Reuse a matching explicit user
+decision or ask when required. Use the report resources selected by the Route;
 unchanged scope does not need another report merely because a batch ends.
 
 Write in the issued Agent directories and submit completed subsets using the

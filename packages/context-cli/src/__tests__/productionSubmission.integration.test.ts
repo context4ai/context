@@ -314,7 +314,7 @@ test("changed long-term scope blocks pending acceptance without discarding accep
   expect(planned.tasks[0]).toEqual(stage!.tasks[0]);
   expect(planned.tasks[2]!.status).toBe("pending");
   expect((await collectProjectStatus(f.root)).workflow.current?.node).toBe("confirm-production-report");
-  await expect(completeProductionSubmission({ ...f.input, stage: refreshed.id })).rejects.toThrow("wait for user feedback");
+  await expect(completeProductionSubmission({ ...f.input, stage: refreshed.id })).rejects.toThrow("context.gate.work_start_scope");
   await writeFile(join(agent, "submissions/report.yaml"), YAML.stringify({ stage: refreshed.id, decision: "approved" }));
   await expect(approveProductionReport({ projectRoot: f.root, stage: refreshed.id, revision: productionReportRevision(stage!),
     path: "submissions/report.yaml" })).rejects.toThrow("plan changed");

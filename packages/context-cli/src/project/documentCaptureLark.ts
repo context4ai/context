@@ -154,6 +154,7 @@ function larkErrorRecovery(error: unknown, sourceName: string): {
   };
 } {
   const message = error instanceof Error ? error.message : String(error);
+  const localCliRecovery = `Install @larksuite/cli in a private directory with \`npm install --prefix "$HOME/.cache/context/lark-cli" @larksuite/cli@latest\`, then rerun \`CONTEXT_LARK_CLI_BIN="$HOME/.cache/context/lark-cli/node_modules/.bin/lark-cli" context run capture:lark:${sourceName}\`. Keep this variable on subsequent Context commands that access Lark; do not replace the global lark-cli.`;
   const environmentIssue = detectExternalEnvironmentIssue(message);
   if (environmentIssue !== undefined) {
     return {
@@ -168,13 +169,13 @@ function larkErrorRecovery(error: unknown, sourceName: string): {
   if (error instanceof LarkCliNotInstalledError || /not installed|ENOENT/iu.test(message)) {
     return {
       reasonCode: "external.dependency-missing",
-      next: "Install lark-cli from https://github.com/larksuite/cli, then rerun capture",
+      next: localCliRecovery,
     };
   }
   if (/does not support --doc-format|api-version|deprecated|unsupported tool version|tool version unsupported/iu.test(message)) {
     return {
       reasonCode: "external.tool-version-unsupported",
-      next: "Run lark-cli update, confirm docs +fetch --help lists --doc-format, then rerun capture",
+      next: localCliRecovery,
     };
   }
   if (/empty|unsupported payload shape|not JSON|parse/iu.test(message)) {

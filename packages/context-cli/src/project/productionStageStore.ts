@@ -112,7 +112,7 @@ export function productionPlanMarkdown(stage: ProductionStage): string {
     ...(!stage.report_approved && stage.planning_complete ? [
       `If the user requests changes, edit ${productionAgentDirectory(stage.id)}/submissions/plan.yaml using ${join(directory, "planning.schema.json")}.`,
       `Resubmit: context action complete-current --revision ${stage.id} --input ${productionAgentDirectory(stage.id)}/submissions/plan.yaml --format json`,
-      "Then present the updated report and wait for approval; an old report confirmation does not approve changed article goals.", "",
+      "Then present the updated report and apply context.gate.work_start_scope; an old decision does not approve changed article goals.", "",
     ] : []),
     ...stage.gaps.map(gap => `- ${gap.scope}: ${gap.reason}`), ""].join("\n");
 }

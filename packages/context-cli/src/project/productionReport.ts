@@ -17,8 +17,8 @@ export function productionReportRevision(stage: ProductionStage): string {
     pending_scopes: stage.pending_scopes, gaps: stage.gaps });
 }
 
-/** The decision is supplied after real user feedback. The revision binds that
- * feedback to the shown plan, not to skill versions or a report-file hash. */
+/** The decision follows the presented report and an applicable explicit user
+ * scope choice. The revision binds it to the shown plan, not to a file hash. */
 export async function approveProductionReport(input: {
   projectRoot: string; stage: string; revision: string; path: string; multiAgent?: boolean;
   manifest?: FixedProductionFile;
