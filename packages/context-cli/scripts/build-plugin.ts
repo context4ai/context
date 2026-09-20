@@ -189,7 +189,8 @@ async function readCommands(): Promise<CommandSource[]> {
     const { frontmatter, body } = parseFrontmatter(await readFile(file, "utf8"), file);
     return { slug, title: titleFromSlug(slug),
       description: frontmatterValue(frontmatter, "description", file), body,
-      explicitOnly: /^disable-model-invocation:\s*true\s*$/mu.test(frontmatter) };
+      explicitOnly: slug === "context-inspect-search"
+        || /^disable-model-invocation:\s*true\s*$/mu.test(frontmatter) };
   }));
 }
 
@@ -263,7 +264,7 @@ async function buildClaude(
     outputPath: join(out, ".claude-plugin/plugin.json"),
   });
   const commands = await readCommands();
-  await copyAuthoringSkill(out);
+  await copyHostRoutedSkills(out);
   await writeClaudeCommands(out, commands);
   await writeGeneratedGuards(out, "CLAUDE.md", "Claude plugin build");
 }
@@ -298,6 +299,12 @@ async function copyAllCanonicalSkills(outputRoot: string): Promise<void> {
 async function copyAuthoringSkill(outputRoot: string): Promise<void> {
   await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", "context-indexer-create"),
     join(outputRoot, "skills", "context-indexer-create"));
+}
+
+async function copyHostRoutedSkills(outputRoot: string): Promise<void> {
+  await copyAuthoringSkill(outputRoot);
+  await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", "context-inspect-search"),
+    join(outputRoot, "skills", "context-inspect-search"));
 }
 
 async function copyContextEntrySkill(outputRoot: string): Promise<void> {
@@ -358,7 +365,7 @@ async function buildCursor(
   out = join(PLUGINS_ROOT, "cursor"),
 ): Promise<void> {
   await resetDir(out);
-  await copyAuthoringSkill(out);
+  await copyHostRoutedSkills(out);
   const manifest = await renderManifest({
     label: "cursor",
     version,

@@ -4,6 +4,12 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.26 - 2026-09-21
+
+- Expose `context-inspect-search` to configured host routing while keeping its
+  user-facing command explicit, so knowledge Bots can invoke it without
+  searching installed plugin files.
+
 ## 0.7.25 - 2026-09-21
 
 - Distribute package inventory and website mapping metadata under
