@@ -8,8 +8,9 @@ mediaType: text/markdown
 
 Use the reader purpose and source boundaries already confirmed by the user.
 Ask for missing decisions before writing; registering a source does not authorize
-unrelated modules. This is not the work-start report: the report follows the
-lightweight investigation and must still wait for user feedback.
+unrelated modules. This is not the work-start report: that report follows the
+lightweight investigation and uses `context.gate.work_start_scope` for its
+confirmation decision.
 
 Write `src/indexers.yaml` with this minimal shape, replacing the example values
 with the user's actual purpose and registered source reference:
@@ -57,7 +58,8 @@ plan fields (`capabilities`, `articles`, optional `indexer_usage`) in a file und
 contains `path`, `question`, `sources` and `batch`, with optional `brief` and
 `after`. Add `--input <that-file>` to the returned `action prepare-current`
 command to prepare those tasks without a separate investigation-plan submission.
-This does not approve the report or permit writing before user feedback.
+This does not approve the report or permit writing before its applicable scope
+decision.
 When targets are unclear, use normal preparation and investigate the skeletons.
 
 ## Configured coverage and the current request

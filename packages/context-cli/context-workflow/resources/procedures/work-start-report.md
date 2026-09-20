@@ -6,6 +6,10 @@ mediaType: text/markdown
 
 # Present the production plan before bulk writing
 
+Agent policy: `context.gate.work_start_scope`; top-level navigation changes
+add the independent `context.gate.top_level_directory` decision. More than 30
+distinct images without a prior choice uses `context.gate.image_handling`.
+
 Prepare `.tmp/work-start-report.md` after lightweight investigation has formed an
 actionable article plan and before bulk writing. Use the companion template as
 guidance, not a mandatory form. This scratch report is for the user; its existence
@@ -80,6 +84,9 @@ position; reuse its layout and delivery choices instead of proposing them again.
 
 ## Confirm image handling for large tasks
 
+`context.gate.image_handling` asks once in both ordinary and managed mode; a
+previous explicit choice for this task avoids another question.
+
 Before bulk image interpretation or article writing, count distinct image resources
 across the current authorized task (all its sources, not each document or batch).
 Use source descriptors and capture reports; do not download images just to count
@@ -125,13 +132,18 @@ Obtain explicit feedback before applying that structural change, reusing a
 concrete structure already approved by the user. If it emerges later, update this
 same plan and review only the changed decision; do not restart approved batches.
 
-## Mandatory feedback
+## Scope decision
 
 Write the scratch report using the host file tool, show its clickable path,
-summarize scope, first delivery and decisions, then wait. Managed mode, permission
-to plan autonomously and multi-Agent capability do not waive this gate. Silence,
-elapsed time, questions and objections are not approval. Make requested
-adjustments before continuing with the Graph-selected confirmation action.
+summarize scope, first delivery and decisions. Ask for feedback only when the
+scope is complex and changes more than five articles, or when a separate decision
+such as a top-level directory change remains unresolved. A specific earlier user
+request can already approve a matching bounded report, including 1–3 documents
+or a single MR-triggered note; do not ask again solely because the report was
+presented. Apply the same rule in ordinary and managed mode. Silence, elapsed
+time, questions and objections are never approval. Make requested adjustments
+before the Graph-selected confirmation action. If the current Route still
+requires a fresh human decision, stop rather than fabricating it.
 
 The current action records confirmation of planned scope, not report file
 integrity. If saving the report fails, explain the issue and present the proposal
@@ -141,7 +153,8 @@ Reuse approval for an unchanged applicable plan across batches, retries and
 compatible skill changes. Update and explain material changes; wait again for
 scope expansion or unresolved material decisions, not merely another ready batch.
 There is no extra task-count confirmation: crossing 50 planning tasks adds no
-pause. Actual scale belongs in the report whose pre-writing feedback is mandatory.
+separate pause. Actual scale belongs in the report and its applicable scope
+decision.
 
 ## Progress and storage
 

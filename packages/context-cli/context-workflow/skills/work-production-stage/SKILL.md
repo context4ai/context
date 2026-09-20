@@ -23,9 +23,11 @@ Submit the plan before presenting the work-start report. Planning does not
 authorize writing or approve the report.
 
 At the work-start-report Gate, read the planned topics and selected report
-resources, present the proposal, and wait for explicit user feedback. Managed
-execution does not replace this confirmation. Submit approval only after that
-feedback; requested changes belong in the plan before writing.
+resources and present the proposal. Apply `context.gate.work_start_scope`:
+reuse a matching explicit user scope decision, or ask when the plan is complex
+and changes more than five articles. Managed execution does not replace a
+required decision. Submit approval only after the applicable decision;
+requested changes belong in the plan before writing.
 
 For writing, read the stage entry and issued batch directories. Choose how to
 read and write within those tasks. Use child Agents only when the current host

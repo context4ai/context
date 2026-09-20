@@ -67,7 +67,7 @@ type DocsFetchApiVersion = "v1" | "v2";
 
 const defaultRunner: LarkRunner = (args, options) =>
   new Promise((resolve, reject) => {
-    const child = spawn(LARK_BIN, args, {
+    const child = spawn(process.env.CONTEXT_LARK_CLI_BIN?.trim() || LARK_BIN, args, {
       ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -191,7 +191,7 @@ function resolveDocsFetchPlan(
   return capabilitiesPromise.then((capabilities) => {
     if (!capabilities.supportsDocFormat) {
       throw new LarkCliError(
-        `${LARK_BIN} docs +fetch does not support --doc-format xml; upgrade @larksuite/cli before capturing Lark sources`,
+        `${LARK_BIN} docs +fetch does not support --doc-format xml; a compatible @larksuite/cli is required to capture Lark sources`,
         0,
         "",
       );
@@ -205,7 +205,7 @@ function docsFetchFailureMessage(stderr: string, apiVersion: DocsFetchApiVersion
   const base = `${LARK_BIN} docs +fetch failed: ${trimmed}`;
   const mentionsV2 = /api-version|--api-version|v2|deprecated|lark-cli update/iu.test(stderr);
   if (apiVersion === "v1" && mentionsV2) {
-    return `${base}\nDetected docs API v2 guidance from lark-cli. Upgrade @larksuite/cli and run \`lark-cli update\`; newer docs +fetch supports \`--api-version v2\`.`;
+    return `${base}\nDetected docs API v2 guidance from lark-cli; a compatible CLI with \`--api-version v2\` is required.`;
   }
   return base;
 }
@@ -339,7 +339,7 @@ function extractDocsFetchContent(payload: DocsFetchPayload, requestedFormat: "xm
   if (markdown !== undefined) {
     if (requestedFormat === "xml") {
       throw new LarkCliError(
-        `${LARK_BIN} docs +fetch returned Markdown despite --doc-format xml; capture stopped because the response cannot provide auditable rich-block fidelity. Upgrade lark-cli and retry.`,
+        `${LARK_BIN} docs +fetch returned Markdown despite --doc-format xml; capture stopped because the response cannot provide auditable rich-block fidelity. Use a compatible CLI and retry.`,
         0,
         "",
       );

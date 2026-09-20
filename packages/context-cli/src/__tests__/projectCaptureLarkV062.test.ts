@@ -464,7 +464,7 @@ describe("0.6.2 Lark capture phase", () => {
         expect(error).toBeInstanceOf(ContextError);
         expect((error as ContextError).detail).toMatchObject({
           reason_code: "external.tool-version-unsupported",
-          next: "Run lark-cli update, confirm docs +fetch --help lists --doc-format, then rerun capture",
+          next: expect.stringContaining("CONTEXT_LARK_CLI_BIN"),
         });
       }
     } finally {

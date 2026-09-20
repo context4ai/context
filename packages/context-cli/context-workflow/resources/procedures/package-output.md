@@ -6,6 +6,10 @@ mediaType: text/markdown
 
 # Package output
 
+Agent policies: `context.gate.package_output` and
+`context.gate.package_template`. Publication uses the separate
+`context.gate.publication` decision.
+
 Before editing, read `context.sdk.package-outputs`, especially its Agent configuration
 and delivery recipe. It contains the concrete SDK declarations and preview steps.
 

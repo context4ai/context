@@ -1,5 +1,9 @@
 # Prepare a workspace for the next task
 
+Agent policy: `context.gate.workspace_reset_restore`. A clear request to
+prepare this workspace authorizes the described task-state cleanup; clarify
+only an unresolved target or loss.
+
 Use only for an explicit workspace preparation request. The goal is usable
 registered sources and no unfinished task, while retaining approved knowledge
 and configuration. Lead with Host tools and actual observations; do not start

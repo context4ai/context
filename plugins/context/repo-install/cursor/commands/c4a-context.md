@@ -94,13 +94,16 @@ settings. Reuse explicit answers and defaults; ask only for unresolved items.
 
 Use focused dialogue, not additional source reading, until every required start
 condition is resolved. Then write and present the complete work-start report
-supplied by the source-boundary Route and wait for the user's feedback. Do not
+supplied by the source-boundary Route. Apply the confirmation policy below: a
+specific earlier user request can approve an unchanged, bounded scope; otherwise
+wait for feedback when confirmation is required. Do not
 present an unresolved draft as the report that authorizes production. The report
 or checklist is task guidance, not a source unless the user explicitly asks to
 ingest it. Before the complete report has been presented, do not write a
 source-registration payload, start capture or extraction, configure Indexers,
 or begin knowledge writing. A
-managed-mode choice does not waive this first reading opportunity. After feedback,
+managed-mode choice does not waive this first reading opportunity. After the
+applicable scope decision,
 use the exact current Route and include its work-start report reference in the
 source batch payload. Existing workspace updates follow their current update Route
 and do not recreate this first-task intake unless they start a new production task.
@@ -140,7 +143,9 @@ Follow the returned `next_action.command`:
 
 - `enter-workspace` and `evaluate-workflow` are read-only.
 - `initialize-workspace` may run immediately if the user requested initialization;
-  otherwise confirm the target. Preserve any `init-target-nonempty` confirmation.
+  otherwise confirm the target. For `context.gate.workspace_initialize_nonempty`,
+  reuse the user's explicit target choice; ask if the nonempty target was not
+  clearly selected.
 - After initialization, execute its exact setup command, enter the project root,
   read the generated `AGENTS.md`, then run the entry again.
 
@@ -156,6 +161,50 @@ conversation. Combine this choice with any necessary initialization question.
 Reuse an explicit review/managed choice across capture and continuation. Neither
 mode settles unclear purpose, missing permissions or non-delegatable decisions.
 Status, discussion and save-only requests need no production-mode question.
+
+## Confirmation policy
+
+The `context.gate.*` IDs below are stable Agent policy switches, not CLI flags or
+workflow authority IDs. Keep the existing Route gate ID, command and payload
+unchanged. An instance-specific Bot may override a switch; precedence is Bot >
+fully managed > ordinary. Reuse a decision already made for the same scope.
+
+| Policy ID | Ordinary default | Fully managed default | Existing Route gate, if any |
+| --- | --- | --- | --- |
+| `context.gate.production_entry` | Ask only if intent is unclear. | Same. | Context entry |
+| `context.gate.workspace_initialize_nonempty` | Proceed if the user already selected this target; otherwise ask before initializing a nonempty directory. | Same. | Context entry `init-target-nonempty` |
+| `context.gate.work_start_scope` | Present the report; ask only if the scope is complex **and** affects more than five new or revised articles. A matching request for 1–3 documents or one MR-triggered note needs no repeat question. | Same. | `production-work-start-report`, `indexer-semantic-structure-review` |
+| `context.gate.source_boundary` | Use the user's selected source scope; ask only for missing boundaries. | Same. | `source-boundary` |
+| `context.gate.source_read` | A user-supplied source authorizes reading it for the requested task; do not ask again. | Same. | `source-read-permission` |
+| `context.gate.repository_clone` | Ask before cloning a missing repository. Other authorized recovery needs no repeat question. | Restore within the selected scope without asking. | Repository restore authority |
+| `context.gate.indexer_extra_action` | Ask only if the operation blocks the requested result and no authorized alternative works. | Resolve eligible operations without asking. | Indexer authorization Routes |
+| `context.gate.image_handling` | Ask once when the task has more than 30 distinct images and no prior handling choice. | Same. | Work-start report |
+| `context.gate.top_level_directory` | Confirm the concrete structure. | Same. | Knowledge map guidance |
+| `context.gate.knowledge_review` | Ask for a decision on the current HTML report. | Delegate when the Route permits. | `knowledge-review` |
+| `context.gate.deletion_scope` | A user-approved deletion of exact sources or approved pages needs no second question after the CLI preview; ask only before deleting additional objects outside that scope. | Same. | Source remove / article retirement preview |
+| `context.gate.force_review_approval` | If the user explicitly says `强制批准` after the report is inaccessible, execute the current force-approval Route without another question. | Same. | `knowledge-review` recovery |
+| `context.gate.package_output` | Ask. | Choose within the requested delivery scope. | `package-output` |
+| `context.gate.package_template` | Ask. | Choose within the requested delivery scope. | `package-template-review` |
+| `context.gate.git_delivery` | Ask before commit, push or MR. | Same. | Host Git delivery |
+| `context.gate.publication` | Ask before publishing. | Same. | Distribution tool |
+| `context.gate.remote_target_create` | Ask before creating a remote target. | Same. | Distribution tool |
+| `context.gate.workspace_reset_restore` | An explicit clear or historical restore request needs no second confirmation when target and losses are clear; clarify either if ambiguous. | Same. | Workspace prepare/restore |
+| `context.gate.exceptional_recovery` | Ask only for a P0 blocker that prevents action and affects the requested result. | Same. | Current recovery Route |
+
+`context.gate.work_start_scope` and `context.gate.knowledge_review` are separate
+decisions; the latter uses the HTML report. Follow the current Route's payload and
+revision. If a Route requires a human decision despite this policy, stop at that
+Gate and report the mismatch instead of fabricating approval. For extra Indexer
+operations that are not blocking, skip the optional operation rather than
+granting its authority implicitly. Fully managed mode does not authorize
+modifying source code or bypassing a non-delegatable Gate.
+
+If an instance sets `context.gate.knowledge_review: ask` while using fully
+managed mode, do not start a `--managed --until blocked-or-complete` loop that
+could cross Review. At Review, evaluate without managed review authority and
+follow the ordinary HTML report and user-decision Route. Force approval remains
+available only after the user's exact Route-required reply; the override itself
+never authorizes it.
 
 Enable debug only when requested: use `entry --debug` for initialization or
 `context debug enable` in an existing workspace. It records diagnostics under
@@ -236,8 +285,9 @@ clear runtime state to force a transition. Explicit historical restoration may
 restore exact Git-saved workspace files after the preparation guide has ended
 old task state; it is not an alternative content-writing path. Do not infer sources, extraction
 scope, review decisions or package choices from surrounding files. Operations on
-source repositories—clone, checkout, reset, fetch, install, build or test—require
-explicit authorization for that scope.
+source repositories stay within the selected source scope. Ask before cloning in
+ordinary mode. Do not modify source code or run destructive recovery outside the
+user's authorization.
 
 ## Follow the current Route
 
@@ -249,7 +299,8 @@ explicit grant.
 
 After continuation is authorized or the new target is registered, both modes
 may use `context run --until blocked-or-complete` for consecutive mechanical
-steps. With explicit managed authorization:
+steps. With explicit managed authorization and no instance-specific Review
+override:
 
 ```bash
 context run --managed --until blocked-or-complete --format json
@@ -298,6 +349,12 @@ Poll the same running invocation; never start a second workspace writer.
 Mechanical blockers follow the returned repair/recovery action; advisory
 warnings do not independently require rewriting content. Migration also uses
 its returned command, not manual path renames.
+
+For Lark capture, use the available `lark-cli` without a session-wide version
+precheck. Only when the Context command reports a missing or incompatible CLI,
+follow its private-install recovery. Keep `CONTEXT_LARK_CLI_BIN` pointing to that
+private executable on subsequent Context commands that access Lark; do not
+upgrade or replace the host's global `lark-cli`.
 
 **Continue.** Read `next_route.file` for the full Route after a compact receipt;
 `result_file` is for full diagnostics. Otherwise use the returned workspace

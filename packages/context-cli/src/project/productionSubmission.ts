@@ -67,7 +67,7 @@ export async function completeProductionSubmission(input: {
     const snapshot = await readProductionStageSnapshot(input.projectRoot);
     let stage = snapshot?.stage;
     if (!stage || stage.id !== input.stage) throw submissionStateError("stale-production-stage", "Task stage no longer exists. Start a new production run; do not reuse a stale submission.");
-    if (!stage.report_approved) throw submissionStateError("production-report-approval-required", "Present the planned report and wait for user feedback before submitting bulk writing.");
+    if (!stage.report_approved) throw submissionStateError("production-report-approval-required", "Present the planned report and apply context.gate.work_start_scope before submitting bulk writing.");
     if (stage.delivery) throw submissionStateError("production-delivery-paused", "Writing is paused for delivery. Finish Review and build, or run context run --resume-writing --format json; existing task inputs remain valid.");
     if ((await readMaintenance(input.projectRoot)).active) throw submissionStateError("production-maintenance-active", "Finish or cancel the active maintenance task before submitting production articles; existing task inputs remain valid.");
     await assertProductionPlanRequirementsCurrent(input.projectRoot, stage);

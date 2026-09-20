@@ -1,5 +1,8 @@
 # Restore a historical workspace version
 
+Agent policy: `context.gate.workspace_reset_restore`. An explicit restore
+request needs no second approval when the target and affected files are clear.
+
 Use the Agent's Git and environment tools. This restores selected workspace
 files and usable sources; it does not reset the entire repository, rewind source
 repositories, or restore ignored runtime progress.
@@ -19,7 +22,8 @@ Compare target files with current tracked, untracked and staged files. Include
 current additions absent at the target in the proposed removal scope. Keep
 unrelated files, existing staged work and ignored source checkouts. Account for
 workspace moves or renames instead of treating a missing old path as an empty
-version. Reuse explicit authorization; ask when the target or loss is unresolved.
+version. Reuse explicit authorization; clarify an unresolved target or loss
+before acting rather than asking for a second approval of the same request.
 
 ## Restore files and environment
 

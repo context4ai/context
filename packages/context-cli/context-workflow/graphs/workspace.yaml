@@ -71,6 +71,7 @@ nodes:
         - resources/views/verification-current.yaml
         - resources/diagnostics/projection-stale.md
 
+  # Agent policy: context.gate.source_boundary
   - id: choose-source-boundary
     kind: gate
     reasonCode: route.source.boundary-required
@@ -109,6 +110,7 @@ nodes:
         - resources/views/source-current.yaml
         - resources/manuals/guides/lark-resources.md
 
+  # Agent policy: context.gate.source_read
   - id: authorize-document-capture
     kind: gate
     reasonCode: route.capture.permission-required
@@ -177,6 +179,7 @@ nodes:
       - path: indexer.lifecycle_current
         equals: true
 
+  # Agent policy: context.gate.knowledge_review
   - id: review-current-batch
     kind: gate
     reasonCode: route.review.decision-required
@@ -205,6 +208,7 @@ nodes:
       recommended:
         - resources/views/review-current.yaml
 
+  # Agent policy: context.gate.package_output
   - id: choose-package-output
     kind: gate
     reasonCode: route.package.output-required
@@ -247,6 +251,7 @@ nodes:
         - resources/manuals/reference/package-templates.md
         - resources/manuals/reference/template-variables.md
 
+  # Agent policy: context.gate.package_template
   - id: review-package-template
     kind: gate
     reasonCode: route.package.template-review-required

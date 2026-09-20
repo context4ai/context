@@ -79,7 +79,7 @@ export async function productionWorkflowRoute(input: {
     authorities: input.authorities }) : undefined;
   return { protocol: "context.workflow.route.v1", id: resolved.routeId, node: resolved.node,
     revision, reason_code: resolved.reasonCode, availability: resolved.availability,
-    summary: report ? `Present the report and wait. After approval, write {stage: ${stage.id}, decision: approved} to ${path}.`
+    summary: report ? `Present the report and apply context.gate.work_start_scope. After the applicable scope decision, write {stage: ${stage.id}, decision: approved} to ${path}.`
       : writing ? "Read the issued task directories. Coordinate them sequentially unless this caller supports independent Agents; only the coordinator submits shared state."
       : repair ? "Add revision tasks for rejected articles using the Review feedback; accepted production responsibilities remain unchanged."
       : investigate ? `Review pending configured scopes: ${stage.pending_scopes.filter(scope => !stage.gaps.some(gap => gap.scope === scope)).join(", ")}. Check their relevance to the current request and existing approved content before assigning investigation. Submit supported article tasks and remaining pending_scopes; do not infer missing articles from this list or repeat accepted work. If the requested articles are already accepted, context run --deliver --format json enters their Review while retaining unrelated pending scopes.`

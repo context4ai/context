@@ -42,15 +42,17 @@ nodes:
   - id: production-planning-ready
     kind: terminal
     terminalOutcome: completed
+  # Agent policy: context.gate.work_start_scope
   - id: confirm-production-report
     kind: gate
     reasonCode: route.production.report-required
     resolutionAction: actions/approve-production-report.yaml
     gate:
       id: production-work-start-report
-      prompt: Present the lightweight plan and work-start report, then wait for
-        explicit user feedback before writing. Managed authority does not waive
-        confirmation.
+      prompt: Present the lightweight plan and work-start report. Apply
+        context.gate.work_start_scope; reuse a matching explicit user scope
+        decision, otherwise ask when the scope is complex and changes more than
+        five articles. Managed authority does not waive a required decision.
       delegatable: false
     satisfiedBy:
       - path: production.report_approved
@@ -146,6 +148,7 @@ nodes:
       recommended:
         - resources/procedures/note.md
         - resources/procedures/sessions.md
+  # Agent policy: context.gate.work_start_scope; context.gate.top_level_directory when applicable
   - id: review-current-indexer-structure
     kind: gate
     reasonCode: route.indexer.semantic-structure-review
@@ -153,10 +156,11 @@ nodes:
     gate:
       id: indexer-semantic-structure-review
       prompt: Present the work-start report from the lightweight plan, explain reader
-        topics, scope, first delivery and gaps, then wait for explicit user
-        feedback before bulk writing. Managed execution does not waive this
-        gate. Reuse approval of unchanged scope across batches; task counts add
-        no separate confirmation.
+        topics, scope, first delivery and gaps. Apply context.gate.work_start_scope;
+        reuse matching prior approval, otherwise ask when the scope is complex
+        and changes more than five articles. Managed execution does not waive a
+        required decision. Top-level changes need their own approval; task counts
+        add no separate confirmation.
       authority: context.knowledge-review
       delegatable: false
     satisfiedBy:
