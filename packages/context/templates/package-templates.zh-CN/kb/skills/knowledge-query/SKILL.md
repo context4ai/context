@@ -60,7 +60,7 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键词>' --limit 8
 ```
 
-脚本位于知识包目录内时会自动定位 `{{packageName}}`。如果包管理工具将本 Skill 复制到了其他位置，增加 `--root <包含 context-build-inventory.json 的包目录>`；也可以使用 `--base <多包集合根目录>`，按构建清单中的包名定位。它按 Markdown 标题和固定行块机械切分，返回路径、行号、标题和短预览，不判断内容语义。
+脚本位于知识包目录内时会自动定位 `{{packageName}}`。它兼容包根的构建清单及 `others/context/` 下的分发副本。如果包管理工具将本 Skill 复制到了其他位置，增加 `--root <知识包目录>`；也可以使用 `--base <多包集合根目录>`，按构建清单中的包名定位。它按 Markdown 标题和固定行块机械切分，返回路径、行号、标题和短预览，不判断内容语义。
 
 搜索命中只是线索。回答前打开命中的页面和章节；关系或影响范围须引用实际说明该关系的正文，不能用 BM25 分数或文本共现代替。
 
@@ -101,7 +101,7 @@ node <当前 knowledge-query Skill 目录>/scripts/search.mjs --query '<关键�
 ## 总结中的网站文档链接
 
 完成正文检索和回答后，仅在最终总结中按需附上一篇或多篇实际读取过的相关文档链接。
-从当前知识包读取 `context-site-map.json`，按命中文章的包内路径匹配
+依次从当前知识包根、`others/context/context-site-map.json` 或工作区网站输出读取站点映射，按命中文章的包内路径匹配
 `pages[].package_path`，使用 `title` 作链接文字，将 `site_path` 相对
 `site_url` 拼接。`site_url` 已包含站点子路径，不再重复拼接 `base`。
 同一文章只列一次，不凭标题推测页面地址或章节锚点。

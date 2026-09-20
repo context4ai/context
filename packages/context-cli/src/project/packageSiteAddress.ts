@@ -2,6 +2,7 @@ import { readFile, writeFile, rename } from "node:fs/promises";
 import { join } from "node:path";
 import type { PackageDefinition } from "@c4a/context";
 import { packageSiteOutputDir } from "./packageOutputPaths.js";
+import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
 export const SITE_MAP_FILE = "context-site-map.json";
@@ -49,7 +50,11 @@ export async function recordPackageSiteUrl(root: string, packageName: string, va
       throw new TypeError("Rebuild the website to restore a valid context-site-map.json");
     }
     const content = JSON.stringify({ ...map, site_url: siteUrl }, null, 2) + "\n";
-    for (const path of [siteMap, join(root, pkg.outDir, SITE_MAP_FILE)]) {
+    for (const path of [
+      siteMap,
+      join(root, pkg.outDir, SITE_MAP_FILE),
+      join(root, pkg.outDir, packageDistributionMetadataPath(SITE_MAP_FILE)),
+    ]) {
       await writeFile(`${path}.tmp`, content);
       await rename(`${path}.tmp`, path);
     }

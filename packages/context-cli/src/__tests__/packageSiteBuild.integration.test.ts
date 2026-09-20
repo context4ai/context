@@ -90,6 +90,10 @@ test("normal build publishes the website, reuses an unchanged build and removes 
     const readMap = async (dir: string) => JSON.parse(await readFile(join(root, dir, "context-site-map.json"), "utf8"));
     expect((await readMap(first.outDir)).site_url).toBe("https://example.com/docs/");
     expect(await readMap(first.outDir)).toEqual(await readMap(first.siteOutDir!));
+    expect(JSON.parse(await readFile(join(root, first.outDir, "others/context/context-build-inventory.json"), "utf8")))
+      .toEqual(JSON.parse(await readFile(join(root, first.outDir, "context-build-inventory.json"), "utf8")));
+    expect(JSON.parse(await readFile(join(root, first.outDir, "others/context/context-site-map.json"), "utf8")))
+      .toEqual(await readMap(first.outDir));
     await expect(recordPackageSiteUrl(root, "missing", "https://example.com")).rejects.toThrow("declared knowledge package");
     const originalSite = await readFile(sitePath, "utf8");
     await writeFile(sitePath, originalSite + "<!-- external edit -->");

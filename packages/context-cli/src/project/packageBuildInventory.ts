@@ -11,6 +11,7 @@ import {
 } from "./packageDistribution.js";
 import { packageKind } from "./packageTemplateUtils.js";
 import type { ProjectVerifyResult } from "./verifyTypes.js";
+import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
 
 export const PACKAGE_BUILD_INVENTORY_PATH = "context-build-inventory.json";
 
@@ -196,7 +197,19 @@ export async function writePackageBuildInventory(input: {
   inventory: Record<string, unknown>;
 }): Promise<number> {
   const outputPath = join(input.projectRoot, input.pkg.outDir, PACKAGE_BUILD_INVENTORY_PATH);
-  await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, `${JSON.stringify(input.inventory, null, 2)}\n`, "utf8");
-  return 1;
+  const distributionPath = join(
+    input.projectRoot,
+    input.pkg.outDir,
+    packageDistributionMetadataPath(PACKAGE_BUILD_INVENTORY_PATH),
+  );
+  const content = `${JSON.stringify(input.inventory, null, 2)}\n`;
+  await Promise.all([
+    mkdir(dirname(outputPath), { recursive: true }),
+    mkdir(dirname(distributionPath), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(outputPath, content, "utf8"),
+    writeFile(distributionPath, content, "utf8"),
+  ]);
+  return 2;
 }

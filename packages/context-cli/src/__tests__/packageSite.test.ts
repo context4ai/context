@@ -172,6 +172,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     const map = JSON.parse(await readFile(join(root, packageSiteOutputDir(pkg), "context-site-map.json"), "utf8"));
     expect(map.site_url).toBe("https://example.com/docs/");
     expect(JSON.parse(await readFile(join(root, pkg.outDir, "context-site-map.json"), "utf8"))).toEqual(map);
+    expect(JSON.parse(await readFile(join(root, pkg.outDir, "others/context/context-site-map.json"), "utf8"))).toEqual(map);
     expect(await readPackageSiteUrl(root, pkg)).toBe(map.site_url);
     expect(new URL(map.pages[0].site_path, map.site_url).pathname).toBe(`/docs/${map.pages[0].site_path}`);
     expect(map.pages).toHaveLength(4);

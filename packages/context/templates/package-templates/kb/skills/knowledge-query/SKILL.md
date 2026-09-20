@@ -81,9 +81,10 @@ phrases, or several large indexes, run the bundled
 node <current knowledge-query Skill directory>/scripts/search.mjs --query '<terms>' --limit 8
 ```
 
-The script locates `{{packageName}}` when it runs inside the package tree. If a
-package manager copied this Skill elsewhere, add `--root <package directory
-containing context-build-inventory.json>`, or use `--base <package collection>`
+The script locates `{{packageName}}` when it runs inside the package tree. It accepts
+the build inventory at the package root or its distributed copy under
+`others/context/`. If a package manager copied this Skill elsewhere, add
+`--root <package directory>`, or use `--base <package collection>`
 to locate this package by its inventory name. It chunks Markdown mechanically
 by headings and bounded line ranges, then returns paths, line ranges, headings,
 and previews; it does not interpret meaning.
@@ -138,7 +139,8 @@ explicitly accept the unchanged default during Context package-template review.
 
 After answering from the pages actually read, optionally append one or more
 related document links in the final summary. Read `context-site-map.json` from
-the selected package (or its sibling website output in a workspace). Match the
+the selected package root, then `others/context/context-site-map.json`, or its
+sibling website output in a workspace. Match the
 read page to `pages[].package_path` or `approved_path`; use its `title` and resolve
 `site_path` relative to `site_url`. The URL already includes the deployment base
 path: do not prepend `base` again. Only cite matched articles, deduplicate links,

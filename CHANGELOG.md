@@ -4,6 +4,14 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.25 - 2026-09-21
+
+- Distribute package inventory and website mapping metadata under
+  `others/context/` while retaining the existing package-root copies.
+- Let installed knowledge-query Skills locate fully installed packages through
+  the distributed inventory and resolve website maps from either supported
+  metadata location.
+
 ## 0.7.23 - 2026-09-20
 
 - Add stable Agent policy switches for production entry, source access, Review,

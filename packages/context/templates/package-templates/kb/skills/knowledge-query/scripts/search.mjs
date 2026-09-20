@@ -51,7 +51,14 @@ function parseArgs(argv) {
 }
 
 function isPackageRoot(directory) {
-  return existsSync(join(directory, "context-build-inventory.json"));
+  return inventoryPath(directory) !== undefined;
+}
+
+function inventoryPath(directory) {
+  return [
+    join(directory, "context-build-inventory.json"),
+    join(directory, "others", "context", "context-build-inventory.json"),
+  ].find((path) => existsSync(path));
 }
 
 function ancestorPackageRoot(start) {
@@ -66,14 +73,20 @@ function ancestorPackageRoot(start) {
 
 function findInventories(directory, depth = 0) {
   if (!existsSync(directory) || depth > 5) return [];
-  const inventory = join(directory, "context-build-inventory.json");
-  if (existsSync(inventory)) return [inventory];
+  const inventory = inventoryPath(directory);
+  if (inventory !== undefined) return [inventory];
   const matches = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     matches.push(...findInventories(join(directory, entry.name), depth + 1));
   }
   return matches;
+}
+
+function packageRootFromInventory(inventory) {
+  return inventory.endsWith(join("others", "context", "context-build-inventory.json"))
+    ? dirname(dirname(dirname(inventory)))
+    : dirname(inventory);
 }
 
 function inventoryPackageName(inventoryPath) {
@@ -99,7 +112,7 @@ function resolvePackageRoot(explicitRoot, packageCollection) {
   }
   const inventories = findInventories(resolve(packageCollection));
   const matching = inventories.filter((path) => inventoryPackageName(path) === PACKAGE_NAME);
-  if (matching.length === 1) return dirname(matching[0]);
+  if (matching.length === 1) return packageRootFromInventory(matching[0]);
   if (matching.length > 1) {
     throw new Error(`multiple installed packages named ${PACKAGE_NAME}; pass --root explicitly`);
   }
@@ -107,10 +120,10 @@ function resolvePackageRoot(explicitRoot, packageCollection) {
 }
 
 function knowledgeRoots(packageRoot) {
-  const inventoryPath = join(packageRoot, "context-build-inventory.json");
+  const packageInventoryPath = inventoryPath(packageRoot);
   let declared = [];
   try {
-    const inventory = JSON.parse(readFileSync(inventoryPath, "utf8"));
+    const inventory = JSON.parse(readFileSync(packageInventoryPath, "utf8"));
     declared = Object.values(inventory?.package?.distribution?.roots ?? {})
       .filter((value) => typeof value === "string");
   } catch {
