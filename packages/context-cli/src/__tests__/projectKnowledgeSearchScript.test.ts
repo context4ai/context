@@ -129,4 +129,34 @@ describe("knowledge-query BM25 search script", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test("discovers a fully installed package from its distributed inventory", () => {
+    const root = mkdtempSync(join(tmpdir(), "context-knowledge-search-distributed-"));
+    try {
+      mkdirSync(join(root, "guides"), { recursive: true });
+      mkdirSync(join(root, "others", "context"), { recursive: true });
+      writeFileSync(join(root, "others", "context", "context-build-inventory.json"), JSON.stringify({
+        package: {
+          name: "sample-kb",
+          distribution: { roots: { guides: "guides" } },
+        },
+      }));
+      writeFileSync(join(root, "guides", "entry.md"), "# Installed guide\n\ncomplete package metadata contract\n");
+
+      const result = spawnSync("node", [
+        ENGLISH_SCRIPT,
+        "--root",
+        root,
+        "--query",
+        "package metadata contract",
+        "--json",
+      ], { encoding: "utf8" });
+      expect(result.status).toBe(0);
+      const output = JSON.parse(result.stdout) as { root: string; results: Array<{ path: string }> };
+      expect(realpathSync(output.root)).toBe(realpathSync(root));
+      expect(output.results[0]?.path).toBe("guides/entry.md");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

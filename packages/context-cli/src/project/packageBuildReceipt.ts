@@ -10,6 +10,7 @@ import type { PackageAssetDeliverySummary } from "./packageAssetDelivery.js";
 import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes.js";
 import { toPosixPath } from "./packageTemplateUtils.js";
 import { packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
+import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
 
 export interface PackageBuildFileChange {
   path: string;
@@ -114,6 +115,7 @@ export async function packageOutputSnapshot(
     // Deployment metadata can be recorded after a build. Keep page mappings
     // covered by the receipt while excluding the optional delivery address.
     if (file.absPath === join(projectRoot, pkg.outDir, "context-site-map.json") ||
+        file.absPath === join(projectRoot, pkg.outDir, packageDistributionMetadataPath("context-site-map.json")) ||
         file.absPath === join(projectRoot, packageSiteOutputDir(pkg), "context-site-map.json")) {
       try {
         const map = JSON.parse(content.toString());

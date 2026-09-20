@@ -18,6 +18,7 @@ import { articleProvenanceMarkdown, siteArticleSources } from "./packageSiteSour
 import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } from "./packageSiteTheme.js";
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
+import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
@@ -297,8 +298,18 @@ export async function writePackageSite(input: {
     const siteMapContent = JSON.stringify({ ...(input.siteUrl ? { site_url: input.siteUrl } : {}), protocol: "context.site-output/v1",
       knowledge_map_revision: structure?.revision ?? null, base, llms: { index: "llms.txt", full: "llms-full.txt", home: "llms/index.html", articles: llms.articleCount }, pages: [...byPath.values()], entries: mapping.entries,
       sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })), warnings: mapping.warnings }, null, 2) + "\n";
-    await writeFile(join(output, "context-site-map.json"), siteMapContent);
-    await writeFile(join(projectRoot, pkg.outDir, "context-site-map.json"), siteMapContent);
+    const packageSiteMap = join(projectRoot, pkg.outDir, "context-site-map.json");
+    const distributedSiteMap = join(
+      projectRoot,
+      pkg.outDir,
+      packageDistributionMetadataPath("context-site-map.json"),
+    );
+    await mkdir(dirname(distributedSiteMap), { recursive: true });
+    await Promise.all([
+      writeFile(join(output, "context-site-map.json"), siteMapContent),
+      writeFile(packageSiteMap, siteMapContent),
+      writeFile(distributedSiteMap, siteMapContent),
+    ]);
     return mapping;
   } finally { await rm(temporary, { recursive: true, force: true }); }
 }
