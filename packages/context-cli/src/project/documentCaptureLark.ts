@@ -187,7 +187,7 @@ function larkErrorRecovery(error: unknown, sourceName: string): {
   if (/auth|login|permission|forbidden|unauthori[sz]ed|scope/iu.test(message)) {
     return {
       reasonCode: "external.authorization-required",
-      next: "Run lark-cli auth login with an account that can read the document, then rerun capture",
+      next: "Check the selected Lark identity and document access. For host-managed credentials use the host authorization flow; use lark-cli auth login only for a locally managed user login, then rerun capture",
     };
   }
   return {
@@ -378,6 +378,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
       ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
     }, input.larkRunner);
   } catch (error) {
+    if (error instanceof ContextError) throw error;
     const failure = normalizeLarkError(error, resolved.sourceName);
     if (failure.detail?.reason_code === "external.authorization-required" ||
         failure.detail?.reason_code === "external.tool-failed" && error instanceof LarkCliError && error.exitCode !== 0) {
@@ -566,7 +567,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
     diagnostics: [
       ...(recovery === undefined ? [] : [recovery.diagnostic]),
       ...(fetched.identityFallback
-        ? [`info: lark.capture.identity-fallback: user credentials unavailable; captured with ${fetched.accessIdentity} identity`]
+        ? [`info: lark.capture.identity-fallback: capture used an identity fallback; document identity: ${fetched.accessIdentity}; embedded reads may use the fallback identity`]
         : []),
       ...fetched.fidelity.issues.map((issue) =>
         `${issue.severity}: ${issue.code}: ${issue.block_type} × ${issue.count}: ${issue.reason}`

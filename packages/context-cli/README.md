@@ -283,6 +283,18 @@ MIT.
 
 ## Updating an existing workspace
 
+### Lark read identity
+
+`CONTEXT_LARK_IDENTITY=user|bot` selects the identity for Lark acquisition
+(default: `user`). Export it in each shell executing Context commands. In Bot
+mode, a credential/scope/access failure retries once as the current user; the
+rest of that capture keeps the fallback identity for pagination and resources.
+Network, rate-limit and parsing errors do not trigger a user authorization
+attempt. This does not change source-read consent or the audience of published
+knowledge. Host-managed OAuth must use the host's authorization flow.
+
+### Workspace updates
+
 Start with `context entry --format json` and read the returned update guide when
 adding material or changing published knowledge. Entry and status only observe;
 they do not resume an earlier managed task before the new request is understood.

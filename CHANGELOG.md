@@ -4,6 +4,16 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.30 - 2026-09-21
+
+- Add explicit User/Bot identity selection for Lark reads, retaining User as
+  the default and allowing bounded authorization fallback from Bot to User.
+- Let capture instructions limit task-wide document image collection with
+  ON/OFF/count policies, defaulting to ten documents and Agent self-checks.
+- Search approved knowledge before preparing original sources, reuse query
+  checks and batch evidence reads and citations. Compare versions only when
+  the question or evidence warrants it, retaining source and freshness limits.
+
 ## 0.7.29 - 2026-09-21
 
 - Explain decisive mechanisms and scoped evidence in complex query answers,

@@ -17,6 +17,7 @@ import {
 } from "./larkResourceMaterialization.js";
 import { createLarkCaptureReport } from "./larkCaptureReport.js";
 import { larkMarkdownImageResources, replaceLarkMarkdownImages } from "./larkMarkdownImages.js";
+import { createLarkReadSession, resolveLarkReadIdentity } from "./larkReadIdentity.js";
 
 /**
  * Name of the binary we spawn. Matches the `bin` field of the official npm
@@ -92,7 +93,7 @@ const defaultRunner: LarkRunner = (args, options) =>
   });
 
 export async function checkLarkCli(runner: LarkRunner = defaultRunner): Promise<string> {
-  const result = await runner(["--version"]);
+  const result = await runner(["--version", "--as", resolveLarkReadIdentity()]);
   if (result.exitCode !== 0) {
     throw new LarkCliError(`${LARK_BIN} --version failed`, result.exitCode, result.stderr);
   }
@@ -117,7 +118,9 @@ export interface FetchFeishuDocInput {
   url: string;
   docsApiVersion?: DocsFetchApiVersion | "auto";
   /**
-   * Identity used to read the document. `auto` prefers the user identity and
+   * Defaults to CONTEXT_LARK_IDENTITY (user). Bot mode permits one credential/
+   * permission fallback to user for this capture, including embedded resources.
+   * Explicit legacy `auto` prefers the user identity and
    * falls back to the bot only when user credentials themselves are absent or
    * cannot be refreshed. It never changes identity after a permission error.
    */
@@ -160,7 +163,7 @@ interface DocsFetchPlan {
   docFormat?: "xml";
 }
 
-const docsFetchCapabilitiesCache = new WeakMap<LarkRunner, Promise<DocsFetchCapabilities>>();
+const docsFetchCapabilitiesCache = new WeakMap<LarkRunner, Map<string, Promise<DocsFetchCapabilities>>>();
 
 async function detectDocsFetchCapabilities(runner: LarkRunner): Promise<DocsFetchCapabilities> {
   const result = await runner(["docs", "+fetch", "--help"]).catch((): RunLarkResult => ({
@@ -179,14 +182,21 @@ async function detectDocsFetchCapabilities(runner: LarkRunner): Promise<DocsFetc
 function resolveDocsFetchPlan(
   requested: FetchFeishuDocInput["docsApiVersion"],
   runner: LarkRunner,
+  cacheKey: LarkRunner = runner,
+  identity = "user",
 ): Promise<DocsFetchPlan> {
   if (requested === "v1" || requested === "v2") {
     return Promise.resolve({ apiVersion: requested, docFormat: "xml" });
   }
-  let capabilitiesPromise = docsFetchCapabilitiesCache.get(runner);
+  let cached = docsFetchCapabilitiesCache.get(cacheKey);
+  if (!cached) {
+    cached = new Map();
+    docsFetchCapabilitiesCache.set(cacheKey, cached);
+  }
+  let capabilitiesPromise = cached.get(identity);
   if (capabilitiesPromise === undefined) {
     capabilitiesPromise = detectDocsFetchCapabilities(runner);
-    docsFetchCapabilitiesCache.set(runner, capabilitiesPromise);
+    cached.set(identity, capabilitiesPromise);
   }
   return capabilitiesPromise.then((capabilities) => {
     if (!capabilities.supportsDocFormat) {
@@ -630,20 +640,26 @@ export async function fetchFeishuDocSnapshot(
   input: FetchFeishuDocInput,
   runner: LarkRunner = defaultRunner,
 ): Promise<FetchFeishuDocSnapshotResult> {
+  const preference = input.prefetched?.identity ?? input.identity ?? resolveLarkReadIdentity();
+  const cacheKey = runner;
+  const session = createLarkReadSession(runner, input.prefetched?.identity ?? (preference === "bot" ? "bot" : "user"),
+    !input.prefetched && preference === "bot");
+  runner = session.run;
   const docsFetchPlan: DocsFetchPlan = input.prefetched
     ? { apiVersion: "v2", docFormat: "xml" }
-    : await resolveDocsFetchPlan(input.docsApiVersion ?? "auto", runner);
+    : await resolveDocsFetchPlan(input.docsApiVersion ?? "auto", runner, cacheKey, preference);
   const identityFetch = input.prefetched
     ? { fetched: await fetchDocsResponse(input, docsFetchPlan, runner, input.prefetched.identity),
         identity: input.prefetched.identity, fallback: false }
-    : await fetchWithIdentity(input, docsFetchPlan, runner);
+    : await fetchWithIdentity({ ...input, identity: preference }, docsFetchPlan, runner);
   let fetched = identityFetch.fetched;
-  const accessIdentity = identityFetch.identity;
+  let accessIdentity = input.prefetched?.identity ?? session.identity;
   let projection: LarkDocxProjection | undefined;
   for (let attempt = 0; attempt < MAX_STRUCTURAL_FETCH_ATTEMPTS && fetched.contentFormat === "xml"; attempt++) {
     projection = projectLarkDocxXml({ xml: fetched.body, sourceUrl: input.url });
     if (input.prefetched || !hasEmptySubPageList(projection) || attempt === MAX_STRUCTURAL_FETCH_ATTEMPTS - 1) break;
     fetched = await fetchDocsResponse(input, docsFetchPlan, runner, accessIdentity);
+    accessIdentity = session.identity;
   }
 
   let body = fetched.body;
@@ -733,7 +749,7 @@ export async function fetchFeishuDocSnapshot(
       fidelity,
       resourceMaterialization,
       accessIdentity,
-      identityFallback: identityFetch.fallback,
+      identityFallback: identityFetch.fallback || session.usedFallback,
     };
   }
   return {
@@ -744,7 +760,7 @@ export async function fetchFeishuDocSnapshot(
     fidelity,
     resourceMaterialization,
     accessIdentity,
-    identityFallback: identityFetch.fallback,
+    identityFallback: identityFetch.fallback || session.usedFallback,
   };
 }
 

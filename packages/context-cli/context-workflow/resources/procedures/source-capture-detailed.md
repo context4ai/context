@@ -71,6 +71,12 @@ settled scope, not a new confirmation step.
 
 ## Workflow
 
+Before any capture or host prefetch, follow the task-wide image threshold and
+Agent self-check in [Document capture](document-capture.md#image-acquisition-before-capture).
+Do not ask the user to confirm this default or infer an all-image override from
+source-read permission. Apply the effective resource policy before a managed batch;
+registration defaults must not silently re-enable excluded images.
+
 Capture is entirely CLI-driven — your role is to register the right source,
 declare the matching capture phase, run the current `context run capture:*`
 command, and preserve its machine fields while summarizing the outcome in the

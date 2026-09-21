@@ -61,7 +61,7 @@ describe("Lark capture identity selection", () => {
       throw new Error(`unexpected command: ${args.join(" ")}`);
     };
 
-    const result = await fetchFeishuDocSnapshot({ url: "https://example.test/wiki/shared" }, runner);
+    const result = await fetchFeishuDocSnapshot({ url: "https://example.test/wiki/shared", identity: "auto" }, runner);
 
     expect(result.accessIdentity).toBe("bot");
     expect(result.identityFallback).toBe(true);
