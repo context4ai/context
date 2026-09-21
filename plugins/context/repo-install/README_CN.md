@@ -27,7 +27,7 @@ Skills 只能通过完成校验的 Context Indexer Provider 生命周期激活�
 ## 查询知识与来源归因
 
 主动调用 `/c4a:context-inspect-search`（Cursor：`/c4a-context-inspect-search`），
-或由宿主配置将知识问答路由到 `context-inspect-search` 技能。无需本地工作区即可检索本地、全局或宿主提供的知识包，优先使用包内查询技能；没有产物但有工作区时，
+或由宿主配置将知识问答路由到 `context-inspect-search` 技能。`CONTEXT_QUERY_SOURCE_MODE` 可选择默认的 `repo-first`、`package-first` 或 `dual` 检索。无需本地工作区也可检索本地、全局或宿主提供的知识包；没有产物但有工作区时，
 直接查询已批准的 `knowledge`，构建产物需事先获得写入工作区的授权。只读探索及有边界的
 非破坏性检查无需再次确认。代码归因自动取得登记版本，并核对相关文件与当前代码的差异，
 无需用户选择版本。通过构建清单关联批准原稿

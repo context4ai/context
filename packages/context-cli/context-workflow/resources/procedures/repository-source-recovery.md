@@ -17,7 +17,9 @@ remote and pinned commit, so one physical checkout can restore every module in
 that group. Do not create one clone per module. Groups already marked `ready`
 need no decision; when every group is ready, the plan has no recovery action.
 
-For each missing physical checkout, ask the user to choose one option:
+For each missing physical checkout, reuse an applicable choice and authorization
+already supplied in the current task. If the recovery choice is unresolved, ask
+the user to choose one option:
 
 1. provide an existing local Git checkout;
 2. name a bounded directory that the Agent may scan, then choose one of the
@@ -43,3 +45,8 @@ Repository sources are ready only when every selected module resolves to the
 registered remote and pinned commit, every registered subpath exists, no local
 path was overwritten, Context materialization succeeds, and the selected recovery
 plan reports them ready.
+
+Recovery failure does not stop unrelated document capture or independent article
+tasks. Preserve pending code-dependent questions and follow the returned recovery
+diagnostic. After a successful restore, follow `next_action` to refresh affected
+production material; keep accepted articles and use the newly returned handles.

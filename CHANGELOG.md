@@ -4,6 +4,16 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.29 - 2026-09-21
+
+- Assess code evidence needs after document investigation and before article
+  planning, with an explicit assessment for plans exceeding 30 article tasks.
+  Keep the assessment advisory and independent document work unblocked.
+- Reuse authorized repository recovery choices and continue from returned
+  preparation handles without restarting accepted work.
+- Diagnose missing repository directories and broken module links separately
+  from Git startup failures, with actionable recovery commands.
+
 ## 0.7.26 - 2026-09-21
 
 - Expose `context-inspect-search` to configured host routing while keeping its

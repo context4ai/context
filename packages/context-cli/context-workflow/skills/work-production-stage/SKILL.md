@@ -19,6 +19,10 @@ where needed to decide reader topics, source grouping and writing batches.
 Indexer guidance discovers a skeleton, not a mandatory deep parse or a ledger
 of every symbol. Declare relevant available skills and record planned uses;
 do not collect skill hashes, versions or article ownership credentials.
+After reading representative documents and grouping reader topics, apply
+[document and code investigation guidance](../../resources/procedures/document-code-investigation.md)
+before submitting the article plan. Revisit it when new implementation questions
+appear during writing. This assessment adds no approval gate or required field.
 Submit the plan before presenting the work-start report. Planning does not
 authorize writing or approve the report.
 

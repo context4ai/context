@@ -26,14 +26,35 @@ Do not execute returned production actions, initialize a replacement workspace,
 or install tools without existing authorization. Querying must not alter source
 registrations, snapshots, tasks, approvals or user checkouts.
 
-## Search available material concurrently
+Resolve `CONTEXT_QUERY_SOURCE_MODE` from the host or Bot instance configuration
+before choosing the first retrieval path. Supported values are:
 
-Check relevant knowledge packages, the workspace and reusable source checkouts
-in parallel. Search each as soon as it is readable; tool checks and authorized
-upgrades must not block independent reading. If a missing configured workspace
-is needed for further attribution, recover it into an isolated directory while
-package retrieval continues. Without a configured workspace, investigate the
-available packages directly; do not request or create one merely to start.
+- `repo-first` (default): inspect the configured knowledge workspace and
+  authorized repository sources first. Use an available package only when the
+  repository path is unavailable or leaves a material gap.
+- `package-first`: inspect the selected package first, then use its recorded
+  workspace or repository sources for missing, stale or disputed evidence.
+- `dual`: inspect the package and repository paths concurrently, then reconcile
+  relevant differences before answering.
+
+An unknown or empty value is `repo-first`; do not invent a fourth mode. The
+mode changes retrieval order, not authorization or evidence standards. It does
+not make a missing secondary source mandatory: continue with readable configured
+sources and identify only gaps that affect the answer.
+
+## Search available material according to the configured mode
+
+Apply `CONTEXT_QUERY_SOURCE_MODE` before starting retrieval. In `repo-first`,
+start with the configured workspace and reusable source checkouts; do not fetch
+or install a package merely to begin the query. In `package-first`, start with
+the selected readable package. In `dual`, start both paths concurrently. Search
+each selected path as soon as it is readable; tool checks and authorized
+upgrades must not block independent reading. If a configured primary path is
+missing, continue with the readable fallback instead of stopping. If a missing
+configured workspace is needed for further attribution, recover it into an
+isolated directory while other selected retrieval continues. Without a
+configured workspace, investigate available packages directly; do not request
+or create one merely to start.
 
 A knowledge package may be workspace build output (usually `dist/`), a global
 installation, or an equivalent host-provided directory. Locate it from available
