@@ -4,7 +4,7 @@ import { loadCurrentIndexerRegistry as loadIndexerRegistry } from "./currentInde
 import { excludedIndexerSourcePath, selectedIndexerExclusions } from "./indexerScopeExclusions.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, extname, join } from "node:path";
 import {
@@ -22,6 +22,9 @@ import {
   type ProjectIndexerReadTarget,
 } from "./indexerReadScopeAuthorization.js";
 import { scopedIndexerSourceBoundaryDigest } from "./indexerSourceBoundary.js";
+import { ContextError } from "../lib/errors.js";
+import { ExitCode } from "../types/exitCode.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -51,17 +54,7 @@ function isParserCandidate(path: string, candidates: ReadonlySet<string>): boole
 }
 
 async function trackedPaths(root: string, ref: string): Promise<string[]> {
-  try {
-    await execFileAsync("git", ["diff", "--quiet", ref, "--", "."], { cwd: root });
-  } catch (error) {
-    const exitCode = error !== null && typeof error === "object" && "code" in error
-      ? error.code
-      : null;
-    if (exitCode === 1) {
-      throw new TypeError(`materialized repository source differs from its pinned ref: ${root}`);
-    }
-    throw error;
-  }
+  await assertPinnedSource(root, ref);
   const { stdout } = await execFileAsync("git", ["ls-files", "-z", "--", "."], {
     cwd: root,
     encoding: "buffer",
@@ -71,6 +64,19 @@ async function trackedPaths(root: string, ref: string): Promise<string[]> {
 }
 
 export async function assertPinnedSource(root: string, ref: string): Promise<void> {
+  const sourceStat = await stat(root).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return undefined;
+    throw error;
+  });
+  if (!sourceStat?.isDirectory()) {
+    throw new ContextError(ExitCode.WorkspaceStateError,
+      `Repository source directory is unavailable: ${root}. Inspect recovery with context source recovery-plan --format json.`, {
+        category: ErrorCategory.WorkspaceStateInvalid,
+        reason_code: "repository-source-directory-unavailable", cwd: root,
+        next_action: { command: "context source recovery-plan --format json" },
+        input_schema: { type: "object", properties: {}, additionalProperties: false },
+      });
+  }
   try {
     await execFileAsync("git", ["diff", "--quiet", ref, "--", "."], { cwd: root });
   } catch (error) {
@@ -79,6 +85,15 @@ export async function assertPinnedSource(root: string, ref: string): Promise<voi
       : null;
     if (exitCode === 1) {
       throw new TypeError(`materialized repository source differs from its pinned ref: ${root}`);
+    }
+    if (exitCode === "ENOENT") {
+      throw new ContextError(ExitCode.ExternalToolError,
+        `Git could not start for repository source ${root}. Check git --version and the source directory in the same host environment.`, {
+          category: ErrorCategory.ExternalToolFailed,
+          reason_code: "repository-git-spawn-unavailable", cwd: root,
+          next_action: { command: "git --version" },
+          input_schema: { type: "object", properties: {}, additionalProperties: false },
+        });
     }
     throw error;
   }

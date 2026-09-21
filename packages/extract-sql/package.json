@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-sql",
   "description": "Dialect-bound lightweight SQL evidence adapter for Context",
-  "version": "0.7.26",
+  "version": "0.7.29",
   "type": "module",
   "license": "MIT",
   "engines": {

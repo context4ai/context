@@ -31,7 +31,7 @@ Context workflow and Indexer Provider lifecycle.
 ## Query and attribute workspace knowledge
 
 Explicitly invoke `/c4a:context-inspect-search` (Cursor: `/c4a-context-inspect-search`),
-or let a host configuration route knowledge questions to the `context-inspect-search` Skill. It can start from a readable local, global or host-provided knowledge package and its query Skill without a local workspace. Without output, it
+or let a host configuration route knowledge questions to the `context-inspect-search` Skill. `CONTEXT_QUERY_SOURCE_MODE` selects `repo-first` (the default), `package-first`, or `dual` retrieval. It can start from a readable local, global or host-provided knowledge package and its query Skill without a local workspace. Without output, it
 queries approved `knowledge` directly; a package build requires prior authorization for that workspace write.
 Read-only investigation and bounded non-destructive checks need no further approval. For code attribution, it
 retrieves the registered revision and checks relevant differences against current code without asking the user to select a version.

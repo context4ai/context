@@ -36,6 +36,10 @@ nodes:
     kind: action
     reasonCode: route.production.planning-required
     action: actions/work-production-stage.yaml
+    resources:
+      recommended:
+        - resources/procedures/document-code-investigation.md
+        - resources/procedures/repository-source-recovery.md
     satisfiedBy:
       - path: production.planning_complete
         equals: true
