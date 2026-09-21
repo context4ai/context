@@ -133,8 +133,24 @@ assess the page with its non-text evidence.
 
 ## Image choices for a production task
 
+Before capture, the Agent follows the document-capture Route procedure's task-wide
+document threshold and image self-check, without asking for user confirmation.
+Set `DOCUMENT_IMAGE_CAPTURE` in task instructions or workspace guidance to `ON`
+(include images), `OFF` (references only), or a positive integer document threshold.
+Omitting it uses `10`; exactly the threshold remains within normal acquisition.
+Current-conversation instructions override workspace guidance for that task only.
+For example, `DOCUMENT_IMAGE_CAPTURE: 20` skips image downloads when the task
+contains more than 20 distinct documents. This is an Agent instruction, not an
+environment variable, CLI flag or SDK field; no Bot configuration is required.
+Above a numeric threshold, the default is body capture with image references,
+unless the effective setting is overridden to `ON`. This workflow
+choice uses the existing resource fields; it does not change SDK defaults or add
+a CLI hard gate. Apply it before bulk capture or host prefetch, not after images
+have already been downloaded.
+
 The work-start report asks once when a task contains more than 30 distinct images
-and has no explicit image policy. The choices are intelligent conversion and
+that will be acquired and has no explicit image handling policy. Reuse the
+current-conversation image instruction when it already settles this choice. The choices are intelligent conversion and
 inclusion (recommended), include all as images with compression, or include none
 with placeholders. Count the whole task, not each capture or writing batch.
 Review reports show the resulting image handling and any fallbacks.

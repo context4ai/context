@@ -13,14 +13,16 @@ Before capture:
 
 1. every registered document module must have a matching capture declaration;
 2. the user must have allowed the external read in the current conversation;
-3. execute only the current route command.
+3. perform the Agent's task-wide image acquisition preflight below before capture;
+4. execute only the current route command.
 
 An explicit request to capture, ingest, fetch, or read named file/remote
 documents grants source-read permission for those named modules. A mention,
 possible-source discussion, or register-only request does not. An explicit
 refusal always wins.
 
-When that permission is already present in the conversation, execute the
+When that permission is already present and the Agent's image acquisition
+preflight is complete, execute the
 Gate's returned authority-carrying command. In managed mode it runs the
 deterministic capture batch until the next real blocker; in ordinary mode it
 reevaluates status with `context.source-read`. The authority remains in the
@@ -48,12 +50,26 @@ boundary is a documentation site rather than plain Markdown, use the
 Context-provided processor/configuration diagnostic; do not invent rendered
 text or scan outside the confirmed boundary.
 
-For Lark reads, Context prefers the authenticated user identity. If that
-identity is unavailable because its credential is missing, expired, or cannot
-be refreshed, Context may retry the same registered source with the bot
-identity. It does not switch identity after a permission or missing-scope
-response. Once selected, the same identity is used for the document body and
-all embedded resources. If `docs +fetch` lacks the required `--doc-format`
+For Lark reads, set `CONTEXT_LARK_IDENTITY=user|bot` in the environment of every
+Context invocation that may read Lark; the default is `user`. A host/Bot prompt
+setting alone is not an exported environment variable. User mode reads only
+as the current user. Bot mode reads as the configured application, then retries
+once as the current user on a credential, scope or access denial. Subsequent
+reads in that capture use the fallback identity, including pagination, synced
+references, media, Sheets, Base and whiteboards. Network, rate-limit and format
+errors do not switch identity. The diagnostic records any fallback.
+
+This setting does not grant source access or change the intended audience of
+the resulting knowledge. Do not use another person's credentials. For direct
+host `lark-cli` reads, explicitly pass the selected `--as bot` or `--as user`
+on every business read, including Wiki resolution/listing and asset reads.
+If Bot access fails for the reasons above, retry that read once as user; stop
+and report a pending source if user authorization is required. In a managed
+runtime, use its authorization flow rather than repeatedly running `auth login`.
+Local help and embedded skill discovery require no document authorization;
+do not request user OAuth just to read a CLI guide.
+
+If `docs +fetch` lacks the required `--doc-format`
 capability, follow the returned `lark-cli update` recovery and rerun the same
 Route command; do not replace the capture with a hand-written export.
 
@@ -63,9 +79,67 @@ are available while another capture remains pending. Keep unresolved sources in
 pending capture after the active production/review work, before delivery completes.
 This does not mark failed captures as complete or waive source-read authorization.
 
-For image-heavy tasks, reuse the image choice in the work-start report. When
-source descriptors already show more than 30 distinct images across the task,
-resolve that question before bulk media acquisition. If counts emerge only from
-capture, stop further image processing to confirm the choice during planning.
-Use explicit image/GIF reference-only policies for exclusions; never substitute
-temporary signed media URLs as permanent public image links.
+## Image acquisition before capture
+
+The workflow instruction setting `DOCUMENT_IMAGE_CAPTURE` accepts `ON`, `OFF`,
+or a positive integer document threshold; when absent it defaults to **10**.
+Read it from the current task instructions or workspace guidance; a current
+conversation instruction takes precedence. This is an Agent-interpreted setting,
+not a CLI flag, environment variable, or SDK field. Hosts need not add a setting.
+
+| Setting | Acquisition policy |
+| --- | --- |
+| `ON` | Include images without a document-count cutoff, subject to existing resource limits and explicit exclusions. |
+| `OFF` | Capture bodies and image references only, regardless of document count. |
+| positive integer `N` | Include images under the existing policy for at most `N` documents; above `N`, use references only. |
+| absent | Use `10`. |
+
+For an invalid value, report it and use `10` rather than silently enabling all
+images or blocking the task. An explicit current-conversation request to include
+all images selects `ON` for this task; an explicit request to skip images selects
+`OFF`. If neither is present, use the configured setting. Do not write a temporary
+conversation override back into permanent workspace guidance.
+
+Count distinct documents
+selected for this task, including Wiki descendants and in-scope linked documents,
+not all historical workspace sources, API pages, retries, or output articles.
+Deduplicate shortcuts and repeated links. Splitting the task into batches or
+resuming it does not reset the count. Exactly 10 documents is within the default.
+
+Before starting capture, the Agent separately checks the document count (or known
+lower bound), setting, and effective image policy. This is an Agent self-check,
+not a user confirmation gate: do not ask a question or wait for a reply. Above the
+numeric threshold, automatically capture bodies with image references only; at or
+below it, retain the existing image policy. `ON` and `OFF` apply regardless of count.
+A generic
+"capture everything", source-read permission, managed mode, or an old bundle setting
+does not. Briefly report the count and applied policy in the work-start update and
+retain the decision in task notes; do not repeat the update for every document.
+
+If the count is unknown, first perform only authorized directory/metadata discovery
+without image downloads. If body reads are needed to discover linked documents,
+use a body-and-reference-only discovery pass within existing read authorization.
+With a numeric setting, unknown totals do not authorize image acquisition; `ON`
+does not require counting to enable images, and `OFF` never enables them.
+Recalculate the task total before enabling images under a numeric setting.
+If later expansion crosses the numeric threshold, apply the
+reference-only policy before further acquisition and report the change without
+waiting for a reply; retain any explicit all-image override and existing evidence.
+
+For `OFF` or above-threshold tasks without an `ON` override, apply
+`resources: { images: "reference-only", gifs: "reference-only" }` to the selected
+Lark capture declarations before executing the Route. Preserve unrelated sources,
+resource settings and existing stricter exclusions; inspect generated/dynamic
+configuration rather than assuming registration applied the policy. Host prefetch
+and import paths must honor the same choice, not download images before import.
+Other resource types retain their existing policies. Do not edit snapshots or
+invent unsupported flags; when a capture adapter cannot exclude images, explain
+that limitation and resolve the acquisition method before downloading.
+
+Preserve source links/placeholders and report skipped images as not acquired or
+interpreted. This is a workflow instruction using existing resource policies, not
+a new CLI hard gate or automatic document counter. For tasks that still include
+images, retain the existing handling workflow for more than 30 distinct images
+and reuse an explicit choice; do not invoke it for images skipped by this
+preflight. Never substitute temporary signed media URLs as permanent
+public image links.
