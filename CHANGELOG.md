@@ -6,6 +6,8 @@ All notable changes to Context are documented here.
 
 ## 0.7.29 - 2026-09-21
 
+- Explain decisive mechanisms and scoped evidence in complex query answers,
+  with semantic sections where helpful and concise answers for simple questions.
 - Assess code evidence needs after document investigation and before article
   planning, with an explicit assessment for plans exceeding 30 article tasks.
   Keep the assessment advisory and independent document work unblocked.

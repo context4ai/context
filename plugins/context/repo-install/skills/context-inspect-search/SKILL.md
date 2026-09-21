@@ -139,7 +139,21 @@ not prove a historical snapshot.
 
 ## Answer with evidence and hand off updates
 
-Lead with the conclusion and a concise evidence chain. Distinguish implementation,
+Answer the user's question directly, keeping conditions that change the conclusion
+beside it. For complex questions, explain the mechanism that determines the result,
+not just the verdict and source links. Explain its practical meaning before using
+a short code excerpt or concrete rule when that helps the reader verify or act.
+Keep decisive evidence beside the claim it supports; separate supplementary facts
+from the proof. State where a local rule applies rather than generalizing it to
+the whole system, and do not infer presentation or behavior from data retrieval
+alone without checking the controlling logic.
+
+Adapt depth and structure to the question: keep simple answers short; use short
+headings and, where supported, separators between major semantic sections in
+longer answers. Do not impose a fixed outline, separate every paragraph, repeat
+the conclusion, or remove necessary explanation just to shorten the answer.
+Keep conditions affecting the answer prominent and supplementary reading secondary.
+Distinguish implementation,
 declared contracts, test assertions, runtime observations and inferences. Perform
 bounded non-destructive validation only when useful; inspect its effects first
 and do not run unrelated scripts, builds or tests.
