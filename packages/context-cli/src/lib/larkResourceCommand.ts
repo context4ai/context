@@ -18,6 +18,8 @@ export class LarkResourceCommandError extends Error {
     message: string,
     readonly errorType?: string,
     readonly errorSubtype?: string,
+    readonly code?: string | number,
+    readonly logId?: string,
   ) {
     super(message);
     this.name = "LarkResourceCommandError";
@@ -62,6 +64,8 @@ function commandError(
     message.length > 0 ? message : stableJson(detail),
     typeof detail.type === "string" ? detail.type : undefined,
     typeof detail.subtype === "string" ? detail.subtype : undefined,
+    typeof detail.code === "string" || typeof detail.code === "number" ? detail.code : undefined,
+    typeof detail.log_id === "string" ? detail.log_id : undefined,
   );
 }
 
@@ -74,7 +78,7 @@ export async function runLarkResourceCommand(
   if (result.exitCode !== 0) {
     const fallback = result.stderr.trim()
       || `lark-cli ${args.slice(0, 2).join(" ")} failed with exit code ${result.exitCode ?? "unknown"}`;
-    throw commandError(fallback, errorDetail(result.stderr));
+    throw commandError(fallback, errorDetail(result.stderr) ?? errorDetail(result.stdout));
   }
   const trimmed = result.stdout.trim();
   if (!trimmed.startsWith("{")) return result.stdout;
@@ -91,4 +95,13 @@ export async function runLarkResourceCommand(
     throw error;
   }
   return result.stdout;
+}
+
+/** Only explicit permission failures qualify for the official preview endpoint. */
+export function isLarkResourcePermissionDenied(error: unknown): error is LarkResourceCommandError {
+  return error instanceof LarkResourceCommandError && (
+    String(error.code) === "403" ||
+    (error.errorType === "authorization" &&
+      ["permission_denied", "access_denied", "missing_scope"].includes(error.errorSubtype ?? ""))
+  );
 }

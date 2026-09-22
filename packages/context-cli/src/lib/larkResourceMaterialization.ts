@@ -1,3 +1,4 @@
+import { downloadLarkMedia } from "./larkMediaDownload.js";
 import { LarkResourceBudgetError, omitLarkImage } from "./larkImagePolicy.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -10,7 +11,7 @@ import {
 } from "@c4a/extract";
 import type { LarkExternalResource } from "./larkDocxXml.js";
 import {
-  LarkResourceCommandError,
+  isLarkResourcePermissionDenied,
   runLarkResourceCommand,
   type LarkResourceCommandRunner,
 } from "./larkResourceCommand.js";
@@ -216,33 +217,20 @@ async function downloadedFile(input: {
   token: string;
   type: "media" | "whiteboard";
   localPath?: string;
-}): Promise<{ path: string; bytes: Uint8Array; mediaType: string }> {
+  allowPreview?: boolean;
+}): Promise<{ path: string; bytes: Uint8Array; mediaType: string; representation: "original" | "preview" }> {
   if (input.localPath !== undefined) {
     const bytes = await readFile(input.localPath);
-    return { path: input.localPath, bytes, mediaType: mediaTypeFor(input.localPath, bytes) };
+    return { path: input.localPath, bytes, mediaType: mediaTypeFor(input.localPath, bytes), representation: "original" };
   }
   const tempRoot = await mkdtemp(join(tmpdir(), "context-lark-resource-"));
   try {
-    await runLarkResourceCommand(input.runner, [
-      "docs",
-      "+media-download",
-      "--as",
-      input.identity,
-      "--token",
-      input.token,
-      "--type",
-      input.type,
-      "--output",
-      "./resource",
-      "--overwrite",
-      "--format",
-      "json",
-    ], { cwd: tempRoot });
+    const representation = await downloadLarkMedia({ ...input, cwd: tempRoot });
     const entries = (await readdir(tempRoot, { withFileTypes: true })).filter((entry) => entry.isFile());
     if (entries.length !== 1) throw new Error(`media download produced ${entries.length} files, expected exactly one`);
     const path = entries[0]?.name ?? "resource.bin";
     const bytes = await readFile(join(tempRoot, path));
-    return { path, bytes, mediaType: mediaTypeFor(path, bytes) };
+    return { path, bytes, mediaType: mediaTypeFor(path, bytes), representation };
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
@@ -578,7 +566,7 @@ function materializationReport(items: readonly LarkResourceMaterializationItem[]
     item.required &&
     !isNonBlockingDocumentResourceFailureReasonCode(item.reason_code)
   );
-  const hasOptionalFailure = items.some((item) => item.status === "failed" || item.reason_code === "image-budget-exceeded") || items.some(
+  const hasOptionalFailure = items.some((item) => item.status === "failed" || item.reason_code === "image-budget-exceeded" || item.reason_code === "document.resource.preview") || items.some(
     (item) => item.status === "reference-only" && item.kind === "poll" && item.reason?.includes("absent") === true,
   );
   return {
@@ -592,9 +580,7 @@ function materializationReport(items: readonly LarkResourceMaterializationItem[]
 }
 
 function resourceFailureReasonCode(resource: LarkExternalResource, error: unknown): string | undefined {
-  if (error instanceof LarkResourceCommandError &&
-    error.errorType === "authorization" &&
-    error.errorSubtype === "permission_denied") {
+  if (isLarkResourcePermissionDenied(error)) {
     return DOCUMENT_RESOURCE_PERMISSION_DENIED_REASON_CODE;
   }
   if (resource.kind !== "diagram" && resource.kind !== "whiteboard") return undefined;
@@ -723,6 +709,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
         identity,
         token,
         type: "media",
+        allowPreview: resource.kind === "image",
         ...(input.mediaFiles?.[token] === undefined ? {} : { localPath: input.mediaFiles[token] }),
       });
       if (omitLarkImage(resource, input.policy, items, replacements, downloaded.mediaType)) return;
@@ -733,7 +720,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
         bytes: downloaded.bytes,
         mediaType: downloaded.mediaType,
         role: "evidence",
-        source: { kind: resource.kind, locator: resource.locator },
+        source: { kind: resource.kind, locator: resource.locator, identity, representation: downloaded.representation },
       };
       assertBudget(asset, input.policy, totalBytes);
       totalBytes += asset.bytes.byteLength;
@@ -743,8 +730,11 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
       const replacement = downloaded.mediaType.startsWith("image/")
         ? `![${title}](${target}) <!-- ${resource.locator} -->`
         : `[${title}](${target}) <!-- ${resource.locator} -->`;
-      replacements.set(resource.locator, replacement);
-      items.push({ kind: resource.kind, locator: resource.locator, status: "materialized", required, asset_paths: [asset.path] });
+      replacements.set(resource.locator, downloaded.representation === "preview"
+        ? `${replacement}\n\n> Image preview captured; the original could not be downloaded.` : replacement);
+      items.push({ kind: resource.kind, locator: resource.locator, status: "materialized", required, asset_paths: [asset.path],
+        ...(downloaded.representation === "preview" ? { reason_code: "document.resource.preview", reason: "Same-identity preview captured; original download permission denied" } : {}),
+      });
     } catch (error) {
       if (error instanceof LarkResourceBudgetError && omitLarkImage(resource, input.policy, items, replacements, undefined, error.message)) return;
       const reasonCode = resourceFailureReasonCode(resource, error);

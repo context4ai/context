@@ -4,6 +4,18 @@ All notable changes to Context are documented here.
 
 ## Unreleased
 
+## 0.7.34 - 2026-09-22
+
+- Restrict Bot-to-User fallback to whole-document reads, restarting pagination
+  and keeping the selected identity fixed for every embedded resource.
+- Use the official same-identity image preview after download permission denial,
+  label previews explicitly, and retain unavailable-resource references without
+  requesting another identity's credentials.
+- Recognize structured HTTP permission failures and preserve partial capture
+  diagnostics through source manifests and workflow warnings.
+- Reuse query and delivery instructions, verify symbolic version boundaries,
+  and resolve citations against the actual inspected source revision.
+
 ## 0.7.30 - 2026-09-21
 
 - Add explicit User/Bot identity selection for Lark reads, retaining User as

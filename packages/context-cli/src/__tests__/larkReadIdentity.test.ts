@@ -39,7 +39,7 @@ describe("configured Lark read identity", () => {
       seen.push(as(args)!);
       return as(args) === "bot" ? denied : success;
     }, "bot");
-    await session.run(["docs", "+fetch", "--as", "bot"]);
+    await session.readDocument(() => session.run(["docs", "+fetch", "--as", "bot"]));
     await session.run(["docs", "+fetch", "--offset", "1", "--as", "bot"]);
     await session.run(["docs", "+media-download", "--as", "bot"]);
     expect(seen).toEqual(["bot", "user", "user", "user"]);
@@ -63,7 +63,7 @@ describe("configured Lark read identity", () => {
     expect(seen).toEqual(["bot"]);
   });
 
-  test("capture uses the configured identity for discovery, body and media fallback", async () => {
+  test("capture keeps bot identity for resources and uses an explicitly marked preview", async () => {
     process.env.CONTEXT_LARK_IDENTITY = "bot";
     const seen: string[] = [];
     const runner: LarkRunner = async (args, options) => {
@@ -73,8 +73,8 @@ describe("configured Lark read identity", () => {
       if (args[1] === "+fetch") return { ...success, stdout: JSON.stringify({ ok: true, identity: as(args), data: {
         document: { content: '<title>Handbook</title><p>Body</p><img token="image"/>' },
       } }) };
-      if (args[1] === "+media-download" && as(args) === "bot") return denied;
-      if (args[1] === "+media-download") {
+      if (args[1] === "+media-download") return denied;
+      if (args[1] === "+media-preview") {
         await writeFile(resolve(options!.cwd!, `${args[args.indexOf("--output") + 1]}.png`), "image");
         return success;
       }
@@ -83,10 +83,47 @@ describe("configured Lark read identity", () => {
     await checkLarkCli(runner);
     const result = await fetchFeishuDocSnapshot({ url: "https://example.test/wiki/handbook" }, runner);
     expect(result.accessIdentity).toBe("bot");
-    expect(result.identityFallback).toBe(true);
-    expect(result.resourceMaterialization.status).toBe("complete");
+    expect(result.identityFallback).toBe(false);
+    expect(result.resourceMaterialization.status).toBe("warning");
+    expect(result.assets.some(asset => asset.source?.representation === "preview")).toBe(true);
     expect(seen).toEqual(["--version:--as:bot", "docs:+fetch:bot", "docs:+fetch:bot",
-      "docs:+media-download:bot", "docs:+media-download:user"]);
+      "docs:+media-download:bot", "docs:+media-preview:bot"]);
+  });
+
+  test("a later denied page restarts the whole document and discards bot pages", async () => {
+    const seen: string[] = [];
+    const runner: LarkRunner = async args => {
+      const offset = args.includes("--offset") ? args[args.indexOf("--offset") + 1] : "0";
+      seen.push(`${as(args)}:${offset}`);
+      if (as(args) === "bot" && offset === "1") return denied;
+      return { ...success, stdout: JSON.stringify({ ok: true, data: {
+        document: { content: `<p>${as(args)} page ${offset}</p>` },
+        ...(offset === "0" ? { has_more: true, next_offset: 1 } : {}),
+      } }) };
+    };
+    const result = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/paged", identity: "bot", docsApiVersion: "v2" }, runner);
+    expect(seen).toEqual(["bot:0", "bot:1", "user:0", "user:1"]);
+    expect(result.markdown).not.toContain("bot page");
+    expect(result.markdown).toContain("user page 0");
+    expect(result.accessIdentity).toBe("user");
+  });
+
+  test("resource permission failures retain body and references without requesting user credentials", async () => {
+    const seen: string[] = [];
+    const runner: LarkRunner = async args => {
+      seen.push(as(args)!);
+      if (args[1] === "+fetch") return { ...success, stdout: JSON.stringify({ ok: true, data: {
+        document: { content: '<p>Readable body</p><img token="first"/><img token="second"/>' },
+      } }) };
+      return denied;
+    };
+    const result = await fetchFeishuDocSnapshot({ url: "https://example.test/docx/shared", identity: "bot", docsApiVersion: "v2" }, runner);
+    expect(seen).toEqual(["bot", "bot", "bot", "bot", "bot"]);
+    expect(result.identityFallback).toBe(false);
+    expect(result.resourceMaterialization.status).toBe("warning");
+    expect(result.resourceMaterialization.failed.image).toBe(2);
+    expect(result.markdown).toContain("Readable body");
+    expect(result.markdown).toContain("Resource unavailable");
   });
 
   test("body fallback records user identity", async () => {
