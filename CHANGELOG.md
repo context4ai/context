@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.36 - 2026-09-22
+
+- Clarify source inventory counts and failure reasons without treating retained workspace evidence as a new task's missing material.
+- Preserve current workflow resource receipts when resuming tasks and refresh Routes after CLI upgrades.
+- Recommend thirty documents per planning stage with a fifty-document maximum; retain one newly researched repository per stage.
+- Require scope confirmation for broad discovery and human intervention above five hundred documents, including delegated planning.
+
 ## 0.7.35 - 2026-09-22
 
 - Add the community `context-plan` Skill for project research, broad source updates, staged production handoffs and Git-backed plan recovery and completion.

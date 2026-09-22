@@ -1,7 +1,7 @@
 {
   "name": "@c4a/tui",
   "description": "Shared terminal UI components (Ink + React) for Context development tools",
-  "version": "0.7.35",
+  "version": "0.7.36",
   "private": true,
   "type": "module",
   "license": "MIT",

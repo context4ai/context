@@ -84,6 +84,7 @@ export type ContextWorkflowResourceAcknowledgeResult = ProjectStatus & {
     protocol: "context.workflow.resource-receipts.v1";
     acknowledged: number;
     receiptReference: string;
+    message: string;
   };
 };
 
@@ -413,6 +414,7 @@ export async function acknowledgeCurrentWorkflowResources(input: {
       protocol: "context.workflow.resource-receipts.v1",
       acknowledged: directResources.length,
       receiptReference: `@${join(found.projectRoot, continuation.path)}`,
+      message: "Read the returned workflow and follow its selected command unchanged, including revision and resource-receipt arguments. Do not pre-chain an earlier write command or replace this result with status without receipts. Acknowledgement does not necessarily change the revision; reread only changed or unavailable required content.",
     },
   };
 }

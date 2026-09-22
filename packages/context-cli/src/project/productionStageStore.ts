@@ -14,6 +14,8 @@ import { withProductionFeedback } from "./productionFeedback.js";
 import { dispatchProductionStage, validateProductionStage,
   productionCapabilitiesSchema, type ProductionCapabilities, type ProductionDispatch, type ProductionStage } from "./productionStage.js";
 
+import { productionSourceSummaryMarkdown } from "./productionSourceSummary.js";
+
 export const PRODUCTION_STAGES_ROOT = ".tmp/context-runtime/production-stages";
 const CURRENT_PATH = join(PRODUCTION_STAGES_ROOT, "current.json");
 
@@ -114,7 +116,7 @@ export function productionPlanMarkdown(stage: ProductionStage): string {
       `Resubmit: context action complete-current --revision ${stage.id} --input ${productionAgentDirectory(stage.id)}/submissions/plan.yaml --format json`,
       "Then present the updated report and apply context.gate.work_start_scope; an old decision does not approve changed article goals.", "",
     ] : []),
-    ...stage.gaps.map(gap => `- ${gap.scope}: ${gap.reason}`), ""].join("\n");
+    ...productionSourceSummaryMarkdown(stage)].join("\n");
 }
 
 /** Prepare directories before publishing issued state. A crash can leave an

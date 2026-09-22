@@ -20,6 +20,11 @@ requiring substantive investigation**. Recommend it when starting a new knowledg
 project whose scope needs research. Starting a fresh sandbox alone is not a
 reason to plan again. Ordinary software planning and coding do not activate it.
 
+For ordinary bounded knowledge production, read and follow the `context` entry
+skill first. This planning skill does not replace its CLI version check, current
+Route or resource-receipt handoff. Apply it when the planning conditions below
+are met or when the user explicitly requests project planning.
+
 ## Start or resume
 
 1. Identify the selected project's existing `PLAN-*.md`, workspace and Git root.
@@ -30,6 +35,11 @@ reason to plan again. Ordinary software planning and coding do not activate it.
    Map overlaps, gaps and relationships between documents, repositories and pages;
    distinguish reuse, revision, consolidation and new coverage in the PLAN.
    Inventory sources and inspect representative material using [resource-tools.md](references/resource-tools.md).
+   For more than 100 distinct documents, assess whether bounded research can
+   establish a useful scope and confirm it with the user. Above 500 in this task’s source scope, pause the whole task for mandatory
+   human scope confirmation, even with `plan_review: delegate`, using the
+   evidence already available; do not wait for a complete PLAN. Follow the early
+   scope rules in project-planning.md, including previously confirmed choices.
    Reuse accessible local checkouts and saved research before fetching again.
 3. Create or update `PLAN-YYYYMMDD-slug.md` at that project's Git root using
    [the report template](templates/PLAN.md). Keep downloaded research under
@@ -79,16 +89,17 @@ existing knowledge overlap, evidence gaps and inherited delivery permissions;
 repair deficiencies before recording an Agent review decision. Continue only if
 execution was authorized, the scope is clear and the review passed. Unknown
 scope or non-delegatable decisions remain unresolved, not automatically approved.
+The above-500 scope gate requires an actual human decision for this task and scale;
+delegation, managed execution and scheduled triggers cannot approve it. Save progress
+and wait for that decision; do not continue independent stages during this pause.
 Knowledge review is independent: delegating PLAN review alone leaves article
 review unchanged. Preserve the reporting/continuation choice and all other Gates.
 
 ## Continue and finish
 
-Use source sets of at most **20 documents per stage**. Exceed 20 only when the
-documents must be handled together, or when merging the final remaining **10 or
-fewer documents** avoids an extra closing stage. In either case, keep the stage
-at **30 documents or fewer** and record the concrete reason in the PLAN; being
-manageable alone does not justify an exception.
+Recommend **30 source documents per stage**. Adjust the group to its subject,
+length, complexity and dependencies, with an absolute maximum of **50**.
+Explain groups above 30 in the PLAN; split even smaller groups when needed.
 Investigate at most **one new repository per stage**; existing studied
 repositories may support a document stage. Limit a revision stage to **30 target
 articles**. These are planning boundaries, not additional CLI gates.
@@ -100,7 +111,8 @@ open MR is not publication. For an explicitly publication-free task, mark it
 delivered when its agreed deliverable is complete, and never label it published.
 Commit and synchronize the plan/results under the user's Git authorization.
 If a merge is unavailable, open a PR/MR when authorized, record the dependency
-and continue independent work without repeatedly asking about the same blocker.
+and continue independent work without repeatedly asking about the same blocker,
+unless the mandatory human scope gate is pending.
 
 On interruption, leave the PLAN with the exact current position and next action.
 Before each new stage, recheck the affected workspace knowledge, including earlier

@@ -20,6 +20,11 @@ it in. It is a working report, not a machine-validated schema.
 
 - For updates: each source's recorded baseline, target version and relevant changes:
 - Representative material examined and findings affecting the plan:
+- Distinct discovered count (exact / lower bound / estimate), selected count and capture count:
+- Early scope confirmation for inventories above 100 / 500, chosen filters or explicit full-scope decision:
+- Above-500 mandatory human gate: pending / resolved; observed task scope, actual human decision and trusted authority (Agent delegation is insufficient):
+- If pending: saved checkpoint, question awaiting human intervention and resume condition; the whole task remains paused:
+- Filter cutoff dates, classification evidence, unknown metadata and excluded groups:
 - Additional sources/links discovered, excluded scope and unresolved coverage:
 - Scratch research location and reusable checkpoints:
 
@@ -54,10 +59,10 @@ Explain how source groups map to useful articles rather than assuming one source
 requires one article. Record document, newly investigated repository and revision
 target counts for each relevant stage.
 
-Limit each stage to 20 source documents. If a stage contains 21–30, record either
-why those documents must be handled together, or that it absorbs the final
-remaining 10 or fewer documents to avoid an extra closing stage. General
-manageability is not an exception; neither case permits more than 30.
+Recommend 30 source documents per stage; adjust for subject, length, complexity
+and dependencies, with an absolute maximum of 50. Explain groups above 30 and
+use smaller stages when needed. Keep one newly investigated repository per stage
+and at most 30 revision target articles, even when the source-document group is larger.
 
 ## Approval and execution choices
 

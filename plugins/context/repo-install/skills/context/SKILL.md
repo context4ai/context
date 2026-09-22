@@ -44,6 +44,13 @@ a human-readable root `PLAN-*.md`; it does not start or replace this production
 workflow. Its directory conventions and batch sizes are Agent guidance, not new
 CLI validation or Graph Gates. Research may read source bodies before the PLAN
 is approved, without registering the entire project or writing formal knowledge.
+Follow its early scope checks: above 100 distinct source documents, assess bounded
+research feasibility and confirm the scope; above 500 in the current task’s source scope, pause the whole task and ask a human
+to confirm filters or retaining the full scope, even with `plan_review: delegate`. Sufficient evidence can trigger that
+question before the PLAN exists. Reuse an explicit prior decision covering the
+observed scale for this task; delegated review, managed execution and scheduled
+triggers cannot satisfy this mandatory human gate. Save progress and wait; do not
+continue independent work while it is pending.
 
 When continuing an approved PLAN, use `context-plan` to select or recover one
 stage after comparing the plan with the actual workspace and delivery receipts.
@@ -174,7 +181,9 @@ without the user's authorization.
 ## Enter the workspace
 
 If the host requires a minimum CLI version, resolve that requirement before
-obtaining a workflow Route. After any CLI upgrade, refresh entry/status and
+obtaining a workflow Route. Run the version check separately: do not chain
+`context --version && context status` before deciding whether an upgrade is needed.
+After an authorized upgrade, verify the executable version once, then refresh entry/status and
 discard commands and revisions obtained from the previous installation.
 
 Once the activation condition is met, run:
@@ -276,7 +285,9 @@ its authorization with the selected task scope. A later explicit instruction can
 replace it for remaining work; completed review decisions are not rewritten.
 `ask` requires the applicable human decision; `delegate` requires the Agent to
 perform the full review and resolve defects before approval. It never means
-unconditional approval, force approval or fabricated reading receipts.
+unconditional approval, force approval or fabricated reading receipts. The
+`context-plan` above-500 human scope gate takes precedence: pause the task until
+an actual human decision for its observed scope is available.
 
 The override applies only to this task and its stages, including authorized
 continuations. Carry it in stage handoffs without changing persistent Bot or
@@ -433,10 +444,19 @@ resources, follow the returned receipt instructions, keep receipts in this
 conversation, and use the latest `next_action.command` carrying that context.
 When only direct files remain, `resources.after_read.command` acknowledges them
 together. Do not assemble receipts or reuse an older after-read command.
+The acknowledgement already returns the evaluated workflow; inspect that result
+instead of immediately running a bare `status` that omits the reading context.
+Use its selected command unchanged, including `--workflow-resource-receipts` and
+`--workflow-revision`. A receipt file on disk alone does not pass it to a command.
 Consume the acknowledgement's returned Route before selecting the next command;
 do not pre-chain a write with an earlier revision after acknowledgement. A new
 revision requires the newly returned command, not repeated reading of unchanged
-resources already marked current by the CLI.
+resources already marked current by the CLI. If a command is rejected as stale,
+follow its recovery action and retain valid conversation receipts through the
+supported receipt option. Re-read only changed or unavailable required content;
+never retry the rejected write unchanged or infer that acknowledgement necessarily
+changed the revision. Report an unresolved blocker to the user, not each routine
+receipt or recovery step.
 
 **Act.** Execute the Route's commands. A command marked
 `after-human-confirmation` waits for the current Gate decision. Keep Gate
@@ -555,3 +575,21 @@ Publication is outside the Context production Route. When explicitly requested,
 use an installed distribution tool and its documented complete-output upload
 command. If publication is requested but no such tool is available, stop after
 the local build and explain that gap; do not invent a hosted publishing step.
+
+## Source counts and recovery language
+
+Distinguish workspace registered/captured sources, approved articles, this task's
+planned articles, pending investigation scopes, and actual source-read failures.
+Report counts only from their matching current result; source counts are not
+article counts, and pending scopes are not all unavailable or unindexed material.
+Use the specific failure list and reasons, not `ready=0` alone, to explain why a
+source is unavailable. If the failure details are not available, say so.
+
+A fresh clone can contain approved knowledge and captured documents while lacking
+local source-code checkouts. `task-cleared` alone does not prove sandbox reuse or
+an earlier task being erased. Describe starting new production from retained
+knowledge unless an actual active task or restoration receipt proves continuation.
+When a document's claims require code verification, restore the relevant authorized
+repository and fixed version under the existing recovery workflow. Do not skip
+required evidence merely because the user supplied a document. Report material
+availability separately from whether knowledge has already been approved.

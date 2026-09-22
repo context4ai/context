@@ -261,7 +261,13 @@ test("an initially unavailable source does not block independent writing and is 
   const plan = { stage: stage.id, capabilities: { skills: [] }, pending_scopes: [sources[1]!.source_ref],
     articles: [{ path: "decision/first.md", question: "What was first observed?", sources: [sources[0]!.source_ref], batch: "first" }] };
   await writeFile(join(agent, "submissions/plan.yaml"), YAML.stringify({ ...plan, pending_scopes: [] }));
-  await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/plan.yaml" })).rejects.toThrow("Keep unresolved material gaps");
+  await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/plan.yaml" })).rejects.toMatchObject({ detail: {
+    reason_code: "production-planning-refresh-required",
+    missing_pending_scopes: [sources[1]!.source_ref],
+    source_summary: { stage_source_count: 2, pending_scope_count: 2, unavailable_source_count: 1,
+      pending_without_read_failure_count: 1, planned_article_count: 0,
+      unavailable_sources: [{ scope: sources[1]!.source_ref, reason: expect.any(String) }] },
+  } });
   await writeFile(join(agent, "submissions/plan.yaml"), YAML.stringify({ ...plan,
     articles: [{ ...plan.articles[0]!, sources: [sources[1]!.source_ref] }] }));
   await expect(submitProductionPlan({ projectRoot, stage: stage.id, path: "submissions/plan.yaml" })).rejects.toThrow("unavailable material");

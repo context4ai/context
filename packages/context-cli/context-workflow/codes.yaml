@@ -96,4 +96,4 @@ codes:
   - { code: route.indexer.candidate-review, kind: route-reason, summary: Review the exact current candidate set only after current mechanical validation passes. }
   - { code: route.indexer.approved-knowledge-close, kind: route-reason, summary: Atomically close approved Indexer structure after required material gaps are resolved. }
   - { code: route.indexer.source-update, kind: route-reason, summary: Inspect fixed source changes against current approved pages. }
-  - { code: route.workspace.task-cleared, kind: route-reason, summary: Task state is cleared and production awaits an explicit resume request., document: resources/procedures/workspace-prepare.md }
+  - { code: route.workspace.task-cleared, kind: route-reason, summary: No active production task; existing knowledge is retained and new production awaits explicit user intent., document: resources/procedures/workspace-prepare.md }
