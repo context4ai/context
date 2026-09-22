@@ -194,7 +194,7 @@ describe("0.6.2 Lark capture fidelity", () => {
         if (args.includes("--help")) {
           return { stdout: "Flags:\n      --api-version string\n      --doc-format string\n", stderr: "", exitCode: 0 };
         }
-        if (args.includes("+media-download")) {
+        if (args.includes("+media-download") || args.includes("+media-preview")) {
           return {
             stdout: "",
             stderr: JSON.stringify({
