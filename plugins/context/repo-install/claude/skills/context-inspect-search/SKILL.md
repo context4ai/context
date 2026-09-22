@@ -12,6 +12,11 @@ language. The invocation authorizes read-only investigation of the selected
 knowledge packages, available workspace and identified sources within that scope,
 including isolated source retrieval and bounded non-destructive checks. The Skill
 can run from a global installation with host-provided packages and no workspace.
+The ordinary query path is contained in this file. Reuse instructions already
+read in this response; do not reopen them for each stage. When actual delivery
+requires separate host link or response Skills, read their still-unread main
+instructions together once, and open conditional references only for the case
+being handled. Do not prepare delivery that the host's progress mode skips.
 Resolve scope from the request, conversation and configuration before asking.
 Continue through non-blocking issues; ask only for missing access, genuinely
 unresolved scope or effects outside existing authorization.
@@ -183,6 +188,10 @@ Distinguish implementation,
 declared contracts, test assertions, runtime observations and inferences. Perform
 bounded non-destructive validation only when useful; inspect its effects first
 and do not run unrelated scripts, builds or tests.
+Do not turn a symbolic constant or version-like name into a numeric value without
+checking its actual imported definition at the inspected revision. A mock value
+is not the production definition. Keep the symbol when its numeric value is not
+needed; verify the value when the user's concrete boundary depends on it.
 
 Link material actually read: source files at the inspected commit, knowledge
 website articles and original documents. If no reliable clickable link exists,
@@ -194,6 +203,15 @@ appear in source URLs without requiring a separate version audit in the prose.
 Collect citation targets after the relevant evidence is established and resolve
 them in one batch using the host's existing link resolver when available. Reuse
 known workspace, repository and site parameters; do not rediscover them per link.
+Include knowledge pages and original-source locations in that same batch. For
+each source file, retain the actual inspected repository, full commit, path and
+line range from the investigation; a recorded source reference alone may resolve
+to an older baseline. Pass the inspected commit through the resolver's supported
+contract, or supply a verified commit-specific URL when needed. Never first
+resolve baseline links and then replace them with branch-head links merely as a
+formatting step. If the revision cannot be established, state the attribution
+limit rather than silently substituting another commit. Resolution formats
+citations; it does not prove file contents, accessibility or live deployment.
 If later evidence adds targets, resolve only those missing from the results.
 Without a host resolver, use an already available `context-site-map.json` from
 the selected package or website output. Do not search for `dist/` merely to
