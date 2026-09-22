@@ -651,7 +651,7 @@ export async function fetchFeishuDocSnapshot(
   const identityFetch = input.prefetched
     ? { fetched: await fetchDocsResponse(input, docsFetchPlan, runner, input.prefetched.identity),
         identity: input.prefetched.identity, fallback: false }
-    : await fetchWithIdentity({ ...input, identity: preference }, docsFetchPlan, runner);
+    : await session.readDocument(() => fetchWithIdentity({ ...input, identity: preference }, docsFetchPlan, runner));
   let fetched = identityFetch.fetched;
   let accessIdentity = input.prefetched?.identity ?? session.identity;
   let projection: LarkDocxProjection | undefined;

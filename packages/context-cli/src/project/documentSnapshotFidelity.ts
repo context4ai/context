@@ -73,8 +73,8 @@ export function documentSnapshotFidelityState(
       ...(report === undefined ? [] : render((issue) => issue.impact === "projection" || issue.severity === "warning")),
       ...(resources?.items ?? [])
         .filter((item) =>
-          item.status === "failed" &&
-          (!item.required || isNonBlockingDocumentResourceFailureReasonCode(item.reason_code))
+          item.reason_code === "document.resource.preview" || (item.status === "failed" &&
+          (!item.required || isNonBlockingDocumentResourceFailureReasonCode(item.reason_code)))
         )
         .map((item) => `${item.reason_code ?? "lark.capture.resource-materialization-warning"}: ${item.kind}: ${item.reason ?? item.locator}`),
     ],

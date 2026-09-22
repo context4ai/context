@@ -240,7 +240,7 @@ export function parseDocumentResourceMaterialization(
     !isNonBlockingDocumentResourceFailureReasonCode(item.reason_code)
   )
     ? "error"
-    : items.some((item) => item.status === "failed") || items.some(
+    : items.some((item) => item.status === "failed" || item.reason_code === "document.resource.preview") || items.some(
       (item) => item.status === "reference-only" && item.kind === "poll" && item.reason?.includes("absent") === true,
     )
       ? "warning"

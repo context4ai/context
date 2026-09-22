@@ -35,25 +35,41 @@ function credentialFailure(result: RunLarkResult): boolean {
   return result.exitCode !== 0 && /reason=(?:bot_unavailable|not_authorized)\b|\b(?:missing_scope|permission_denied|access_denied)\b/iu.test(result.stderr);
 }
 
-/** One capture owns one identity session; a fallback is sticky, not per image. */
+/** Identity fallback restarts a document read; resources never select a new identity. */
 export function createLarkReadSession(runner: LarkRunner, initial: LarkReadIdentity, fallback = initial === "bot") {
   let identity = initial;
   let usedFallback = false;
+  let readingDocument = false;
+  let locked = false;
+  const restart = new Error("Restart document with user identity");
   const run: LarkRunner = async (args, options) => {
     const explicit = args.indexOf("--as");
     const requested = explicit >= 0 ? args[explicit + 1] : identity;
-    const selected = usedFallback ? "user" : requested === "bot" ? "bot" : "user";
+    const selected = locked || usedFallback ? identity : requested === "bot" ? "bot" : "user";
     const withIdentity = [...args];
     if (explicit >= 0) withIdentity[explicit + 1] = selected;
     else withIdentity.push("--as", selected);
     const result = await runner(withIdentity, options);
     identity = selected;
-    // Help is local discovery, not a reason to request the user's OAuth grant.
-    if (identity !== "bot" || !fallback || usedFallback || args.includes("--help") || !credentialFailure(result)) return result;
-    usedFallback = true;
-    identity = "user";
-    withIdentity[withIdentity.indexOf("--as") + 1] = "user";
-    return runner(withIdentity, options);
+    if (readingDocument && identity === "bot" && fallback && !usedFallback &&
+        !args.includes("--help") && credentialFailure(result)) throw restart;
+    return result;
   };
-  return { run, get identity() { return identity; }, get usedFallback() { return usedFallback; } };
+  async function readDocument<T>(read: () => Promise<T>): Promise<T> {
+    readingDocument = true;
+    try {
+      try {
+        return await read();
+      } catch (error) {
+        if (error !== restart) throw error;
+        usedFallback = true;
+        identity = "user";
+        return await read();
+      }
+    } finally {
+      readingDocument = false;
+      locked = true;
+    }
+  }
+  return { run, readDocument, get identity() { return identity; }, get usedFallback() { return usedFallback; } };
 }

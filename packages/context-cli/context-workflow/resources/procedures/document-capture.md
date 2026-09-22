@@ -53,19 +53,26 @@ text or scan outside the confirmed boundary.
 For Lark reads, set `CONTEXT_LARK_IDENTITY=user|bot` in the environment of every
 Context invocation that may read Lark; the default is `user`. A host/Bot prompt
 setting alone is not an exported environment variable. User mode reads only
-as the current user. Bot mode reads as the configured application, then retries
-once as the current user on a credential, scope or access denial. Subsequent
-reads in that capture use the fallback identity, including pagination, synced
-references, media, Sheets, Base and whiteboards. Network, rate-limit and format
-errors do not switch identity. The diagnostic records any fallback.
+as the current user. Bot mode may fall back once to the current user only when
+reading the document body fails with a credential, scope or access denial.
+The fallback restarts the entire body, including pagination; never combine body
+pages from different identities. Once the body is available, its identity is
+fixed for all media, synced references, Sheets, Base and whiteboard reads.
+Resource failures do not request user authorization or restart the article.
+Network, rate-limit and format errors do not switch identity.
+
+An image download denied by permissions may use the official preview endpoint
+once with the same identity. A captured preview is explicitly marked as such.
+Unavailable resources retain their location and failure reason; continue with
+other resources and usable body text. Never infer missing image contents or
+present a partial snapshot as a complete original. Assess any evidence gaps
+before approving conclusions that depend on those resources.
 
 This setting does not grant source access or change the intended audience of
 the resulting knowledge. Do not use another person's credentials. For direct
-host `lark-cli` reads, explicitly pass the selected `--as bot` or `--as user`
-on every business read, including Wiki resolution/listing and asset reads.
-If Bot access fails for the reasons above, retry that read once as user; stop
-and report a pending source if user authorization is required. In a managed
-runtime, use its authorization flow rather than repeatedly running `auth login`.
+host reads, explicitly pass the article's selected identity on every read.
+Only an article-level fallback may request the current user's authorization;
+use the managed runtime's authorization flow once when needed.
 Local help and embedded skill discovery require no document authorization;
 do not request user OAuth just to read a CLI guide.
 
