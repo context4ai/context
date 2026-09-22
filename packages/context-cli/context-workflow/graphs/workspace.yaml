@@ -153,7 +153,7 @@ nodes:
     resolutionAction: actions/resume-workspace-task.yaml
     gate:
       id: resume-workspace-task
-      prompt: Task state was cleared; retained knowledge does not prove all registered scope was delivered. For a capture-only request, register the named documents and reevaluate the capture Route without resuming production; report their outcomes and stop. Stay ready unless the user asks to resume production. With that explicit request, run task resume and follow the fresh Route.
+      prompt: No active production task is present. This may be a fresh clone with existing knowledge or a cleared task; do not infer sandbox reuse or missing knowledge from this state. For a capture-only request, register the named documents and reevaluate the capture Route without resuming production; report their outcomes and stop. Stay ready unless the user asks to resume production. With that explicit request, run task resume and follow the fresh Route.
       delegatable: false
     satisfiedBy:
       - path: workspace.task_start_authorized

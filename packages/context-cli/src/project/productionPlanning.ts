@@ -25,8 +25,11 @@ import { readMaintenance } from "./maintenanceStorage.js";
 import { withProductionFeedback } from "./productionFeedback.js";
 import { resolveProductionExclusions } from "./productionExclusions.js";
 
-function refreshRequired(stage: string, message: string): ContextError {
+import { productionSourceSummary, productionSourceSummaryMarkdown } from "./productionSourceSummary.js";
+
+function refreshRequired(stage: string, message: string, detail: Record<string, unknown> = {}): ContextError {
   return new ContextError(ExitCode.UserError, message, {
+    ...detail,
     category: ErrorCategory.UserInputInvalid, reason_code: "production-planning-refresh-required",
     next_action: { command: `context action prepare-current --revision ${stage} --format json` },
   });
@@ -121,7 +124,7 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
     await writeProductionProjection(input.projectRoot, join(directory, "planning.md"), ["# Investigate and plan", "",
       `Requirements: ${join(directory, "shared/requirements.md")}`, `Submission schema: ${join(directory, "planning.schema.json")}`,
       `Existing reader topics: ${join(directory, "guidance/existing-articles.md")}`,
-      `Stage: ${stage.id}`, "", ...scopes.map(scope => `- ${scope.scope}: ${join(directory, productionSourceFile(scope.scope))}`), "",
+      `Stage: ${stage.id}`, "", ...productionSourceSummaryMarkdown(stage), ...scopes.map(scope => `- ${scope.scope}: ${join(directory, productionSourceFile(scope.scope))}`), "",
       "Use code skeletons and document outlines to identify the authorized capability families and document tasks, then selectively read full material to decide reader topics. Navigation is not a complete feature inventory. Keep unchecked scope pending; do not parse all code or maintain per-symbol disposition just to plan.",
       "Configured sources are the knowledge workspace coverage boundary, not a new investigation assignment on every request. First distinguish the user's current task, its actual source dependencies, and unrelated configured sources. Reuse approved content; a source-level pending entry alone does not prove missing knowledge or require new articles.",
       "Report source baseline/read failures separately from content gaps. For an unrelated configured source, explain that its availability check is unresolved outside this task; do not promise a new code investigation. If the Route still requires resolution, report that precise workflow limitation without deleting source configuration, clearing runtime state, or claiming the source was investigated.",
@@ -136,7 +139,7 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
       `Write the plan to ${productionAgentDirectory(stage.id)}/submissions/plan.yaml and use the current action command. This does not approve the work-start report.`, ""].join("\n"));
     await materializeProductionStage({ projectRoot: input.projectRoot, stage,
       capabilities: productionCapabilitiesSchema.parse({}), materials: { ...prepared.materials, sources: sourceMaterials, guidance } });
-    return { stage_state: "active" as const, next: { directory, mode: "single-agent" as const } };
+    return { stage_state: "active" as const, source_summary: productionSourceSummary(stage), next: { directory, mode: "single-agent" as const } };
   });
 }
 
@@ -158,9 +161,13 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (new Set(pendingScopes).size !== pendingScopes.length || pendingScopes.some(scope => !stage.scopes.some(source => source.scope === scope))) {
       throw new TypeError("Pending investigation must name unique authorized stage scopes");
     }
-    if (stage.gaps.some(gap => !pendingScopes.includes(gap.scope))) throw refreshRequired(stage.id, "Keep unresolved material gaps in pending_scopes; restore the source if unavailable, then prepare the current stage to refresh its material snapshot");
+    if (stage.gaps.some(gap => !pendingScopes.includes(gap.scope))) throw refreshRequired(stage.id,
+      "Keep unresolved material gaps in pending_scopes. These are current material/baseline read failures, not evidence that knowledge was never captured. Restore required dependencies before preparing their snapshots; do not label every pending source as unavailable.", {
+        source_summary: productionSourceSummary(stage),
+        missing_pending_scopes: [...new Set(stage.gaps.filter(gap => !pendingScopes.includes(gap.scope)).map(gap => gap.scope))],
+      });
     if (plan.articles.some(article => article.sources.some(scope => stage.gaps.some(gap => gap.scope === scope)))) {
-      throw refreshRequired(stage.id, "An article requires unavailable material in the captured stage. Restore the source if needed, then prepare the current stage; independent source plans may proceed");
+      throw refreshRequired(stage.id, "An article requires unavailable material in the captured stage. Restore the required source, including code dependencies of document-led work, then prepare the current stage; independent source plans may proceed.", { source_summary: productionSourceSummary(stage) });
     }
     for (const source of stage.scopes) if (!stage.gaps.some(gap => gap.scope === source.scope) &&
       await productionSourceBaseline(input.projectRoot, source.scope) !== source.baseline) {

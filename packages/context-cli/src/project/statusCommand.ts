@@ -77,6 +77,7 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
         ? "Progress only: workspace verification and delivery freshness were not checked. Delivery actions validate their inputs; context verify performs an explicit audit."
         : "Approved pages may not yet be built. Package freshness describes dist; task completion describes the current stage only.",
     },
+    counts_scope: "Workspace inventory, not this request’s additions or article workload. Captured documents, approved articles, pending investigation and source-read failures are different measures; source ready counts alone do not explain failure causes.",
     counts: {
       sources: status.sourceSummary,
       draftCandidates: status.draftCandidates,
