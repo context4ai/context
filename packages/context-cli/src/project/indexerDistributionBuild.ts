@@ -138,7 +138,7 @@ export async function materializeBundledIndexerDistribution(input: {
   const sourceEntries = (await readdir(sourceRoot, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
-  const nonProviderEntries = ["context", "context-inspect-search", "context-indexer-create"];
+  const nonProviderEntries = ["context", "context-inspect-search", "context-indexer-create", "context-plan"];
   const communityEntries = [...nonProviderEntries, ...EXPECTED_BUNDLES.map((bundle) => bundle.id)];
   const missingCommunityEntries = communityEntries.filter((entry) => !sourceEntries.includes(entry));
   if (missingCommunityEntries.length > 0) {

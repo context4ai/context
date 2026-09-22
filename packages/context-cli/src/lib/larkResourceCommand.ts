@@ -20,10 +20,33 @@ export class LarkResourceCommandError extends Error {
     readonly errorSubtype?: string,
     readonly code?: string | number,
     readonly logId?: string,
+    readonly missingScope = false,
   ) {
     super(message);
     this.name = "LarkResourceCommandError";
   }
+}
+
+/** Lark may put an application scope error inside the CLI's HTTP 400 message. */
+function hasMissingScope(value: unknown, depth = 0): boolean {
+  if (depth > 6 || value === null) return false;
+  if (typeof value === "string") {
+    const start = value.indexOf("{");
+    if (start < 0) return false;
+    try {
+      return hasMissingScope(JSON.parse(value.slice(start)) as unknown, depth + 1);
+    } catch {
+      return false;
+    }
+  }
+  if (typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (String(record.code) === "99991672") return true;
+  if (Array.isArray(record.permission_violations) && record.permission_violations.some((item: unknown) =>
+    item !== null && typeof item === "object" && !Array.isArray(item) &&
+    (item as Record<string, unknown>).type === "action_scope_required"
+  )) return true;
+  return [record.error, record.cause, record.message].some((item) => hasMissingScope(item, depth + 1));
 }
 
 function stableJson(value: unknown): string {
@@ -54,8 +77,10 @@ function errorDetail(value: string): Record<string, unknown> | undefined {
 function commandError(
   fallback: string,
   detail: Record<string, unknown> | undefined,
+  sources: readonly string[] = [],
 ): LarkResourceCommandError {
-  if (detail === undefined) return new LarkResourceCommandError(fallback);
+  const missingScope = hasMissingScope(detail) || [fallback, ...sources].some((source) => hasMissingScope(source));
+  if (detail === undefined) return new LarkResourceCommandError(fallback, undefined, undefined, undefined, undefined, missingScope);
   const message = [detail.message, detail.hint, detail.code]
     .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
     .map(String)
@@ -66,6 +91,7 @@ function commandError(
     typeof detail.subtype === "string" ? detail.subtype : undefined,
     typeof detail.code === "string" || typeof detail.code === "number" ? detail.code : undefined,
     typeof detail.log_id === "string" ? detail.log_id : undefined,
+    missingScope,
   );
 }
 
@@ -78,7 +104,7 @@ export async function runLarkResourceCommand(
   if (result.exitCode !== 0) {
     const fallback = result.stderr.trim()
       || `lark-cli ${args.slice(0, 2).join(" ")} failed with exit code ${result.exitCode ?? "unknown"}`;
-    throw commandError(fallback, errorDetail(result.stderr) ?? errorDetail(result.stdout));
+    throw commandError(fallback, errorDetail(result.stderr) ?? errorDetail(result.stdout), [result.stderr, result.stdout]);
   }
   const trimmed = result.stdout.trim();
   if (!trimmed.startsWith("{")) return result.stdout;
@@ -87,7 +113,7 @@ export async function runLarkResourceCommand(
     if (envelope !== null && typeof envelope === "object" && !Array.isArray(envelope)) {
       const record = envelope as Record<string, unknown>;
       if (record.ok === false) {
-        throw commandError("lark-cli returned ok=false", errorDetail(trimmed));
+        throw commandError("lark-cli returned ok=false", errorDetail(trimmed), [trimmed]);
       }
     }
   } catch (error) {
@@ -97,11 +123,17 @@ export async function runLarkResourceCommand(
   return result.stdout;
 }
 
-/** Only explicit permission failures qualify for the official preview endpoint. */
-export function isLarkResourcePermissionDenied(error: unknown): error is LarkResourceCommandError {
-  return error instanceof LarkResourceCommandError && (
-    String(error.code) === "403" ||
-    (error.errorType === "authorization" &&
-      ["permission_denied", "access_denied", "missing_scope"].includes(error.errorSubtype ?? ""))
-  );
+/** Only explicit permission failures qualify for non-blocking resource capture. */
+export function isLarkResourcePermissionDenied(error: unknown): error is Error {
+  if (!(error instanceof Error)) return false;
+  const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr : "";
+  // Synced block readers use the document command error, which retains CLI stderr.
+  const detail = error instanceof LarkResourceCommandError
+    ? { type: error.errorType, subtype: error.errorSubtype, code: error.code }
+    : errorDetail(stderr);
+  return (error instanceof LarkResourceCommandError && error.missingScope) ||
+    hasMissingScope(detail) || hasMissingScope(stderr) ||
+    String(detail?.code) === "403" ||
+    (detail?.type === "authorization" &&
+      ["permission_denied", "access_denied", "missing_scope"].includes(String(detail.subtype ?? "")));
 }

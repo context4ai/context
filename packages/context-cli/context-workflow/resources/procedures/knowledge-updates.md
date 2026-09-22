@@ -500,6 +500,12 @@ the user without blocking an independently supported local correction.
 
 ## Import a document response already read by the host
 
+For complete snapshots produced by `context source fetch lark`, use the optional
+`snapshot_dir` form described in [Lark resource reuse](../manuals/guides/lark-resources.md#reuse-a-complete-planning-snapshot).
+It reuses saved bodies and all captured resources without remote reads, retaining
+their original capture time and source revision. The response-file form below
+remains supported when the host supplies its own full document responses.
+
 For a registered Lark source, retain the actual full JSON response from
 `lark-cli docs +fetch` and each returned continuation page. Do not reconstruct a
 response from a summary. Use the same source import command:

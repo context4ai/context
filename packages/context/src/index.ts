@@ -316,6 +316,7 @@ export {
   DEFAULT_LARK_SOURCES_REGISTRY_PATH,
   DEFAULT_REPO_SOURCES_REGISTRY_PATH,
   loadSourcesRegistry,
+  parseLarkSourcesRegistry,
   resolveSourceReference,
   source,
 } from "./sources.js";

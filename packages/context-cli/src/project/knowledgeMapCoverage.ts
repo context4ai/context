@@ -48,7 +48,11 @@ export function assertKnowledgeMapCoverage(structure: KnowledgeMap | undefined, 
   if (!coverage.missing.length && !invalid.length && !(options.require_update && !options.has_update)) return coverage;
   throw new ContextError(ExitCode.UserError, "Knowledge map is incomplete. Bind every article with knowledge_map.upsert[].target.artifact_ref; section_key is optional. Keep category nodes and add article entries beneath them. No approval or package output was committed.", {
     reason_code: "knowledge-map-incomplete", coverage, invalid_targets: invalid,
-    next_action: { command: "context task adjust --input - --format json", message: "Apply the missing bindings, then retry the original action with the current knowledge-map revision." },
+    available_targets: [...known.values()].slice(-20), available_targets_total: known.size,
+    available_targets_truncated: known.size > 20,
+    next_action: { command: "context task adjust --input - --format json", message: invalid.length
+      ? "Correct or remove invalid targets using available_targets; unknown articles are not a request to approve content. Refresh context status if an expected draft is absent."
+      : "Apply the missing bindings, then retry the original action with the current knowledge-map revision." },
     input_schema: { knowledge_map: { expected_revision: options.current_revision === undefined ? structure?.revision ?? null : options.current_revision,
       upsert: [{ key: "<unique-entry-key>", parent: "<existing-category-key-or-null>", title: "<reader-label>", target: { artifact_ref: "<artifact_ref from missing>" } }], remove: [] } },
     ...(options.revision ? { structure_review_revision: options.revision } : {}),

@@ -60,6 +60,8 @@ const DEFAULT_INTERNAL_FIELDS = [
   "project_root",
   "input_project_root",
   "input_file",
+  "input_path",
+  "state_path",
   "absolute_path",
   "route_metadata_path",
   "recovery_path",
@@ -100,6 +102,7 @@ const DEFAULT_INTERNAL_FIELDS = [
 
 function policyFor(field: string): PathFieldInventoryEntry["policy"] {
   if (["project_root", "input_project_root", "input_file"].includes(field)) return "external-input";
+  if (field === "input_path" || field === "state_path") return "human-only";
   if (field === "previousPath") return "human-only";
   if (field === "feedback_path") return "internal-only";
   if (field === "previous_path" || field === "requested_approved_path" || field === "revision_path") {
@@ -146,6 +149,9 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
 }
 
 function semanticReplacementFor(field: string): string {
+  if (field === "input_path" || field === "state_path") {
+    return "Saved registration checkpoint locations for inspection; use job_id, status_command and resume_command for recovery, never edit saved input or progress to skip validation.";
+  }
   if (field === "site_dir") return "Explicit website build output for an authorized deployment handoff; use package_name for identity and never infer source or runtime paths.";
   if (field === "package_path" || field === "site_path") {
     return "Relative delivery coordinates in the website mapping manifest; use artifact_ref for article identity and resolve these paths only within the package output.";

@@ -1,4 +1,4 @@
-import { readAcceptedProductionCandidates } from "./productionReviewCandidates.js";
+import { loadReviewCandidateAuthority } from "./reviewCandidateAuthority.js";
 import { approvedKnowledgeMapTargets, assertKnowledgeMapCoverage, type KnowledgeMapArticleTarget } from "./knowledgeMapCoverage.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -61,11 +61,11 @@ export async function applyKnowledgeMapUpdate(projectRoot: string, update: Knowl
     const previewText = await optionalText(projectRoot, ".tmp/context-runtime/indexer/structure-review/preview.json");
     const preview = previewText === undefined ? undefined : JSON.parse(previewText) as { topics?: { article_targets?: KnowledgeMapArticleTarget[] }[] };
     const planned = preview?.topics?.flatMap(topic => topic.article_targets ?? []) ?? [];
-    const production = await readAcceptedProductionCandidates(projectRoot);
-    const accepted = production?.candidates.filter(candidate => candidate.status === "draft").map(candidate => ({
+    const candidates = [...(await loadReviewCandidateAuthority(projectRoot, "navigation")).values()];
+    const accepted = candidates.filter(candidate => candidate.status === "draft").map(candidate => ({
       artifact_ref: candidate.article_id, title: candidate.review.title,
       section_keys: candidate.indexer_candidate.sections.map(section => section.section_key),
-    })) ?? [];
+    }));
     assertKnowledgeMapCoverage(next, approved, { known: [...approved, ...planned, ...accepted], current_revision: current?.revision ?? null });
     const content = stringify(next);
     const previous = await optionalText(projectRoot, KNOWLEDGE_MAP_PATH);

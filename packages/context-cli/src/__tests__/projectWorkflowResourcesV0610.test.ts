@@ -33,7 +33,7 @@ import {
 import { runCliInDir } from "./projectBuildVerifyV060Helpers.js";
 
 describe("Context workflow resources", () => {
-  test("summary status links the intact Route without expanding its transport", async () => {
+  test("summary status and run return a bounded intact Route with a compatible file reference", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-summary-route-"));
     try {
       const initialized = await initContextProject({ cwd: root, projectDir: "kb", dev: true });
@@ -43,9 +43,11 @@ describe("Context workflow resources", () => {
       expect(full.workflow.current.resources.required.some((resource: { command?: string }) => resource.command !== undefined)).toBe(true);
       expect(summary.workflow.current).toBeUndefined();
       expect(summary.workflow.revision).toBe(full.workflow.revision);
+      expect(summary.next_route.inline).toEqual(full.workflow.current);
       expect(JSON.parse(await readFile(summary.next_route.file, "utf8"))).toEqual(full.workflow.current);
       const stopped = JSON.parse(await runCliInDir(initialized.projectRoot, ["run", "--until", "blocked-or-complete", "--format", "json"]));
       expect(stopped.workflow.current).toBeUndefined();
+      expect(stopped.next_route.inline).toEqual(JSON.parse(await readFile(stopped.next_route.file, "utf8")));
       expect(JSON.parse(await readFile(stopped.next_route.file, "utf8"))).toHaveProperty("resources");
     } finally {
       await rm(root, { recursive: true, force: true });

@@ -8,6 +8,56 @@ actual full response files and downloaded media for the same normalization and
 resource checks; it does not fetch that supplied body again. See
 [importing an existing response](knowledge-updates.md#import-a-document-response-already-read-by-the-host).
 
+## Reuse a complete planning snapshot
+
+Before creating a workspace or registering sources, an authorized research task
+can save a portable snapshot:
+
+```bash
+context source fetch lark https://example.larkoffice.com/docx/example-token \
+  --output .tmp/research/handbook --as bot --format json
+```
+
+The output directory must not exist. Fetch keeps one fixed identity for the body
+and resources; Bot is the default and never switches to User automatically.
+Explicit User reads use the host's existing authorization behavior. Supported
+resources retain the same permission handling and rate-limit recovery as capture.
+Read the returned fidelity and resource diagnostics before using the material.
+A failed operation can leave an incomplete directory; only an intact completion
+receipt can be imported.
+
+After registering the matching source in the selected workspace, save this input
+using its actual registered name and local snapshot path:
+
+```json
+{
+  "type": "lark",
+  "name": "20260101/handbook",
+  "snapshot_dir": ".tmp/research/handbook"
+}
+```
+
+```bash
+context source import --input .tmp/import-handbook.json --format json
+```
+
+Keep or move the complete directory: `snapshot.json`, document, original response
+pages and resource files. Paths in the input resolve from the selected workspace.
+Import checks the source match, file integrity and capture report, then follows
+the existing capture write and workflow protections. It reuses structured
+resources as well as images without remote reads. It retains the original
+capture time, source revision and coverage gaps; importing does not establish
+upstream freshness. The receipt verifies local integrity, not source authenticity.
+The saved resource policy must match the configured capture phase. If it differs,
+use that phase's normal capture operation or explicitly reconcile its configuration;
+import does not silently reinterpret saved resources under a new policy.
+Do not synthesize platform responses or repair a damaged receipt by editing it;
+use an intact snapshot or fetch again into a new directory.
+
+The existing `response_files` import contract remains supported. It avoids
+fetching the supplied body again, but may fetch other resources; `snapshot_dir`
+is the complete-snapshot alternative.
+
 ## Resource policy
 
 | Resource | Default capture behavior |
@@ -16,7 +66,7 @@ resource checks; it does not fetch that supplied body again. See
 | Attachment | Download the original file and link it from the Markdown projection. |
 | Sheet | Read the complete selected sheet, render a Markdown table, and retain a CSV snapshot. |
 | Base | Read the selected table/view with pagination, render a Markdown table, and retain a canonical JSON snapshot. |
-| Whiteboard and diagram | Retain a readable preview plus the raw structured export. |
+| Whiteboard and diagram | Retain a readable preview plus the raw structured export; if only raw export is denied, retain and explicitly label the available preview. |
 | Synced block | Resolve the exact source block, project its body, and retain a Markdown evidence snapshot. |
 | Poll | Preserve exported options and metadata as non-interactive Markdown; warn when the export omits them. |
 | Bookmark, citation, sub-document, chat, and generic embed | Preserve a stable navigation reference and provenance. |
@@ -39,12 +89,33 @@ resources remain explicit in the capture report. Unknown non-empty XML blocks
 stay auditable in the raw XML and receive a warning; the CLI does not infer
 their meaning.
 
+When raw whiteboard export is denied after its preview succeeds, the preview is
+usable visual material, not complete structured evidence. The report retains a
+preview warning; unavailable raw nodes must not be reconstructed or described as
+successfully acquired. A permission failure before any usable representation is
+obtained leaves only the reference and an unavailable-resource notice.
+
 Document and resource reads share one access identity. The configured default is
 user. Bot mode permits one whole-document user fallback for a body authorization
 failure, restarting all pages. After the body is read, resources remain under
 that identity. A resource failure never requests another identity's credentials.
 Legacy explicit auto mode may select Bot when user credentials are unavailable;
 all resources still use the identity that supplied the complete body.
+
+## Download concurrency and throttling
+
+Independent resources use up to four concurrent requests within one capture.
+Nested synced-block projections follow leaf resources. The CLI keeps one access
+identity, deduplicates resources, and enforces the existing byte limits.
+
+Explicit structured HTTP 429 or rate-limit responses reduce concurrency and
+pause queued requests together. Each request receives at most three retries
+with exponential backoff; exposed Retry-After values are respected. Eight
+successful requests allow concurrency to increase by one, up to four. Exhausted
+retries or a server wait longer than 30 seconds stop further resource requests
+for this capture. Already acquired resources and failure diagnostics are retained.
+This recovery does not ask for user confirmation or another identity's credentials;
+persistent failures remain visible and are not reported as successful acquisition.
 
 ## Storage lifecycle
 

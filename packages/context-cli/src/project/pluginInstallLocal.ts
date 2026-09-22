@@ -66,7 +66,7 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
     for (const entry of await readdir(join(root, agent, "commands"), { withFileTypes: true })) {
       if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
       let content = await readFile(join(root, agent, "commands", entry.name), "utf8");
-      if (agent === "claude") {
+      if (agent === "claude" && entry.name !== "context-plan.md") {
         const frontmatter = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/.exec(content);
         if (!frontmatter) conflict(join(root, agent, "commands", entry.name));
         content = `${frontmatter[1]}disable-model-invocation: true\n${frontmatter[2]!.replace(/^disable-model-invocation:.*\r?\n?/mu, "")}${frontmatter[3]}${content.slice(frontmatter[0].length)}`;
@@ -92,11 +92,13 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
     if (!entry.isDirectory() || !await stat(join(sourceRoot, entry.name, "SKILL.md"))) continue;
     const source = join(sourceRoot, entry.name);
     const target = join(skillsRoot, entry.name);
-    if (commandEntries.has(entry.name)) {
+    if (commandEntries.has(entry.name) && entry.name !== "context-plan") {
       // Never leave a duplicate Skill entry alongside its slash command.
       if (await stat(target)) conflict(`${target} (use a fresh host directory to avoid duplicate command/skill entries)`);
       continue;
     }
+    // Planning commands delegate to their Skill so bundled references remain
+    // usable. Host projection hides its duplicate user command, not model use.
     const existing = await stat(target);
     if (existing) {
       if (!existing.isDirectory() || existing.isSymbolicLink()) conflict(target);
@@ -119,11 +121,11 @@ export async function installLocalSkills(root: string, path: string, dryRun: boo
       let moved = false;
       try {
         await cp(plan.source, candidate, { recursive: true });
-        if (agent === "claude") {
+        if (agent === "claude" || (agent === "cursor" && plan.name === "context-plan")) {
           const skillFile = join(candidate, "SKILL.md");
           const content = await readFile(skillFile, "utf8");
           const parts = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))/.exec(content);
-          if (parts && /^\s*context-public-entry:\s*["']?false["']?\s*$/mu.test(parts[2]!)) {
+          if (parts && (plan.name === "context-plan" || /^\s*context-public-entry:\s*["']?false["']?\s*$/mu.test(parts[2]!))) {
             const frontmatter = parts[2]!.replace(/^user-invocable:.*\r?\n?/mu, "");
             await writeFile(skillFile, `${parts[1]}user-invocable: false\n${frontmatter}${parts[3]}${content.slice(parts[0].length)}`);
           }

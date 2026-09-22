@@ -42,6 +42,35 @@ async function createMonorepo(root: string): Promise<{ root: string; head: strin
 }
 
 describe("0.6.0 source registration concurrency and batch input", () => {
+  test("checkpoint status and resume retain the original batch and do not configure the workspace implicitly", async () => {
+    const root = await mkdtemp(join(tmpdir(), "context-source-batch-resume-cli-"));
+    try {
+      const initialized = await initContextProject({ cwd: root, projectDir: "context", dev: true });
+      const inputPath = join(initialized.projectRoot, "batch.json");
+      await writeFile(inputPath, JSON.stringify({ sources: [{ type: "lark", module: "manual", wikiToken: "private-token" }] }));
+      const sourceConfig = await readFile(join(initialized.projectRoot, "src/index.ts"), "utf8");
+      const first = await invokeCliInDir(initialized.projectRoot, [
+        "source", "add", "batch", "20260712", "--input", inputPath, "--checkpoint", "--format", "json",
+      ]);
+      expect(first.status).toBe(0);
+      const result = JSON.parse(first.stdout);
+      expect(result.checkpoint.registration_only).toBe(true);
+      expect(first.stdout).not.toContain("private-token");
+      const jobId = result.checkpoint.job_id as string;
+      await rm(inputPath);
+      const status = await invokeCliInDir(initialized.projectRoot, ["source", "batch-status", jobId, "--format", "json"]);
+      expect(status.status).toBe(0);
+      expect(JSON.parse(status.stdout)).toMatchObject({ phase: "completed", committed_count: 1, progress_is_advisory: true });
+      const resumed = await invokeCliInDir(initialized.projectRoot, ["source", "add", "batch", "--resume", jobId, "--format", "json"]);
+      expect(resumed.status).toBe(0);
+      expect(JSON.parse(resumed.stdout)).toMatchObject({ kind: "source.registration.batch", namespace: "20260712", total: 1 });
+      expect(await readFile(join(initialized.projectRoot, "src/index.ts"), "utf8")).toBe(sourceConfig);
+      const conflict = await invokeCliInDir(initialized.projectRoot, ["source", "add", "batch", "20260713", "--resume", jobId, "--format", "json"]);
+      expect(conflict.status).not.toBe(0);
+      expect((await loadSourcesRegistry({ rootDir: initialized.projectRoot })).larks).toHaveLength(1);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   test("registers the authorized source boundary before the planning report without report credentials", async () => {
     const root = await mkdtemp(join(tmpdir(), "context-source-batch-work-start-"));
     try {

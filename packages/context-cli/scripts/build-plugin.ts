@@ -184,11 +184,18 @@ function stripHtmlComments(markdown: string): string {
 }
 
 async function readCommands(): Promise<CommandSource[]> {
-  return Promise.all(["context", "context-inspect-search"].map(async (slug) => {
+  return Promise.all(["context", "context-inspect-search", "context-plan"].map(async (slug) => {
     const file = join(PLUGIN_SOURCE_ROOT, "skills", slug, "SKILL.md");
     const { frontmatter, body } = parseFrontmatter(await readFile(file, "utf8"), file);
     return { slug, title: titleFromSlug(slug),
-      description: frontmatterValue(frontmatter, "description", file), body,
+      description: frontmatterValue(frontmatter, "description", file),
+      body: slug === "context-plan" ? [
+        "# Context Plan",
+        "",
+        "Read the installed `context-plan` skill at `../skills/context-plan/SKILL.md`",
+        "relative to this command file, then follow its instructions for the user's request.",
+        "Resolve its references and templates from that skill directory.",
+      ].join("\n") : body,
       explicitOnly: slug === "context-inspect-search"
         || /^disable-model-invocation:\s*true\s*$/mu.test(frontmatter) };
   }));
@@ -280,9 +287,11 @@ async function writeClaudeCommands(
       "---",
       `description: ${JSON.stringify(command.description)}`,
       'argument-hint: "[project-dir or user intent]"',
-      ...(command.explicitOnly ? ["disable-model-invocation: true"] : [
+      ...(command.explicitOnly ? ["disable-model-invocation: true"] : command.slug === "context" ? [
         "allowed-tools:", "  - Bash(context:*)", "  - Bash(bun:*)", "  - Bash(cd *)",
-      ]),
+      ] : command.slug === "context-plan" ? [
+        "allowed-tools:", "  - Bash(context:*)",
+      ] : []),
       "---",
       "",
       command.body.trimEnd(),
@@ -303,8 +312,14 @@ async function copyAuthoringSkill(outputRoot: string): Promise<void> {
 
 async function copyHostRoutedSkills(outputRoot: string): Promise<void> {
   await copyAuthoringSkill(outputRoot);
-  await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", "context-inspect-search"),
-    join(outputRoot, "skills", "context-inspect-search"));
+  for (const slug of ["context-inspect-search", "context-plan"]) {
+    await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", slug), join(outputRoot, "skills", slug));
+  }
+  // The command is the visible entry; keep the underlying Skill available to
+  // model routing and relative resource loading without a duplicate command.
+  const planningEntry = join(outputRoot, "skills", "context-plan", "SKILL.md");
+  const { frontmatter, body } = parseFrontmatter(await readFile(planningEntry, "utf8"), planningEntry);
+  await writeFile(planningEntry, `---\nuser-invocable: false\n${frontmatter.replace(/^user-invocable:.*\n?/mu, "")}\n---\n\n${body}`, "utf8");
 }
 
 async function copyContextEntrySkill(outputRoot: string): Promise<void> {

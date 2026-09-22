@@ -31,8 +31,8 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
     ),
   ].sort();
   const completedCollections = [...status.approvedCollections].sort();
-  // The complete executable contract is in next_route.file. Do not inline its
-  // transports here or publish a partial Route that a caller might execute.
+  // The shared serializer either returns the intact Route inline or points to
+  // it on disk. Summary fields never become a partial executable contract.
   return {
     workflow: { status: status.workflow.status, revision: status.workflow.revision },
     next_route: await workflowRouteOutput(projectRoot, status.workflow.current),

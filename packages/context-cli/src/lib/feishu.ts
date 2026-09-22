@@ -107,6 +107,8 @@ export interface PrefetchedLarkDocument {
 }
 
 export interface FetchFeishuDocInput {
+  /** Explicit standalone reads can lock identity; existing capture defaults remain unchanged. */
+  allowIdentityFallback?: boolean;
   prefetched?: PrefetchedLarkDocument;
   /**
    * Full feishu/lark URL (e.g. `https://xxx.feishu.cn/docx/...`,
@@ -147,7 +149,7 @@ export interface FetchFeishuDocSnapshotResult {
   identityFallback: boolean;
 }
 
-const DEFAULT_RESOURCE_POLICY: LarkResourceMaterializationPolicy = {
+export const DEFAULT_RESOURCE_POLICY: LarkResourceMaterializationPolicy = {
   videos: "reference-only",
   maxBytesPerResource: 20 * 1024 * 1024,
   maxTotalBytes: 200 * 1024 * 1024,
@@ -607,7 +609,7 @@ async function fetchWithIdentity(
       fallback: false,
     };
   } catch (userError) {
-    if (!userIdentityUnavailable(userError)) throw userError;
+    if (input.allowIdentityFallback === false || !userIdentityUnavailable(userError)) throw userError;
     try {
       return {
         fetched: await fetchDocsResponse(input, docsFetchPlan, runner, "bot"),
@@ -643,7 +645,7 @@ export async function fetchFeishuDocSnapshot(
   const preference = input.prefetched?.identity ?? input.identity ?? resolveLarkReadIdentity();
   const cacheKey = runner;
   const session = createLarkReadSession(runner, input.prefetched?.identity ?? (preference === "bot" ? "bot" : "user"),
-    !input.prefetched && preference === "bot");
+    !input.prefetched && preference === "bot" && input.allowIdentityFallback !== false);
   runner = session.run;
   const docsFetchPlan: DocsFetchPlan = input.prefetched
     ? { apiVersion: "v2", docFormat: "xml" }
@@ -770,3 +772,11 @@ export async function fetchFeishuDoc(
 ): Promise<string> {
   return (await fetchFeishuDocSnapshot(input, runner)).markdown;
 }
+
+/** Validate saved complete document pages without fetching embedded resources. */
+export async function readPrefetchedLarkDocument(url: string, prefetched: PrefetchedLarkDocument) {
+  return fetchDocsResponse({ url, prefetched }, { apiVersion: "v2", docFormat: "xml" },
+    async () => { throw new Error("Saved document validation must remain offline"); }, prefetched.identity);
+}
+
+export { defaultRunner as runLarkCommand };

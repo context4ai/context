@@ -34,11 +34,29 @@ const title = (s: string, fallback: string) => {
 async function optional(path: string) {
   try { return await readFile(path, "utf8"); } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw e; }
 }
+async function navigationContext(root: string, hasApproved: boolean) {
+  const current = await readKnowledgeMap(root);
+  let baseline = current, kind: ReviewSiteModel["navigationBaseline"] = hasApproved ? "current" : "empty";
+  if (hasApproved) {
+    try {
+      const { stdout } = await promisify(execFile)("git", ["show", "HEAD:./src/knowledge-map.yaml"], { cwd: root, timeout: 5000, maxBuffer: 4 * 1024 * 1024 });
+      baseline = validateKnowledgeMap(parse(stdout)); kind = "git-head";
+    } catch { /* Without a Git baseline, do not invent historical navigation changes. */ }
+  }
+  const changedArticles = new Set((current?.entries ?? []).filter(n =>
+    JSON.stringify(baseline?.entries.find(b => b.key === n.key)) !== JSON.stringify(n))
+    .flatMap(n => n.target ? [n.target.artifact_ref] : []));
+  return { current, baseline, kind, changedArticles };
+}
 /** Binds only displayed inputs, not every source, tool version or unrelated runtime file. */
 export async function reviewSiteBaselineHash(root: string, reviewedPaths: readonly string[]): Promise<string> {
   const files = await readApprovedMarkdownFiles(root);
-  return hash(JSON.stringify([await optional(join(root, "src/knowledge-map.yaml")) ?? null,
-    files.map(f => [f.relPath, reviewedPaths.includes(f.relPath) ? hash(f.content) : title(f.content, f.relPath)]).sort((a, b) => a[0]!.localeCompare(b[0]!))]));
+  const navigation = await navigationContext(root, files.length > 0);
+  const metadata = await readApprovedKnowledgeMetadataIndex(root);
+  const displayed = new Set([...reviewedPaths, ...((metadata.structure?.articles ?? []) as Array<{ article_id: string; path: string }>)
+    .filter(a => navigation.changedArticles.has(a.article_id)).map(a => a.path)]);
+  return hash(JSON.stringify([navigation.baseline, await optional(join(root, "src/knowledge-map.yaml")) ?? null,
+    files.map(f => [f.relPath, displayed.has(f.relPath) ? hash(f.content) : title(f.content, f.relPath)]).sort((a, b) => a[0]!.localeCompare(b[0]!))]));
 }
 /** Compare complete Markdown blocks, including fenced code, tables and nested lists. */
 export function reviewBodyDiff(previous: string, next: string): string {
@@ -70,13 +88,16 @@ export function reviewBodyDiff(previous: string, next: string): string {
 }
 export async function collectReviewSiteModel(root: string, candidates: readonly ReviewCandidateView[]): Promise<ReviewSiteModel> {
   const pendingFeedback = new Map((await readPendingReviewFeedback(root, candidates)).map(r => [r.candidate_id, r.instruction]));
-  const current = await readKnowledgeMap(root);
   const metadata = await readApprovedKnowledgeMetadataIndex(root);
   const articles = (metadata.structure?.articles ?? []) as Array<{ article_id: string; path: string }>;
   const files = await readApprovedMarkdownFiles(root);
+  const { current, baseline, kind: navigationBaseline, changedArticles } = await navigationContext(root, files.length > 0);
   const byPath = new Map(files.map(f => [f.relPath, f.content]));
   const pages: ReviewSitePage[] = files.map(f => ({ id: articles.find(a => a.path === f.relPath)?.article_id ?? f.relPath,
     path: f.relPath, title: title(f.content, f.relPath), change: "unchanged", html: "", sources: [] }));
+  for (const page of pages) if (changedArticles.has(page.id)) {
+    page.html = renderReviewMarkdown(body(byPath.get(page.path)!).replace(/^# [^\n]+\n*/u, ""));
+  }
   for (const { record: r } of candidates) {
     const found = pages.find(p => p.id === r.article_id || p.path === (r.approved_revision?.previous_path ?? r.path));
     const old = found && byPath.get(found.path);
@@ -86,12 +107,6 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
       ...(found && found.path !== r.path ? { previousPath: found.path } : {}), change: found ? "modify" : "new",
       html: old === undefined ? renderReviewMarkdown(next.replace(/^# [^\n]+\n*/u, "")) : reviewBodyDiff(body(old).replace(/^# [^\n]+\n*/u, ""), next.replace(/^# [^\n]+\n*/u, "")), sources: [...r.source_refs, ...r.indexer_candidate.sections.flatMap(s => s.references.map(ref => JSON.stringify(ref)))] };
     if (found) pages.splice(pages.indexOf(found), 1, page); else pages.push(page);
-  }
-  let baseline = current, navigationBaseline: ReviewSiteModel["navigationBaseline"] = files.length ? "current" : "empty";
-  if (files.length) {
-    try { const { stdout } = await promisify(execFile)("git", ["show", "HEAD:./src/knowledge-map.yaml"], { cwd: root, timeout: 5000, maxBuffer: 4 * 1024 * 1024 });
-      baseline = validateKnowledgeMap(parse(stdout)); navigationBaseline = "git-head";
-    } catch { /* Unversioned workspace: current navigation is context, not an invented old tree. */ }
   }
   const nodes: ReviewSiteNode[] = (current?.entries ?? []).map(n => {
     const old = baseline?.entries.find(b => b.key === n.key);

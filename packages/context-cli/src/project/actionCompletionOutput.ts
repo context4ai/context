@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import YAML from "yaml";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
+import { workflowRouteOutput } from "./workflow/workflowRouteOutput.js";
+import type { ContextResolvedWorkflowRoute } from "./workflow/workflowTypes.js";
 
 const INLINE_LIMIT = 16 * 1024;
 
@@ -45,8 +47,6 @@ export async function prepareActionCompletionOutput(input: {
     details: resultFile, ...pick(result, ["next", "next_preparation"]) };
   const next = record(result.next) ?? record(record(result.workflow)?.current) ??
     record(record(result.continuation)?.next);
-  const nextFile = next === undefined ? undefined : join(root, `${digest}.next.json`);
-  if (nextFile !== undefined) await atomicWriteFile(nextFile, serializeActionCompletion(next, "json"));
   const outcomes = (Array.isArray(result.outcomes) ? result.outcomes : [])
     .map(record).filter((item): item is Record<string, unknown> => item !== undefined);
   const counts: Record<string, number> = {};
@@ -74,16 +74,24 @@ export async function prepareActionCompletionOutput(input: {
       "scopes", "stage", "total", "accepted", "running", "pending", "failed", "stale", "stop", "workflow_progress", "task_completion", "pages",
     ]),
     next_route: next === undefined ? null : {
-      file: nextFile, digest: `sha256:${createHash("sha256").update(serializeActionCompletion(next, "json")).digest("hex")}`, ...pick(next, ["revision", "node", "availability"]),
+      // Preserve legacy summary fields; only inline or file is the full Route.
       commands: next.commands, gate: next.gate === undefined ? undefined : pick(record(next.gate)!, ["id", "resolution", "delegatable"]),
-    },
+    } as Record<string, unknown>,
     ...(failure === undefined ? {} : { next_preparation: {
       outcome: failure.outcome, message: shortText(failure.message), command: failure.command,
     } }),
     details_required: false,
-    guidance: "Read result_file only when details_required is true, transport output was truncated, or the outcome is unclear. Otherwise the summary contains all task outcomes. Read next_route.file once for the exact next Route when present; result_file embeds the same Route. Do not resubmit committed tasks or start another production driver while a submission is running.",
+    guidance: "Read result_file only when details_required is true, transport output was truncated, or the outcome is unclear. Otherwise the summary contains all task outcomes. Use next_route.inline as the complete Route when present; otherwise read next_route.file once. Legacy next_route commands/gate are summaries, not the executable contract. Required resources and read receipts still apply. Do not resubmit committed tasks or start another production driver while a submission is running.",
 
   };
+  if (next !== undefined) {
+    // Prefer retaining outcomes over inlining a Route. Leave room for the file
+    // reference and envelope indentation; large completions keep the old path.
+    const inlineByteLimit = Math.max(0,
+      INLINE_LIMIT - Buffer.byteLength(serializeActionCompletion(summary, input.format)) - 2 * 1024);
+    summary.next_route = { ...summary.next_route,
+      ...await workflowRouteOutput(input.projectRoot, next as unknown as ContextResolvedWorkflowRoute, { inlineByteLimit }) };
+  }
   // An unusually large individual diagnostic must not defeat the output limit.
   while (summary.outcomes.length > 0 && Buffer.byteLength(serializeActionCompletion(summary, input.format)) > INLINE_LIMIT) {
     summary.outcomes.pop();

@@ -323,7 +323,7 @@ export interface AddLarkSourceInput {
   title?: string;
 }
 
-export async function addLarkSourceUnlocked(input: AddLarkSourceInput): Promise<Record<string, unknown>> {
+export function assertLarkSourceIdentity(input: AddLarkSourceInput): void {
   assertDocumentBatchIdentity({ sourceType: "lark", ...input });
   if (larkIdentityFlags(input).length !== 1) {
     throw new ContextError(ExitCode.UserError, "source add lark requires exactly one of --url, --doc-token, or --wiki-token", {
@@ -331,6 +331,10 @@ export async function addLarkSourceUnlocked(input: AddLarkSourceInput): Promise<
       flags: ["--url", "--doc-token", "--wiki-token"],
     });
   }
+}
+
+export async function addLarkSourceUnlocked(input: AddLarkSourceInput): Promise<Record<string, unknown>> {
+  assertLarkSourceIdentity(input);
 
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   const existing = registry.larks.find((source) => source.name === input.name || source.id === input.name);

@@ -6,6 +6,18 @@ mediaType: text/markdown
 
 # Prepare a workspace for the next task
 
+## Capture-only requests in an existing workspace
+
+An explicit request to capture named documents and pause does not start article
+production. Register those sources first using the source-registration contract,
+then reevaluate status for the capture Route. Capture precedes the cleared-task
+resumption gate, so `task resume` is unnecessary for this request. Do not create
+a production stage and then clear it to return to capture. Retain existing tasks,
+drafts, approved content and source registrations. Stop after reporting the
+selected capture results; resumption requires a request to produce knowledge.
+The preparation and cleanup procedure below applies only when cleanup itself
+is requested, not merely because the workspace previously completed a task.
+
 Agent policy: `context.gate.workspace_reset_restore`. A clear request to
 prepare this workspace authorizes the described task-state cleanup; clarify
 only an unresolved target or loss.

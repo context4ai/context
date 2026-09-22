@@ -88,7 +88,7 @@ describe("0.7.0 root plugin source", () => {
       "context-code-indexer",
       "context-markdown-indexer",
     ]));
-    expect(installedSkills).toEqual(["context", "context-indexer-create", "context-inspect-search"]);
+    expect(installedSkills).toEqual(["context", "context-indexer-create", "context-inspect-search", "context-plan"]);
     for (const host of ["claude", "codex", "cursor"] as const) {
       for (const provider of sourceSkills.filter((skill) => skill.includes("-indexer") && skill !== "context-indexer-create")) {
         await expect(readFile(
@@ -187,6 +187,51 @@ describe("0.7.0 root plugin source", () => {
       .toBe("./plugins/context/repo-install/cursor");
     expect(codexMarketplace.plugins[0]?.source.path)
       .toBe("./plugins/context/repo-install/codex");
+  });
+
+  test("ships the planning entry with usable references and templates for every host", async () => {
+    const name = "context-plan";
+    const canonicalRoot = join(SOURCE_ROOT, "skills", name);
+    const canonical = await readFile(join(canonicalRoot, "SKILL.md"), "utf8");
+    expect(frontmatter(canonical)["disable-model-invocation"]).not.toBe(true);
+    expect(frontmatter(canonical)["user-invocable"]).not.toBe(false);
+    expect(parse(await readFile(join(canonicalRoot, "agents/openai.yaml"), "utf8"))).toMatchObject({
+      policy: { allow_implicit_invocation: true },
+    });
+    const canonicalFiles = await fileBodies(canonicalRoot);
+    expect(canonicalFiles.map(([path]) => path)).toEqual(expect.arrayContaining([
+      "references/project-planning.md", "references/resource-tools.md", "templates/PLAN.md",
+    ]));
+    for (const root of [join(PACKAGE_ROOT, "dist/plugins"), REPO_INSTALL_ROOT]) {
+      for (const host of ["claude", "cursor", "codex"]) {
+        const installedRoot = join(root, host, "skills", name);
+        const installedFiles = await fileBodies(installedRoot);
+        expect(installedFiles.filter(([path]) => path !== "SKILL.md")).toEqual(
+          canonicalFiles.filter(([path]) => path !== "SKILL.md"));
+        const installed = await readFile(join(installedRoot, "SKILL.md"), "utf8");
+        expect(bodyAfterFrontmatter(installed)).toBe(bodyAfterFrontmatter(canonical));
+        expect(frontmatter(installed)["disable-model-invocation"]).not.toBe(true);
+        if (host === "codex") expect(frontmatter(installed)["user-invocable"]).not.toBe(false);
+        else expect(frontmatter(installed)["user-invocable"]).toBe(false);
+        await expect(readFile(join(installedRoot, "context-indexer.yaml"))).rejects.toThrow();
+      }
+      expect(await fileBodies(join(root, "skills", name))).toEqual(canonicalFiles);
+      for (const [host, command] of [["claude", `${name}.md`], ["cursor", `c4a-${name}.md`]] as const) {
+        const commandRoot = join(root, host, "commands");
+        const content = await readFile(join(commandRoot, command), "utf8");
+        expect(frontmatter(content)["disable-model-invocation"]).not.toBe(true);
+        if (host === "claude") {
+          expect(frontmatter(content)["argument-hint"]).toBeDefined();
+          expect(frontmatter(content)["allowed-tools"]).toContain("Bash(context:*)");
+          expect(frontmatter(content)["allowed-tools"]).not.toContain("Read");
+        }
+        expect(content).toContain("../skills/context-plan/SKILL.md");
+        expect(bodyAfterFrontmatter(await readFile(resolve(commandRoot, "../skills/context-plan/SKILL.md"), "utf8")))
+          .toBe(bodyAfterFrontmatter(canonical));
+        const manifest = JSON.parse(await readFile(join(root, host, `.${host}-plugin/plugin.json`), "utf8"));
+        expect(manifest.skills).toContain("./skills/context-plan");
+      }
+    }
   });
 
   test("build and Indexer release code never read the retired source directories", async () => {

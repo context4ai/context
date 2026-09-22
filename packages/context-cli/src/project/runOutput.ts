@@ -151,19 +151,22 @@ export function writeRunSuccess(input: {
 
 function compactDiagnostics(record: Record<string, unknown>): void {
   if (!Array.isArray(record.diagnostics) || record.diagnostics.length <= 25) return;
-  const diagnostics = record.diagnostics.filter((item): item is Record<string, unknown> =>
-    item !== null && typeof item === "object" && !Array.isArray(item)
-  ).sort((left, right) => {
+  const severity = (item: unknown): unknown => {
+    if (typeof item === "string") return /^(error|warning|info):/u.exec(item)?.[1];
+    return item !== null && typeof item === "object" && "severity" in item ? item.severity : undefined;
+  };
+  const diagnostics = [...record.diagnostics].sort((left, right) => {
     const rank = (severity: unknown): number => severity === "error" ? 0 : severity === "warning" ? 1 : 2;
-    return rank(left.severity) - rank(right.severity);
+    return rank(severity(left)) - rank(severity(right));
   });
   record.diagnostics = diagnostics.slice(0, 25);
   record.diagnostics_summary = {
     total: diagnostics.length,
     returned: Math.min(25, diagnostics.length),
-    errors: diagnostics.filter((item) => item.severity === "error").length,
-    warnings: diagnostics.filter((item) => item.severity === "warning").length,
-    info: diagnostics.filter((item) => item.severity === "info").length,
+    errors: diagnostics.filter((item) => severity(item) === "error").length,
+    warnings: diagnostics.filter((item) => severity(item) === "warning").length,
+    info: diagnostics.filter((item) => severity(item) === "info").length,
+    unclassified: diagnostics.filter((item) => !["error", "warning", "info"].includes(String(severity(item)))).length,
     truncated: diagnostics.length > 25,
     continuation: record.diagnostics_view,
   };

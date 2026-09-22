@@ -371,7 +371,10 @@ describe("path-free plugin source audit", () => {
       // those paths as a production protocol. Keep its other protocol audits.
       // The authoring assistant reads bundle sources to create a Provider; it is not a production Route.
       const inspection = file.rel.endsWith("/skills/context-inspect-search/SKILL.md")
-        || file.rel.includes("/skills/context-indexer-create/");
+        || file.rel.includes("/skills/context-indexer-create/")
+        // Project planning inventories source roots before handing off to the
+        // production Route; its local research paths are not workflow gates.
+        || file.rel.includes("/skills/context-plan/");
       findings.push(...scanProductionDoc(file.rel, body).filter((finding) =>
         !inspection || finding.rule !== "storage-path-probing"));
     }
