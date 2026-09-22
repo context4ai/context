@@ -57,6 +57,7 @@ const sdkManuals = [
   "guides/package-outputs.md",
   "guides/page-customization.md",
   "guides/lark-resources.md",
+  "guides/source-batches.md",
   "guides/knowledge-updates.md",
   "guides/workspace-prepare.md",
   "guides/workspace-commit.md",
@@ -84,7 +85,8 @@ for (const sourceGuide of ["note", "sessions", "workspace-prepare", "workspace-c
 }
 await writeFile(resolve(packageRoot, "context-workflow/resources/procedures/knowledge-updates.md"),
   "---\nid: procedure.knowledge-updates\nkind: procedure\nmediaType: text/markdown\n---\n\n" +
-  await readFile(resolve(packageRoot, "../context/docs/guides/knowledge-updates.md"), "utf8"));
+  (await readFile(resolve(packageRoot, "../context/docs/guides/knowledge-updates.md"), "utf8"))
+    .replaceAll("](lark-resources.md", "](../manuals/guides/lark-resources.md"));
 const provider = await loadProvider(providerPath);
 await assertCurrentIndexerWorkflowContract(provider);
 

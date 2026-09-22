@@ -509,7 +509,7 @@ const parseFileSourcesRegistry = (
   });
 };
 
-const parseLarkSourcesRegistry = (
+export const parseLarkSourcesRegistry = (
   input: unknown,
   registryPath: string,
 ): readonly LarkSourceRegistryEntry[] => {

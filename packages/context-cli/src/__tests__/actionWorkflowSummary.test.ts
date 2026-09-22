@@ -63,7 +63,9 @@ for (const wrapper of ["workflow", "continuation"] as const) {
     const route = { protocol: "context.workflow.route.v1", revision: "sha256:current", node: "run-indexer-agent-step", commands: [] };
     const result = { protocol: "context.indexer.current-action-completion/v2", stage: "structure-review",
       [wrapper]: wrapper === "workflow" ? { current: route } : { next: route } };
-    const compact = await prepareActionCompletionOutput({ projectRoot, result, format: "json" }) as { next_route: { file: string }; result_file: string };
+    const compact = await prepareActionCompletionOutput({ projectRoot, result, format: "json" }) as { next_route: { file: string; inline: unknown; commands: unknown }; result_file: string };
+    expect(compact.next_route.inline).toEqual(route);
+    expect(compact.next_route.commands).toEqual(route.commands);
     expect(JSON.parse(await readFile(compact.next_route.file, "utf8"))).toEqual(route);
     expect(JSON.parse(await readFile(compact.result_file, "utf8"))).toEqual(result);
   });

@@ -43,9 +43,20 @@ discussion, or register-only request is not permission, and an explicit refusal
 always wins.
 Register several file/Lark/repo sources with `context source add batch [date]
 --input <yaml|json|->`; do not launch multiple `source add` processes in
-parallel. Repo batch items require `module`; file/Lark items may omit it and use
+parallel. Long authorized batches can add `--checkpoint --progress`; use the
+returned status and resume commands after interruption instead of rebuilding
+the input. The checkpoint is advisory; resume revalidates the original input
+against current sources. Repo batch items require `module`; file/Lark items may omit it and use
 the module returned by the CLI. A write-lock error means another Context mutation is active: wait for
 it to finish and retry rather than editing registry files.
+
+Register a supplied Lark document or Wiki URL directly. `title` and `module` are
+optional: the CLI derives a stable module locally, and capture obtains the title
+with the document body. Do not call Wiki metadata, resolve a document token, or
+fetch a title separately just to prepare registration. Keep an already known
+title when useful; otherwise omit it instead of delaying capture to discover it.
+For several URLs, one batch payload can contain only `type: lark` and `url` for
+each source. Registration itself does not fetch remote content or grant access.
 
 
 ## Repository boundaries before bulk work
@@ -89,14 +100,22 @@ separate artifacts: XML audit evidence and a deterministic readable Markdown
 projection. Do not treat raw XML as Markdown and do not rewrite it yourself.
 The CLI also materializes supported embedded resources and returns a closed
 `resource_materialization` report. Required images, attachments, Sheets, Bases,
-whiteboards, diagrams, and synced blocks must be materialized before downstream
-Review. Polls and navigation references remain explicit non-interactive
+whiteboards, diagrams, and synced blocks are processed under the source's
+effective resource policy. Polls and navigation references remain explicit non-interactive
 projections; video is reference-only unless the project SDK opts into bundling.
 If the remote API explicitly confirms that a referenced whiteboard or diagram
 no longer exists, preserve the unresolved placeholder and the structured
 `document.resource.source-missing` warning, then continue through the Route.
-This is an audited source-side deletion, not successful materialization. Access,
-network, parameter, and unknown resource failures still block downstream work.
+This is an audited source-side deletion, not successful materialization.
+For an explicitly recognized permission denial, the CLI tries a supported
+same-identity fallback. A preview is retained as a preview; a resource that
+remains inaccessible stays unavailable with its reference and reason. These
+warnings do not block the preserved body or trigger resource-level identity
+switching, authorization prompts, or requests to change application permissions.
+Do not use unavailable resources as content evidence or claim that previews
+contain the original's complete data. Network, parameter, and unknown failures
+retain the CLI's failure classification; a generic HTTP 400 is not proof of a
+permission error.
 Do not manually download resources or patch links. Approved resources move to
 `knowledge/assets/`, and package build projects selected resources to
 `others/assets/`.
@@ -219,9 +238,10 @@ Preserve commands, reason codes, ids, and diagnostics exactly; summarize
 successful capture results for the user instead of dumping raw JSON. After any
 capture result:
 
-- Run `context status --format json` and treat `workflow.current` as the
-  current-step authority; if the route returns `configuration`, perform only
-  that declared project edit and rerun status.
+- Consume a fresh `workflow.current` returned with the command result as the
+  current-step authority. If no fresh workspace Route was returned, run
+  `context status --format json` once. If the route returns `configuration`,
+  perform only that declared project edit and rerun status.
 - If `workflow.current.commands` contains another capture command for the
   confirmed batch, execute it before asking another naming, collection, or
   read-permission question.
@@ -249,6 +269,18 @@ retrying capture.
 ## Final Report
 
 Report in the user's conversation language. Translate section headings into the user's language instead of copying the English labels below verbatim. Optimize for human readability: use document titles instead of source ids, package names instead of internal source id strings, and human-readable kind labels ("local markdown", "Feishu doc", "code package") instead of internal tokens. Do not surface content hashes, snapshot digests, internal payload identifiers, or absolute file paths.
+
+Use the capture command's returned `source`, `documents`, `snapshot`, `fidelity`,
+and `resource_materialization` for the completion summary. They already contain
+the title, body line count, change flag, resource counts, and per-resource reasons;
+`access_identity` records the identity actually used. Reuse `source.url` when
+present, or the user's original URL; do not construct a host URL from an opaque
+token. Count `document.resource.preview` items separately from original downloads,
+and distinguish reference-only or unavailable resources from acquired evidence.
+Do not reopen the manifest/report, inspect Git changes, or perform a separate
+link lookup solely to repeat fields already returned. Open detailed evidence only
+for a concrete missing fact, failure investigation, or requested audit. The
+workspace Route, not a successful resource count, determines workflow readiness.
 
 Stable structure:
 

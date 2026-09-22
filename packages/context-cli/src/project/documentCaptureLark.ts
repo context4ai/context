@@ -38,6 +38,7 @@ import {
 import { withProjectWriteLock } from "./writeLock.js";
 import { sensitiveSourceLiteralCandidates } from "./sensitiveSourceLiteral.js";
 import { LARK_DOCUMENT_NORMALIZER_VERSION } from "./documentCaptureContract.js";
+import { assertSnapshotResourcePolicy, readLarkSnapshotBundle } from "./larkSnapshotBundle.js";
 
 export interface CaptureLarkRunResult {
   kind: "document.capture.lark.result";
@@ -45,8 +46,11 @@ export interface CaptureLarkRunResult {
     type: "lark";
     name: string;
     identity: "url" | "docToken" | "wikiToken";
-    title?: string;
+    title: string;
+    url?: string;
   };
+  access_identity: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>["accessIdentity"];
+  identity_fallback: boolean;
   snapshot: {
     manifest: string;
     materializedAt: string;
@@ -351,6 +355,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
   now?: Date;
   larkRunner?: LarkRunner;
   prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
+  snapshotDirectory?: string;
 }): Promise<CaptureLarkRunResult> {
   const resolved = await resolveDocumentPhaseSource({
     projectRoot: input.projectRoot,
@@ -371,8 +376,14 @@ async function runCaptureLarkPhaseUnlocked(input: {
   assertLarkSnapshotMaterializedAt(entry);
   const target = larkTarget(entry);
   let fetched: Awaited<ReturnType<typeof fetchFeishuDocSnapshot>>;
+  let capturedAt = (input.now ?? new Date()).toISOString();
   try {
-    fetched = await fetchFeishuDocSnapshot({
+    if (input.snapshotDirectory !== undefined) {
+      const snapshot = await readLarkSnapshotBundle(input.snapshotDirectory, target);
+      assertSnapshotResourcePolicy(snapshot, input.phase.resources);
+      fetched = snapshot.fetched;
+      capturedAt = snapshot.capturedAt;
+    } else fetched = await fetchFeishuDocSnapshot({
       url: target.value,
       resourcePolicy: input.phase.resources,
       ...(input.prefetched === undefined ? {} : { prefetched: input.prefetched }),
@@ -431,7 +442,7 @@ async function runCaptureLarkPhaseUnlocked(input: {
   const manifest = createDocumentSnapshotManifest({
     sourceType: "lark",
     sourceName: resolved.sourceName,
-    capturedAt: (input.now ?? new Date()).toISOString(),
+    capturedAt,
     files: snapshotFiles,
     assets: assets.map((asset) => asset.entry),
     metadata: metadataForSource({
@@ -544,8 +555,11 @@ async function runCaptureLarkPhaseUnlocked(input: {
       type: "lark",
       name: resolved.sourceName,
       identity: target.kind,
-      ...(entry.title !== undefined ? { title: entry.title } : fetched.title !== undefined ? { title: fetched.title } : {}),
+      title,
+      ...(entry.url !== undefined ? { url: entry.url } : {}),
     },
+    access_identity: fetched.accessIdentity,
+    identity_fallback: fetched.identityFallback,
     snapshot: {
       manifest: manifestPath,
       materializedAt,
@@ -586,6 +600,7 @@ export async function runCaptureLarkPhase(input: {
   now?: Date;
   larkRunner?: LarkRunner;
   prefetched?: import("../lib/feishu.js").PrefetchedLarkDocument;
+  snapshotDirectory?: string;
 }): Promise<CaptureLarkRunResult> {
   return withProjectWriteLock(input.projectRoot, "capture-lark", () => runCaptureLarkPhaseUnlocked(input));
 }

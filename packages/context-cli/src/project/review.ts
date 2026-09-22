@@ -380,6 +380,7 @@ export async function runReviewHtmlCommand(input: {
     headline: `${result.candidates} candidate(s)`,
     body: [
       `file: ${result.path}`,
+      `unplaced candidates: ${result.navigation.unplaced_count}`,
       `absolute path: ${report.absolute_path}`,
       `file_url: ${report.file_url}`,
       ...(openResult !== undefined ? [
@@ -387,7 +388,8 @@ export async function runReviewHtmlCommand(input: {
         ...(openResult.error !== undefined ? [`open_error: ${openResult.error}`] : []),
       ] : []),
     ],
-    next: "Apply the exact decision Payload returned by this report.",
+    next: result.next_action ? `${result.next_action.message} ${result.next_action.command}`
+      : "Apply the exact decision Payload returned by this report.",
   }));
 }
 

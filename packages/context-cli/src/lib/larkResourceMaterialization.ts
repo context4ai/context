@@ -1,4 +1,6 @@
+import { createLarkResourceScheduler, forEachLarkResource } from "./larkResourceScheduler.js";
 import { downloadLarkMedia } from "./larkMediaDownload.js";
+import { exportLarkWhiteboardRaw } from "./larkWhiteboardExport.js";
 import { LarkResourceBudgetError, omitLarkImage } from "./larkImagePolicy.js";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -299,25 +301,6 @@ function stableJson(value: unknown): string {
     .join(",")}}`;
 }
 
-function canonicalWhiteboardPayload(value: unknown): unknown {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
-  const record = value as Record<string, unknown>;
-  if (!Array.isArray(record.nodes)) return value;
-  const nodeKey = (node: unknown): string => {
-    if (node !== null && typeof node === "object" && !Array.isArray(node)) {
-      const id = (node as Record<string, unknown>).id;
-      if (typeof id === "string") return `id:${id}`;
-    }
-    return `value:${stableJson(node)}`;
-  };
-  return {
-    ...record,
-    nodes: [...record.nodes].sort((left, right) =>
-      nodeKey(left).localeCompare(nodeKey(right)) || stableJson(left).localeCompare(stableJson(right))
-    ),
-  };
-}
-
 async function sheetMaterialization(
   resource: LarkExternalResource,
   runner: LarkResourceCommandRunner,
@@ -486,54 +469,48 @@ async function whiteboardMaterialization(
 ): Promise<{
   assets: LarkMaterializedAsset[];
   replacement: string;
+  reason_code?: string;
+  reason?: string;
 }> {
   const token = resourceToken(resource);
   if (token === undefined) throw new Error(`${resource.kind} has no whiteboard token`);
   const preview = await downloadedFile({ runner, identity, token, type: "whiteboard" });
-  const tempRoot = await mkdtemp(join(tmpdir(), "context-lark-whiteboard-"));
-  let rawPayload: unknown;
-  try {
-    await runLarkResourceCommand(runner, [
-      "whiteboard",
-      "+export",
-      "--as",
-      identity,
-      "--whiteboard-token",
-      token,
-      "--output-type",
-      "raw",
-      "--output",
-      "./raw.json",
-      "--overwrite",
-      "--format",
-      "json",
-    ], { cwd: tempRoot });
-    rawPayload = JSON.parse(await readFile(join(tempRoot, "raw.json"), "utf8")) as unknown;
-  } finally {
-    await rm(tempRoot, { recursive: true, force: true });
-  }
   const digest = resourceDigest(resource);
   const previewPath = `materialized/${resource.kind}/${digest}${extensionFor(preview.mediaType, preview.path)}`;
   const rawPath = `materialized/${resource.kind}/${digest}.json`;
   const title = markdownLabel(safeLabel(resource.title, resource.kind === "diagram" ? "Diagram" : "Whiteboard"));
+  const previewAsset: LarkMaterializedAsset = {
+    path: previewPath,
+    bytes: preview.bytes,
+    mediaType: preview.mediaType,
+    role: "presentation",
+    source: { kind: resource.kind, locator: resource.locator, identity, representation: "preview" },
+  };
+  const previewMarkdown = `![${title}](${sourceAssetTarget(previewPath)})`;
+  let rawBytes: Uint8Array;
+  try {
+    rawBytes = await exportLarkWhiteboardRaw(runner, identity, token);
+  } catch (error) {
+    if (!isLarkResourcePermissionDenied(error)) throw error;
+    return {
+      assets: [previewAsset],
+      replacement: `${previewMarkdown} <!-- ${resource.locator} -->\n\n> Preview captured; structured whiteboard data is unavailable because export permission was denied.`,
+      reason_code: "document.resource.preview",
+      reason: `Same-identity preview captured; structured export permission denied: ${error.message}`,
+    };
+  }
   return {
     assets: [
-      {
-        path: previewPath,
-        bytes: preview.bytes,
-        mediaType: preview.mediaType,
-        role: "presentation",
-        source: { kind: resource.kind, locator: resource.locator },
-      },
+      previewAsset,
       {
         path: rawPath,
-        bytes: Buffer.from(`${stableJson(canonicalWhiteboardPayload(rawPayload))}\n`, "utf8"),
+        bytes: rawBytes,
         mediaType: "application/json",
         role: "evidence",
-        source: { kind: resource.kind, locator: resource.locator },
+        source: { kind: resource.kind, locator: resource.locator, identity },
       },
     ],
-    replacement: `![${title}](${sourceAssetTarget(previewPath)})\n\n[Raw snapshot](${sourceAssetTarget(rawPath)}) <!-- ${resource.locator} -->`,
+    replacement: `${previewMarkdown}\n\n[Raw snapshot](${sourceAssetTarget(rawPath)}) <!-- ${resource.locator} -->`,
   };
 }
 
@@ -608,6 +585,7 @@ function assertBudget(asset: LarkMaterializedAsset, policy: LarkResourceMaterial
 }
 
 export async function materializeLarkResources(input: MaterializeLarkResourcesInput): Promise<MaterializeLarkResourcesResult> {
+  input = { ...input, runner: createLarkResourceScheduler(input.runner) };
   const assets: LarkMaterializedAsset[] = [];
   const replacements = new Map<string, string>();
   const items: LarkResourceMaterializationItem[] = [];
@@ -673,6 +651,7 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
           status: "materialized",
           required,
           asset_paths: result.assets.map((asset) => asset.path),
+          ...(result.reason_code === undefined ? {} : { reason_code: result.reason_code, reason: result.reason }),
         });
         return;
       }
@@ -753,7 +732,12 @@ export async function materializeLarkResources(input: MaterializeLarkResourcesIn
     }
   };
 
-  for (const resource of input.resources) await materialize(resource, 0);
+  await forEachLarkResource(input.resources.filter(resource => resource.kind !== "synced-reference"), (resource) => materialize(resource, 0));
+  // Resolve nested projections after shared leaf resources have their replacements.
+  for (const resource of input.resources.filter(resource => resource.kind === "synced-reference")) await materialize(resource, 0);
+  // Completion timing must not reorder persisted audit records or assets.
+  items.sort((a, b) => a.locator.localeCompare(b.locator) || a.kind.localeCompare(b.kind));
+  assets.sort((a, b) => a.path.localeCompare(b.path));
   return { assets, replacements, report: materializationReport(items) };
 }
 

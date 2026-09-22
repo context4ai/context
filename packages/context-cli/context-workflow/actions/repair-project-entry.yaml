@@ -5,6 +5,7 @@ effect: write
 handler: context.project.repair-entry
 # Supporting SDK manuals remain available through links, without mandatory reads.
 files:
+  - resources/manuals/guides/source-batches.md
   - resources/manuals/reference/code-extractors.md
   - resources/manuals/guides/knowledge-updates.md
   - resources/manuals/guides/note.md

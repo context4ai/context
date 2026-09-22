@@ -65,6 +65,13 @@ preview after replacement delivery, and repair its
 reported incoming references. Navigation removal alone does not remove content
 from search or packages. A renamed menu does not require a new article identity.
 
+Before requesting human review, follow the report's navigation diagnostics.
+Bind unplaced drafts to suitable existing categories using the returned adjustment
+action, then regenerate the report. Draft placement does not require content
+approval. Ask about placement only when the existing structure and task do not
+establish a reasonable destination. Keep unplaced pages visible for diagnosis;
+do not describe the report as ready while placement is unresolved.
+
 The report opens on a change overview, with the existing navigation and an
 expected workspace file tree. The CLI collects approved titles, navigation and
 candidate bodies; it renders their changes mechanically. Do not write a second
@@ -160,3 +167,9 @@ any fallback affecting reader understanding. Reuse the planning choice; do not
 turn image handling into another per-article approval. Missing image content must
 not be presented as read or fully covered. Build-only media fallbacks are reported
 in the build receipt and do not rewrite approved evidence.
+
+Within the current revision scope, remove research-baseline prose (repository
+commit IDs or capture revisions repeated in the article). Preserve source
+references and exact citation destinations. Keep versions or comparison baselines
+that explain business behavior, compatibility, migrations or measured performance.
+Do not turn this editorial check into a keyword gate or an unrelated cleanup.

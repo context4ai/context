@@ -1,3 +1,5 @@
+import { approveCandidates } from "./projectDocumentRevisionStages.fixture.js";
+import { reviewSiteBaselineHash } from "../project/reviewSiteModel.js";
 import { execFileSync } from "node:child_process";
 import { updateKnowledgeMap } from "@c4a/context";
 import { expect, test } from "bun:test";
@@ -132,5 +134,39 @@ test("bulk approval requires acknowledgment and eight seconds only for genuinely
     runInContext("openBulkConfirmation()", existing.runtime);
     expect(existing.get("bulk-roots").hidden).toBe(true);
     expect(existing.get("bulk-confirm").disabled).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 45000);
+
+
+test("approved pages in changed navigation remain readable without review controls", async () => {
+  const root = await prepareRevisionKnowledge([]);
+  try {
+    const candidates = await collectAllReviewCandidates(root);
+    await approveCandidates(root, candidates.map(c => c.record));
+    const git = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8",
+      env: { ...process.env, GIT_AUTHOR_NAME: "Test", GIT_AUTHOR_EMAIL: "test@example.com", GIT_COMMITTER_NAME: "Test", GIT_COMMITTER_EMAIL: "test@example.com" } }).trim();
+    git("init", "--quiet");
+    const oldMap = updateKnowledgeMap(undefined, { expected_revision: null, remove: [], upsert: [] });
+    const blob = execFileSync("git", ["hash-object", "-w", "--stdin"], { cwd: root, input: JSON.stringify(oldMap), encoding: "utf8" }).trim();
+    const tree = (input: string) => execFileSync("git", ["mktree"], { cwd: root, input, encoding: "utf8" }).trim();
+    const sourceTree = tree(`100644 blob ${blob}\tknowledge-map.yaml\n`);
+    const rootTree = tree(`040000 tree ${sourceTree}\tsrc\n`);
+    git("update-ref", "HEAD", git("commit-tree", rootTree, "-m", "Fixture navigation baseline"));
+    const row = candidates[0]!.record;
+    const map = updateKnowledgeMap(oldMap, { expected_revision: oldMap.revision, remove: [], upsert: [
+      { key: "new-page", parent: null, title: row.review.title, order: 10, target: { artifact_ref: row.article_id } },
+    ] });
+    await writeFile(join(root, "src/knowledge-map.yaml"), JSON.stringify(map));
+    const report = await writeReviewHtml({ projectRoot: root, all: true });
+    const browser = openReport(await readFile(report.path, "utf8"));
+    runInContext('selected=DATA.pages.find(p=>p.html).id;render()', browser.runtime);
+    expect(browser.get("article").innerHTML).toContain("value 42");
+    expect(browser.get("footer").hidden).toBe(true);
+    expect(runInContext('candidates.length', browser.runtime)).toBe(0);
+    expect(runInContext('DATA.nodes.find(n=>n.key==="new-page").change', browser.runtime)).toBe("new");
+    const baseline = await reviewSiteBaselineHash(root, []);
+    const path = join(root, "knowledge", row.path);
+    await writeFile(path, (await readFile(path, "utf8")).replace("value 42", "value 45"));
+    expect(await reviewSiteBaselineHash(root, [])).not.toBe(baseline);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 45000);

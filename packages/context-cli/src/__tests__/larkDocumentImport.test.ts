@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fetchFeishuDocSnapshot } from "../lib/feishu.js";
 import { importLarkDocument } from "../project/larkDocumentImport.js";
+import { registerSourceBatch } from "../project/sourceBatchRegistration.js";
 import { createLarkCaptureProject } from "./projectCaptureLarkV062.fixtures.js";
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
@@ -46,8 +47,34 @@ test("host response import uses the registered Lark snapshot and repeated bytes 
   const input = { type: "lark", name: "handbook", access_identity: "user", response_files: [".tmp/response.json"] };
   const first = await importLarkDocument(root, input);
   const second = await importLarkDocument(root, input);
-  expect(first).toMatchObject({ kind: "document.capture.lark.result" });
+  expect(first).toMatchObject({ kind: "document.capture.lark.result", source: { title: "Product Handbook" },
+    access_identity: "user", identity_fallback: false });
   expect(second).toMatchObject({ kind: "document.capture.lark.result" });
   expect(second.snapshot.changed).toBe(false);
   expect(second.snapshot.snapshot_hash).toBe(first.snapshot.snapshot_hash);
+});
+
+test("URL-only registration and capture return fetched titles and reporting fields without metadata lookups", async () => {
+  const base = await mkdtemp(join(tmpdir(), "context-lark-url-capture-")); roots.push(base);
+  const root = await createLarkCaptureProject(base);
+  const url = "https://example.larkoffice.com/wiki/example-guide";
+  const payload = { sources: [{ type: "lark", url }] };
+  const registered = await registerSourceBatch({ projectRoot: root, namespace: "20260922", payload });
+  const entries = registered.registered as Array<{ result: { name: string; module: string } }>;
+  const registration = entries[0]!.result;
+  expect(registration.module).toMatch(/^wiki-[a-f0-9]{12}$/u);
+  expect(registration).not.toHaveProperty("title");
+  const repeated = await registerSourceBatch({ projectRoot: root, namespace: "20260922", payload });
+  expect(repeated.registered).toEqual(registered.registered);
+
+  await mkdir(join(root, ".tmp"), { recursive: true });
+  await writeFile(join(root, ".tmp/response.json"), response);
+  const captured = await importLarkDocument(root, { type: "lark", name: registration.name,
+    access_identity: "bot", response_files: [".tmp/response.json"] });
+  expect(captured.source).toMatchObject({ name: registration.name, identity: "url", title: "Guide", url });
+  expect(captured).toMatchObject({ access_identity: "bot", identity_fallback: false,
+    snapshot: { changed: true }, fidelity: { evidence_status: "complete" },
+    resource_materialization: { status: "complete", discovered: {}, materialized: {}, reference_only: {}, failed: {} } });
+  expect(captured.documents[0]).toMatchObject({ title: "Guide" });
+  expect(captured.documents[0]!.line_count).toBeGreaterThan(0);
 });

@@ -30,6 +30,10 @@ state.
 
 ## Sources
 
+For optional directory inventories and recoverable registration, see
+[Resumable source operations](../guides/source-batches.md). These operations do
+not select or expand the current production scope.
+
 ```ts
 const repo = source("20260901", "component-lib");
 const docs = source("20260901/product-docs", { type: "file" });

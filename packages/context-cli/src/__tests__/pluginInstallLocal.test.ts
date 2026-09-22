@@ -14,16 +14,32 @@ beforeEach(async () => {
   await mkdir(".tmp", { recursive: true });
   dir = await mkdtemp(".tmp/plugin-local-test-");
   source = join(dir, "bundle"); target = join(dir, "repo", ".agents");
-  for (const name of ["context", "context-inspect-search", "context-code-indexer"]) {
+  for (const name of ["context", "context-inspect-search", "context-code-indexer", "context-plan"]) {
     await mkdir(join(source, "skills", name, "references"), { recursive: true });
     await writeFile(join(source, "skills", name, "SKILL.md"), `---\nname: ${name}\n${name.endsWith("indexer") ? 'metadata:\n  context-public-entry: "false"\n' : ''}---\n`);
     await writeFile(join(source, "skills", name, "references", "guide.md"), "guide");
   }
   for (const host of ["claude", "cursor"]) {
     await mkdir(join(source, host, "commands"), { recursive: true });
-    for (const name of ["context", "context-inspect-search"]) {
-      await writeFile(join(source, host, "commands", `${host === "cursor" ? "c4a-" : ""}${name}.md`), `---\ndescription: ${name}\ndisable-model-invocation: true\n---\nCommand body\n`);
+    for (const name of ["context", "context-inspect-search", "context-plan"]) {
+      await writeFile(join(source, host, "commands", `${host === "cursor" ? "c4a-" : ""}${name}.md`), `---\ndescription: ${name}\n${name === "context-plan" ? "" : "disable-model-invocation: true\n"}---\nCommand body\n`);
     }
+  }
+});
+
+test.each(["claude", "cursor", "codex"] as const)("%s local install retains automatically routable planning resources", async agent => {
+  await mkdir(join(source, "skills/context-plan/templates"), { recursive: true });
+  await writeFile(join(source, "skills/context-plan/templates/PLAN.md"), "# Project plan\n");
+  await installLocalSkills(source, target, false, agent);
+  const skill = await readFile(join(target, "skills/context-plan/SKILL.md"), "utf8");
+  if (agent === "codex") expect(skill).not.toContain("user-invocable: false");
+  else expect(skill).toContain("user-invocable: false");
+  expect(skill).not.toContain("disable-model-invocation: true");
+  expect(await readFile(join(target, "skills/context-plan/templates/PLAN.md"), "utf8")).toBe("# Project plan\n");
+  expect(await readFile(join(target, "skills/context-plan/references/guide.md"), "utf8")).toBe("guide");
+  if (agent !== "codex") {
+    const command = `${agent === "cursor" ? "c4a-" : ""}context-plan.md`;
+    expect(await readFile(join(target, "commands", command), "utf8")).not.toContain("disable-model-invocation: true");
   }
 });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });

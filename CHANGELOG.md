@@ -2,6 +2,23 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.35 - 2026-09-22
+
+- Add the community `context-plan` Skill for project research, broad source updates, staged production handoffs and Git-backed plan recovery and completion.
+- Support task-scoped plan and article review delegation while retaining default human review, trusted authorization boundaries and stage continuation policies.
+- Add workspace-free, fixed-identity Lark snapshot fetching and validated local snapshot import, retaining capture provenance and embedded resources without fetching them again.
+- Stage Lark source registrations with shared validation and bounded atomic commits; preserve partial-success receipts and avoid unchanged registry writes.
+- Add optional registration checkpoints, status queries, replay, bounded progress output, and scoped cancellation.
+- Add resumable Wiki directory discovery with fixed identity, page receipts, object deduplication, and bounded throttling recovery, without creating production tasks.
+- Recognize current revision drafts when binding navigation before content approval.
+- Share candidate validation between navigation and Review; rejected drafts cannot authorize new bindings.
+- Return unplaced article diagnostics and navigation recovery guidance with review reports.
+- Capture independent embedded resources concurrently with bounded throttling retries and a shared cooldown.
+- Recognize nested application-scope failures without changing resource identity; preserve usable whiteboard previews when raw export is denied.
+- Inline complete small workflow Routes while retaining file-based fallback and existing authorization and read-receipt checks.
+- Keep capture-only requests out of article production, reuse URL registration and capture receipts, and retain string diagnostics in compact output.
+- Keep source baseline details in provenance and citations rather than reader-facing article prose.
+
 ## Unreleased
 
 ## 0.7.34 - 2026-09-22

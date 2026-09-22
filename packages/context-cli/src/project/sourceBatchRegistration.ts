@@ -3,15 +3,21 @@ import { ContextError } from "../lib/errors.js";
 import { ExitCode } from "../types/exitCode.js";
 import {
   addFileSourceUnlocked,
-  addLarkSourceUnlocked,
   defaultFileModule,
   defaultLarkModule,
   isDateSourceNamespace,
 } from "./documentSourceRegistration.js";
 import { addRepoSourceUnlocked } from "./repoSources.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { createLarkBatchRegistration } from "./sourceBatchLarkRegistration.js";
+import {
+  prepareSourceBatchJournal,
+  updateSourceBatchJournal,
+  sourceBatchJournalReceipt,
+  type SourceBatchJournal,
+} from "./sourceBatchJournal.js";
 
-type SourceBatchItem =
+export type SourceBatchItem =
   | { type: "repo"; module: string; local?: string; remote?: string; ref?: string }
   | { type: "file"; module: string; local: string; include?: readonly string[] }
   | { type: "lark"; module: string; url?: string; docToken?: string; wikiToken?: string; title?: string };
@@ -150,6 +156,9 @@ export async function registerSourceBatch(input: {
   projectRoot: string;
   namespace: string;
   payload: unknown;
+  checkpoint?: boolean;
+  signal?: AbortSignal;
+  onProgress?: (progress: SourceBatchProgress) => void;
 }): Promise<Record<string, unknown>> {
   if (!isDateSourceNamespace(input.namespace)) {
     throw inputError(`source add batch date must be a valid YYYYMMDD date: ${input.namespace}`, {
@@ -159,44 +168,120 @@ export async function registerSourceBatch(input: {
   const items = parseBatchPayload(input.payload);
   return withProjectWriteLock(input.projectRoot, "source-add-batch", async () => {
     const registered: Record<string, unknown>[] = [];
-    for (const [index, item] of items.entries()) {
+    const warnings = new Set<string>();
+    const journal = input.checkpoint ? await prepareSourceBatchJournal({
+      projectRoot: input.projectRoot, namespace: input.namespace, items,
+    }) : undefined;
+    let larks: Awaited<ReturnType<typeof createLarkBatchRegistration>> | undefined;
+    let pending: Record<string, unknown>[] = [];
+    let flushFailed = false;
+    const progress = (phase: SourceBatchProgress["phase"]) => {
+      // Observability is advisory: a broken progress consumer must never change
+      // the result of a registry write or become a new registration gate.
       try {
-        const result = item.type === "repo"
-          ? await addRepoSourceUnlocked({ projectRoot: input.projectRoot, namespace: input.namespace, ...item })
-          : item.type === "file"
-            ? await addFileSourceUnlocked({
-                projectRoot: input.projectRoot,
-                namespace: input.namespace,
-                name: `${input.namespace}/${item.module}`,
-                ...item,
-              })
-            : await addLarkSourceUnlocked({
-                projectRoot: input.projectRoot,
-                namespace: input.namespace,
-                name: `${input.namespace}/${item.module}`,
-                ...item,
-              });
-        registered.push({ index, type: item.type, module: item.module, result });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const code = error instanceof ContextError ? error.code : ExitCode.WorkspaceStateError;
-        const errorDetail = error instanceof ContextError ? error.detail : undefined;
-        const itemNext = typeof errorDetail?.next === "string"
-          ? errorDetail.next
-          : undefined;
-        throw new ContextError(code, `source batch stopped at sources[${index}] (${item.type}:${item.module}): ${message}`, {
-          ...errorDetail,
-          batch_completed: registered.map((entry) => ({ type: entry.type, module: entry.module })),
-          failed_index: index,
-          next: itemNext ?? "Fix the failed item and rerun the same batch. Completed items are idempotently updated; do not edit registry YAML by hand.",
+        input.onProgress?.({ phase, committed_count: registered.length, total: items.length });
+      } catch { /* ignore unavailable progress consumers */ }
+    };
+    const checkpoint = async (phase: SourceBatchProgress["phase"], failedIndex?: number) => {
+      if (journal !== undefined) {
+        const warning = await updateSourceBatchJournal(journal, {
+          phase, committed_count: registered.length,
+          ...(failedIndex === undefined ? {} : { failed_index: failedIndex }),
         });
+        if (warning !== undefined) warnings.add(warning);
       }
+      progress(phase);
+    };
+    const flush = async () => {
+      if (pending.length === 0) return;
+      try {
+        await larks!.flush();
+      } catch (error) {
+        flushFailed = true;
+        throw error;
+      }
+      registered.push(...pending);
+      pending = [];
+      await checkpoint("running");
+    };
+    const assertNotCancelled = () => {
+      if (input.signal?.aborted) throw new ContextError(ExitCode.WorkspaceStateError, "source batch interrupted", {
+        reason_code: "source-batch-interrupted",
+        next: "Resume the saved batch or rerun the same input. Completed registrations remain valid.",
+      });
+    };
+    await checkpoint("running");
+    let currentIndex = 0;
+    try {
+      for (const [index, item] of items.entries()) {
+        currentIndex = index;
+        assertNotCancelled();
+        if (item.type === "lark") {
+          larks ??= await createLarkBatchRegistration(input.projectRoot, input.namespace);
+          const result = await larks.add(item);
+          pending.push({ index, type: item.type, module: item.module, result });
+          if (pending.length >= 100) await flush();
+        } else {
+          await flush();
+          // Repository/file registration retains its existing validation and
+          // side effects. Reload the Lark identity index after mixed writes.
+          larks = undefined;
+          const result = item.type === "repo"
+            ? await addRepoSourceUnlocked({ projectRoot: input.projectRoot, namespace: input.namespace, ...item })
+            : await addFileSourceUnlocked({
+                projectRoot: input.projectRoot, namespace: input.namespace,
+                name: `${input.namespace}/${item.module}`, ...item,
+              });
+          registered.push({ index, type: item.type, module: item.module, result });
+          await checkpoint("running");
+        }
+      }
+      await flush();
+      await checkpoint("completed");
+    } catch (error) {
+      // Match the old partial-success contract: accepted items before an
+      // invalid item remain committed, while uncommitted writes are not claimed.
+      let failure = error;
+      try {
+        if (!flushFailed) await flush();
+      } catch (flushError) {
+        failure = flushError;
+      }
+      if (flushFailed) currentIndex = registered.length;
+      const interrupted = failure instanceof ContextError && failure.detail?.reason_code === "source-batch-interrupted";
+      await checkpoint(interrupted ? "interrupted" : "failed", currentIndex);
+      const detail = failure instanceof ContextError ? failure.detail : undefined;
+      const code = failure instanceof ContextError ? failure.code : ExitCode.WorkspaceStateError;
+      const message = failure instanceof Error ? failure.message : String(failure);
+      const item = items[currentIndex];
+      throw new ContextError(code, `source batch stopped at sources[${currentIndex}] (${item?.type}:${item?.module}): ${message}`, {
+        ...detail,
+        batch_completed: registered.map((entry) => ({ type: entry.type, module: entry.module })),
+        failed_index: currentIndex,
+        ...journalReceipt(journal, warnings),
+        next: typeof detail?.next === "string" ? detail.next
+          : "Fix the failed item and rerun the same batch. Completed items are idempotently updated; do not edit registry YAML by hand.",
+      });
     }
     return {
       kind: "source.registration.batch",
       namespace: input.namespace,
       total: registered.length,
       registered,
+      ...journalReceipt(journal, warnings),
     };
   });
+}
+
+export interface SourceBatchProgress {
+  phase: "running" | "completed" | "failed" | "interrupted";
+  committed_count: number;
+  total: number;
+}
+
+function journalReceipt(journal: SourceBatchJournal | undefined, warnings: Set<string>): Record<string, unknown> {
+  return {
+    ...(journal === undefined ? {} : { checkpoint: sourceBatchJournalReceipt(journal) }),
+    ...(warnings.size === 0 ? {} : { warnings: [...warnings] }),
+  };
 }

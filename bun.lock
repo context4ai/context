@@ -18,7 +18,7 @@
     },
     "packages/context": {
       "name": "@c4a/context",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "yaml": "^2.5.1",
         "zod": "^3.23.8",
@@ -26,7 +26,7 @@
     },
     "packages/context-cli": {
       "name": "@c4a/context-cli",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "bin": {
         "context": "dist/cli.js",
       },
@@ -73,7 +73,7 @@
     },
     "packages/core": {
       "name": "@c4a/core",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "picomatch": "^4.0.4",
         "yaml": "^2.4.5",
@@ -85,7 +85,7 @@
     },
     "packages/dev-cli": {
       "name": "@c4a/dev-cli",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/context": "workspace:*",
         "@c4a/core": "workspace:*",
@@ -97,7 +97,7 @@
     },
     "packages/extract": {
       "name": "@c4a/extract",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "bin": {
         "c4a-extract-code": "./dist/bin/c4a-extract-code.js",
       },
@@ -112,7 +112,7 @@
     },
     "packages/extract-contract": {
       "name": "@c4a/extract-contract",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "graphql": "^16.14.2",
@@ -122,7 +122,7 @@
     },
     "packages/extract-go": {
       "name": "@c4a/extract-go",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/extract": "workspace:*",
@@ -132,7 +132,7 @@
     },
     "packages/extract-mdx": {
       "name": "@c4a/extract-mdx",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "remark-mdx": "^3.1.1",
@@ -144,7 +144,7 @@
     },
     "packages/extract-proto": {
       "name": "@c4a/extract-proto",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "zod": "^3.23.8",
@@ -152,7 +152,7 @@
     },
     "packages/extract-rush": {
       "name": "@c4a/extract-rush",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "typescript": "^5.5.4",
@@ -162,7 +162,7 @@
     },
     "packages/extract-sql": {
       "name": "@c4a/extract-sql",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "node-sql-parser": "^5.4.0",
@@ -171,7 +171,7 @@
     },
     "packages/extract-style": {
       "name": "@c4a/extract-style",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "postcss": "^8.5.26",
@@ -183,7 +183,7 @@
     },
     "packages/extract-thrift": {
       "name": "@c4a/extract-thrift",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "zod": "^3.23.8",
@@ -191,7 +191,7 @@
     },
     "packages/extract-ts": {
       "name": "@c4a/extract-ts",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "@c4a/core": "workspace:*",
         "@c4a/extract": "workspace:*",
@@ -202,7 +202,7 @@
     },
     "packages/tui": {
       "name": "@c4a/tui",
-      "version": "0.7.34",
+      "version": "0.7.35",
       "dependencies": {
         "ink": "^5.0.0",
         "react": "^18.3.1",

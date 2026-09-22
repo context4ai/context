@@ -9,6 +9,12 @@ mediaType: text/markdown
 Capture creates a reproducible local snapshot of a registered document source.
 It does not classify, summarize, approve, or build knowledge.
 
+For an explicit capture-and-pause request, register the named sources before
+starting article production. Do not call `task resume` or prepare/clear a
+production stage merely to reach capture. Once the selected documents have
+outcomes, report those outcomes and stop. Preserve unrelated pending sources
+and unfinished production work; a Route does not broaden the user's scope.
+
 Before capture:
 
 1. every registered document module must have a matching capture declaration;
@@ -36,9 +42,16 @@ child sandbox. If the CLI reports an external-environment requirement, retry
 the same returned command through the host. Never downgrade credential
 protection as a recovery step.
 
-Capture targets are a batch. Process one current target, evaluate status again,
+Capture targets are a batch. Process one current target, consume its freshly
+returned Route if present, or evaluate status when no fresh Route is returned,
 and continue until the graph reports the batch complete. Never treat one
 successful module as completion of the whole batch.
+
+Use the capture result's source identity, fidelity and resource-materialization
+summary for the final report. Open the full audit file only for truncated output,
+an unexplained outcome, or a requested investigation. Report previews as previews
+and unavailable resources as unavailable; no additional Git inspection or source
+lookup is required solely to repeat an already complete capture receipt.
 
 The CLI owns normalization, snapshot identity, hashes, manifests, and
 idempotency. For Lark sources it also owns embedded-resource download,

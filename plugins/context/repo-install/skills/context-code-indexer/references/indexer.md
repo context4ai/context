@@ -159,3 +159,20 @@ Use [diagram guidance](diagrams.md) or [source visual processing](visual-source-
 when actual reader needs or supplied images justify them. Diagrams are not
 mandatory. Content quality belongs to the Agent and Review; do not optimize
 wording, headings or section counts to satisfy a metric.
+
+## Source provenance and article prose
+
+Keep capture baselines, repository commit hashes, inspected branch revisions and
+verification timestamps in structured source references or citation destinations,
+not in article headings, introductions, tables or standalone evidence paragraphs.
+Do not add sentences such as “the backend baseline is repository@commit” merely
+to describe how the article was researched. Preserve exact source links and
+reference metadata; removing this prose must not weaken traceability.
+
+Retain business or API versions, compatibility constraints, migration differences
+and performance comparison baselines when they explain behavior or reader actions.
+A commit belongs in the prose only when the requested topic is that specific
+change, regression or reproduction and its identity is necessary. Apply editorial
+cleanup only to the current authorized writing or revision scope; do not scan or
+rewrite unrelated approved articles. This is writing guidance, not a keyword-based
+CLI rejection rule.

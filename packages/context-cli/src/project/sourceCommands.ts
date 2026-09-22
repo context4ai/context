@@ -32,6 +32,10 @@ import {
 } from "./documentSourceRegistration.js";
 import { readYamlOrJsonInput } from "./payloadInput.js";
 import { registerSourceBatch } from "./sourceBatchRegistration.js";
+import { loadSourceBatchJournal, readSourceBatchJournalStatus } from "./sourceBatchJournal.js";
+import { withSourceOperationRuntime } from "./sourceOperationRuntime.js";
+import { registerSourceDiscoveryCommands } from "./sourceDiscoveryCommands.js";
+import { registerSourceFetchCommands } from "./sourceFetchCommands.js";
 import { removeProjectSource } from "./sourceRemoval.js";
 import { findContextProjectRoot } from "./workspace.js";
 import { configureRegisteredSources, type ConfigurationSource } from "./sourceProjectConfiguration.js";
@@ -253,6 +257,17 @@ async function getProjectSource(projectRoot: string, id: string): Promise<Record
 
 export function registerProjectSourceCommands(program: Command): void {
   const source = program.command("source").description("Read or update project source registries");
+  registerSourceDiscoveryCommands(source);
+  registerSourceFetchCommands(source);
+  source.command("batch-status <job-id>")
+    .description("Read a saved registration checkpoint without changing sources")
+    .option("--format <format>", "output format: json | yaml | table", "table")
+    .action(async (jobId: string, ...args: unknown[]) => {
+      const options = actionOptions(...args);
+      const format = assertChoice(options.format, DATA_FORMATS, "--format") as DataFormat;
+      const projectRoot = requireProjectRoot(process.cwd(), "source batch-status");
+      writeFormatted(await readSourceBatchJournalStatus({ projectRoot, jobId }), format);
+    });
   source.command("import")
     .description("Import managed Markdown or prefetched Lark content, singly or in a batch")
     .requiredOption("--input <file>", "JSON/YAML type, name, markdown and optional base_digest; - for stdin")
@@ -275,7 +290,10 @@ export function registerProjectSourceCommands(program: Command): void {
 
   sourceAdd.command("batch [date]")
     .description("Register multiple repo, file, or Lark modules under one YYYYMMDD batch")
-    .requiredOption("--input <file>", "YAML/JSON payload path, or - for stdin")
+    .option("--input <file>", "YAML/JSON payload path, or - for stdin; required unless --resume is used")
+    .option("--checkpoint", "Persist this registration input and progress for safe replay")
+    .option("--resume <job-id>", "Replay a saved registration input against the current registries")
+    .option("--progress", "Emit bounded JSON progress to stderr; stdout keeps the final receipt")
     .option("--configure", "Also declare these sources and default capture phases in a simple src/index.ts; does not capture")
     .option("--format <format>", "output format: json | yaml | table", "table")
     .addHelpText("after", `
@@ -293,30 +311,44 @@ Payload example:
 
 repo.module is required. file.module and lark.module are optional; when omitted,
 the CLI derives a lowercase path-safe module and rejects duplicate batch identities.
+lark.title is optional. Pass the document or Wiki URL directly; capture obtains
+the title with the body, so no separate metadata or token lookup is required.
 repo.local is resolved from the Context project root. A valid local Git checkout
 lets the CLI infer origin and the current commit; remote/ref are needed only when
 that local identity cannot be resolved. If local is omitted, the CLI also accepts
 one uniquely named Git directory at <project-root>/<module> or ../<module>.
 The current source-boundary Route requires the completed, presented work-start
 report shown above. A direct maintenance call outside that Route may omit it.
+For long batches, add --checkpoint --progress. Resume with --resume <job-id>;
+saved progress is advisory and every item is revalidated against current sources.
+Resume performs registration only unless --configure is explicitly supplied.
 `)
     .action(async (namespace: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
       const format = assertChoice(options.format, DATA_FORMATS, "--format") as DataFormat;
       const projectRoot = requireProjectRoot(process.cwd(), "source add batch");
-      const sourceNamespace = resolveSourceName(namespace);
-      const payload = await readYamlOrJsonInput({
+      const resume = optionalString(options.resume);
+      if (resume !== undefined && (namespace !== undefined || options.input !== undefined)) {
+        throw new ContextError(ExitCode.UserError, "--resume cannot be combined with date or --input", {
+          category: ErrorCategory.UserInputInvalid,
+          next: "Use --resume <job-id> alone, or supply a date and --input for a new registration.",
+        });
+      }
+      const saved = resume === undefined ? undefined : await loadSourceBatchJournal({ projectRoot, jobId: resume });
+      const sourceNamespace = saved === undefined ? resolveSourceName(namespace) : { name: saved.namespace };
+      const payload = saved?.items ?? await readYamlOrJsonInput({
         path: optionalString(options.input),
         label: "source add batch",
         missingNext: "Pass a YAML/JSON payload with a non-empty sources array.",
         readFailureNext: "Fix the input path or pass --input - for stdin, then retry.",
         parseFailureNext: "Fix the YAML/JSON syntax, then retry the same batch command.",
       });
-      const result = await registerSourceBatch({
-        projectRoot,
-        namespace: sourceNamespace.name,
-        payload,
-      });
+      const result = await withSourceOperationRuntime(options.progress === true, ({ signal, report }) =>
+        registerSourceBatch({
+          projectRoot, namespace: sourceNamespace.name, payload,
+          checkpoint: options.checkpoint === true || saved !== undefined,
+          signal, onProgress: value => report({ operation: "source-add-batch", ...value }),
+        }));
       if (options.configure) {
         const entries = result.registered as Array<{ type: ConfigurationSource["type"]; module: string }>;
         result.configuration = await configureRegisteredSources(projectRoot, entries.map(item => ({
@@ -404,7 +436,7 @@ report shown above. A direct maintenance call outside that Route may omit it.
     .option("--url <url>", "Lark/Feishu document or wiki URL")
     .option("--doc-token <token>", "Lark document identity token")
     .option("--wiki-token <token>", "Lark wiki identity token")
-    .option("--title <title>", "optional user-readable source title")
+    .option("--title <title>", "optional known source title; omit to obtain it during capture without a separate lookup")
     .option("--format <format>", "output format: json | yaml | table", "table")
     .action(async (name: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);

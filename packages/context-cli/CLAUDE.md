@@ -61,6 +61,7 @@
 | Slash command | Skill 链 | CLI 辅助 | 写入边界 |
 |---|---|---|---|
 | `/c4a:context` | thin Context shell | 运行 `context entry --format json`，按返回动作初始化、进入工作区或消费 `workflow.current` | 单一对话入口；入口解析器只处理 workspace bootstrap，底层 Graph 选择生命周期路线。 |
+| `/c4a:context-plan` | 独立项目调研与分轮规划 Skill | 按需调用来源获取与导入工具 | 维护 Git 根目录 PLAN，单轮交接给既有生产工作流；不维护第二套 Graph、不增加 PLAN 格式或规模 CLI 门禁。 |
 
 改 project workflow 协议时，同步更新 `context-workflow/` Provider、CLI
 adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run build`
@@ -69,6 +70,7 @@ adapter、对应 plugin shell、SDK 手册和 Graph tests，并运行 `bun run b
 ### V1 Agent 入口与写入契约
 
 - 生产工作流入口是 `/c4a:context`；独立只读查询与来源归因入口是显式触发的 `/c4a:context-inspect-search`，不消费生产 Route 的写动作。不要为初始化或 `source` / `run` / `review` / `build` / `verify` / `status` 增加第二个公开 slash command 或 public skill。
+- `context-plan` 是独立的项目调研、来源批量更新分析与分轮协调入口，不是 CLI primitive 的公开别名。规模分流、计划阅读批准、阶段交接与 PLAN 收尾由 Skill 负责；单轮生产继续由当前 Graph、Route 和既有门禁负责。
 - `/c4a:context` 是对话式入口，不是同名 CLI primitive。它先运行只读 `context entry --format json`，只执行返回的 `next_action.command`；工作区就绪后把 `workflow.current` 当作当前步骤权威，完整读取 required 资源，并原样执行 Route 返回的命令。**不要新增或调用 `context continue`**。
 - 用户在当前会话明确授权全托管后，优先执行 Route 返回的连续命令，保留其中的阅读回执等参数，不自行拼裸循环。连续执行仅推进唯一、immediate、非 read 命令，每步重新求值；遇到语义读取、配置、权限缺口或多命令时返回当前 Route。
 - 普通模式与全托管模式复用同一 Gate，并完整保留普通模式的 Inspection 与 Resolution 能力。只在 Graph Gate 的 `delegated` 策略中声明全托管可跳过的冗余 inspection、可替换的对话 Resource，以及需要时由 authority 选择的专用 Resolution Action；不要在 Facts、TypeScript 或入口提示词中把 Authority 伪装成已完成业务事实。普通模式在工作区创建后和来源采集完成后通过 Route-selected dialogue 说明模式差异。
@@ -305,8 +307,8 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 
 构建不变量：
 
-- Claude/Cursor commands 发布生产与显式查询入口，并提供 Indexer 创建 Skill。
-- `dist/plugins/codex/skills/` 包含 `context`、`context-inspect-search` 和 `context-indexer-create`；宿主 plugin root 不内嵌 lifecycle Provider。
+- Claude/Cursor commands 发布生产、项目规划与显式查询入口，并提供 Indexer 创建 Skill。项目规划 command 转交完整 `context-plan` Skill，保留其参考文件和模板。
+- `dist/plugins/codex/skills/` 包含 `context`、`context-plan`、`context-inspect-search` 和 `context-indexer-create`；宿主 plugin root 不内嵌 lifecycle Provider。
 - `dist/plugins/skills/` 直接投影根级全部 Skills；安装器把其中 lifecycle Provider 原子复制到 `~/.agents/skills` 和 `~/.claude/skills`，而不是复制进 Host plugin root。
 - `dist/plugins/{claude,codex,cursor}/` 各带 generated guard（`CLAUDE.md` 或 `AGENTS.md` + `.generated`）；看到 guard 不要编辑 build 产物。`dist/plugins/skills/` 顶层 README 统一说明。
 - 生命周期规则、长诊断、Schema 发现说明和语义规则统一住在

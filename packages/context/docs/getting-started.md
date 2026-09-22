@@ -4,6 +4,28 @@ Context turns selected code, documents, notes and conversation summaries into
 approved knowledge. Start through the installed Context Agent entry and follow
 the current Route returned by the CLI.
 
+## Planning and review choices
+
+Use the `context-plan` Skill before production for a broad source refresh or a
+large multi-stage knowledge task. Its project report defaults to human review,
+including managed mode. Ordinary bounded changes use the Context entry directly.
+For authorized unattended updates, pass Skill-level review choices in the task
+instructions:
+
+```yaml
+CONTEXT_RUN_POLICY:
+  plan_review: delegate
+  knowledge_review: delegate
+```
+
+`ask` requests human review; `delegate` authorizes actual Agent review. Each key
+is optional and independent; omission preserves existing policy. Overrides are
+limited to this authorized task and its stages, leaving Bot defaults unchanged.
+This is not shell syntax or a new CLI/API option. Include the allowed source
+scope, execution/delivery authorization and continuation preference. See the
+[Agent Guide](guides/agent-guide.md#task-scoped-review-policy) for precedence,
+trusted input and recovery rules. Other Gates and required reports still apply.
+
 ## 1. Initialize the workspace
 
 ```bash
@@ -118,8 +140,11 @@ waves. Each delivery completes review, close and build before continuing.
 ## 6. Continue or update
 
 Use the latest Route and revision. Accepted tasks must not be resubmitted. If a
-completion points to `result_file` or `next_route.file`, read those files; do not
-infer failure from a shortened console response. Follow its recovery command if
+completion includes `next_route.inline`, use that complete Route without also
+reading its identical `next_route.file`. Otherwise read the Route file before
+acting. Required resources and read receipts are unchanged. Read `result_file`
+when details are required or the outcome is unclear; do not infer failure from a
+shortened console response. Follow its recovery command if
 preparing the next Route failed after acceptance.
 
 Approved knowledge and `structure.yaml` retain the durable information needed
