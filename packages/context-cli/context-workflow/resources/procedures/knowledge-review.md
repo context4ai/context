@@ -8,7 +8,6 @@ mediaType: text/markdown
 
 Agent policy: `context.gate.knowledge_review`. An instance-specific Bot may
 override the managed default and require the ordinary HTML review decision.
-The report-inaccessible exception is `context.gate.force_review_approval`.
 
 Review is the authority boundary between candidates and approved knowledge.
 Open one report for the complete current candidate set and apply only a payload
@@ -25,20 +24,22 @@ an approved path is a migration within the user's requested scope; do not ask
 again when that scope is already clear. The resulting Candidate still enters
 Review.
 
-Without explicit session-managed authority:
+Without explicit session-managed authority, open the report returned by the
+Route and request confirmation or revision notes through the host user-question
+tool. Follow the selected knowledge-review dialogue to distinguish feedback,
+approval and approval-after-repair. Keep the exact report reference, presented
+scope and user intent in this conversation. The HTML contains reading progress
+and plain revision notes, not approval authority. Normal explicit confirmation
+uses the Route's revision-bound resolution Action and the report's scope snapshot.
+No review code or special approval phrase is required.
 
-- open the report returned by the route;
-- let the user approve, reject, or request revisions to candidates;
-- apply the exact copied review code through the returned review apply command; and
-- retain the exact report reference and reviewed scope in this conversation for
-  the final completion summary.
-
-The ordinary Route also carries a revision-bound force-approval resolution
-Action as an escape path. Do not advertise it when first presenting Review.
-Use it only after the user cannot use the report and explicitly replies with
-the exact phrase `强制批准` in the current conversation. That reply is the
-decision; do not ask a second confirmation. It approves the complete
-current scope atomically; no candidate-specific decisions are inferred.
+For old automation, `review approve-all --force` remains a deprecated explicit
+approval alias and applies the current candidate scope without requiring a new
+report. Prefer `--confirmed` for new calls. The CLI also accepts existing legacy
+review files and translates their decisions and repair notes, retaining scope,
+content and baseline checks. Compatibility notices go to stderr, preserving JSON
+stdout. Never request or generate a review code; the page exposes only reading
+progress and revision notes. Existing pending repairs must still be resolved.
 
 With explicit session-managed authority, materialize the required
 `context.review-current` Markdown Resource once. Read its index and every
@@ -80,16 +81,19 @@ all candidate pages as New. Existing unchanged pages show titles only; changed
 blocks and previous text remain available for comparison. Navigation without a
 Git baseline is labelled as current context, not an invented historical diff.
 
-Approve accepts a candidate. Reject durably omits it; it does not request a
-rewrite or retire an approved article. Entering revision instructions requests
-repair and locks the other choices for that page until cancelled. Bulk approval
-requires confirmation and affects only undecided pages. When the report contains
-new top-level categories, the dialog lists them and requires explicit
-acknowledgment plus an eight-second wait before confirmation is enabled.
-New descendant pages under an existing category do not trigger this extra step. The copied code binds
-the candidate scope, exact content, displayed baseline and revision instructions;
-the CLI validates these together before writing any decision. Follow returned
-repair commands, then obtain review of the repaired candidates.
+Opening a candidate marks it READ once for that browser and content version.
+Read counts and revision notes are local convenience state, never approval or
+required CLI receipts. The total includes only current candidates. Typing notes
+immediately marks a page for revision; clearing notes preserves its READ state.
+The revision counter opens a card list of titles and notes, with links back to
+the articles. Copy exports plain notes with article IDs and titles. After copying,
+a five-second dialog previews the text; only that preview is truncated at 400px.
+
+The Agent converts conversation intent into current scoped CLI decisions or
+revision instructions. A rejection durably omits a candidate; it does not request
+a rewrite or retire an approved article. Repair first, inspect the actual result,
+and obtain a new decision unless the user already explicitly authorized approval
+after the correction. The latter applies only to the same agreed article scope.
 
 Use the affected page's `Repair` command in the review material, replacing only
 the correction instruction. Current candidates are repaired within this batch;

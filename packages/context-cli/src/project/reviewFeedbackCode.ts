@@ -1,4 +1,4 @@
-/** Shared with the offline browser. Feedback is bound to the same exact scope as decisions. */
+/** Legacy CLI input compatibility only. Never embedded in the reading report. */
 export function createReviewFeedbackCodec() {
   type Feedback = { scope: string; idsHash: string; contentHash: string; baselineHash: string;
     statuses: Array<"approved" | "rejected" | "pending" | "revised">;

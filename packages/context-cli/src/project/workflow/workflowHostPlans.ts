@@ -60,7 +60,7 @@ function reviewApproveCommand(
   return "context review apply '<review-decisions-file>' --format json";
 }
 
-function reviewForceApproveCommand(
+function reviewConfirmedApproveCommand(
   observation: ContextWorkflowObservation,
 ): string | undefined {
   if (
@@ -70,8 +70,8 @@ function reviewForceApproveCommand(
     return undefined;
   }
   return observation.draftCollections.length === 1
-    ? `context review approve-all ${observation.draftCollections[0]} --force --format json`
-    : "context review approve-all --all --force --format json";
+    ? `context review approve-all ${observation.draftCollections[0]} --confirmed --format json`
+    : "context review approve-all --all --confirmed --format json";
 }
 
 function workspaceRepairPlan(
@@ -188,8 +188,8 @@ const HOST_PLAN_RESOLVERS: Readonly<Record<string, HostPlanResolver>> = {
         : [command(next, "write", "agent-required")],
     };
   },
-  "context.review.force-approve-current": (observation) => {
-    const next = reviewForceApproveCommand(observation);
+  "context.review.confirm-current": (observation) => {
+    const next = reviewConfirmedApproveCommand(observation);
     return {
       commands: next === undefined ? [] : [command(next, "write")],
     };

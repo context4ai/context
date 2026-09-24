@@ -1,5 +1,4 @@
-import { createReviewFeedbackCodec } from "./reviewFeedbackCode.js";
-import { createReviewCodeCodec } from "./reviewCode.js";
+import { readLegacyReviewPayload, warnLegacyReview } from "./reviewLegacy.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
@@ -25,6 +24,7 @@ import {
   type ReviewPayloadScope,
   type ReviewStatus,
 } from "./reviewShared.js";
+import { readConfirmedReviewScope } from "./reviewReportScope.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { htmlReportReference, openLocalFile } from "./localHtmlReport.js";
 import { findContextProjectRoot } from "./workspace.js";
@@ -129,7 +129,7 @@ function parsePayloadValues(parsed: unknown[]): ReviewPayload {
   if (first.schema !== REVIEW_PAYLOAD_SCHEMA) {
     throw new ContextError(ExitCode.UserError, `review payload header schema must be ${REVIEW_PAYLOAD_SCHEMA}`, {
       category: ErrorCategory.UserInputInvalid,
-      next: "Copy a fresh review payload from context review html <collection>.",
+      next: "Use the current scope template from the review resource.",
     });
   }
 
@@ -160,7 +160,20 @@ function parsePayloadValues(parsed: unknown[]): ReviewPayload {
   }
   const decisions = (first.decisions ?? parsed.slice(1) as unknown[]) as unknown[];
   const validatedDecisions = decisions.map((item, index) => parsePayloadLineDecision(item, index + 2));
+  const repairs = first.repairs;
+  if (repairs !== undefined && (!Array.isArray(repairs) || repairs.some(item =>
+    !isRecord(item) || typeof item.candidate_id !== "string" || !item.candidate_id.trim() ||
+    typeof item.instruction !== "string" || !item.instruction.trim()))) {
+    throw new ContextError(ExitCode.UserError, "review repairs require candidate_id and nonempty instruction", {
+      category: ErrorCategory.UserInputInvalid,
+    });
+  }
+  if (first.baseline_hash !== undefined && (typeof first.baseline_hash !== "string" || !/^[a-f0-9]{64}$/iu.test(first.baseline_hash))) {
+    throw new ContextError(ExitCode.UserError, "review baseline_hash must be a SHA-256 digest", { category: ErrorCategory.UserInputInvalid });
+  }
   return {
+    ...(Array.isArray(repairs) ? { repairs: repairs as NonNullable<ReviewPayload["repairs"]> } : {}),
+    ...(typeof first.baseline_hash === "string" ? { baseline_hash: first.baseline_hash.toLowerCase() } : {}),
     decisions: validatedDecisions,
     ...(typeof first.note === "string" ? { note: first.note } : {}),
     ...(collection !== undefined ? { collection } : {}),
@@ -203,7 +216,7 @@ function parseReviewPayloadText(raw: string): ReviewPayload {
   }
 }
 
-export async function readReviewPayloadFile(filePath: string): Promise<ReviewPayload> {
+export async function readReviewPayloadFile(filePath: string, projectRoot?: string): Promise<ReviewPayload> {
   let raw: string;
   try {
     raw = await readFile(filePath, "utf8");
@@ -213,31 +226,11 @@ export async function readReviewPayloadFile(filePath: string): Promise<ReviewPay
       category: ErrorCategory.UserInputInvalid,
       path: filePath,
       reason: message,
-      next: "Pass the JSON or JSONL review Payload copied from the review HTML page.",
+      next: "Pass the scoped JSON or JSONL decisions prepared from the current review resource.",
     });
   }
-  if (raw.trim().startsWith("CR")) {
-    try {
-      if (raw.trim().startsWith("CR2.")) {
-        const feedback = createReviewFeedbackCodec().decode(raw);
-        const collection = feedback.scope === "all" ? undefined : assertCollection(feedback.scope);
-        return { decisions: [], encoded_statuses: feedback.statuses.map(s => s === "revised" ? "pending" : s),
-          feedback_repairs: feedback.repairs, baseline_hash: feedback.baselineHash,
-          ...(collection === undefined ? {} : { collection }),
-          scope: { kind: collection === undefined ? "all" : "collection", ...(collection === undefined ? {} : { collection }),
-            count: feedback.statuses.length, ids_sha256: feedback.idsHash, candidates_sha256: feedback.contentHash } };
-      }
-      const decoded = createReviewCodeCodec().decode(raw);
-      const collection = decoded.scope === "all" ? undefined : assertCollection(decoded.scope);
-      return { decisions: [], encoded_statuses: decoded.statuses, ...(collection === undefined ? {} : { collection }),
-        scope: { kind: collection === undefined ? "all" : "collection", ...(collection === undefined ? {} : { collection }),
-          count: decoded.count, ids_sha256: decoded.idsHash, candidates_sha256: decoded.contentHash } };
-    } catch (error) {
-      throw new ContextError(ExitCode.UserError, error instanceof Error ? error.message : String(error), {
-        category: ErrorCategory.UserInputInvalid,
-        next: "Copy the complete review code and all following revision instruction lines unchanged from the current report into one input file. Older segmented codes require every segment.",
-      });
-    }
+  if (/^CR(?:[12]|P1)\./u.test(raw.trim())) {
+    return readLegacyReviewPayload(raw, projectRoot ?? projectRootFromCwd(process.cwd()));
   }
   return parseReviewPayloadText(raw);
 }
@@ -389,7 +382,7 @@ export async function runReviewHtmlCommand(input: {
       ] : []),
     ],
     next: result.next_action ? `${result.next_action.message} ${result.next_action.command}`
-      : "Apply the exact decision Payload returned by this report.",
+      : "Return to the conversation to confirm or provide revision notes.",
   }));
 }
 
@@ -460,7 +453,7 @@ export async function runReviewApplyCommand(input: {
 }): Promise<void> {
   const projectRoot = projectRootFromCwd(input.cwd);
   const payloadPath = isAbsolute(input.payloadInput) ? input.payloadInput : resolve(input.cwd, input.payloadInput);
-  const payload = await readReviewPayloadFile(payloadPath);
+  const payload = await readReviewPayloadFile(payloadPath, projectRoot);
   const result = await applyReviewDecisions({ projectRoot, payload });
   const continuation = await input.afterApply?.(projectRoot);
   process.stdout.write(formatApplyResult({ ...result, ...(continuation === undefined ? {} : { continuation }) }, input.format ?? "text"));
@@ -471,44 +464,50 @@ export async function runReviewApproveAllCommand(input: {
   collection?: string;
   all?: boolean;
   managed?: boolean;
+  confirmed?: boolean;
   force?: boolean;
   verbose?: boolean;
   format?: ReviewFormat;
   afterApply?: ReviewContinuation;
 }): Promise<void> {
-  if (input.managed === true && input.force === true) {
-    throw new ContextError(ExitCode.UserError, "review approve-all accepts either --managed or --force, not both", {
+  if (input.managed === true && (input.confirmed === true || input.force === true)) {
+    throw new ContextError(ExitCode.UserError, "review approve-all accepts either --managed or --confirmed, not both", {
       category: ErrorCategory.UserInputInvalid,
       code: "review-approval-authority-conflict",
       next: "context status --format json",
     });
   }
-  if (input.managed !== true && input.force !== true) {
-    throw new ContextError(ExitCode.UserError, "review approve-all requires explicit --managed authority or --force user confirmation", {
+  if (input.managed !== true && input.confirmed !== true && input.force !== true) {
+    throw new ContextError(ExitCode.UserError, "review approve-all requires explicit --managed authority or --confirmed user confirmation", {
       category: ErrorCategory.UserInputInvalid,
       code: "review-approval-authority-required",
       next: "context status --format json",
     });
   }
+  if (input.force === true) warnLegacyReview("--force");
   const decisionSource = input.managed === true
     ? "managed-session"
-    : "explicit-user-force-approval";
+    : "explicit-user-confirmation";
   const projectRoot = projectRootFromCwd(input.cwd);
   const scoped = await reviewCommandScope({
     projectRoot,
     ...(input.collection !== undefined ? { collection: input.collection } : {}),
     ...(input.all === true ? { all: true } : {}),
   });
+  const confirmedScope = input.confirmed === true
+    ? await readConfirmedReviewScope(projectRoot, scoped.collection ?? "all")
+    : undefined;
   const result = await applyReviewDecisions({
     projectRoot,
     payload: {
+      ...(confirmedScope === undefined ? {} : { baseline_hash: confirmedScope.baseline_hash }),
       decisions: [],
       default: "approved",
       note: input.managed === true
         ? "managed-session auto approval"
-        : "explicit user force approval",
+        : "explicit user confirmation",
       ...(scoped.collection !== undefined ? { collection: scoped.collection } : {}),
-      scope: scoped.scope,
+      scope: confirmedScope?.scope ?? scoped.scope,
     },
   });
   const continuation = await input.afterApply?.(projectRoot);
@@ -543,7 +542,7 @@ export async function runReviewApproveAllCommand(input: {
   process.stdout.write(formatFeedback({
     symbol: "✓",
     action: "approved",
-    subject: input.managed === true ? "managed review batch" : "force-approved review batch",
+    subject: input.managed === true ? "managed review batch" : "confirmed review batch",
     headline: `${result.approved} candidate(s) approved`,
     body: [
       `decision source: ${decisionSource}`,

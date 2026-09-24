@@ -175,7 +175,7 @@ function supportsCommand(command: readonly string[]): boolean {
     const options = parseOptions(
       command.slice(2),
       new Set(["--format"]),
-      new Set(["--all", "--managed", "--force", "--verbose"]),
+      new Set(["--all", "--managed", "--confirmed", "--verbose"]),
     );
     return options !== undefined && options.positionals.length <= 1 &&
       !(options.flags.has("--all") && options.positionals.length === 1) &&
@@ -240,7 +240,7 @@ async function executeReviewApproveAll(
   const options = parseOptions(
     invocation.command.slice(2),
     new Set(["--format"]),
-    new Set(["--all", "--managed", "--force", "--verbose"]),
+    new Set(["--all", "--managed", "--confirmed", "--verbose"]),
   );
   if (options === undefined || options.positionals.length > 1) throw new Error("unsupported review approve-all command");
   await runReviewApproveAllCommand({
@@ -248,7 +248,7 @@ async function executeReviewApproveAll(
     ...(options.positionals[0] === undefined ? {} : { collection: options.positionals[0] }),
     ...(options.flags.has("--all") ? { all: true } : {}),
     managed: invocation.managed || options.flags.has("--managed"),
-    force: options.flags.has("--force"),
+    confirmed: options.flags.has("--confirmed"),
     verbose: options.flags.has("--verbose"),
     format: outputFormat(options) ?? "text",
   });

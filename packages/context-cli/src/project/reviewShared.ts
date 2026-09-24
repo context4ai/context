@@ -31,9 +31,8 @@ export interface ReviewDecision {
 }
 
 export interface ReviewPayload {
-  feedback_repairs?: Array<{ index: number; instruction: string }>;
+  repairs?: Array<{ candidate_id: string; instruction: string }>;
   baseline_hash?: string;
-  encoded_statuses?: Array<ReviewStatus | "pending">;
   decisions: ReviewDecision[];
   note?: string;
   collection?: KnowledgeCollection;

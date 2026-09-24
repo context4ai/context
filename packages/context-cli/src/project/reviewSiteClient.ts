@@ -1,46 +1,335 @@
-/** Offline review UI; receives only deterministic report data. Never loads the website runtime. */
-export const REVIEW_SITE_CLIENT = String.raw`
-const $=id=>document.getElementById(id);
-let language=(navigator.languages?.[0]||navigator.language||'en').startsWith('zh')?'zh':'en';
-const words={approvedContext:['已入库正文，供核对目录；本轮无需再次审核。','Approved content shown for navigation review; no new approval required.'],newRoots:['新增一级目录','New top-level categories'],ackRoots:['我已知晓本次新增一级目录','I acknowledge the new top-level categories'],home:['待审核内容','Pages to review'],unchanged:['本次未变更内容略。','Unchanged content omitted.'],previous:['查看旧文本','Previous text'],removed:['移除或替换的旧内容','Removed or replaced content'],removedNav:['移除的目录条目','Removed navigation entries'],unplaced:['待落位文章','Unplaced articles'],approve:['批准这篇','Approve page'],reject:['拒绝这篇','Reject page'],revise:['修订','Revise'],approved:['已批准','Approved'],rejected:['已拒绝','Rejected'],revised:['已修订','Revision requested'],cancel:['取消','Cancel'],copy:['复制审核码','Copy review code'],allApprove:['全部批准','Approve all'],allReject:['全部拒绝','Reject all'],note:['输入修订意见','Enter revision instructions'],guide:['逐篇阅读并批准或拒绝后，复制审核码回复给 Agent。需要修改的文章请填写修订意见。','Read each page, approve or reject, then copy the review code back to your Agent. Enter instructions for pages needing revision.'],known:['知道了','Got it'],close:['关闭','Close'],notReviewed:['尚未完成审核','Not yet reviewed'],confirmAll:['建议逐篇阅读并确认。除非已读完所有待审核文章，否则请勿一次性全部批准。已有拒绝和修订意见将保留。','Read and confirm each page. Approve all only after reading every pending page. Existing rejections and revisions are preserved.'],confirm:['已阅读，全部批准','Read all, approve'],copied:['审核码已复制','Review code copied'],failed:['复制失败，请手动复制下方完整内容','Copy failed. Copy the complete text below manually.'],instructions:['请回到和 Agent 的会话窗口粘贴已复制内容进行回复即可继续~','Return to your conversation with the Agent and reply with the copied content to continue.'],long:['超过 1000 字符，飞书表单可能不接受。飞书场景下建议 @Bot 后粘贴回复。','Over 1,000 characters: a Feishu form may reject it. Mention @Bot and paste it in a reply instead.'],files:['预期工作区变化','Expected workspace changes'],navigate:['目录与文章','Directories and articles'],pendingNew:['未审批的新增文章','Pending new pages'],pendingModify:['未审批的修改文章','Pending modified pages'],processed:['已经审核和修订的文章','Reviewed or revision requested'],noSelection:['请先选择审核结果或填写修订意见','Select a decision or enter revision instructions first'],baseline:['无 Git 导航基线，目录沿用当前工作区；未推断历史目录变化。','No Git navigation baseline. Current navigation is shown without inferred historic changes.'],placement:['待落位文章不是新的站点栏目；请先按既有分类完成导航规划。','Unplaced articles are not a new site category. Finish their placement in the existing navigation first.']};
-const t=k=>words[k]?.[language==='zh'?0:1]||k;
-const escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const decisions=new Map(),notes=new Map(),expanded=new Set();let selected=null,active=null;
-const candidates=DATA.pages.filter(p=>p.candidate_id),ordered=[...candidates].sort((a,b)=>a.candidate_id<b.candidate_id?-1:1);
-for(const p of candidates)if(p.revisionInstruction){decisions.set(p.candidate_id,'revised');notes.set(p.candidate_id,p.revisionInstruction)}
-const badge=change=>change==='unchanged'?'':'<span class="badge '+change+'">'+(change==='new'?'New':change==='modify'?'Modify':change==='removed'?'Remove':t(change))+'</span>';
-const state=p=>decisions.get(p.candidate_id)||'pending';
-function descendants(key,seen=new Set()){if(seen.has(key))return[];seen.add(key);return DATA.nodes.filter(n=>n.parent===key).flatMap(n=>[n,...descendants(n.key,seen)])}
-function nodeChange(n){if(n.removed)return 'removed';const changes=[n.change,...[n,...descendants(n.key)].flatMap(v=>{const p=DATA.pages.find(p=>p.id===v.page);return p?[p.change]:[]}),...descendants(n.key).map(v=>v.change)];return descendants(n.key).some(v=>v.removed)||changes.includes('modify')?'modify':changes.includes('new')?'new':'unchanged'}
-function nodeTitle(n){return n.key==='review-unplaced'?t('unplaced'):n.title}
-function nodeLabel(n){return (n.removed?'<del>':'')+escape(nodeTitle(n))+(n.removed?'</del>':'')+(n.oldTitle?'<small class="old-title"> ← '+escape(n.oldTitle)+'</small>':'')}
-function totals(){const result={new:0,modify:0,approved:0,rejected:0,revised:0,pending:0};for(const p of candidates){const s=state(p);result[s]++;if(s==='pending')result[p.change==='new'?'new':'modify']++}return result}
-function updateCounts(){const c=totals();$('counts').textContent=c.new+' New / '+c.modify+' Modify / '+(c.approved+c.rejected+c.revised)+' Confirm';$('counter-pop').innerHTML='<div class="counter-grid"><div><b>'+c.new+'</b>'+t('pendingNew')+'</div><div><b>'+c.modify+'</b>'+t('pendingModify')+'</div></div><p>'+t('processed')+': '+(c.approved+c.rejected+c.revised)+'</p><small>'+t('approved')+' '+c.approved+' · '+t('rejected')+' '+c.rejected+' · '+t('revised')+' '+c.revised+'</small>'}
-function button(n,depth){const change=nodeChange(n),page=DATA.pages.find(p=>p.id===n.page);return '<button data-node="'+escape(n.key)+'" class="node '+(DATA.nodes.some(c=>c.parent===n.key)?'directory ':'')+change+(selected===n.page?' selected':'')+'" style="padding-left:'+(26+14*depth)+'px">'+nodeLabel(n)+badge(change)+(page&&page.candidate_id&&state(page)!=='pending'?badge(state(page)):'')+(DATA.nodes.some(c=>c.parent===n.key)?'<span class="caret">›</span>':'')+'</button>'}
-function renderNav(){const roots=DATA.nodes.filter(n=>!n.parent).sort((a,b)=>a.order-b.order);$('top').innerHTML=roots.map(n=>'<button data-root="'+escape(n.key)+'" class="'+nodeChange(n)+(active===n.key?' active':'')+'">'+nodeLabel(n)+badge(nodeChange(n))+'</button>').join('');let html='';function walk(key,depth,seen=new Set()){if(seen.has(key))return;seen.add(key);for(const n of DATA.nodes.filter(n=>n.parent===key).sort((a,b)=>a.order-b.order)){html+=button(n,depth);if(expanded.has(n.key)||n.page===selected||descendants(n.key).some(d=>d.page===selected))walk(n.key,depth+1,seen)}}if(active)walk(active,0);else html=roots.map(n=>button(n,0)).join('');$('tree').innerHTML=html}
-function rootFor(page){let node=DATA.nodes.find(n=>n.page===page);const seen=new Set();while(node?.parent&&!seen.has(node.key)){seen.add(node.key);node=DATA.nodes.find(n=>n.key===node.parent)}return node?.key||null}
-function showPage(id){selected=id;active=rootFor(id)||active;render()}
-function localizeBody(){document.querySelectorAll('[data-label]').forEach(el=>{el.textContent=t(el.dataset.label)})}
-function workspaceTree(){const tree={};for(const p of candidates){let node=tree;for(const part of ('knowledge/'+p.path).split('/'))node=node[part]??=( {} );node.$page=p}function lines(node,level=0){return Object.entries(node).filter(([k])=>k!=='$page').sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>'<div style="padding-left:'+level*18+'px">'+(v.$page?'<button data-page="'+escape(v.$page.id)+'">'+escape(k)+'</button>'+badge(v.$page.change)+(state(v.$page)!=='pending'?badge(state(v.$page)):''):escape(k)+'/')+'</div>'+lines(v,level+1)).join('')}return '<div class="workspace-tree">'+lines(tree)+'</div>'}
-function renderHome(){const c=totals();$('article').innerHTML='<h1>'+t('home')+'</h1><p class="stats">'+candidates.length+' '+(language==='zh'?'篇候选正文':'candidate pages')+' · '+c.approved+' '+t('approved')+' '+badge('new')+' '+badge('modify')+' '+badge('removed')+'</p>'+(DATA.navigationBaseline==='current'?'<p class="note">'+t('baseline')+'</p>':'')+(DATA.nodes.some(n=>n.key==='review-unplaced')?'<p class="note">'+t('placement')+'</p>':'')+'<h2>'+t('navigate')+'</h2>'+DATA.nodes.filter(n=>!n.parent).map(n=>{const ids=new Set([n,...descendants(n.key)].map(x=>x.page));const pages=candidates.filter(p=>ids.has(p.id));return pages.length?'<section class="home-group"><h3>'+nodeLabel(n)+badge(nodeChange(n))+'</h3><div class="cards">'+pages.map(p=>'<button data-page="'+escape(p.id)+'">'+escape(p.title)+badge(p.change)+(state(p)!=='pending'?badge(state(p)):'')+'</button>').join('')+'</div></section>':''}).join('')+(DATA.nodes.some(n=>n.removed)?'<h2>'+t('removedNav')+'</h2><ul>'+DATA.nodes.filter(n=>n.removed).map(n=>'<li class="removed">'+nodeLabel(n)+badge('removed')+'</li>').join('')+'</ul>':'')+'<h2>'+t('files')+'</h2>'+workspaceTree()}
-function controls(){const p=DATA.pages.find(p=>p.id===selected),s=p?state(p):'pending';$('footer').hidden=!p?.candidate_id;if(!p?.candidate_id)return;$('revision-note').value=notes.get(p.candidate_id)||'';$('revision-note').placeholder=t('note');$('revision-note').disabled=s==='approved'||s==='rejected';for(const [id,v,label]of[['revise-btn','revised','revise'],['reject-btn','rejected','reject'],['approve-btn','approved','approve']]){const b=$(id);b.disabled=s!=='pending'&&s!==v;b.className='btn '+(s===v?'chosen':v==='approved'?'primary':'');b.innerHTML=s===v?'<span class="normal">'+t(v)+'</span><span class="hover-label">'+t('cancel')+'</span>':t(label);b.title=s===v?t('cancel'):''}}
-function render(){document.body.classList.toggle('home',selected===null);$('article').classList.toggle('review-new-page',DATA.pages.some(p=>p.id===selected&&p.change==='new'));renderNav();updateCounts();if(selected===null)renderHome();else{const p=DATA.pages.find(p=>p.id===selected);$('article').innerHTML=p?'<h1>'+escape(p.title)+badge(p.change)+(p.candidate_id&&state(p)!=='pending'?badge(state(p)):'')+'</h1>'+(p.previousPath?'<p class="note">'+escape(p.previousPath)+' → '+escape(p.path)+'</p>':'')+(p.candidate_id?p.html:p.html?'<p class="note">'+t('approvedContext')+'</p>'+p.html:'<div class="review-omitted">'+t('unchanged')+'</div>')+(p.sources.length?'<details><summary>'+(language==='zh'?'来源引用':'Sources')+'</summary><ul>'+p.sources.map(s=>'<li>'+escape(s)+'</li>').join('')+'</ul></details>':''):''}controls();localizeBody();globalThis.contextDiagramViewer?.render($('article'),{dark:document.body.classList.contains('dark'),language})}
-function setDecision(id,value){const current=decisions.get(id);if(current===value){decisions.delete(id);notes.delete(id)}else if(!current){if(value==='revised'){$('revision-note').focus();return}decisions.set(id,value)}render()}
-function setAllDecision(value){for(const p of candidates)if(!decisions.has(p.candidate_id))decisions.set(p.candidate_id,value);render()}
-function payloadText(){const statuses=ordered.map(p=>state(p));return feedbackCodec.encode({scope:SCOPE.label,idsHash:SCOPE.ids_sha256,contentHash:SCOPE.candidates_sha256,baselineHash:DATA.baselineHash,statuses,repairs:ordered.flatMap((p,index)=>state(p)==='revised'?[{index,instruction:notes.get(p.candidate_id)}]:[])})}
-async function copyPayload(){dismissGuide();const c=totals();$('copy-warning').textContent='';$('payload').value='';if(c.pending===candidates.length){$('copy-title').textContent=t('noSelection');$('payload').value=''}else{try{const text=payloadText();$('payload').value=text;await navigator.clipboard.writeText(text);$('copy-title').textContent=t('copied')}catch(e){$('copy-title').textContent=t('failed');if(!$('payload').value)$('payload').value=String(e.message)}}$('copy-summary').textContent=t('approved')+' '+c.approved+' · '+t('rejected')+' '+c.rejected+' · '+t('revised')+' '+c.revised+' · '+t('notReviewed')+' '+c.pending;$('copy-instructions').textContent=t('instructions');$('copy-warning').textContent=Array.from($('payload').value).length>1000?t('long'):'';$('copy-dialog').showModal()}
-let guideTimer;function dismissGuide(){clearInterval(guideTimer);$('copy-guide').hidden=true}
-function labels(){$('all-approved').textContent=t('allApprove');$('all-rejected').textContent=t('allReject');$('payload-open').textContent=t('copy');$('guide-text').textContent=t('guide');$('guide-close').textContent=t('known');$('bulk-title').textContent=t('allApprove');$('bulk-message').textContent=t('confirmAll');$('bulk-cancel').textContent=t('cancel');$('bulk-confirm').textContent=t('confirm');$('payload-close').textContent=t('close');$('language').textContent=language==='zh'?'EN':'中文'}
-document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.page){showPage(b.dataset.page);window.scrollTo(0,0)}if(b.dataset.root){active=b.dataset.root;const n=DATA.nodes.find(n=>n.key===active);selected=n?.page||[...descendants(active)].find(d=>d.page)?.page||null;render()}if(b.dataset.node){const n=DATA.nodes.find(n=>n.key===b.dataset.node);if(n.page)showPage(n.page);else{expanded.has(n.key)?expanded.delete(n.key):expanded.add(n.key);renderNav()}}});
-$('home').onclick=()=>{selected=null;active=null;render();window.scrollTo(0,0)};
-$('revision-note').oninput=e=>{const p=DATA.pages.find(p=>p.id===selected);if(!p?.candidate_id)return;const value=e.target.value;notes.set(p.candidate_id,value);if(value.trim())decisions.set(p.candidate_id,'revised');else decisions.delete(p.candidate_id);controls();renderNav();updateCounts();$('article').querySelectorAll('h1 > .approved,h1 > .revised,h1 > .rejected').forEach(e=>e.remove());$('article').querySelector('h1')?.insertAdjacentHTML('beforeend',value.trim()?badge('revised'):'')};
-for(const [id,value]of[['revise-btn','revised'],['reject-btn','rejected'],['approve-btn','approved']])$(id).onclick=()=>{const p=DATA.pages.find(p=>p.id===selected);if(p?.candidate_id)setDecision(p.candidate_id,value)};
-const addedRoots=DATA.nodes.filter(n=>!n.parent&&n.change==='new'&&!n.removed&&n.key!=='review-unplaced');
-let bulkTimer,bulkDeadline=0;
-function updateBulkConfirmation(){const remaining=addedRoots.length?Math.max(0,Math.ceil((bulkDeadline-Date.now())/1000)):0;$('bulk-confirm').disabled=addedRoots.length>0&&(!$('bulk-ack').checked||remaining>0);$('bulk-confirm').textContent=t('confirm')+(remaining?' ('+remaining+'s)':'');return remaining}
-function openBulkConfirmation(){clearInterval(bulkTimer);$('bulk-ack').checked=false;$('bulk-roots').hidden=!addedRoots.length;$('bulk-roots-title').textContent=t('newRoots');$('bulk-roots-list').innerHTML=addedRoots.map(n=>'<li>'+escape(nodeTitle(n))+'</li>').join('');$('bulk-ack-label').textContent=t('ackRoots');bulkDeadline=Date.now()+8000;updateBulkConfirmation();$('bulk-dialog').showModal();if(addedRoots.length)bulkTimer=setInterval(()=>{if(!updateBulkConfirmation())clearInterval(bulkTimer)},200)}
-$('bulk-ack').onchange=updateBulkConfirmation;
-$('bulk-dialog').onclose=()=>clearInterval(bulkTimer);
-$('all-approved').onclick=openBulkConfirmation;$('bulk-confirm').onclick=()=>{updateBulkConfirmation();if(!$('bulk-dialog').open||$('bulk-confirm').disabled)return;setAllDecision('approved');clearInterval(bulkTimer);$('bulk-dialog').close()};$('bulk-cancel').onclick=()=>{clearInterval(bulkTimer);$('bulk-dialog').close()};$('all-rejected').onclick=()=>setAllDecision('rejected');$('payload-open').onclick=copyPayload;$('payload-close').onclick=()=>$('copy-dialog').close();$('guide-close').onclick=dismissGuide;$('theme').onclick=()=>{document.body.classList.toggle('dark');globalThis.contextDiagramViewer?.render($('article'),{dark:document.body.classList.contains('dark'),language})};$('language').onclick=()=>{language=language==='zh'?'en':'zh';labels();render()};
-labels();render();const deadline=Date.now()+10000;guideTimer=setInterval(()=>{const left=Math.max(0,Math.ceil((deadline-Date.now())/1000));$('guide-countdown').textContent=left+'s';if(!left)dismissGuide()},250);
+/** Standalone reader: browser progress and plain revision notes, never approval authority. */
+export const REVIEW_SITE_CLIENT = `
+const $ = id => document.getElementById(id);
+const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const words = {
+  read: ['已读', 'Read'], revisions: ['修订', 'Revisions'], total: ['总', 'Total'], unit: ['篇', ''],
+  copy: ['复制修订意见', 'Copy revision notes'], home: ['本次内容', 'This update'],
+  homeHint: ['阅读文章，可在正文下方填写修订意见。完成后返回会话确认或反馈。', 'Read the articles and add revision notes below. Return to the conversation to confirm or share feedback.'],
+  navigate: ['目录与文章', 'Directories and articles'], files: ['预期工作区变化', 'Expected workspace changes'],
+  note: ['输入本篇修订意见……', 'Enter revision notes for this article…'], clear: ['清空本条修订', 'Clear this note'],
+  revisionTitle: ['修订意见', 'Revision notes'], revisionHint: ['点击文章标题返回正文，继续编辑修订意见。', 'Select an article title to return to the article and edit its notes.'],
+  empty: ['暂无修订意见', 'No revision notes yet'], emptyHint: ['可在文章正文下方填写修订意见。', 'Add revision notes below an article.'],
+  emptyCopy: ['暂无修订意见，可返回会话确认。', 'No revision notes. You can confirm in the conversation.'],
+  copied: ['已复制修订意见，可粘贴到会话中。', 'Revision notes copied. Paste them into the conversation.'],
+  manualCopy: ['请手动复制修订意见', 'Copy revision notes manually'], manualHint: ['自动复制不可用，请复制下方文本并回复到会话中。', 'Automatic copy is unavailable. Copy the text below and reply in the conversation.'],
+  close: ['关闭', 'Close'], baseline: ['无 Git 导航基线，目录沿用当前工作区；未推断历史目录变化。', 'No Git navigation baseline. The current workspace navigation is shown.'],
+  approvedContext: ['既有正文，仅供对照。', 'Existing content, shown for reference.'], unchanged: ['本次未变更内容略。', 'Unchanged content omitted.'],
+  previous: ['查看旧文本', 'Previous text'], removed: ['移除或替换的旧内容', 'Removed or replaced content'],
+  removedNav: ['移除的目录条目', 'Removed navigation entries'], unplaced: ['待落位文章', 'Unplaced articles'],
+  sources: ['来源引用', 'Sources'], feedbackTag: ['修订', 'Notes'],
+};
+let language = 'zh';
+const t = key => words[key]?.[language === 'zh' ? 0 : 1] || key;
+const candidates = DATA.pages.filter(page => page.candidate_id);
+const pagesById = new Map(DATA.pages.map(page => [page.id, page]));
+const read = new Set();
+const notes = new Map();
+const expanded = new Set();
+let selected = null;
+let active = null;
+let view = 'home';
+let toastTimer;
+let copyTimer;
+const storageKey = 'context-reading-v1:' + DATA.storageScope;
+
+function restore() {
+  for (const page of candidates) {
+    if (page.revisionInstruction?.trim()) notes.set(page.id, page.revisionInstruction);
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+    language = saved.language === 'en' ? 'en' : 'zh';
+    document.body.classList.toggle('dark', saved.dark === true);
+    for (const page of candidates) {
+      const entry = saved.pages?.[page.id];
+      if (entry?.version !== page.readVersion) continue;
+      if (entry.read === true) read.add(page.id);
+      if (typeof entry.note === 'string') {
+        if (entry.note.trim()) notes.set(page.id, entry.note);
+        else notes.delete(page.id);
+      }
+    }
+  } catch { /* The report remains usable when local storage is unavailable. */ }
+}
+
+function persist() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({
+      language, dark: document.body.classList.contains('dark'),
+      pages: Object.fromEntries(candidates.map(page => [page.id, {
+        version: page.readVersion, read: read.has(page.id), note: notes.get(page.id) || '',
+      }])),
+    }));
+  } catch { /* Reading and copying still work without storage access. */ }
+}
+
+function revisedPages() { return candidates.filter(page => (notes.get(page.id) || '').trim()); }
+function countText(label, count) { return \`\${label} <b>\${count}</b>\${language === 'zh' ? ' 篇' : ''}\`; }
+function badges(page) {
+  if (!page?.candidate_id) return '';
+  return (read.has(page.id) ? '<span class="badge read">READ</span>' : '')
+    + ((notes.get(page.id) || '').trim() ? \`<span class="badge has-feedback">\${t('feedbackTag')}</span>\` : '');
+}
+function badge(change) {
+  if (!change || change === 'unchanged') return '';
+  const label = { new: 'New', modify: 'Modify', removed: 'Remove' }[change] || change;
+  return \`<span class="badge \${escape(change)}">\${escape(label)}</span>\`;
+}
+function descendants(key, seen = new Set()) {
+  if (seen.has(key)) return [];
+  seen.add(key);
+  return DATA.nodes.filter(node => node.parent === key).flatMap(node => [node, ...descendants(node.key, seen)]);
+}
+function nodeChange(node) {
+  if (node.removed) return 'removed';
+  const nested = descendants(node.key);
+  const changes = [node.change, ...nested.map(child => child.change),
+    ...[node, ...nested].map(child => pagesById.get(child.page)?.change)];
+  return nested.some(child => child.removed) || changes.includes('modify') ? 'modify' : changes.includes('new') ? 'new' : 'unchanged';
+}
+function nodeTitle(node) { return node.key === 'review-unplaced' ? t('unplaced') : node.title; }
+function nodeLabel(node) {
+  const title = escape(nodeTitle(node));
+  return (node.removed ? \`<del>\${title}</del>\` : title)
+    + (node.oldTitle ? \`<small class="old-title"> ← \${escape(node.oldTitle)}</small>\` : '');
+}
+function rootFor(pageId) {
+  let node = DATA.nodes.find(item => item.page === pageId);
+  const seen = new Set();
+  while (node?.parent && !seen.has(node.key)) { seen.add(node.key); node = DATA.nodes.find(item => item.key === node.parent); }
+  return node?.key || null;
+}
+
+function updateCounts() {
+  const revised = revisedPages().length;
+  $('counts').innerHTML = \`<span>\${countText(t('read'), read.size)}</span><span class="separator">/</span>\`
+    + \`<button id="revisions-link" class="\${revised ? 'has-notes' : ''}" aria-pressed="\${view === 'revisions'}">\${countText(t('revisions'), revised)}</button>\`
+    + \`<span class="separator">/</span><span>\${countText(t('total'), candidates.length)}</span>\`;
+  $('revisions-link').onclick = () => { view = 'revisions'; selected = null; location.hash = 'revisions'; render(); window.scrollTo(0, 0); };
+  $('read-fill').style.width = (candidates.length ? read.size / candidates.length * 100 : 0) + '%';
+  const track = document.querySelector('.read-track');
+  track.setAttribute('aria-valuenow', String(read.size));
+  track.setAttribute('aria-valuemax', String(candidates.length));
+}
+
+function renderNav() {
+  const roots = DATA.nodes.filter(node => !node.parent).sort((a, b) => a.order - b.order);
+  $('top').innerHTML = roots.map(node => \`<button data-root="\${escape(node.key)}" class="\${nodeChange(node)}\${active === node.key ? ' active' : ''}">\${nodeLabel(node)}</button>\`).join('');
+  function nodeButton(node, depth) {
+    const page = pagesById.get(node.page);
+    const isDirectory = DATA.nodes.some(child => child.parent === node.key);
+    return \`<button data-node="\${escape(node.key)}" title="\${escape(nodeTitle(node))}" class="node \${isDirectory ? 'directory ' : ''}\${nodeChange(node)}\${selected === node.page ? ' selected' : ''}" style="padding-left:\${26 + 14 * depth}px">\`
+      + \`<span class="node-content"><span class="node-title">\${nodeLabel(node)}</span>\`
+      + \`<span class="node-status">\${badges(page)}</span>\${isDirectory ? '<span class="caret">›</span>' : ''}</span></button>\`;
+  }
+  let content = '';
+  function walk(key, depth, seen = new Set()) {
+    if (seen.has(key)) return;
+    seen.add(key);
+    for (const node of DATA.nodes.filter(item => item.parent === key).sort((a, b) => a.order - b.order)) {
+      content += nodeButton(node, depth);
+      if (expanded.has(node.key) || node.page === selected || descendants(node.key).some(child => child.page === selected)) walk(node.key, depth + 1, seen);
+    }
+  }
+  if (active) walk(active, 0);
+  else content = roots.map(node => nodeButton(node, 0)).join('');
+  $('tree').innerHTML = content;
+}
+
+function workspaceTree() {
+  const root = {};
+  for (const page of candidates) {
+    let node = root;
+    for (const part of ('knowledge/' + page.path).split('/')) node = node[part] ??= {};
+    node.$page = page;
+  }
+  function lines(node, depth = 0) {
+    return Object.entries(node).filter(([key]) => key !== '$page').sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => {
+      const label = child.$page ? \`<button data-page="\${escape(child.$page.id)}">\${escape(key)}</button>\${badge(child.$page.change)}\${badges(child.$page)}\` : escape(key) + '/';
+      return \`<div style="padding-left:\${depth * 18}px">\${label}</div>\${lines(child, depth + 1)}\`;
+    }).join('');
+  }
+  return \`<div class="workspace-tree">\${lines(root)}</div>\`;
+}
+
+function renderHome() {
+  $('article').innerHTML = \`<h1>\${t('home')}</h1><p class="stats">\${t('homeHint')}</p>\`
+    + (DATA.navigationBaseline === 'current' ? \`<p class="note">\${t('baseline')}</p>\` : '')
+    + \`<h2>\${t('navigate')}</h2>\`
+    + DATA.nodes.filter(node => !node.parent).map(node => {
+      const ids = new Set([node, ...descendants(node.key)].map(item => item.page));
+      const pages = candidates.filter(page => ids.has(page.id));
+      if (!pages.length) return '';
+      return \`<section class="home-group"><h3>\${nodeLabel(node)}\${badge(nodeChange(node))}</h3><div class="cards">\`
+        + pages.map(page => \`<button data-page="\${escape(page.id)}">\${escape(page.title)}\${badge(page.change)}<span data-status-for="\${escape(page.id)}">\${badges(page)}</span></button>\`).join('') + '</div></section>';
+    }).join('')
+    + (DATA.nodes.some(node => node.removed) ? \`<h2>\${t('removedNav')}</h2><ul>\${DATA.nodes.filter(node => node.removed).map(node => \`<li class="removed">\${nodeLabel(node)}</li>\`).join('')}</ul>\` : '')
+    + \`<h2>\${t('files')}</h2>\${workspaceTree()}\`;
+}
+
+function renderRevisions() {
+  const pages = revisedPages();
+  $('article').innerHTML = \`<h1>\${t('revisionTitle')} <span class="revision-count">· \${pages.length}</span></h1><p class="stats">\${t('revisionHint')}</p>\`
+    + (pages.length ? pages.map(page => \`<section class="revision-card"><h2><button class="revision-title" data-page="\${escape(page.id)}">\${escape(page.title)}<span class="arrow" aria-hidden="true">↗</span></button></h2>\`
+      + \`<p class="revision-path">\${escape(page.path)}</p><p class="revision-body">\${escape(notes.get(page.id))}</p></section>\`).join('')
+      : \`<div class="empty-notes">\${t('empty')}<br><span class="note">\${t('emptyHint')}</span></div>\`);
+}
+
+function resizeInput() {
+  const input = $('revision-note');
+  input.style.height = '42px';
+  input.style.height = Math.min(112, Math.max(42, input.scrollHeight + 2)) + 'px';
+}
+
+function render() {
+  document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  document.body.classList.toggle('home', view === 'home');
+  document.body.classList.toggle('revision-index', view === 'revisions');
+  const page = pagesById.get(selected);
+  $('article').classList.toggle('review-new-page', view === 'article' && page?.change === 'new');
+  renderNav();
+  updateCounts();
+  if (view === 'home') renderHome();
+  else if (view === 'revisions') renderRevisions();
+  else if (page) {
+    $('article').innerHTML = \`<h1>\${escape(page.title)}\${badge(page.change)}<span id="article-status">\${badges(page)}</span></h1>\`
+      + (page.previousPath ? \`<p class="note">\${escape(page.previousPath)} → \${escape(page.path)}</p>\` : '')
+      + (page.candidate_id ? page.html : page.html ? \`<p class="note">\${t('approvedContext')}</p>\${page.html}\` : \`<div class="review-omitted">\${t('unchanged')}</div>\`)
+      + (page.sources.length ? \`<details><summary>\${t('sources')}</summary><ul>\${page.sources.map(source => \`<li>\${escape(source)}</li>\`).join('')}</ul></details>\` : '');
+  }
+  document.querySelectorAll('[data-label]').forEach(element => { element.textContent = t(element.dataset.label); });
+  $('footer').hidden = !(view === 'article' && page?.candidate_id);
+  $('revision-note').value = page ? notes.get(page.id) || '' : '';
+  $('revision-note').placeholder = t('note');
+  $('clear-note').textContent = t('clear');
+  $('clear-note').disabled = !page || !(notes.get(page.id) || '').trim();
+  $('copy-notes').textContent = t('copy');
+  $('copy-close').textContent = t('close');
+  $('language').textContent = language === 'zh' ? 'EN' : '中文';
+  if (!$('footer').hidden) resizeInput();
+  globalThis.contextDiagramViewer?.render($('article'), { dark: document.body.classList.contains('dark'), language });
+}
+
+function showPage(id, updateHash = true) {
+  const page = pagesById.get(id);
+  if (!page) return;
+  selected = id;
+  active = rootFor(id) || active;
+  view = 'article';
+  if (page.candidate_id) { read.add(page.id); persist(); }
+  if (updateHash) history.replaceState(null, '', '#article=' + encodeURIComponent(id));
+  render();
+  window.scrollTo(0, 0);
+  const currentNode = $('tree').querySelector('.selected');
+  if (currentNode) $('tree').scrollTop = Math.max(0, currentNode.offsetTop - $('tree').offsetTop - $('tree').clientHeight / 3);
+}
+
+function showToast(message) {
+  clearTimeout(toastTimer);
+  $('toast').textContent = message;
+  $('toast').hidden = false;
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3000);
+}
+
+function feedbackText() {
+  return t('revisionTitle') + '\\n\\n' + revisedPages().map(page =>
+    \`《\${page.title}》\\n\${language === 'zh' ? '文章 ID' : 'Article ID'}：\${page.id}\\n\${language === 'zh' ? '修订意见' : 'Revision notes'}：\${notes.get(page.id)}\`
+  ).join('\\n\\n');
+}
+
+async function copyNotes() {
+  if (!revisedPages().length) { showToast(t('emptyCopy')); return; }
+  const text = feedbackText();
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+    showCopyDialog(text, true);
+  } catch {
+    showCopyDialog(text, false);
+  }
+}
+
+function showCopyDialog(text, copied) {
+  clearInterval(copyTimer);
+  $('copy-title').textContent = copied ? (language === 'zh' ? '✓ 已复制修订意见' : '✓ Revision notes copied') : t('manualCopy');
+  $('copy-title').classList.toggle('copy-success', copied);
+  $('copy-summary').textContent = copied ? (language === 'zh' ? '可返回会话粘贴以下修订意见。' : 'Paste these revision notes into the conversation.') : t('manualHint');
+  $('copy-preview').hidden = !copied;
+  $('copy-preview').classList.remove('has-overflow');
+  $('copy-preview-text').textContent = text;
+  $('copied-notes').hidden = copied;
+  $('copied-notes').value = text;
+  $('copy-close').parentElement.hidden = copied;
+  $('copy-countdown').hidden = !copied;
+  $('copy-countdown').textContent = language === 'zh' ? '5 秒后关闭' : 'Closes in 5s';
+  if (!$('copy-dialog').open) $('copy-dialog').showModal();
+  if (!copied) {
+    $('copied-notes').focus();
+    $('copied-notes').select();
+    return;
+  }
+  const preview = $('copy-preview');
+  preview.classList.toggle('has-overflow', preview.scrollHeight > preview.clientHeight);
+  const deadline = performance.now() + 5000;
+  copyTimer = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+    $('copy-countdown').textContent = language === 'zh' ? \`\${remaining} 秒后关闭\` : \`Closes in \${remaining}s\`;
+    if (!remaining) { clearInterval(copyTimer); $('copy-dialog').close(); }
+  }, 100);
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  if (button.dataset.page) showPage(button.dataset.page);
+  else if (button.dataset.root) {
+    active = button.dataset.root;
+    const node = DATA.nodes.find(item => item.key === active);
+    const children = descendants(active);
+    const preferred = candidates.find(page => [node, ...children].some(item => item?.page === page.id));
+    const pageId = preferred?.id || node?.page || children.find(child => child.page)?.page;
+    if (pageId) showPage(pageId);
+    else render();
+  } else if (button.dataset.node) {
+    const node = DATA.nodes.find(item => item.key === button.dataset.node);
+    if (node.page) showPage(node.page);
+    else { expanded.has(node.key) ? expanded.delete(node.key) : expanded.add(node.key); renderNav(); }
+  }
+});
+
+$('revision-note').addEventListener('input', event => {
+  const page = pagesById.get(selected);
+  if (!page?.candidate_id) return;
+  const value = event.target.value;
+  if (value.trim()) notes.set(page.id, value);
+  else notes.delete(page.id);
+  $('clear-note').disabled = !value.trim();
+  persist();
+  updateCounts();
+  renderNav();
+  $('article-status').innerHTML = badges(page);
+  resizeInput();
+});
+$('clear-note').onclick = () => {
+  notes.delete(selected);
+  persist();
+  $('revision-note').value = '';
+  $('revision-note').dispatchEvent(new Event('input', { bubbles: true }));
+  $('revision-note').focus();
+};
+$('home').onclick = () => { selected = null; active = null; view = 'home'; history.replaceState(null, '', location.pathname + location.search); render(); window.scrollTo(0, 0); };
+$('theme').onclick = () => { document.body.classList.toggle('dark'); persist(); render(); };
+$('language').onclick = () => { language = language === 'zh' ? 'en' : 'zh'; persist(); render(); };
+$('copy-notes').onclick = copyNotes;
+$('copy-close').onclick = () => $('copy-dialog').close();
+$('copy-dialog').onclose = () => clearInterval(copyTimer);
+window.addEventListener('hashchange', () => {
+  if (location.hash.startsWith('#article=')) showPage(decodeURIComponent(location.hash.slice(9)), false);
+  else { selected = null; view = location.hash === '#revisions' ? 'revisions' : 'home'; render(); }
+});
+new ResizeObserver(() => { document.documentElement.style.setProperty('--header-height', document.querySelector('header').offsetHeight + 'px'); }).observe(document.querySelector('header'));
+restore();
+if (location.hash.startsWith('#article=')) showPage(decodeURIComponent(location.hash.slice(9)), false);
+else { if (location.hash === '#revisions') view = 'revisions'; render(); }
 `;
