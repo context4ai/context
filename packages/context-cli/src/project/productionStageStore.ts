@@ -126,7 +126,7 @@ export async function materializeProductionStage(input: {
   stage: ProductionStage;
   capabilities: ProductionCapabilities;
   materials?: ProductionStageMaterials;
-}): Promise<ProductionDispatch & { directory: string; submission?: string; updated_files: number }> {
+}): Promise<ProductionDispatch & { directory: string; agent_directory: string; submission?: string; updated_files: number }> {
   return withProjectWriteLock(input.projectRoot, "production-stage-materialize", async () => {
     const stage = validateProductionStage(input.stage);
     const previous = await readProductionStage(input.projectRoot, stage.id);
@@ -204,6 +204,8 @@ export async function materializeProductionStage(input: {
             }
           }
           await write(join(taskRoot, "task.md"), [`# ${task.question}`, "", `Target: ${task.path}`,
+            `Draft Markdown: ${join(agent, "batches", batch.id, id, "article.md")}`,
+            `Draft references: ${join(agent, "batches", batch.id, id, "references.yaml")}`,
             `Article: ${task.article_id}`, `Dependencies: ${task.after.join(", ") || "none"}`, "",
             task.brief ?? "Read the authorized sources and write the complete article, or revise the existing article's affected fragments.", "",
             ...(task.base !== null ? [`Revision base: ${join(taskRoot, "base.md")}`,
@@ -227,11 +229,11 @@ export async function materializeProductionStage(input: {
     // The CLI supplies a template on its own side; it never overwrites an Agent
     // draft or an edited submission on a repeated preparation or downgrade.
     const submission = dispatch.batches.length ? join(directory, "submission.yaml") : undefined;
-    if (submission) await write(submission, YAML.stringify({ stage: stage.id, tasks: submittedTasks }));
+    if (submission) await write(submission, `# Draft paths below are relative to ${agent}/, NOT this template directory.\n# Copy this template to ${agent}/submissions/ready.yaml before editing.\n${YAML.stringify({ stage: stage.id, tasks: submittedTasks })}`);
     await write(join(directory, "stage.md"), [`# ${stage.purpose}`, "",
       `Stage: ${stage.id}`, `State: ${dispatch.state}`, `Scheduling: ${dispatch.mode}`, "",
       ...dispatch.batches.map(batch => `- Batch ${batch.id}: ${join(directory, "batches", batch.id, "batch.md")}`), "",
-      `Agent output directory: ${agent}`, `Remaining investigation: ${stage.pending_scopes.join(", ") || "none"}`, "",
+      `Agent output directory (all content/references/edits paths resolve here): ${agent}`, `Remaining investigation: ${stage.pending_scopes.join(", ") || "none"}`, "",
       ...stage.tasks.filter(task => task.status === "blocked").map(task => `- Blocked task ${task.id}: ${task.path} — ${task.reason ?? "Investigate the task's source and dependencies."}`), "",
       `To add articles within this confirmed purpose and source scope, submit a plan amendment using ${join(directory, "planning.schema.json")}.`,
       "During writing, articles adds tasks; replaces explicitly names unfinished task IDs. Existing task IDs may be used in after. Do not resubmit the whole original plan or widen the purpose without user confirmation.",
@@ -242,7 +244,7 @@ export async function materializeProductionStage(input: {
       "Completion of this stage does not approve or publish its candidates.", ""].join("\n"));
     await saveProductionStage(input.projectRoot, { ...stage,
       tasks: stage.tasks.map(task => issued.has(task.id) && task.status === "pending" ? { ...task, status: "issued" } : task) });
-    return { ...dispatch, directory, ...(submission ? { submission } : {}), updated_files: changed };
+    return { ...dispatch, directory, agent_directory: agent, ...(submission ? { submission } : {}), updated_files: changed };
   });
 }
 

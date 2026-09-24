@@ -13,7 +13,7 @@ import { withProductionFeedback } from "./productionFeedback.js";
 /** Retry directory preparation, never production acceptance. This consumes an
  * existing current plan; it does not infer sources or create a new workflow. */
 export async function prepareCurrentProductionStage(input: {
-  projectRoot: string; revision: string; multiAgent?: boolean;
+  projectRoot: string; revision: string; multiAgent?: boolean; sources?: string[];
 }) {
   return withProductionFeedback({ operation: "prepare" }, () => withProjectWriteLock(input.projectRoot, "production-prepare", async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
@@ -31,6 +31,6 @@ export async function prepareCurrentProductionStage(input: {
     const dispatch = dispatchProductionStage(stage, capabilities);
     const prepared = await prepareNextProductionStage({ projectRoot: input.projectRoot, stage, multiAgent: capabilities.multi_agent });
     return { stage_state: dispatch.state, mode: prepared?.mode ?? dispatch.mode,
-      ...(prepared ? { next: { directory: prepared.directory, submission: prepared.submission, mode: prepared.mode } } : {}) };
+      ...(prepared ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory, submission: prepared.submission, mode: prepared.mode } } : {}) };
   }));
 }

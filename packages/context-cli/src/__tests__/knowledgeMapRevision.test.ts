@@ -40,7 +40,7 @@ test("navigation binds a local revision's new draft before approval and rejects 
     expect((await readKnowledgeMap(root))!.entries.find(entry => entry.key === "new-task")!.target)
       .toEqual({ artifact_ref: candidate.article_id, section_key: "usage" });
     const afterReport = await writeReviewHtml({ projectRoot: root, all: true });
-    expect(afterReport.navigation).toEqual({ ready: true, unplaced_count: 0, unplaced: [] });
+    expect(afterReport.navigation).toMatchObject({ ready: true, unplaced_count: 0, unplaced: [] });
     expect(afterReport.next_action).toBeUndefined();
     expect(await readCandidateRecords(root)).toEqual(candidates);
     await expect(readFile(join(root, "knowledge", path))).rejects.toThrow();

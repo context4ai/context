@@ -52,6 +52,9 @@ writing batches are declared in the temporary investigation plan.
 
 After editing, run `context status --format json` and consume its current Route.
 
+Read `context action prepare-current --schema --format json` for the complete
+known-task input contract before creating a stage; no workspace or revision is required.
+
 When article targets and source grouping are already clear, put the existing
 plan fields (`capabilities`, `articles`, optional `indexer_usage`) in a file under
 `.tmp/agent-work/`, omitting only `stage`, which does not exist yet. Each article
@@ -60,27 +63,17 @@ contains `path`, `question`, `sources` and `batch`, with optional `brief` and
 command to prepare those tasks without a separate investigation-plan submission.
 This does not approve the report or permit writing before its applicable scope
 decision.
-When targets are unclear, use normal preparation and investigate the skeletons.
+When targets are unclear, repeat `--source <source-ref>` on the preparation command
+for the sources selected by this request. Without a selection, only a sole
+configured target is inferred; multiple targets require the Agent to select
+from the user's request, not to ask the user to understand CLI source IDs.
+The CLI prepares only this scope. A source in `evidence_source_scope` remains
+available without becoming an investigation assignment. A later article plan
+can select it in `articles[].sources`; the CLI validates and prepares that
+actual dependency before allowing writing. Missing required evidence still
+blocks the dependent article.
 
-## Configured coverage and the current request
-
-`src/indexers.yaml` describes the workspace's standing coverage configuration.
-Source registration or presence in that configuration does not, by itself, mean
-that the source needs investigation again for this request. For a bounded document
-addition or revision, identify its reader task and actual evidence dependencies;
-reuse existing approved articles and applicable completed work. Do not broaden a
-document task to unrelated code repositories merely because they are configured.
-
-In planning and completion reports distinguish:
-- work requested and completed in this task;
-- specific content gaps established by reading, with their affected reader tasks;
-- source/environment failures, and whether this task depends on those sources.
-
-A `pending_scopes` count is workflow state, not a count of missing topics,
-repositories to rewrite, or articles to produce. A Git spawn/baseline-read error
-means source availability could not be checked; it does not prove that existing
-knowledge is absent or obsolete. If unrelated configured sources remain blocked,
-say so as a workflow limitation rather than announcing new investigation work.
-Do not delete configured sources, invent exclusions, clear stage files, or mark
-unread material investigated to make the current task appear complete. Follow the
-returned resolution action when the workflow still needs a decision.
+Long-term configuration additions do not restart an unchanged stage. Plans and
+refreshes track this request's selected investigation and actual article inputs.
+Preserve genuinely unfinished work when extending a multi-stage request; do not
+turn an incremental addition into a whole-workspace refresh.

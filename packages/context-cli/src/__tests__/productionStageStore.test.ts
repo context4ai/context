@@ -91,6 +91,7 @@ test("materializes current single batch and reuses unchanged shared files", asyn
   const capabilities = productionCapabilitiesSchema.parse({ skills: [{ name: "code" }] });
   const first = await materializeProductionStage({ projectRoot: f.root, ...f, capabilities });
   expect(first.mode).toBe("single-agent");
+  expect(first.agent_directory).toBe(productionAgentDirectory(f.stage.id));
   expect(first.batches.map(batch => batch.id)).toEqual(["first"]);
   const current = (await readProductionStage(f.root))!;
   expect(current.tasks.map(task => task.status)).toEqual(["issued", "pending"]);

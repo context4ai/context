@@ -134,7 +134,9 @@ async function readFixedProductionFile(input: {
     return { path: input.path, text, bytes, digest: durableContentDigest(text) };
   } catch (error) {
     if (error instanceof ContextError) throw error;
-    throw invalidFile(input.path, `Cannot read the stage-local file: ${error instanceof Error ? error.message : String(error)}. No tasks were saved.`);
+    const failure = invalidFile(input.path, `Cannot read ${local}. Draft paths are relative to ${input.directory}/, not the runtime or submission-file directory. ${error instanceof Error ? error.message : String(error)}. No tasks were saved.`);
+    throw new ContextError(failure.code, failure.message, { ...failure.detail,
+      base_directory: input.directory, expected_path: local });
   } finally {
     await handle?.close();
   }

@@ -184,32 +184,20 @@ a top-level navigation change already required by this procedure.
 
 ## Configured coverage and the current request
 
-`src/indexers.yaml` describes the workspace's standing coverage configuration.
-Source registration or presence in that configuration does not, by itself, mean
-that the source needs investigation again for this request. For a bounded document
-addition or revision, identify its reader task and actual evidence dependencies;
-reuse existing approved articles and applicable completed work. Do not broaden a
-document task to unrelated code repositories merely because they are configured.
+Long-term source configuration is the authorized reading boundary, not the work
+requested in every conversation. Prepare this request's selected investigation
+sources or known article tasks. Keep unused supporting material available for
+later article plans without treating it as unfinished work. For an addition to
+an existing article, prefer the existing article-revision workflow with the
+selected supporting sources rather than starting unrelated production.
 
-In planning and completion reports distinguish:
-- work requested and completed in this task;
-- specific content gaps established by reading, with their affected reader tasks;
-- source/environment failures, and whether this task depends on those sources.
+Report this request's planned and completed work. Restore missing sources that
+its investigation or articles actually require. Reference material not selected
+for this work does not need restoration just to complete an independent note.
+Never infer missing knowledge merely from unavailable source-code checkouts.
 
-A `pending_scopes` count is workflow state, not a count of missing topics,
-repositories to rewrite, or articles to produce. A Git spawn/baseline-read error
-means source availability could not be checked; it does not prove that existing
-knowledge is absent or obsolete. If unrelated configured sources remain blocked,
-say so as a workflow limitation rather than announcing new investigation work.
-Do not delete configured sources, invent exclusions, clear stage files, or mark
-unread material investigated to make the current task appear complete. Follow the
-returned resolution action when the workflow still needs a decision.
-
-For a bounded addition inside an existing production stage, completed articles can
-enter Review with `context run --deliver --format json`. This retains pending
-configured scopes and unfinished tasks; it does not authorize approval or publish.
-Use this existing delivery path when remaining source failures are unrelated to
-the requested articles. If the selected articles need the missing repository, use
-`context source recovery-plan` and `context source restore` with an explicit local
-checkout or clone decision. Do not ask users to investigate unrelated repositories
-just to deliver saved notes, and do not clear gaps to imitate task completion.
+For an explicitly requested partial delivery, `context run --deliver --format json`
+reviews completed articles while retaining genuine remaining tasks and selected
+investigation. It does not approve or publish articles, and is unnecessary for
+an otherwise completed bounded request. Do not clear unfinished work to force
+completion; ordinary source authorization and citation checks still apply.

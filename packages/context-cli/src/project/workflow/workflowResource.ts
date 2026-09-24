@@ -414,7 +414,7 @@ export async function acknowledgeCurrentWorkflowResources(input: {
       protocol: "context.workflow.resource-receipts.v1",
       acknowledged: directResources.length,
       receiptReference: `@${join(found.projectRoot, continuation.path)}`,
-      message: "Read the returned workflow and follow its selected command unchanged, including revision and resource-receipt arguments. Do not pre-chain an earlier write command or replace this result with status without receipts. Acknowledgement does not necessarily change the revision; reread only changed or unavailable required content.",
+      message: "For workflow continuation, use the returned selected command with its revision and resource-receipt arguments. Receipts retain required-reading state for Route evaluation; they are not approval credentials or universal prerequisites for direct CLI primitives. Direct commands still enforce their own state, scope and confirmation checks. Do not pre-chain an earlier write command or replace this result with status without receipts. Acknowledgement does not necessarily change the revision; reread only changed or unavailable required content.",
     },
   };
 }

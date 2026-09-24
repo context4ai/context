@@ -64,7 +64,7 @@ test("confirmed exclusion settles unfinished scope, retains accepted work and su
   expect(dispatchProductionStage((await readProductionStage(root))!, productionCapabilitiesSchema.parse({})).state).toBe("ended");
   expect(await readCandidateRecords(root)).toEqual(accepted);
   await rm(join(root, ".tmp"), { recursive: true, force: true });
-  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision });
+  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision, sources: targets.map(target => target.source_ref) });
   const fresh = (await readProductionStage(root))!;
   expect(fresh.scopes.map(source => source.scope)).toEqual([first.source_ref]);
   expect(fresh.tasks).toEqual([]);

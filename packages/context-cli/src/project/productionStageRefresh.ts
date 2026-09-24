@@ -1,3 +1,4 @@
+import { activeProductionSources } from "./productionScope.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { productionSourceBaseline } from "./productionSubmission.js";
@@ -11,10 +12,12 @@ import { durableContentDigest } from "./durableSingleFileTransaction.js";
 /** Explicit preparation may refresh changed sources. Ordinary submission
  * continuation does not call this source scan. Everything remains temporary. */
 export async function refreshProductionStageSources(projectRoot: string, stage: ProductionStage): Promise<ProductionStage> {
-  const affected = new Set(stage.gaps.map(gap => gap.scope));
+  const active = activeProductionSources(stage);
+  const affected = new Set(stage.gaps.filter(gap => active.has(gap.scope)).map(gap => gap.scope));
   const unavailable = new Map<string, string>();
   const scopes = [];
   for (const source of stage.scopes) {
+    if (!active.has(source.scope)) { scopes.push(source); continue; }
     try {
       const baseline = await productionSourceBaseline(projectRoot, source.scope);
       if (baseline !== source.baseline) affected.add(source.scope);

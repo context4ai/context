@@ -11,7 +11,9 @@ directories. Read relevant source text before writing; a skeleton is navigation,
 not semantic evidence. Skill names guide work, not article ownership or versions.
 
 Use the [reader organization guidance](knowledge-updates.md#reader-tasks-names-and-reading-order)
-for article names, placement and manually arranged navigation. Check the draft's
+for article names, placement and manually arranged navigation.
+Use `context task adjust --inspect --format json` to obtain current categories,
+reading order and the exact revision before preparing a navigation adjustment. Check the draft's
 main reader task against its planned title and group; adjust through the existing
 plan, revision or knowledge-map flow when needed. A navigation change alone does
 not call for rewriting valid prose.
@@ -57,7 +59,7 @@ current task does not mean other authorized work is finished. New source or purp
 authorization still follows the current Route.
 
 Write results under the returned Agent directory. All submission paths are
-relative to that stage directory, even when the manifest is in `submissions/`.
+relative to `.tmp/agent-work/production-stages/<stage>/`, even when the manifest is in `submissions/`. They are never relative to `.tmp/context-runtime/` or to the manifest location. Each task lists the complete workspace-relative Markdown and reference output paths.
 Copy the CLI's submission template, keep completed tasks only, and keep each
 task's prefilled `input`. Submit the manifest using the returned command.
 Do not edit submitted files until the command returns.

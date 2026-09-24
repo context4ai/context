@@ -38,7 +38,8 @@ export async function prepareKnownProductionTasks(input: {
       throw invalid("Use known tasks before report approval, with the current preparation revision. Approved stages use ordinary task amendments.");
     }
     if (!stage) {
-      await prepareCurrentProductionStage({ projectRoot: input.projectRoot, revision: input.revision });
+      await prepareCurrentProductionStage({ projectRoot: input.projectRoot, revision: input.revision,
+        sources: [...new Set([...plan.articles.flatMap(article => article.sources), ...plan.pending_scopes ?? []])] });
       stage = (await readProductionStage(input.projectRoot))!;
     }
     // Validate and accept exactly the fixed input already read. Neither this

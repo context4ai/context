@@ -112,3 +112,15 @@ describe("stage-local fixed submission files", () => {
     } })).rejects.toThrow("budget");
   });
 });
+
+
+test("missing drafts report the Agent base and exact expected path without accepting runtime files", async () => {
+  const f = await fixture();
+  const path = "batches/first/article.md";
+  await mkdir(join(f.root, ".tmp/context-runtime/production-stages", f.stage, "batches/first"), { recursive: true });
+  await writeFile(join(f.root, ".tmp/context-runtime/production-stages", f.stage, path), "Wrong directory");
+  await expect(readProductionFile({ projectRoot: f.root, stage: f.stage, path })).rejects.toMatchObject({ detail: {
+    reason_code: "invalid-production-file", base_directory: productionAgentDirectory(f.stage),
+    expected_path: join(productionAgentDirectory(f.stage), path),
+  } });
+});

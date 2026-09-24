@@ -38,6 +38,7 @@ export const productionTaskSchema = z.object({
 export const productionStageSchema = z.object({
   id,
   purpose: name,
+  requested_sources: z.array(name).optional(),
   // An authorized but unavailable source has no observed version yet. Tasks
   // still require a real digest; null never authorizes a writer.
   scopes: z.array(taskSource.extend({ baseline: digest.nullable() })),

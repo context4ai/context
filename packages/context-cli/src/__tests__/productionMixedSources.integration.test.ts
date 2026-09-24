@@ -61,7 +61,7 @@ test("code plus two documents share reader topics across skills and batches thro
     target_scope: { targets: sources.map(source_ref => ({ source_ref })) },
     exclusions: [{ scope: { targets: [{ source_ref: sources[0] }] }, paths: ["src/deprecated"], reason: "User requests only current APIs" }] }] });
   await writeFile(join(root, "src/indexers.yaml"), requirements);
-  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision });
+  await prepareCurrentProductionStage({ projectRoot: root, revision: (await productionPlanningRequest(root))!.revision, sources });
   const initial = (await readProductionStage(root))!;
   expect(initial.gaps).toEqual([]);
   const shared = (source: string) => readFile(join(root, productionStageDirectory(initial.id), productionSourceFile(source)), "utf8");

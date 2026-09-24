@@ -63,13 +63,19 @@ describe("Production bootstrap follows the workspace Graph", () => {
       }
     });
 
-    test(`deterministic execution prepares once and stops for planning and report approval (managed=${managed})`, async () => {
+    test(`execution waits for source selection then stops for planning and report approval (managed=${managed})`, async () => {
       const { root, requirementsPath, requirements, source } = await workspace();
       const args = ["run", ...flags, "--until", "blocked-or-complete", "--format", "json", "--verbose"];
       const missing = JSON.parse(await runCliInDir(root, args));
       expect(missing).toMatchObject({ state: "blocked", steps: [],
         stop: { reasonCode: "workflow.until.configuration-required" } });
       await writeFile(requirementsPath, requirements);
+      const selection = JSON.parse(await runCliInDir(root, args));
+      expect(selection.steps).toEqual([]);
+      expect(selection.workflow.current.node).toBe("prepare-production-planning");
+      expect(await readProductionStage(root)).toBeUndefined();
+      await runCliInDir(root, ["action", "prepare-current", "--revision", selection.workflow.current.revision,
+        "--source", source, "--format", "json"]);
       const prepared = JSON.parse(await runCliInDir(root, args));
       expect(prepared.workflow.current.node).toBe("plan-production-stage");
       const stage = (await readProductionStage(root))!;
