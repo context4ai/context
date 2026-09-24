@@ -9,6 +9,9 @@ import {
 } from "@c4a/context";
 import { durableContentDigest } from "./durableSingleFileTransaction.js";
 import { recoverDurableMultiFileTransactions, runDurableMultiFileTransaction, type DurableMultiFileFailureInjector } from "./durableMultiFileTransaction.js";
+import { ContextError } from "../lib/errors.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
+import { ExitCode } from "../types/exitCode.js";
 import { withProjectWriteLock } from "./writeLock.js";
 
 export const KNOWLEDGE_MAP_PATH = "src/knowledge-map.yaml";
@@ -19,6 +22,24 @@ async function optionalText(root: string, path: string): Promise<string | undefi
 export async function readKnowledgeMap(root: string): Promise<KnowledgeMap | undefined> {
   const content = await optionalText(root, KNOWLEDGE_MAP_PATH);
   return content === undefined ? undefined : validateKnowledgeMap(parse(content));
+}
+
+/** Read-only, patch-ready navigation state, available before generating a report. */
+export async function inspectKnowledgeMap(root: string) {
+  const current = await readKnowledgeMap(root);
+  return { path: KNOWLEDGE_MAP_PATH, revision: current?.revision ?? null, entries: current?.entries ?? [],
+    input_template: { knowledge_map: { expected_revision: current?.revision ?? null, upsert: [], remove: [] } },
+    next_action: { command: "context task adjust --input - --format json" } };
+}
+
+function assertMapRevision(current: KnowledgeMap | undefined, update: KnowledgeMapUpdate): void {
+  if ((current?.revision ?? null) === update.expected_revision) return;
+  throw new ContextError(ExitCode.UserError, "The navigation revision does not match. Read the current organization and reapply the intended edit; no changes were saved.", {
+    category: ErrorCategory.UserInputInvalid, reason_code: "knowledge-map-stale-revision",
+    expected_revision: update.expected_revision, current_revision: current?.revision ?? null,
+    next_action: { command: "context task adjust --inspect --format json" },
+    input_schema: { knowledge_map: { expected_revision: current?.revision ?? null, upsert: [], remove: [] } },
+  });
 }
 
 /** Called by the existing structure acceptance, never by parsing a prose report.
@@ -34,6 +55,7 @@ export async function acceptStructureDecision(input: {
   return withProjectWriteLock(input.projectRoot, "accept-knowledge-map", async () => {
     await recoverDurableMultiFileTransactions(input.projectRoot);
     const current = await readKnowledgeMap(input.projectRoot);
+    if (input.knowledge_map !== undefined) assertMapRevision(current, input.knowledge_map);
     const next = input.knowledge_map === undefined ? current : updateKnowledgeMap(current, input.knowledge_map);
     if (input.article_targets !== undefined) {
       const known = [...await approvedKnowledgeMapTargets(input.projectRoot), ...input.article_targets];
@@ -56,6 +78,7 @@ export async function applyKnowledgeMapUpdate(projectRoot: string, update: Knowl
   return withProjectWriteLock(projectRoot, "adjust-knowledge-map", async () => {
     await recoverDurableMultiFileTransactions(projectRoot);
     const current = await readKnowledgeMap(projectRoot);
+    assertMapRevision(current, update);
     const next = updateKnowledgeMap(current, update);
     const approved = await approvedKnowledgeMapTargets(projectRoot);
     const previewText = await optionalText(projectRoot, ".tmp/context-runtime/indexer/structure-review/preview.json");

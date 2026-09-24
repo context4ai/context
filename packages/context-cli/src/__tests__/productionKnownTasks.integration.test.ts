@@ -116,7 +116,7 @@ test("known tasks retain source authorization and reject unsafe files before cre
   await writeFile(join(f.root, f.path), YAML.stringify({ ...f.plan,
     articles: [{ ...f.plan.articles[0], sources: ["repo:not-authorized"] }] }));
   await expect(prepareKnownProductionTasks({ projectRoot: f.root, cwd: f.root, revision: f.revision, path: f.path })).rejects.toThrow("outside authorized");
-  expect((await readProductionStage(f.root))!.tasks).toEqual([]);
+  expect(await readProductionStage(f.root)).toBeUndefined();
 });
 
 test("the real action boundary returns actionable plan, report and syntax failures without altering tasks", async () => {
@@ -174,4 +174,12 @@ test("the same known article saves one real CLI round trip before writing withou
   // Do not assert a wall-time ratio: these are local Node process timings,
   // excluding model reading, authoring and the human's report response time.
   console.info(`Same-article CLI comparison: ${JSON.stringify(measurements)}`);
+});
+
+
+test("known-task schema is available before a workspace or revision exists", async () => {
+  const schema = JSON.parse(await runCliInDir(resolve(".tmp"), ["action", "prepare-current", "--schema", "--format", "json"]));
+  expect(schema.properties.articles.items.properties.sources).toBeDefined();
+  expect(schema.required).not.toContain("stage");
+  expect(schema.properties.capabilities).toBeDefined();
 });

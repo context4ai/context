@@ -21,7 +21,7 @@ import { bundledMarkdownReaderQuestionContracts } from
   "./indexerBaseMarkdownAuthoringCatalog.js";
 
 const BASE_CONTRACT_VERSION = "1.1.0";
-export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.37";
+export const BUNDLED_INDEXER_PARSER_PACKAGE_VERSION = "0.7.38";
 const BUNDLED_PARSER_REQUIREMENTS = buildIndexerParserCapabilityRequirements(
   BUNDLED_INDEXER_PARSER_PACKAGE_VERSION,
 );

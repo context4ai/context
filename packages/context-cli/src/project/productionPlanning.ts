@@ -5,11 +5,11 @@ import YAML from "yaml";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { indexerProtocolDigest } from "@c4a/context";
-import { inspectProductionRequirements, productionSourceIsExcluded } from "./productionRequirements.js";
+import { inspectProductionRequirements, productionSourceIsExcluded, type ProductionRequirements } from "./productionRequirements.js";
 import { prepareProductionPlanningMaterials } from "./productionPlanningMaterials.js";
 import { productionSourceBaseline } from "./productionSubmission.js";
 import { productionCapabilitiesSchema, productionIndexerUsageSchema, productionTaskInput, validateProductionStage, reviseProductionPlan, type ProductionStage } from "./productionStage.js";
-import { materializeProductionStage, readProductionStage, saveProductionStage, productionStageDirectory,
+import { materializeProductionStage, readProductionStage, productionStageDirectory,
   productionSourceFile, writeProductionProjection } from "./productionStageStore.js";
 import { productionAgentDirectory, readProductionFile, type FixedProductionFile } from "./productionSubmissionFiles.js";
 import { withProjectWriteLock } from "./writeLock.js";
@@ -24,6 +24,8 @@ import { ExitCode } from "../types/exitCode.js";
 import { readMaintenance } from "./maintenanceStorage.js";
 import { withProductionFeedback } from "./productionFeedback.js";
 import { resolveProductionExclusions } from "./productionExclusions.js";
+
+import { authorizedProductionSources, selectProductionSources, scopedProductionRequirements, productionRequestedSources, activeProductionSources, saveExpandedProductionScope } from "./productionScope.js";
 
 import { productionSourceSummary, productionSourceSummaryMarkdown } from "./productionSourceSummary.js";
 
@@ -64,7 +66,7 @@ export async function productionPlanningIsPrepared(root: string, stage: Producti
     const supplied = YAML.parse(await readFile(await safeProjectTarget(root, join(directory, "shared/requirements.md")), "utf8"));
     await access(await safeProjectTarget(root, join(directory, "planning.md")));
     await access(await safeProjectTarget(root, join(directory, "planning.schema.json")));
-    return !!current && current.revision === indexerProtocolDigest(supplied);
+    return !!current && indexerProtocolDigest(scopedProductionRequirements(current.requirements, productionRequestedSources(stage))) === indexerProtocolDigest(scopedProductionRequirements(supplied as ProductionRequirements, productionRequestedSources(stage)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw error;
@@ -76,7 +78,7 @@ export async function productionRequirementsAreCurrent(root: string, stage: Prod
     const current = await productionPlanningRequest(root);
     const supplied = YAML.parse(await readFile(await safeProjectTarget(root,
       join(productionStageDirectory(stage.id), "shared/requirements.md")), "utf8"));
-    return !!current && current.revision === indexerProtocolDigest(supplied);
+    return !!current && indexerProtocolDigest(scopedProductionRequirements(current.requirements, productionRequestedSources(stage))) === indexerProtocolDigest(scopedProductionRequirements(supplied as ProductionRequirements, productionRequestedSources(stage)));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -88,7 +90,7 @@ export async function assertProductionPlanRequirementsCurrent(root: string, stag
     "Confirmed requirements changed or their planning snapshot is missing; refresh the plan before submitting");
 }
 
-export async function prepareInitialProductionPlanning(input: { projectRoot: string; revision: string }) {
+export async function prepareInitialProductionPlanning(input: { projectRoot: string; revision: string; sources?: string[] }) {
   return withProjectWriteLock(input.projectRoot, "production-planning", async () => {
     const previous = await readProductionStage(input.projectRoot);
     if (previous && (previous.id !== input.revision || previous.report_approved && await productionRequirementsAreCurrent(input.projectRoot, previous))) {
@@ -96,10 +98,12 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
     }
     const request = await productionPlanningRequest(input.projectRoot);
     if (!request || (!previous && request.revision !== input.revision)) throw new TypeError("Production requirements changed; read the current route");
-    const scopeNames = [...new Set(request.requirements.requirements.flatMap(item => [
-      ...item.target_scope.targets, ...item.evidence_source_scope?.targets ?? [],
-    ].map(target => target.source_ref)))].filter(scope => !productionSourceIsExcluded(request.requirements, scope));
-    const prepared = await prepareProductionPlanningMaterials({ projectRoot: input.projectRoot, requirements: request.requirements });
+    const authorized = new Set(authorizedProductionSources(request.requirements, true));
+    const requested = selectProductionSources(request.requirements, input.sources ?? (previous
+      ? productionRequestedSources(previous).filter(source => authorized.has(source)) : undefined), true);
+    const scopeNames = requested.filter(source => !productionSourceIsExcluded(request.requirements, source));
+    const scoped = scopedProductionRequirements(request.requirements, requested);
+    const prepared = await prepareProductionPlanningMaterials({ projectRoot: input.projectRoot, requirements: scoped, scopes: new Set(scopeNames) });
     const sourceMaterials = new Map(prepared.materials.sources);
     const scopes: ProductionStage["scopes"] = [];
     for (const scope of scopeNames) {
@@ -112,9 +116,9 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
       }
     }
     const guidance = await productionExistingArticleNavigation(input.projectRoot);
-    const stage = validateProductionStage({ id: randomUUID(), purpose: request.requirements.requirements.map(item =>
+    const stage = validateProductionStage({ id: randomUUID(), purpose: scoped.requirements.map(item =>
       item.purpose ?? item.reader_goals?.join("; ") ?? item.questions!.join("; ")).join("\n"),
-    scopes, pending_scopes: scopeNames,
+    requested_sources: requested, scopes, pending_scopes: scopeNames,
     tasks: previous?.tasks.filter(task => previous.report_approved || ["accepted", "excluded", "replaced"].includes(task.status))
       .map(task => ["accepted", "excluded", "replaced"].includes(task.status) ? task : { ...task, status: "replaced",
         reason: "Long-term requirements changed; the replacement plan requires a new report approval." }) ?? [],
@@ -126,12 +130,12 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
       `Existing reader topics: ${join(directory, "guidance/existing-articles.md")}`,
       `Stage: ${stage.id}`, "", ...productionSourceSummaryMarkdown(stage), ...scopes.map(scope => `- ${scope.scope}: ${join(directory, productionSourceFile(scope.scope))}`), "",
       "Use code skeletons and document outlines to identify the authorized capability families and document tasks, then selectively read full material to decide reader topics. Navigation is not a complete feature inventory. Keep unchecked scope pending; do not parse all code or maintain per-symbol disposition just to plan.",
-      "Configured sources are the knowledge workspace coverage boundary, not a new investigation assignment on every request. First distinguish the user's current task, its actual source dependencies, and unrelated configured sources. Reuse approved content; a source-level pending entry alone does not prove missing knowledge or require new articles.",
-      "Report source baseline/read failures separately from content gaps. For an unrelated configured source, explain that its availability check is unresolved outside this task; do not promise a new code investigation. If the Route still requires resolution, report that precise workflow limitation without deleting source configuration, clearing runtime state, or claiming the source was investigated.",
+      "These materials cover this request's selected sources. Long-term supporting sources remain authorized for later article plans without becoming pending work. Reuse approved content and declare only actual remaining investigation.",
+      "Report source baseline/read failures separately from content gaps. Restore the selected dependencies that an article actually needs; do not remove real unfinished investigation or manufacture successful source reads.",
       "Scale planning to the current request. For one or two documents or a clearly bounded module, decide which articles to add or revise and where they belong; do not redesign the whole knowledge base. Start with related existing topics, expand reading only when needed, and reuse applicable decisions. A large module may need several topics, but not investigation of unrelated modules.",
       "Separate the whole requested outcome from the current writing batch. Use one batch unless actual dependencies or useful parallel work justify more; do not invent page counts or dependencies. A first useful delivery does not settle remaining authorized work.",
       "Use question and brief to describe the reader task and useful depth: a checked file/symbol or document section with a concrete next step for navigation, or the behavior, conditions and steps needed for explanation. Reuse or revise existing articles without replacing valid detail with generic summaries; split distinct tasks, not sources or symbols.",
-      ...(request.reassess.length ? [`Reassess earlier content exclusions: ${request.reassess.join(", ")}. Their source material changed or is unavailable. The stored decisions were preserved but no longer suppress investigation.`] : []),
+      ...(request.reassess.some(source => requested.includes(source)) ? [`Reassess earlier content exclusions: ${request.reassess.filter(source => requested.includes(source)).join(", ")}. Their source material changed or is unavailable. The stored decisions were preserved but no longer suppress investigation.`] : []),
       "Keep user-confirmed long-term exclusions in the existing requirements file. For a content-based exclusion, retain source_baselines from the supplied stage scopes for the material actually read; changed material is investigated again. Do not turn a temporary failure or an unapproved suggestion into a permanent exclusion.",
       "Declare available relevant skills and whether you can coordinate multiple Agents. Article sources may cross registered source and skill boundaries. Batch dependencies in after name article paths.",
       "Article path is relative to knowledge/ (for example business/example.md, not knowledge/business/example.md). indexer_usage.scopes names authorized source refs from the stage, not knowledge collections. Declare skills here; no separate Indexer registry is required.",
@@ -146,7 +150,7 @@ export async function prepareInitialProductionPlanning(input: { projectRoot: str
 export async function submitProductionPlan(input: { projectRoot: string; stage: string; path: string; manifest?: FixedProductionFile }) {
   return withProductionFeedback({ operation: "plan", file: input.path, schema: productionPlanInputSchema },
     () => withProjectWriteLock(input.projectRoot, "production-plan-submit", async () => {
-    const stage = await readProductionStage(input.projectRoot);
+    let stage = await readProductionStage(input.projectRoot);
     if (!stage || stage.id !== input.stage) throw new TypeError("Plan replacement requires the current stage; read the current route");
     if (stage.delivery) throw new TypeError("Finish the requested delivery or run context run --resume-writing --format json before amending the plan.");
     if ((await readMaintenance(input.projectRoot)).active) throw new TypeError("Finish or cancel the active maintenance task before amending the production plan.");
@@ -157,6 +161,23 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (new Set(plan.replaces).size !== plan.replaces.length) throw new TypeError("Replacement task identities must be unique");
     if (!stage.report_approved && plan.replaces.length) throw new TypeError("Before report approval, submit the complete plan instead of replacement task identities");
     if (stage.report_approved && !plan.articles.length && plan.pending_scopes === undefined) throw new TypeError("A writing-stage plan amendment needs new tasks or an explicit investigation update");
+    const request = (await productionPlanningRequest(input.projectRoot))!;
+    const selected = [...new Set([...plan.articles.flatMap(article => article.sources), ...plan.pending_scopes ?? []])];
+    if (selected.length) selectProductionSources(request.requirements, selected);
+    const existingScopes = new Set(stage.scopes.map(source => source.scope));
+    const active = activeProductionSources(stage);
+    const additions = selected.filter(source => !existingScopes.has(source) || !active.has(source));
+    const additional = await prepareProductionPlanningMaterials({ projectRoot: input.projectRoot,
+      requirements: scopedProductionRequirements(request.requirements, additions), scopes: new Set(additions) });
+    const scopes = stage.scopes.filter(source => !additions.includes(source.scope));
+    for (const scope of additions) {
+      try { scopes.push({ scope, baseline: await productionSourceBaseline(input.projectRoot, scope) }); }
+      catch (error) {
+        scopes.push({ scope, baseline: null });
+        additional.gaps = [...additional.gaps.filter(gap => gap.scope !== scope), { scope, reason: error instanceof Error ? error.message : String(error) }];
+      }
+    }
+    stage = { ...stage, requested_sources: [...new Set([...productionRequestedSources(stage), ...selected])], scopes, gaps: [...stage.gaps, ...additional.gaps] };
     const pendingScopes = plan.pending_scopes ?? (stage.report_approved ? stage.pending_scopes : []);
     if (new Set(pendingScopes).size !== pendingScopes.length || pendingScopes.some(scope => !stage.scopes.some(source => source.scope === scope))) {
       throw new TypeError("Pending investigation must name unique authorized stage scopes");
@@ -169,7 +190,8 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (plan.articles.some(article => article.sources.some(scope => stage.gaps.some(gap => gap.scope === scope)))) {
       throw refreshRequired(stage.id, "An article requires unavailable material in the captured stage. Restore the required source, including code dependencies of document-led work, then prepare the current stage; independent source plans may proceed.", { source_summary: productionSourceSummary(stage) });
     }
-    for (const source of stage.scopes) if (!stage.gaps.some(gap => gap.scope === source.scope) &&
+    const relevant = new Set([...activeProductionSources(stage), ...selected]);
+    for (const source of stage.scopes) if (relevant.has(source.scope) && !stage.gaps.some(gap => gap.scope === source.scope) &&
       await productionSourceBaseline(input.projectRoot, source.scope) !== source.baseline) {
       throw refreshRequired(stage.id, `Planning source changed: ${source.scope}; refresh the investigation materials`);
     }
@@ -179,7 +201,7 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
     if (identities.size !== plan.articles.length) throw new TypeError("Plan article paths must be unique");
     if (stage.report_approved && identities.size > 0 && [...identities.values()].every(id => stage.tasks.some(task => task.id === id))) {
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage, capabilities: plan.capabilities });
-      return { stage_state: prepared.state, next: { directory: prepared.directory, mode: prepared.mode,
+      return { stage_state: prepared.state, next: { directory: prepared.directory, agent_directory: prepared.agent_directory, mode: prepared.mode,
         ...(prepared.submission ? { submission: prepared.submission } : {}) } };
     }
     const candidates = await readCandidateRecords(input.projectRoot);
@@ -212,10 +234,10 @@ export async function submitProductionPlan(input: { projectRoot: string; stage: 
       : { ...stage, tasks: [...retained, ...tasks], pending_scopes: pendingScopes, planning_complete: true };
     const usage = stage.report_approved ? [...stage.indexer_usage, ...plan.indexer_usage] : plan.indexer_usage;
     const updated = validateProductionStage({ ...amended, indexer_usage: [...new Map(usage.map(item => [JSON.stringify(item), item])).values()] });
-    await saveProductionStage(input.projectRoot, updated);
+    await saveExpandedProductionScope(input.projectRoot, updated, request.requirements, additional.materials.sources);
     try {
       const prepared = await materializeProductionStage({ projectRoot: input.projectRoot, stage: updated, capabilities: plan.capabilities });
-      return { stage_state: prepared.state, ...(prepared.submission ? { next: { directory: prepared.directory,
+      return { stage_state: prepared.state, ...(prepared.submission ? { next: { directory: prepared.directory, agent_directory: prepared.agent_directory,
         submission: prepared.submission, mode: prepared.mode } } : { next_action: { command: "context status --format json" } }) };
     } catch (error) {
       return { stage_state: "active" as const, next_preparation: { outcome: "failed" as const,

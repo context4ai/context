@@ -89,7 +89,7 @@ test("saved material planning honors shared scope and explicit exclusions withou
       exclusions: [{ scope: unavailableScope, reason: "Explicitly out of scope" }] },
     requirements.requirements[1],
   ] }));
-  await prepareCurrentProductionStage({ projectRoot, revision: (await productionPlanningRequest(projectRoot))!.revision });
+  await prepareCurrentProductionStage({ projectRoot, revision: (await productionPlanningRequest(projectRoot))!.revision, sources: [note.source_ref, "repo:missing"] });
   const stage = (await readProductionStage(projectRoot))!;
   expect(stage.scopes.map(source => source.scope)).toEqual([note.source_ref]);
   expect(stage.pending_scopes).toEqual([note.source_ref]);

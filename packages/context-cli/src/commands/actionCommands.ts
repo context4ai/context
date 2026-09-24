@@ -13,7 +13,7 @@ import { readYamlOrJsonInput } from "../project/payloadInput.js";
 import { ExitCode } from "../types/exitCode.js";
 import { prepareCurrentProductionStage } from "../project/productionStagePreparation.js";
 import { currentProductionOwnsAction } from "../project/indexerCurrentAction.js";
-import { prepareKnownProductionTasks } from "../project/productionKnownTasks.js";
+import { prepareKnownProductionTasks, productionKnownTasksSchema } from "../project/productionKnownTasks.js";
 
 function requiredString(value: unknown, flag: string): string {
   if (typeof value === "string" && value.trim().length > 0) return value.trim();
@@ -29,11 +29,20 @@ export function registerProjectActionCommands(program: Command): void {
 
   action.command("prepare-current")
     .description("Prepare or retry current production batch directories without resubmitting accepted articles")
-    .requiredOption("--revision <revision>", "current production stage identity")
+    .option("--revision <revision>", "current production stage identity")
+    .option("--schema", "show the known-task input schema without a workspace or revision")
     .option("--input <file>", "already-decided article tasks under .tmp/agent-work; prepare and submit the plan together, then wait for report approval")
+    .option("--source <source-ref>", "source selected for this request; repeat for multi-source investigation", (value: string, previous: string[]) => [...previous, value], [])
     .option("--multi-agent", "this caller can coordinate multiple independent batch directories; default is one batch")
     .option("--format <format>", "output format: json | yaml", "json")
-    .action(async (options: { revision: string; multiAgent?: boolean; format: string; input?: string }) => {
+    .action(async (options: { revision?: string; schema?: boolean; multiAgent?: boolean; format: string; input?: string; source: string[] }) => {
+      if (options.schema) {
+        const { zodToJsonSchema } = await import("zod-to-json-schema");
+        const { writeSchemaOutput, schemaOutputFormat } = await import("../lib/schemaOutput.js");
+        writeSchemaOutput(zodToJsonSchema(productionKnownTasksSchema, { $refStrategy: "none" }), schemaOutputFormat(options.format));
+        return;
+      }
+      const revision = requiredString(options.revision, "--revision");
       if (options.format !== "json" && options.format !== "yaml") throw new ContextError(ExitCode.UserError,
         "--format must be json or yaml", { category: ErrorCategory.UserInputInvalid,
           reason_code: "invalid-action-format", flag: "--format", valid_formats: ["json", "yaml"],
@@ -43,8 +52,8 @@ export function registerProjectActionCommands(program: Command): void {
         "prepare-current requires a Context workspace", { category: ErrorCategory.WorkspaceNotFound,
           reason_code: "action-workspace-not-found", next_action: { command: "context entry --format json", instruction: "Locate the intended workspace before preparing task files." } });
       const result = options.input ? await prepareKnownProductionTasks({ projectRoot: root.projectRoot, cwd: process.cwd(),
-        revision: options.revision, path: options.input }) : await prepareCurrentProductionStage({ projectRoot: root.projectRoot,
-        revision: options.revision, multiAgent: options.multiAgent === true });
+        revision, path: options.input }) : await prepareCurrentProductionStage({ projectRoot: root.projectRoot,
+        revision, multiAgent: options.multiAgent === true, ...(options.source.length ? { sources: options.source } : {}) });
       await new Promise<void>((resolve, reject) => {
         process.stdout.write(serializeActionCompletion(result, options.format as "json" | "yaml"), error => {
           if (error) reject(error); else resolve();

@@ -27,7 +27,7 @@ export async function produceFixtureArticles(root: string, articles: FixtureProd
 } = {}) {
   const request = await productionPlanningRequest(root);
   if (!request) throw new Error("Fixture needs canonical production requirements");
-  await prepareCurrentProductionStage({ projectRoot: root, revision: request.revision });
+  await prepareCurrentProductionStage({ projectRoot: root, revision: request.revision, sources: [...new Set(articles.flatMap(article => article.sources))] });
   const initial = (await readProductionStage(root))!;
   const agent = join(root, productionAgentDirectory(initial.id));
   await mkdir(join(agent, "submissions"), { recursive: true });

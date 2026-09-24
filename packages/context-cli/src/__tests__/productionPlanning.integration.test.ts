@@ -251,7 +251,7 @@ test("an initially unavailable source does not block independent writing and is 
   const initiallyMissing = join(projectRoot, "sources/note/20260913/later.md");
   const heldInitialSource = join(outer, "held-later.md");
   await rename(initiallyMissing, heldInitialSource);
-  await prepareCurrentProductionStage({ projectRoot, revision: (await productionPlanningRequest(projectRoot))!.revision });
+  await prepareCurrentProductionStage({ projectRoot, revision: (await productionPlanningRequest(projectRoot))!.revision, sources: sources.map(source => source.source_ref) });
   const stage = (await readProductionStage(projectRoot))!;
   expect(stage.scopes.find(source => source.scope === sources[1]!.source_ref)?.baseline).toBeNull();
   expect(stage.gaps.map(gap => gap.scope)).toEqual([sources[1]!.source_ref]);

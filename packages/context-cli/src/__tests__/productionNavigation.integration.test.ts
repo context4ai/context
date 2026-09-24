@@ -7,7 +7,7 @@ import { readCandidateRecords } from "../project/candidateLedger.js";
 import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { buildFixturePackages } from "./workspaceVersionDelivery.fixture.js";
-import { readKnowledgeMap } from "../project/knowledgeMap.js";
+import { readKnowledgeMap, inspectKnowledgeMap } from "../project/knowledgeMap.js";
 import { adjustCurrentTaskSources } from "../project/taskSourceAdjustment.js";
 
 test("reader navigation spans current articles and can be renamed without rewriting their prose", async () => {
@@ -34,6 +34,13 @@ test("reader navigation spans current articles and can be renamed without rewrit
       expect(await readFile(join(root, "dist/update-kb", decodeURIComponent(path)), "utf8")).toContain('<a id="' + anchor + '"></a>');
     }
     const map = (await readKnowledgeMap(root))!;
+    const inspection = await inspectKnowledgeMap(root);
+    expect(inspection.revision).toBe(map.revision);
+    expect(inspection.entries).toEqual(map.entries);
+    await expect(adjustCurrentTaskSources(root, { knowledge_map: { expected_revision: "stale", upsert: [], remove: [] } }))
+      .rejects.toMatchObject({ detail: { reason_code: "knowledge-map-stale-revision", current_revision: map.revision,
+        next_action: { command: "context task adjust --inspect --format json" } } });
+    expect(await readKnowledgeMap(root)).toEqual(map);
     await adjustCurrentTaskSources(root, { knowledge_map: { expected_revision: map.revision, remove: [],
       upsert: [{ ...map.entries.find(entry => entry.key === "guide")!, title: "Adoption by reader task" }] } });
     expect((await buildFixturePackages(root)).packages[0]!.state).toBe("updated");
@@ -67,6 +74,10 @@ test("accepted drafts can be placed and reviewed while unrelated repository gaps
     await expect(adjustCurrentTaskSources(root, { knowledge_map: { expected_revision: map.revision,
       upsert: [{ ...entries[0]!, target: { artifact_ref: candidates[0]!.article_id, section_key: "missing" } }] } })).rejects.toThrow();
     await expect(readProductionReviewCandidates(root)).rejects.toThrow();
+    const { productionWorkflowRoute } = await import("../project/productionWorkflowRoute.js");
+    const route = await productionWorkflowRoute({ projectRoot: root, authorities: [] });
+    expect(route?.commands).toContainEqual({ command: "context run --deliver --format json", effect: "write",
+      availability: "after-human-confirmation", managed_execution: "agent-required" });
     expect(await requestProductionDelivery(root)).toBe(true);
     expect((await readProductionReviewCandidates(root))!.candidates).toHaveLength(candidates.length);
     const after = (await readProductionStage(root))!;

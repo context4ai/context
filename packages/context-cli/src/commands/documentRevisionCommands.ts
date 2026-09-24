@@ -134,8 +134,16 @@ export function registerDocumentRevisionCommand(program: Command): void {
   task.command("adjust").description("Adjust current source/module inputs or reader organization while preserving unrelated work")
     .option("--input <file>", "YAML/JSON source scopes with instruction, or knowledge_map; - for stdin")
     .option("--schema", "show source adjustment or knowledge map input schema")
+    .option("--inspect", "read current navigation entries, revision and an adjustment template")
     .option("--format <format>", "output format: json", "json")
-    .action(async (options: { input?: string; schema?: boolean; format: string }) => {
+    .action(async (options: { input?: string; schema?: boolean; inspect?: boolean; format: string }) => {
+      if (options.inspect) {
+        if (options.input || options.schema || options.format !== "json") throw new ContextError(ExitCode.UserError,
+          "Use --inspect --format json without --input or --schema.", { category: ErrorCategory.UserInputInvalid });
+        const { inspectKnowledgeMap } = await import("../project/knowledgeMap.js");
+        process.stdout.write(`${JSON.stringify(await inspectKnowledgeMap(requireProjectRoot()))}\n`);
+        return;
+      }
       if (options.schema) {
         const { taskSourceAdjustmentSchema } = await import("../project/taskSourceAdjustment.js");
         const { zodToJsonSchema } = await import("zod-to-json-schema");

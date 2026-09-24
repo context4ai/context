@@ -38,7 +38,11 @@ test("the existing task adjustment updates only organization and rejects stale c
     const next = { expected_revision: first.revision, upsert: [{ ...first.entries[0]!, title: "New reader label" }], remove: [] };
     expect(await adjustCurrentTaskSources(root, { knowledge_map: next })).toMatchObject({ outcome: "knowledge-map-updated" });
     expect(await readFile(join(root, "knowledge/entry.md"), "utf8")).toBe(content);
-    await expect(adjustCurrentTaskSources(root, { knowledge_map: next })).rejects.toThrow("reread");
+    await expect(adjustCurrentTaskSources(root, { knowledge_map: next })).rejects.toMatchObject({ detail: {
+      reason_code: "knowledge-map-stale-revision", expected_revision: first.revision,
+      current_revision: (await readKnowledgeMap(root))!.revision,
+      next_action: { command: "context task adjust --inspect --format json" },
+    } });
     expect((await readKnowledgeMap(root))?.entries[0]?.title).toBe("New reader label");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

@@ -28,13 +28,15 @@ export async function productionPlanningRoute(input: { projectRoot: string; auth
   return { protocol: "context.workflow.route.v1", id: route.routeId, node: route.node, revision,
     reason_code: route.reasonCode, availability: route.availability,
     summary: configure ? "Record the user's reader purpose and authorized sources, not Provider configuration. Ask only for missing scope or purpose decisions."
-      : prepare ? "Prepare lightweight navigation. If article targets are already decided, add --input with the known-task file under .tmp/agent-work to create those tasks in the same call; report approval still follows." : "Investigate the supplied skeletons and submit article goals, source grouping and writing batches; report approval follows.",
-    commands: configure ? [] : [{ command, effect: "write", availability: "immediate", managed_execution: prepare ? "automatic" : "agent-required" }],
+      : prepare ? "Select only this request's investigation sources with repeated --source <source-ref>, or add --input with decided article tasks under .tmp/agent-work. A sole configured target can be selected automatically. Supporting sources remain available for later article plans; do not select the whole reference pool. Report approval still follows." : "Investigate the supplied skeletons and submit article goals, source grouping and writing batches; report approval follows.",
+    commands: configure ? [] : [{ command, effect: "write", availability: "immediate", managed_execution: "agent-required" }],
     ...(configure ? { configuration: { file: "src/indexers.yaml" as const,
       action: "Write the confirmed long-term requirements using the supplied contract, then run context status --format json. Do not invent new source authorization or add Provider/process configuration." } } : {}),
     resources: { required: [...route.resources.required.map(resource => projectWorkflowResourceLocation(resource, revision, input.authorities)),
       ...(stage && !prepare ? [{ id: `production/${stage.id}/planning`, kind: "context-view" as const, media_type: "text/markdown",
         path: join(input.projectRoot, productionStageDirectory(stage.id), "planning.md"), read_state: "read-required" as const }] : [])],
-      recommended: route.resources.recommended.map(resource => projectWorkflowResourceLocation(resource, revision, input.authorities)) },
+      recommended: [...route.resources.recommended.map(resource => projectWorkflowResourceLocation(resource, revision, input.authorities)),
+        ...(prepare ? [{ id: "production/known-tasks-schema", kind: "context-view" as const, media_type: "application/schema+json",
+          command: "context action prepare-current --schema --format json", read_state: "read-required" as const }] : [])] },
     after_action: { evaluate: true } };
 }

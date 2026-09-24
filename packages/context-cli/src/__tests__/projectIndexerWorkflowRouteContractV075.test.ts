@@ -76,7 +76,7 @@ describe("current Indexer workflow Route contract", () => {
     expect(() => validateIndexerCurrentActionInput(retiredAgentFinalization)).toThrow();
   });
 
-  test("current requirements lead directly to deterministic preparation without an Agent output contract", async () => {
+  test("current requirements expose source selection and the known-task schema before preparation", async () => {
     const parent = resolve(".tmp/production-route-tests");
     await mkdir(parent, { recursive: true });
     const root = await mkdtemp(join(parent, "case-")); roots.push(root);
@@ -88,7 +88,10 @@ describe("current Indexer workflow Route contract", () => {
     const route = await projectCurrentIndexerWorkflowRoute({ projectRoot: root,
       route: outerIndexerAgentRoute(), authorities: contextWorkflowAuthorities({ managed: true }), managed: true });
     expect(route).toMatchObject({ node: "prepare-production-planning", availability: "immediate",
-      commands: [{ command: expect.stringContaining("action prepare-current"), effect: "write", managed_execution: "automatic" }] });
+      commands: [{ command: expect.stringContaining("action prepare-current"), effect: "write", managed_execution: "agent-required" }] });
+    expect(route?.resources.recommended).toContainEqual(expect.objectContaining({
+      command: "context action prepare-current --schema --format json", media_type: "application/schema+json",
+    }));
     expect(route?.action).toBeUndefined();
     expect(route?.gate).toBeUndefined();
     expect(await readFile(path, "utf8")).toBe(configuration);

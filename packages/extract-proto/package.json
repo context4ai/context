@@ -1,7 +1,7 @@
 {
   "name": "@c4a/extract-proto",
   "description": "Protocol Buffers IDL catalog parser for Context",
-  "version": "0.7.37",
+  "version": "0.7.38",
   "type": "module",
   "license": "MIT",
   "engines": {

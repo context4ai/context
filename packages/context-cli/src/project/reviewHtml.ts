@@ -13,6 +13,8 @@ import { saveReviewReportScope } from "./reviewReportScope.js";
 import { REVIEW_SITE_CLIENT } from "./reviewSiteClient.js";
 import { REVIEW_SITE_STYLES } from "./reviewSiteStyles.js";
 
+import { readKnowledgeMap, KNOWLEDGE_MAP_PATH } from "./knowledgeMap.js";
+
 const REVIEW_HTML_ROOT = join(".tmp", "context-runtime", "review");
 
 export async function collectReviewCandidates(projectRoot: string, collection: KnowledgeCollection): Promise<ReviewCandidateView[]> {
@@ -79,7 +81,7 @@ export async function writeReviewHtml(input: {
   candidates: number;
   candidate_set_digest: string;
   structure_digests: string[];
-  navigation: { ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[] };
+  navigation: { current_revision: string | null; structure_path: string; inspect_command: string; ready: boolean; unplaced_count: number; unplaced: { article_id: string; candidate_id: string; path: string; title: string }[] };
   next_action?: { command: string; message: string };
 }> {
   const reviewScope = input.all === true ? "all" : input.collection;
@@ -108,7 +110,8 @@ export async function writeReviewHtml(input: {
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));
   return {
-    navigation: { ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced },
+    navigation: { current_revision: (await readKnowledgeMap(input.projectRoot))?.revision ?? null,
+      structure_path: KNOWLEDGE_MAP_PATH, inspect_command: "context task adjust --inspect --format json", ready: unplaced.length === 0, unplaced_count: unplaced.length, unplaced },
     ...(unplaced.length ? { next_action: { command: "context task adjust --input - --format json",
       message: "Bind the listed drafts to suitable existing categories before requesting review, then regenerate this report. Content approval is not required for navigation." } } : {}),
     path: outPath,
