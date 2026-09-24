@@ -1,4 +1,5 @@
 import { reviewSiteBaselineHash } from "./reviewSiteModel.js";
+import { readPendingReviewFeedback } from "./reviewFeedback.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -194,20 +195,6 @@ function reviewFileTarget(input: {
   };
 }
 
-function expandEncodedReviewDecisions(payload: ReviewPayload, scopedIds: string[]): ReviewDecision[] {
-  if (payload.scope?.candidates_sha256 === undefined || payload.encoded_statuses!.length !== scopedIds.length ||
-    payload.decisions.length !== 0 || payload.default !== undefined ||
-    payload.encoded_statuses!.some((status) => status !== "approved" && status !== "rejected" && status !== "pending")) {
-    throw new ContextError(ExitCode.UserError, "Invalid scoped review code decisions", {
-      category: ErrorCategory.UserInputInvalid, next: "Copy a fresh complete review code from the current HTML report.",
-    });
-  }
-  return scopedIds.flatMap((candidate_id, index) => {
-    const status = payload.encoded_statuses![index]!;
-    return status === "pending" ? [] : [{ candidate_id, status }];
-  });
-}
-
 function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRecord[]): ReviewDecision[] {
   const scopedRows = payload.scope?.kind === "all"
     ? rows.filter((row) => row.status === "draft")
@@ -220,15 +207,15 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
     throw new ContextError(ExitCode.UserError, "review payload requires an explicit scope from the current review gate", {
       category: ErrorCategory.UserInputInvalid,
       next: payload.collection === undefined
-        ? "Rerun context review html --all --format json and copy a fresh scoped payload."
-        : `Rerun context review html ${payload.collection} --format json and copy a fresh scoped payload.`,
+        ? "Rerun context review html --all --format json and use its current scope template."
+        : `Rerun context review html ${payload.collection} --format json and use its current scope template.`,
     });
   }
 
   const actualHash = candidateIdsHash(scopedIds);
   const actualCandidatesHash = candidateSetHash(scopedRows);
   const visibleIds = payload.scope.visible_candidate_ids;
-  if (payload.scope.kind === "all" && visibleIds === undefined && payload.encoded_statuses === undefined) {
+  if (payload.scope.kind === "all" && visibleIds === undefined) {
     throw new ContextError(ExitCode.UserError, "all-scope review payload requires scope.visible_candidate_ids", {
       category: ErrorCategory.UserInputInvalid,
       expected: {
@@ -236,7 +223,7 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
         ids_sha256: actualHash,
         visible_candidate_ids: scopedIds,
       },
-      next: "Rerun context review html --all --format json and copy a fresh scoped payload.",
+      next: "Rerun context review html --all --format json and use its current scope template.",
     });
   }
   const visibleMismatch = visibleIds !== undefined &&
@@ -254,11 +241,10 @@ function expandReviewPayload(payload: ReviewPayload, rows: readonly CandidateRec
         candidates_sha256: actualCandidatesHash,
         visible_candidate_ids: scopedIds,
       },
-      next: `Rerun context review html ${scopeLabel} and copy a fresh payload.`,
+      next: `Rerun context review html ${scopeLabel} and use its current scope template.`,
     });
   }
 
-  if (payload.encoded_statuses !== undefined) return expandEncodedReviewDecisions(payload, scopedIds);
   if (payload.default === undefined) {
     const scopedSet = new Set(scopedIds);
     for (const decision of payload.decisions) {
@@ -319,17 +305,29 @@ export async function applyReviewDecisions(input: {
     const decisions = expandReviewPayload(input.payload, rows);
     const scoped = rows.filter(r => r.status === "draft" && (input.payload.scope?.kind === "all" || r.collection === input.payload.collection))
       .sort((a, b) => a.candidate_id < b.candidate_id ? -1 : 1);
+    const pendingFeedback = await readPendingReviewFeedback(input.projectRoot, scoped.map(record => ({ record, snapshot: undefined })));
+    const unresolved = pendingFeedback.filter(repair => decisions.some(decision =>
+      decision.candidate_id === repair.candidate_id && decision.status === "approved"));
+    if (unresolved.length) {
+      throw new ContextError(ExitCode.UserError, "Pending revision instructions must be resolved before approval", {
+        category: ErrorCategory.UserInputInvalid, repairs: unresolved,
+      });
+    }
     if (input.payload.baseline_hash && input.payload.baseline_hash !== await reviewSiteBaselineHash(input.projectRoot,
       scoped.map(r => r.approved_revision?.previous_path ?? r.path))) {
       throw new ContextError(ExitCode.WorkspaceStateError, "Review navigation or approved baseline changed; generate a fresh report", {
         category: ErrorCategory.WorkspaceStateInvalid, code: "review-baseline-stale", next: "context review html --all --format json" });
     }
-    const repairIds = new Set<number>();
-    const repairs = (input.payload.feedback_repairs ?? []).map(repair => {
-      const row = scoped[repair.index];
-      if (!Number.isInteger(repair.index) || !row || repairIds.has(repair.index) || !repair.instruction.trim() ||
-        input.payload.encoded_statuses?.[repair.index] !== "pending") throw new Error("Invalid review revision request");
-      repairIds.add(repair.index);
+    const repairIds = new Set<string>();
+    const repairs = (input.payload.repairs ?? []).map(repair => {
+      const row = scoped.find(candidate => candidate.candidate_id === repair.candidate_id);
+      if (!row || repairIds.has(repair.candidate_id) || !repair.instruction.trim() ||
+        decisions.some(decision => decision.candidate_id === repair.candidate_id)) {
+        throw new ContextError(ExitCode.UserError, "Revision requests must be unique, scoped and separate from decisions", {
+          category: ErrorCategory.UserInputInvalid, candidate_id: repair.candidate_id,
+        });
+      }
+      repairIds.add(repair.candidate_id);
       const quote = (value: string) => "'" + value.replace(/'/gu, "'\\''") + "'";
       return { candidate_id: row.candidate_id, path: row.path, fingerprint: row.fingerprint, instruction: repair.instruction,
         command: `context revise ${quote(row.candidate_id)} --instruction ${quote(repair.instruction)} --format json` };

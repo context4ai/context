@@ -4,13 +4,12 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { KnowledgeCollection } from "@c4a/context";
 import { readCandidateRecords } from "./candidateLedger.js";
 import {
-  candidateIdsHash,
   candidateSetHash,
   readReviewCandidateSnapshot,
   type ReviewCandidateView,
 } from "./reviewShared.js";
 import { collectReviewSiteModel, escapeReviewHtml, reviewHtmlJson, type ReviewSiteModel } from "./reviewSiteModel.js";
-import { createReviewFeedbackCodec } from "./reviewFeedbackCode.js";
+import { saveReviewReportScope } from "./reviewReportScope.js";
 import { REVIEW_SITE_CLIENT } from "./reviewSiteClient.js";
 import { REVIEW_SITE_STYLES } from "./reviewSiteStyles.js";
 
@@ -34,16 +33,35 @@ export async function collectAllReviewCandidates(projectRoot: string): Promise<R
   })));
 }
 
-function renderReviewHtml(candidates: readonly ReviewCandidateView[], reviewScope: KnowledgeCollection | "all", model: ReviewSiteModel, diagramScript: string): string {
-  const scope = { label: reviewScope, ids_sha256: candidateIdsHash(candidates.map(c => c.record.candidate_id).sort()),
-    candidates_sha256: candidateSetHash(candidates.map(c => c.record)) };
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeReviewHtml(model.title)} · Review</title><style>${REVIEW_SITE_STYLES}${model.themeCss ?? ""}</style></head><body>
-<header><button id="home">${escapeReviewHtml(model.title)}</button><nav id="top"></nav><div class="tools"><div class="counter" tabindex="0"><span id="counts"></span><div class="counter-pop" id="counter-pop"></div></div><button class="btn" id="all-approved"></button><button class="btn" id="all-rejected"></button><button class="btn primary" id="payload-open"></button><div class="guide" id="copy-guide"><span id="guide-countdown">10s</span><p id="guide-text"></p><button class="btn" id="guide-close"></button></div></div><button class="btn" id="theme" aria-label="Theme">◐</button><button class="btn" id="language"></button></header>
-<div class="layout"><aside id="tree"></aside><main><article id="article"></article></main></div>
-<footer id="footer" hidden><input id="revision-note" aria-label="Revision instructions"><button class="btn" id="revise-btn"></button><button class="btn" id="reject-btn"></button><button class="btn primary" id="approve-btn"></button></footer>
-<dialog id="bulk-dialog"><h2 id="bulk-title"></h2><p id="bulk-message"></p><div id="bulk-roots" hidden><strong id="bulk-roots-title"></strong><ul id="bulk-roots-list"></ul><label class="bulk-ack"><input type="checkbox" id="bulk-ack"><span id="bulk-ack-label"></span></label></div><div class="dialog-actions"><button class="btn" id="bulk-cancel"></button><button class="btn primary" id="bulk-confirm"></button></div></dialog>
-<dialog id="copy-dialog"><h2 id="copy-title"></h2><p id="copy-summary"></p><p id="copy-instructions"></p><textarea id="payload" readonly aria-label="Review code"></textarea><p id="copy-warning"></p><button class="btn" id="payload-close"></button></dialog>
-${diagramScript ? `<script>${diagramScript}</script>` : ""}<script>const DATA=${reviewHtmlJson(model)};const SCOPE=${reviewHtmlJson(scope)};const feedbackCodec=(${createReviewFeedbackCodec.toString()})();${REVIEW_SITE_CLIENT}</script></body></html>`;
+function renderReviewHtml(model: ReviewSiteModel, diagramScript: string): string {
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeReviewHtml(model.title)} · Reading report</title><style>${REVIEW_SITE_STYLES}${model.themeCss ?? ""}</style></head><body>
+  <header>
+    <button id="home" aria-label="返回本次内容">${escapeReviewHtml(model.title)}</button>
+    <nav id="top" aria-label="知识分类"></nav>
+    <div class="tools">
+      <div class="reading-progress">
+        <div id="counts" aria-label="阅读进度"></div>
+        <div class="read-track" role="progressbar" aria-label="本轮阅读进度" aria-valuemin="0" aria-valuenow="0"><span id="read-fill"></span></div>
+      </div>
+      <button class="btn primary" id="copy-notes">复制修订意见</button>
+    </div>
+    <button class="btn" id="theme" aria-label="切换深色主题" title="切换深色主题">◐</button>
+    <button class="btn" id="language" aria-label="Switch language">EN</button>
+  </header>
+  <div class="layout"><aside id="tree" aria-label="文章目录"></aside><main><article id="article"></article></main></div>
+  <footer id="footer" hidden>
+    <textarea id="revision-note" rows="1" placeholder="输入本篇修订意见……" aria-label="本篇修订意见"></textarea>
+    <button class="btn" id="clear-note" disabled>清空本条修订</button>
+  </footer>
+  <dialog id="copy-dialog" aria-labelledby="copy-title">
+    <div class="copy-heading"><h2 id="copy-title"></h2><span id="copy-countdown" hidden></span></div>
+    <p id="copy-summary"></p>
+    <div id="copy-preview" hidden><div id="copy-preview-text"></div><span class="copy-ellipsis" aria-hidden="true">...</span></div>
+    <textarea id="copied-notes" readonly aria-label="修订意见文本"></textarea>
+    <div class="dialog-actions"><button class="btn" id="copy-close">关闭</button></div>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+${diagramScript ? `<script>${diagramScript}</script>` : ""}<script>const DATA=${reviewHtmlJson(model)};${REVIEW_SITE_CLIENT}</script></body></html>`;
 }
 
 function resolveOutputPath(projectRoot: string, outPath: string | undefined, reviewScope: KnowledgeCollection | "all"): string {
@@ -84,7 +102,8 @@ export async function writeReviewHtml(input: {
       diagramScript = await readFile(resolve(here, "../../dist/browser/diagrams.js"), "utf8");
     }
   }
-  await writeFile(outPath, renderReviewHtml(candidates, reviewScope, model, diagramScript), "utf8");
+  await writeFile(outPath, renderReviewHtml(model, diagramScript), "utf8");
+  await saveReviewReportScope(input.projectRoot, reviewScope, candidates, model.baselineHash);
   const unplaced = model.pages.filter(page => page.candidate_id &&
     !model.nodes.some(node => node.page === page.id && node.parent !== "review-unplaced" && !node.removed))
     .map(page => ({ article_id: page.id, candidate_id: page.candidate_id!, path: page.path, title: page.title }));

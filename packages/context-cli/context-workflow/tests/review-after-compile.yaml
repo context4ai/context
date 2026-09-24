@@ -36,4 +36,4 @@ expect:
   primaryReasonCode: route.review.decision-required
   gateResolution: user
   inspectionHandler: context.review.inspect-current
-  resolutionHandler: context.review.force-approve-current
+  resolutionHandler: context.review.confirm-current

@@ -1,4 +1,4 @@
-/** Shared verbatim with the offline review page: no imports or external closures. */
+/** Legacy CLI input compatibility only. Never embedded in the reading report. */
 export function createReviewCodeCodec() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
   function checksum(text: string): string {

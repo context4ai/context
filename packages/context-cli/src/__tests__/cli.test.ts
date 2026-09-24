@@ -209,7 +209,7 @@ describe("CLI error handling", () => {
 
     expect(status).toContain("--managed");
     expect(approveAll).toContain("--managed");
-    expect(approveAll).toContain("--force");
+    expect(approveAll).toContain("--confirmed");
     expect(approveAll).toContain("--all");
     expect(approveAll).toContain("current-conversation");
   });

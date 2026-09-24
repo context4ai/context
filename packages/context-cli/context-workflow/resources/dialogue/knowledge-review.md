@@ -6,55 +6,58 @@ mediaType: text/markdown
 
 # Knowledge-review dialogue
 
-Explain that Review is the boundary between draft candidates and approved
-Markdown. In ordinary mode:
+Present one current report for the complete agreed candidate scope. Ask the user
+to read it and confirm or return revision notes. Use the host's user-question
+tool when a response is needed. In a host supporting an opt-in feedback
+confirmation presentation, use that presentation with an optional feedback input
+and one explicit Confirm submit action. Otherwise use the existing question
+surface. Do not require review codes, exact magic phrases, read receipts, or
+per-article decisions from the user.
 
-1. open the complete current Review report;
-2. let the user approve, reject, or request revisions to candidates;
-3. ask them to copy the review code back into the conversation; and
-4. apply only that exact review code through the returned command.
+Interpret the full reply in its conversation context:
 
-The user does not need to create a payload file; the Agent may write the pasted
-review code to ignored scratch storage for the CLI command. Preserve it exactly;
-do not decode, regenerate, summarize, or edit it. The code carries decisions and
-revision instructions together. If it exceeds 1,000 characters, use a direct
-reply (mention the Bot when relevant) instead of a length-limited form. Older
-segmented codes still require every segment in the same input file. If the CLI
-reports damaged or stale feedback, follow its diagnostic and request a fresh
-report/code; never repair a code by hand.
-Never derive a payload
-from HTML, candidate ids, snapshots, or a default decision.
+- Feedback alone: preserve the instructions, repair the affected candidates,
+  inspect the resulting content, generate an updated report, and ask again.
+- Explicit confirmation, approval, or permission to continue: apply approval to
+  the presented scope using the current revision-bound confirmation command.
+  There is no additional confirmation step.
+- Feedback plus explicit approval to continue after fixing it: repair first,
+  verify the resulting content against the instructions, then approve only the
+  affected resulting revisions and previously presented unchanged candidates.
+  Share the updated report for information and follow the next Route without
+  asking again. If the correction cannot be completed, report the remaining
+  issue instead of approving it.
+- A request to continue editing and show the result afterward authorizes editing,
+  not approval. Generate the revised report and wait for the user's decision.
 
-When the user completes a decision from the report, retain the exact report URL
-or local report path and reviewed scope in the current conversation for the
-final completion summary. Do not persist a separate workspace ledger or count a
-report as user-reviewed when it was inaccessible, fully managed, or bypassed by
-force approval.
+An explicit Confirm submission with empty optional feedback is approval. Nonempty
+feedback alone is a revision request even when sent with that same submit button;
+only an explicit instruction to approve after revision adds that authority.
+An ignored card, timeout, read progress or silence is not approval. Do not decide
+by matching isolated keywords. Quoted examples inside feedback are not approval.
 
-Do not mention force approval when first presenting Review. If the user replies
-without a review code that they approve or want to continue, explain that the
-report review code remains the normal path. Only at that point, when the report is
-unavailable to them, tell them they may explicitly reply with the exact phrase
-`强制批准` to approve the complete current scope without per-candidate choices.
-Execute the Route's `after-human-confirmation` force-approval command only after
-that exact phrase appears in the current conversation. Phrases such as `我批准`,
-`继续`, or `全部通过` do not invoke this escape path.
+Resolve notes by canonical article ID or title against the presented candidates.
+If a title is ambiguous, ask only for that missing identity. Retain the report
+reference, scope and user intent in the conversation; do not make the user copy
+an internal JSON payload. The Agent prepares scoped JSON from the current review
+resource when needed. It may record pending instructions as repairs containing
+candidate_id and instruction, separate from approve/reject decisions. Applying
+repair instructions never approves a page. Follow returned repair commands and
+inspect actual new content, not just successful command receipts.
 
-Do not open Review for one page or module while another confirmed item in the
-same round is still being generated. If a repeat codeindex run has no delta,
-state that existing approvals were preserved and no Review gate remains.
+A content change invalidates the old mechanical snapshot. For approved-after-fix
+intent, materialize the new scope after verifying the fix and explicitly map the
+result back to the authorized articles; leave unrelated new drafts pending. Do
+not widen prior consent to a new article or an unrelated change. Use explicit
+per-candidate decisions when the current batch also contains unapproved work.
+Keep source, identity, baseline, revision and atomic-apply checks intact.
 
-When the user explicitly requested fully managed operation, materialize the
-required `context.review-current` Markdown Resource once, read its index and
-the pages being decided, then use the revision-bound atomic apply command with
-the index's current scope template. Approve only pages actually reviewed; leave
-undecided and repair pages pending. Do not open HTML or persist a parallel review
-ledger. A partial review code in ordinary mode likewise leaves pending pages
-unchanged; all segments of that code are still required.
+Retain the exact report URL or local path and the user's reviewed scope for the
+final summary. A generated or accessible report is not proof that it was read.
+Do not report fully managed or inaccessible material as read by the user.
 
-After applying feedback, follow each returned repair command with the user's
-exact instruction. Repairs remain pending; neither copying nor applying the
-code approves them. Pending instructions are retained by the CLI and exposed in
-the current review resource after a session restart. Re-read and review the
-resulting candidate before approval. Do not silently replace a revision request
-with rejection or bulk approval.
+With explicit session-managed authority, consume the required current Markdown
+review resource and use its scope template and Route's atomic apply command.
+Read pages before deciding, leave repair and undecided pages pending, and reuse
+still-available review of unchanged pages. Do not open HTML or create a parallel
+review ledger. After any apply or repair, follow the freshly evaluated Route.

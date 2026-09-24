@@ -1,3 +1,4 @@
+import { reviewSiteBaselineHash } from "./reviewSiteModel.js";
 import { readPendingReviewFeedback } from "./reviewFeedback.js";
 import { inspectProductionRequirements } from "./productionRequirements.js";
 import { mkdir, readFile } from "node:fs/promises";
@@ -158,7 +159,7 @@ export async function materializeCurrentReviewBatchSet(input: {
     "The material note below only compares delivered previews, not approval or reading history. Reuse an unchanged batch only if its content review is still in this conversation; a new reviewer must read it.",
     "Apply only decisions for pages actually reviewed. Keep undecided or repair pages out of decisions; do not set default unless every page has that decision. Omit remains a durable exclusion, never a request to repair.",
     "Save the following current scope in a temporary JSON input file and add decisions as {candidate_id, status: approved|rejected}; use that file in the Route command. Applied pages survive later repairs of other pages.",
-    "```json", JSON.stringify({ schema: REVIEW_PAYLOAD_SCHEMA, scope: { kind: "all", count: input.candidates.length,
+    "```json", JSON.stringify({ schema: REVIEW_PAYLOAD_SCHEMA, baseline_hash: await reviewSiteBaselineHash(input.projectRoot, input.candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), scope: { kind: "all", count: input.candidates.length,
       ids_sha256: candidateIdsHash(input.candidates.map(item => item.record.candidate_id).sort()),
       candidates_sha256: candidateSetHash(input.candidates.map(item => item.record)),
       visible_candidate_ids: input.candidates.map(item => item.record.candidate_id).sort() }, decisions: [] }, null, 2), "```",

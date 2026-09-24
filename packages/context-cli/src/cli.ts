@@ -258,7 +258,7 @@ export function createCliProgram(): Command {
 
   review
     .command("apply <payload-file>")
-    .description("Apply a copied review code (all segments in one file) or JSON/JSONL decisions")
+    .description("Apply scoped JSON/JSONL decisions and revision instructions")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (payloadInput: string, options: Record<string, unknown>) => {
       if (options.format !== "text" && options.format !== "json") {
@@ -279,10 +279,11 @@ export function createCliProgram(): Command {
 
   review
     .command("approve-all [collection]")
-    .description("Approve the complete current review scope under explicit managed or user force authority")
+    .description("Approve the complete current review scope under explicit managed authority or user confirmation")
     .option("--all", "approve all current draft candidates across internal collections")
     .option("--managed", "assert explicit current-conversation managed approval")
-    .option("--force", "assert the user's explicit current-conversation force approval")
+    .option("--force", "deprecated compatibility flag; use --confirmed for user approval")
+    .option("--confirmed", "apply explicit user confirmation to the current report scope")
     .option("--verbose", "include candidate ids and materialized page paths in JSON output")
     .option("--format <format>", "output format: text | json", "text")
     .action(async (collection: string | undefined, options: Record<string, unknown>) => {
@@ -296,6 +297,7 @@ export function createCliProgram(): Command {
         ...(collection !== undefined ? { collection } : {}),
         ...(options.all === true ? { all: true } : {}),
         managed: options.managed === true,
+        confirmed: options.confirmed === true,
         force: options.force === true,
         verbose: options.verbose === true,
         format: options.format === "json" ? "json" : "text",

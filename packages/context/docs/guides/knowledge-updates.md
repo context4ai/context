@@ -318,16 +318,20 @@ assembled page and previous text without accepting the edit. Submit the same
 input without that flag to continue. A preview is not approval and does not make
 a stale revision valid.
 
-Review can approve checked pages while leaving repair pages pending. The HTML
-report shows the current site navigation, candidate changes and expected file
-paths. Unchanged approved pages retain their titles with omitted bodies. Enter
-revision instructions directly in the report; the copied code and following
-instruction lines must be returned together without edits. The CLI binds them to
-the reviewed content and baseline and returns repair commands while leaving
-those pages pending. Changed candidates require a fresh review. The HTML
-review code includes pending positions; managed Review provides the same current
-scope as a JSON template. Send decisions only for pages actually reviewed. Omit
-means a durable exclusion, not repair. Partial approval alone does not build.
+Review can approve checked pages while leaving repair pages pending. The report
+shows current navigation, candidate changes and expected file paths. Its READ
+progress is local to the browser. Enter revision notes in the article input,
+then copy the plain notes back to the conversation or simply confirm there.
+No review code is needed. Feedback alone leads to repair and an updated report;
+explicit approval continues the workflow. If the user asks to fix the notes and
+then proceed, verify the fix and approve only that authorized scope without
+another question. A request to edit and show the result still waits for review.
+
+The Agent uses the current resource's scoped JSON template, with explicit
+candidate decisions or repairs containing candidate_id and instruction. The CLI
+checks scope, content and displayed baseline before applying changes. Pending
+instructions survive a session restart. Omit means durable exclusion, not repair.
+Partial approval alone does not build.
 
 When the user requests an earlier delivery, use the Route's `context run
 --deliver` request. Independently approved pages can pass close/build while

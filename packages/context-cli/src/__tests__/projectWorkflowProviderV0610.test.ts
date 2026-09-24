@@ -424,7 +424,7 @@ describe("Context workflow Provider", () => {
     expect(ordinary.route?.resources.required.some((resource) => resource.id === "context.review-current")).toBe(false);
     expect(ordinary.route?.resources.recommended.some((resource) => resource.id === "context.review-current")).toBe(true);
     expect(ordinary.route?.commands).toContainEqual(expect.objectContaining({
-      command: expect.stringContaining("review approve-all architecture --force"),
+      command: expect.stringContaining("review approve-all architecture --confirmed"),
       availability: "after-human-confirmation",
     }));
 

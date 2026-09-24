@@ -21,8 +21,8 @@ export type ReviewChange = "new" | "modify" | "unchanged";
 export interface ReviewSiteNode { key: string; parent: string | null; title: string; order: number; page?: string;
   change: ReviewChange; oldTitle?: string; removed?: boolean }
 export interface ReviewSitePage { id: string; title: string; path: string; previousPath?: string; candidate_id?: string;
-  change: ReviewChange; html: string; sources: string[]; revisionInstruction?: string }
-export interface ReviewSiteModel { themeCss?: string; title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
+  change: ReviewChange; html: string; sources: string[]; revisionInstruction?: string; readVersion?: string }
+export interface ReviewSiteModel { storageScope: string; themeCss?: string; title: string; baselineHash: string; nodes: ReviewSiteNode[]; pages: ReviewSitePage[];
   navigationBaseline: "git-head" | "current" | "empty" }
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 const body = (s: string) => s.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/u, "").replace(/<!--[^]*?-->/gu, "").trim();
@@ -106,6 +106,7 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
       ...(pendingFeedback.has(r.candidate_id) ? { revisionInstruction: pendingFeedback.get(r.candidate_id)! } : {}),
       ...(found && found.path !== r.path ? { previousPath: found.path } : {}), change: found ? "modify" : "new",
       html: old === undefined ? renderReviewMarkdown(next.replace(/^# [^\n]+\n*/u, "")) : reviewBodyDiff(body(old).replace(/^# [^\n]+\n*/u, ""), next.replace(/^# [^\n]+\n*/u, "")), sources: [...r.source_refs, ...r.indexer_candidate.sections.flatMap(s => s.references.map(ref => JSON.stringify(ref)))] };
+    page.readVersion = hash(JSON.stringify([page.id, page.title, page.path, page.html, page.sources]));
     if (found) pages.splice(pages.indexOf(found), 1, page); else pages.push(page);
   }
   const nodes: ReviewSiteNode[] = (current?.entries ?? []).map(n => {
@@ -126,7 +127,7 @@ export async function collectReviewSiteModel(root: string, candidates: readonly 
   const siteTitle = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site?.title ? [p.site.title] : [])[0];
   const sitePackages = project?.project.packages.flatMap(p => p.kind === "package.kb" && p.site ? [p.site] : []) ?? [];
   const themeCss = siteThemeVariables(await resolveSiteTheme(root, sitePackages.length === 1 ? sitePackages[0]?.theme : undefined));
-  return { themeCss, title: siteTitle ?? pkg.name ?? "Knowledge review", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline };
+  return { storageScope: hash(root), themeCss, title: siteTitle ?? pkg.name ?? "Knowledge reading report", baselineHash: await reviewSiteBaselineHash(root, candidates.map(c => c.record.approved_revision?.previous_path ?? c.record.path)), nodes, pages, navigationBaseline };
 }
 export const reviewHtmlJson = (value: unknown) => JSON.stringify(value).replace(/</gu, "\\u003c").replace(/\u2028/gu, "\\u2028").replace(/\u2029/gu, "\\u2029");
 export { escapeReviewHtml };

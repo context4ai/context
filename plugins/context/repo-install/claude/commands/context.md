@@ -251,7 +251,6 @@ already made for the same scope.
 | `context.gate.top_level_directory` | Confirm the concrete structure. | Same. | Knowledge map guidance |
 | `context.gate.knowledge_review` | Ask for a decision on the current HTML report. | Delegate when the Route permits. | `knowledge-review` |
 | `context.gate.deletion_scope` | A user-approved deletion of exact sources or approved pages needs no second question after the CLI preview; ask only before deleting additional objects outside that scope. | Same. | Source remove / article retirement preview |
-| `context.gate.force_review_approval` | If the user explicitly says `强制批准` after the report is inaccessible, execute the current force-approval Route without another question. | Same. | `knowledge-review` recovery |
 | `context.gate.package_output` | Ask. | Choose within the requested delivery scope. | `package-output` |
 | `context.gate.package_template` | Ask. | Choose within the requested delivery scope. | `package-template-review` |
 | `context.gate.git_delivery` | Ask before commit, push or MR. | Same. | Host Git delivery |
@@ -465,9 +464,8 @@ receipt or recovery step.
 inspection and resolution separate: inspection resources apply while inspecting;
 resolution resources apply once the decision is authorized. Neither replaces
 ordinary required reading. For ordinary Knowledge Review, use its selected
-dialogue; only the exact reply `强制批准` authorizes the report-inaccessible
-force-approval route. Do not offer that shortcut initially or treat generic
-approval as equivalent.
+dialogue to interpret confirmation, revision notes, or explicit approval after
+revision. Ordinary confirmation needs no review code or special phrase.
 
 For `execution.target: agent-host`, use the exact top-level host action with
 its required access, not a restricted child sandbox. For `configuration`, edit
@@ -571,7 +569,7 @@ above for every progress summary.
 Keep the exact HTML review report links the user actually used in this
 conversation. Include those links in a compact final `Review reports` section
 when applicable; do not reconstruct them from runtime files or describe managed,
-force-approved or inaccessible reports as user-reviewed.
+unread or inaccessible reports as user-reviewed.
 
 Publication is outside the Context production Route. When explicitly requested,
 use an installed distribution tool and its documented complete-output upload
