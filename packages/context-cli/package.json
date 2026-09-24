@@ -86,8 +86,8 @@
   },
   "devDependencies": {
     "@c4a/core": "workspace:*",
-    "esbuild": "0.27.3",
-    "playwright": "1.58.2",
+    "esbuild": "0.28.2",
+    "playwright": "1.63.0",
     "zod-to-json-schema": "^3.25.1"
   }
 }
