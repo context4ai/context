@@ -2,6 +2,12 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.40 - 2026-09-29
+
+- Use optional read-only remote code evidence at recorded repository baselines before retrieving unavailable local sources.
+- Preserve repository identity, fixed commits, returned line ranges, partial batch results and permission boundaries during evidence retrieval.
+- Retain local/offline query paths and existing knowledge retrieval and production source workflows.
+
 ## 0.7.36 - 2026-09-22
 
 - Clarify source inventory counts and failure reasons without treating retained workspace evidence as a new task's missing material.
