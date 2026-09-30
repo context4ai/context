@@ -128,7 +128,9 @@ jobs:
             >/dev/null
 
       - name: Build workspace
-        run: bun run build
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal --target wasm32-unknown-unknown
+          bun run build
 
       - name: Prepare publish artifacts
         run: bun run release:prepare

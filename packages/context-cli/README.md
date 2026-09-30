@@ -1,5 +1,22 @@
 # Context Agent Runtime
 
+## Repository evidence plugin
+
+New workspace initialization includes `context-evidence.sourcegraph.wasm` when
+the workspace is the repository root (or has no enclosing Git repository).
+For existing workspaces run `context evidence install [project-dir] --format json`.
+Nested workspaces require explicit `--repository-root <git-root>` for full-repo
+hosting, or `--plugin-root <registered-content-root>` for scoped hosting. Use the
+workspace directory relative to that plugin root as `workspace_root`.
+Unknown or modified same-name files are preserved. The installer never commits
+or pushes; the artifact must be committed and synchronized before remote use.
+
+On a compatible read-only MCP host, read/read_many can request
+`plugins: [{"name":"context-evidence"}]` to attach registered section sources.
+This does not verify original source contents or change local retrieval and
+production. Missing enhancement falls back to ordinary metadata reads.
+See the [plugin ABI and build instructions](../context-evidence-wasm/README.md).
+
 [简体中文](./README.zh-CN.md)
 
 `@c4a/context-cli` ships the local runtime and Agent integration for the

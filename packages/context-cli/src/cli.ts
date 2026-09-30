@@ -45,6 +45,7 @@ import {
   registerProjectVerifyCommand,
 } from "./registerProjectLifecycleCommands.js";
 import { registerPluginCommands } from "./registerPluginCommands.js";
+import { registerEvidenceCommands } from "./commands/evidenceCommands.js";
 import { registerPackageCommands } from "./registerPackageCommands.js";
 
 function inferErrorCategory(message: string): string {
@@ -198,6 +199,7 @@ export function createCliProgram(): Command {
   registerProjectEntryCommand(program);
   registerProjectInitCommand(program);
   registerPluginCommands(program);
+  registerEvidenceCommands(program);
 
   registerDebugCommands(program);
   registerDocumentRevisionCommand(program);

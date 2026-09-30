@@ -7,6 +7,8 @@ export const COMMAND_MATRIX: readonly CommandMatrixEntry[] = [
   { command: "entry", view: "production-semantic", handles: ["project_status", "workspace_root", "next_command"], notes: "Resolves the single agent entry into initialization, workspace relocation, or current Agent Graph workflow evaluation." },
   { command: "init", view: "production-semantic", handles: ["project_dir", "project_name"], notes: "Creates a project-local Context workspace." },
   { command: "plugin", view: "production-semantic", handles: ["plugin_status", "agent_adapter"], notes: "Global Context agent plugin namespace." },
+  { command: "evidence", view: "production-semantic", handles: ["plugin_status"], notes: "Repository evidence plugin maintenance namespace." },
+  { command: "evidence install", view: "production-semantic", handles: ["project_dir", "repository_root", "plugin_status"], notes: "Installs the bundled read-only evidence Wasm without starting production." },
   { command: "plugin install", view: "production-semantic", handles: ["plugin_status", "agent_adapter", "marketplace_root"], notes: "Installs or refreshes bundled global agent plugins." },
   { command: "plugin path", view: "production-semantic", handles: ["marketplace_root"], notes: "Prints the bundled plugin marketplace root." },
   { command: "plugin status", view: "production-semantic", handles: ["plugin_status", "agent_adapter"], notes: "Reports global plugin installation state and stale entry cleanup." },

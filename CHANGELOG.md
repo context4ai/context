@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.42 - 2026-09-30
+
+- Read approved knowledge and recorded code evidence remotely without requiring a checkout; preserve local and offline retrieval paths.
+- Bundle a read-only repository Wasm plugin that attaches section evidence and commit-specific source URLs to knowledge reads.
+- Add `context evidence install` and workspace initialization support with explicit nested-repository scope selection and protection for custom plugins.
+- Reuse ready evidence links without repeated source-registry lookup or link formatting, while retaining source verification and partial-result boundaries.
+
 ## 0.7.40 - 2026-09-29
 
 - Use optional read-only remote code evidence at recorded repository baselines before retrieving unavailable local sources.
