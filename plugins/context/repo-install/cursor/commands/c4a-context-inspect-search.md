@@ -127,8 +127,36 @@ reads within returned limits. Use the remote evidence checks below for knowledge
 as well as code, including per-item errors, truncation and coverage. A search
 miss is not evidence that the repository lacks the knowledge.
 
+Consume recorded evidence already attached to ordinary `read`/`read_many`
+responses; the repository plugin may be enabled by default. Do not reread just
+to request the same evidence explicitly. If needed evidence is absent and the
+host supports explicit selection, use `plugins: [{"name":"context-evidence"}]`
+once unless enhancement was explicitly disabled by the user or connection.
+For a known nested workspace, add `args: {"workspace_root":"<directory relative to plugin root>"}`.
+This returns section sources with the original text; reuse them instead of
+separately looking up structure and registries. No plugin discovery/help call is
+required when the name and workspace are known. These are registered references,
+not verification that original sources were read. Keep original read errors and
+truncation checks; inspect extension `issues` only for affected evidence gaps.
+Source references may contain a ready commit-specific `url` instead of separate
+repository/ref/path/line fields. Reuse it directly for that registered evidence;
+do not look up registries merely to reconstruct it. For necessary code reads,
+extract the exact repository, full commit, percent-decoded path and line range
+from its recognized blob route into the existing MCP read fields. The service
+does not implicitly accept a URL as a read request. Do not guess unfamiliar URL
+formats; use targeted source metadata when needed. A URL is not proof of a read,
+and evidence read at another commit needs its own citation.
+For a scoped repository, consume `extensions["context-evidence"].scopes[].data`
+with its `root`: knowledge and snapshot paths are relative to that plugin root;
+source-code reference paths already include their own source subpath. Do not
+prepend the knowledge scope to external source paths or repeat either prefix.
+If the service rejects the plugin option, retry the ordinary read once. If the
+plugin is absent or fails, retain readable text and use the targeted metadata
+path below only when needed; do not install, request management access or keep
+retrying the enhancement. Local retrieval remains unchanged.
+
 Do not download the entire navigation or source registry as a prerequisite.
-Only for navigation, attribution or links, locate the relevant article entries
+Only for navigation, attribution or links not supplied by the enhancement, locate the relevant article entries
 in `knowledge/structure.yaml` and source records in `sources/*/index.yaml` at
 the same knowledge commit; read complete matching records with enclosing batch
 identity, not disconnected YAML lines. Follow saved document/note/session bodies
@@ -315,10 +343,12 @@ limitation. Do not dump internal reasoning, runtime identifiers or routine
 version comparisons. Explain only differences affecting the answer; hashes may
 appear in source URLs without requiring a separate version audit in the prose.
 
-Collect citation targets after the relevant evidence is established and resolve
-them in one batch using the host's existing link resolver when available. Reuse
+Collect citation targets after the relevant evidence is established. Reuse ready
+source URLs whose version and range match that evidence, without another resolver
+call or registry lookup. Resolve only remaining targets in one batch using the
+host's existing link resolver when available. Reuse
 known workspace, repository and site parameters; do not rediscover them per link.
-Include knowledge pages and original-source locations in that same batch. For
+Include unresolved knowledge pages and original-source locations in that batch. For
 each source file, retain the actual inspected repository, full commit, path and
 line range from the investigation; a recorded source reference alone may resolve
 to an older baseline. Remote paths are repository-relative; do not prepend a

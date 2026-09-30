@@ -1,0 +1,17 @@
+{
+  "name": "context-evidence",
+  "title": "Context evidence",
+  "description": "Attach recorded section sources to knowledge reads; does not verify original source contents.",
+  "version": "0.2.0",
+  "abi_version": 1,
+  "operations": ["read", "read_many"],
+  "default_enabled": true,
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "workspace_root": {"type": "string", "default": "."},
+      "include_digest": {"type": "boolean", "default": false}
+    },
+    "additionalProperties": false
+  }
+}

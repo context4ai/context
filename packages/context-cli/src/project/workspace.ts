@@ -15,6 +15,7 @@ import {
 import { enableContextDebug } from "./debugTrace.js";
 import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuidanceTemplates.js";
 import { assertTrustedContextProjectConfigBoundary } from "./projectModulePolicy.js";
+import { installEvidencePlugin, type EvidencePluginResult } from "./evidencePlugin.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
 const PROJECT_SCRATCH_DIRS = [join(".tmp", "agent-payloads")] as const;
@@ -43,6 +44,7 @@ export interface ProjectInitResult {
   language: ProjectLanguage;
   created: string[];
   kept: string[];
+  evidencePlugin?: EvidencePluginResult;
 }
 
 interface StaticTemplateFile {
@@ -515,6 +517,10 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
 
   if (input.debug === true) await enableContextDebug(projectRoot, "init");
 
+  result.evidencePlugin = await installEvidencePlugin({ projectRoot });
+  if (result.evidencePlugin.status === "installed") result.created.push(result.evidencePlugin.path);
+  else result.kept.push(result.evidencePlugin.path);
+
   return result;
 }
 
@@ -590,6 +596,7 @@ export function formatProjectInitResult(result: ProjectInitResult): string {
       `- language → ${result.language}`,
       `- created → ${result.created.length}`,
       `- kept → ${result.kept.length}`,
+      ...(result.evidencePlugin?.message ? [`- evidence plugin → ${result.evidencePlugin.message}`] : []),
       ...(result.kept.length > 0
         ? [`- preserved existing files → ${result.kept.map((path) => path.replace(`${projectRoot}/`, "")).join(", ")}`]
         : []),

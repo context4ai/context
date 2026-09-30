@@ -1,5 +1,19 @@
 # Context Agent 运行时
 
+## 仓库证据插件
+
+新建工作区位于 Git 根目录（或尚无上级 Git 仓库）时，初始化会附带
+`context-evidence.sourcegraph.wasm`。存量工作区运行
+`context evidence install [project-dir] --format json`；嵌套工作区需显式指定
+`--repository-root <git-root>`（全仓托管）或 `--plugin-root <登记内容根目录>`
+（范围托管），远程读取的 `workspace_root` 是工作区相对插件目录的位置。
+未知或用户修改的同名文件会保留，不自动提交或推送。
+
+制品正常提交并同步后，兼容的只读 MCP 宿主可在 read/read_many 中传
+`plugins: [{"name":"context-evidence"}]`，随正文返回登记的章节来源。
+这不表示已经复核原始来源，也不改变本地查询或生产流程；增强不可用时保留原读取路径。
+使用者无需安装 Rust。参见[插件 ABI 与构建说明](../context-evidence-wasm/README.md)。
+
 [English](./README.md)
 
 `@c4a/context-cli` 提供 Context 知识生产工作流的本地运行时和 Agent 接入。虽然

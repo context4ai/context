@@ -1,7 +1,7 @@
 {
   "name": "@c4a/context-cli",
   "description": "Local runtime and Agent integration for traceable knowledge production",
-  "version": "0.7.40",
+  "version": "0.7.42",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -35,14 +35,16 @@
     "README.zh-CN.md"
   ],
   "scripts": {
-    "build": "rm -rf dist && bun run ../build.ts src/cli.ts src/parserEntryWorker.ts --shebang=node && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && bun run scripts/build-diagrams.ts && cp ../../LICENSE dist/LICENSE",
+    "build": "rm -rf dist && bun run ../build.ts src/cli.ts src/parserEntryWorker.ts --shebang=node && bun run scripts/build-evidence.ts && bun run scripts/build-workflow.ts && bun run scripts/build-plugin.ts && bun run scripts/build-indexers.ts && bun run scripts/build-diagrams.ts && cp ../../LICENSE dist/LICENSE",
+    "build:evidence": "bun run scripts/build-evidence.ts",
+    "test:evidence": "bun run build:evidence && node --test scripts/evidence-wasm.test.mjs",
     "build:indexers": "bun run scripts/build-indexers.ts",
     "generate:article-templates": "bun run scripts/generate-article-templates.ts",
     "build:workflow": "bun run scripts/build-workflow.ts",
     "build:plugin": "bun run scripts/build-plugin.ts",
     "postinstall": "node scripts/postinstall.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/test-shards.test.mjs && CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --max-concurrency=1 --timeout=120000",
+    "test": "node --test scripts/test-shards.test.mjs scripts/evidence-wasm.test.mjs && CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --max-concurrency=1 --timeout=120000",
     "test:full": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full --max-concurrency=1 --timeout=1200000",
     "test:full-only": "CONTEXT_RUNTIME_EVENTS_DISABLED=1 bun run scripts/run-unit-tests.mjs --full-only --max-concurrency=1 --timeout=1200000",
     "lint": "eslint src --cache --cache-location .tmp/eslint-cache",

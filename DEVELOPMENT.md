@@ -19,6 +19,9 @@ and the same bundled plugin tree that is shipped to users.
 ## Prerequisites
 
 - Bun for installing workspace dependencies, building, and running tests.
+- Rust 1.89.0 with `wasm32-unknown-unknown` for building the evidence plugin
+  (`rustup toolchain install 1.89.0 --profile minimal --target wasm32-unknown-unknown`).
+  Published CLI users do not need Rust. See [the ABI](packages/context-evidence-wasm/README.md).
 - Node.js and npm for the globally linked or published CLI surface.
 - Claude Code or Codex only when testing the corresponding agent plugin.
 

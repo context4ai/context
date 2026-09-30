@@ -1,0 +1,9 @@
+[
+  {"text":"<!-- context:section id=\"first\" -->\nBody\n<!-- /context:section -->", "ids":["first"]},
+  {"text":"```md\n<!-- context:section id=\"example\" -->\n```\n", "ids":[]},
+  {"text":"<!-- context:section id=\"a&amp;b\" -->\r\n~~~\r\n<!-- /context:section -->\r\n~~~\r\nBody\r\n<!-- /context:section -->", "ids":["a&b"]},
+  {"text":"<!-- context:section id=\"first\" -->", "error":true},
+  {"text":"<!-- /context:section -->", "error":true},
+  {"text":"<!-- context:section id=\"first\" -->\n<!-- context:section id=\"second\" -->", "error":true},
+  {"text":"<!-- context:section bad -->", "error":true}
+]
