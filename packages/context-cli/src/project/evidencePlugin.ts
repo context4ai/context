@@ -43,7 +43,8 @@ async function readArtifact(artifact: string): Promise<{ bytes: Buffer; manifest
   }
   const module = new WebAssembly.Module(bytes);
   const metadata = WebAssembly.Module.customSections(module, "sourcegraph.plugin.v1");
-  if (metadata.length !== 1 || JSON.parse(new TextDecoder().decode(metadata[0])).name !== "context-evidence") {
+  const declaration = metadata.length === 1 ? JSON.parse(new TextDecoder().decode(metadata[0])) : undefined;
+  if (declaration?.name !== "context-evidence" || declaration.abi_version !== 2) {
     throw new Error("Invalid bundled evidence plugin metadata");
   }
   return { bytes, manifest };

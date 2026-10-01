@@ -30,18 +30,30 @@ fn code_url(remote: &str, revision: &str, path: &str, start: u64, end: u64) -> O
     } else if let Some(rest) = remote.strip_prefix("git@") {
         let (host, repo) = rest.split_once(':')?;
         ("https", format!("{host}/{repo}"))
-    } else { return None; };
+    } else {
+        return None;
+    };
     let (host, repo) = rest.split_once('/')?;
-    if host.is_empty() || !host.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-')) {
+    if host.is_empty()
+        || !host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-'))
+    {
         return None;
     }
     let repo = repo.trim_end_matches('/');
     let repo = repo.strip_suffix(".git").unwrap_or(repo);
-    if !safe_path(repo) || !repo.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.')) {
+    if !safe_path(repo)
+        || !repo
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.'))
+    {
         return None;
     }
     // These providers do not use the default blob route.
-    if matches!(host, "bitbucket.org" | "dev.azure.com" | "gitlab.com") { return None; }
+    if matches!(host, "bitbucket.org" | "dev.azure.com" | "gitlab.com") {
+        return None;
+    }
     let mut encoded = String::new();
     for byte in path.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.' | b'~') {
@@ -51,8 +63,14 @@ fn code_url(remote: &str, revision: &str, path: &str, start: u64, end: u64) -> O
             write!(&mut encoded, "%{byte:02X}").ok()?;
         }
     }
-    let anchor = if start == end { format!("L{start}") } else { format!("L{start}-L{end}") };
-    Some(format!("{scheme}://{host}/{repo}/blob/{revision}/{encoded}#{anchor}"))
+    let anchor = if start == end {
+        format!("L{start}")
+    } else {
+        format!("L{start}-L{end}")
+    };
+    Some(format!(
+        "{scheme}://{host}/{repo}/blob/{revision}/{encoded}#{anchor}"
+    ))
 }
 
 impl Engine {
@@ -155,7 +173,9 @@ impl Engine {
             out["ref"] = json!(revision);
             if let Some(url) = code_url(remote, revision, &join(subpath, path), start, end) {
                 let mut compact = json!({"url":url});
-                if digest { compact["content_digest"] = out["content_digest"].clone(); }
+                if digest {
+                    compact["content_digest"] = out["content_digest"].clone();
+                }
                 return Ok(compact);
             }
         } else {

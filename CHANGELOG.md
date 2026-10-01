@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.43 - 2026-10-01
+
+- Upgrade repository evidence enrichment to ABI 2, attaching compact references to individual read items without replacing original content.
+- Preserve batch item identity for repeated paths and ranges; report evidence diagnostics without treating registered references as verified source reads.
+- Adapt remote query guidance to bounded default reads, file-only search and per-file match limits while preserving local retrieval paths.
+- Validate the bundled plugin ABI and retain known official artifact digests for safe workspace upgrades.
+
 ## 0.7.42 - 2026-09-30
 
 - Read approved knowledge and recorded code evidence remotely without requiring a checkout; preserve local and offline retrieval paths.
