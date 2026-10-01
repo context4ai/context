@@ -1,5 +1,4 @@
-use crate::{Engine, Input, Reader, MAX_FILE};
-use serde_json::json;
+use crate::{diagnostic, Engine, Input, Reader, MAX_FILE};
 use std::cell::RefCell;
 
 #[used]
@@ -64,12 +63,15 @@ pub unsafe extern "C" fn dealloc(pointer: u32, length: u32) {
 #[no_mangle]
 pub unsafe extern "C" fn enrich(pointer: u32, length: u32) -> u64 {
     let result = if length > 1024 * 1024 {
-        json!({"issues":[{"code":"INVALID_INPUT","message":"Input exceeds plugin budget"}]})
+        diagnostic("INVALID_INPUT", "Input exceeds plugin budget")
     } else {
         let bytes = std::slice::from_raw_parts(pointer as *const u8, length as usize);
         match serde_json::from_slice::<Input>(bytes) {
             Ok(input) => ENGINE.with(|engine| engine.borrow_mut().enrich(input, &mut Host)),
-            Err(_) => json!({"issues":[{"code":"INVALID_INPUT","message":"Invalid plugin input"}]}),
+            Err(_) => diagnostic(
+                "INVALID_INPUT",
+                "Expected ABI 2 input with item_id on every file and valid plugin arguments",
+            ),
         }
     };
     let bytes = serde_json::to_vec(&result).unwrap().into_boxed_slice();

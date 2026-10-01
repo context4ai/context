@@ -17,6 +17,7 @@ pub trait Reader {
 
 #[derive(Deserialize)]
 pub struct Input {
+    pub abi_version: u32,
     pub operation: String,
     #[serde(default)]
     pub args: Option<Args>,
@@ -32,6 +33,7 @@ pub struct Args {
 }
 #[derive(Deserialize)]
 pub struct File {
+    pub item_id: String,
     pub path: String,
     pub start_line: u64,
     pub end_line: u64,
@@ -77,6 +79,43 @@ fn issue(code: &str, message: &str, path: &str) -> Value {
     json!({"code": code, "message": message, "path": path})
 }
 
+pub fn diagnostic(code: &str, message: &str) -> Value {
+    json!({"attachments":[{"text":format!("diagnostics:\n- {}", json!({"code":code,"message":message}))}]})
+}
+
+fn attachment(item_id: &str, sections: Vec<Value>, issues: Vec<Value>) -> Option<Value> {
+    let mut seen = HashSet::new();
+    let mut references = Vec::new();
+    for section in sections {
+        for reference in section["references"].as_array().into_iter().flatten() {
+            let value = if reference
+                .as_object()
+                .is_some_and(|o| o.len() == 1 && o.contains_key("url"))
+            {
+                reference["url"].clone()
+            } else {
+                reference.clone()
+            };
+            if seen.insert(value.to_string()) {
+                references.push(value);
+            }
+        }
+    }
+    if references.is_empty() && issues.is_empty() {
+        return None;
+    }
+    let mut body = serde_json::Map::new();
+    if !references.is_empty() {
+        body.insert("references".into(), json!(references));
+    }
+    if !issues.is_empty() {
+        body.insert("diagnostics".into(), json!(issues));
+    }
+    // Serialize, rather than interpolate, repository-controlled strings.
+    let text = serde_yaml_ng::to_string(&body).expect("JSON values are YAML serializable");
+    Some(json!({"item_id":item_id,"text":text}))
+}
+
 impl Engine {
     fn trim_cache(&mut self, size: usize) {
         if self.cache_bytes.saturating_add(size) > MAX_CACHE {
@@ -102,19 +141,27 @@ impl Engine {
     }
     pub fn enrich(&mut self, input: Input, reader: &mut impl Reader) -> Value {
         let mut output = Vec::new();
-        let mut issues = Vec::new();
         let args = input.args.unwrap_or_default();
         let root = args.workspace_root.as_deref().unwrap_or(".");
         let root = if root == "." { "" } else { root };
-        if (!root.is_empty() && !safe_path(root))
+        let mut ids = HashSet::new();
+        if input.abi_version != 2
+            || (!root.is_empty() && !safe_path(root))
             || !matches!(input.operation.as_str(), "read" | "read_many")
             || input.files.len() > 10
+            || input.files.iter().any(|f| {
+                f.item_id.is_empty()
+                    || f.item_id.len() > 256
+                    || f.item_id.chars().any(char::is_control)
+                    || !ids.insert(f.item_id.clone())
+            })
         {
-            return json!({"issues":[{"code":"INVALID_INPUT","message":"Invalid operation, workspace root or batch size"}]});
+            return diagnostic("INVALID_INPUT", "Expected ABI 2, unique nonempty item IDs, a safe workspace root and at most 10 read items");
         }
         let prefix = join(root, "knowledge/");
         let structure_path = join(root, "knowledge/structure.yaml");
         for file in input.files {
+            let mut issues = Vec::new();
             let Some(article_path) = file.path.strip_prefix(&prefix) else {
                 continue;
             };
@@ -187,17 +234,23 @@ impl Engine {
                 }
                 Ok(results)
             })();
-            match result {
-                Ok(values) => output.extend(values),
-                Err(message) => issues.push(issue("EVIDENCE_UNAVAILABLE", &message, &file.path)),
+            let values = match result {
+                Ok(values) => values,
+                Err(message) => {
+                    issues.push(issue("EVIDENCE_UNAVAILABLE", &message, &file.path));
+                    Vec::new()
+                }
+            };
+            if let Some(value) = attachment(&file.item_id, values, issues) {
+                output.push(value);
             }
         }
-        let mut result = json!({"sections":output});
-        if !issues.is_empty() {
-            result["issues"] = json!(issues);
-        }
+        let result = json!({"attachments":output});
         if result.to_string().len() > MAX_OUTPUT {
-            return json!({"issues":[{"code":"OUTPUT_LIMIT","message":"Evidence exceeds output budget; read a narrower range"}]});
+            return diagnostic(
+                "OUTPUT_LIMIT",
+                "Evidence exceeds output budget; read a narrower range",
+            );
         }
         result
     }

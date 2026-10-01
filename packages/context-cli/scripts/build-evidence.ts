@@ -14,7 +14,8 @@ execFileSync("cargo", ["build", "--locked", "--release", "--target", "wasm32-unk
 const bytes = await readFile(resolve(crate, "target/wasm32-unknown-unknown/release/context_evidence_wasm.wasm"));
 const module = new WebAssembly.Module(bytes);
 const metadata = WebAssembly.Module.customSections(module, "sourcegraph.plugin.v1");
-if (metadata.length !== 1 || JSON.parse(new TextDecoder().decode(metadata[0])).name !== "context-evidence") {
+const declaration = metadata.length === 1 ? JSON.parse(new TextDecoder().decode(metadata[0])) : undefined;
+if (declaration?.name !== "context-evidence" || declaration.abi_version !== 2) {
   throw new Error("Missing evidence plugin metadata");
 }
 const imports = WebAssembly.Module.imports(module);

@@ -128,6 +128,18 @@ matching sections with their conditions, not snippets alone. Batch known related
 reads within returned limits. Use the remote evidence checks below for knowledge
 as well as code, including per-item errors, truncation and coverage. A search
 miss is not evidence that the repository lacks the knowledge.
+When the connected schema supports it, use `output: "files"` only when locating
+paths is enough; use content excerpts when relevance needs context, bounding
+them with `max_lines_per_file` as needed. Do not add a mandatory file-list pass
+before every search. Omitted matches and truncation do not establish absence.
+If results are too broad, narrow by article path or a distinctive term before
+reading more output. For zero hits, simplify combined conditions using the
+service's documented syntax; do not assume unsupported OR/regex syntax worked.
+Follow the connected tool schema: use search-hit ranges when known; otherwise
+omit bounds if the service supplies a bounded default (currently up to 500 lines).
+For services requiring endpoints, supply `start_line` and `end_line` per item.
+Start with a bounded first window
+and follow continuation only when needed, not the whole file by default.
 
 Consume recorded evidence already attached to ordinary `read`/`read_many`
 responses; the repository plugin may be enabled by default. Do not reread just
@@ -139,8 +151,12 @@ This returns section sources with the original text; reuse them instead of
 separately looking up structure and registries. No plugin discovery/help call is
 required when the name and workspace are known. These are registered references,
 not verification that original sources were read. Keep original read errors and
-truncation checks; inspect extension `issues` only for affected evidence gaps.
-Source references may contain a ready commit-specific `url` instead of separate
+truncation checks; inspect appended diagnostics only for affected evidence gaps.
+Consume `references:` appended to each returned file. These may cover several
+sections in that read: not every reference supports every
+sentence. Narrow the read or inspect the source when attribution matters.
+References may be ready
+commit-specific URL strings or contain a `url` instead of separate
 repository/ref/path/line fields. Reuse it directly for that registered evidence;
 do not look up registries merely to reconstruct it. For necessary code reads,
 extract the exact repository, full commit, percent-decoded path and line range
@@ -148,8 +164,7 @@ from its recognized blob route into the existing MCP read fields. The service
 does not implicitly accept a URL as a read request. Do not guess unfamiliar URL
 formats; use targeted source metadata when needed. A URL is not proof of a read,
 and evidence read at another commit needs its own citation.
-For a scoped repository, consume `extensions["context-evidence"].scopes[].data`
-with its `root`: knowledge and snapshot paths are relative to that plugin root;
+For a scoped repository, knowledge and snapshot paths are relative to the plugin root;
 source-code reference paths already include their own source subpath. Do not
 prepend the knowledge scope to external source paths or repeat either prefix.
 If the service rejects the plugin option, retry the ordinary read once. If the

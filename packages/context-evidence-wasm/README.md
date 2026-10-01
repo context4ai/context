@@ -9,7 +9,7 @@ with the `wasm32-unknown-unknown` target and the committed Cargo lockfile. End u
 receive the compiled artifact with the CLI and do not need Rust.
 The binary embeds redistribution notices in the `context.licenses` custom section.
 
-## ABI 1
+## ABI 2
 
 Exports: `memory`, `alloc(length: i32) -> i32`,
 `dealloc(pointer: i32, length: i32)`, `enrich(pointer: i32, length: i32) -> i64`.
@@ -37,9 +37,10 @@ Input JSON:
 
 ```json
 {
+  "abi_version": 2,
   "operation": "read",
   "args": {"workspace_root": ".", "include_digest": false},
-  "files": [{"path": "knowledge/example.md", "start_line": 2,
+  "files": [{"item_id": "read-0", "path": "knowledge/example.md", "start_line": 2,
     "end_line": 8, "content": "actual returned text", "truncated": false}]
 }
 ```
@@ -50,7 +51,7 @@ fields are ignored; unknown plugin args are rejected. Empty args can be omitted
 or null (a host's absent argument map).
 For scoped repositories the host supplies files.path relative to the registered
 plugin root, with root/repository_path as additional context. Host reads and
-workspace_root use that same base. The host wraps results in scopes[{root,data}];
+workspace_root use that same base;
 prefix root only when resolving knowledge/snapshot locations, never external
 source repository paths. A full-repository host uses the Git root.
 Plugin metadata lives in custom section `sourcegraph.plugin.v1`.
@@ -60,11 +61,22 @@ an explicit `plugins: []` disables enhancement, and a nonempty list selects only
 the named plugins. Hosts without default selection still require explicit
 `plugins: [{"name":"context-evidence"}]`. Business arguments remain optional.
 
-Output contains `sections: [{path, section_id, references}]`, and only on failure
-`issues: [{code, message, path?, section_id?, source_ref?}]`. No success flag.
+Output is `{"attachments":[{"item_id":"read-0","text":"references:\n- https://example.org/source"}]}`.
+The host assigns unique opaque item IDs, including repeated paths or ranges, and
+appends each text unchanged to that item's original content. IDs are nonempty,
+at most 256 UTF-8 bytes and contain no control characters. They survive scoped
+invocation splitting. The host does not parse references or other business fields.
+Attachments without an item ID apply to the batch; unknown IDs are diagnostics,
+never guessed associations. Empty evidence returns `{"attachments":[]}`.
+The text is YAML with deduplicated references per item and diagnostics on failure.
+Normal output exposes no section IDs, plugin labels or success flags. Sections
+remain internal to selecting evidence for the actual returned range.
+Metadata and input both require `abi_version: 2`; low-level exports remain
+unchanged. Old JSON contracts are rejected, not interpreted. MCP renders only
+standard content text blocks, preserving original text even if enrichment fails.
 References are recorded metadata, not proof that the source has been reread.
 Repository references with a full 40/64-digit commit and a supported remote shape
-return `{url}` (plus `content_digest` only when requested). They use Context's
+return URL strings (objects with `url` and `content_digest` when requested). They use Context's
 blob-compatible web URL convention with encoded file segments and line anchors.
 No host reachability is implied. Unsupported
 remote shapes, known incompatible routes and nonimmutable refs retain the original
