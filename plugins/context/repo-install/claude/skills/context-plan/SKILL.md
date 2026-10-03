@@ -27,6 +27,13 @@ are met or when the user explicitly requests project planning.
 
 ## Start or resume
 
+Choose the workspace boundary before source inventory. A large multi-domain
+monorepo may need a Context workspace per direction, with at most one project
+group inside each; do not migrate existing workspaces automatically. For
+same-repository docs and authored Skills, prefer registration/editing through
+`context-repo-content` and preserve one original. Only explicit rewriting for
+an audience enters production; do not count registration as completed research.
+
 1. Identify the selected project's existing `PLAN-*.md`, workspace and Git root.
    Reuse a matching plan. Inspect its current stage, permissions and pending work
    before expanding research; do not reset a live Context workflow.

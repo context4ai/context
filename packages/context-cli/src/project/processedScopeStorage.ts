@@ -3,13 +3,15 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import YAML from "yaml";
 import { loadSourcesRegistry, mergeProcessedScopes, processedScopesSchema,
-  readProcessedScopes, indexerProtocolDigest, type ProcessedScope } from "@c4a/context";
+  readProcessedScopes, indexerProtocolDigest, validateArticleStructureEntries, type ProcessedScope } from "@c4a/context";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
 import { assertPinnedSource } from "./indexerParserSourceMaterialization.js";
+import { repoContentWorkingVersion, advanceRepoContentReferences } from "./repoContentEvidence.js";
 
 export async function currentScopeSourceVersion(projectRoot: string, sourceRef: string): Promise<string> {
+  if (sourceRef.startsWith("repo-content:")) return repoContentWorkingVersion(projectRoot, sourceRef);
   const sources = await loadSourcesRegistry({ rootDir: projectRoot });
   const split = sourceRef.indexOf(":");
   const type = sourceRef.slice(0, split);
@@ -62,7 +64,9 @@ export async function commitProcessedScopes(projectRoot: string, scopes: readonl
   const structure = await readKnowledgeStructure(projectRoot);
   if (structure.parsed === null) throw new TypeError("A closed knowledge structure is required before recording processed scopes");
   const processed = mergeProcessedScopes(readProcessedScopes(structure.parsed), scopes);
-  await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, processed_scopes: processed }));
+  const articles = await advanceRepoContentReferences(projectRoot,
+    validateArticleStructureEntries(structure.parsed.articles ?? []), scopes.filter(scope => !scope.module_refs).map(scope => scope.source_ref));
+  await atomicWriteFile(join(projectRoot, structure.path), YAML.stringify({ ...structure.parsed, articles, processed_scopes: processed }));
 }
 
 /** Clear only proofs whose purpose/boundary changed, before committing that

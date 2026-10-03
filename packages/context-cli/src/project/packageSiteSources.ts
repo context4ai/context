@@ -1,9 +1,10 @@
-import type { ArticleStructureEntry, SourcesRegistry } from "@c4a/context";
+import { parseRepoContentRef, type ArticleStructureEntry, type SourcesRegistry } from "@c4a/context";
+import { repoContentWebUrl } from "./repoContentPages.js";
 
 export interface SiteSource { label: string; href?: string }
 /** Generated only for exported Markdown; the workspace keeps a single reference record. */
-export function articleProvenanceMarkdown(article: ArticleStructureEntry | undefined, registry: SourcesRegistry): string {
-  const sources = siteArticleSources(article, registry);
+export function articleProvenanceMarkdown(article: ArticleStructureEntry | undefined, registry: SourcesRegistry, repositoryRemote?: string): string {
+  const sources = siteArticleSources(article, registry, repositoryRemote);
   if (!sources.length) return "";
   const label = (value: string) => value.replace(/[\\[\]<>`*]/gu, "\\$&").replace(/[\r\n]/gu, " ");
   return ["", "---", "", "## Sources", "", ...sources.map(source => source.href
@@ -24,12 +25,19 @@ function repoUrl(remote: string): string | undefined {
 const encodedPath = (value: string) => value.split("/").map(encodeURIComponent).join("/");
 
 /** Project recorded provenance only; do not infer source files from prose or titles. */
-export function siteArticleSources(article: ArticleStructureEntry | undefined, registry: SourcesRegistry): SiteSource[] {
+export function siteArticleSources(article: ArticleStructureEntry | undefined, registry: SourcesRegistry, repositoryRemote?: string): SiteSource[] {
   const sources: SiteSource[] = [];
   for (const reference of article?.sections.flatMap(section => section.references) ?? []) {
     const ref = reference.source_ref;
     const locator = reference.locator;
     const region = `L${locator.start_line}–L${locator.end_line}`;
+    const local = parseRepoContentRef(ref);
+    if (local) {
+      const url = !local.worktree ? repoContentWebUrl(repositoryRemote, local.commit, locator.path) : undefined;
+      sources.push({ label: `${local.id} · ${locator.path} ${region} · ${local.commit?.slice(0, 7) ?? "unknown revision"}${local.worktree ? " + worktree" : ""}`,
+        ...(url ? { href: `${url}#L${locator.start_line}-L${locator.end_line}` } : {}) });
+      continue;
+    }
     const repo = registry.repos.find(entry => ref === `repo:${entry.id}` || ref === `repo:${entry.name}`);
     if (repo) {
       const base = repoUrl(repo.remote);

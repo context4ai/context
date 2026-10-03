@@ -18,6 +18,17 @@ actual behavior, a confirmed decision, and a proposal that is not implemented.
 
 ## Keep planning local to the change
 
+Same-repository originals use `repo-content.yaml` rather than another capture.
+For editing/registering them, use the `context-repo-content` Skill without
+starting production. An explicitly requested source update can select
+`repo-content:<entry-id>` in its confirmed requirement and update scope. The
+prepared update includes current local changes and chapter impact candidates.
+Docs compare cited regions; Skills compare the whole owning Skill directory,
+including untracked additions. Missing historical objects are unknown, not an
+empty diff. Inspect/edit does not advance references; delivery or an explicit
+no-impact outcome settles the selected scope. Historical locators always store
+the real repository path at the cited commit, not today's registration path.
+
 Before starting production, compare the proposed content with the workspace's
 reader purpose. For clearly unrelated anecdotes or personal rankings, briefly
 recommend leaving them out of the formal manual or saving them separately because

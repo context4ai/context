@@ -1,5 +1,6 @@
 import { formatFeedback } from "../lib/cliFeedback.js";
 import type { ProjectStatus } from "./statusTypes.js";
+import { repoContentLinksNeedRepair } from "./repoContentLinks.js";
 
 export function formatProjectStatus(status: ProjectStatus): string {
   const repoSourceLines = status.sources.map((source) =>
@@ -47,6 +48,8 @@ export function formatProjectStatus(status: ProjectStatus): string {
       "",
       "**Project**:",
       `- root → \`${status.projectRoot}\``,
+      ...(status.repoContent ?? []).map(item => `- repository content ${item.name}: ${item.status}${item.message ? ` — ${item.message}` : ""}`),
+      ...(repoContentLinksNeedRepair(status.repoContent ?? []) ? ["- repair view → `context source ensure repo-content --format json` (does not change original content)"] : []),
       `- state: ${status.state}`,
       ...(status.executionMode !== undefined
         ? [`- execution mode: ${status.executionMode.mode} (${status.executionMode.scope})`]

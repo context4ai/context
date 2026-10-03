@@ -11,6 +11,11 @@ Skill，并以当前 Route、资源和命令为权威；这里只保留稳定的
 
 ## 仓库来源的获取和更新
 
+`repo-content.yaml` 登记的同仓文档和自有 Skills 不是采集副本。编辑原文或登记时
+使用 `context-repo-content`，不启动生产。另行授权的知识更新可选择
+`repo-content:<id>`；文档检查引用区域，Skill 检查整个目录及未跟踪新增文件。
+检查与编辑不推进处理基线，旧证据保留当时的真实仓库路径。
+
 先检查当前 Context Route。已登记仓库模块缺失或本地链接断开时，使用 Route
 选择的仓库恢复流程，让用户选择已有 checkout、授权在一个限定目录内扫描，
 或明确允许 clone 已登记的固定 commit。

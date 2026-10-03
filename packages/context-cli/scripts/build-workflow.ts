@@ -59,6 +59,7 @@ const sdkManuals = [
   "guides/lark-resources.md",
   "guides/source-batches.md",
   "guides/knowledge-updates.md",
+  "guides/repo-content.md",
   "guides/workspace-prepare.md",
   "guides/workspace-commit.md",
   "guides/workspace-restore.md",

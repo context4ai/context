@@ -1,4 +1,5 @@
 import { resolveSiteTheme } from "./siteTheme.js";
+import { repoContentPages, repoContentFingerprint, repoContentNavigation, writeRepoContentPages } from "./repoContentPages.js";
 import { readPackageSiteUrl } from "./packageSiteAddress.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
@@ -245,6 +246,7 @@ async function packageInputFingerprint(input: {
   const siteRegistry = await loadSourcesRegistry({ rootDir: input.projectRoot });
   const siteTheme = input.pkg.kind === "package.kb" && input.pkg.site ? await resolveSiteTheme(input.projectRoot, input.pkg.site.theme) : null;
   return stableHash({
+    repoContent: await repoContentFingerprint(input.projectRoot, input.pkg),
     siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
       ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,
     siteTheme,
@@ -555,12 +557,15 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       knowledgeGroups,
       previousManifest?.outputs ?? [],
     );
+    const repositoryPages = await repoContentPages(projectRoot, pkg);
+    const navigationFiles = repoContentNavigation(repositoryPages);
     const vars = packageTemplateVars({
       pkg,
       bundle,
       knowledgeCount: selected.length,
       knowledgeTimestamp,
       selected,
+      navigationFiles,
       buildInventory,
       knowledgeStructure: structure.parsed,
     });
@@ -576,6 +581,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       ...(assetProcessor === undefined ? {} : { assetProcessor }),
     });
     const siteUrl = await readPackageSiteUrl(projectRoot, pkg);
+    if (repositoryPages.length) buildInventory.generated_pages = repositoryPages.map(({ path, source, revision }) => ({ path, source, revision, kind: "repo-content" }));
     const writtenKnowledge = await withStagedPackageOutput(projectRoot, pkg, async (stagedPkg) => {
       const rendered = await writeRenderedPackageTemplate({
         projectRoot,
@@ -584,6 +590,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         bundle,
         knowledgeTimestamp,
         selected,
+        navigationFiles,
         buildInventory,
         knowledgeStructure: structure.parsed,
       });
@@ -594,10 +601,11 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
         ...(assetProcessor === undefined ? {} : { assetProcessor }),
         prepared: preparedKnowledge,
       });
+      await writeRepoContentPages(projectRoot, stagedPkg, repositoryPages);
       await writeKnowledgeDirectoryIndexes({
         projectRoot,
         pkg: stagedPkg,
-        selected,
+        selected: [...selected, ...navigationFiles],
         knowledgeTimestamp,
       });
       await writePackageKnowledgeMap({ projectRoot, pkg: stagedPkg, selected, structure: await readKnowledgeMap(projectRoot) });

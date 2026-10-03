@@ -12,6 +12,13 @@ mappings here.
 
 ## Repository sources
 
+Same-repository docs and authored Skills registered in `repo-content.yaml` are
+not captured source copies. For original edits or registration use
+`context-repo-content`, without starting production. A separately requested
+knowledge update may select `repo-content:<id>`; compare cited document regions
+and entire cited Skill directories, including untracked additions. Inspecting
+or editing never advances the processed baseline. Keep historical real paths.
+
 Start with the current Context Route. If registered repository modules are
 missing or their local links are broken, follow the route-selected repository
 recovery procedure. Let the user choose an existing checkout, authorize a scan

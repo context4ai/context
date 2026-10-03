@@ -87,6 +87,14 @@ routes into the existing repository/revision/path/range API, not a new MCP URL A
 Repository paths already include registered subpath; do not prepend it twice.
 Note/session sources use their committed dated files, not nonexistent registries.
 
+Same-repository references use `repo-content:<id>@<full-source-SHA>` with a
+historical repository-root-relative locator. They do not join today's registry
+or prepend the plugin/workspace root. If the host's `repository` is a supported
+credential-free remote URL, the plugin emits a fixed source URL; a repository
+name alone retains structured evidence instead of guessing a host. `+worktree`
+references preserve their digest and uncommitted limitation without a HEAD URL.
+Ordinary repository docs and Skills are not enriched with self-references.
+
 The host may pool instances only for the same repo, revision, artifact, effective
 scope and configuration. Each instance is exclusive; parsed metadata/section
 outlines are cached with bounded eviction. No output is retained between requests.

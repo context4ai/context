@@ -22,6 +22,7 @@ import {
   type ProjectPhaseListEntry,
 } from "./documentRun.js";
 import { ensureRepoSources } from "./repoSources.js";
+import { ensureRepoContentLinks } from "./repoContentLinks.js";
 import { errorView, resultSummary, writeRunSuccess, type ProjectRunFormat } from "./runOutput.js";
 import { createPhaseRunId, writePhaseRunLog } from "./runLog.js";
 import { findContextProjectRoot, loadContextProjectModule } from "./workspace.js";
@@ -276,6 +277,7 @@ export async function runProjectPhaseCommand(input: {
   }
 
   const format = input.format ?? "text";
+  if (!input.list && !input.dryRun) await ensureRepoContentLinks(found.projectRoot);
   if (input.list === true) {
     const loaded = await loadContextProjectModule(found.projectRoot);
     const phaseEntries = await normalizeRunPhasesForList({

@@ -184,15 +184,15 @@ function stripHtmlComments(markdown: string): string {
 }
 
 async function readCommands(): Promise<CommandSource[]> {
-  return Promise.all(["context", "context-inspect-search", "context-plan"].map(async (slug) => {
+  return Promise.all(["context", "context-inspect-search", "context-plan", "context-repo-content"].map(async (slug) => {
     const file = join(PLUGIN_SOURCE_ROOT, "skills", slug, "SKILL.md");
     const { frontmatter, body } = parseFrontmatter(await readFile(file, "utf8"), file);
     return { slug, title: titleFromSlug(slug),
       description: frontmatterValue(frontmatter, "description", file),
-      body: slug === "context-plan" ? [
-        "# Context Plan",
+      body: ["context-plan", "context-repo-content"].includes(slug) ? [
+        `# ${titleFromSlug(slug)}`,
         "",
-        "Read the installed `context-plan` skill at `../skills/context-plan/SKILL.md`",
+        `Read the installed \`${slug}\` skill at \`../skills/${slug}/SKILL.md\``,
         "relative to this command file, then follow its instructions for the user's request.",
         "Resolve its references and templates from that skill directory.",
       ].join("\n") : body,
@@ -312,14 +312,16 @@ async function copyAuthoringSkill(outputRoot: string): Promise<void> {
 
 async function copyHostRoutedSkills(outputRoot: string): Promise<void> {
   await copyAuthoringSkill(outputRoot);
-  for (const slug of ["context-inspect-search", "context-plan"]) {
+  for (const slug of ["context-inspect-search", "context-plan", "context-repo-content"]) {
     await copyDir(join(PLUGIN_SOURCE_ROOT, "skills", slug), join(outputRoot, "skills", slug));
   }
   // The command is the visible entry; keep the underlying Skill available to
   // model routing and relative resource loading without a duplicate command.
-  const planningEntry = join(outputRoot, "skills", "context-plan", "SKILL.md");
-  const { frontmatter, body } = parseFrontmatter(await readFile(planningEntry, "utf8"), planningEntry);
-  await writeFile(planningEntry, `---\nuser-invocable: false\n${frontmatter.replace(/^user-invocable:.*\n?/mu, "")}\n---\n\n${body}`, "utf8");
+  for (const slug of ["context-plan", "context-repo-content"]) {
+    const entry = join(outputRoot, "skills", slug, "SKILL.md");
+    const { frontmatter, body } = parseFrontmatter(await readFile(entry, "utf8"), entry);
+    await writeFile(entry, `---\nuser-invocable: false\n${frontmatter.replace(/^user-invocable:.*\n?/mu, "")}\n---\n\n${body}`, "utf8");
+  }
 }
 
 async function copyContextEntrySkill(outputRoot: string): Promise<void> {

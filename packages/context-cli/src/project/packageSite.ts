@@ -1,4 +1,6 @@
 import { resolveSiteTheme, siteThemeVariables } from "./siteTheme.js";
+import { optionalRepoGit } from "./repoContentGit.js";
+import { repoContentLabels } from "./repoContentPages.js";
 import { createHash } from "node:crypto";
 import { packageSiteOutputDir } from "./packageOutputPaths.js";
 import { readWorkspaceChangelog } from "./workspaceChangelog.js";
@@ -176,12 +178,14 @@ export async function writePackageSite(input: {
   const temporary = await mkdtemp(join(temporaryRoot, "website-"));
   try {
     const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+    const repositoryRemote = await optionalRepoGit(projectRoot, ["remote", "get-url", "origin"]);
     const sourceContent = new Map(selected.map(file => [packageKnowledgeOutputPath(pkg, file.relPath), file]));
     const mapping = createSiteNavigation(pkg, selected, structure);
     const delivered = await walkPackageFiles(root);
     const byPath = new Map(mapping.pages.map(page => [page.package_path, page]));
     // Preserve linked package reference pages without exposing packaging directories as navigation.
     for (const file of delivered) {
+      if (/^wikis\/repo-content(?:\/|\.md$)/u.test(file.relPath) && typeof pkg.repoContentPage !== "object") continue;
       if (!/^(?:skills|wikis|guides|rules|feats)\/.*\.md$/u.test(file.relPath) || byPath.has(file.relPath)) continue;
       const content = await readFile(file.absPath, "utf8");
       const meta = parseKnowledgeFrontmatter(content);
@@ -217,19 +221,25 @@ export async function writePackageSite(input: {
         contextSections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
         contextHome: { resources: options.home?.resources ?? [], branding: packageSiteBranding },
         sidebar: sections[0]?.items ?? [],
-        nav: [...sections.map(section => ({ text: section.title, link: section.href })), { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
+        nav: [...sections.map(section => ({ text: section.title, link: section.href })),
+          ...(typeof pkg.repoContentPage === "object" && byPath.has("wikis/repo-content.md")
+            ? [{ text: (await repoContentLabels(projectRoot)).title, link: `/${byPath.get("wikis/repo-content.md")!.site_path}` }] : []),
+          { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
       } };
     await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
     await mkdir(join(temporary, "pages"), { recursive: true });
     for (const page of byPath.values()) {
-      const content = await readFile(join(root, page.package_path), "utf8");
+      let content = await readFile(join(root, page.package_path), "utf8");
+      if (page.package_path === "wikis/index.md" && typeof pkg.repoContentPage !== "object") {
+        content = content.replace(/^.*\]\((?:<)?(?:\.\/)?repo-content\.md(?:>)?\).*\n?/gmu, "");
+      }
       // Only the presentation title is passed as frontmatter; source frontmatter
       // cannot supply scripts, layouts, imports or head tags to the compiler.
       const original = sourceContent.get(page.package_path);
-      const provenance = articleProvenanceMarkdown(original?.article, registry);
+      const provenance = articleProvenanceMarkdown(original?.article, registry, repositoryRemote);
       const pageContent = provenance && content.endsWith(provenance) ? content.slice(0, -provenance.length) : content;
       const body = siteMarkdown(pageContent, page.package_path, byPath, resources);
-      const sources = siteArticleSources(original?.article, registry);
+      const sources = siteArticleSources(original?.article, registry, repositoryRemote);
       const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
       const updated = typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))
         ? new Date(timestamp).toISOString() : null;

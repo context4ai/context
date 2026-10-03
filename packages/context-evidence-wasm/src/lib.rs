@@ -20,6 +20,8 @@ pub struct Input {
     pub abi_version: u32,
     pub operation: String,
     #[serde(default)]
+    pub repository: Option<String>,
+    #[serde(default)]
     pub args: Option<Args>,
     pub files: Vec<File>,
 }
@@ -223,7 +225,7 @@ impl Engine {
                     let mut references = Vec::new();
                     let mut seen = HashSet::new();
                     for reference in refs {
-                        match self.reference(reader, root, reference, args.include_digest) {
+                        match self.reference(reader, root, reference, args.include_digest, input.repository.as_deref()) {
                             Ok(value) => { if seen.insert(value.to_string()) { references.push(value); } },
                             Err(message) => issues.push(json!({"code":"SOURCE_UNRESOLVED","message":message,"path":file.path,"section_id":section.id,"source_ref":reference["source_ref"]})),
                         }

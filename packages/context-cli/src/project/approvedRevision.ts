@@ -6,7 +6,7 @@ import { readFile, realpath, rm } from "node:fs/promises";
 import { join, relative, isAbsolute } from "node:path";
 import { z } from "zod";
 import YAML from "yaml";
-import { articleSectionSchema, validateArticleStructureEntries, indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema,
+import { articleSectionSchema, validateArticleStructureEntries, indexerProtocolDigest, indexerKnowledgeCollectionSchema, processedScopesSchema, repoContentScopeMatches,
   type ProcessedScope } from "@c4a/context";
 import { newKnowledgePageTarget, type NewKnowledgePage } from "./newKnowledgePage.js";
 import { atomicWriteFile } from "../lib/atomicWrite.js";
@@ -56,12 +56,12 @@ export function requestDigest(input: Pick<ApprovedRevision, "target" | "instruct
   // A page's review authority binds its own inputs. Adjusting a queued sibling
   // does not revoke an unchanged page's decision or accepted body.
   const scopes = input.processed_scopes?.filter((scope) => input.target.source_refs.some((ref) =>
-    ref === scope.source_ref || ref.startsWith(`${scope.source_ref}#`) || ref.startsWith(`${scope.source_ref}/`)));
+    repoContentScopeMatches(scope.source_ref, ref) || ref.startsWith(`${scope.source_ref}#`) || ref.startsWith(`${scope.source_ref}/`)));
   const ids = new Set(scopes?.map((scope) => scope.requirement_ref));
   return indexerProtocolDigest({ target: input.target, instruction: input.instruction,
     ...(input.merge_context ? { merge_context: input.merge_context } : {}),
     ...(input.regenerate ? { regenerate: true, program_blocks: input.program_blocks ?? [] } : {}),
-    ...(input.requirements === undefined ? {} : { requirements: input.requirements.filter((item) => ids.has(item.id) || item.target_scope.targets.some((source) => input.target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`)))) }),
+    ...(input.requirements === undefined ? {} : { requirements: input.requirements.filter((item) => ids.has(item.id) || item.target_scope.targets.some((source) => input.target.source_refs.some((ref) => repoContentScopeMatches(source.source_ref, ref) || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`)))) }),
     ...(scopes === undefined ? {} : { processed_scopes: scopes }),
   });
 }
@@ -273,7 +273,7 @@ export async function prepareApprovedRevision(input: {
     const { prepareRevisionProgramBlocks } = await import("./approvedRevisionPrograms.js");
     const registry = await readProductionRequirements(input.projectRoot);
     const requirements = input.requirements ?? registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
-      target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
+      target.source_refs.some((ref) => repoContentScopeMatches(source.source_ref, ref) || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
     const { currentScopeSourceVersion } = await import("./processedScopeStorage.js");
     const regenerationScopes = input.regenerate ? await Promise.all(requirements.flatMap(requirement =>
       requirement.target_scope.targets.filter(source => source.source_ref.startsWith("repo:") && target.source_refs.some(ref =>

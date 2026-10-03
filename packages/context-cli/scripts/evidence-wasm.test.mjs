@@ -94,6 +94,32 @@ test('optional digest and monorepo root', () => {
   request.files[0].path = 'docs/knowledge/example.md';
   assert.equal(refs(host(files).run(request))[0].content_digest, reference().content_digest);
 });
+
+test('repo-content uses its historical repository path and source commit without registry joins', () => {
+  const sha = 'c'.repeat(40);
+  const ref = { ...reference(`repo-content:docs@${sha}`), locator: { path: 'packages/cli/docs/old.md', start_line: 3, end_line: 9 } };
+  const files = Object.fromEntries(Object.entries(fixtures([ref])).map(([p, v]) => [`workspace/${p}`, v]));
+  delete files['workspace/sources/repo/index.yaml'];
+  const request = input(2, 2, { workspace_root: 'workspace' });
+  request.repository = 'https://example.org/team/project.git';
+  request.commit = 'd'.repeat(40);
+  request.files[0].path = 'workspace/knowledge/example.md';
+  const h = host(files);
+  assert.deepEqual(refs(h.run(request)), [`https://example.org/team/project/blob/${sha}/packages/cli/docs/old.md#L3-L9`]);
+  assert.deepEqual(h.calls.sort(), ['workspace/knowledge/example.md', 'workspace/knowledge/structure.yaml']);
+});
+
+test('repo-content retains worktree uncertainty and does not invent a URL from a repository name', () => {
+  for (const worktree of [false, true]) {
+    const sourceRef = `repo-content:docs@${'c'.repeat(40)}${worktree ? '+worktree' : ''}`;
+    const request = input(); request.repository = 'team/project';
+    const result = refs(host(fixtures([reference(sourceRef)])).run(request))[0];
+    assert.equal(result.source_ref, sourceRef);
+    assert.equal(result.path, 'src/example.ts');
+    assert.equal(result.url, undefined);
+    if (worktree) assert.equal(result.content_digest, reference().content_digest);
+  }
+});
 test('source URLs encode file segments and normalize credential-free Git transports', () => {
   for (const remote of ['https://github.com/team/source.git', 'git@github.com:team/source.git', 'ssh://git@github.com/team/source.git']) {
     const ref = reference(); ref.locator = { path: 'src/a #中文%.ts', start_line: 3, end_line: 3 };

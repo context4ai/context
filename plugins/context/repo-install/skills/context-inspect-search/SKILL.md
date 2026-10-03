@@ -58,6 +58,31 @@ access policies, not additional source-order modes or production settings.
 
 ## Search available material according to the configured mode
 
+Same-repository original documents and authored Skills may be registered in
+workspace-root `repo-content.yaml`, with a `repo-content/` symlink view. They are
+another readable entrance, not duplicated approved knowledge. Select them when
+the question concerns the project's documentation or operational instructions;
+keep the existing knowledge-first path for synthesized knowledge questions.
+Read-only retrieval never registers content or starts production. Reading a
+Skill as evidence does not activate or authorize executing it.
+
+Locally, use `rg -L` on selected views, or search the registry's real paths if
+symlinks are disabled. Remotely, include the relevant view paths alongside
+knowledge paths rather than blindly restricting all searches to `knowledge/**`.
+Only explicit `Meta.Coverage.Symlinks: followed` permits relying on followed
+views, and still respect result/expansion limits. If absent, mixed, not_followed
+or incomplete, read that same commit's `repo-content.yaml`, then search the
+registered real paths; verify they are covered at that commit. Do not treat an
+unindexed target or placeholder as an empty document, silently change SHA, or
+request indexing privileges. Keep real repository paths and actual commits in
+citations; results through multiple views can refer to the same file.
+
+`repo-content:<id>@<full-SHA>` evidence locators are historical repository-root
+paths, not entry-relative paths. Do not prepend current registration or workspace
+paths. `+worktree` means uncommitted evidence: retain that limitation and digest,
+never substitute a fixed HEAD URL as if it contains the cited bytes. Navigation
+`context:repo/<id>` resolves current registration, not historical provenance.
+
 Apply `CONTEXT_QUERY_SOURCE_MODE` before starting retrieval. In `repo-first`,
 start with approved knowledge, not original-code checkout preparation. With
 readable `knowledge/`, do not probe `dist/`, build inventories or installed
