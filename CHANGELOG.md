@@ -2,6 +2,14 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.50 - 2026-10-03
+
+- Register same-repository documentation and authored Skills without copying their bodies into knowledge; maintain safe relative symlink entrances.
+- Preserve historical repository paths and commits in evidence, detect relocated document regions and changes across entire Skill directories.
+- Add optional repository entrance pages, original-source links, localized navigation and offline build fallbacks.
+- Support repository-content references in the bundled evidence plugin and local or remote query workflows, including incomplete symlink-index coverage.
+- Keep invalid-registration maintenance advisory, provide actionable repair guidance and reject invalid build inputs without replacing prior outputs.
+
 ## 0.7.43 - 2026-10-01
 
 - Upgrade repository evidence enrichment to ABI 2, attaching compact references to individual read items without replacing original content.
