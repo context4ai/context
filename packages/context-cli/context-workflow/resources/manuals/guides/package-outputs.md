@@ -23,6 +23,11 @@ package index, and section fingerprint rebuilds are not current close output.
 
 ## Default New-Workspace Outputs: Knowledge Base + Website
 
+Same-repository originals have an optional [repository entrance](repo-content.md):
+`repoContentPage: true` in a KB declaration projects README and Skill summaries,
+not the full document tree. It does not expose that page on a configured website;
+use `repoContentPage: { site: true }` to opt in. Existing declarations are kept.
+
 Output channels support multiple selection. In a new workspace without explicit
 preferences, the Agent proposes and configures KB + website as the default. Honor
 user feedback, session authority and existing workspace declarations; LLMS is an

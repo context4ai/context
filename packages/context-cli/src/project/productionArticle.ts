@@ -1,7 +1,7 @@
 import YAML from "yaml";
 import { z } from "zod";
 import { articleFragmentReferences, createArticleSourceReference,
-  indexerKnowledgeCollectionSchema, indexerProtocolDigest } from "@c4a/context";
+  indexerKnowledgeCollectionSchema, indexerProtocolDigest, repoContentScopeMatches } from "@c4a/context";
 import { ContextError } from "../lib/errors.js";
 import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ExitCode } from "../types/exitCode.js";
@@ -39,7 +39,7 @@ export async function prefetchProductionArticleSources(
       const declared = productionReferencesSchema.parse(YAML.parse(files.references.text));
       const allowed = new Set(task.sources.map(source => source.scope));
       for (const section of declared.sections) for (const ref of section.references) {
-        if (!allowed.has(ref.source_ref)) continue;
+        if (![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) continue;
         const location = { source: ref.source_ref, path: ref.locator.path };
         locations.set(JSON.stringify(location), location);
       }
@@ -138,7 +138,7 @@ export async function prepareProductionArticle(input: {
     const references = [];
     for (const ref of byId.get(fragment.id)!) {
       try {
-        if (!allowed.has(ref.source_ref)) throw new TypeError(`Source is outside this task's authorized inputs: ${ref.source_ref}`);
+        if (![...allowed].some(scope => repoContentScopeMatches(scope, ref.source_ref))) throw new TypeError(`Source is outside this task's authorized inputs: ${ref.source_ref}`);
         const text = await read(ref.source_ref, ref.locator.path, true);
         const reference = createArticleSourceReference(ref.source_ref, ref.locator, text);
         const previous = retained?.get(fragment.id)?.find(value => value.source_ref === ref.source_ref &&

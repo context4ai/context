@@ -20,7 +20,7 @@ test("the installed workflow carries the current guide and its linked manuals", 
     const relative = file.split("/resources/manuals/")[1]!;
     expect(markdown).toBe(await readFile(resolve(packageRoot, "../context/docs", relative), "utf8"));
     for (const match of markdown.matchAll(/\]\(([^)]+\.md)(?:#[^)]*)?\)/gu)) {
-      if (/^https?:/u.test(match[1]!)) continue;
+      if (/^[a-z][a-z\d+.-]*:/iu.test(match[1]!)) continue;
       pending.push(resolve(dirname(file), match[1]!));
     }
   }
@@ -62,7 +62,7 @@ test("Route SDK manuals and their local links ship with the current SDK content"
     const manual = path.split("/resources/manuals/")[1]!;
     expect(markdown).toBe(await readFile(resolve(packageRoot, "../context/docs", manual), "utf8"));
     for (const match of markdown.matchAll(/\]\(([^)]+\.md)(?:#[^)]*)?\)/gu)) {
-      if (/^https?:/u.test(match[1]!)) continue;
+      if (/^[a-z][a-z\d+.-]*:/iu.test(match[1]!)) continue;
       pending.push(resolve(dirname(path), match[1]!));
     }
   }

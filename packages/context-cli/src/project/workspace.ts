@@ -16,6 +16,7 @@ import { enableContextDebug } from "./debugTrace.js";
 import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuidanceTemplates.js";
 import { assertTrustedContextProjectConfigBoundary } from "./projectModulePolicy.js";
 import { installEvidencePlugin, type EvidencePluginResult } from "./evidencePlugin.js";
+import { readRepoContentRegistry } from "./repoContentRegistry.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
 const PROJECT_SCRATCH_DIRS = [join(".tmp", "agent-payloads")] as const;
@@ -506,7 +507,9 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
     ),
     result,
   );
-  await writeIfMissing(join(projectRoot, "src", "index.ts"), renderProjectEntry(language), result);
+  const repositoryPackage = !existsSync(join(projectRoot, "src", "index.ts")) &&
+    (await readRepoContentRegistry(projectRoot))?.entries.length ? `${projectName}-kb` : undefined;
+  await writeIfMissing(join(projectRoot, "src", "index.ts"), renderProjectEntry(language, repositoryPackage), result);
   await writeDefaultPackageTemplates(projectRoot, result, language);
   await writeIfMissing(join(projectRoot, "sources", "repo", "index.yaml"), renderRepoIndex(), result);
   await writeIfMissing(join(projectRoot, "sources", "file", "index.yaml"), renderFileIndex(), result);

@@ -30,6 +30,7 @@ const DEFAULT_INTERNAL_FIELDS = [
   "expected_path",
   "current_path",
   "previous_path",
+  "old_path",
   "previousPath",
   "feedback_path",
   "candidate_path",
@@ -105,7 +106,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
   if (field === "input_path" || field === "state_path") return "human-only";
   if (field === "previousPath") return "human-only";
   if (field === "feedback_path") return "internal-only";
-  if (field === "previous_path" || field === "requested_approved_path" || field === "revision_path") {
+  if (field === "previous_path" || field === "old_path" || field === "requested_approved_path" || field === "revision_path") {
     return "external-input";
   }
   if (field === "href" || field === "packageDir" || field === "package_dir" || field === "report_path" || field === "absolute_path") {
@@ -162,6 +163,7 @@ function semanticReplacementFor(field: string): string {
   if (field === "feedback_path") return "CLI-owned revision feedback receipt; follow returned repair commands or the current Review resource instead of editing this file.";
   if (field === "previousPath") return "Explicit old article location displayed in the human Review diff; use the stable article identity for actions.";
   if (field === "previous_path") return "Explicit approved-page move origin, checked against stable View identity and current bytes before Review apply; not an inferred runtime path.";
+  if (field === "old_path") return "Historical repository-relative evidence path from Git rename detection; resolve only with the recorded repository and baseline commit, never with the current registration path.";
   if (field === "result_file") {
     return "An explicit completion-report locator for Host reading, not a semantic identity or an inferred cache path; retain revision and outcome fields in the summary.";
   }

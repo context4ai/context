@@ -11,6 +11,8 @@ import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
 import { productionSourceIsExcluded, type ProductionRequirements } from "./productionRequirements.js";
 import type { ProductionStageMaterials } from "./productionStageStore.js";
+import { readRepoContentRegistry, repoContentExcluded } from "./repoContentRegistry.js";
+import { optionalRepoGit, repoContentGit } from "./repoContentGit.js";
 
 const execute = promisify(execFile);
 const markdownParser = unified().use(remarkParse);
@@ -85,6 +87,21 @@ export async function prepareProductionPlanningMaterials(input: {
       continue;
     }
     try {
+      if (scope.startsWith("repo-content:")) {
+        const local = await readRepoContentRegistry(input.projectRoot);
+        const entry = local?.entries.find(item => scope === `repo-content:${item.id}`);
+        if (!local || !entry) throw new TypeError(`Register the selected same-repository input: ${scope}`);
+        const head = await optionalRepoGit(local.repoRoot, ["rev-parse", "HEAD"]);
+        if (!head) throw new TypeError("Repository evidence needs a committed HEAD");
+        const files = [...new Set((await repoContentGit(local.repoRoot, ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", entry.path]))
+          .split("\0").filter(path => path && !repoContentExcluded(entry, path) && !sourceExcludes(input.requirements, scope, path)))];
+        sources.set(scope, [`# ${scope}`, "", `Original repository: ${local.repoRoot}`, `Entry: ${entry.path}`, `HEAD: ${head}`,
+          "Read selected originals in place. No snapshot or duplicate article is implied by registration.",
+          `For evidence use ${scope}@${head}; append +worktree when citing uncommitted content. Locators are real repository-root paths, never mount paths.`,
+          "", "## File navigation sample", "", ...files.slice(0, 128).map(path => `- ${path}`),
+          ...(files.length > 128 ? [`${files.length - 128} additional files; narrow to the relevant directory.`] : []), ""].join("\n"));
+        continue;
+      }
       const separator = scope.indexOf(":");
       const type = scope.slice(0, separator);
       const name = scope.slice(separator + 1);

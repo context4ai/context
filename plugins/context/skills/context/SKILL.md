@@ -27,6 +27,14 @@ use this production workflow's current Route and preserve existing work.
 
 ## Route project-scale work before production
 
+For creating, editing or registering same-repository docs and authored Skills,
+use `context-repo-content` instead of starting production. Originals stay in their
+project directories; registration/editing does not authorize knowledge updates.
+During authorized onboarding, select only the current project's conventional
+README/docs/Skill locations, with ownership and workspace boundaries from that
+skill. Do not capture registered originals into sources merely to duplicate them
+as knowledge. Explicit audience-oriented rewriting remains ordinary production.
+
 For an authorized knowledge-production request involving more than 30 original
 documents or at least two repositories needing substantive investigation, use
 the installed `context-plan` Skill before registering the full request. Also use

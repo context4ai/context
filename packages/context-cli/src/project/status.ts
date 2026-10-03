@@ -1,6 +1,7 @@
 import { attachDocumentAcquisitionWarnings } from "./documentCaptureAvailability.js";
 import { productionRequirementsAreCurrent } from "./productionPlanning.js";
 import { readTaskPreparation } from "./taskResumption.js";
+import { inspectRepoContentLinks } from "./repoContentLinks.js";
 import { readApprovedRevision } from "./approvedRevision.js";
 import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
 import { observeApprovedRevisionBatch } from "./approvedRevisionBatch.js";
@@ -298,6 +299,7 @@ async function collectProjectStatusSnapshotInternal(
     observation: workflowSnapshot.observation,
   });
   const status: ProjectStatus = {
+    repoContent: await inspectRepoContentLinks(projectRoot),
     projectRoot,
     sourceCount: observation.sourceCount,
     readySources,

@@ -28,3 +28,13 @@ test("unknown sources and prose do not invent provenance; unsafe paths and URLs 
   const result = siteArticleSources(article("../../secret"), unsafe);
   expect(result.every(source => source.href === undefined)).toBe(true);
 });
+
+test("same-repository provenance uses the source SHA and never labels worktree bytes as committed", () => {
+  const entry = article("packages/core/docs/guide.md");
+  entry.sections[0]!.references = [entry.sections[0]!.references[0]!];
+  entry.sections[0]!.references[0]!.source_ref = `repo-content:docs@${"c".repeat(40)}`;
+  const source = siteArticleSources(entry, registry, "https://example.org/team/project.git")[0]!;
+  expect(source.href).toBe(`https://example.org/team/project/blob/${"c".repeat(40)}/packages/core/docs/guide.md#L3-L8`);
+  entry.sections[0]!.references[0]!.source_ref += "+worktree";
+  expect(siteArticleSources(entry, registry, "https://example.org/team/project.git")[0]!.href).toBeUndefined();
+});

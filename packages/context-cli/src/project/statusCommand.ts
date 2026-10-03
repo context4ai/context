@@ -4,6 +4,7 @@ import { ExitCode } from "../types/exitCode.js";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
 import { collectProjectStatus } from "./status.js";
 import { formatProjectStatus } from "./statusRender.js";
+import { repoContentLinksNeedRepair } from "./repoContentLinks.js";
 import type { ProjectStatus } from "./statusTypes.js";
 import {
   assertContextStatusWorkspaceAllowed,
@@ -89,6 +90,11 @@ async function projectStatusSummary(status: ProjectStatus, projectRoot: string):
       projectionRefreshIssues: status.projectionRefreshIssues,
     },
     diagnostics: status.workflow.diagnostics,
+    ...(status.repoContent?.length ? { repo_content: {
+      entries: status.repoContent,
+      ...(repoContentLinksNeedRepair(status.repoContent)
+        ? { repair_command: "context source ensure repo-content --format json" } : {}),
+    } } : {}),
   };
 }
 

@@ -1,4 +1,6 @@
 import { articleProvenanceMarkdown } from "./packageSiteSources.js";
+import { repoContentLinkProjector } from "./repoContentPages.js";
+import { optionalRepoGit } from "./repoContentGit.js";
 import { loadSourcesRegistry } from "@c4a/context";
 import { projectPackageArticleLinks, type PackageArticleLinkWarning } from "./packageArticleLinks.js";
 import { buildLlmsDocuments, llmsArticles } from "./packageLlms.js";
@@ -107,13 +109,14 @@ export function packageTemplateVars(input: {
   knowledgeCount: number;
   knowledgeTimestamp: string;
   selected: readonly ApprovedKnowledgeFile[];
+  navigationFiles?: readonly ApprovedKnowledgeFile[];
   buildInventory?: Record<string, unknown>;
   knowledgeStructure?: Record<string, unknown> | null;
   templateRelPath?: string;
   logicalTemplateRelPath?: string;
 }): Record<string, TemplateVarValue> {
   const inventory = knowledgeInventory(
-    input.selected,
+    [...input.selected, ...input.navigationFiles ?? []],
     input.templateRelPath ?? `${packageOkfRootPath(input.pkg, "wikis")}/index.md`,
     packageNavigation(input.pkg),
     input.pkg,
@@ -184,6 +187,7 @@ export async function writeRenderedPackageTemplate(input: {
   bundle: string;
   knowledgeTimestamp: string;
   selected: readonly ApprovedKnowledgeFile[];
+  navigationFiles?: readonly ApprovedKnowledgeFile[];
   buildInventory: Record<string, unknown>;
   knowledgeStructure: Record<string, unknown> | null;
 }): Promise<{ files: number; consumesKnowledge: boolean }> {
@@ -261,6 +265,8 @@ export async function writeSelectedPackageKnowledge(input: {
   const approvedByOutput = new Map([...outputByApproved].map(([approved, output]) => [output, approved]));
   const byPath = new Map(input.files.map(file => [file.relPath, file]));
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
+  const projectRepoLinks = await repoContentLinkProjector(input.projectRoot);
+  const repositoryRemote = await optionalRepoGit(input.projectRoot, ["remote", "get-url", "origin"]);
   for (let offset = 0; offset < projectedPages.length; offset += 8) {
     const results = await Promise.allSettled(projectedPages.slice(offset, offset + 8).map(async projected => {
       assertSafeRenderedPath(projected.pageOutputPath, "knowledge path");
@@ -283,11 +289,11 @@ export async function writeSelectedPackageKnowledge(input: {
         return undefined;
       });
       await mkdir(dirname(outputPath), { recursive: true });
-      const links = projectPackageArticleLinks({ markdown: rewritten, approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
+      const links = projectPackageArticleLinks({ markdown: projectRepoLinks(rewritten), approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
       const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
         key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
       const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);
-      await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry), "utf8");
+      await writeFile(outputPath, markdown + articleProvenanceMarkdown(file?.article, registry, repositoryRemote), "utf8");
       return links.warnings;
     }));
     // Finish all temporary writes before propagating a failure. The caller may

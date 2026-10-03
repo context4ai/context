@@ -80,6 +80,7 @@ impl Engine {
         root: &str,
         reference: &Value,
         digest: bool,
+        repository: Option<&str>,
     ) -> Result<Value, String> {
         let source_ref = string(reference, "source_ref")?;
         let (kind, name) = source_ref.split_once(':').ok_or("Invalid source_ref")?;
@@ -97,7 +98,8 @@ impl Engine {
         }
         let mut out =
             json!({"source_ref":source_ref,"path":path,"start_line":start,"end_line":end});
-        if digest {
+        let worktree = kind == "repo-content" && name.ends_with("+worktree");
+        if digest || worktree {
             let value = string(reference, "content_digest")?;
             if value.len() != 71
                 || !value.starts_with("sha256:")
@@ -106,6 +108,34 @@ impl Engine {
                 return Err("Invalid content digest".into());
             }
             out["content_digest"] = json!(value);
+        }
+        if kind == "repo-content" {
+            let (id, version) = name.rsplit_once('@').ok_or("Repository content requires a full commit")?;
+            if id.is_empty() || !id.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-')) {
+                return Err("Invalid repository content identity".into());
+            }
+            let commit = version.strip_suffix("+worktree").unwrap_or(version);
+            if !matches!(commit.len(), 40 | 64) || !commit.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err("Repository content requires a full commit".into());
+            }
+            out["ref"] = json!(version);
+            if let Some(repo) = repository.filter(|r| !r.is_empty() && !r.chars().any(char::is_control)) {
+                // A host repository name need not be a web origin. Keep it as
+                // identity, and never invent an origin from a group/name pair.
+                if repo.contains("://") && !safe_remote(repo) {
+                    return Err("Repository identity is unsafe or contains credentials".into());
+                }
+                out["repository"] = json!(repo);
+                if !worktree {
+                    if let Some(url) = code_url(repo, commit, path, start, end) {
+                        return Ok(if digest { json!({"url":url,"content_digest":out["content_digest"]}) } else { json!({"url":url}) });
+                    }
+                }
+            }
+            if worktree {
+                out["note"] = json!("Uncommitted evidence; HEAD alone cannot reproduce the recorded content");
+            }
+            return Ok(out);
         }
         if matches!(kind, "note" | "sessions") {
             let (date, file) = name

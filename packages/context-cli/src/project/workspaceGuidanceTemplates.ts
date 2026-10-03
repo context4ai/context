@@ -1,6 +1,17 @@
 import type { ProjectLanguage } from "./workspace.js";
 
-export function renderProjectEntry(language: ProjectLanguage): string {
+export function renderProjectEntry(language: ProjectLanguage, repositoryPackageName?: string): string {
+  if (repositoryPackageName) return [
+    'import { defineProject, kbPackage } from "@c4a/context";',
+    "",
+    "// Repository entrance only; website exposure requires repoContentPage: { site: true }.",
+    "export default defineProject({",
+    "  sources: [],",
+    "  phases: [],",
+    `  packages: [kbPackage({ name: ${JSON.stringify(repositoryPackageName)}, repoContentPage: true,`,
+    '    template: { path: "src/package-templates/kb" } })],',
+    "});", "",
+  ].join("\n");
   if (language === "zh-CN") {
     return [
       'import { defineProject } from "@c4a/context";',
@@ -70,6 +81,7 @@ export function renderReadme(projectName: string, language: ProjectLanguage): st
       "- `src/package-templates/`：输出包模板。",
       "- `sources/`：来源注册信息和采集快照。",
       "- `knowledge/`：持久知识及其结构投影。",
+      "- `repo-content.yaml` / `repo-content/`：同仓 docs 与自有 Skills 的登记和软链视图，原文仍在项目目录维护。",
       "- `context-evidence.sourcegraph.wasm`：仓库根目录的可选远程读取增强插件；存量仓库用 `context evidence install` 安全安装，查询时不自动安装。",
       "- `dist/`：生成的知识包。",
       "- `.tmp/agent-payloads/`：Agent 可选的临时命令输入；初始化时会创建，被清理后可在写入前重新创建。",
@@ -109,6 +121,7 @@ export function renderReadme(projectName: string, language: ProjectLanguage): st
     "- `src/package-templates/`: package output templates.",
     "- `sources/`: registered sources and captured snapshots.",
     "- `knowledge/`: durable approved knowledge and its structural projection with minimal closed source inputs.",
+    "- `repo-content.yaml` / `repo-content/`: same-repository docs and authored Skill registration and symlink view; originals stay in project directories.",
     "- `context-evidence.sourcegraph.wasm`: optional repository-root remote read enhancement; use `context evidence install` to maintain it, never auto-install during queries.",
     "- `dist/`: generated packages.",
     "- `.tmp/agent-payloads/`: optional Agent-owned command inputs. Initialization creates it; recreate it before writing if scratch cleanup removed it.",
@@ -144,6 +157,8 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
       "若 CLI 的工作区、Route 资源所在工作区与本次 `.tmp/` 不一致，说明命令执行、文件生成或读取位置有误：停止提交，按 CLI 提示核对工作目录，再获取该工作区的当前 Route。父目录即使也是 Context 工作区，也不能混用 revision、任务或账本；不要靠移动运行时文件或新建工作区来消除报错。",
       "",
       "## 工作区契约",
+      "",
+      "同仓文档和自有 Skills 用 context-repo-content 独立编辑、登记；repo-content/ 是软链视图，编辑原位置，本地搜索用 rg -L，软链不可用时按 repo-content.yaml 的真实路径读取。登记与编辑不启动生产、不推进知识基线。",
       "",
       "版本以 package.json.version 为准。正式内容变化收尾时通过 context version inspect / record 同步递增版本并生成 changelog.yaml 和 CHANGELOG.md，具体说明由 Agent 根据 diff 和会话撰写。新增模块或扩大知识覆盖升 minor，普通修补、目录和正式状态变化升 patch；major 只由人工明确指定。.tmp 进度不算变化，build 只记录 hash。仅主协调者记录版本；版本记录本身不提交或发布，后续交付按本次授权和已安装的分发技能执行。触发来源必填；触发用户优先使用会话中明确的飞书显示名，否则由 CLI 读取 Git 用户名。",
       "版本差异使用 Git 比较正文、结构、资源、导航和模板；可通过 version inspect --base 指定交付 commit/tag。构建预览不锁定版本，已发布内容发生变化时必须递增版本。无需维护根目录 Context 版本、构建或发布回执。",
@@ -189,6 +204,8 @@ export function renderAgents(projectName: string, language: ProjectLanguage): st
     "If the CLI workspace, Route resources, and task scratch directory refer to different workspaces, a command, write, or read is targeting the wrong location. Stop submissions, follow the CLI working-directory diagnostic, and obtain the intended workspace's current Route. Even an initialized parent is a separate workspace: do not mix revisions, tasks, or ledgers, move runtime state, or initialize another workspace to clear the error.",
     "",
     "## Workspace Contract",
+    "",
+    "Use context-repo-content for independent edits and registration of same-repository docs and authored Skills. repo-content/ is a symlink view: edit originals, use rg -L locally, or real paths from repo-content.yaml when links are unavailable. Editing does not start production or advance knowledge baselines.",
     "",
     "package.json.version is the workspace version. At formal-content completion, use context version inspect / record to increment SemVer and generate changelog.yaml and CHANGELOG.md together. Write descriptions from the diff and conversation. Added modules/coverage increment minor; repairs, navigation and persistent status changes increment patch. Major requires an explicit user instruction. Ignore .tmp progress; build only records hashes. The coordinator alone records versions; recording a version does not commit or publish, and later delivery follows this task's authorization and the installed distribution skill. Triggers are required; use an explicitly known conversational Lark display name, otherwise let CLI use Git user.name.",
     "Compare bodies, structure, assets, navigation and templates using Git; version inspect --base selects a delivery commit/tag. Preview builds do not seal versions. Changes to already published content must increment the version. No root Context version/build/publication receipts are required.",

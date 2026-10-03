@@ -5,6 +5,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { loadSourcesRegistry, type SourcesRegistry } from "@c4a/context";
 import { parseDocumentSnapshotForSource } from "./documentBatchManifest.js";
+import { repoContentReferenceReader } from "./repoContentEvidence.js";
 
 const execute = promisify(execFile);
 
@@ -19,6 +20,7 @@ function inside(root: string, path: string): void {
  * source; a document manifest identifies its files even in a shared date folder.
  * This never prepares parsers or loads uncited document bodies. */
 export async function registeredArticleSourceReader(projectRoot: string) {
+  let repoContentRead: ReturnType<typeof repoContentReferenceReader> | undefined;
   const workspace = await realpath(projectRoot);
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
   const sources = new Map<string, { kind: string; entry: SourcesRegistry["repos"][number]
@@ -57,6 +59,10 @@ export async function registeredArticleSourceReader(projectRoot: string) {
     return { root, files: new Map(manifest.files.map(file => [file.path, file.content_hash])) };
   }
   return async (sourceRef: string, path: string, requireCapturedVersion = false): Promise<string> => {
+    if (sourceRef.startsWith("repo-content:")) {
+      repoContentRead ??= repoContentReferenceReader(projectRoot);
+      return (await repoContentRead)(sourceRef, path, requireCapturedVersion);
+    }
     const key = JSON.stringify([sourceRef, path]);
     let pending = texts.get(key);
     if (!pending) {

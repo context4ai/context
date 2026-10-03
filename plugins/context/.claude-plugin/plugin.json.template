@@ -16,6 +16,7 @@
   "skills": [
     "./skills/context-indexer-create",
     "./skills/context-inspect-search",
-    "./skills/context-plan"
+    "./skills/context-plan",
+    "./skills/context-repo-content"
   ]
 }

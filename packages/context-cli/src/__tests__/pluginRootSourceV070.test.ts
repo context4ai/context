@@ -88,7 +88,7 @@ describe("0.7.0 root plugin source", () => {
       "context-code-indexer",
       "context-markdown-indexer",
     ]));
-    expect(installedSkills).toEqual(["context", "context-indexer-create", "context-inspect-search", "context-plan"]);
+    expect(installedSkills).toEqual(["context", "context-indexer-create", "context-inspect-search", "context-plan", "context-repo-content"]);
     for (const host of ["claude", "codex", "cursor"] as const) {
       for (const provider of sourceSkills.filter((skill) => skill.includes("-indexer") && skill !== "context-indexer-create")) {
         await expect(readFile(

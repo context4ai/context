@@ -18,6 +18,10 @@ description: 查询 {{displayName}} 中经过审核、可追溯来源的知识�
 
 ## 知识根目录
 
+若存在 `{{wikisRoot}}/repo-content.md`，它是生成的仓库入口页：README 与 Skill
+简介，不是批准知识文章，也不包含全部项目文档。需要且有权访问时沿链接读取原文；
+阅读 Skill 说明不代表安装或执行。原仓库是真源，页面标明构建所用基线。
+
 | 根目录 | 用途 |
 |---|---|
 | `{{wikisRoot}}/` | 来自 codeindex、business、product 的代码、业务和产品说明。 |

@@ -4,6 +4,7 @@ import { readArticleRegionBaseline } from "./articleRegionBaselines.js";
 import { readKnowledgeStructure } from "./packageBuildInventory.js";
 import { approvedKnowledgeSnapshotsFromStructure } from "./approvedKnowledgeSnapshots.js";
 import type { ProjectVerifyIssue } from "./verifyTypes.js";
+import { repoContentImpactReader } from "./repoContentEvidence.js";
 
 /** Read only cited captured files, once per verification. No parser invocation,
  * article dependency graph, or mutation of approved references. Changed regions
@@ -17,11 +18,23 @@ export async function approvedKnowledgeDependencyWarnings(
   if (!articles.some(article => article.sections.some(section => section.references.length))) return [];
   const read = await registeredArticleSourceReader(projectRoot);
   const issues: ProjectVerifyIssue[] = [];
+  let repoImpact: ReturnType<typeof repoContentImpactReader> | undefined;
   for (const article of articles) {
     const changed: string[] = [];
     const moved: string[] = [];
     for (const section of article.sections) {
       for (const reference of section.references) {
+        if (reference.source_ref.startsWith("repo-content:")) {
+          repoImpact ??= repoContentImpactReader(projectRoot);
+          const impact = await (await repoImpact)(reference);
+          if (impact.state === "unchanged") continue;
+          if (impact.state === "moved") {
+            moved.push(`${section.id}: ${reference.source_ref}/${impact.current_path ?? reference.locator.path}`);
+            continue;
+          }
+          changed.push(section.id);
+          break;
+        }
         try {
           const text = await read(reference.source_ref, reference.locator.path);
           let current: string | undefined;
@@ -47,7 +60,7 @@ export async function approvedKnowledgeDependencyWarnings(
     });
     if (moved.length) issues.push({
       severity: "warning", code: "approved-source-region-moved", path: article.path,
-      message: `Unchanged source regions have new positions: ${moved.join("; ")}. Refresh these locators during the source update; do not rewrite unaffected prose.`,
+      message: `Cited regions are unchanged but their location or surrounding source changed: ${moved.join("; ")}. Check locators during the source update; do not rewrite unaffected prose.`,
     });
   }
   return issues;

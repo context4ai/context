@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { ensureRepoContentLinks, inspectRepoContentLinks } from "./repoContentLinks.js";
 import { isAbsolute, resolve } from "node:path";
 import { loadSourcesRegistry } from "@c4a/context";
 import { Command, Option } from "commander";
@@ -476,6 +477,10 @@ Resume performs registration only unless --configure is explicitly supplied.
       const options = actionOptions(...args);
       const format = assertChoice(options.format, DATA_FORMATS, "--format") as DataFormat;
       const projectRoot = requireProjectRoot(process.cwd(), "source ensure");
+      if (name === "repo-content") {
+        writeFormatted(await ensureRepoContentLinks(projectRoot), format);
+        return;
+      }
       const documentMatches = await documentSourcesForName({
         projectRoot,
         ...(name !== undefined ? { name } : {}),
@@ -484,6 +489,7 @@ Resume performs registration only unless --configure is explicitly supplied.
         repo.name === name || repo.id === name || repo.namespace === name
       );
       const result = [
+        ...(name === undefined ? await ensureRepoContentLinks(projectRoot) : []),
         ...(repoMatches || documentMatches.length === 0
           ? await ensureRepoSources({
               projectRoot,
@@ -596,6 +602,10 @@ Resume performs registration only unless --configure is explicitly supplied.
     .action(async (name: string | undefined, ...args: unknown[]) => {
       const options = actionOptions(...args);
       const projectRoot = requireProjectRoot(process.cwd(), "source inspect");
+      if (name === "repo-content") {
+        writeFormatted(await inspectRepoContentLinks(projectRoot), assertChoice(options.format, DATA_FORMATS, "--format"));
+        return;
+      }
       const documentMatches = options.repoOnly === true
         ? []
         : await documentSourcesForName({
@@ -606,6 +616,7 @@ Resume performs registration only unless --configure is explicitly supplied.
         repo.name === name || repo.id === name || repo.namespace === name
       );
       const result = [
+        ...(name === undefined ? await inspectRepoContentLinks(projectRoot) : []),
         ...(repoMatches || documentMatches.length === 0
           ? await inspectRepoSources({
               projectRoot,

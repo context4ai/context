@@ -1,7 +1,7 @@
 import { readProductionRequirements } from "./productionRequirements.js";
 import { readProductionStage } from "./productionStageStore.js";
 import { readFile } from "node:fs/promises";
-import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest, type ArticleStructureEntry } from "@c4a/context";
+import { assertManagedDocumentPath, readSessionChanges, indexerProtocolDigest, repoContentScopeMatches, type ArticleStructureEntry } from "@c4a/context";
 import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 
 /** Resolve current selected writing resources even for an explicit page revise
@@ -9,7 +9,7 @@ import { approvedContextSectionsInMarkdown } from "./verifyContextSections.js";
 export async function approvedRevisionContext(root: string, target: { source_refs: string[]; markdown: string; sections: ArticleStructureEntry["sections"] }) {
   const registry = await readProductionRequirements(root);
   const requirements = registry.requirements.filter((requirement) => requirement.target_scope.targets.some((source) =>
-    target.source_refs.some((ref) => ref === source.source_ref || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
+    target.source_refs.some((ref) => repoContentScopeMatches(source.source_ref, ref) || ref.startsWith(`${source.source_ref}#`) || ref.startsWith(`${source.source_ref}/`))));
   // Planning guidance is useful within this run, not permanent production provenance.
   // A new run does not recover skills from the formal article.
   const stage = await readProductionStage(root);

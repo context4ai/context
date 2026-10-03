@@ -12,6 +12,9 @@ import type { PhaseDefinition, PhaseResourceReference } from "./phases.js";
 import type { ProjectSourceDefinition } from "./sources.js";
 
 export * from "./indexerCoreExports.js";
+export { repoContentRegistrySchema, repoContentEntrySchema, repoContentPathSchema,
+  repoContentMount, parseRepoContentRef, repoContentScopeMatches,
+  type RepoContentEntry, type RepoContentRegistry } from "./repoContent.js";
 export {
   indexerComposerContractSchema,
   indexerComposerDeclarationSchema,
@@ -413,6 +416,7 @@ export type KbPackageDefinition = BasePackageDefinition & {
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
+  repoContentPage?: boolean | { site: true };
 };
 
 export type LlmsPackageDefinition = BasePackageDefinition & {
@@ -695,11 +699,20 @@ export const kbPackage = (definition: {
   distribution?: PackageDistributionDefinition;
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
+  repoContentPage?: boolean | { site: true };
 }): KbPackageDefinition => {
   const base = createPackageDefinitionBase("kb", definition);
   const distribution = normalizePackageDistribution(definition.distribution);
   const assets = normalizePackageAssets(definition.assets);
   const site = normalizePackageSite(definition.site);
+  if (definition.repoContentPage !== undefined && typeof definition.repoContentPage !== "boolean" &&
+      (!definition.repoContentPage || typeof definition.repoContentPage !== "object" ||
+       definition.repoContentPage.site !== true || Object.keys(definition.repoContentPage).some(key => key !== "site"))) {
+    throw new TypeError("repoContentPage must be a boolean or { site: true }");
+  }
+  if (typeof definition.repoContentPage === "object" && !site) {
+    throw new TypeError("repoContentPage.site requires a configured site");
+  }
   return {
     kind: "package.kb",
     ...base,
@@ -707,6 +720,7 @@ export const kbPackage = (definition: {
     ...(distribution === undefined ? {} : { distribution }),
     assets,
     ...(site === undefined ? {} : { site }),
+    ...(definition.repoContentPage === undefined ? {} : { repoContentPage: definition.repoContentPage }),
   };
 };
 

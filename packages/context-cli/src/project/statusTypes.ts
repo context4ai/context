@@ -62,6 +62,7 @@ export interface DocumentSourceStatus {
 }
 
 export interface ProjectStatus {
+  repoContent?: import("./repoContentLinks.js").RepoContentLinkResult[];
   projectRoot: string;
   sourceCount: number;
   readySources: number;

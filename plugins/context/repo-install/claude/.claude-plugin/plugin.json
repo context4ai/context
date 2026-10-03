@@ -1,7 +1,7 @@
 {
   "name": "c4a",
   "description": "Start or continue a project-local knowledge workspace through one graph-routed entry.",
-  "version": "0.7.43",
+  "version": "0.7.50",
   "author": {
     "name": "c4a"
   },
@@ -16,6 +16,7 @@
   "skills": [
     "./skills/context-indexer-create",
     "./skills/context-inspect-search",
-    "./skills/context-plan"
+    "./skills/context-plan",
+    "./skills/context-repo-content"
   ]
 }

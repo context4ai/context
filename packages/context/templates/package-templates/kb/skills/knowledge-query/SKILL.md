@@ -25,6 +25,12 @@ as evidence rather than relying on memory or frontmatter summaries.
 
 ## Package Roots
 
+If present, `{{wikisRoot}}/repo-content.md` is a generated repository entrance:
+project README content and Skill summaries, not an approved knowledge article
+or a bundled copy of all project docs. Follow its original links when authorized
+and needed; reading a Skill description does not install or execute it. The
+original repository remains authoritative, and the page states its build baseline.
+
 | Root | Use |
 |---|---|
 | `{{wikisRoot}}/` | Code, business and product reference articles. |

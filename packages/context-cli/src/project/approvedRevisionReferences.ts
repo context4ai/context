@@ -1,5 +1,5 @@
 import { articleFragmentReferences, articleSourceRegionDigest, createArticleSourceReference,
-  locateArticleRegion, type ArticleStructureEntry } from "@c4a/context";
+  locateArticleRegion, repoContentScopeMatches, type ArticleStructureEntry } from "@c4a/context";
 import { readArticleRegionBaseline, rememberArticleRegion } from "./articleRegionBaselines.js";
 import { registeredArticleSourceReader } from "./articleSourceReader.js";
 import type { RevisionContentInput } from "./approvedRevisionEdits.js";
@@ -19,7 +19,7 @@ export async function prepareRevisionReferences(input: {
   }
   let read: Awaited<ReturnType<typeof registeredArticleSourceReader>> | undefined;
   const readSource = async (source: string, path: string) => {
-    if (!input.sourceRefs.includes(source)) throw new TypeError(`Source is outside this revision: ${source}`);
+    if (!input.sourceRefs.some(scope => repoContentScopeMatches(scope, source))) throw new TypeError(`Source is outside this revision: ${source}`);
     read ??= await registeredArticleSourceReader(input.projectRoot);
     return read(source, path, true);
   };

@@ -14,6 +14,9 @@ import { captureProcessedScopes, currentScopeSourceVersion, commitProcessedScope
 import { readProductionStage } from "./productionStageStore.js";
 import { readCandidateRecords } from "./candidateLedger.js";
 import { withProjectWriteLock } from "./writeLock.js";
+import { repoContentScopeMatches } from "@c4a/context";
+import { ensureRepoContentLinks } from "./repoContentLinks.js";
+import { inspectRepoContentChanges, repoContentImpactReader } from "./repoContentEvidence.js";
 
 export const knowledgeUpdateInputSchema = z.object({
   scopes: z.array(z.object({ requirement_ref: z.string().min(1), source_ref: z.string().min(1),
@@ -29,6 +32,7 @@ const updateSchema = z.object({
   refresh_sources: z.array(z.string().min(1)).min(1).optional(),
   structure_proposal: indexerCurrentActionInputDefinitions.sourceUpdate.omit({ stage: true }).optional(),
   previous_versions: z.array(z.string().nullable()), changes: z.string().optional(),
+  repo_content: z.unknown().optional(),
 }).strict();
 export type KnowledgeUpdate = z.infer<typeof updateSchema>;
 
@@ -46,6 +50,7 @@ export async function readKnowledgeUpdate(projectRoot: string): Promise<Knowledg
 export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) {
   return withProjectWriteLock(projectRoot, "begin-knowledge-update", async () => {
     const input = knowledgeUpdateInputSchema.parse(value);
+    await ensureRepoContentLinks(projectRoot);
     const { readTaskRollback } = await import("./taskRollback.js");
     if (await readTaskRollback(projectRoot) || await readApprovedRevision(projectRoot) || await readKnowledgeUpdate(projectRoot) || await readProductionStage(projectRoot) || (await readCandidateRecords(projectRoot)).length > 0) {
       throw new TypeError("Finish or explicitly roll back the active task before starting an independent source update.");
@@ -59,7 +64,7 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
     if (!structure.parsed) throw new TypeError("Close the existing knowledge before checking source updates");
     const candidates = await Promise.all(validateArticleStructureEntries(structure.parsed.articles ?? [])
       .filter(article => article.sections.some(section => section.references.some(reference =>
-        scopes.some(scope => scope.source_ref === reference.source_ref))))
+        scopes.some(scope => repoContentScopeMatches(scope.source_ref, reference.source_ref)))))
       .map(async article => {
         const title = parseFrontmatterLoose(await targetBytes(projectRoot, article.path)).title;
         return { path: article.path, title: typeof title === "string" ? title : article.path,
@@ -67,9 +72,19 @@ export async function beginKnowledgeUpdate(projectRoot: string, value: unknown) 
           source_refs: [...new Set(article.sections.flatMap(section => section.references.map(reference => reference.source_ref)))] };
       }));
     const registry = await readProductionRequirements(projectRoot);
+    const repoReferences = validateArticleStructureEntries(structure.parsed.articles ?? []).flatMap(article =>
+      article.sections.flatMap(section => section.references.filter(ref => ref.source_ref.startsWith("repo-content:") &&
+        scopes.some(scope => repoContentScopeMatches(scope.source_ref, ref.source_ref)))
+        .map(reference => ({ article: article.path, section: section.id, reference }))));
+    const impact = repoReferences.length ? await repoContentImpactReader(projectRoot) : undefined;
+    const repoContent = scopes.some(scope => scope.source_ref.startsWith("repo-content:")) ? {
+      entries: await inspectRepoContentChanges(projectRoot),
+      impacts: await Promise.all(repoReferences.map(async item => ({ ...item, impact: await impact!(item.reference) }))),
+    } : undefined;
     const requirementIds = new Set(scopes.map((scope) => scope.requirement_ref));
     const requirements = registry.requirements.filter((requirement) => requirementIds.has(requirement.id));
     const payload = { protocol: "context.source-update/v1" as const, scopes, requirements, candidates,
+      ...(repoContent === undefined ? {} : { repo_content: repoContent }),
       previous_versions: scopes.map((scope) => processedVersionForScope(readProcessedScopes(structure.parsed), scope) ?? null),
       ...(input.changes === undefined ? {} : { changes: input.changes }) };
     const request = updateSchema.parse({ ...payload, revision: indexerProtocolDigest(payload) });
@@ -92,13 +107,13 @@ export async function completeKnowledgeUpdate(input: { projectRoot: string; revi
     }
     for (const page of input.new_topics) {
       newKnowledgePageTarget(page);
-      if (page.source_refs.some((ref) => !request.scopes.some((scope) => ref === scope.source_ref || ref.startsWith(`${scope.source_ref}/`)))) {
+      if (page.source_refs.some((ref) => !request.scopes.some((scope) => repoContentScopeMatches(scope.source_ref, ref) || ref.startsWith(`${scope.source_ref}/`)))) {
         throw new TypeError("New topic references material outside the confirmed update scope");
       }
     }
     for (const decision of input.decisions) {
       if (decision.supporting_sources && (!decision.instruction || decision.supporting_sources.some((ref) =>
-        !request.scopes.some((scope) => ref === scope.source_ref)))) {
+        !request.scopes.some((scope) => repoContentScopeMatches(scope.source_ref, ref))))) {
         throw new TypeError("Supporting sources must belong to the confirmed update and accompany a concrete revision instruction");
       }
     }

@@ -8,6 +8,12 @@ metadata:
 
 # Context Markdown Indexer
 
+Same-repository docs and authored Skills registered as repo-content remain
+originals, not automatic capture or rewriting candidates. Use them as bounded
+supporting evidence with their real repository path and read revision. Capture
+and rewrite selected originals only when the user explicitly requests knowledge
+production for an audience; registration alone is not that request.
+
 Use the current stage's reader purpose, authorized sources and submission schema.
 Read [planning](references/semantic-planning.md) during investigation and
 [writing](references/indexer.md) when writing. Consult

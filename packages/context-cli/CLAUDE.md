@@ -308,7 +308,7 @@ block 标题用 `**Label**:` 或 `**Label** (meta):`，统一英文（中文标�
 构建不变量：
 
 - Claude/Cursor commands 发布生产、项目规划与显式查询入口，并提供 Indexer 创建 Skill。项目规划 command 转交完整 `context-plan` Skill，保留其参考文件和模板。
-- `dist/plugins/codex/skills/` 包含 `context`、`context-plan`、`context-inspect-search` 和 `context-indexer-create`；宿主 plugin root 不内嵌 lifecycle Provider。
+- `dist/plugins/codex/skills/` 包含 `context`、`context-plan`、`context-inspect-search`、`context-repo-content` 和 `context-indexer-create`；宿主 plugin root 不内嵌 lifecycle Provider。`context-repo-content` 独立编辑/登记同仓原文，不启动知识生产。
 - `dist/plugins/skills/` 直接投影根级全部 Skills；安装器把其中 lifecycle Provider 原子复制到 `~/.agents/skills` 和 `~/.claude/skills`，而不是复制进 Host plugin root。
 - `dist/plugins/{claude,codex,cursor}/` 各带 generated guard（`CLAUDE.md` 或 `AGENTS.md` + `.generated`）；看到 guard 不要编辑 build 产物。`dist/plugins/skills/` 顶层 README 统一说明。
 - 生命周期规则、长诊断、Schema 发现说明和语义规则统一住在
