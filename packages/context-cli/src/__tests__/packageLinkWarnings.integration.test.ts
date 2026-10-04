@@ -9,7 +9,7 @@ import { closeProjectWorkspace } from "../project/close.js";
 import { acceptStarterPackageTemplates } from "../project/packageTemplateReview.js";
 import { buildFixturePackages as buildProjectPackages } from "./workspaceVersionDelivery.fixture.js";
 
-test("a successful package build retains body anchor diagnostics on unchanged rebuilds", async () => {
+test("a successful package build retains navigation diagnostics on unchanged rebuilds", async () => {
   const root = await createDocumentRevisionWorkspace({ sourceCount: 1 });
   try {
     await cp(join(import.meta.dir, "../../../context/templates/package-templates/kb"), join(root, "src/package-templates/kb"), { recursive: true });
@@ -19,7 +19,7 @@ test("a successful package build retains body anchor diagnostics on unchanged re
     await produceFixtureArticles(root, [{
       path: "architecture/entry.md", question: "How is the public entry used?",
       sources: [DOCUMENT_REVISION_SOURCE_REF],
-      markdown: '---\ntitle: Public entry\ndescription: Public entry navigation.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point. [Old section](#removed-section)\n<!-- /context:section -->\n',
+      markdown: '---\ntitle: Public entry\ndescription: Public entry navigation.\n---\n\n<!-- context:section id="entry" -->\nUse the public entry point. [Old section](#removed-section) [External](context:import/guide)\n<!-- /context:section -->\n',
       references: { sections: [{ id: "entry", references: [{ source_ref: DOCUMENT_REVISION_SOURCE_REF,
         locator: { path: "src/index.ts", start_line: 1, end_line: 1 } }] }] },
     }]);
@@ -28,9 +28,16 @@ test("a successful package build retains body anchor diagnostics on unchanged re
     await acceptStarterPackageTemplates({ projectRoot: root });
     const first = (await buildProjectPackages(root)).packages[0]!;
     expect(first.linkWarnings).toContainEqual({ code: "package-link-anchor-unresolved", path: expect.any(String), target: "#removed-section" });
+    expect(first.linkWarnings).toContainEqual(expect.objectContaining({ code: "package-import-unresolved", target: "context:import/guide" }));
     const second = (await buildProjectPackages(root)).packages[0]!;
     expect(second.state).toBe("unchanged");
     expect(second.linkWarnings).toEqual(first.linkWarnings);
-    expect(await readFile(join(root, first.outDir, first.linkWarnings![0]!.path), "utf8")).toContain("#removed-section");
+    const page = join(root, first.outDir, first.linkWarnings!.find(warning => warning.code === "package-link-anchor-unresolved")!.path);
+    expect(await readFile(page, "utf8")).toContain("#removed-section");
+    expect(await readFile(page, "utf8")).toContain("External (unresolved import: guide)");
+    await writeFile(join(root, "imports.yaml"), 'protocol: context.imports/v1\nimports:\n  guide:\n    url: https://example.org/guide\n');
+    const repaired = (await buildProjectPackages(root)).packages[0]!;
+    expect(repaired.linkWarnings?.some(warning => warning.code === "package-import-unresolved")).toBe(false);
+    expect(await readFile(page, "utf8")).toContain("https://example.org/guide");
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60000);

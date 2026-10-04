@@ -1,6 +1,7 @@
 import { resolveSiteTheme, siteThemeVariables } from "./siteTheme.js";
 import { optionalRepoGit } from "./repoContentGit.js";
 import { repoContentLabels } from "./repoContentPages.js";
+import { importsLabels } from "./importsPages.js";
 import { createHash } from "node:crypto";
 import { packageSiteOutputDir } from "./packageOutputPaths.js";
 import { readWorkspaceChangelog } from "./workspaceChangelog.js";
@@ -186,6 +187,7 @@ export async function writePackageSite(input: {
     // Preserve linked package reference pages without exposing packaging directories as navigation.
     for (const file of delivered) {
       if (/^wikis\/repo-content(?:\/|\.md$)/u.test(file.relPath) && typeof pkg.repoContentPage !== "object") continue;
+      if (file.relPath === "wikis/imports.md" && typeof pkg.importsPage !== "object") continue;
       if (!/^(?:skills|wikis|guides|rules|feats)\/.*\.md$/u.test(file.relPath) || byPath.has(file.relPath)) continue;
       const content = await readFile(file.absPath, "utf8");
       const meta = parseKnowledgeFrontmatter(content);
@@ -224,6 +226,8 @@ export async function writePackageSite(input: {
         nav: [...sections.map(section => ({ text: section.title, link: section.href })),
           ...(typeof pkg.repoContentPage === "object" && byPath.has("wikis/repo-content.md")
             ? [{ text: (await repoContentLabels(projectRoot)).title, link: `/${byPath.get("wikis/repo-content.md")!.site_path}` }] : []),
+          ...(typeof pkg.importsPage === "object" && byPath.has("wikis/imports.md")
+            ? [{ text: (await importsLabels(projectRoot)).title, link: `/${byPath.get("wikis/imports.md")!.site_path}` }] : []),
           { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
       } };
     await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
@@ -232,6 +236,9 @@ export async function writePackageSite(input: {
       let content = await readFile(join(root, page.package_path), "utf8");
       if (page.package_path === "wikis/index.md" && typeof pkg.repoContentPage !== "object") {
         content = content.replace(/^.*\]\((?:<)?(?:\.\/)?repo-content\.md(?:>)?\).*\n?/gmu, "");
+      }
+      if (page.package_path === "wikis/index.md" && typeof pkg.importsPage !== "object") {
+        content = content.replace(/^.*\]\((?:<)?(?:\.\/)?imports\.md(?:>)?\).*\n?/gmu, "");
       }
       // Only the presentation title is passed as frontmatter; source frontmatter
       // cannot supply scripts, layouts, imports or head tags to the compiler.

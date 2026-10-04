@@ -67,7 +67,14 @@ describe("0.7.0 root plugin source", () => {
       join(repoInstallHostRoot("cursor"), "commands", "c4a-context.md"),
       "utf8",
     );
-    expect(bodyAfterFrontmatter(adapter)).toBe(bodyAfterFrontmatter(canonical));
+    const commandBody = bodyAfterFrontmatter(canonical).replaceAll("](references/", "](../resources/context/");
+    expect(bodyAfterFrontmatter(adapter)).toBe(commandBody);
+    expect(bodyAfterFrontmatter(cursorCommand)).toBe(commandBody);
+    for (const host of ["claude", "cursor"] as const) {
+      for (const match of commandBody.matchAll(/\]\(\.\.\/resources\/context\/([^)#]+)/gu)) {
+        await expect(readFile(join(repoInstallHostRoot(host), "resources", "context", match[1]!), "utf8")).resolves.toBeString();
+      }
+    }
     expect(installedSkill).toBe(canonical);
     expect(frontmatter(adapter)["allowed-tools"]).toEqual([
       "Bash(context:*)", "Bash(bun:*)", "Bash(cd *)",

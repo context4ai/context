@@ -13,6 +13,7 @@
 
 | 当前需要 | 阅读内容 |
 |---|---|
+| 关联外部知识、Skill 或插件，不复制内容 | [外部关联](./guides/imports.md) |
 | 理解完整知识项目的形态 | [Getting Started](./getting-started.md) |
 | 判断 Agent 可以决定或修改什么 | [Agent Guide](./guides/agent-guide.md) 和 [Agent Dialogue](./guides/agent-dialogue.md) |
 | 配置来源、采集、Indexer 或产物 | [Project API](./reference/project-api.md) |

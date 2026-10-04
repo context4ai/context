@@ -44,7 +44,7 @@ export async function repoContentLinkProjector(projectRoot: string) {
   };
 }
 
-export interface RepoContentPage { path: string; content: string; revision: string | null; source: "repo-content.yaml" }
+export interface RepoContentPage { path: string; content: string; revision: string | null; source: "repo-content.yaml" | "imports.yaml" }
 export async function repoContentLabels(projectRoot: string) {
   let chinese = false;
   try { chinese = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8")).context?.language === "zh-CN"; }
@@ -57,7 +57,7 @@ export async function repoContentLabels(projectRoot: string) {
 
 /** Navigation-only records; these are not approved knowledge or copied sources. */
 export function repoContentNavigation(pages: RepoContentPage[]): ApprovedKnowledgeFile[] {
-  return pages.filter(page => page.path === "wikis/repo-content.md")
+  return pages.filter(page => page.path === "wikis/repo-content.md" || page.path === "wikis/imports.md")
     .map(page => ({ relPath: page.path, absPath: "", content: page.content }));
 }
 function stripHeader(text: string): { body: string; description: string; title?: string } {

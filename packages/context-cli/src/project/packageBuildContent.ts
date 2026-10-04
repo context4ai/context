@@ -1,8 +1,10 @@
 import { articleProvenanceMarkdown } from "./packageSiteSources.js";
 import { repoContentLinkProjector } from "./repoContentPages.js";
+import { importsLinkProjector, importsWarnings } from "./importsPages.js";
 import { optionalRepoGit } from "./repoContentGit.js";
 import { loadSourcesRegistry } from "@c4a/context";
-import { projectPackageArticleLinks, type PackageArticleLinkWarning } from "./packageArticleLinks.js";
+import { projectPackageArticleLinks } from "./packageArticleLinks.js";
+import type { PackageBuildLinkWarning } from "./packageBuildReceipt.js";
 import { buildLlmsDocuments, llmsArticles } from "./packageLlms.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { existsSync } from "node:fs";
@@ -160,8 +162,9 @@ export async function packageKnowledgeBundle(
     return buildLlmsDocuments({ title: pkg.name, articles: llmsArticles(pkg, files), ...(map ? { map } : {}) }).files.get("llms.txt")!;
   }
   const registry = await loadSourcesRegistry({ rootDir: projectRoot });
+  const projectLinks = await packageSourceLinkProjector(projectRoot);
   const projected = await Promise.all(files.map(async (file) => {
-    const content = file.content;
+    const content = await projectLinks(file.content);
     const distPath = packageKnowledgeOutputPath(pkg, file.relPath);
     const lines = [`# ${distPath}`, ""];
     if (file.relPath !== distPath) lines.push(`<!-- approved_path: ${file.relPath} -->`, "");
@@ -170,6 +173,13 @@ export async function packageKnowledgeBundle(
     return lines.join("\n") + articleProvenanceMarkdown(file.article, registry);
   }));
   return projected.join("\n\n---\n\n");
+}
+
+/** Apply the same external-entrance projection to individual pages and bundles. */
+async function packageSourceLinkProjector(projectRoot: string) {
+  const projectRepoLinks = await repoContentLinkProjector(projectRoot);
+  const projectImportLinks = await importsLinkProjector(projectRoot);
+  return (markdown: string) => projectImportLinks(projectRepoLinks(markdown));
 }
 
 export function approvedKnowledgeTimestamp(files: readonly ApprovedKnowledgeFile[]): string {
@@ -254,18 +264,18 @@ export async function writeSelectedPackageKnowledge(input: {
   prepared?: PreparedPackageKnowledge;
 }): Promise<{
   pages: number;
-  linkWarnings: PackageArticleLinkWarning[];
+  linkWarnings: PackageBuildLinkWarning[];
   resources: number;
   resourceBytes: number;
   assetDelivery: PackageAssetDeliverySummary;
 }> {
   const { projectedPages, delivered } = input.prepared ?? await prepareSelectedPackageKnowledge(input);
-  const linkWarnings: PackageArticleLinkWarning[] = [];
+  const linkWarnings: PackageBuildLinkWarning[] = await importsWarnings(input.projectRoot, input.pkg, input.files);
   const outputByApproved = new Map(input.files.map(file => [file.relPath, packageKnowledgeOutputPath(input.pkg, file.relPath)]));
   const approvedByOutput = new Map([...outputByApproved].map(([approved, output]) => [output, approved]));
   const byPath = new Map(input.files.map(file => [file.relPath, file]));
   const registry = await loadSourcesRegistry({ rootDir: input.projectRoot });
-  const projectRepoLinks = await repoContentLinkProjector(input.projectRoot);
+  const projectLinks = await packageSourceLinkProjector(input.projectRoot);
   const repositoryRemote = await optionalRepoGit(input.projectRoot, ["remote", "get-url", "origin"]);
   for (let offset = 0; offset < projectedPages.length; offset += 8) {
     const results = await Promise.allSettled(projectedPages.slice(offset, offset + 8).map(async projected => {
@@ -289,7 +299,7 @@ export async function writeSelectedPackageKnowledge(input: {
         return undefined;
       });
       await mkdir(dirname(outputPath), { recursive: true });
-      const links = projectPackageArticleLinks({ markdown: projectRepoLinks(rewritten), approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
+      const links = projectPackageArticleLinks({ markdown: await projectLinks(rewritten), approvedPath: approvedByOutput.get(projected.pageOutputPath)!, outputPath: projected.pageOutputPath, selected: outputByApproved });
       const markdown = await cachedPackageKnowledgeMarkdown({ projectRoot: input.projectRoot,
         key: `${input.pkg.name}/page/${projected.pageOutputPath}`, content: links.markdown });
       const file = byPath.get(approvedByOutput.get(projected.pageOutputPath)!);

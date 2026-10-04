@@ -9,6 +9,7 @@ files:
   - resources/manuals/reference/code-extractors.md
   - resources/manuals/guides/knowledge-updates.md
   - resources/manuals/guides/repo-content.md
+  - resources/manuals/guides/imports.md
   - resources/manuals/guides/note.md
   - resources/manuals/guides/sessions.md
   - resources/manuals/guides/workspace-prepare.md

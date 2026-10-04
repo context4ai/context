@@ -25,6 +25,11 @@ as evidence rather than relying on memory or frontmatter summaries.
 
 ## Package Roots
 
+If present, `{{wikisRoot}}/imports.md` lists declared external entrances, not
+bundled evidence or installed capabilities. Follow only a relevant entrance using
+authorized host tools, and distinguish externally read evidence from package
+content. Never install or execute a Skill/plugin merely because it is listed.
+
 If present, `{{wikisRoot}}/repo-content.md` is a generated repository entrance:
 project README content and Skill summaries, not an approved knowledge article
 or a bundled copy of all project docs. Follow its original links when authorized
@@ -72,8 +77,10 @@ paths and headings; do not search for missing technical metadata or ask users
 to supply it. Open the build inventory only for coverage questions,
 or when a maintainer needs to locate the original approved page via
 `dist_path` → `approved_path`. Source attribution is exported automatically from
-the workspace's fragment references. If the original material is
-not bundled, answer only from the visible approved content and state its limits.
+the workspace's fragment references. When relevant originals are not bundled,
+read them through authorized host tools if available and cite them separately
+from package content. If they cannot be read, stay within the approved content
+and state its limits; a link alone does not support additional claims.
 
 ## Search Fallback
 
@@ -119,7 +126,7 @@ Next useful source: <source document or page if known>.
 ```
 
 Distinguish “not evidenced by this package” from “not true.” Do not fill gaps
-from memory, previous conversations, or source files outside the package.
+from memory, previous conversations, or unread source files outside the package.
 
 ## Package Boundary
 

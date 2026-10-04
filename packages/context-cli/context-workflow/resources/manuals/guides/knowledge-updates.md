@@ -35,6 +35,19 @@ empty diff. Inspect/edit does not advance references; delivery or an explicit
 no-impact outcome settles the selected scope. Historical locators always store
 the real repository path at the cited commit, not today's registration path.
 
+External associations in `imports.yaml` are entrances, not recorded evidence:
+they create no `references[]` and no review hints, and the CLI never checks
+their versions. When the user asks to update or check external associations,
+use existing authorized Host tools (for example `git ls-remote`, a package
+manager or a web read) to observe each selected entry's current version and
+compare it with its optional `version`. If it differs, read only what the
+linked articles rely on, report whether they need revision and update
+`version` once settled. Unreachable, unauthorized or failed checks are
+"version unknown": report them, keep `version` unchanged, and never treat them
+as changed. When an article's conclusion must trace or track external content,
+register the needed part as a source and capture it; do not cite the
+association itself as evidence.
+
 Before starting production, compare the proposed content with the workspace's
 reader purpose. For clearly unrelated anecdotes or personal rankings, briefly
 recommend leaving them out of the formal manual or saving them separately because

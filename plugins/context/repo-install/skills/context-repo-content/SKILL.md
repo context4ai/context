@@ -27,7 +27,8 @@ installed third-party Skills and de-duplicate copies across host directories. Ig
 Skills are external installations; untracked, nonignored content needs ownership
 assessment. A Skill authored in the current task stays self-owned before its first commit.
 Non-same-repository material, including registered source repositories, is not repo-content.
-Do not copy it here or pretend imports support is provided by this skill.
+Do not copy it here. For an authorized lasting external association, return to
+the Context entry's imports maintenance reference; this skill stays same-repository.
 
 ## Edit and register
 
