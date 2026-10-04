@@ -1,14 +1,15 @@
 import type { ProjectLanguage } from "./workspace.js";
 
-export function renderProjectEntry(language: ProjectLanguage, repositoryPackageName?: string): string {
+export function renderProjectEntry(language: ProjectLanguage, repositoryPackageName?: string,
+  entrances: { repository?: boolean; imports?: boolean } = { repository: true }): string {
   if (repositoryPackageName) return [
     'import { defineProject, kbPackage } from "@c4a/context";',
     "",
-    "// Repository entrance only; website exposure requires repoContentPage: { site: true }.",
+    "// Declaration entrances only; website exposure requires the corresponding page option { site: true }.",
     "export default defineProject({",
     "  sources: [],",
     "  phases: [],",
-    `  packages: [kbPackage({ name: ${JSON.stringify(repositoryPackageName)}, repoContentPage: true,`,
+    `  packages: [kbPackage({ name: ${JSON.stringify(repositoryPackageName)},${entrances.repository ? " repoContentPage: true," : ""}${entrances.imports ? " importsPage: true," : ""}`,
     '    template: { path: "src/package-templates/kb" } })],',
     "});", "",
   ].join("\n");

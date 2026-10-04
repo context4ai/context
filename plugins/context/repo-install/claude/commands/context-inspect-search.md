@@ -59,6 +59,14 @@ access policies, not additional source-order modes or production settings.
 
 ## Search available material according to the configured mode
 
+Workspace `imports.yaml` and a package's optional `wikis/imports.md` list external
+entrances, not bundled or verified knowledge. When a relevant article links to
+`context:import/<id>`, read that declaration (at the same workspace commit for
+remote reads) and use its URL through available authorized tools. Do not append
+the declared path/version to the URL or visit unrelated entries. Local tools and
+MCP follow the same rule; neither reading nor registration authorizes installation
+or execution of a Skill/plugin. Temporary query reads do not update declarations.
+
 Same-repository original documents and authored Skills may be registered in
 workspace-root `repo-content.yaml`, with a `repo-content/` symlink view. They are
 another readable entrance, not duplicated approved knowledge. Select them when

@@ -1,5 +1,6 @@
 import { resolveSiteTheme } from "./siteTheme.js";
 import { repoContentPages, repoContentFingerprint, repoContentNavigation, writeRepoContentPages } from "./repoContentPages.js";
+import { importsPages, importsFingerprint } from "./importsPages.js";
 import { readPackageSiteUrl } from "./packageSiteAddress.js";
 import { readKnowledgeMap } from "./knowledgeMap.js";
 import { readApprovedMarkdownFiles } from "./approvedFileRead.js";
@@ -25,7 +26,7 @@ import { dirname, join, resolve } from "node:path";
 import { validateArticleStructureEntries, loadSourcesRegistry, type PackageDefinition } from "@c4a/context";
 import { siteArticleSources } from "./packageSiteSources.js";
 import { parse as parseYaml } from "yaml";
-import { ErrorCategory, formatFeedback } from "../lib/cliFeedback.js";
+import { ErrorCategory } from "../lib/cliFeedback.js";
 import { ContextError } from "../lib/errors.js";
 import {
   flushQueuedContextRuntimeEvents,
@@ -48,7 +49,7 @@ import {
 } from "./packageIndexes.js";
 import { packageNavigation } from "./packageNavigation.js";
 import {
-  formatPackageBuildSummary,
+  formatProjectBuildResult,
   knowledgeOutputGroups,
   packageBuildChanges,
   packageOutputFingerprint,
@@ -247,6 +248,7 @@ async function packageInputFingerprint(input: {
   const siteTheme = input.pkg.kind === "package.kb" && input.pkg.site ? await resolveSiteTheme(input.projectRoot, input.pkg.site.theme) : null;
   return stableHash({
     repoContent: await repoContentFingerprint(input.projectRoot, input.pkg),
+    imports: await importsFingerprint(input.projectRoot, input.pkg, input.selected.map(file => file.content)),
     siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
       ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,
     siteTheme,
@@ -557,7 +559,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       knowledgeGroups,
       previousManifest?.outputs ?? [],
     );
-    const repositoryPages = await repoContentPages(projectRoot, pkg);
+    const repositoryPages = [...await repoContentPages(projectRoot, pkg), ...await importsPages(projectRoot, pkg)];
     const navigationFiles = repoContentNavigation(repositoryPages);
     const vars = packageTemplateVars({
       pkg,
@@ -581,7 +583,7 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
       ...(assetProcessor === undefined ? {} : { assetProcessor }),
     });
     const siteUrl = await readPackageSiteUrl(projectRoot, pkg);
-    if (repositoryPages.length) buildInventory.generated_pages = repositoryPages.map(({ path, source, revision }) => ({ path, source, revision, kind: "repo-content" }));
+    if (repositoryPages.length) buildInventory.generated_pages = repositoryPages.map(({ path, source, revision }) => ({ path, source, revision, kind: source === "imports.yaml" ? "imports" : "repo-content" }));
     const writtenKnowledge = await withStagedPackageOutput(projectRoot, pkg, async (stagedPkg) => {
       const rendered = await writeRenderedPackageTemplate({
         projectRoot,
@@ -689,76 +691,6 @@ async function buildProjectPackagesInternal(projectRoot: string, options: { deli
     });
   }
   return { projectRoot, packages: summaries, agent_hints: agentHints };
-}
-
-function formatProjectBuildResult(
-  result: ProjectBuildResult,
-  format: "text" | "json" = "text",
-  verbose = false,
-): string {
-  if (format === "json") {
-    if (verbose) return `${JSON.stringify(result, null, 2)}\n`;
-    return `${JSON.stringify({
-      agent_hints: result.agent_hints,
-      packages: result.packages.map((pkg) => ({
-        name: pkg.name,
-        kind: pkg.kind,
-        outDir: pkg.outDir,
-        state: pkg.state,
-        ...(pkg.siteOutDir ? { siteOutDir: pkg.siteOutDir } : {}),
-        inputs: pkg.inputs,
-        files: pkg.files,
-        resources: pkg.resources,
-        changes: {
-          added: summarizePackageChanges(pkg.changes.added),
-          updated: summarizePackageChanges(pkg.changes.updated),
-          removed: summarizePackageChanges(pkg.changes.removed),
-        },
-      })),
-    }, null, 2)}\n`;
-  }
-  return formatFeedback({
-    symbol: "✓",
-    action: "built",
-    subject: "project packages",
-    headline: `${result.packages.length} package(s)`,
-    body: [...result.packages.flatMap((pkg) => formatPackageBuildSummary(pkg)),
-      ...result.agent_hints.filter((hint) => hint.reason_code === "website-deployment-ready")
-        .map((hint) => `${hint.site_dir}: ${hint.message}`)],
-  });
-}
-
-function summarizePackageChanges(
-  changes: PackageBuildSummary["changes"]["added"],
-): {
-  total: number;
-  knowledge_pages: Record<string, number>;
-  indexes: number;
-  other_files: number;
-} {
-  const knowledgePages: Record<string, number> = {};
-  let indexes = 0;
-  let otherFiles = 0;
-  for (const change of changes) {
-    if (change.kind === "knowledge-page") {
-      const group = change.group ?? "knowledge";
-      knowledgePages[group] = (knowledgePages[group] ?? 0) + 1;
-    } else if (change.kind === "index") {
-      indexes += 1;
-    } else {
-      otherFiles += 1;
-    }
-  }
-  return {
-    total: changes.length,
-    knowledge_pages: Object.fromEntries(
-      Object.entries(knowledgePages).sort(([left], [right]) =>
-        left.localeCompare(right)
-      ),
-    ),
-    indexes,
-    other_files: otherFiles,
-  };
 }
 
 export function queueProjectBuildCompletedEvent(result: ProjectBuildResult): void {

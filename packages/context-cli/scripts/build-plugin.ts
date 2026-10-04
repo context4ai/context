@@ -282,6 +282,7 @@ async function writeClaudeCommands(
 ): Promise<void> {
   const commandsRoot = join(outputRoot, "commands");
   await mkdir(commandsRoot, { recursive: true });
+  await copyDir(join(PLUGIN_SOURCE_ROOT, "skills/context/references"), join(outputRoot, "resources/context"));
   for (const command of commands) {
     const body = [
       "---",
@@ -294,7 +295,7 @@ async function writeClaudeCommands(
       ] : []),
       "---",
       "",
-      command.body.trimEnd(),
+      (command.slug === "context" ? command.body.replaceAll("](references/", "](../resources/context/") : command.body).trimEnd(),
       "",
     ].join("\n");
     await writeFile(join(commandsRoot, `${command.slug}.md`), body, "utf8");
@@ -368,8 +369,10 @@ async function buildVercel(): Promise<void> {
 async function writeCursorCommands(outRoot: string, commands: readonly CommandSource[]): Promise<void> {
   const dest = join(outRoot, "commands");
   await mkdir(dest, { recursive: true });
+  await copyDir(join(PLUGIN_SOURCE_ROOT, "skills/context/references"), join(outRoot, "resources/context"));
   for (const command of commands) {
-    const rewrittenBody = rewriteClaudeSlashCommandsForCursor(command.body);
+    const rewrittenBody = rewriteClaudeSlashCommandsForCursor(command.slug === "context"
+      ? command.body.replaceAll("](references/", "](../resources/context/") : command.body);
     const body = stripHtmlComments(rewrittenBody).trimStart();
     const file = `---\ndescription: ${JSON.stringify(command.description)}\n---\n\n${body.trimEnd()}\n`;
     await writeFile(join(dest, cursorCommandFileName(command.slug)), file, "utf8");

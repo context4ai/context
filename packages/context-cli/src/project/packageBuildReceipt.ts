@@ -1,5 +1,6 @@
 import type { PackageArticleLinkWarning } from "./packageArticleLinks.js";
 import type { PackageMarkdownLinkWarning } from "./packageMarkdownAnchors.js";
+import type { PackageImportWarning } from "./importsPages.js";
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -11,6 +12,8 @@ import { knowledgeInventory, type ApprovedKnowledgeFile } from "./packageIndexes
 import { toPosixPath } from "./packageTemplateUtils.js";
 import { packageOutputDirs, packageSiteOutputDir } from "./packageOutputPaths.js";
 import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
+import { formatFeedback } from "../lib/cliFeedback.js";
+import type { ProjectBuildResult } from "./packageBuilder.js";
 
 export interface PackageBuildFileChange {
   path: string;
@@ -28,13 +31,14 @@ export interface PackageBuildChanges {
   removed: PackageBuildFileChange[];
 }
 
-export type PackageBuildLinkWarning = PackageArticleLinkWarning | PackageMarkdownLinkWarning;
+export type PackageBuildLinkWarning = PackageArticleLinkWarning | PackageMarkdownLinkWarning | PackageImportWarning;
 
 export function parsePackageLinkWarnings(value: unknown): PackageBuildLinkWarning[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is PackageBuildLinkWarning => item !== null && typeof item === "object" &&
     typeof item.path === "string" && typeof item.target === "string" &&
-    ["package-article-not-selected", "package-link-page-missing", "package-link-anchor-unresolved"].includes(item.code));
+    ["package-article-not-selected", "package-link-page-missing", "package-link-anchor-unresolved",
+      "package-import-unresolved", "package-imports-unavailable"].includes(item.code));
 }
 
 export interface PackageBuildSummary {
@@ -205,6 +209,10 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     `  resources: ${pkg.resources.files} file(s), ${pkg.resources.bytes} byte(s)`,
   ];
   for (const warning of pkg.linkWarnings ?? []) {
+    if (warning.code === "package-import-unresolved" || warning.code === "package-imports-unavailable") {
+      lines.push(`  warning: ${warning.path} → ${warning.target}: ${warning.message ?? "Correct imports.yaml or the article link; build continued without this navigation."}`);
+      continue;
+    }
     const explanation = warning.code === "package-article-not-selected"
       ? "is not included; its source coordinate is retained for inspection"
       : warning.code === "package-link-anchor-unresolved"
@@ -233,4 +241,75 @@ export function formatPackageBuildSummary(pkg: PackageBuildSummary): string[] {
     ...formatPackageChangeLines("updated", pkg.changes.updated),
     ...formatPackageChangeLines("removed", pkg.changes.removed),
   ];
+}
+
+export function formatProjectBuildResult(
+  result: ProjectBuildResult,
+  format: "text" | "json" = "text",
+  verbose = false,
+): string {
+  if (format === "json") {
+    if (verbose) return `${JSON.stringify(result, null, 2)}\n`;
+    return `${JSON.stringify({
+      agent_hints: result.agent_hints,
+      packages: result.packages.map((pkg) => ({
+        name: pkg.name,
+        kind: pkg.kind,
+        outDir: pkg.outDir,
+        state: pkg.state,
+        ...(pkg.siteOutDir ? { siteOutDir: pkg.siteOutDir } : {}),
+        inputs: pkg.inputs,
+        files: pkg.files,
+        resources: pkg.resources,
+        ...(pkg.linkWarnings?.length ? { linkWarnings: pkg.linkWarnings } : {}),
+        changes: {
+          added: summarizePackageChanges(pkg.changes.added),
+          updated: summarizePackageChanges(pkg.changes.updated),
+          removed: summarizePackageChanges(pkg.changes.removed),
+        },
+      })),
+    }, null, 2)}\n`;
+  }
+  return formatFeedback({
+    symbol: "✓",
+    action: "built",
+    subject: "project packages",
+    headline: `${result.packages.length} package(s)`,
+    body: [...result.packages.flatMap((pkg) => formatPackageBuildSummary(pkg)),
+      ...result.agent_hints.filter((hint) => hint.reason_code === "website-deployment-ready")
+        .map((hint) => `${hint.site_dir}: ${hint.message}`)],
+  });
+}
+
+function summarizePackageChanges(
+  changes: PackageBuildSummary["changes"]["added"],
+): {
+  total: number;
+  knowledge_pages: Record<string, number>;
+  indexes: number;
+  other_files: number;
+} {
+  const knowledgePages: Record<string, number> = {};
+  let indexes = 0;
+  let otherFiles = 0;
+  for (const change of changes) {
+    if (change.kind === "knowledge-page") {
+      const group = change.group ?? "knowledge";
+      knowledgePages[group] = (knowledgePages[group] ?? 0) + 1;
+    } else if (change.kind === "index") {
+      indexes += 1;
+    } else {
+      otherFiles += 1;
+    }
+  }
+  return {
+    total: changes.length,
+    knowledge_pages: Object.fromEntries(
+      Object.entries(knowledgePages).sort(([left], [right]) =>
+        left.localeCompare(right)
+      ),
+    ),
+    indexes,
+    other_files: otherFiles,
+  };
 }

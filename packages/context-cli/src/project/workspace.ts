@@ -17,6 +17,7 @@ import { renderAgents, renderProjectEntry, renderReadme } from "./workspaceGuida
 import { assertTrustedContextProjectConfigBoundary } from "./projectModulePolicy.js";
 import { installEvidencePlugin, type EvidencePluginResult } from "./evidencePlugin.js";
 import { readRepoContentRegistry } from "./repoContentRegistry.js";
+import { readImportsRegistry } from "./importsRegistry.js";
 
 const PROJECT_DIRS = ["src", "sources", "knowledge", "dist"] as const;
 const PROJECT_SCRATCH_DIRS = [join(".tmp", "agent-payloads")] as const;
@@ -46,6 +47,7 @@ export interface ProjectInitResult {
   created: string[];
   kept: string[];
   evidencePlugin?: EvidencePluginResult;
+  warnings?: { code: "imports-unavailable"; path: string; message: string }[];
 }
 
 interface StaticTemplateFile {
@@ -507,9 +509,21 @@ export async function initContextProject(input: ProjectInitInput): Promise<Proje
     ),
     result,
   );
-  const repositoryPackage = !existsSync(join(projectRoot, "src", "index.ts")) &&
-    (await readRepoContentRegistry(projectRoot))?.entries.length ? `${projectName}-kb` : undefined;
-  await writeIfMissing(join(projectRoot, "src", "index.ts"), renderProjectEntry(language, repositoryPackage), result);
+  const newEntry = !existsSync(join(projectRoot, "src", "index.ts"));
+  let imports = false;
+  if (newEntry) {
+    try { imports = !!(await readImportsRegistry(projectRoot)); }
+    catch (error) {
+      result.warnings = [{ code: "imports-unavailable", path: "imports.yaml",
+        message: `${error instanceof Error ? error.message : String(error)}. Correct imports.yaml; automatic imports page configuration was skipped. Initialization continued without changing the declaration.` }];
+    }
+  }
+  const entrances = {
+    repository: newEntry && !!(await readRepoContentRegistry(projectRoot))?.entries.length,
+    imports,
+  };
+  const repositoryPackage = entrances.repository || entrances.imports ? `${projectName}-kb` : undefined;
+  await writeIfMissing(join(projectRoot, "src", "index.ts"), renderProjectEntry(language, repositoryPackage, entrances), result);
   await writeDefaultPackageTemplates(projectRoot, result, language);
   await writeIfMissing(join(projectRoot, "sources", "repo", "index.yaml"), renderRepoIndex(), result);
   await writeIfMissing(join(projectRoot, "sources", "file", "index.yaml"), renderFileIndex(), result);
@@ -603,6 +617,8 @@ export function formatProjectInitResult(result: ProjectInitResult): string {
       ...(result.kept.length > 0
         ? [`- preserved existing files → ${result.kept.map((path) => path.replace(`${projectRoot}/`, "")).join(", ")}`]
         : []),
+      ...(result.warnings?.length ? ["", "**Warnings**:",
+        ...result.warnings.map(warning => `- ${warning.code} → \`${warning.path}\`: ${warning.message}`)] : []),
       "",
       "**Next action**:",
       `- command → \`${next}\``,

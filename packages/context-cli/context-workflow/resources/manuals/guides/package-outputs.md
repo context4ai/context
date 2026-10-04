@@ -28,6 +28,14 @@ Same-repository originals have an optional [repository entrance](repo-content.md
 not the full document tree. It does not expose that page on a configured website;
 use `repoContentPage: { site: true }` to opt in. Existing declarations are kept.
 
+External associations have an optional [directory](imports.md): `importsPage: true`
+generates `wikis/imports.md` from declarations only; `{ site: true }` also exposes
+it on a configured website. Neither option downloads or installs external content.
+
+When first declaring a KB for a new workspace, enable `repoContentPage: true`
+if `repo-content.yaml` exists and `importsPage: true` if `imports.yaml` exists.
+Keep existing package settings and explicit user choices; website exposure stays opt-in.
+
 Output channels support multiple selection. In a new workspace without explicit
 preferences, the Agent proposes and configures KB + website as the default. Honor
 user feedback, session authority and existing workspace declarations; LLMS is an

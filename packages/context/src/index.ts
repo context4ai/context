@@ -12,6 +12,8 @@ import type { PhaseDefinition, PhaseResourceReference } from "./phases.js";
 import type { ProjectSourceDefinition } from "./sources.js";
 
 export * from "./indexerCoreExports.js";
+export { importsRegistrySchema, importEntrySchema, importUrlSchema, importIdSchema,
+  type ImportEntry, type ImportsRegistry } from "./imports.js";
 export { repoContentRegistrySchema, repoContentEntrySchema, repoContentPathSchema,
   repoContentMount, parseRepoContentRef, repoContentScopeMatches,
   type RepoContentEntry, type RepoContentRegistry } from "./repoContent.js";
@@ -417,6 +419,7 @@ export type KbPackageDefinition = BasePackageDefinition & {
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
   repoContentPage?: boolean | { site: true };
+  importsPage?: boolean | { site: true };
 };
 
 export type LlmsPackageDefinition = BasePackageDefinition & {
@@ -700,11 +703,20 @@ export const kbPackage = (definition: {
   assets?: PackageAssetDefinition;
   site?: PackageSiteDefinition;
   repoContentPage?: boolean | { site: true };
+  importsPage?: boolean | { site: true };
 }): KbPackageDefinition => {
   const base = createPackageDefinitionBase("kb", definition);
   const distribution = normalizePackageDistribution(definition.distribution);
   const assets = normalizePackageAssets(definition.assets);
   const site = normalizePackageSite(definition.site);
+  if (definition.importsPage !== undefined && typeof definition.importsPage !== "boolean" &&
+      (!definition.importsPage || typeof definition.importsPage !== "object" ||
+       definition.importsPage.site !== true || Object.keys(definition.importsPage).some(key => key !== "site"))) {
+    throw new TypeError("importsPage must be a boolean or { site: true }");
+  }
+  if (typeof definition.importsPage === "object" && !site) {
+    throw new TypeError("importsPage.site requires a configured site");
+  }
   if (definition.repoContentPage !== undefined && typeof definition.repoContentPage !== "boolean" &&
       (!definition.repoContentPage || typeof definition.repoContentPage !== "object" ||
        definition.repoContentPage.site !== true || Object.keys(definition.repoContentPage).some(key => key !== "site"))) {
@@ -721,6 +733,7 @@ export const kbPackage = (definition: {
     assets,
     ...(site === undefined ? {} : { site }),
     ...(definition.repoContentPage === undefined ? {} : { repoContentPage: definition.repoContentPage }),
+    ...(definition.importsPage === undefined ? {} : { importsPage: definition.importsPage }),
   };
 };
 
