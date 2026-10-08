@@ -141,6 +141,29 @@ reachable as linked read-only pages, but have no automatically added navigation
 section. A reader-facing usage guide can link them where appropriate.
 Section landing pages have stable URLs separate from article URLs.
 
+`site.nav` appends links after the reading directories, and `site.more` adds
+items to the More menu before LLM Docs and Changelog. A More item uses either
+`link` or `target: { artifact_ref }`; a target is an approved article kept
+outside the knowledge map (for example release notes or a contribution guide),
+so it is not reported as unplaced. A missing target blocks the build. Links that
+start with `/` are origin paths, such as a sibling application on the same
+domain, and are not prefixed with `site.base`. `locales` on a nav or More item
+translates its text per language tag. `socialLinks` adds icon links in the top
+bar; each requires an `https` URL.
+
+`site.locales` publishes translated copies under a URL segment, for example
+`locales: { "zh-CN": { path: "zh", title: "项目知识" } }` serves the primary
+language at `/` and Simplified Chinese at `/zh/`. Each locale may override
+`label`, `title`, `description` and `home`. Translations are stored in the
+workspace under `translations/<tag>/` and follow the
+[site translation](site-translation.md) procedure. The top bar language button
+opens the same page in the next language. A first visit follows the browser
+languages; the reader's choice is remembered under `site.localePreferenceKey`
+(default `context-locale:<package>:<base>`). Pages without a current
+translation show the original with a notice. LLM Docs and Changelog stay in the
+primary language. `context-site-map.json` lists translated, stale and missing
+counts per locale.
+
 `dist/<base>-site/context-site-map.json` records each article's approved path, KB path and
 site path, plus the projected menu and unresolved targets. URLs are derived from
 article identity; legacy pages without `artifact_ref` use their approved path,

@@ -2,6 +2,13 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.60 - 2026-10-08
+
+- Publish knowledge websites in several languages with `site.locales`; translations live under `translations/<tag>/`, track the approved content they were written from, and show a notice when stale or missing.
+- Add `context translate status|prepare|submit|skip` with structural validation of sections, code blocks and links, and a workspace Route step before the version is recorded.
+- Add `site.nav`, `site.more` and `site.socialLinks`; More menu items may target approved articles kept outside the knowledge map, and origin paths link to sibling applications on the same domain.
+- Include translations in package freshness and add the `translation` changelog trigger.
+
 ## 0.7.50 - 2026-10-03
 
 - Register same-repository documentation and authored Skills without copying their bodies into knowledge; maintain safe relative symlink entrances.

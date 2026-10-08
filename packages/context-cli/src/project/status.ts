@@ -7,6 +7,7 @@ import { readKnowledgeUpdate } from "./knowledgeUpdate.js";
 import { observeApprovedRevisionBatch } from "./approvedRevisionBatch.js";
 import { readRevisionDelivery } from "./revisionDelivery.js";
 import { assertPreparationComplete } from "./workspacePreparation.js";
+import { inspectSiteTranslations } from "./siteTranslation.js";
 import { join } from "node:path";
 import type { ResourceReadReceiptSet } from "@c4a/agent-graph";
 import { KNOWLEDGE_COLLECTIONS } from "@c4a/context";
@@ -218,6 +219,8 @@ async function collectProjectStatusSnapshotInternal(
   // restore the production that previously cleared its temporary workspace.
   const observation: ContextWorkflowObservation = {
     versionCurrent: phaseStatus.projectEntryValid && !deferDeliveryChecks ? (await inspectWorkspaceVersion(projectRoot)).current : false,
+    translationRouteSatisfied: phaseStatus.projectEntryValid && !deferDeliveryChecks
+      ? await inspectSiteTranslations(projectRoot, packages).then(result => result.route_satisfied, () => false) : true,
     taskPreparation,
     localRevisionActive: !!localRevision || !!localUpdate,
     unfinishedIndexerTasks: false,

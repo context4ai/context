@@ -82,14 +82,67 @@ export default {
       const language = ref('zh');
       const copiedCommand = ref('');
       let copyReset;
-      const chinese = computed(() => language.value === 'zh');
+      const localeConfig = computed(() => data.theme.value.contextLocales);
+      const chinese = computed(() => localeConfig.value
+        ? (data.lang.value || '').toLowerCase().startsWith('zh') : language.value === 'zh');
       const languageKey = 'context-language:' + data.site.value.base;
+      const localePrefixes = () => {
+        const config = localeConfig.value;
+        return config ? [[config.primary, ''], ...Object.entries(config.paths).map(([tag, path]) => [tag, path + '/'])] : [];
+      };
+      const localePath = (tag) => {
+        const base = data.site.value.base;
+        const relative = route.path.startsWith(base) ? route.path.slice(base.length) : route.path.slice(1);
+        const current = localePrefixes().find(([, prefix]) => prefix && relative.startsWith(prefix));
+        const rest = current ? relative.slice(current[1].length) : relative;
+        const target = localePrefixes().find(([candidate]) => candidate === tag);
+        return target ? base + target[1] + rest : undefined;
+      };
+      const matchLocale = (preferred) => {
+        const tags = localePrefixes().map(([tag]) => tag);
+        for (const wanted of preferred) {
+          const lower = String(wanted).toLowerCase();
+          const exact = tags.find(tag => tag.toLowerCase() === lower);
+          const partial = exact || tags.find(tag => tag.toLowerCase().split('-')[0] === lower.split('-')[0]);
+          if (partial) return partial;
+        }
+        return undefined;
+      };
       onMounted(() => {
+        const config = localeConfig.value;
+        if (config) {
+          let saved;
+          try { saved = localStorage.getItem(config.preferenceKey); } catch {}
+          const wanted = saved ? undefined : matchLocale(navigator.languages || [navigator.language]);
+          const target = wanted && wanted !== data.lang.value ? localePath(wanted) : undefined;
+          try { localStorage.setItem(config.preferenceKey, wanted || data.lang.value); } catch {}
+          if (target && target !== route.path) window.location.replace(target + window.location.hash);
+          return;
+        }
         let saved;
         try { saved = localStorage.getItem(languageKey); } catch {}
         language.value = saved === 'en' || saved === 'zh' ? saved :
           navigator.language.toLowerCase().startsWith('en') ? 'en' : 'zh';
       });
+      watch(() => data.lang.value, value => {
+        if (!mounted.value || !localeConfig.value) return;
+        try { localStorage.setItem(localeConfig.value.preferenceKey, value); } catch {}
+      });
+      const localeButton = () => {
+        const tags = localePrefixes().map(([tag]) => tag);
+        const next = tags[(tags.indexOf(data.lang.value) + 1) % tags.length];
+        const label = localeConfig.value.labels?.[next] || next;
+        return h('button', { class: 'context-language', type: 'button', lang: next, title: label, 'aria-label': label,
+          onClick: () => {
+            try { localStorage.setItem(localeConfig.value.preferenceKey, next); } catch {}
+            const target = localePath(next);
+            if (target) window.location.assign(target + window.location.hash);
+          } }, label);
+      };
+      const localizedText = item => item.locales?.[data.lang.value] || item.text;
+      const navLink = item => ({ text: localizedText(item),
+        ...(item.origin ? { link: mounted.value ? window.location.origin + item.link : item.link, target: '_self', noIcon: true }
+          : { link: item.link.startsWith('/pages/') ? '/' + (localePrefixes().find(([tag]) => tag === data.lang.value)?.[1] || '') + item.link.slice(1) : item.link }) });
       const changeLanguage = value => {
         language.value = value;
         try { localStorage.setItem(languageKey, value); } catch {}
@@ -197,7 +250,9 @@ export default {
         sidebar: inLlms.value || inHistory.value ? [] : active.value?.items || [],
         nav: [...sections.value.map(section => ({ text: section.title, link: section.href,
           activeMatch: !inLlms.value && !inHistory.value && section.key === selected.value ? '^' : '(?!)' })),
+          ...(data.theme.value.contextNav || []).map(navLink),
           { text: chinese.value ? '更多' : 'More', items: [
+            ...(data.theme.value.contextMore || []).map(navLink),
             { text: 'LLM Docs', link: '/llms/index.html' },
             { text: 'Changelog', link: '/changelog.html' }],
             activeMatch: inLlms.value || inHistory.value ? '^' : '(?!)' }],
@@ -205,7 +260,7 @@ export default {
       const slots = {
         'home-hero-before': () => extensions.banner ? extensions.banner() : null,
         'layout-bottom': () => extensions.floating ? h('div', { class: 'context-business-floating' }, extensions.floating()) : null,
-        'nav-bar-content-after': () => h('button', { class: 'context-language', type: 'button',
+        'nav-bar-content-after': () => localeConfig.value ? localeButton() : h('button', { class: 'context-language', type: 'button',
           'aria-label': chinese.value ? 'Switch interface language to English' : '将界面语言切换为中文',
           title: chinese.value ? 'Switch to English' : '切换为中文',
           onClick: () => changeLanguage(chinese.value ? 'en' : 'zh') }, chinese.value ? 'EN' : '中文'),

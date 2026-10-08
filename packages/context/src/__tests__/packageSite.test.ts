@@ -23,3 +23,26 @@ test("site extension configuration retains defaults and rejects unsafe roots and
   expect(() => kbPackage({ ...base, site: { extensions: { root: "../outside" } } })).toThrow();
   expect(() => kbPackage({ ...base, site: { extensions: { pages: { "../index": "help.md" } } } })).toThrow();
 });
+
+test("site locales, navigation, More menu and social links are validated", () => {
+  const base = { name: "sample", template: "src/templates" };
+  const site = kbPackage({ ...base, site: {
+    lang: "en-US",
+    locales: { "zh-CN": { path: "zh", title: "示例文档" } },
+    nav: [{ text: "Home", link: "/", locales: { "zh-CN": "首页" } }, { text: "Search", link: "https://example.com/search/" }],
+    more: [{ text: "Release Notes", target: { artifact_ref: "release-notes" } }, { text: "Status", link: "https://example.com/status" }],
+    socialLinks: [{ icon: "github", link: "https://github.com/example" }],
+    localePreferenceKey: "example-locale",
+  } }).site;
+  expect(site?.locales?.["zh-CN"]?.path).toBe("zh");
+  expect(site?.more).toHaveLength(2);
+  expect(() => kbPackage({ ...base, site: { locales: { "en-US": { path: "en" } } } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { locales: { "zh-CN": { path: "zh" }, "zh-TW": { path: "zh" } } } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { locales: { "zh-CN": { path: "pages" } } } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { locales: { "zh-CN": { path: "zh/cn" } } } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { locales: { chinese_simplified: { path: "zh" } } } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { more: [{ text: "Both", link: "/a", target: { artifact_ref: "a" } }] } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { more: [{ text: "Neither" }] } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { nav: [{ text: "Unsafe", link: "javascript:alert(1)" }] } })).toThrow();
+  expect(() => kbPackage({ ...base, site: { socialLinks: [{ icon: "github", link: "http://github.com/example" }] } })).toThrow();
+});

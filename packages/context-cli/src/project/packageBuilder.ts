@@ -92,6 +92,7 @@ import {
   PACKAGE_TEMPLATE_REVIEW_FILE,
 } from "./packageTemplateReview.js";
 import { isApprovedKnowledgeMarkdownPath } from "./knowledgeFileClassification.js";
+import { siteTranslationFingerprint } from "./siteTranslation.js";
 import {
   hydrateApprovedKnowledgeMarkdown,
   readApprovedKnowledgeMetadataIndex,
@@ -252,6 +253,7 @@ async function packageInputFingerprint(input: {
     siteExtensions: input.pkg.kind === "package.kb" && input.pkg.site
       ? (await readSiteExtensions(input.projectRoot, input.pkg.site.extensions)).digest : null,
     siteTheme,
+    siteTranslations: await siteTranslationFingerprint(input.projectRoot, input.pkg),
     siteSources: siteRegistry ? input.selected.map(file => siteArticleSources(file.article, siteRegistry)) : null,
     builder: PACKAGE_BUILDER_PROTOCOL_VERSION,
     readerProjection: PACKAGE_READER_MARKDOWN_VERSION,

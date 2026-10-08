@@ -22,10 +22,11 @@ import { siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels } fr
 import { packageSiteBranding } from "./packageSiteBranding.js";
 import { writeSiteExtensions, siteExtensionTargets, invalidSiteExtension } from "./packageSiteExtensions.js";
 import { packageDistributionMetadataPath } from "./packageDistributionMetadata.js";
+import { localeLabel, siteMoreTargets, siteNavigationConfig, writeLocalizedSite } from "./packageSiteLocales.js";
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v44-site-address:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v45-locales:${createHash("sha256")
   .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -81,8 +82,12 @@ export function createSiteNavigation(pkg: PackageDefinition, selected: readonly 
   });
   visit(projection.entries);
   const remaining: ProjectedKnowledgeMapEntry[] = [];
+  const moreTargets = siteMoreTargets(pkg.kind === "package.kb" ? pkg.site : undefined);
+  for (const target of moreTargets) {
+    if (!identities.has(target)) invalidSiteExtension(`More menu target ${target} is not a delivered article; approve it or remove it from site.more`);
+  }
   for (const page of pages) {
-    if (linked.has(`/${page.site_path}`)) continue;
+    if (linked.has(`/${page.site_path}`) || (page.artifact_ref !== undefined && moreTargets.has(page.artifact_ref))) continue;
     remaining.push({ key: page.site_path, title: page.title, href: `/${page.site_path}`, children: [] });
   }
   const entries = [...projection.entries];
@@ -213,6 +218,7 @@ export async function writePackageSite(input: {
     await writeFile(join(configRoot, "theme/index.js"), siteThemeScript);
     await writeFile(join(configRoot, "theme/style.css"), siteThemeCss + siteThemeVariables(await resolveSiteTheme(projectRoot, options.theme, true)));
     await writeSiteExtensions(projectRoot, temporary, options.extensions);
+    const navigation = siteNavigationConfig(options, mapping.pages);
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: options.lang ?? "en-US", base,
       appearance: { initialValue: "light", valueDark: "dark", valueLight: "light", storageKey: `context-theme:${pkg.name}:${base}` },
       srcExclude: ["_site/**/*.md"],
@@ -229,11 +235,17 @@ export async function writePackageSite(input: {
           ...(typeof pkg.importsPage === "object" && byPath.has("wikis/imports.md")
             ? [{ text: (await importsLabels(projectRoot)).title, link: `/${byPath.get("wikis/imports.md")!.site_path}` }] : []),
           { text: "更多", items: [{ text: "LLM Docs", link: "/llms/index.html" }, { text: "Changelog", link: "/changelog.html" }] }],
+        contextNav: navigation.nav, contextMore: navigation.more,
+        ...(options.socialLinks ? { socialLinks: options.socialLinks } : {}),
+        ...(options.locales ? { contextLocales: { primary: options.lang ?? "en-US",
+          paths: Object.fromEntries(Object.entries(options.locales).map(([tag, locale]) => [tag, locale.path])),
+          labels: { [options.lang ?? "en-US"]: localeLabel(options.lang ?? "en-US"),
+            ...Object.fromEntries(Object.entries(options.locales).map(([tag, locale]) => [tag, locale.label ?? localeLabel(tag)])) },
+          preferenceKey: options.localePreferenceKey ?? `context-locale:${pkg.name}:${base}` } } : {}),
       } };
-    await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
     await mkdir(join(temporary, "pages"), { recursive: true });
-    for (const page of byPath.values()) {
-      let content = await readFile(join(root, page.package_path), "utf8");
+    const primaryBody = (page: SitePage, packageContent: string) => {
+      let content = packageContent;
       if (page.package_path === "wikis/index.md" && typeof pkg.repoContentPage !== "object") {
         content = content.replace(/^.*\]\((?:<)?(?:\.\/)?repo-content\.md(?:>)?\).*\n?/gmu, "");
       }
@@ -245,14 +257,26 @@ export async function writePackageSite(input: {
       const original = sourceContent.get(page.package_path);
       const provenance = articleProvenanceMarkdown(original?.article, registry, repositoryRemote);
       const pageContent = provenance && content.endsWith(provenance) ? content.slice(0, -provenance.length) : content;
-      const body = siteMarkdown(pageContent, page.package_path, byPath, resources);
+      return siteMarkdown(pageContent, page.package_path, byPath, resources);
+    };
+    const pageFrontmatter = (page: SitePage, title: string, content?: string) => {
+      const original = sourceContent.get(page.package_path);
       const sources = siteArticleSources(original?.article, registry, repositoryRemote);
-      const timestamp = parseKnowledgeFrontmatter(original?.content ?? content).timestamp;
+      const timestamp = parseKnowledgeFrontmatter(original?.content ?? content ?? "").timestamp;
       const updated = typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))
         ? new Date(timestamp).toISOString() : null;
+      return `---\ntitle: ${JSON.stringify(title)}\ncontextSources: ${JSON.stringify(sources)}\ncontextUpdated: ${JSON.stringify(updated)}\n---\n`;
+    };
+    for (const page of byPath.values()) {
+      const content = await readFile(join(root, page.package_path), "utf8");
       await writeFile(join(temporary, page.site_path.replace(/\.html$/u, ".md")),
-        `---\ntitle: ${JSON.stringify(page.title)}\ncontextSources: ${JSON.stringify(sources)}\ncontextUpdated: ${JSON.stringify(updated)}\n---\n\n${body}`);
+        `${pageFrontmatter(page, page.title, content)}\n${primaryBody(page, content)}`);
     }
+    const localized = await writeLocalizedSite({ projectRoot, temporary, root, site: options, packageName: pkg.name, selected,
+      byPath, entries: mapping.entries, resources, contextHome: config.themeConfig.contextHome, primaryBody,
+      pageFrontmatter: (page, title) => pageFrontmatter(page, title) });
+    await writeFile(join(configRoot, "config.mjs"), `export default { ...${JSON.stringify({ ...config,
+      ...(localized.locales ? { locales: localized.locales } : {}) })}, markdown: { ${siteMarkdownConfig} } };\n`);
     const menu = (lines: string[], entries: ProjectedKnowledgeMapEntry[], level: number) => entries.forEach(entry => {
       lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${mdLabel(entry.title)}](${entry.href})` : mdLabel(entry.title)}`);
       menu(lines, entry.children, level + 1);
@@ -314,7 +338,8 @@ export async function writePackageSite(input: {
     }
     const siteMapContent = JSON.stringify({ ...(input.siteUrl ? { site_url: input.siteUrl } : {}), protocol: "context.site-output/v1",
       knowledge_map_revision: structure?.revision ?? null, base, llms: { index: "llms.txt", full: "llms-full.txt", home: "llms/index.html", articles: llms.articleCount }, pages: [...byPath.values()], entries: mapping.entries,
-      sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })), warnings: mapping.warnings }, null, 2) + "\n";
+      sections: sections.map(({ key, title, href, pages, items }) => ({ key, title, href, pages, items })),
+      ...(localized.summaries.length ? { locales: localized.summaries } : {}), warnings: mapping.warnings }, null, 2) + "\n";
     const packageSiteMap = join(projectRoot, pkg.outDir, "context-site-map.json");
     const distributedSiteMap = join(
       projectRoot,

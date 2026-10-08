@@ -9,7 +9,8 @@ checks real changes and an increasing SemVer; you decide the wording and impact.
 Do not summarize temporary execution progress as knowledge changes.
 
 This action is selected at completed-scope delivery, after Review, Close and
-package configuration/template approval, before the final package build.
+package configuration/template approval and website translation, before the final
+package build.
 Record one version for the completed scope, then follow the returned workspace
 Route to build outputs with that version. A failed build alone does not require
 another version; retry through the Route using the recorded version. Do not
@@ -26,7 +27,7 @@ Use the returned digest in `context version record --input <file> --format json`
 Input fields: `expected_digest`, `version`, `title`, `changes` (nonempty list),
 `triggers` (nonempty list of `{kind, description}`), and optional
 `actor: {name, kind}`. Trigger kinds are initial, note, sessions, mr, module,
-document, navigation, repair, dist, other. Describe what actually triggered the
+document, navigation, repair, dist, translation, other. Describe what actually triggered the
 iteration, not merely the CLI command. Never include raw private transcripts,
 credentials, local absolute paths or private account IDs in public history.
 
