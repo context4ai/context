@@ -1,8 +1,39 @@
 # Context Development
 
 This guide explains how a contributor or an agent can run the Context CLI,
-SDK, and bundled agent plugin from a local checkout. Product workflows and the
-published installation path remain documented in the package READMEs.
+SDK, and bundled agent plugin from a local checkout. Product workflows are
+documented on the [documentation site](https://context4ai.org/context/); read
+[CONTRIBUTING.md](./CONTRIBUTING.md) for review expectations.
+
+## Repository Layout
+
+```text
+packages/context/              @c4a/context: project SDK, templates and docs
+packages/context-cli/          @c4a/context-cli: CLI, workflow Provider, site builder
+packages/core/                 @c4a/core: shared schemas and contracts
+packages/extract*/             extraction runner and language plugins
+packages/context-evidence-wasm/  Source Graph read plugin (Rust → Wasm)
+packages/dev-cli/, packages/tui/ development and release tooling
+plugins/context/               Agent plugin source: public entries and Indexer Skills
+docs/                          case studies and development notes
+case-studies/                  interactive workflow replay
+scripts/                       release preparation and audits
+```
+
+[Module Layout](https://context4ai.org/context/pages/48ba914060b8913ca26c053abac47fac.html)
+describes the dependencies between these packages, and
+[ARCHITECTURE.md](./ARCHITECTURE.md) the runtime internals.
+
+## Common Commands
+
+| Command | Purpose |
+|---|---|
+| `bun install` | Install workspace dependencies |
+| `bun run build` | Build every package, the plugin tree and Indexer bundles |
+| `bun run verify` | Typecheck, lint and the default tests |
+| `bun run verify:full` | `verify` plus full-only CLI tests and Node artifact checks |
+| `./start.sh link` | Link the built CLI and SDK globally and refresh Agent plugins |
+| `./start.sh context <args>` | Run the CLI from source |
 
 ## Choose A Mode
 
