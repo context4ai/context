@@ -2,6 +2,11 @@
 
 All notable changes to Context are documented here.
 
+## 0.7.61 - 2026-10-12
+
+- Apply a reader's saved light or dark choice from the first paint of a knowledge website; pages no longer flash the system scheme before loading.
+- Reader languages inherit unset homepage title, slogan, description and actions from the site's own homepage settings.
+
 ## 0.7.60 - 2026-10-08
 
 - Publish knowledge websites in several languages with `site.locales`; translations live under `translations/<tag>/`, track the approved content they were written from, and show a notice when stale or missing.
