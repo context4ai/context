@@ -56,7 +56,7 @@ Code、Markdown、Note 与 Sessions 四个 Indexer 技能由工作流选择，�
 
 ## 工作原理
 
-![Context 知识生产工作流](./assets/context-workflow.svg)
+![Context 知识生产工作流](./assets/context-workflow.zh-CN.svg)
 
 1. **登记来源**：固定版本的代码仓库、文档目录、笔记与会话摘要。
 2. **采集证据**：文档正文、代码符号、关系与来源指纹。
