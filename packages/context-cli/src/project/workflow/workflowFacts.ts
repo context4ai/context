@@ -201,6 +201,7 @@ export function createContextWorkflowFacts(
       templates_reviewed: packageTemplatesReviewed(observation),
       current: packagesCurrent && !partialDelivery,
     },
+    translation: { route_satisfied: partialDelivery || observation.translationRouteSatisfied !== false },
     version: { current: observation.versionCurrent !== false,
       recording_satisfied: partialDelivery || ((deliveryReady || outputOnlyMaintenance) && observation.unfinishedIndexerTasks === true) || observation.versionCurrent !== false },
     logs: {

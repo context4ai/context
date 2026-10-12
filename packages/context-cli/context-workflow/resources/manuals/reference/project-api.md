@@ -189,7 +189,8 @@ may be rebuilt; it is not an authoring source.
 `kbPackage.site` optionally adds a VitePress website at `dist/<base>-site/` in
 the same build, beside the KB directory. `<base>` removes one trailing `-kb`
 from the package name, if present. Omit it for KB-only output. It accepts `title`, `description`,
-`lang`, a deployment `base` path, and an optional `home` presentation. `home`
+`lang`, a deployment `base` path, an optional top-bar `titleLink`, and an
+optional `home` presentation. `home`
 accepts `title`, `slogan`, `description`, hero `actions`, and `resources` shown
 below the generated site map. Each resource needs an `href`, a copyable
 `command`, or both. Omit unknown resources; the builder never invents service

@@ -17,7 +17,7 @@ const semver = z.string().regex(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u);
 const text = z.string().trim().min(1);
 export const changelogEntrySchema = z.object({
   version: semver, date: z.string().datetime(), title: text, changes: z.array(text).min(1),
-  triggers: z.array(z.object({ kind: z.enum(["initial", "note", "sessions", "mr", "module", "document", "navigation", "repair", "dist", "other"]), description: text }).strict()).min(1),
+  triggers: z.array(z.object({ kind: z.enum(["initial", "note", "sessions", "mr", "module", "document", "navigation", "repair", "dist", "translation", "other"]), description: text }).strict()).min(1),
   actor: z.object({ name: text, kind: z.enum(["git", "lark", "user"]) }).strict().optional(),
 }).strict();
 export const changelogInputSchema = changelogEntrySchema.omit({ date: true }).extend({ expected_digest: text, base_ref: text.optional() });

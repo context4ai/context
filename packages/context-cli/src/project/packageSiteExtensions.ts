@@ -93,7 +93,7 @@ export async function writeSiteExtensions(projectRoot: string, temporary: string
     imports.push(`const ${name} = defineAsyncComponent(() => import(${JSON.stringify(`../../_site/${path}`)}));`);
     // Floating widgets can contain browser-only SDKs. The import is deferred
     // until ClientOnly mounts, so it never executes during prerendering.
-    slots.push(`${JSON.stringify(name)}: ${name === "floating" ? `() => h(resolveComponent('ClientOnly'), null, { default: () => h(${name}) })` : `() => h(${name})`}`);
+    slots.push(`${JSON.stringify(name)}: ${name === "floating" ? `() => h(resolveComponent('ClientOnly'), null, { default: () => h(${name}) })` : `props => h(${name}, props)`}`);
   }
   await writeFile(join(temporary, ".vitepress/theme/extensions.js"), imports.join("\n") + `\nexport default {${slots.join(",")}};\n`);
   for (const [key, path] of Object.entries(extensions?.pages ?? {})) {

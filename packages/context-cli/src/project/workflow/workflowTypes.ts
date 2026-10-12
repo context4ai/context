@@ -90,6 +90,7 @@ export interface ContextWorkflowObservation {
   productionDelivery?: boolean;
   localRevisionActive?: boolean;
   versionCurrent?: boolean;
+  translationRouteSatisfied?: boolean;
   unfinishedIndexerTasks?: boolean;
   taskPreparation?: "cleared" | "resume-requested" | undefined;
   projectRoot: string;

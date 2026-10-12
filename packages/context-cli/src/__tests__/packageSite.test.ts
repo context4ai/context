@@ -107,7 +107,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(history.match(/<details class="context-history-card"/gu)).toHaveLength(5);
     expect(history.match(/<details class="context-history-card" open/gu)).toHaveLength(3);
     expect(history).toContain("Example User");
-    expect(history).toMatch(/<summary>[\s\S]*?class="context-history-attribution">Example User [^<]+<time[\s\S]*?<\/summary>/u);
+    expect(history).toMatch(/<summary>[\s\S]*?class="context-history-attribution">Example User [\s\S]*?updated on [\s\S]*?<time[\s\S]*?<\/summary>/u);
     expect(history).not.toContain("User: Example User");
     expect(history).toContain("context-empty-sidebar");
     const llmsHome = await readFile(join(root, packageSiteOutputDir(pkg), "llms/index.html"), "utf8");
@@ -156,7 +156,7 @@ test("VitePress builds an independent site with search, safe prose, anchors and 
     expect(homeResources).toContain("context-home-resource-heading");
     expect(homeResources).toContain("context-home-install-action");
     expect(home.indexOf("Browse knowledge")).toBeLessThan(home.indexOf("Project workspace"));
-    expect(home).toContain('"light"');
+    expect(home).toContain('"auto"');
     expect(home).toContain("context-theme:");
     expect(article).toContain('<a id="section-entry"></a>');
     expect(article).not.toContain('&lt;a id=');

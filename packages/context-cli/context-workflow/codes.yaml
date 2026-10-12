@@ -10,6 +10,7 @@ codes:
   - { code: route.production.prepare-required, kind: route-reason, summary: Prepare the next eligible production directories. }
   - { code: route.production.writing-required, kind: route-reason, summary: Complete the issued production tasks using stage-local files. }
   - { code: route.production.scope-incomplete, kind: route-reason, summary: Resolve remaining investigation and material gaps without discarding accepted articles. }
+  - { code: route.translation.pending, kind: route-reason, summary: Translate approved knowledge for the website locales or publish it in the primary language. }
   - { code: route.version.content-changed, kind: route-reason, summary: Record an increasing workspace version and changelog for formal content changes. }
   - { code: route.workspace.recovery, kind: route-reason, summary: Inspect a stuck task independently of normal workflow evaluation., document: resources/procedures/task-recovery.md }
   - { code: route.indexer.maintenance, kind: route-reason, summary: Advance registered knowledge maintenance at a safe boundary., document: resources/procedures/knowledge-maintenance.md }

@@ -31,6 +31,39 @@ const packageSiteHomeSchema = z.object({
   resources: z.array(packageSiteHomeResourceSchema).optional(),
 }).strict();
 
+const localeTagSchema = z.string().regex(/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/u, "Use a BCP 47 language tag, such as zh-CN");
+const localizedTextSchema = z.record(localeTagSchema, z.string().trim().min(1));
+
+/** Every page keeps one URL; the reader's language selects which translation is shown. */
+const packageSiteLocaleSchema = z.object({
+  label: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(1).optional(),
+  description: z.string().optional(),
+  home: packageSiteHomeSchema.optional(),
+}).strict();
+
+const packageSiteNavLinkSchema = z.object({
+  text: z.string().trim().min(1),
+  link: siteHrefSchema,
+  locales: localizedTextSchema.optional(),
+}).strict();
+
+const packageSiteMoreItemSchema = z.object({
+  text: z.string().trim().min(1),
+  link: siteHrefSchema.optional(),
+  /** Approved article shown only through this menu, outside the knowledge map. */
+  target: z.object({ artifact_ref: z.string().trim().min(1) }).strict().optional(),
+  locales: localizedTextSchema.optional(),
+}).strict().refine(value => (value.link === undefined) !== (value.target === undefined), {
+  message: "A More menu item requires exactly one of link or target",
+});
+
+const packageSiteSocialLinkSchema = z.object({
+  icon: z.enum(["github", "discord", "x", "youtube", "slack", "linkedin", "mastodon", "npm"]),
+  link: z.string().regex(/^https:\/\//u, "Use an https URL"),
+  ariaLabel: z.string().trim().min(1).optional(),
+}).strict();
+
 /** Static website in a sibling dist/<name-without-trailing-kb>-site directory. */
 export const packageSiteSchema = z.object({
   theme: siteThemeSchema.optional(),
@@ -39,10 +72,23 @@ export const packageSiteSchema = z.object({
   lang: z.string().min(1).default("en-US"),
   base: z.string().regex(/^\/(?:[a-zA-Z0-9_-]+\/)*$/, "Use / or a slash-delimited deployment path, such as /docs/").default("/"),
   home: packageSiteHomeSchema.optional(),
+  /** Additional reader languages; translations are optional and never reviewed knowledge. */
+  locales: z.record(localeTagSchema, packageSiteLocaleSchema).optional(),
+  /** Target of the top-bar title; defaults to the site home. Root-relative links address the site origin. */
+  titleLink: siteHrefSchema.optional(),
+  /** Top navigation links after the knowledge sections. Root-relative links address the site origin. */
+  nav: z.array(packageSiteNavLinkSchema).optional(),
+  /** Items appended to the More menu after LLM Docs and Changelog. */
+  more: z.array(packageSiteMoreItemSchema).optional(),
+  socialLinks: z.array(packageSiteSocialLinkSchema).optional(),
+  /** Shared localStorage key so sites on one origin keep the same reader language. */
+  localePreferenceKey: z.string().regex(/^[a-zA-Z0-9:._-]+$/u).optional(),
   /** Trusted presentation code, relative to the workspace; never captured knowledge. */
   extensions: z.object({
     root: z.string().regex(/^src\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/).default("src/site"),
     slots: z.object({
+      /** Replaces the site title at the start of the top bar, for example with a logo. */
+      brand: z.string().min(1).optional(),
       banner: z.union([z.string().min(1), z.literal(false)]).optional(),
       knowledge: z.union([z.string().min(1), z.literal(false)]).optional(),
       resources: z.union([z.string().min(1), z.literal(false)]).optional(),
@@ -51,8 +97,15 @@ export const packageSiteSchema = z.object({
     }).strict().optional(),
     pages: z.record(z.string().regex(/^[a-zA-Z0-9_-]+$/), z.string().min(1)).optional(),
   }).strict().optional(),
-}).strict();
+}).strict().superRefine((value, context) => {
+  for (const tag of Object.keys(value.locales ?? {})) {
+    if (tag.toLowerCase() === value.lang.toLowerCase()) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["locales", tag], message: "An additional locale must differ from the primary site lang" });
+    }
+  }
+});
 export type PackageSiteDefinition = z.input<typeof packageSiteSchema>;
+export type PackageSiteLocale = z.output<typeof packageSiteLocaleSchema>;
 
 export function normalizePackageSite(value: PackageSiteDefinition | undefined) {
   return value === undefined ? undefined : packageSiteSchema.parse(value);

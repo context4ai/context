@@ -328,6 +328,18 @@ nodes:
     kind: terminal
     terminalOutcome: completed
 
+  - id: translate-site-locales
+    kind: action
+    reasonCode: route.translation.pending
+    action: actions/translate-site-locales.yaml
+    satisfiedBy:
+      - path: translation.route_satisfied
+        equals: true
+    resources:
+      recommended:
+        - resources/manuals/guides/site-translation.md
+        - resources/manuals/guides/package-outputs.md
+
   - id: record-workspace-version
     kind: action
     reasonCode: route.version.content-changed
@@ -350,7 +362,8 @@ edges:
   - { from: close-approved-knowledge, to: choose-package-output }
   - { from: choose-package-output, to: configure-package-output, kind: gatedBy }
   - { from: configure-package-output, to: review-package-template }
-  - { from: review-package-template, to: record-workspace-version, kind: gatedBy }
+  - { from: review-package-template, to: translate-site-locales, kind: gatedBy }
+  - { from: translate-site-locales, to: record-workspace-version }
   - { from: record-workspace-version, to: build-next }
   - { from: build-next, to: flush-logs-after-build }
   - { from: flush-logs-after-build, to: current-scope-complete }

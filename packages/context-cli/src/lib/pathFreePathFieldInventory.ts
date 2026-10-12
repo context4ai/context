@@ -68,8 +68,10 @@ const DEFAULT_INTERNAL_FIELDS = [
   "recovery_path",
   "requested_approved_path",
   "revision_path",
+  "translation_path",
   "structure_path",
   "stage_path",
+  "task_path",
   "entry_path",
   "prompt_path",
   "packageDir",
@@ -106,7 +108,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
   if (field === "input_path" || field === "state_path") return "human-only";
   if (field === "previousPath") return "human-only";
   if (field === "feedback_path") return "internal-only";
-  if (field === "previous_path" || field === "old_path" || field === "requested_approved_path" || field === "revision_path") {
+  if (field === "previous_path" || field === "old_path" || field === "requested_approved_path" || field === "revision_path" || field === "translation_path") {
     return "external-input";
   }
   if (field === "href" || field === "packageDir" || field === "package_dir" || field === "report_path" || field === "absolute_path") {
@@ -127,6 +129,7 @@ function policyFor(field: string): PathFieldInventoryEntry["policy"] {
     field === "ctxDir" ||
     field === "runner_config_path" ||
     field === "stage_path" ||
+    field === "task_path" ||
     field === "entry_path" ||
     field === "program_path" ||
     field === "bundle_root" ||

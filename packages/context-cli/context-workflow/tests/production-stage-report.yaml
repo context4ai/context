@@ -5,6 +5,7 @@ entry: production
 state:
   authorities: [context.knowledge-review]
   facts:
+    translation: { route_satisfied: true }
     production:
       report_approved: false
       prepared: false
