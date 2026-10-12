@@ -27,7 +27,7 @@ import { createLocaleMarker, createSiteLocalizer, escapeHtml, localizedHtml, res
 
 // Include shipped presentation assets: theme-only upgrades must invalidate an
 // existing site's receipt even when its knowledge and configuration are unchanged.
-export const PACKAGE_SITE_VERSION = `vitepress-site-v49-locale-home-fallback:${createHash("sha256")
+export const PACKAGE_SITE_VERSION = `vitepress-site-v49-appearance-home-fallback:${createHash("sha256")
   .update(JSON.stringify([siteThemeVariables.toString(), siteMarkdownConfig, siteThemeCss, siteThemeScript, siteThemeLabels("zh"), siteThemeLabels("en")]))
   .digest("hex")}`;
 const require = createRequire(import.meta.url);
@@ -283,7 +283,8 @@ export async function writePackageSite(input: {
     const appearanceKey = `context-theme:${pkg.name}:${base}`;
     const config = { title: options.title ?? pkg.name, description: options.description ?? "", lang: readers.primary, base,
       appearance: { initialValue: "auto", valueDark: "dark", valueLight: "light", storageKey: appearanceKey },
-      // VitePress's pre-paint script reads its default key; apply the site key before first paint too.
+      // VitePress's own pre-paint script ignores storageKey and can only add "dark", so the pages
+      // drop it (see transformHtml) and this script alone applies the site key before first paint.
       // Without a saved choice ("auto" included) the site follows the system scheme.
       head: [["script", { id: "context-appearance" },
         `(()=>{let v=null;try{v=localStorage.getItem(${JSON.stringify(appearanceKey)})}catch{}document.documentElement.classList.toggle("dark",v==="dark"||(v!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))})();`],
@@ -310,7 +311,8 @@ export async function writePackageSite(input: {
         contextLocales: { primary: readers.primary, tags: readers.tags, labels: readers.labels, titles: readers.titles, preferenceKey: readers.preferenceKey },
       } };
     await writeFile(join(configRoot, "config.mjs"), `const contextLocaleMarker = ${JSON.stringify(readers.translated ? marker : null)};\n` +
-      `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} } };\n`);
+      `export default { ...${JSON.stringify(config)}, markdown: { ${siteMarkdownConfig} },\n` +
+      `  transformHtml: html => html.replace(/<script id="check-dark-mode">[\\s\\S]*?<\\/script>/u, "") };\n`);
     const menu = (lines: string[], entries: ProjectedKnowledgeMapEntry[], level: number, tag: string) => entries.forEach(entry => {
       const title = mdLabel(localizer.entryTitle(tag, entry));
       lines.push(`${"  ".repeat(level)}- ${entry.href ? `[${title}](${entry.href})` : title}`);

@@ -138,6 +138,7 @@ test("localized website keeps one URL per page with a block per reader language"
     expect(guide).toContain('Placeholder">Search</span>');
     expect(guide).toContain('href="/sourcegraph/" target="_self"');
     expect(guide).toContain('<script id="context-appearance">');
+    expect(guide).not.toContain('id="check-dark-mode"');
     expect(guide).toContain("context-theme:sample:/context/");
     expect(guide).toContain('<script id="context-locale">');
     expect(guide).toContain("context-locale:sample:/context/");
