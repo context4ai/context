@@ -8,6 +8,7 @@ All notable changes to Context are documented here.
 - Reader languages inherit unset homepage title, slogan, description and actions from the site's own homepage settings.
 - Knowledge websites show a centred, localized 404 page with a link back home, instead of the default page offset by the sidebar.
 - Planning guidance compares cited repository files by object ID before reading content and batches partial-clone object fetches, avoiding long stalls during version updates.
+- Diagrams render in a single frame in offline Review as well as on websites; edge labels use a smaller font, sit centred on the edge they annotate and fully cover it, subgraph titles keep clear of the subgraph border, and site paragraph styles no longer push node text below centre.
 
 ## 0.7.60 - 2026-10-08
 
