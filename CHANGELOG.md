@@ -6,6 +6,7 @@ All notable changes to Context are documented here.
 
 - Apply a reader's saved light or dark choice from the first paint of a knowledge website; pages no longer flash the system scheme before loading.
 - Reader languages inherit unset homepage title, slogan, description and actions from the site's own homepage settings.
+- Knowledge websites show a centred, localized 404 page with a link back home, instead of the default page offset by the sidebar.
 
 ## 0.7.60 - 2026-10-08
 
